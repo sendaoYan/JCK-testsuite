@@ -1,0 +1,2 @@
+@PkgAnno("hello")
+package p;
