@@ -1,3 +1,7 @@
 JTwork/
 JTreport/
 *.class
+
+# javadoc HTML mirrors (re-downloadable via spec-docs/gen_pdfs.py sources)
+spec-docs/java8-api/
+spec-docs/java27-api/
