@@ -1,0 +1,135 @@
+super public class CondBranches
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method ifeq:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        ifeq L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method ifne:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        ifne L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method iflt:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        iflt L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method ifge:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        ifge L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method ifnull:"(Ljava/lang/Object;)I"
+        stack 1 locals 1
+    {
+        aload_0;
+        ifnull L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method ifnonnull:"(Ljava/lang/Object;)I"
+        stack 1 locals 1
+    {
+        aload_0;
+        ifnonnull L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method ifIcmplt:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmplt L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method ifIcmpge:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmpge L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method ifAcmeq:"(Ljava/lang/Object;Ljava/lang/Object;)I"
+        stack 2 locals 2
+    {
+        aload_0;
+        aload_1;
+        if_acmpeq L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    public static Method ifAcmpne:"(Ljava/lang/Object;Ljava/lang/Object;)I"
+        stack 2 locals 2
+    {
+        aload_0;
+        aload_1;
+        if_acmpne L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+}
