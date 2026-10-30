@@ -1,0 +1,113 @@
+super public class MiscOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method iincTest:"()I"
+        stack 1 locals 1
+    {
+        iconst_0;
+        istore_0;
+        iinc 0, 5;
+        iload_0;
+        ireturn;
+    }
+
+    public static Method multiArray:"(II)[[I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        multianewarray class "[[I", 2;
+        areturn;
+    }
+
+    public static Method baload:"([BI)I"
+        stack 2 locals 2
+    {
+        aload_0;
+        iload_1;
+        baload;
+        ireturn;
+    }
+
+    public static Method caload:"([CI)C"
+        stack 2 locals 2
+    {
+        aload_0;
+        iload_1;
+        caload;
+        ireturn;
+    }
+
+    public static Method saload:"([SI)S"
+        stack 2 locals 2
+    {
+        aload_0;
+        iload_1;
+        saload;
+        ireturn;
+    }
+
+    public static Method bastore:"([BIB)V"
+        stack 3 locals 3
+    {
+        aload_0;
+        iload_1;
+        iload_2;
+        bastore;
+        return;
+    }
+
+    public static Method castore:"([CIC)V"
+        stack 3 locals 3
+    {
+        aload_0;
+        iload_1;
+        iload_2;
+        castore;
+        return;
+    }
+
+    public static Method sastore:"([SIS)V"
+        stack 3 locals 3
+    {
+        aload_0;
+        iload_1;
+        iload_2;
+        sastore;
+        return;
+    }
+
+    // dup_x1: [v2, v1] -> [v1, v2, v1]; with 1,2 on the stack returns 5
+    public static Method dupX1:"()I"
+        stack 3 locals 1
+    {
+        iconst_1;
+        iconst_2;
+        dup_x1;
+        iadd;
+        iadd;
+        ireturn;
+    }
+
+    // dup_x2: [v3, v2, v1] -> [v1, v3, v2, v1]; with 1,2,3 returns 9
+    public static Method dupX2:"()I"
+        stack 4 locals 1
+    {
+        iconst_1;
+        iconst_2;
+        iconst_3;
+        dup_x2;
+        iadd;
+        iadd;
+        iadd;
+        ireturn;
+    }
+}

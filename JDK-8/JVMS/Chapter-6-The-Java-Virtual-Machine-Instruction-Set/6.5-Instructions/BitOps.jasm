@@ -1,0 +1,90 @@
+super public class BitOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method iand:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        iand;
+        ireturn;
+    }
+
+    public static Method ior:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        ior;
+        ireturn;
+    }
+
+    public static Method ixor:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        ixor;
+        ireturn;
+    }
+
+    public static Method ishr:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        ishr;
+        ireturn;
+    }
+
+    public static Method iushr:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        iushr;
+        ireturn;
+    }
+
+    public static Method ineg:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        ineg;
+        ireturn;
+    }
+
+    public static Method lneg:"(J)J"
+        stack 2 locals 2
+    {
+        lload_0;
+        lneg;
+        lreturn;
+    }
+
+    public static Method lshl:"(JI)J"
+        stack 3 locals 3
+    {
+        lload_0;
+        iload_2;
+        lshl;
+        lreturn;
+    }
+
+    public static Method lushr:"(JI)J"
+        stack 3 locals 3
+    {
+        lload_0;
+        iload_2;
+        lushr;
+        lreturn;
+    }
+}

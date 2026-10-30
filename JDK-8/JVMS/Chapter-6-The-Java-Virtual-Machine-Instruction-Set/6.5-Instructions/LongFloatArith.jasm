@@ -1,0 +1,99 @@
+super public class LongFloatArith
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method lsub:"(JJ)J"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        lsub;
+        lreturn;
+    }
+
+    public static Method lmul:"(JJ)J"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        lmul;
+        lreturn;
+    }
+
+    public static Method ldiv:"(JJ)J"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        ldiv;
+        lreturn;
+    }
+
+    public static Method lrem:"(JJ)J"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        lrem;
+        lreturn;
+    }
+
+    public static Method fsub:"(FF)F"
+        stack 2 locals 2
+    {
+        fload_0;
+        fload_1;
+        fsub;
+        freturn;
+    }
+
+    public static Method fmul:"(FF)F"
+        stack 2 locals 2
+    {
+        fload_0;
+        fload_1;
+        fmul;
+        freturn;
+    }
+
+    public static Method fneg:"(F)F"
+        stack 1 locals 1
+    {
+        fload_0;
+        fneg;
+        freturn;
+    }
+
+    public static Method dsub:"(DD)D"
+        stack 4 locals 4
+    {
+        dload_0;
+        dload_2;
+        dsub;
+        dreturn;
+    }
+
+    public static Method dmul:"(DD)D"
+        stack 4 locals 4
+    {
+        dload_0;
+        dload_2;
+        dmul;
+        dreturn;
+    }
+
+    public static Method dneg:"(D)D"
+        stack 2 locals 2
+    {
+        dload_0;
+        dneg;
+        dreturn;
+    }
+}

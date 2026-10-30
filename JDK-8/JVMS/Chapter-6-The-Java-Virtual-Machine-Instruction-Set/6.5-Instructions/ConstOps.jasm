@@ -1,0 +1,53 @@
+super public class ConstOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method bipush:"()I"
+        stack 1 locals 0
+    {
+        bipush 100;
+        ireturn;
+    }
+
+    public static Method sipush:"()I"
+        stack 1 locals 0
+    {
+        sipush 30000;
+        ireturn;
+    }
+
+    public static Method ldcInt:"()I"
+        stack 1 locals 0
+    {
+        ldc int 40000;
+        ireturn;
+    }
+
+    public static Method ldcFloat:"()F"
+        stack 1 locals 0
+    {
+        ldc float 1.5f;
+        freturn;
+    }
+
+    public static Method ldcLong:"()J"
+        stack 2 locals 0
+    {
+        ldc2_w long 1234567890123l;
+        lreturn;
+    }
+
+    public static Method ldcDouble:"()D"
+        stack 2 locals 0
+    {
+        ldc2_w double 2.5d;
+        dreturn;
+    }
+}

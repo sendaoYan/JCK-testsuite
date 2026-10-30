@@ -1,0 +1,24 @@
+super public class Simple
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method ret:"()V"
+        stack 0 locals 0
+    {
+        return;
+    }
+
+    public static Method loadRet:"()I"
+        stack 1 locals 0
+    {
+        iconst_0;
+        ireturn;
+    }
+}

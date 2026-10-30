@@ -1,0 +1,46 @@
+super public class ArrayOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method newIntArray:"(I)[I"
+        stack 1 locals 1
+    {
+        iload_0;
+        newarray int;
+        areturn;
+    }
+
+    public static Method arrayLength:"([I)I"
+        stack 1 locals 1
+    {
+        aload_0;
+        arraylength;
+        ireturn;
+    }
+
+    public static Method iastore:"([III)V"
+        stack 3 locals 3
+    {
+        aload_0;
+        iload_1;
+        iload_2;
+        iastore;
+        return;
+    }
+
+    public static Method iaload:"([II)I"
+        stack 2 locals 2
+    {
+        aload_0;
+        iload_1;
+        iaload;
+        ireturn;
+    }
+}

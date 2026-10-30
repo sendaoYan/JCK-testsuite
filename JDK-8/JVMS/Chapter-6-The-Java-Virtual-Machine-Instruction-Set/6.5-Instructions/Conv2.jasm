@@ -1,0 +1,83 @@
+super public class Conv2
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method i2f:"(I)F"
+        stack 1 locals 1
+    {
+        iload_0;
+        i2f;
+        freturn;
+    }
+
+    public static Method i2d:"(I)D"
+        stack 2 locals 1
+    {
+        iload_0;
+        i2d;
+        dreturn;
+    }
+
+    public static Method l2f:"(J)F"
+        stack 2 locals 2
+    {
+        lload_0;
+        l2f;
+        freturn;
+    }
+
+    public static Method l2d:"(J)D"
+        stack 2 locals 2
+    {
+        lload_0;
+        l2d;
+        dreturn;
+    }
+
+    public static Method f2d:"(F)D"
+        stack 2 locals 1
+    {
+        fload_0;
+        f2d;
+        dreturn;
+    }
+
+    public static Method d2f:"(D)F"
+        stack 2 locals 2
+    {
+        dload_0;
+        d2f;
+        freturn;
+    }
+
+    public static Method f2l:"(F)J"
+        stack 2 locals 1
+    {
+        fload_0;
+        f2l;
+        lreturn;
+    }
+
+    public static Method d2l:"(D)J"
+        stack 2 locals 2
+    {
+        dload_0;
+        d2l;
+        lreturn;
+    }
+
+    public static Method i2c:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        i2c;
+        ireturn;
+    }
+}

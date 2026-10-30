@@ -1,0 +1,59 @@
+super public class TypeConv
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method i2b:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        i2b;
+        ireturn;
+    }
+
+    public static Method i2s:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        i2s;
+        ireturn;
+    }
+
+    public static Method d2i:"(D)I"
+        stack 2 locals 2
+    {
+        dload_0;
+        d2i;
+        ireturn;
+    }
+
+    public static Method f2i:"(F)I"
+        stack 1 locals 1
+    {
+        fload_0;
+        f2i;
+        ireturn;
+    }
+
+    public static Method l2i:"(J)I"
+        stack 2 locals 2
+    {
+        lload_0;
+        l2i;
+        ireturn;
+    }
+
+    public static Method i2l:"(I)J"
+        stack 2 locals 1
+    {
+        iload_0;
+        i2l;
+        lreturn;
+    }
+}

@@ -1,0 +1,63 @@
+super public class CmpOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method lcmp:"(JJ)I"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        lcmp;
+        ireturn;
+    }
+
+    public static Method fcmpl:"(FF)I"
+        stack 2 locals 2
+    {
+        fload_0;
+        fload_1;
+        fcmpl;
+        ireturn;
+    }
+
+    public static Method fcmpg:"(FF)I"
+        stack 2 locals 2
+    {
+        fload_0;
+        fload_1;
+        fcmpg;
+        ireturn;
+    }
+
+    public static Method dcmpl:"(DD)I"
+        stack 4 locals 4
+    {
+        dload_0;
+        dload_2;
+        dcmpl;
+        ireturn;
+    }
+
+    public static Method dcmpg:"(DD)I"
+        stack 4 locals 4
+    {
+        dload_0;
+        dload_2;
+        dcmpg;
+        ireturn;
+    }
+
+    public static Method ldStr:"()Ljava/lang/String;"
+        stack 1 locals 0
+    {
+        ldc String "hi";
+        areturn;
+    }
+}

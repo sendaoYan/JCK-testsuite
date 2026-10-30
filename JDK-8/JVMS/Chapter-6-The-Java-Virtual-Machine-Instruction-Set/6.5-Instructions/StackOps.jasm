@@ -1,0 +1,52 @@
+super public class StackOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // dup duplicates the top int: 5 + 5 == 10
+    public static Method dupTest:"()I"
+        stack 2 locals 1
+    {
+        iconst_5;
+        dup;
+        iadd;
+        ireturn;
+    }
+
+    // swap exchanges the top two ints: computes b - a
+    public static Method swapTest:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        swap;
+        isub;
+        ireturn;
+    }
+
+    // pop discards the top int: returns 1
+    public static Method popTest:"()I"
+        stack 2 locals 1
+    {
+        iconst_1;
+        iconst_2;
+        pop;
+        ireturn;
+    }
+
+    // pop2 discards the top two units (a long): returns 1
+    public static Method pop2Test:"()I"
+        stack 3 locals 1
+    {
+        iconst_1;
+        lconst_0;
+        pop2;
+        ireturn;
+    }
+}

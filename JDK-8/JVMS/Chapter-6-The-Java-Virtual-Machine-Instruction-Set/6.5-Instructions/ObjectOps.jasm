@@ -1,0 +1,60 @@
+super public class ObjectOps
+    version 52:0
+{
+    Field x:I;
+
+    public Method "<init>":"(I)V"
+        stack 2 locals 2
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        aload_0;
+        iload_1;
+        putfield Field x:"I";
+        return;
+    }
+
+    public Method getX:"()I"
+        stack 1 locals 1
+    {
+        aload_0;
+        getfield Field x:"I";
+        ireturn;
+    }
+
+    public Method setX:"(I)V"
+        stack 2 locals 2
+    {
+        aload_0;
+        iload_1;
+        putfield Field x:"I";
+        return;
+    }
+
+    // new + dup + invokespecial, returning the fresh instance as Object
+    public static Method make:"(I)Ljava/lang/Object;"
+        stack 3 locals 1
+    {
+        new class ObjectOps;
+        dup;
+        iload_0;
+        invokespecial Method "<init>":"(I)V";
+        areturn;
+    }
+
+    public static Method isStr:"(Ljava/lang/Object;)Z"
+        stack 1 locals 1
+    {
+        aload_0;
+        instanceof class java/lang/String;
+        ireturn;
+    }
+
+    public static Method cast:"(Ljava/lang/Object;)Ljava/lang/String;"
+        stack 1 locals 1
+    {
+        aload_0;
+        checkcast class java/lang/String;
+        areturn;
+    }
+}

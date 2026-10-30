@@ -1,0 +1,38 @@
+super public class ArrayRefOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method mk:"(I)[Ljava/lang/String;"
+        stack 1 locals 1
+    {
+        iload_0;
+        anewarray class java/lang/String;
+        areturn;
+    }
+
+    public static Method get:"([Ljava/lang/String;I)Ljava/lang/String;"
+        stack 2 locals 2
+    {
+        aload_0;
+        iload_1;
+        aaload;
+        areturn;
+    }
+
+    public static Method set:"([Ljava/lang/String;ILjava/lang/String;)V"
+        stack 3 locals 3
+    {
+        aload_0;
+        iload_1;
+        aload_2;
+        aastore;
+        return;
+    }
+}
