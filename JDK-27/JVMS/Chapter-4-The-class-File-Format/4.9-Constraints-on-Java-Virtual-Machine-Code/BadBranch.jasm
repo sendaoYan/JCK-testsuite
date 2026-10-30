@@ -1,0 +1,21 @@
+super public class BadBranch
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // goto +32767 points well beyond the end of this method's code array,
+    // violating the JVMS 4.9 constraint that every branch target be within
+    // the code array.
+    public static Method bad:"()V"
+        stack 0 locals 0
+    {
+        bytecode 0xA7, 0x7F, 0xFF;
+        return;
+    }
+}
