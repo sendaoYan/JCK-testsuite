@@ -1,0 +1,83 @@
+super public class ControlFlow
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // if_icmpeq: return 1 when a == b, else 0
+    public static Method ifIcmpeq:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmpeq L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    // goto: unconditional branch to the labeled target, returning 7
+    public static Method gotoTest:"()I"
+        stack 1 locals 1
+    {
+        goto L1;
+    L1: stack_frame_type same;
+        bipush 7;
+        ireturn;
+    }
+
+    // tableswitch: dense keys 0..2
+    public static Method tableSwitch:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        tableswitch{ //0 to 2
+            0: L0;
+            1: L1;
+            2: L2;
+            default: Ldef };
+    Ldef: stack_frame_type same;
+        bipush 99;
+        ireturn;
+    L0: stack_frame_type same;
+        bipush 10;
+        ireturn;
+    L1: stack_frame_type same;
+        bipush 20;
+        ireturn;
+    L2: stack_frame_type same;
+        bipush 30;
+        ireturn;
+    }
+
+    // lookupswitch: sparse keys
+    public static Method lookupSwitch:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        lookupswitch{ //3
+            -100: Lneg;
+            0: L0;
+            100: Lpos;
+            default: Ldef };
+    Ldef: stack_frame_type same;
+        bipush 99;
+        ireturn;
+    Lneg: stack_frame_type same;
+        bipush 1;
+        ireturn;
+    L0: stack_frame_type same;
+        bipush 2;
+        ireturn;
+    Lpos: stack_frame_type same;
+        bipush 3;
+        ireturn;
+    }
+}

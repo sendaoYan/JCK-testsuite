@@ -1,0 +1,47 @@
+super public class Arith
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method iadd:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        iadd;
+        ireturn;
+    }
+
+    public static Method idiv:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        idiv;
+        ireturn;
+    }
+
+    public static Method irem:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        irem;
+        ireturn;
+    }
+
+    public static Method ishl:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        ishl;
+        ireturn;
+    }
+}

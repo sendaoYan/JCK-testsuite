@@ -1,0 +1,39 @@
+super public class MonitorOps
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // Enter and exit the monitor on the given object, returning 42.
+    public static Method lockUnlock:"(Ljava/lang/Object;)I"
+        stack 1 locals 2
+    {
+        aload_0;
+        monitorenter;
+        aload_0;
+        monitorexit;
+        bipush 42;
+        ireturn;
+    }
+
+    // Re-entrant acquisition: enter twice, exit twice, return 1.
+    public static Method reentrant:"(Ljava/lang/Object;)I"
+        stack 1 locals 2
+    {
+        aload_0;
+        monitorenter;
+        aload_0;
+        monitorenter;
+        aload_0;
+        monitorexit;
+        aload_0;
+        monitorexit;
+        iconst_1;
+        ireturn;
+    }
+}

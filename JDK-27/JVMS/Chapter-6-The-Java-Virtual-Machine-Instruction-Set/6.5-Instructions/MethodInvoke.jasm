@@ -1,0 +1,29 @@
+super public class MethodInvoke
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // invokevirtual: dispatch on the runtime class of the receiver
+    public static Method callName:"(LAnimal;)Ljava/lang/String;"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokevirtual Method Animal.name:"()Ljava/lang/String;";
+        areturn;
+    }
+
+    // invokeinterface: dispatch through the interface type
+    public static Method callSpeak:"(LSpeaker;)Ljava/lang/String;"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokeinterface InterfaceMethod Speaker.speak:"()Ljava/lang/String;", 1;
+        areturn;
+    }
+}
