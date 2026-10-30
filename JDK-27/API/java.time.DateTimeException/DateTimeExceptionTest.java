@@ -1,11 +1,12 @@
 /*
  * @test
- * @summary java.time.DateTimeException API conformance: hierarchy and the (String)
- *          constructor.
+ * @summary java.time.DateTimeException API conformance: unchecked hierarchy and invalid
+ *          date rejection.
  * @run main DateTimeExceptionTest
  */
 
 import java.time.DateTimeException;
+import java.time.LocalDate;
 
 public class DateTimeExceptionTest {
     static int passed;
@@ -16,9 +17,17 @@ public class DateTimeExceptionTest {
     }
 
     static void testDateTimeException() {
-        DateTimeException e = new DateTimeException("msg");
-        check(e instanceof RuntimeException, "is a RuntimeException");
-        check("msg".equals(e.getMessage()), "(String) constructor");
+        DateTimeException e = new DateTimeException("bad");
+        check("bad".equals(e.getMessage()), "message");
+        check(e instanceof RuntimeException, "is unchecked RuntimeException");
+
+        boolean thrown = false;
+        try {
+            LocalDate.of(2024, 2, 30);
+        } catch (DateTimeException ex) {
+            thrown = true;
+        }
+        check(thrown, "invalid date throws DateTimeException");
     }
 
     public static void main(String[] args) {

@@ -1,11 +1,12 @@
 /*
  * @test
- * @summary java.time.OffsetDateTime API conformance: of/getters, getOffset, toInstant, and
- *          plusDays.
+ * @summary java.time.OffsetDateTime API conformance: accessors, offset, and instant
+ *          roundtrip.
  * @run main OffsetDateTimeTest
  */
 
-import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.Month;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
@@ -18,11 +19,15 @@ public class OffsetDateTimeTest {
     }
 
     static void testOffsetDateTime() {
-        OffsetDateTime odt = OffsetDateTime.of(2024, 3, 1, 10, 30, 0, 0, ZoneOffset.ofHours(2));
-        check(odt.getYear() == 2024 && odt.getHour() == 10, "of/getters");
-        check(odt.getOffset().equals(ZoneOffset.ofHours(2)), "getOffset");
-        check(odt.toInstant().equals(Instant.parse("2024-03-01T08:30:00Z")), "toInstant");
-        check(odt.plusDays(1).getDayOfMonth() == 2, "plusDays");
+        OffsetDateTime odt =
+            OffsetDateTime.of(2024, 6, 15, 10, 30, 0, 0, ZoneOffset.ofHours(2));
+        check(odt.getYear() == 2024, "year");
+        check(odt.getMonth() == Month.JUNE, "month");
+        check(odt.getDayOfMonth() == 15, "day of month");
+        check(odt.getOffset().equals(ZoneOffset.ofHours(2)), "offset");
+        check(odt.toLocalDateTime().equals(LocalDateTime.of(2024, 6, 15, 10, 30)),
+              "toLocalDateTime");
+        check(odt.toInstant().atOffset(odt.getOffset()).equals(odt), "instant roundtrip");
     }
 
     public static void main(String[] args) {

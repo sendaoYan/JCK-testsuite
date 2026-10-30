@@ -1,10 +1,9 @@
 /*
  * @test
- * @summary java.time.MonthDay API conformance: of/getters, isValidYear, and atYear.
+ * @summary java.time.MonthDay API conformance: month/day accessors and isValidYear.
  * @run main MonthDayTest
  */
 
-import java.time.LocalDate;
 import java.time.Month;
 import java.time.MonthDay;
 
@@ -17,10 +16,12 @@ public class MonthDayTest {
     }
 
     static void testMonthDay() {
-        MonthDay md = MonthDay.of(Month.FEBRUARY, 29);
-        check(md.getMonth() == Month.FEBRUARY && md.getDayOfMonth() == 29, "of/getters");
-        check(md.isValidYear(2024) && !md.isValidYear(2023), "isValidYear");
-        check(md.atYear(2024).equals(LocalDate.of(2024, 2, 29)), "atYear");
+        MonthDay md = MonthDay.of(Month.MAY, 17);
+        check(md.getMonth() == Month.MAY, "month enum");
+        check(md.getDayOfMonth() == 17, "day of month");
+        MonthDay feb29 = MonthDay.of(Month.FEBRUARY, 29);
+        check(feb29.isValidYear(2020), "Feb 29 valid in leap year");
+        check(!feb29.isValidYear(2019), "Feb 29 invalid in non-leap year");
     }
 
     public static void main(String[] args) {

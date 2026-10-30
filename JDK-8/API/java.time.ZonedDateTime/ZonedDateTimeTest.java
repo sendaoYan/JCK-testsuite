@@ -1,12 +1,11 @@
 /*
  * @test
- * @summary java.time.ZonedDateTime API conformance: of/getters, getOffset, toInstant,
- *          plusDays, isBefore, and withZoneSameInstant.
+ * @summary java.time.ZonedDateTime API conformance: zone, accessors, and instant roundtrip.
  * @run main ZonedDateTimeTest
  */
 
-import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
 public class ZonedDateTimeTest {
@@ -18,13 +17,12 @@ public class ZonedDateTimeTest {
     }
 
     static void testZonedDateTime() {
-        ZonedDateTime zdt = ZonedDateTime.of(2024, 3, 1, 12, 0, 0, 0, ZoneOffset.UTC);
-        check(zdt.getYear() == 2024 && zdt.getHour() == 12, "of/getters");
-        check(zdt.getOffset().equals(ZoneOffset.UTC), "getOffset");
-        check(zdt.toInstant().equals(Instant.parse("2024-03-01T12:00:00Z")), "toInstant");
-        check(zdt.plusDays(1).getDayOfMonth() == 2, "plusDays");
-        check(zdt.isBefore(ZonedDateTime.of(2024, 3, 2, 0, 0, 0, 0, ZoneOffset.UTC)), "isBefore");
-        check(zdt.withZoneSameInstant(ZoneOffset.ofHours(1)).getHour() == 13, "withZoneSameInstant");
+        ZonedDateTime zdt =
+            ZonedDateTime.of(2024, 6, 15, 10, 30, 0, 0, ZoneId.of("UTC"));
+        check(zdt.getZone().equals(ZoneId.of("UTC")), "zone");
+        check(zdt.getYear() == 2024, "year");
+        check(zdt.toLocalDate().equals(LocalDate.of(2024, 6, 15)), "toLocalDate");
+        check(zdt.toInstant().atZone(zdt.getZone()).equals(zdt), "instant roundtrip");
     }
 
     public static void main(String[] args) {

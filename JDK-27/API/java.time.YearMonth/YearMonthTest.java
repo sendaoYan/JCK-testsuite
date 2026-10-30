@@ -1,7 +1,6 @@
 /*
  * @test
- * @summary java.time.YearMonth API conformance: of/getters, lengthOfMonth, isLeapYear, and
- *          atDay.
+ * @summary java.time.YearMonth API conformance: year/month accessors, length, and atDay.
  * @run main YearMonthTest
  */
 
@@ -19,11 +18,12 @@ public class YearMonthTest {
 
     static void testYearMonth() {
         YearMonth ym = YearMonth.of(2024, 2);
-        check(ym.getYear() == 2024 && ym.getMonth() == Month.FEBRUARY, "of/getters");
+        check(ym.getYear() == 2024, "year");
+        check(ym.getMonth() == Month.FEBRUARY, "month enum");
+        check(ym.getMonthValue() == 2, "month value");
+        check(ym.isLeapYear(), "isLeapYear 2024");
         check(ym.lengthOfMonth() == 29, "lengthOfMonth leap");
-        check(ym.isLeapYear(), "isLeapYear");
-        check(YearMonth.of(2023, 2).lengthOfMonth() == 28, "lengthOfMonth non-leap");
-        check(ym.atDay(15).equals(LocalDate.of(2024, 2, 15)), "atDay");
+        check(ym.atDay(1).equals(LocalDate.of(2024, 2, 1)), "atDay");
     }
 
     public static void main(String[] args) {

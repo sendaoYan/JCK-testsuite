@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.time.Year API conformance: getValue, isLeap, length, and atDay.
+ * @summary java.time.Year API conformance: value, leap, length, and atDay.
  * @run main YearTest
  */
 
@@ -17,10 +17,14 @@ public class YearTest {
 
     static void testYear() {
         Year y = Year.of(2024);
-        check(y.getValue() == 2024, "getValue");
-        check(y.isLeap() && !Year.of(2023).isLeap(), "isLeap");
-        check(y.length() == 366 && Year.of(2023).length() == 365, "length");
-        check(y.atDay(60).equals(LocalDate.of(2024, 2, 29)), "atDay");
+        check(y.getValue() == 2024, "value");
+        check(y.isLeap(), "isLeap 2024");
+        check(!Year.of(2023).isLeap(), "2023 not leap");
+        check(y.length() == 366, "length 366");
+        check(Year.of(2023).length() == 365, "length 365");
+        check(y.atDay(60).equals(LocalDate.of(2024, 2, 29)), "atDay 60 leap");
+        check(Year.of(2023).atDay(60).equals(LocalDate.of(2023, 3, 1)),
+              "atDay 60 non-leap");
     }
 
     public static void main(String[] args) {
