@@ -1,0 +1,65 @@
+super public class FloatArith
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method ladd:"(JJ)J"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        ladd;
+        lreturn;
+    }
+
+    public static Method fadd:"(FF)F"
+        stack 2 locals 2
+    {
+        fload_0;
+        fload_1;
+        fadd;
+        freturn;
+    }
+
+    public static Method dadd:"(DD)D"
+        stack 4 locals 4
+    {
+        dload_0;
+        dload_2;
+        dadd;
+        dreturn;
+    }
+
+    public static Method fdiv:"(FF)F"
+        stack 2 locals 2
+    {
+        fload_0;
+        fload_1;
+        fdiv;
+        freturn;
+    }
+
+    public static Method ddiv:"(DD)D"
+        stack 4 locals 4
+    {
+        dload_0;
+        dload_2;
+        ddiv;
+        dreturn;
+    }
+
+    public static Method frem:"(FF)F"
+        stack 2 locals 2
+    {
+        fload_0;
+        fload_1;
+        frem;
+        freturn;
+    }
+}

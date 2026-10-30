@@ -1,0 +1,32 @@
+super public class ExceptionOps
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // athrow a freshly constructed NullPointerException
+    public static Method throwNPE:"()V"
+        stack 2 locals 0
+    {
+        new class java/lang/NullPointerException;
+        dup;
+        invokespecial Method java/lang/NullPointerException."<init>":"()V";
+        athrow;
+    }
+
+    // athrow an IllegalArgumentException carrying a message
+    public static Method throwMessage:"(Ljava/lang/String;)V"
+        stack 3 locals 1
+    {
+        new class java/lang/IllegalArgumentException;
+        dup;
+        aload_0;
+        invokespecial Method java/lang/IllegalArgumentException."<init>":"(Ljava/lang/String;)V";
+        athrow;
+    }
+}
