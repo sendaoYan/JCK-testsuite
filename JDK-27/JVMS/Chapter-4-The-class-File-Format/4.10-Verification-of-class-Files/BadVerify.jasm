@@ -1,0 +1,20 @@
+super public class BadVerify
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // Declared to return int, but pushes a reference and returns it:
+    // verification must reject this with a VerifyError.
+    public static Method bad:"()I"
+        stack 1 locals 0
+    {
+        aconst_null;
+        ireturn;
+    }
+}
