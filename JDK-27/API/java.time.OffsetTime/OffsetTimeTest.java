@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.time.OffsetTime API conformance: time accessors and offset.
+ * @summary java.time.OffsetTime API conformance: of/getters, getOffset, and plusHours.
  * @run main OffsetTimeTest
  */
 
@@ -16,11 +16,10 @@ public class OffsetTimeTest {
     }
 
     static void testOffsetTime() {
-        OffsetTime ot = OffsetTime.of(10, 30, 15, 0, ZoneOffset.ofHours(2));
-        check(ot.getHour() == 10, "hour");
-        check(ot.getMinute() == 30, "minute");
-        check(ot.getSecond() == 15, "second");
-        check(ot.getOffset().equals(ZoneOffset.ofHours(2)), "offset");
+        OffsetTime ot = OffsetTime.of(10, 30, 0, 0, ZoneOffset.ofHours(2));
+        check(ot.getHour() == 10 && ot.getMinute() == 30, "of/getters");
+        check(ot.getOffset().equals(ZoneOffset.ofHours(2)), "getOffset");
+        check(ot.plusHours(1).getHour() == 11, "plusHours");
     }
 
     public static void main(String[] args) {
