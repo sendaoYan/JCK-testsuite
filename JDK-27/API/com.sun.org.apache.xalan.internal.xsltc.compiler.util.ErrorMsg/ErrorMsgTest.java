@@ -1,0 +1,161 @@
+/*
+ * @test
+ * @summary com.sun.org.apache.xalan.internal.xsltc.compiler.util.ErrorMsg conformance: internal package reflection.
+ * @modules java.xml/com.sun.org.apache.xalan.internal.xsltc.compiler.util:+open
+ * @run main ErrorMsgTest
+ */
+public class ErrorMsgTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.org.apache.xalan.internal.xsltc.compiler.util.ErrorMsg", false, ErrorMsgTest.class.getClassLoader());
+        check(c.getName().equals("com.sun.org.apache.xalan.internal.xsltc.compiler.util.ErrorMsg"), "name");
+        check(c.isInterface() == false, "isInterface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) == false, "isAbstract");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()) == true, "isFinal");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
+        java.util.Set<String> ifs = new java.util.HashSet<>();
+        for (Class<?> i : c.getInterfaces()) ifs.add(i.getName());
+        check(ifs.size() == 0, "interface-count");
+        java.util.Set<String> ec = new java.util.HashSet<>();
+        java.util.Set<String> fd = new java.util.HashSet<>();
+        java.util.Set<String> md = new java.util.HashSet<>();
+        for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+            if (f.isEnumConstant()) ec.add(f.getName());
+            else if (java.lang.reflect.Modifier.isPublic(f.getModifiers()) || java.lang.reflect.Modifier.isProtected(f.getModifiers())) fd.add(f.getName());
+        }
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            if (java.lang.reflect.Modifier.isPublic(m.getModifiers()) || java.lang.reflect.Modifier.isProtected(m.getModifiers())) md.add(m.getName());
+        }
+        check(ec.size() == 0, "enum-constant-count");
+        check(fd.size() == 120, "field-count");
+        check(fd.contains("MULTIPLE_STYLESHEET_ERR"), "field-MULTIPLE_STYLESHEET_ERR");
+        check(fd.contains("TEMPLATE_REDEF_ERR"), "field-TEMPLATE_REDEF_ERR");
+        check(fd.contains("TEMPLATE_UNDEF_ERR"), "field-TEMPLATE_UNDEF_ERR");
+        check(fd.contains("VARIABLE_REDEF_ERR"), "field-VARIABLE_REDEF_ERR");
+        check(fd.contains("VARIABLE_UNDEF_ERR"), "field-VARIABLE_UNDEF_ERR");
+        check(fd.contains("CLASS_NOT_FOUND_ERR"), "field-CLASS_NOT_FOUND_ERR");
+        check(fd.contains("METHOD_NOT_FOUND_ERR"), "field-METHOD_NOT_FOUND_ERR");
+        check(fd.contains("ARGUMENT_CONVERSION_ERR"), "field-ARGUMENT_CONVERSION_ERR");
+        check(fd.contains("FILE_NOT_FOUND_ERR"), "field-FILE_NOT_FOUND_ERR");
+        check(fd.contains("INVALID_URI_ERR"), "field-INVALID_URI_ERR");
+        check(fd.contains("CATALOG_EXCEPTION"), "field-CATALOG_EXCEPTION");
+        check(fd.contains("FILE_ACCESS_ERR"), "field-FILE_ACCESS_ERR");
+        check(fd.contains("MISSING_ROOT_ERR"), "field-MISSING_ROOT_ERR");
+        check(fd.contains("NAMESPACE_UNDEF_ERR"), "field-NAMESPACE_UNDEF_ERR");
+        check(fd.contains("FUNCTION_RESOLVE_ERR"), "field-FUNCTION_RESOLVE_ERR");
+        check(fd.contains("NEED_LITERAL_ERR"), "field-NEED_LITERAL_ERR");
+        check(fd.contains("XPATH_PARSER_ERR"), "field-XPATH_PARSER_ERR");
+        check(fd.contains("REQUIRED_ATTR_ERR"), "field-REQUIRED_ATTR_ERR");
+        check(fd.contains("ILLEGAL_CHAR_ERR"), "field-ILLEGAL_CHAR_ERR");
+        check(fd.contains("ILLEGAL_PI_ERR"), "field-ILLEGAL_PI_ERR");
+        check(fd.contains("STRAY_ATTRIBUTE_ERR"), "field-STRAY_ATTRIBUTE_ERR");
+        check(fd.contains("ILLEGAL_ATTRIBUTE_ERR"), "field-ILLEGAL_ATTRIBUTE_ERR");
+        check(fd.contains("CIRCULAR_INCLUDE_ERR"), "field-CIRCULAR_INCLUDE_ERR");
+        check(fd.contains("IMPORT_PRECEDE_OTHERS_ERR"), "field-IMPORT_PRECEDE_OTHERS_ERR");
+        check(fd.contains("RESULT_TREE_SORT_ERR"), "field-RESULT_TREE_SORT_ERR");
+        check(fd.contains("SYMBOLS_REDEF_ERR"), "field-SYMBOLS_REDEF_ERR");
+        check(fd.contains("XSL_VERSION_ERR"), "field-XSL_VERSION_ERR");
+        check(fd.contains("CIRCULAR_VARIABLE_ERR"), "field-CIRCULAR_VARIABLE_ERR");
+        check(fd.contains("ILLEGAL_BINARY_OP_ERR"), "field-ILLEGAL_BINARY_OP_ERR");
+        check(fd.contains("ILLEGAL_ARG_ERR"), "field-ILLEGAL_ARG_ERR");
+        check(fd.contains("DOCUMENT_ARG_ERR"), "field-DOCUMENT_ARG_ERR");
+        check(fd.contains("MISSING_WHEN_ERR"), "field-MISSING_WHEN_ERR");
+        check(fd.contains("MULTIPLE_OTHERWISE_ERR"), "field-MULTIPLE_OTHERWISE_ERR");
+        check(fd.contains("STRAY_OTHERWISE_ERR"), "field-STRAY_OTHERWISE_ERR");
+        check(fd.contains("STRAY_WHEN_ERR"), "field-STRAY_WHEN_ERR");
+        check(fd.contains("WHEN_ELEMENT_ERR"), "field-WHEN_ELEMENT_ERR");
+        check(fd.contains("UNNAMED_ATTRIBSET_ERR"), "field-UNNAMED_ATTRIBSET_ERR");
+        check(fd.contains("ILLEGAL_CHILD_ERR"), "field-ILLEGAL_CHILD_ERR");
+        check(fd.contains("ILLEGAL_ELEM_NAME_ERR"), "field-ILLEGAL_ELEM_NAME_ERR");
+        check(fd.contains("ILLEGAL_ATTR_NAME_ERR"), "field-ILLEGAL_ATTR_NAME_ERR");
+        check(fd.contains("ILLEGAL_TEXT_NODE_ERR"), "field-ILLEGAL_TEXT_NODE_ERR");
+        check(fd.contains("SAX_PARSER_CONFIG_ERR"), "field-SAX_PARSER_CONFIG_ERR");
+        check(fd.contains("INTERNAL_ERR"), "field-INTERNAL_ERR");
+        check(fd.contains("UNSUPPORTED_XSL_ERR"), "field-UNSUPPORTED_XSL_ERR");
+        check(fd.contains("UNSUPPORTED_EXT_ERR"), "field-UNSUPPORTED_EXT_ERR");
+        check(fd.contains("MISSING_XSLT_URI_ERR"), "field-MISSING_XSLT_URI_ERR");
+        check(fd.contains("MISSING_XSLT_TARGET_ERR"), "field-MISSING_XSLT_TARGET_ERR");
+        check(fd.contains("ACCESSING_XSLT_TARGET_ERR"), "field-ACCESSING_XSLT_TARGET_ERR");
+        check(fd.contains("NOT_IMPLEMENTED_ERR"), "field-NOT_IMPLEMENTED_ERR");
+        check(fd.contains("NOT_STYLESHEET_ERR"), "field-NOT_STYLESHEET_ERR");
+        check(fd.contains("ELEMENT_PARSE_ERR"), "field-ELEMENT_PARSE_ERR");
+        check(fd.contains("KEY_USE_ATTR_ERR"), "field-KEY_USE_ATTR_ERR");
+        check(fd.contains("OUTPUT_VERSION_ERR"), "field-OUTPUT_VERSION_ERR");
+        check(fd.contains("ILLEGAL_RELAT_OP_ERR"), "field-ILLEGAL_RELAT_OP_ERR");
+        check(fd.contains("ATTRIBSET_UNDEF_ERR"), "field-ATTRIBSET_UNDEF_ERR");
+        check(fd.contains("ATTR_VAL_TEMPLATE_ERR"), "field-ATTR_VAL_TEMPLATE_ERR");
+        check(fd.contains("UNKNOWN_SIG_TYPE_ERR"), "field-UNKNOWN_SIG_TYPE_ERR");
+        check(fd.contains("DATA_CONVERSION_ERR"), "field-DATA_CONVERSION_ERR");
+        check(fd.contains("UNSUPPORTED_EXT_FUNC_ERR"), "field-UNSUPPORTED_EXT_FUNC_ERR");
+        check(fd.contains("NO_TRANSLET_CLASS_ERR"), "field-NO_TRANSLET_CLASS_ERR");
+        check(fd.contains("NO_MAIN_TRANSLET_ERR"), "field-NO_MAIN_TRANSLET_ERR");
+        check(fd.contains("TRANSLET_CLASS_ERR"), "field-TRANSLET_CLASS_ERR");
+        check(fd.contains("TRANSLET_OBJECT_ERR"), "field-TRANSLET_OBJECT_ERR");
+        check(fd.contains("ERROR_LISTENER_NULL_ERR"), "field-ERROR_LISTENER_NULL_ERR");
+        check(fd.contains("JAXP_UNKNOWN_SOURCE_ERR"), "field-JAXP_UNKNOWN_SOURCE_ERR");
+        check(fd.contains("JAXP_NO_SOURCE_ERR"), "field-JAXP_NO_SOURCE_ERR");
+        check(fd.contains("JAXP_COMPILE_ERR"), "field-JAXP_COMPILE_ERR");
+        check(fd.contains("JAXP_INVALID_ATTR_ERR"), "field-JAXP_INVALID_ATTR_ERR");
+        check(fd.contains("JAXP_INVALID_ATTR_VALUE_ERR"), "field-JAXP_INVALID_ATTR_VALUE_ERR");
+        check(fd.contains("JAXP_SET_RESULT_ERR"), "field-JAXP_SET_RESULT_ERR");
+        check(fd.contains("JAXP_NO_TRANSLET_ERR"), "field-JAXP_NO_TRANSLET_ERR");
+        check(fd.contains("JAXP_NO_HANDLER_ERR"), "field-JAXP_NO_HANDLER_ERR");
+        check(fd.contains("JAXP_NO_RESULT_ERR"), "field-JAXP_NO_RESULT_ERR");
+        check(fd.contains("JAXP_UNKNOWN_PROP_ERR"), "field-JAXP_UNKNOWN_PROP_ERR");
+        check(fd.contains("SAX2DOM_ADAPTER_ERR"), "field-SAX2DOM_ADAPTER_ERR");
+        check(fd.contains("XSLTC_SOURCE_ERR"), "field-XSLTC_SOURCE_ERR");
+        check(fd.contains("ER_RESULT_NULL"), "field-ER_RESULT_NULL");
+        check(fd.contains("JAXP_INVALID_SET_PARAM_VALUE"), "field-JAXP_INVALID_SET_PARAM_VALUE");
+        check(fd.contains("JAXP_SET_FEATURE_NULL_NAME"), "field-JAXP_SET_FEATURE_NULL_NAME");
+        check(fd.contains("JAXP_GET_FEATURE_NULL_NAME"), "field-JAXP_GET_FEATURE_NULL_NAME");
+        check(fd.contains("JAXP_UNSUPPORTED_FEATURE"), "field-JAXP_UNSUPPORTED_FEATURE");
+        check(fd.contains("JAXP_SECUREPROCESSING_FEATURE"), "field-JAXP_SECUREPROCESSING_FEATURE");
+        check(fd.contains("COMPILE_STDIN_ERR"), "field-COMPILE_STDIN_ERR");
+        check(fd.contains("COMPILE_USAGE_STR"), "field-COMPILE_USAGE_STR");
+        check(fd.contains("TRANSFORM_USAGE_STR"), "field-TRANSFORM_USAGE_STR");
+        check(fd.contains("STRAY_SORT_ERR"), "field-STRAY_SORT_ERR");
+        check(fd.contains("UNSUPPORTED_ENCODING"), "field-UNSUPPORTED_ENCODING");
+        check(fd.contains("SYNTAX_ERR"), "field-SYNTAX_ERR");
+        check(fd.contains("CONSTRUCTOR_NOT_FOUND"), "field-CONSTRUCTOR_NOT_FOUND");
+        check(fd.contains("NO_JAVA_FUNCT_THIS_REF"), "field-NO_JAVA_FUNCT_THIS_REF");
+        check(fd.contains("TYPE_CHECK_ERR"), "field-TYPE_CHECK_ERR");
+        check(fd.contains("TYPE_CHECK_UNK_LOC_ERR"), "field-TYPE_CHECK_UNK_LOC_ERR");
+        check(fd.contains("ILLEGAL_CMDLINE_OPTION_ERR"), "field-ILLEGAL_CMDLINE_OPTION_ERR");
+        check(fd.contains("CMDLINE_OPT_MISSING_ARG_ERR"), "field-CMDLINE_OPT_MISSING_ARG_ERR");
+        check(fd.contains("WARNING_PLUS_WRAPPED_MSG"), "field-WARNING_PLUS_WRAPPED_MSG");
+        check(fd.contains("WARNING_MSG"), "field-WARNING_MSG");
+        check(fd.contains("FATAL_ERR_PLUS_WRAPPED_MSG"), "field-FATAL_ERR_PLUS_WRAPPED_MSG");
+        check(fd.contains("FATAL_ERR_MSG"), "field-FATAL_ERR_MSG");
+        check(fd.contains("ERROR_PLUS_WRAPPED_MSG"), "field-ERROR_PLUS_WRAPPED_MSG");
+        check(fd.contains("ERROR_MSG"), "field-ERROR_MSG");
+        check(fd.contains("TRANSFORM_WITH_TRANSLET_STR"), "field-TRANSFORM_WITH_TRANSLET_STR");
+        check(fd.contains("TRANSFORM_WITH_JAR_STR"), "field-TRANSFORM_WITH_JAR_STR");
+        check(fd.contains("COULD_NOT_CREATE_TRANS_FACT"), "field-COULD_NOT_CREATE_TRANS_FACT");
+        check(fd.contains("TRANSLET_NAME_JAVA_CONFLICT"), "field-TRANSLET_NAME_JAVA_CONFLICT");
+        check(fd.contains("INVALID_QNAME_ERR"), "field-INVALID_QNAME_ERR");
+        check(fd.contains("INVALID_NCNAME_ERR"), "field-INVALID_NCNAME_ERR");
+        check(fd.contains("INVALID_METHOD_IN_OUTPUT"), "field-INVALID_METHOD_IN_OUTPUT");
+        check(fd.contains("OUTLINE_ERR_TRY_CATCH"), "field-OUTLINE_ERR_TRY_CATCH");
+        check(fd.contains("OUTLINE_ERR_UNBALANCED_MARKERS"), "field-OUTLINE_ERR_UNBALANCED_MARKERS");
+        check(fd.contains("OUTLINE_ERR_DELETED_TARGET"), "field-OUTLINE_ERR_DELETED_TARGET");
+        check(fd.contains("OUTLINE_ERR_METHOD_TOO_BIG"), "field-OUTLINE_ERR_METHOD_TOO_BIG");
+        check(fd.contains("XPATH_LIMIT"), "field-XPATH_LIMIT");
+        check(fd.contains("XPATH_GROUP_LIMIT"), "field-XPATH_GROUP_LIMIT");
+        check(fd.contains("XPATH_OPERATOR_LIMIT"), "field-XPATH_OPERATOR_LIMIT");
+        check(fd.contains("XPATH_TOTAL_OPERATOR_LIMIT"), "field-XPATH_TOTAL_OPERATOR_LIMIT");
+        check(fd.contains("DESERIALIZE_TRANSLET_ERR"), "field-DESERIALIZE_TRANSLET_ERR");
+        check(fd.contains("ERROR_MESSAGES_KEY"), "field-ERROR_MESSAGES_KEY");
+        check(fd.contains("COMPILER_ERROR_KEY"), "field-COMPILER_ERROR_KEY");
+        check(fd.contains("COMPILER_WARNING_KEY"), "field-COMPILER_WARNING_KEY");
+        check(fd.contains("RUNTIME_ERROR_KEY"), "field-RUNTIME_ERROR_KEY");
+        check(md.size() == 4, "method-count");
+        check(md.contains("getCause"), "method-getCause");
+        check(md.contains("isWarningError"), "method-isWarningError");
+        check(md.contains("setWarningError"), "method-setWarningError");
+        check(md.contains("toString"), "method-toString");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
