@@ -1,0 +1,24 @@
+/*
+ * @test
+ * @summary jdk.jpackage.internal.cli.Main.Provider conformance: internal final class reflection.
+ * @modules jdk.jpackage/jdk.jpackage.internal.cli:+open
+ * @run main ProviderTest
+ */
+public class ProviderTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("jdk.jpackage.internal.cli.Main$Provider", false, ProviderTest.class.getClassLoader());
+        check(c != null, "loads");
+        check(c.isInterface() == false, "isInterface");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(c.isEnum() == false, "isEnum");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()) == true, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Record"), "superclass");
+        check(c.getInterfaces().length == 1, "1 direct interfaces");
+        check(c.getDeclaredMethods().length == 8, "8 declared methods");
+        check(c.getDeclaredFields().length == 2, "2 declared fields");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
