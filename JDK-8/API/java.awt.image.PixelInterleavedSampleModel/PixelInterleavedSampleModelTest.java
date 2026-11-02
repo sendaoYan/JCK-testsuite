@@ -1,0 +1,31 @@
+/*
+ * @test
+ * @summary java.awt.image.PixelInterleavedSampleModel conformance: class reflection.
+ * @run main PixelInterleavedSampleModelTest
+ */
+
+public class PixelInterleavedSampleModelTest {
+    static int passed;
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    static boolean hasMethod(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getMethods())
+            if (m.getName().equals(name)) return true;
+        return false;
+    }
+
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("java.awt.image.PixelInterleavedSampleModel");
+        check(!c.isInterface() && !c.isEnum(), "is class");
+        check(c.getSuperclass().getName().equals("java.awt.image.ComponentSampleModel"), "superclass java.awt.image.ComponentSampleModel");
+        check(c.getInterfaces().length == 0, "no direct interfaces");
+        check(hasMethod(c, "createCompatibleSampleModel"), "method createCompatibleSampleModel");
+        check(hasMethod(c, "createSubsetSampleModel"), "method createSubsetSampleModel");
+        check(hasMethod(c, "hashCode"), "method hashCode");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
