@@ -1,0 +1,166 @@
+/*
+ * @test
+ * @summary com.sun.rowset.internal.SyncResolverImpl conformance: hierarchy and declared members via reflection.
+ * @run main SyncResolverImplTest
+ */
+
+public class SyncResolverImplTest {
+    static int passed;
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.rowset.internal.SyncResolverImpl", false, null);
+        check(c.getName().equals("com.sun.rowset.internal.SyncResolverImpl"), "binary name");
+        check(c.isInterface() == false, "is interface");
+        check(c.isEnum() == false, "is enum");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) == false, "is abstract");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("com.sun.rowset.CachedRowSetImpl"), "superclass com.sun.rowset.CachedRowSetImpl");
+        java.util.Set<String> in = new java.util.HashSet<String>();
+        for (Class<?> i : c.getInterfaces()) in.add(i.getName());
+        check(in.contains("javax.sql.rowset.spi.SyncResolver"), "implements javax.sql.rowset.spi.SyncResolver");
+        java.util.Set<String> ms = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) ms.add(m.getName());
+        check(ms.contains("absolute"), "declares absolute");
+        check(ms.contains("acceptChanges"), "declares acceptChanges");
+        check(ms.contains("afterLast"), "declares afterLast");
+        check(ms.contains("beforeFirst"), "declares beforeFirst");
+        check(ms.contains("buildCachedRow"), "declares buildCachedRow");
+        check(ms.contains("cancelRowUpdates"), "declares cancelRowUpdates");
+        check(ms.contains("clearWarnings"), "declares clearWarnings");
+        check(ms.contains("clone"), "declares clone");
+        check(ms.contains("close"), "declares close");
+        check(ms.contains("columnUpdated"), "declares columnUpdated");
+        check(ms.contains("commit"), "declares commit");
+        check(ms.contains("createCopy"), "declares createCopy");
+        check(ms.contains("createCopyNoConstraints"), "declares createCopyNoConstraints");
+        check(ms.contains("createCopySchema"), "declares createCopySchema");
+        check(ms.contains("createShared"), "declares createShared");
+        check(ms.contains("deleteRow"), "declares deleteRow");
+        check(ms.contains("execute"), "declares execute");
+        check(ms.contains("findColumn"), "declares findColumn");
+        check(ms.contains("first"), "declares first");
+        check(ms.contains("getArray"), "declares getArray");
+        check(ms.contains("getAsciiStream"), "declares getAsciiStream");
+        check(ms.contains("getBigDecimal"), "declares getBigDecimal");
+        check(ms.contains("getBinaryStream"), "declares getBinaryStream");
+        check(ms.contains("getBlob"), "declares getBlob");
+        check(ms.contains("getBoolean"), "declares getBoolean");
+        check(ms.contains("getByte"), "declares getByte");
+        check(ms.contains("getBytes"), "declares getBytes");
+        check(ms.contains("getCharacterStream"), "declares getCharacterStream");
+        check(ms.contains("getClob"), "declares getClob");
+        check(ms.contains("getConflictValue"), "declares getConflictValue");
+        check(ms.contains("getConnection"), "declares getConnection");
+        check(ms.contains("getCurrentRow"), "declares getCurrentRow");
+        check(ms.contains("getCursorName"), "declares getCursorName");
+        check(ms.contains("getDate"), "declares getDate");
+        check(ms.contains("getDouble"), "declares getDouble");
+        check(ms.contains("getFloat"), "declares getFloat");
+        check(ms.contains("getInt"), "declares getInt");
+        check(ms.contains("getKeyColumns"), "declares getKeyColumns");
+        check(ms.contains("getLong"), "declares getLong");
+        check(ms.contains("getMatchColumnIndexes"), "declares getMatchColumnIndexes");
+        check(ms.contains("getMatchColumnNames"), "declares getMatchColumnNames");
+        check(ms.contains("getMetaData"), "declares getMetaData");
+        check(ms.contains("getObject"), "declares getObject");
+        check(ms.contains("getOriginal"), "declares getOriginal");
+        check(ms.contains("getOriginalRow"), "declares getOriginalRow");
+        check(ms.contains("getPageSize"), "declares getPageSize");
+        check(ms.contains("getRef"), "declares getRef");
+        check(ms.contains("getRow"), "declares getRow");
+        check(ms.contains("getRowSetWarnings"), "declares getRowSetWarnings");
+        check(ms.contains("getShort"), "declares getShort");
+        check(ms.contains("getStatement"), "declares getStatement");
+        check(ms.contains("getStatus"), "declares getStatus");
+        check(ms.contains("getString"), "declares getString");
+        check(ms.contains("getSyncProvider"), "declares getSyncProvider");
+        check(ms.contains("getTableName"), "declares getTableName");
+        check(ms.contains("getTime"), "declares getTime");
+        check(ms.contains("getTimestamp"), "declares getTimestamp");
+        check(ms.contains("getURL"), "declares getURL");
+        check(ms.contains("getUnicodeStream"), "declares getUnicodeStream");
+        check(ms.contains("getWarnings"), "declares getWarnings");
+        check(ms.contains("insertRow"), "declares insertRow");
+        check(ms.contains("internalFirst"), "declares internalFirst");
+        check(ms.contains("internalLast"), "declares internalLast");
+        check(ms.contains("internalNext"), "declares internalNext");
+        check(ms.contains("internalPrevious"), "declares internalPrevious");
+        check(ms.contains("isAfterLast"), "declares isAfterLast");
+        check(ms.contains("isBeforeFirst"), "declares isBeforeFirst");
+        check(ms.contains("isFirst"), "declares isFirst");
+        check(ms.contains("isLast"), "declares isLast");
+        check(ms.contains("last"), "declares last");
+        check(ms.contains("moveToCurrentRow"), "declares moveToCurrentRow");
+        check(ms.contains("moveToInsertRow"), "declares moveToInsertRow");
+        check(ms.contains("next"), "declares next");
+        check(ms.contains("nextConflict"), "declares nextConflict");
+        check(ms.contains("nextPage"), "declares nextPage");
+        check(ms.contains("populate"), "declares populate");
+        check(ms.contains("previous"), "declares previous");
+        check(ms.contains("previousConflict"), "declares previousConflict");
+        check(ms.contains("previousPage"), "declares previousPage");
+        check(ms.contains("readObject"), "declares readObject");
+        check(ms.contains("refreshRow"), "declares refreshRow");
+        check(ms.contains("relative"), "declares relative");
+        check(ms.contains("release"), "declares release");
+        check(ms.contains("removeCurrentRow"), "declares removeCurrentRow");
+        check(ms.contains("restoreOriginal"), "declares restoreOriginal");
+        check(ms.contains("rollback"), "declares rollback");
+        check(ms.contains("rowDeleted"), "declares rowDeleted");
+        check(ms.contains("rowInserted"), "declares rowInserted");
+        check(ms.contains("rowSetPopulated"), "declares rowSetPopulated");
+        check(ms.contains("rowUpdated"), "declares rowUpdated");
+        check(ms.contains("setCachedRowSet"), "declares setCachedRowSet");
+        check(ms.contains("setCachedRowSetResolver"), "declares setCachedRowSetResolver");
+        check(ms.contains("setCachedRowSetWriter"), "declares setCachedRowSetWriter");
+        check(ms.contains("setCommand"), "declares setCommand");
+        check(ms.contains("setKeyColumns"), "declares setKeyColumns");
+        check(ms.contains("setMatchColumn"), "declares setMatchColumn");
+        check(ms.contains("setMetaData"), "declares setMetaData");
+        check(ms.contains("setOriginal"), "declares setOriginal");
+        check(ms.contains("setOriginalRow"), "declares setOriginalRow");
+        check(ms.contains("setPageSize"), "declares setPageSize");
+        check(ms.contains("setResolvedValue"), "declares setResolvedValue");
+        check(ms.contains("setStatus"), "declares setStatus");
+        check(ms.contains("setSyncProvider"), "declares setSyncProvider");
+        check(ms.contains("setTableName"), "declares setTableName");
+        check(ms.contains("size"), "declares size");
+        check(ms.contains("toCollection"), "declares toCollection");
+        check(ms.contains("undoDelete"), "declares undoDelete");
+        check(ms.contains("undoInsert"), "declares undoInsert");
+        check(ms.contains("undoUpdate"), "declares undoUpdate");
+        check(ms.contains("unsetMatchColumn"), "declares unsetMatchColumn");
+        check(ms.contains("updateArray"), "declares updateArray");
+        check(ms.contains("updateAsciiStream"), "declares updateAsciiStream");
+        check(ms.contains("updateBigDecimal"), "declares updateBigDecimal");
+        check(ms.contains("updateBinaryStream"), "declares updateBinaryStream");
+        check(ms.contains("updateBlob"), "declares updateBlob");
+        check(ms.contains("updateBoolean"), "declares updateBoolean");
+        check(ms.contains("updateByte"), "declares updateByte");
+        check(ms.contains("updateBytes"), "declares updateBytes");
+        check(ms.contains("updateCharacterStream"), "declares updateCharacterStream");
+        check(ms.contains("updateClob"), "declares updateClob");
+        check(ms.contains("updateDate"), "declares updateDate");
+        check(ms.contains("updateDouble"), "declares updateDouble");
+        check(ms.contains("updateFloat"), "declares updateFloat");
+        check(ms.contains("updateInt"), "declares updateInt");
+        check(ms.contains("updateLong"), "declares updateLong");
+        check(ms.contains("updateNCharacterStream"), "declares updateNCharacterStream");
+        check(ms.contains("updateNull"), "declares updateNull");
+        check(ms.contains("updateObject"), "declares updateObject");
+        check(ms.contains("updateRef"), "declares updateRef");
+        check(ms.contains("updateRow"), "declares updateRow");
+        check(ms.contains("updateShort"), "declares updateShort");
+        check(ms.contains("updateString"), "declares updateString");
+        check(ms.contains("updateTime"), "declares updateTime");
+        check(ms.contains("updateTimestamp"), "declares updateTimestamp");
+        check(ms.contains("wasNull"), "declares wasNull");
+        check(ms.contains("writeData"), "declares writeData");
+
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
