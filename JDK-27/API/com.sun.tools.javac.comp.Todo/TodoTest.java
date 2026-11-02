@@ -1,0 +1,18 @@
+/*
+ * @test
+ * @summary com.sun.tools.javac.comp.Todo conformance: internal class reflection.
+ * @modules jdk.compiler/com.sun.tools.javac.comp:+open
+ * @run main TodoTest
+ */
+public class TodoTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.tools.javac.comp.Todo", false, TodoTest.class.getClassLoader());
+        check(c != null, "loads");
+        check(c.getName().equals("com.sun.tools.javac.comp.Todo"), "name");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.util.AbstractQueue"), "superclass");
+        check(c.getInterfaces().length == 0, "interfaces count");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
