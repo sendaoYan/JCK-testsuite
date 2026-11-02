@@ -1,0 +1,38 @@
+/*
+ * @test
+ * @summary jdk.internal.platform.CgroupV1Metrics conformance: internal package reflection.
+ * @modules java.base/jdk.internal.platform:+open
+ * @run main CgroupV1MetricsTest
+ */
+public class CgroupV1MetricsTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasMethod(Class<?> c, String n) { for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(n)) return true; return false; }
+    static boolean hasField(Class<?> c, String n) { for (java.lang.reflect.Field f : c.getDeclaredFields()) if (f.getName().equals(n)) return true; return false; }
+    static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
+    static boolean hasEnumConstant(Class<?> c, String n) { for (java.lang.reflect.Field f : c.getDeclaredFields()) if (f.isEnumConstant() && f.getName().equals(n)) return true; return false; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("jdk.internal.platform.CgroupV1Metrics", false, CgroupV1MetricsTest.class.getClassLoader());
+        check(c != null, "loads");
+        check(c.isInterface() == true, "isInterface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) == true, "abstract");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "superclass null");
+        check(c.getInterfaces().length == 1, "interface count");
+        check(hasInterface(c, "jdk.internal.platform.Metrics"), "interface jdk.internal.platform.Metrics");
+        check(hasMethod(c, "getCpuSetMemoryPressure"), "method getCpuSetMemoryPressure");
+        check(hasMethod(c, "getKernelMemoryFailCount"), "method getKernelMemoryFailCount");
+        check(hasMethod(c, "getKernelMemoryMaxUsage"), "method getKernelMemoryMaxUsage");
+        check(hasMethod(c, "getKernelMemoryUsage"), "method getKernelMemoryUsage");
+        check(hasMethod(c, "getMemoryAndSwapFailCount"), "method getMemoryAndSwapFailCount");
+        check(hasMethod(c, "getMemoryAndSwapMaxUsage"), "method getMemoryAndSwapMaxUsage");
+        check(hasMethod(c, "getMemoryMaxUsage"), "method getMemoryMaxUsage");
+        check(hasMethod(c, "getTcpMemoryFailCount"), "method getTcpMemoryFailCount");
+        check(hasMethod(c, "getTcpMemoryMaxUsage"), "method getTcpMemoryMaxUsage");
+        check(hasMethod(c, "isCpuSetMemoryPressureEnabled"), "method isCpuSetMemoryPressureEnabled");
+        check(hasMethod(c, "isMemoryOOMKillEnabled"), "method isMemoryOOMKillEnabled");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}

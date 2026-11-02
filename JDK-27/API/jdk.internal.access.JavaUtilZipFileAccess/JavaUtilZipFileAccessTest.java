@@ -1,0 +1,36 @@
+/*
+ * @test
+ * @summary jdk.internal.access.JavaUtilZipFileAccess conformance: internal package reflection.
+ * @modules java.base/jdk.internal.access:+open
+ * @run main JavaUtilZipFileAccessTest
+ */
+public class JavaUtilZipFileAccessTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasMethod(Class<?> c, String n) { for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(n)) return true; return false; }
+    static boolean hasField(Class<?> c, String n) { for (java.lang.reflect.Field f : c.getDeclaredFields()) if (f.getName().equals(n)) return true; return false; }
+    static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
+    static boolean hasEnumConstant(Class<?> c, String n) { for (java.lang.reflect.Field f : c.getDeclaredFields()) if (f.isEnumConstant() && f.getName().equals(n)) return true; return false; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("jdk.internal.access.JavaUtilZipFileAccess", false, JavaUtilZipFileAccessTest.class.getClassLoader());
+        check(c != null, "loads");
+        check(c.isInterface() == true, "isInterface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) == true, "abstract");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "superclass null");
+        check(c.getInterfaces().length == 0, "interface count");
+        check(hasMethod(c, "entries"), "method entries");
+        check(hasMethod(c, "entryNameStream"), "method entryNameStream");
+        check(hasMethod(c, "getExternalFileAttributes"), "method getExternalFileAttributes");
+        check(hasMethod(c, "getManifestAndSignatureRelatedFiles"), "method getManifestAndSignatureRelatedFiles");
+        check(hasMethod(c, "getManifestName"), "method getManifestName");
+        check(hasMethod(c, "getManifestNum"), "method getManifestNum");
+        check(hasMethod(c, "getMetaInfVersions"), "method getMetaInfVersions");
+        check(hasMethod(c, "setExternalFileAttributes"), "method setExternalFileAttributes");
+        check(hasMethod(c, "startsWithLocHeader"), "method startsWithLocHeader");
+        check(hasMethod(c, "stream"), "method stream");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
