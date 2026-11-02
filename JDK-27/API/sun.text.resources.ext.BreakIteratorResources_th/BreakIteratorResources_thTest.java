@@ -1,0 +1,25 @@
+/*
+ * @test
+ * @summary sun.text.resources.ext.BreakIteratorResources_th conformance: internal package reflection.
+ * @modules jdk.localedata/sun.text.resources.ext:+open
+ * @run main BreakIteratorResources_thTest
+ */
+public class BreakIteratorResources_thTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("sun.text.resources.ext.BreakIteratorResources_th", false, BreakIteratorResources_thTest.class.getClassLoader());
+        check(c.getName().equals("sun.text.resources.ext.BreakIteratorResources_th"), "name");
+        check(c.isInterface() == false && c.isEnum() == false && c.isAnnotation() == false && java.lang.reflect.Modifier.isAbstract(c.getModifiers()) == false && java.lang.reflect.Modifier.isFinal(c.getModifiers()) == false, "kind");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("sun.util.resources.BreakIteratorResourceBundle"), "superclass");
+        check(c.getInterfaces().length == 0, "interfaces");
+        java.util.Set<String> ms = new java.util.HashSet<>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            int mm = m.getModifiers();
+            if (java.lang.reflect.Modifier.isPublic(mm) || java.lang.reflect.Modifier.isProtected(mm)) ms.add(m.getName());
+        }
+        check(ms.contains("getBreakIteratorInfo"), "method getBreakIteratorInfo");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+    static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
+}
