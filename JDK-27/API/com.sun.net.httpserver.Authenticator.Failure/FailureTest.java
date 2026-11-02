@@ -1,0 +1,36 @@
+/*
+ * @test
+ * @summary com.sun.net.httpserver.Authenticator.Failure conformance: response code.
+ * @run main FailureTest
+ */
+
+import java.lang.reflect.*;
+import java.util.*;
+
+public class FailureTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Set<String> methodNames(Class<?> c) {
+        Set<String> s = new HashSet<>();
+        for (Method m : c.getDeclaredMethods()) s.add(m.getName());
+        return s;
+    }
+    static Set<String> fieldNames(Class<?> c) {
+        Set<String> s = new HashSet<>();
+        for (Field f : c.getDeclaredFields()) s.add(f.getName());
+        return s;
+    }
+    static Set<String> interfaces(Class<?> c) {
+        Set<String> s = new HashSet<>();
+        for (Class<?> i : c.getInterfaces()) s.add(i.getName());
+        return s;
+    }
+    static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
+
+    public static void main(String[] a) throws Exception {
+        com.sun.net.httpserver.Authenticator.Failure f = new com.sun.net.httpserver.Authenticator.Failure(401);
+        check(f.getResponseCode() == 401, "responseCode 401");
+        check(f instanceof com.sun.net.httpserver.Authenticator.Result, "extends Result");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
