@@ -1,0 +1,35 @@
+/*
+ * @test
+ * @summary com.sun.xml.internal.bind.v2.model.impl.ArrayInfoImpl conformance: class hierarchy and members.
+ * @run main ArrayInfoImplTest
+ */
+
+public class ArrayInfoImplTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.xml.internal.bind.v2.model.impl.ArrayInfoImpl", false, ClassLoader.getSystemClassLoader());
+        check(c.getName().equals("com.sun.xml.internal.bind.v2.model.impl.ArrayInfoImpl"), "binary name");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "is public");
+        check(!c.isInterface(), "is not interface");
+        check(!c.isEnum(), "is not enum");
+        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "is concrete");
+        check("com.sun.xml.internal.bind.v2.model.impl.TypeInfoImpl".equals(c.getSuperclass().getName()), "extends com.sun.xml.internal.bind.v2.model.impl.TypeInfoImpl");
+        java.util.Set<String> ifs = new java.util.HashSet<String>();
+        for (Class<?> i : c.getInterfaces()) ifs.add(i.getName());
+        check(ifs.size() == 2, "direct interface count");
+        check(ifs.contains("com.sun.xml.internal.bind.v2.model.core.ArrayInfo"), "has interface com.sun.xml.internal.bind.v2.model.core.ArrayInfo");
+        check(ifs.contains("com.sun.xml.internal.bind.v2.runtime.Location"), "has interface com.sun.xml.internal.bind.v2.runtime.Location");
+        java.util.Set<String> mn = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) mn.add(m.getName());
+        check(mn.contains("canBeReferencedByIDREF"), "has method canBeReferencedByIDREF");
+        check(mn.contains("getItemType"), "has method getItemType");
+        check(mn.contains("getLocation"), "has method getLocation");
+        check(mn.contains("getType"), "has method getType");
+        check(mn.contains("getTypeName"), "has method getTypeName");
+        check(mn.contains("getUpstream"), "has method getUpstream");
+        check(mn.contains("isSimpleType"), "has method isSimpleType");
+        check(mn.contains("toString"), "has method toString");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
