@@ -17,6 +17,7 @@ public class SerialJavaObjectTest {
         javax.sql.rowset.serial.SerialJavaObject sj2 = new javax.sql.rowset.serial.SerialJavaObject("xyz");
         check(sj.equals(sj2), "equals");
         check(sj.hashCode() == sj2.hashCode(), "hashCode");
-        check(sj.clone() != null, "clone non-null");        System.out.println("PASS (" + passed + " assertions)");
+        check(sj.clone() != null, "clone non-null");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

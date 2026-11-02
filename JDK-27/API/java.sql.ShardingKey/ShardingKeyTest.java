@@ -21,6 +21,7 @@ public class ShardingKeyTest {
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 0, "0 direct superinterface(s)");
-        check(c.getDeclaredMethods().length == 0, "declared method count 0");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 0, "declared method count 0");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

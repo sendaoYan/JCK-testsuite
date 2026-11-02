@@ -24,6 +24,7 @@ public class DataTruncationTest {
         java.sql.DataTruncation d2 = new java.sql.DataTruncation(1, false, true, 3, 4, cause);
         check(d2.getCause() == cause, "cause");
         check(d2.getTransferSize() == 4 && d2.getRead() == true, "second ctor fields");
-        check(d instanceof java.sql.SQLWarning, "extends SQLWarning");        System.out.println("PASS (" + passed + " assertions)");
+        check(d instanceof java.sql.SQLWarning, "extends SQLWarning");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

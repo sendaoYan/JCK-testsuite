@@ -42,6 +42,7 @@ public class BaseRowSetTest {
         check(b.getFetchSize() == 10, "setFetchSize/getFetchSize");
         b.setMaxRows(100);
         check(b.getMaxRows() == 100, "setMaxRows/getMaxRows");
-        check(b.getParams() != null, "getParams non-null");        System.out.println("PASS (" + passed + " assertions)");
+        check(b.getParams() != null, "getParams non-null");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

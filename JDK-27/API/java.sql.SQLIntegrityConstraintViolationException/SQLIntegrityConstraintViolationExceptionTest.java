@@ -34,6 +34,7 @@ public class SQLIntegrityConstraintViolationExceptionTest {
         SQLIntegrityConstraintViolationException e8 = new SQLIntegrityConstraintViolationException("msg", "42S01", 7, cause);
         check(e8.getErrorCode() == 7 && cause == e8.getCause(), "full ctor");
         check(e instanceof java.sql.SQLNonTransientException, "extends java.sql.SQLNonTransientException");
-        check(e instanceof java.sql.SQLException, "is SQLException");        System.out.println("PASS (" + passed + " assertions)");
+        check(e instanceof java.sql.SQLException, "is SQLException");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

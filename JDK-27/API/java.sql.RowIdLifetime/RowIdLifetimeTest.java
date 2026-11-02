@@ -26,6 +26,7 @@ public class RowIdLifetimeTest {
         check(RowIdLifetime.valueOf("ROWID_VALID_TRANSACTION") == RowIdLifetime.ROWID_VALID_TRANSACTION, "valueOf == ROWID_VALID_TRANSACTION");
         check(RowIdLifetime.valueOf("ROWID_VALID_TRANSACTION").name().equals("ROWID_VALID_TRANSACTION"), "name ROWID_VALID_TRANSACTION");
         check(RowIdLifetime.valueOf("ROWID_VALID_FOREVER") == RowIdLifetime.ROWID_VALID_FOREVER, "valueOf == ROWID_VALID_FOREVER");
-        check(RowIdLifetime.valueOf("ROWID_VALID_FOREVER").name().equals("ROWID_VALID_FOREVER"), "name ROWID_VALID_FOREVER");        System.out.println("PASS (" + passed + " assertions)");
+        check(RowIdLifetime.valueOf("ROWID_VALID_FOREVER").name().equals("ROWID_VALID_FOREVER"), "name ROWID_VALID_FOREVER");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

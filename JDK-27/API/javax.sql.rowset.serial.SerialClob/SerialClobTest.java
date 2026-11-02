@@ -23,6 +23,7 @@ public class SerialClobTest {
         javax.sql.rowset.serial.SerialClob cl2 = (javax.sql.rowset.serial.SerialClob) cl.clone();
         check(cl2 != null && cl2.length() == 8, "clone");
         check(cl.equals(cl2), "equals clone");
-        cl.free();        System.out.println("PASS (" + passed + " assertions)");
+        cl.free();
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

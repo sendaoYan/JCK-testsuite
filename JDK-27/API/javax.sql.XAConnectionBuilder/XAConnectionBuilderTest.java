@@ -21,6 +21,7 @@ public class XAConnectionBuilderTest {
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 0, "0 direct superinterface(s)");
-        check(c.getDeclaredMethods().length == 5, "declared method count 5");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 5, "declared method count 5");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

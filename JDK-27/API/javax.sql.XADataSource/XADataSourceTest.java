@@ -22,6 +22,7 @@ public class XADataSourceTest {
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("javax.sql.CommonDataSource"), "superinterface 0");
-        check(c.getDeclaredMethods().length == 7, "declared method count 7");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 7, "declared method count 7");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

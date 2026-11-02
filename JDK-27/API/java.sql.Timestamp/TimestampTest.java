@@ -24,6 +24,7 @@ public class TimestampTest {
         check(ts3.compareTo(ts3) == 0, "compareTo self");
         ts3.setNanos(42);
         check(ts3.getNanos() == 42, "setNanos");
-        check(ts3.before(java.sql.Timestamp.from(java.time.Instant.parse("2027-01-01T00:00:00Z"))), "before");        System.out.println("PASS (" + passed + " assertions)");
+        check(ts3.before(java.sql.Timestamp.from(java.time.Instant.parse("2027-01-01T00:00:00Z"))), "before");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

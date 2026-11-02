@@ -43,6 +43,7 @@ public class ResultSetTest {
         java.lang.reflect.Field f_HOLD_CURSORS_OVER_COMMIT = c.getField("HOLD_CURSORS_OVER_COMMIT");
         check(f_HOLD_CURSORS_OVER_COMMIT.getInt(null) == 1, "HOLD_CURSORS_OVER_COMMIT == 1");
         java.lang.reflect.Field f_CLOSE_CURSORS_AT_COMMIT = c.getField("CLOSE_CURSORS_AT_COMMIT");
-        check(f_CLOSE_CURSORS_AT_COMMIT.getInt(null) == 2, "CLOSE_CURSORS_AT_COMMIT == 2");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_CLOSE_CURSORS_AT_COMMIT.getInt(null) == 2, "CLOSE_CURSORS_AT_COMMIT == 2");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

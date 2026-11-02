@@ -32,6 +32,7 @@ public class JoinRowSetTest {
         java.lang.reflect.Field f_RIGHT_OUTER_JOIN = c.getField("RIGHT_OUTER_JOIN");
         check(f_RIGHT_OUTER_JOIN.getInt(null) == 3, "RIGHT_OUTER_JOIN == 3");
         java.lang.reflect.Field f_FULL_JOIN = c.getField("FULL_JOIN");
-        check(f_FULL_JOIN.getInt(null) == 4, "FULL_JOIN == 4");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_FULL_JOIN.getInt(null) == 4, "FULL_JOIN == 4");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

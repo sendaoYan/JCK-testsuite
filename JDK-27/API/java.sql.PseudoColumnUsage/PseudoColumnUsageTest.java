@@ -24,6 +24,7 @@ public class PseudoColumnUsageTest {
         check(PseudoColumnUsage.valueOf("NO_USAGE_RESTRICTIONS") == PseudoColumnUsage.NO_USAGE_RESTRICTIONS, "valueOf == NO_USAGE_RESTRICTIONS");
         check(PseudoColumnUsage.valueOf("NO_USAGE_RESTRICTIONS").name().equals("NO_USAGE_RESTRICTIONS"), "name NO_USAGE_RESTRICTIONS");
         check(PseudoColumnUsage.valueOf("USAGE_UNKNOWN") == PseudoColumnUsage.USAGE_UNKNOWN, "valueOf == USAGE_UNKNOWN");
-        check(PseudoColumnUsage.valueOf("USAGE_UNKNOWN").name().equals("USAGE_UNKNOWN"), "name USAGE_UNKNOWN");        System.out.println("PASS (" + passed + " assertions)");
+        check(PseudoColumnUsage.valueOf("USAGE_UNKNOWN").name().equals("USAGE_UNKNOWN"), "name USAGE_UNKNOWN");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

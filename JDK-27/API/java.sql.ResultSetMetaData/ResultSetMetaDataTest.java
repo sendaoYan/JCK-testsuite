@@ -28,6 +28,7 @@ public class ResultSetMetaDataTest {
         java.lang.reflect.Field f_columnNullable = c.getField("columnNullable");
         check(f_columnNullable.getInt(null) == 1, "columnNullable == 1");
         java.lang.reflect.Field f_columnNullableUnknown = c.getField("columnNullableUnknown");
-        check(f_columnNullableUnknown.getInt(null) == 2, "columnNullableUnknown == 2");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_columnNullableUnknown.getInt(null) == 2, "columnNullableUnknown == 2");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

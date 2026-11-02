@@ -17,6 +17,7 @@ public class SQLInputImplTest {
         check("abc".equals(in.readString()), "readString");
         check(in.readBoolean() == true, "readBoolean");
         check(in.readDouble() == 1.5, "readDouble");
-        check(in.wasNull() == false, "wasNull false after non-null reads");        System.out.println("PASS (" + passed + " assertions)");
+        check(in.wasNull() == false, "wasNull false after non-null reads");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

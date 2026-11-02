@@ -22,6 +22,7 @@ public class XAConnectionTest {
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("javax.sql.PooledConnection"), "superinterface 0");
-        check(c.getDeclaredMethods().length == 1, "declared method count 1");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 1, "declared method count 1");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

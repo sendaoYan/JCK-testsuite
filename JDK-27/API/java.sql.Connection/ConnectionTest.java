@@ -33,6 +33,7 @@ public class ConnectionTest {
         java.lang.reflect.Field f_TRANSACTION_REPEATABLE_READ = c.getField("TRANSACTION_REPEATABLE_READ");
         check(f_TRANSACTION_REPEATABLE_READ.getInt(null) == 4, "TRANSACTION_REPEATABLE_READ == 4");
         java.lang.reflect.Field f_TRANSACTION_SERIALIZABLE = c.getField("TRANSACTION_SERIALIZABLE");
-        check(f_TRANSACTION_SERIALIZABLE.getInt(null) == 8, "TRANSACTION_SERIALIZABLE == 8");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_TRANSACTION_SERIALIZABLE.getInt(null) == 8, "TRANSACTION_SERIALIZABLE == 8");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -22,6 +22,7 @@ public class DateTest {
         check(threw, "toInstant throws UnsupportedOperationException");
         java.sql.Date d3 = new java.sql.Date(0L);
         d3.setTime(5000L);
-        check(d3.getTime() == 5000L, "setTime/getTime");        System.out.println("PASS (" + passed + " assertions)");
+        check(d3.getTime() == 5000L, "setTime/getTime");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

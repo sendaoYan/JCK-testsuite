@@ -26,6 +26,7 @@ public class DriverManagerTest {
         check(java.sql.DriverManager.getLogWriter() == pw, "log writer");
         java.sql.DriverManager.setLogWriter(null);
         check(java.sql.DriverManager.getLogWriter() == null, "log writer null");
-        java.sql.DriverManager.println("hello");        System.out.println("PASS (" + passed + " assertions)");
+        java.sql.DriverManager.println("hello");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

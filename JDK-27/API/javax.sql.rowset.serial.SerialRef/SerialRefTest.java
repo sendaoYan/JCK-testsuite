@@ -26,6 +26,7 @@ public class SerialRefTest {
         check(ifs[1].getName().equals("java.io.Serializable"), "interface 1");
         check(ifs[2].getName().equals("java.lang.Cloneable"), "interface 2");
         check(c.getDeclaredMethods().length == 9, "declared method count 9");
-        check(c.getDeclaredConstructors().length == 1, "constructor count 1");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredConstructors().length == 1, "constructor count 1");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

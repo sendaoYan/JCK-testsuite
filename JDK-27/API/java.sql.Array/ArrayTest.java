@@ -22,6 +22,7 @@ public class ArrayTest {
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("java.lang.AutoCloseable"), "superinterface 0");
-        check(c.getDeclaredMethods().length == 12, "declared method count 12");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 12, "declared method count 12");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -21,6 +21,7 @@ public class DriverPropertyInfoTest {
         p.required = true;
         p.value = "v";
         p.choices = new String[]{"a", "b"};
-        check("desc".equals(p.description) && p.required && "v".equals(p.value) && p.choices.length == 2, "mutable fields");        System.out.println("PASS (" + passed + " assertions)");
+        check("desc".equals(p.description) && p.required && "v".equals(p.value) && p.choices.length == 2, "mutable fields");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

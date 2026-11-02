@@ -37,6 +37,7 @@ public class StatementTest {
         java.lang.reflect.Field f_RETURN_GENERATED_KEYS = c.getField("RETURN_GENERATED_KEYS");
         check(f_RETURN_GENERATED_KEYS.getInt(null) == 1, "RETURN_GENERATED_KEYS == 1");
         java.lang.reflect.Field f_NO_GENERATED_KEYS = c.getField("NO_GENERATED_KEYS");
-        check(f_NO_GENERATED_KEYS.getInt(null) == 2, "NO_GENERATED_KEYS == 2");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_NO_GENERATED_KEYS.getInt(null) == 2, "NO_GENERATED_KEYS == 2");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

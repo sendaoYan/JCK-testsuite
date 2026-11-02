@@ -23,6 +23,7 @@ public class SerialBlobTest {
         javax.sql.rowset.serial.SerialBlob c = (javax.sql.rowset.serial.SerialBlob) b.clone();
         check(c != null && c.length() == 7, "clone");
         check(b.equals(c), "equals clone");
-        b.free();        System.out.println("PASS (" + passed + " assertions)");
+        b.free();
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

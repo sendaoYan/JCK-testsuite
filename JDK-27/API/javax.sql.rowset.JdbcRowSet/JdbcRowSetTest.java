@@ -23,6 +23,7 @@ public class JdbcRowSetTest {
         check(ifs.length == 2, "2 direct superinterface(s)");
         check(ifs[0].getName().equals("javax.sql.RowSet"), "superinterface 0");
         check(ifs[1].getName().equals("javax.sql.rowset.Joinable"), "superinterface 1");
-        check(c.getDeclaredMethods().length == 8, "declared method count 8");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 8, "declared method count 8");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

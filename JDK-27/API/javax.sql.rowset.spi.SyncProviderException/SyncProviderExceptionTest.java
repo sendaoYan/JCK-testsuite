@@ -17,6 +17,7 @@ public class SyncProviderExceptionTest {
         check(e.getSyncResolver() instanceof javax.sql.rowset.spi.SyncResolver, "default resolver is SyncResolver");
         javax.sql.rowset.spi.SyncProviderException e2 = new javax.sql.rowset.spi.SyncProviderException("m");
         check("m".equals(e2.getMessage()), "String ctor");
-        check(e2 instanceof java.sql.SQLException, "extends SQLException");        System.out.println("PASS (" + passed + " assertions)");
+        check(e2 instanceof java.sql.SQLException, "extends SQLException");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

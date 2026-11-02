@@ -19,6 +19,7 @@ public class RowSetProviderTest {
         check(f.createJoinRowSet() != null, "createJoinRowSet");
         check(f.createWebRowSet() != null, "createWebRowSet");
         javax.sql.rowset.RowSetFactory f2 = javax.sql.rowset.RowSetProvider.newFactory("com.sun.rowset.RowSetFactoryImpl", null);
-        check(f2 != null, "newFactory with class name");        System.out.println("PASS (" + passed + " assertions)");
+        check(f2 != null, "newFactory with class name");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

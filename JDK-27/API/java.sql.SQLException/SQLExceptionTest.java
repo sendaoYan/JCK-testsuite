@@ -26,6 +26,7 @@ public class SQLExceptionTest {
         RuntimeException cause = new RuntimeException("c");
         java.sql.SQLException e2 = new java.sql.SQLException("m", "s", 1, cause);
         check(e2.getCause() == cause, "cause");
-        check(e2 instanceof java.lang.Iterable, "implements Iterable");        System.out.println("PASS (" + passed + " assertions)");
+        check(e2 instanceof java.lang.Iterable, "implements Iterable");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

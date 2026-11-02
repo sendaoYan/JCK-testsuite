@@ -36,6 +36,7 @@ public class XAExceptionTest {
         check(javax.transaction.xa.XAException.XAER_RMFAIL == -7, "XAER_RMFAIL");
         check(javax.transaction.xa.XAException.XAER_DUPID == -8, "XAER_DUPID");
         check(javax.transaction.xa.XAException.XAER_OUTSIDE == -9, "XAER_OUTSIDE");
-        check(e instanceof Exception, "extends Exception");        System.out.println("PASS (" + passed + " assertions)");
+        check(e instanceof Exception, "extends Exception");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

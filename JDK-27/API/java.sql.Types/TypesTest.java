@@ -23,6 +23,7 @@ public class TypesTest {
         check(java.sql.Types.TIME == 92, "TIME == 92");
         check(java.sql.Types.TIMESTAMP == 93, "TIMESTAMP == 93");
         check(!java.sql.Types.class.isInterface(), "not interface");
-        check(java.sql.Types.class.getDeclaredFields().length == 41, "41 int constant fields");        System.out.println("PASS (" + passed + " assertions)");
+        check(java.sql.Types.class.getDeclaredFields().length == 41, "41 int constant fields");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

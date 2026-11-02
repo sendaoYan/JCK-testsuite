@@ -22,6 +22,7 @@ public class NClobTest {
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("java.sql.Clob"), "superinterface 0");
-        check(c.getDeclaredMethods().length == 0, "declared method count 0");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 0, "declared method count 0");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

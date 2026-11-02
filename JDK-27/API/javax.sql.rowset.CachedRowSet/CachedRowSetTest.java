@@ -25,6 +25,7 @@ public class CachedRowSetTest {
         check(ifs[1].getName().equals("javax.sql.rowset.Joinable"), "superinterface 1");
         check(c.getDeclaredMethods().length == 41, "declared method count 41");
         java.lang.reflect.Field f_COMMIT_ON_ACCEPT_CHANGES = c.getField("COMMIT_ON_ACCEPT_CHANGES");
-        check(f_COMMIT_ON_ACCEPT_CHANGES.getBoolean(null) == true, "COMMIT_ON_ACCEPT_CHANGES == true");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_COMMIT_ON_ACCEPT_CHANGES.getBoolean(null) == true, "COMMIT_ON_ACCEPT_CHANGES == true");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -24,6 +24,7 @@ public class ClientInfoStatusTest {
         check(ClientInfoStatus.valueOf("REASON_VALUE_INVALID") == ClientInfoStatus.REASON_VALUE_INVALID, "valueOf == REASON_VALUE_INVALID");
         check(ClientInfoStatus.valueOf("REASON_VALUE_INVALID").name().equals("REASON_VALUE_INVALID"), "name REASON_VALUE_INVALID");
         check(ClientInfoStatus.valueOf("REASON_VALUE_TRUNCATED") == ClientInfoStatus.REASON_VALUE_TRUNCATED, "valueOf == REASON_VALUE_TRUNCATED");
-        check(ClientInfoStatus.valueOf("REASON_VALUE_TRUNCATED").name().equals("REASON_VALUE_TRUNCATED"), "name REASON_VALUE_TRUNCATED");        System.out.println("PASS (" + passed + " assertions)");
+        check(ClientInfoStatus.valueOf("REASON_VALUE_TRUNCATED").name().equals("REASON_VALUE_TRUNCATED"), "name REASON_VALUE_TRUNCATED");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

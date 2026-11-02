@@ -22,6 +22,7 @@ public class RowSetTest {
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("java.sql.ResultSet"), "superinterface 0");
-        check(c.getDeclaredMethods().length == 115, "declared method count 115");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 115, "declared method count 115");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

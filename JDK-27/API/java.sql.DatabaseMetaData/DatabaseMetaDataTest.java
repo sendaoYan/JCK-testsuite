@@ -56,6 +56,7 @@ public class DatabaseMetaDataTest {
         java.lang.reflect.Field f_bestRowNotPseudo = c.getField("bestRowNotPseudo");
         check(f_bestRowNotPseudo.getInt(null) == 1, "bestRowNotPseudo == 1");
         java.lang.reflect.Field f_bestRowPseudo = c.getField("bestRowPseudo");
-        check(f_bestRowPseudo.getInt(null) == 2, "bestRowPseudo == 2");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_bestRowPseudo.getInt(null) == 2, "bestRowPseudo == 2");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

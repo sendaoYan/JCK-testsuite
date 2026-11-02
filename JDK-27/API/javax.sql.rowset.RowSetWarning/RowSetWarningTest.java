@@ -19,6 +19,7 @@ public class RowSetWarningTest {
         w2.setNextWarning(next);
         check(w2.getNextWarning() == next, "setNextWarning/getNextWarning");
         check(next.getNextWarning() == null, "next has no next");
-        check(w2 instanceof java.sql.SQLException, "extends SQLException");        System.out.println("PASS (" + passed + " assertions)");
+        check(w2 instanceof java.sql.SQLException, "extends SQLException");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -24,6 +24,7 @@ public class JDBCTypeTest {
         check("java.sql".equals(java.sql.JDBCType.INTEGER.getVendor()), "getVendor");
         check(java.sql.JDBCType.valueOf(4) == java.sql.JDBCType.INTEGER, "valueOf(int)");
         check(java.sql.JDBCType.valueOf("BIGINT") == java.sql.JDBCType.BIGINT, "valueOf(String)");
-        check(java.sql.JDBCType.INTEGER instanceof java.sql.SQLType, "instanceof SQLType");        System.out.println("PASS (" + passed + " assertions)");
+        check(java.sql.JDBCType.INTEGER instanceof java.sql.SQLType, "instanceof SQLType");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

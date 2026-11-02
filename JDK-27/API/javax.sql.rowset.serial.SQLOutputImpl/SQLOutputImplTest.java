@@ -22,6 +22,7 @@ public class SQLOutputImplTest {
         check(v.get(0).equals(Integer.valueOf(42)), "writeInt stored");
         check(v.get(1).equals("abc"), "writeString stored");
         check(v.get(2).equals(Boolean.TRUE), "writeBoolean stored");
-        check(v.get(3).equals(Double.valueOf(1.5)), "writeDouble stored");        System.out.println("PASS (" + passed + " assertions)");
+        check(v.get(3).equals(Double.valueOf(1.5)), "writeDouble stored");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

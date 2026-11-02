@@ -43,6 +43,7 @@ public class XAResourceTest {
         java.lang.reflect.Field f_XA_RDONLY = c.getField("XA_RDONLY");
         check(f_XA_RDONLY.getInt(null) == 3, "XA_RDONLY == 3");
         java.lang.reflect.Field f_XA_OK = c.getField("XA_OK");
-        check(f_XA_OK.getInt(null) == 0, "XA_OK == 0");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_XA_OK.getInt(null) == 0, "XA_OK == 0");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

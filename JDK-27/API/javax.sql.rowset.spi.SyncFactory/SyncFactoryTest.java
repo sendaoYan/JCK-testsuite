@@ -30,6 +30,7 @@ public class SyncFactoryTest {
         check(id != null && javax.sql.rowset.spi.SyncFactory.getInstance(id) != null, "getInstance roundtrip");
         java.util.logging.Logger lg = java.util.logging.Logger.getLogger("SyncFactoryTest");
         javax.sql.rowset.spi.SyncFactory.setLogger(lg);
-        check(javax.sql.rowset.spi.SyncFactory.getLogger() == lg, "getLogger after setLogger");        System.out.println("PASS (" + passed + " assertions)");
+        check(javax.sql.rowset.spi.SyncFactory.getLogger() == lg, "getLogger after setLogger");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

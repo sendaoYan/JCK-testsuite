@@ -23,6 +23,7 @@ public class DataSourceTest {
         check(ifs.length == 2, "2 direct superinterface(s)");
         check(ifs[0].getName().equals("javax.sql.CommonDataSource"), "superinterface 0");
         check(ifs[1].getName().equals("java.sql.Wrapper"), "superinterface 1");
-        check(c.getDeclaredMethods().length == 7, "declared method count 7");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 7, "declared method count 7");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

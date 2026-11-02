@@ -25,6 +25,7 @@ public class XidTest {
         java.lang.reflect.Field f_MAXGTRIDSIZE = c.getField("MAXGTRIDSIZE");
         check(f_MAXGTRIDSIZE.getInt(null) == 64, "MAXGTRIDSIZE == 64");
         java.lang.reflect.Field f_MAXBQUALSIZE = c.getField("MAXBQUALSIZE");
-        check(f_MAXBQUALSIZE.getInt(null) == 64, "MAXBQUALSIZE == 64");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_MAXBQUALSIZE.getInt(null) == 64, "MAXBQUALSIZE == 64");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

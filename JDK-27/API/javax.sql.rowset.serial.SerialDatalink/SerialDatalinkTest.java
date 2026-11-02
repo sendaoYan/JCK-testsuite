@@ -18,6 +18,7 @@ public class SerialDatalinkTest {
         javax.sql.rowset.serial.SerialDatalink sd2 = new javax.sql.rowset.serial.SerialDatalink(new java.net.URL("http://example.com"));
         check(sd.equals(sd2), "equals");
         check(sd.hashCode() == sd2.hashCode(), "hashCode");
-        check(sd.clone() != null, "clone non-null");        System.out.println("PASS (" + passed + " assertions)");
+        check(sd.clone() != null, "clone non-null");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -21,6 +21,7 @@ public class TimeTest {
         check(threw, "toInstant throws UnsupportedOperationException");
         java.sql.Time t3 = new java.sql.Time(0L);
         t3.setTime(7000L);
-        check(t3.getTime() == 7000L, "setTime/getTime");        System.out.println("PASS (" + passed + " assertions)");
+        check(t3.getTime() == 7000L, "setTime/getTime");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

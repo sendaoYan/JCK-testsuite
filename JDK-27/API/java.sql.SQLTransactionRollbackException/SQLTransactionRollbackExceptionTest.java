@@ -34,6 +34,7 @@ public class SQLTransactionRollbackExceptionTest {
         SQLTransactionRollbackException e8 = new SQLTransactionRollbackException("msg", "42S01", 7, cause);
         check(e8.getErrorCode() == 7 && cause == e8.getCause(), "full ctor");
         check(e instanceof java.sql.SQLTransientException, "extends java.sql.SQLTransientException");
-        check(e instanceof java.sql.SQLException, "is SQLException");        System.out.println("PASS (" + passed + " assertions)");
+        check(e instanceof java.sql.SQLException, "is SQLException");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -19,6 +19,7 @@ public class SQLPermissionTest {
         check("setLog".equals(p2.getName()), "2-arg name");
         check("".equals(p2.getActions()), "getActions always empty for BasicPermission");
         check(p.implies(p2), "implies");
-        check(p2.implies(p), "implies symmetric");        System.out.println("PASS (" + passed + " assertions)");
+        check(p2.implies(p), "implies symmetric");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

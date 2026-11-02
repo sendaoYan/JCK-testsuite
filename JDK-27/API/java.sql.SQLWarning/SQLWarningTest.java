@@ -21,6 +21,7 @@ public class SQLWarningTest {
         check(next.getNextWarning() == null, "next has no next");
         RuntimeException cause = new RuntimeException("c");
         check(new java.sql.SQLWarning("m", "s", 1, cause).getCause() == cause, "full ctor cause");
-        check(w2 instanceof java.sql.SQLException, "extends SQLException");        System.out.println("PASS (" + passed + " assertions)");
+        check(w2 instanceof java.sql.SQLException, "extends SQLException");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

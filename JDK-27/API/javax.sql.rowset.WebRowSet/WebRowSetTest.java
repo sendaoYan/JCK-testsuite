@@ -26,6 +26,7 @@ public class WebRowSetTest {
         java.lang.reflect.Field f_PUBLIC_XML_SCHEMA = c.getField("PUBLIC_XML_SCHEMA");
         check("--//Oracle Corporation//XSD Schema//EN".equals(f_PUBLIC_XML_SCHEMA.get(null)), "PUBLIC_XML_SCHEMA value");
         java.lang.reflect.Field f_SCHEMA_SYSTEM_ID = c.getField("SCHEMA_SYSTEM_ID");
-        check("http://java.sun.com/xml/ns/jdbc/webrowset.xsd".equals(f_SCHEMA_SYSTEM_ID.get(null)), "SCHEMA_SYSTEM_ID value");        System.out.println("PASS (" + passed + " assertions)");
+        check("http://java.sun.com/xml/ns/jdbc/webrowset.xsd".equals(f_SCHEMA_SYSTEM_ID.get(null)), "SCHEMA_SYSTEM_ID value");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

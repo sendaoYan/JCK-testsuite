@@ -22,6 +22,7 @@ public class RowSetMetaDataTest {
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("java.sql.ResultSetMetaData"), "superinterface 0");
-        check(c.getDeclaredMethods().length == 17, "declared method count 17");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 17, "declared method count 17");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

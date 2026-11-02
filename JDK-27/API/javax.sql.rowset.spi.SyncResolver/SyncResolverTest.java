@@ -30,6 +30,7 @@ public class SyncResolverTest {
         java.lang.reflect.Field f_INSERT_ROW_CONFLICT = c.getField("INSERT_ROW_CONFLICT");
         check(f_INSERT_ROW_CONFLICT.getInt(null) == 2, "INSERT_ROW_CONFLICT == 2");
         java.lang.reflect.Field f_NO_ROW_CONFLICT = c.getField("NO_ROW_CONFLICT");
-        check(f_NO_ROW_CONFLICT.getInt(null) == 3, "NO_ROW_CONFLICT == 3");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_NO_ROW_CONFLICT.getInt(null) == 3, "NO_ROW_CONFLICT == 3");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

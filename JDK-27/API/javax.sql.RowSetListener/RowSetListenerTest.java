@@ -22,6 +22,7 @@ public class RowSetListenerTest {
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("java.util.EventListener"), "superinterface 0");
-        check(c.getDeclaredMethods().length == 3, "declared method count 3");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 3, "declared method count 3");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

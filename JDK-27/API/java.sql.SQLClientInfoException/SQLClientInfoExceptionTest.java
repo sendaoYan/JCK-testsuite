@@ -22,6 +22,7 @@ public class SQLClientInfoExceptionTest {
         java.sql.SQLClientInfoException e3 = new java.sql.SQLClientInfoException("msg", "st", 1, m, cause);
         check("st".equals(e3.getSQLState()) && e3.getErrorCode() == 1, "state/code");
         check(e3.getCause() == cause && e3.getFailedProperties() == m, "cause and map");
-        check(e3 instanceof java.sql.SQLException, "extends SQLException");        System.out.println("PASS (" + passed + " assertions)");
+        check(e3 instanceof java.sql.SQLException, "extends SQLException");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

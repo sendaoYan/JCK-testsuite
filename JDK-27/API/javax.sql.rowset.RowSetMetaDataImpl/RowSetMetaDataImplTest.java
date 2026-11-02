@@ -26,6 +26,7 @@ public class RowSetMetaDataImplTest {
         md.setPrecision(1, 10);
         check(md.getPrecision(1) == 10, "precision");
         check(md.isWrapperFor(javax.sql.RowSetMetaData.class), "isWrapperFor RowSetMetaData");
-        check(md.unwrap(javax.sql.RowSetMetaData.class) == md, "unwrap self");        System.out.println("PASS (" + passed + " assertions)");
+        check(md.unwrap(javax.sql.RowSetMetaData.class) == md, "unwrap self");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

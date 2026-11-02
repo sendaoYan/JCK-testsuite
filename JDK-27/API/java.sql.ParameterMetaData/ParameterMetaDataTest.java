@@ -36,6 +36,7 @@ public class ParameterMetaDataTest {
         java.lang.reflect.Field f_parameterModeInOut = c.getField("parameterModeInOut");
         check(f_parameterModeInOut.getInt(null) == 2, "parameterModeInOut == 2");
         java.lang.reflect.Field f_parameterModeOut = c.getField("parameterModeOut");
-        check(f_parameterModeOut.getInt(null) == 4, "parameterModeOut == 4");        System.out.println("PASS (" + passed + " assertions)");
+        check(f_parameterModeOut.getInt(null) == 4, "parameterModeOut == 4");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

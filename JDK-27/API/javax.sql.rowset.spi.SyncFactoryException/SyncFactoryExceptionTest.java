@@ -15,6 +15,7 @@ public class SyncFactoryExceptionTest {
         check(e.getMessage() == null, "no-arg");
         javax.sql.rowset.spi.SyncFactoryException e2 = new javax.sql.rowset.spi.SyncFactoryException("m");
         check("m".equals(e2.getMessage()), "String ctor");
-        check(e2 instanceof java.sql.SQLException, "extends SQLException");        System.out.println("PASS (" + passed + " assertions)");
+        check(e2 instanceof java.sql.SQLException, "extends SQLException");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

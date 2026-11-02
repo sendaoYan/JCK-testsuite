@@ -21,6 +21,7 @@ public class RefTest {
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 0, "0 direct superinterface(s)");
-        check(c.getDeclaredMethods().length == 4, "declared method count 4");        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getDeclaredMethods().length == 4, "declared method count 4");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

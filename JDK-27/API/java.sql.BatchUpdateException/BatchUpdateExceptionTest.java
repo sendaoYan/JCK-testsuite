@@ -22,6 +22,7 @@ public class BatchUpdateExceptionTest {
         check(e2.getCause() == cause, "cause");
         check(new java.sql.BatchUpdateException().getUpdateCounts() == null, "no-arg update counts null");
         check(new java.sql.BatchUpdateException().getLargeUpdateCounts() == null, "no-arg large counts null");
-        check(e instanceof java.sql.SQLException, "extends SQLException");        System.out.println("PASS (" + passed + " assertions)");
+        check(e instanceof java.sql.SQLException, "extends SQLException");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

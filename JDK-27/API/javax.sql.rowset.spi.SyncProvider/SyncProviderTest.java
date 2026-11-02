@@ -29,6 +29,7 @@ public class SyncProviderTest {
         check(javax.sql.rowset.spi.SyncProvider.DATASOURCE_TABLE_LOCK == 3, "DATASOURCE_TABLE_LOCK == 3");
         check(javax.sql.rowset.spi.SyncProvider.DATASOURCE_DB_LOCK == 4, "DATASOURCE_DB_LOCK == 4");
         check(javax.sql.rowset.spi.SyncProvider.UPDATABLE_VIEW_SYNC == 5, "UPDATABLE_VIEW_SYNC == 5");
-        check(javax.sql.rowset.spi.SyncProvider.NONUPDATABLE_VIEW_SYNC == 6, "NONUPDATABLE_VIEW_SYNC == 6");        System.out.println("PASS (" + passed + " assertions)");
+        check(javax.sql.rowset.spi.SyncProvider.NONUPDATABLE_VIEW_SYNC == 6, "NONUPDATABLE_VIEW_SYNC == 6");
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }
