@@ -8,3 +8,6 @@ spec-docs/java27-api/
 
 # python
 __pycache__/
+
+# enumerate_api.py generated output
+tools/out/
