@@ -1,0 +1,26 @@
+/*
+ * @test
+ * @summary javax.xml.soap.SOAPException conformance: exception hierarchy and constructors.
+ * @run main SOAPExceptionTest
+ */
+
+
+public class SOAPExceptionTest {
+    static int passed;
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    static boolean has(String[] a, String s) {
+        for (String x : a) if (s.equals(x)) return true;
+        return false;
+    }
+    public static void main(String[] args) throws Exception {
+        check(javax.xml.soap.SOAPException.class.getSuperclass().getName().equals("java.lang.Exception"), "extends java.lang.Exception");
+        javax.xml.soap.SOAPException se = new javax.xml.soap.SOAPException();
+        check(se.getCause() == null, "no cause");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
