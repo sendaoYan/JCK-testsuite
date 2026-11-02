@@ -1,0 +1,28 @@
+/*
+ * @test
+ * @summary com.sun.xml.internal.ws.util.xml.StAXResult conformance: reflection (kind, superclass, interfaces, methods).
+ * @run main StAXResultTest
+ */
+
+import java.lang.reflect.Modifier;
+
+
+public class StAXResultTest {
+    static int passed;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean has(String[] a, String s) { for (String x : a) if (s.equals(x)) return true; return false; }
+
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.xml.internal.ws.util.xml.StAXResult", false, StAXResultTest.class.getClassLoader());
+        check(c.getName().equals("com.sun.xml.internal.ws.util.xml.StAXResult"), "name");
+        check(!c.isInterface(), "not interface");
+        check(!c.isEnum(), "not enum");
+        check(!c.isAnnotation(), "not annotation");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(c.getSuperclass().getName().equals("javax.xml.transform.sax.SAXResult"), "superclass javax.xml.transform.sax.SAXResult");
+        check(c.getInterfaces().length == 0, "no interfaces");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
