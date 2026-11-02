@@ -1,0 +1,77 @@
+/*
+ * @test
+ * @summary sun.awt.CausedFocusEvent.Cause conformance: reflection (no init, native/display-heavy).
+ * @run main CauseTest
+ */
+
+import java.util.*;
+import java.lang.reflect.*;
+
+public class CauseTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("sun.awt.CausedFocusEvent$Cause", false, ClassLoader.getSystemClassLoader());
+        check(c != null, "load");
+        check("sun.awt.CausedFocusEvent$Cause".equals(c.getName()), "name");
+        check(!c.isAnonymousClass(), "not anonymous");
+        check(c.isInterface() == false, "isInterface");
+        check(c.isEnum() == true, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check("java.lang.Enum".equals(c.getSuperclass().getName()), "superclass");
+        check("".equals(interfaces(c)), "interfaces");
+        check("public static#[Lsun.awt.CausedFocusEvent$Cause;#values();public static#sun.awt.CausedFocusEvent$Cause#valueOf(java.lang.String)".equals(methods(c)), "methods");
+        check("public static final#sun.awt.CausedFocusEvent$Cause#ACTIVATION;public static final#sun.awt.CausedFocusEvent$Cause#AUTOMATIC_TRAVERSE;public static final#sun.awt.CausedFocusEvent$Cause#CLEAR_GLOBAL_FOCUS_OWNER;public static final#sun.awt.CausedFocusEvent$Cause#MANUAL_REQUEST;public static final#sun.awt.CausedFocusEvent$Cause#MOUSE_EVENT;public static final#sun.awt.CausedFocusEvent$Cause#NATIVE_SYSTEM;public static final#sun.awt.CausedFocusEvent$Cause#RETARGETED;public static final#sun.awt.CausedFocusEvent$Cause#ROLLBACK;public static final#sun.awt.CausedFocusEvent$Cause#TRAVERSAL;public static final#sun.awt.CausedFocusEvent$Cause#TRAVERSAL_BACKWARD;public static final#sun.awt.CausedFocusEvent$Cause#TRAVERSAL_DOWN;public static final#sun.awt.CausedFocusEvent$Cause#TRAVERSAL_FORWARD;public static final#sun.awt.CausedFocusEvent$Cause#TRAVERSAL_UP;public static final#sun.awt.CausedFocusEvent$Cause#UNKNOWN".equals(fields(c)), "fields");
+        check(c.getDeclaredConstructors().length == 1, "ctors");
+        check("ACTIVATION;AUTOMATIC_TRAVERSE;CLEAR_GLOBAL_FOCUS_OWNER;MANUAL_REQUEST;MOUSE_EVENT;NATIVE_SYSTEM;RETARGETED;ROLLBACK;TRAVERSAL;TRAVERSAL_BACKWARD;TRAVERSAL_DOWN;TRAVERSAL_FORWARD;TRAVERSAL_UP;UNKNOWN".equals(enumConstants(c)), "enum constants");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static String interfaces(Class<?> c) {
+        List<String> l = new ArrayList<>();
+        for (Class<?> i : c.getInterfaces()) l.add(i.getName());
+        Collections.sort(l);
+        return String.join(";", l);
+    }
+
+    static String methods(Class<?> c) {
+        List<String> l = new ArrayList<>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            if (m.isSynthetic()) continue;
+            StringBuilder s = new StringBuilder();
+            s.append(Modifier.toString(m.getModifiers())).append('#');
+            s.append(m.getReturnType().getName()).append('#');
+            s.append(m.getName()).append('(');
+            Class<?>[] ps = m.getParameterTypes();
+            for (int i = 0; i < ps.length; i++) { if (i > 0) s.append(','); s.append(ps[i].getName()); }
+            s.append(')');
+            l.add(s.toString());
+        }
+        Collections.sort(l);
+        return String.join(";", l);
+    }
+
+    static String fields(Class<?> c) {
+        List<String> l = new ArrayList<>();
+        for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+            if (f.isSynthetic()) continue;
+            l.add(Modifier.toString(f.getModifiers()) + '#' + f.getType().getName() + '#' + f.getName());
+        }
+        Collections.sort(l);
+        return String.join(";", l);
+    }
+
+    static String enumConstants(Class<?> c) {
+        try {
+            Object[] ec = c.getEnumConstants();
+            if (ec == null) return "";
+            List<String> l = new ArrayList<>();
+            for (Object o : ec) l.add(((Enum<?>) o).name());
+            Collections.sort(l);
+            return String.join(";", l);
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+}
