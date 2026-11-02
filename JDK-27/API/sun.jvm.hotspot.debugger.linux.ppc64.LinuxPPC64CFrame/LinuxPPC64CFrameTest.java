@@ -1,0 +1,42 @@
+/*
+ * @test
+ * @summary sun.jvm.hotspot.debugger.linux.ppc64.LinuxPPC64CFrame conformance: internal package reflection.
+ * @modules jdk.hotspot.agent/sun.jvm.hotspot.debugger.linux.ppc64:+open
+ * @run main LinuxPPC64CFrameTest
+ */
+import java.lang.reflect.*;
+
+public class LinuxPPC64CFrameTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasMethod(Class<?> c, String n) {
+        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+    static boolean hasField(Class<?> c, String n) {
+        for (Field f : c.getDeclaredFields()) if (f.getName().equals(n)) return true;
+        return false;
+    }
+    static boolean hasInterface(Class<?> c, String n) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true;
+        return false;
+    }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("sun.jvm.hotspot.debugger.linux.ppc64.LinuxPPC64CFrame", false, LinuxPPC64CFrameTest.class.getClassLoader());
+        check(c != null, "loads");
+        check(c.isInterface() == false, "interface");
+        check(c.isEnum() == false, "enum");
+        check(c.isAnnotation() == false, "annotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == true, "final");
+        check("sun.jvm.hotspot.debugger.cdbg.basic.BasicCFrame".equals(c.getSuperclass().getName()), "superclass");
+        check(c.getInterfaces().length == 0, "interface count");
+        check(hasMethod(c, "pc"), "method pc");
+        check(hasMethod(c, "sender"), "method sender");
+        check(hasMethod(c, "closestSymbolToPC"), "method closestSymbolToPC");
+        check(hasMethod(c, "localVariableBase"), "method localVariableBase");
+        check(hasMethod(c, "toFrame"), "method toFrame");
+        check(hasField(c, "PPC64_STACK_BIAS"), "field PPC64_STACK_BIAS");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
