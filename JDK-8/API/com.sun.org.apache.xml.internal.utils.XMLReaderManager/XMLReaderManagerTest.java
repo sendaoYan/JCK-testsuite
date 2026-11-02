@@ -1,0 +1,26 @@
+/*
+ * @test
+ * @summary com.sun.org.apache.xml.internal.utils.XMLReaderManager conformance: class hierarchy and members.
+ * @run main XMLReaderManagerTest
+ */
+public class XMLReaderManagerTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.org.apache.xml.internal.utils.XMLReaderManager", false, XMLReaderManagerTest.class.getClassLoader());
+        check(!c.isInterface() && !c.isEnum(), "is a class");
+        check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");
+        java.util.Set<String> mn = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) mn.add(m.getName());
+        check(mn.contains("getInstance"), "method getInstance");
+        check(mn.contains("getXMLReader"), "method getXMLReader");
+        check(mn.contains("releaseXMLReader"), "method releaseXMLReader");
+        check(mn.contains("overrideDefaultParser"), "method overrideDefaultParser");
+        check(mn.contains("setOverrideDefaultParser"), "method setOverrideDefaultParser");
+        check(mn.contains("setFeature"), "method setFeature");
+        check(mn.contains("getProperty"), "method getProperty");
+        check(mn.contains("setProperty"), "method setProperty");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}

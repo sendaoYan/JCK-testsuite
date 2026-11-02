@@ -1,0 +1,35 @@
+/*
+ * @test
+ * @summary com.sun.org.apache.xerces.internal.dom.DOMInputImpl conformance: class hierarchy and members.
+ * @run main DOMInputImplTest
+ */
+public class DOMInputImplTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.org.apache.xerces.internal.dom.DOMInputImpl", false, DOMInputImplTest.class.getClassLoader());
+        check(!c.isInterface() && !c.isEnum(), "is a class");
+        check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");
+        check(hasInterface(c, "org.w3c.dom.ls.LSInput"), "has interface org.w3c.dom.ls.LSInput");
+        java.util.Set<String> mn = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) mn.add(m.getName());
+        check(mn.contains("getByteStream"), "method getByteStream");
+        check(mn.contains("setByteStream"), "method setByteStream");
+        check(mn.contains("getCharacterStream"), "method getCharacterStream");
+        check(mn.contains("setCharacterStream"), "method setCharacterStream");
+        check(mn.contains("getStringData"), "method getStringData");
+        check(mn.contains("setStringData"), "method setStringData");
+        check(mn.contains("getEncoding"), "method getEncoding");
+        check(mn.contains("setEncoding"), "method setEncoding");
+        check(mn.contains("getPublicId"), "method getPublicId");
+        check(mn.contains("setPublicId"), "method setPublicId");
+        check(mn.contains("getSystemId"), "method getSystemId");
+        check(mn.contains("setSystemId"), "method setSystemId");
+        check(mn.contains("getBaseURI"), "method getBaseURI");
+        check(mn.contains("setBaseURI"), "method setBaseURI");
+        check(mn.contains("getCertifiedText"), "method getCertifiedText");
+        check(mn.contains("setCertifiedText"), "method setCertifiedText");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}

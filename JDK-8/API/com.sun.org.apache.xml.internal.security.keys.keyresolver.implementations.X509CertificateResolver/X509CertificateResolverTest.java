@@ -1,0 +1,21 @@
+/*
+ * @test
+ * @summary com.sun.org.apache.xml.internal.security.keys.keyresolver.implementations.X509CertificateResolver conformance: class hierarchy and members.
+ * @run main X509CertificateResolverTest
+ */
+public class X509CertificateResolverTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.org.apache.xml.internal.security.keys.keyresolver.implementations.X509CertificateResolver", false, X509CertificateResolverTest.class.getClassLoader());
+        check(!c.isInterface() && !c.isEnum(), "is a class");
+        check(c.getSuperclass().getName().equals("com.sun.org.apache.xml.internal.security.keys.keyresolver.KeyResolverSpi"), "superclass com.sun.org.apache.xml.internal.security.keys.keyresolver.KeyResolverSpi");
+        java.util.Set<String> mn = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) mn.add(m.getName());
+        check(mn.contains("engineLookupAndResolvePublicKey"), "method engineLookupAndResolvePublicKey");
+        check(mn.contains("engineLookupResolveX509Certificate"), "method engineLookupResolveX509Certificate");
+        check(mn.contains("engineLookupAndResolveSecretKey"), "method engineLookupAndResolveSecretKey");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}

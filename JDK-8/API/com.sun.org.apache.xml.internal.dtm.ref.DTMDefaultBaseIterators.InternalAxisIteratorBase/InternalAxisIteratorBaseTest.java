@@ -1,0 +1,20 @@
+/*
+ * @test
+ * @summary com.sun.org.apache.xml.internal.dtm.ref.DTMDefaultBaseIterators.InternalAxisIteratorBase conformance: abstract class hierarchy and members.
+ * @run main InternalAxisIteratorBaseTest
+ */
+public class InternalAxisIteratorBaseTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.org.apache.xml.internal.dtm.ref.DTMDefaultBaseIterators$InternalAxisIteratorBase", false, InternalAxisIteratorBaseTest.class.getClassLoader());
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "is abstract");
+        check(c.getSuperclass().getName().equals("com.sun.org.apache.xml.internal.dtm.ref.DTMAxisIteratorBase"), "superclass com.sun.org.apache.xml.internal.dtm.ref.DTMAxisIteratorBase");
+        java.util.Set<String> mn = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) mn.add(m.getName());
+        check(mn.contains("setMark"), "method setMark");
+        check(mn.contains("gotoMark"), "method gotoMark");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}

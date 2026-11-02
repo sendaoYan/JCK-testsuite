@@ -1,0 +1,125 @@
+/*
+ * @test
+ * @summary com.sun.org.apache.xml.internal.dtm.ref.DTMDocumentImpl conformance: class hierarchy and members.
+ * @run main DTMDocumentImplTest
+ */
+public class DTMDocumentImplTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("com.sun.org.apache.xml.internal.dtm.ref.DTMDocumentImpl", false, DTMDocumentImplTest.class.getClassLoader());
+        check(!c.isInterface() && !c.isEnum(), "is a class");
+        check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");
+        check(hasInterface(c, "com.sun.org.apache.xml.internal.dtm.DTM"), "has interface com.sun.org.apache.xml.internal.dtm.DTM");
+        check(hasInterface(c, "org.xml.sax.ContentHandler"), "has interface org.xml.sax.ContentHandler");
+        check(hasInterface(c, "org.xml.sax.ext.LexicalHandler"), "has interface org.xml.sax.ext.LexicalHandler");
+        java.util.Set<String> mn = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) mn.add(m.getName());
+        check(mn.contains("setIncrementalSAXSource"), "method setIncrementalSAXSource");
+        check(mn.contains("setFeature"), "method setFeature");
+        check(mn.contains("setLocalNameTable"), "method setLocalNameTable");
+        check(mn.contains("getLocalNameTable"), "method getLocalNameTable");
+        check(mn.contains("setNsNameTable"), "method setNsNameTable");
+        check(mn.contains("getNsNameTable"), "method getNsNameTable");
+        check(mn.contains("setPrefixNameTable"), "method setPrefixNameTable");
+        check(mn.contains("getPrefixNameTable"), "method getPrefixNameTable");
+        check(mn.contains("setContentBuffer"), "method setContentBuffer");
+        check(mn.contains("getContentBuffer"), "method getContentBuffer");
+        check(mn.contains("getContentHandler"), "method getContentHandler");
+        check(mn.contains("getLexicalHandler"), "method getLexicalHandler");
+        check(mn.contains("getEntityResolver"), "method getEntityResolver");
+        check(mn.contains("getDTDHandler"), "method getDTDHandler");
+        check(mn.contains("getErrorHandler"), "method getErrorHandler");
+        check(mn.contains("getDeclHandler"), "method getDeclHandler");
+        check(mn.contains("needsTwoThreads"), "method needsTwoThreads");
+        check(mn.contains("characters"), "method characters");
+        check(mn.contains("endDocument"), "method endDocument");
+        check(mn.contains("endElement"), "method endElement");
+        check(mn.contains("endPrefixMapping"), "method endPrefixMapping");
+        check(mn.contains("ignorableWhitespace"), "method ignorableWhitespace");
+        check(mn.contains("processingInstruction"), "method processingInstruction");
+        check(mn.contains("setDocumentLocator"), "method setDocumentLocator");
+        check(mn.contains("skippedEntity"), "method skippedEntity");
+        check(mn.contains("startDocument"), "method startDocument");
+        check(mn.contains("startElement"), "method startElement");
+        check(mn.contains("startPrefixMapping"), "method startPrefixMapping");
+        check(mn.contains("comment"), "method comment");
+        check(mn.contains("endCDATA"), "method endCDATA");
+        check(mn.contains("endDTD"), "method endDTD");
+        check(mn.contains("endEntity"), "method endEntity");
+        check(mn.contains("startCDATA"), "method startCDATA");
+        check(mn.contains("startDTD"), "method startDTD");
+        check(mn.contains("startEntity"), "method startEntity");
+        check(mn.contains("initDocument"), "method initDocument");
+        check(mn.contains("hasChildNodes"), "method hasChildNodes");
+        check(mn.contains("getFirstChild"), "method getFirstChild");
+        check(mn.contains("getLastChild"), "method getLastChild");
+        check(mn.contains("getAttributeNode"), "method getAttributeNode");
+        check(mn.contains("getFirstAttribute"), "method getFirstAttribute");
+        check(mn.contains("getFirstNamespaceNode"), "method getFirstNamespaceNode");
+        check(mn.contains("getNextSibling"), "method getNextSibling");
+        check(mn.contains("getPreviousSibling"), "method getPreviousSibling");
+        check(mn.contains("getNextAttribute"), "method getNextAttribute");
+        check(mn.contains("getNextNamespaceNode"), "method getNextNamespaceNode");
+        check(mn.contains("getNextDescendant"), "method getNextDescendant");
+        check(mn.contains("getNextFollowing"), "method getNextFollowing");
+        check(mn.contains("getNextPreceding"), "method getNextPreceding");
+        check(mn.contains("getParent"), "method getParent");
+        check(mn.contains("getDocumentRoot"), "method getDocumentRoot");
+        check(mn.contains("getDocument"), "method getDocument");
+        check(mn.contains("getOwnerDocument"), "method getOwnerDocument");
+        check(mn.contains("getStringValue"), "method getStringValue");
+        check(mn.contains("getStringValueChunkCount"), "method getStringValueChunkCount");
+        check(mn.contains("getStringValueChunk"), "method getStringValueChunk");
+        check(mn.contains("getExpandedTypeID"), "method getExpandedTypeID");
+        check(mn.contains("getLocalNameFromExpandedNameID"), "method getLocalNameFromExpandedNameID");
+        check(mn.contains("getNamespaceFromExpandedNameID"), "method getNamespaceFromExpandedNameID");
+        check(mn.contains("getNodeName"), "method getNodeName");
+        check(mn.contains("getNodeNameX"), "method getNodeNameX");
+        check(mn.contains("getLocalName"), "method getLocalName");
+        check(mn.contains("getPrefix"), "method getPrefix");
+        check(mn.contains("getNamespaceURI"), "method getNamespaceURI");
+        check(mn.contains("getNodeValue"), "method getNodeValue");
+        check(mn.contains("getNodeType"), "method getNodeType");
+        check(mn.contains("getLevel"), "method getLevel");
+        check(mn.contains("isSupported"), "method isSupported");
+        check(mn.contains("getDocumentBaseURI"), "method getDocumentBaseURI");
+        check(mn.contains("setDocumentBaseURI"), "method setDocumentBaseURI");
+        check(mn.contains("getDocumentSystemIdentifier"), "method getDocumentSystemIdentifier");
+        check(mn.contains("getDocumentEncoding"), "method getDocumentEncoding");
+        check(mn.contains("getDocumentStandalone"), "method getDocumentStandalone");
+        check(mn.contains("getDocumentVersion"), "method getDocumentVersion");
+        check(mn.contains("getDocumentAllDeclarationsProcessed"), "method getDocumentAllDeclarationsProcessed");
+        check(mn.contains("getDocumentTypeDeclarationSystemIdentifier"), "method getDocumentTypeDeclarationSystemIdentifier");
+        check(mn.contains("getDocumentTypeDeclarationPublicIdentifier"), "method getDocumentTypeDeclarationPublicIdentifier");
+        check(mn.contains("getElementById"), "method getElementById");
+        check(mn.contains("getUnparsedEntityURI"), "method getUnparsedEntityURI");
+        check(mn.contains("supportsPreStripping"), "method supportsPreStripping");
+        check(mn.contains("isNodeAfter"), "method isNodeAfter");
+        check(mn.contains("isCharacterElementContentWhitespace"), "method isCharacterElementContentWhitespace");
+        check(mn.contains("isDocumentAllDeclarationsProcessed"), "method isDocumentAllDeclarationsProcessed");
+        check(mn.contains("isAttributeSpecified"), "method isAttributeSpecified");
+        check(mn.contains("dispatchCharactersEvents"), "method dispatchCharactersEvents");
+        check(mn.contains("dispatchToEvents"), "method dispatchToEvents");
+        check(mn.contains("getNode"), "method getNode");
+        check(mn.contains("appendChild"), "method appendChild");
+        check(mn.contains("appendTextChild"), "method appendTextChild");
+        check(mn.contains("appendComment"), "method appendComment");
+        check(mn.contains("appendStartElement"), "method appendStartElement");
+        check(mn.contains("appendNSDeclaration"), "method appendNSDeclaration");
+        check(mn.contains("appendAttribute"), "method appendAttribute");
+        check(mn.contains("getAxisTraverser"), "method getAxisTraverser");
+        check(mn.contains("getAxisIterator"), "method getAxisIterator");
+        check(mn.contains("getTypedAxisIterator"), "method getTypedAxisIterator");
+        check(mn.contains("appendEndElement"), "method appendEndElement");
+        check(mn.contains("appendStartDocument"), "method appendStartDocument");
+        check(mn.contains("appendEndDocument"), "method appendEndDocument");
+        check(mn.contains("setProperty"), "method setProperty");
+        check(mn.contains("getSourceLocatorFor"), "method getSourceLocatorFor");
+        check(mn.contains("documentRegistration"), "method documentRegistration");
+        check(mn.contains("documentRelease"), "method documentRelease");
+        check(mn.contains("migrateTo"), "method migrateTo");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
