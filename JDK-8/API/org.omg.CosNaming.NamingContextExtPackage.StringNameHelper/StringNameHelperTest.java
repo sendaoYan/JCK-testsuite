@@ -1,0 +1,20 @@
+/*
+ * @test
+ * @summary org.omg.CosNaming.NamingContextExtPackage.StringNameHelper conformance: helper static id/type/narrow.
+ * @run main StringNameHelperTest
+ */
+
+public class StringNameHelperTest {
+    static int passed;
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    public static void main(String[] args) throws Exception {
+        check(org.omg.CosNaming.NamingContextExtPackage.StringNameHelper.id() != null, "id() non-null");
+        check(org.omg.CosNaming.NamingContextExtPackage.StringNameHelper.type() != null, "type() non-null");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}

@@ -1,0 +1,21 @@
+/*
+ * @test
+ * @summary org.omg.PortableServer.ServantActivatorHelper conformance: helper static id/type/narrow.
+ * @run main ServantActivatorHelperTest
+ */
+
+public class ServantActivatorHelperTest {
+    static int passed;
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    public static void main(String[] args) throws Exception {
+        check(org.omg.PortableServer.ServantActivatorHelper.id() != null, "id() non-null");
+        check(org.omg.PortableServer.ServantActivatorHelper.type() != null, "type() non-null");
+        check(org.omg.PortableServer.ServantActivatorHelper.narrow(null) == null, "narrow(null) returns null");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}

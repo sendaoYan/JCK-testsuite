@@ -1,0 +1,20 @@
+/*
+ * @test
+ * @summary org.omg.PortableInterceptor.ORBInitInfoPackage.ObjectIdHelper conformance: helper static id/type/narrow.
+ * @run main ObjectIdHelperTest
+ */
+
+public class ObjectIdHelperTest {
+    static int passed;
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    public static void main(String[] args) throws Exception {
+        check(org.omg.PortableInterceptor.ORBInitInfoPackage.ObjectIdHelper.id() != null, "id() non-null");
+        check(org.omg.PortableInterceptor.ORBInitInfoPackage.ObjectIdHelper.type() != null, "type() non-null");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
