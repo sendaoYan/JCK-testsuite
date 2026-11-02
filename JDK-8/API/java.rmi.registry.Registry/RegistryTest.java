@@ -1,0 +1,24 @@
+/*
+ * @test
+ * @summary java.rmi.registry.Registry conformance: interface reflection.
+ * @run main RegistryTest
+ */
+
+public class RegistryTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasMethod(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
+        return false;
+    }
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("java.rmi.registry.Registry");
+        check(c.isInterface(), "interface");
+        check(c.getSuperclass() == null, "interfaces have no superclass");
+        check(Class.forName("java.rmi.Remote").isAssignableFrom(c), "implements/extends java.rmi.Remote");
+        check(hasMethod(c, "bind"), "declares bind");
+        check(hasMethod(c, "list"), "declares list");
+        check(hasMethod(c, "lookup"), "declares lookup");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}

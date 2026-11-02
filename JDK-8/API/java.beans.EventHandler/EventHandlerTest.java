@@ -1,0 +1,19 @@
+/*
+ * @test
+ * @summary java.beans.EventHandler conformance: target/action/property/listener.
+ * @run main EventHandlerTest
+ */
+
+import java.beans.*;
+public class EventHandlerTest {
+    static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    public static void main(String[] args) throws Exception {
+        EventHandler eh = new EventHandler(new StringBuilder(), "append", "getSource", "actionPerformed");
+        check(eh.getTarget() instanceof StringBuilder, "target");
+        check("append".equals(eh.getAction()), "action");
+        check("getSource".equals(eh.getEventPropertyName()), "event property name");
+        check("actionPerformed".equals(eh.getListenerMethodName()), "listener method name");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+}
