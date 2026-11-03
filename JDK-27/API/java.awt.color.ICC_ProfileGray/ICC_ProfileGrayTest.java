@@ -1,38 +1,53 @@
 /*
  * @test
- * @summary java.awt.color.ICC_ProfileGray conformance: reflected type shape.
+ * @summary java.awt.color.ICC_ProfileGray conformance: white-box structure plus black-box behavior.
  * @run main ICC_ProfileGrayTest
  */
 
+import java.awt.color.*;
 import java.lang.reflect.*;
 
 public class ICC_ProfileGrayTest {
     static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasMethod(Class<?> c, String n, Class<?>... p) {
+        try { c.getMethod(n, p); return true; } catch (NoSuchMethodException e) { return false; }
+    }
 
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.color.ICC_ProfileGray");
+        int m = c.getModifiers();
+        check(Modifier.isPublic(m) && Modifier.isFinal(m), "public final class");
+        check(ICC_Profile.class.isAssignableFrom(c), "extends ICC_Profile");
+        check(hasMethod(c, "getMediaWhitePoint"), "getMediaWhitePoint()");
+        check(hasMethod(c, "getGamma"), "getGamma()");
+        check(hasMethod(c, "getTRC"), "getTRC()");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        ICC_Profile p = ICC_Profile.getInstance(ColorSpace.CS_GRAY);
+        check(p instanceof ICC_ProfileGray, "getInstance(CS_GRAY) returns ICC_ProfileGray");
+        ICC_ProfileGray gray = (ICC_ProfileGray) p;
+
+        float[] wp = gray.getMediaWhitePoint();
+        check(wp != null && wp.length == 3, "mediaWhitePoint 3 components");
+        check(wp[0] > 0 && wp[1] > 0 && wp[2] > 0, "mediaWhitePoint positive");
+
+        // built-in gray TRC is a single gamma = 1.0 (linear)
+        check(gray.getGamma() == 1.0f, "gray getGamma == 1.0");
+
+        // linear/gamma TRC means getTRC() throws ProfileDataException
+        boolean threw = false;
+        try { gray.getTRC(); }
+        catch (ProfileDataException e) { threw = true; }
+        check(threw, "gray getTRC throws ProfileDataException (linear TRC)");
     }
 
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.color.ICC_ProfileGray", false, ICC_ProfileGrayTest.class.getClassLoader());
-        check(c != null, "type loads: java.awt.color.ICC_ProfileGray");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
-        }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

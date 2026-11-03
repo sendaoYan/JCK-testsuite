@@ -1,38 +1,44 @@
 /*
  * @test
- * @summary java.awt.image.MultiResolutionImage conformance: reflected type shape.
+ * @summary java.awt.image.MultiResolutionImage conformance: white-box structure plus black-box behavior.
  * @run main MultiResolutionImageTest
  */
 
+import java.awt.*;
+import java.awt.image.*;
+import java.util.*;
 import java.lang.reflect.*;
 
 public class MultiResolutionImageTest {
     static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasMethod(Class<?> c, String n, Class<?>... p) {
+        try { c.getMethod(n, p); return true; } catch (NoSuchMethodException e) { return false; }
+    }
 
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.image.MultiResolutionImage");
+        int m = c.getModifiers();
+        check(Modifier.isInterface(m), "interface");
+        check(hasMethod(c, "getResolutionVariant", double.class, double.class), "getResolutionVariant");
+        check(hasMethod(c, "getResolutionVariants"), "getResolutionVariants");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        final Image v = new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB);
+        MultiResolutionImage mri = new MultiResolutionImage() {
+            public Image getResolutionVariant(double w, double h) { return v; }
+            public java.util.List<Image> getResolutionVariants() { return Collections.singletonList(v); }
+        };
+        check(mri.getResolutionVariant(4, 4) == v, "getResolutionVariant");
+        check(mri.getResolutionVariants().size() == 1, "getResolutionVariants size 1");
     }
 
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.image.MultiResolutionImage", false, MultiResolutionImageTest.class.getClassLoader());
-        check(c != null, "type loads: java.awt.image.MultiResolutionImage");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
-        }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
