@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.awt.Dialog.ModalExclusionType conformance: reflected type shape.
+ * @summary java.awt.Dialog.ModalExclusionType conformance: white-box structure + black-box behavior.
  * @run main ModalExclusionTypeTest
  */
 
@@ -14,25 +14,39 @@ public class ModalExclusionTypeTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.Dialog$ModalExclusionType", false, ModalExclusionTypeTest.class.getClassLoader());
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.Dialog$ModalExclusionType");
         check(c != null, "type loads: java.awt.Dialog.ModalExclusionType");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
+        check(Modifier.isPublic(m), "public");
+        check(Modifier.isFinal(m), "final");
+        check(c.isEnum(), "is enum");
+        check(c.getSuperclass() == Enum.class, "extends java.lang.Enum");
+        check(c.getEnumConstants().length == 3, "three constants");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        java.awt.Dialog.ModalExclusionType[] all = java.awt.Dialog.ModalExclusionType.values();
+        check(all.length == 3, "values length 3");
+        check(all[0] == java.awt.Dialog.ModalExclusionType.NO_EXCLUDE, "values[0] NO_EXCLUDE");
+        check(all[1] == java.awt.Dialog.ModalExclusionType.APPLICATION_EXCLUDE, "values[1] APPLICATION_EXCLUDE");
+        check(all[2] == java.awt.Dialog.ModalExclusionType.TOOLKIT_EXCLUDE, "values[2] TOOLKIT_EXCLUDE");
+
+        check(java.awt.Dialog.ModalExclusionType.NO_EXCLUDE.ordinal() == 0, "NO_EXCLUDE ordinal 0");
+        check(java.awt.Dialog.ModalExclusionType.TOOLKIT_EXCLUDE.ordinal() == 2, "TOOLKIT_EXCLUDE ordinal 2");
+
+        for (java.awt.Dialog.ModalExclusionType t : all) {
+            check(java.awt.Dialog.ModalExclusionType.valueOf(t.name()) == t, "valueOf roundtrip " + t);
         }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+        check(java.awt.Dialog.ModalExclusionType.valueOf("APPLICATION_EXCLUDE")
+                == java.awt.Dialog.ModalExclusionType.APPLICATION_EXCLUDE, "valueOf literal");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

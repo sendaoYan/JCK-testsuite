@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.awt.event.ActionListener conformance: reflected type shape.
+ * @summary java.awt.event.ActionListener conformance: white-box structure + black-box behavior.
  * @run main ActionListenerTest
  */
 
-import java.lang.reflect.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.awt.event.ActionListener;
 
 public class ActionListenerTest {
     static int passed;
@@ -14,25 +16,37 @@ public class ActionListenerTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.event.ActionListener", false, ActionListenerTest.class.getClassLoader());
-        check(c != null, "type loads: java.awt.event.ActionListener");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.event.ActionListener");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
-        }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+        check(Modifier.isPublic(m), "ActionListener is public");
+        check(c.isInterface(), "ActionListener is interface");
+        check(c.getSuperclass() == null, "ActionListener has no superclass");
+        check(java.util.Arrays.asList(c.getInterfaces()).contains(java.util.EventListener.class), "ActionListener extends EventListener");
+        check(c.getDeclaredMethods().length == 1, "ActionListener has 1 methods");
+        Method m0 = c.getMethod("actionPerformed", java.awt.event.ActionEvent.class);
+        check(Modifier.isPublic(m0.getModifiers()) && Modifier.isAbstract(m0.getModifiers()), "actionPerformed public abstract");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        final java.util.List<String> calls = new java.util.ArrayList<String>();
+        ActionListener l = new ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { calls.add("actionPerformed"); }
+        };
+        l.actionPerformed(null);
+        check(calls.size() == 1 && calls.get(0).equals("actionPerformed"), "dispatch actionPerformed");
+        final java.util.List<String> lam = new java.util.ArrayList<String>();
+        ActionListener lambda = (e) -> lam.add("x");
+        lambda.actionPerformed(null);
+        check(lam.size() == 1 && lam.get(0).equals("x"), "SAM lambda invocation");
+        check(l instanceof java.util.EventListener, "ActionListener instanceof EventListener");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

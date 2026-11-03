@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.awt.event.ItemListener conformance: reflected type shape.
+ * @summary java.awt.event.ItemListener conformance: white-box structure + black-box behavior.
  * @run main ItemListenerTest
  */
 
-import java.lang.reflect.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.awt.event.ItemListener;
 
 public class ItemListenerTest {
     static int passed;
@@ -14,25 +16,37 @@ public class ItemListenerTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.event.ItemListener", false, ItemListenerTest.class.getClassLoader());
-        check(c != null, "type loads: java.awt.event.ItemListener");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.event.ItemListener");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
-        }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+        check(Modifier.isPublic(m), "ItemListener is public");
+        check(c.isInterface(), "ItemListener is interface");
+        check(c.getSuperclass() == null, "ItemListener has no superclass");
+        check(java.util.Arrays.asList(c.getInterfaces()).contains(java.util.EventListener.class), "ItemListener extends EventListener");
+        check(c.getDeclaredMethods().length == 1, "ItemListener has 1 methods");
+        Method m0 = c.getMethod("itemStateChanged", java.awt.event.ItemEvent.class);
+        check(Modifier.isPublic(m0.getModifiers()) && Modifier.isAbstract(m0.getModifiers()), "itemStateChanged public abstract");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        final java.util.List<String> calls = new java.util.ArrayList<String>();
+        ItemListener l = new ItemListener() {
+            public void itemStateChanged(java.awt.event.ItemEvent e) { calls.add("itemStateChanged"); }
+        };
+        l.itemStateChanged(null);
+        check(calls.size() == 1 && calls.get(0).equals("itemStateChanged"), "dispatch itemStateChanged");
+        final java.util.List<String> lam = new java.util.ArrayList<String>();
+        ItemListener lambda = (e) -> lam.add("x");
+        lambda.itemStateChanged(null);
+        check(lam.size() == 1 && lam.get(0).equals("x"), "SAM lambda invocation");
+        check(l instanceof java.util.EventListener, "ItemListener instanceof EventListener");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

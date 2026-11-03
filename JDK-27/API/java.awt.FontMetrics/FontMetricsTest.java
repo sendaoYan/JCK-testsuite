@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.awt.FontMetrics conformance: reflected type shape.
+ * @summary java.awt.FontMetrics conformance: white-box structure + black-box behavior.
  * @run main FontMetricsTest
  */
 
@@ -14,25 +14,97 @@ public class FontMetricsTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.awt.FontMetrics", false, FontMetricsTest.class.getClassLoader());
         check(c != null, "type loads: java.awt.FontMetrics");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
-        }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+        check(Modifier.isPublic(m), "public class");
+        check(Modifier.isAbstract(m), "abstract class");
+        check(!c.isInterface(), "not interface");
+        check(c.getEnumConstants() == null, "non-enum");
+        check(java.io.Serializable.class.isAssignableFrom(c), "implements Serializable");
+
+        check(c.getMethod("getFont").getReturnType() == java.awt.Font.class, "getFont returns Font");
+        check(c.getMethod("getFontRenderContext").getReturnType() == java.awt.font.FontRenderContext.class,
+              "getFontRenderContext returns FontRenderContext");
+        for (String name : new String[] {"getLeading", "getAscent", "getDescent", "getHeight",
+                "getMaxAscent", "getMaxDescent", "getMaxDecent", "getMaxAdvance",
+                "charWidth", "stringWidth", "charsWidth", "bytesWidth", "getWidths",
+                "hasUniformLineMetrics", "getLineMetrics", "getStringBounds", "getMaxCharBounds",
+                "toString"})
+            check(java.util.Arrays.stream(c.getMethods()).anyMatch(mm -> mm.getName().equals(name)), "method present: " + name);
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        java.awt.image.BufferedImage img =
+            new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics g = img.createGraphics();
+
+        java.awt.Font f24 = new java.awt.Font("Dialog", java.awt.Font.PLAIN, 24);
+        java.awt.Font f12 = new java.awt.Font("Dialog", java.awt.Font.PLAIN, 12);
+        java.awt.FontMetrics fm = g.getFontMetrics(f24);
+        java.awt.FontMetrics fm12 = g.getFontMetrics(f12);
+
+        // getFont / font render context
+        check(fm.getFont().equals(f24), "getFont returns the font");
+        check(fm.getFontRenderContext() != null, "getFontRenderContext non-null");
+
+        // metrics relationships
+        check(fm.getAscent() >= 0, "ascent non-negative");
+        check(fm.getDescent() >= 0, "descent non-negative");
+        check(fm.getLeading() >= 0, "leading non-negative");
+        check(fm.getHeight() == fm.getLeading() + fm.getAscent() + fm.getDescent(),
+              "height == leading+ascent+descent");
+        check(fm.getHeight() >= fm.getAscent() + fm.getDescent(), "height >= ascent+descent");
+        check(fm.getMaxAscent() >= fm.getAscent(), "maxAscent >= ascent");
+        check(fm.getMaxDescent() >= fm.getDescent(), "maxDescent >= descent");
+        check(fm.getMaxAdvance() > 0, "maxAdvance positive");
+
+        // string / char widths (relationships, not exact pixels)
+        check(fm.stringWidth("MMM") > fm.stringWidth("M"), "stringWidth MMM > M");
+        check(fm.stringWidth("MMM") > fm.stringWidth("I"), "stringWidth MMM > I");
+        check(fm.stringWidth("MMM") > fm12.stringWidth("MMM"), "size 24 width > size 12 width");
+        check(fm.charWidth('M') == fm.stringWidth("M"), "charWidth('M') == stringWidth('M')");
+        check(fm.charWidth('A') == fm.charWidth((int) 'A'), "charWidth(char) == charWidth(int)");
+
+        // charsWidth / bytesWidth consistency
+        check(fm.charsWidth(new char[] {'A', 'B', 'C'}, 0, 3) == fm.stringWidth("ABC"),
+              "charsWidth equals stringWidth");
+        check(fm.bytesWidth(new byte[] {'A', 'B'}, 0, 2) == fm.stringWidth("AB"),
+              "bytesWidth latin-1 equals stringWidth");
+
+        // getWidths
+        int[] widths = fm.getWidths();
+        check(widths.length == 256, "getWidths length 256");
+        check(widths[0] >= 0, "getWidths entries non-negative");
+
+        // line metrics via Graphics
+        java.awt.font.LineMetrics lm = fm.getLineMetrics("Hello", g);
+        check(lm.getAscent() >= 0 && lm.getDescent() >= 0, "getLineMetrics non-negative");
+        check(lm.getHeight() >= lm.getAscent() + lm.getDescent(), "lineMetrics height >= ascent+descent");
+
+        // string bounds via Graphics
+        java.awt.geom.Rectangle2D b = fm.getStringBounds("Hello", g);
+        check(b.getWidth() > 0, "getStringBounds positive width");
+        java.awt.geom.Rectangle2D bm = fm.getMaxCharBounds(g);
+        check(bm.getWidth() > 0, "getMaxCharBounds positive width");
+
+        // hasUniformLineMetrics callable
+        fm.hasUniformLineMetrics();
+        check(true, "hasUniformLineMetrics callable");
+
+        // toString
+        String ts = fm.toString();
+        check(ts != null && ts.contains("ascent=") && ts.contains("height="), "toString format");
+
+        g.dispose();
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

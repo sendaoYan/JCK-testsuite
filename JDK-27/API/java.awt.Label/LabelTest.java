@@ -1,9 +1,11 @@
 /*
  * @test
- * @summary java.awt.Label conformance: reflected type shape.
+ * @summary java.awt.Label conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main LabelTest
  */
 
+import java.awt.*;
 import java.lang.reflect.*;
 
 public class LabelTest {
@@ -14,25 +16,61 @@ public class LabelTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.Label", false, LabelTest.class.getClassLoader());
+    static boolean hasMethod(Class<?> c, String name) {
+        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.Label");
         check(c != null, "type loads: java.awt.Label");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
+        check(Modifier.isPublic(m), "public");
+        check(!Modifier.isAbstract(m), "not abstract");
+        check(c.getSuperclass() == Component.class, "extends Component");
+        for (String name : new String[]{"getText", "setText", "getAlignment", "setAlignment"}) {
+            check(hasMethod(c, name), "has " + name);
         }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        check(Label.LEFT == 0, "LEFT 0");
+        check(Label.CENTER == 1, "CENTER 1");
+        check(Label.RIGHT == 2, "RIGHT 2");
+
+        Label l = new Label();
+        check("".equals(l.getText()), "default empty text");
+        check(l.getAlignment() == Label.LEFT, "default LEFT");
+
+        Label l2 = new Label("hi");
+        check("hi".equals(l2.getText()), "constructor text");
+        check(l2.getAlignment() == Label.LEFT, "constructor LEFT");
+
+        Label l3 = new Label("hi", Label.RIGHT);
+        check(l3.getAlignment() == Label.RIGHT, "constructor alignment");
+
+        l2.setText("changed");
+        check("changed".equals(l2.getText()), "setText/getText");
+        l2.setAlignment(Label.CENTER);
+        check(l2.getAlignment() == Label.CENTER, "setAlignment/getAlignment");
+
+        Frame f = new Frame("LabelTest");
+        f.setSize(100, 100);
+        f.setVisible(true);
+        try {
+            f.add(l2);
+            check(l2.isDisplayable(), "displayable after add");
+            check(l2.isShowing(), "showing after add");
+        } finally {
+            f.dispose();
         }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

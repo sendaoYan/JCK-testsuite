@@ -1,9 +1,11 @@
 /*
  * @test
- * @summary java.awt.DefaultKeyboardFocusManager conformance: reflected type shape.
+ * @summary java.awt.DefaultKeyboardFocusManager conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main DefaultKeyboardFocusManagerTest
  */
 
+import java.awt.*;
 import java.lang.reflect.*;
 
 public class DefaultKeyboardFocusManagerTest {
@@ -14,25 +16,41 @@ public class DefaultKeyboardFocusManagerTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.DefaultKeyboardFocusManager", false, DefaultKeyboardFocusManagerTest.class.getClassLoader());
+    static boolean hasMethod(Class<?> c, String name) {
+        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.DefaultKeyboardFocusManager");
         check(c != null, "type loads: java.awt.DefaultKeyboardFocusManager");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
+        check(Modifier.isPublic(m), "public");
+        check(!Modifier.isAbstract(m), "not abstract");
+        check(c.getSuperclass() == KeyboardFocusManager.class, "extends KeyboardFocusManager");
+        for (String name : new String[]{"dispatchEvent", "dispatchKeyEvent", "postProcessKeyEvent",
+                "processKeyEvent", "focusNextComponent", "focusPreviousComponent",
+                "upFocusCycle", "downFocusCycle"}) {
+            check(hasMethod(c, name), "has " + name);
         }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        DefaultKeyboardFocusManager d = new DefaultKeyboardFocusManager();
+        check(d instanceof KeyboardFocusManager, "is a KeyboardFocusManager");
+
+        FocusTraversalPolicy ftp = d.getDefaultFocusTraversalPolicy();
+        check(ftp != null, "default focus traversal policy non-null");
+
+        java.util.Set<AWTKeyStroke> fwd = d.getDefaultFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS);
+        check(fwd != null && !fwd.isEmpty(), "forward traversal keys non-empty");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

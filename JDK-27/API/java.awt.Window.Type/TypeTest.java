@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.awt.Window.Type conformance: reflected type shape.
+ * @summary java.awt.Window.Type conformance: white-box structure + black-box behavior.
  * @run main TypeTest
  */
 
@@ -14,25 +14,39 @@ public class TypeTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.Window$Type", false, TypeTest.class.getClassLoader());
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.Window$Type");
         check(c != null, "type loads: java.awt.Window.Type");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
+        check(Modifier.isPublic(m), "public");
+        check(Modifier.isFinal(m), "final");
+        check(c.isEnum(), "is enum");
+        check(c.getSuperclass() == Enum.class, "extends java.lang.Enum");
+        check(c.getEnumConstants().length == 3, "three constants");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        java.awt.Window.Type[] all = java.awt.Window.Type.values();
+        check(all.length == 3, "values length 3");
+        check(all[0] == java.awt.Window.Type.NORMAL, "values[0] NORMAL");
+        check(all[1] == java.awt.Window.Type.UTILITY, "values[1] UTILITY");
+        check(all[2] == java.awt.Window.Type.POPUP, "values[2] POPUP");
+
+        check(java.awt.Window.Type.NORMAL.ordinal() == 0, "NORMAL ordinal 0");
+        check(java.awt.Window.Type.POPUP.ordinal() == 2, "POPUP ordinal 2");
+
+        for (java.awt.Window.Type t : all) {
+            check(java.awt.Window.Type.valueOf(t.name()) == t, "valueOf roundtrip " + t);
         }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+        check(java.awt.Window.Type.valueOf("UTILITY") == java.awt.Window.Type.UTILITY, "valueOf literal");
+        check(java.awt.Window.Type.NORMAL.toString().equals("NORMAL"), "toString = name");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

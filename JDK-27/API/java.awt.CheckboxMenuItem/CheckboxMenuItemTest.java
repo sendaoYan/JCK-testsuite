@@ -1,9 +1,12 @@
 /*
  * @test
- * @summary java.awt.CheckboxMenuItem conformance: reflected type shape.
+ * @summary java.awt.CheckboxMenuItem conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main CheckboxMenuItemTest
  */
 
+import java.awt.*;
+import java.awt.event.ItemListener;
 import java.lang.reflect.*;
 
 public class CheckboxMenuItemTest {
@@ -14,25 +17,63 @@ public class CheckboxMenuItemTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.CheckboxMenuItem", false, CheckboxMenuItemTest.class.getClassLoader());
+    static boolean hasMethod(Class<?> c, String name) {
+        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.CheckboxMenuItem");
         check(c != null, "type loads: java.awt.CheckboxMenuItem");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
+        check(Modifier.isPublic(m), "public");
+        check(!Modifier.isAbstract(m), "not abstract");
+        check(c.getSuperclass() == MenuItem.class, "extends MenuItem");
+        boolean itemSelectable = false;
+        for (Class<?> i : c.getInterfaces()) if (i == ItemSelectable.class) itemSelectable = true;
+        check(itemSelectable, "implements ItemSelectable");
+        for (String name : new String[]{"getState", "setState", "getSelectedObjects",
+                "addItemListener", "removeItemListener", "getItemListeners"}) {
+            check(hasMethod(c, name), "has " + name);
         }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        CheckboxMenuItem c = new CheckboxMenuItem();
+        check("".equals(c.getLabel()), "default empty label");
+        check(!c.getState(), "default state false");
+
+        CheckboxMenuItem c2 = new CheckboxMenuItem("wrap", true);
+        check("wrap".equals(c2.getLabel()), "constructor label");
+        check(c2.getState(), "constructor state true");
+
+        c2.setLabel("wrapped");
+        check("wrapped".equals(c2.getLabel()), "inherited setLabel");
+        c2.setEnabled(false);
+        check(!c2.isEnabled(), "inherited setEnabled");
+        c2.setEnabled(true);
+
+        c2.setState(false);
+        check(!c2.getState(), "setState(false)");
+        check(c2.getSelectedObjects() == null, "getSelectedObjects null when off");
+        c2.setState(true);
+        check(c2.getState(), "setState(true)");
+        check(c2.getSelectedObjects() != null && c2.getSelectedObjects().length == 1
+                && "wrapped".equals(c2.getSelectedObjects()[0]), "getSelectedObjects when on");
+
+        ItemListener l = e -> {};
+        c2.addItemListener(l);
+        check(c2.getItemListeners().length == 1 && c2.getItemListeners()[0] == l,
+              "addItemListener/getItemListeners");
+        c2.removeItemListener(l);
+        check(c2.getItemListeners().length == 0, "removeItemListener");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

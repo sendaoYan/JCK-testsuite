@@ -1,9 +1,11 @@
 /*
  * @test
- * @summary java.awt.PopupMenu conformance: reflected type shape.
+ * @summary java.awt.PopupMenu conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main PopupMenuTest
  */
 
+import java.awt.*;
 import java.lang.reflect.*;
 
 public class PopupMenuTest {
@@ -14,25 +16,53 @@ public class PopupMenuTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.PopupMenu", false, PopupMenuTest.class.getClassLoader());
+    static boolean hasMethod(Class<?> c, String name) {
+        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.PopupMenu");
         check(c != null, "type loads: java.awt.PopupMenu");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
+        check(Modifier.isPublic(m), "public");
+        check(!Modifier.isAbstract(m), "not abstract");
+        check(c.getSuperclass() == Menu.class, "extends Menu");
+        for (String name : new String[]{"getParent", "addNotify", "show"}) {
+            check(hasMethod(c, name), "has " + name);
         }
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        PopupMenu p = new PopupMenu();
+        check("".equals(p.getLabel()), "default empty label");
+        PopupMenu p2 = new PopupMenu("pop");
+        check("pop".equals(p2.getLabel()), "constructor label");
+
+        MenuItem a = new MenuItem("a");
+        p2.add(a);
+        check(p2.getItemCount() == 1 && p2.getItem(0) == a, "add/getItemCount/getItem");
+
+        Frame f = new Frame("PopupMenuTest");
+        f.setSize(200, 200);
+        f.setVisible(true);
+        try {
+            Canvas c = new Canvas();
+            f.add(c);
+            c.add(p2);
+            check(p2.getParent() == c, "getParent after add to component");
+            p2.show(c, 0, 0); // shown popup under Xvfb without WM
+            check(p2.getItemCount() == 1, "popup still intact after show");
+        } finally {
+            f.dispose();
         }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

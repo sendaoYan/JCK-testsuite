@@ -3,7 +3,8 @@
 # Specification (JLS) and the Java Virtual Machine Specification (JVMS),
 # Java SE 27 edition.
 
-keys=intermittent randomness needs-src
+keys=headful sound printer multimon \
+     intermittent randomness needs-src
 
 # Minimum jtreg version
 requiredVersion=7+1
