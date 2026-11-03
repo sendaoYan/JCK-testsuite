@@ -1,36 +1,104 @@
 /*
  * @test
- * @summary javax.lang.model.element.ModuleElement conformance: reflection shape checks.
+ * @summary javax.lang.model.element.ModuleElement conformance: white-box structure + black-box behavior.
  * @run main ModuleElementTest
  */
 
-import java.lang.reflect.*;
+import java.util.*;
+import javax.lang.model.*;
+import javax.lang.model.element.*;
+import javax.lang.model.type.*;
+import javax.lang.model.util.*;
+import javax.tools.*;
+import com.sun.source.util.*;
 
 public class ModuleElementTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean cond, String msg) { if (!cond) throw new AssertionError(msg); passed++; }
+    static Set<String> ifaceNames(Class<?> c) { Set<String> s = new HashSet<>(); for (Class<?> i : c.getInterfaces()) s.add(i.getName()); return s; }
+    static boolean declares(Class<?> c, String name) { for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true; return false; }
+
+    // ---- compiler harness (headless, deterministic) ----
+    static javax.lang.model.util.Elements el;
+    static javax.lang.model.util.Types ty;
+    static com.sun.source.util.JavacTask jt;
+    static javax.tools.StandardJavaFileManager fm;
+    static java.nio.file.Path tmpDir;
+    static void compile(String source) throws Exception {
+        javax.tools.JavaCompiler c = javax.tools.ToolProvider.getSystemJavaCompiler();
+        tmpDir = java.nio.file.Files.createTempDirectory("jck27bh-langmodel");
+        java.nio.file.Path src = tmpDir.resolve("sample/Sample.java");
+        java.nio.file.Files.createDirectories(src.getParent());
+        java.nio.file.Files.writeString(src, source, java.nio.charset.StandardCharsets.UTF_8);
+        javax.tools.DiagnosticCollector<javax.tools.JavaFileObject> diags = new javax.tools.DiagnosticCollector<>();
+        fm = c.getStandardFileManager(diags, java.util.Locale.ROOT, java.nio.charset.StandardCharsets.UTF_8);
+        Iterable<? extends javax.tools.JavaFileObject> units = fm.getJavaFileObjectsFromFiles(java.util.List.of(src.toFile()));
+        jt = (com.sun.source.util.JavacTask) c.getTask(null, fm, diags, java.util.List.of("-proc:none"), null, units);
+        el = jt.getElements();
+        ty = jt.getTypes();
+        jt.parse();
+        jt.analyze();
+    }
+    static void cleanup() {
+        try { if (fm != null) fm.close(); } catch (java.io.IOException e) {}
+        if (tmpDir != null) {
+            try (java.util.stream.Stream<java.nio.file.Path> s = java.nio.file.Files.walk(tmpDir)) {
+                s.sorted(java.util.Comparator.reverseOrder()).forEach(p -> { try { java.nio.file.Files.deleteIfExists(p); } catch (java.io.IOException e) {} });
+            } catch (java.io.IOException e) {}
+        }
     }
 
-    static java.util.Set<String> ifaceNames(Class<?> c) {
-        java.util.Set<String> s = new java.util.HashSet<>();
-        for (Class<?> i : c.getInterfaces()) s.add(i.getName());
-        return s;
-    }
-    static boolean declares(Class<?> c, String name) {
-        for (Method m : c.getDeclaredMethods())
-            if (m.getName().equals(name)) return true;
-        return false;
-    }
 
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.lang.model.element.ModuleElement");
         check(c != null, "javax.lang.model.element.ModuleElement loads");
         check(c.getName().equals("javax.lang.model.element.ModuleElement"), "binary name is javax.lang.model.element.ModuleElement");
-        check(Modifier.isPublic(c.getModifiers()), "javax.lang.model.element.ModuleElement is public");
-        check(c.isInterface(), "javax.lang.model.element.ModuleElement is an interface");
-        check(ifaceNames(c).equals(java.util.Set.of("javax.lang.model.element.Element", "javax.lang.model.element.QualifiedNameable")), "direct superinterfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "javax.lang.model.element.ModuleElement is public");
+        check(c.isInterface() && !c.isAnnotation(), "is a plain interface");
+        check(ifaceNames(c).contains("javax.lang.model.element.Element"), "extends javax.lang.model.element.Element");
+        check(ifaceNames(c).contains("javax.lang.model.element.QualifiedNameable"), "extends javax.lang.model.element.QualifiedNameable");
+        check(declares(c, "getQualifiedName"), "declares getQualifiedName()");
+        check(declares(c, "getDirectives"), "declares getDirectives()");
+        check(declares(c, "isOpen"), "declares isOpen()");
+        check(declares(c, "isUnnamed"), "declares isUnnamed()");
+    }
+
+    static void testBlackBox() throws Exception {
+        String src = """
+package sample;
+/** Doc for Sample. */
+public class Sample implements Runnable {
+    public int field;
+    public java.util.List<String> list;
+    public Sample() {}
+    public Sample(int a) {}
+    public String method(int a) { return null; }
+    public void run() {}
+    public <T> T id(T x) { return x; }
+}
+record Rec(int x) {}
+@Deprecated class Old {}
+@interface Marker { String value(); }
+@Marker("unchecked") class W {}
+enum Color { RED, GREEN }
+""";
+        compile(src);
+        ModuleElement base = el.getModuleElement("java.base");
+        check(base.getQualifiedName().contentEquals("java.base"), "qualifiedName java.base");
+        check(!base.isOpen() && !base.isUnnamed(), "!open !unnamed");
+        check(!base.getDirectives().isEmpty(), "directives non-empty");
+        Set<ModuleElement.DirectiveKind> kinds = new HashSet<>();
+        for (ModuleElement.Directive d : base.getDirectives()) kinds.add(d.getKind());
+        check(kinds.contains(ModuleElement.DirectiveKind.EXPORTS) && kinds.contains(ModuleElement.DirectiveKind.USES) && kinds.contains(ModuleElement.DirectiveKind.PROVIDES), "java.base has EXPORTS/USES/PROVIDES");
+    }
+
+    public static void main(String[] args) throws Exception {
+        try {
+            testWhiteBox();
+            testBlackBox();
+            System.out.println("PASS (" + passed + " assertions)");
+        } finally {
+            cleanup();
+        }
     }
 }
