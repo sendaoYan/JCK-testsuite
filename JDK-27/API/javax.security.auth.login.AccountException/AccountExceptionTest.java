@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.security.auth.login.AccountException conformance: account exception hierarchy.
+ * @summary javax.security.auth.login.AccountException conformance: white-box structure + black-box behavior.
  * @run main AccountExceptionTest
  */
 
@@ -12,12 +12,50 @@ public class AccountExceptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
-        AccountException e = new AccountException("msg");
-        check("msg".equals(e.getMessage()), "message ctor");
-        check(e instanceof javax.security.auth.login.LoginException, "extends javax.security.auth.login.LoginException");
-        check(e instanceof java.security.GeneralSecurityException, "is java.security.GeneralSecurityException");
+
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            check(type.isInstance(t), msg + " (got " + t.getClass().getName() + ")");
+            return;
+        }
+        check(false, msg + " (no exception)");
+    }
+
+    static boolean hasCtor(Class<?> c, Class<?>... p) {
+        try { c.getDeclaredConstructor(p); return true; } catch (NoSuchMethodException e) { return false; }
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.security.auth.login.AccountException");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public class");
+        check(!c.isInterface() && !java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "concrete class");
+        check(c.getSuperclass().getName().equals("javax.security.auth.login.LoginException"), "extends javax.security.auth.login.LoginException");
+        check(hasCtor(c) && hasCtor(c, String.class), "no-arg + String constructors present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        AccountException e = new AccountException("hello");
+        check("hello".equals(e.getMessage()), "message ctor getMessage");
         check(new AccountException().getMessage() == null, "no-arg message null");
+        check(e instanceof javax.security.auth.login.AccountException, "e instanceof javax.security.auth.login.AccountException");
+        check(e instanceof javax.security.auth.login.LoginException, "e instanceof javax.security.auth.login.LoginException");
+        check(e instanceof java.security.GeneralSecurityException, "e instanceof java.security.GeneralSecurityException");
+
+        // cause semantics inherited from Throwable
+        AccountException c = new AccountException();
+        IllegalStateException cause = new IllegalStateException("cause");
+        check(c.initCause(cause) == c, "initCause returns this");
+        check(c.getCause() == cause, "getCause returns cause");
+        expect(IllegalStateException.class, () -> c.initCause(new RuntimeException()), "second initCause throws IllegalStateException");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
