@@ -1,9 +1,23 @@
 /*
  * @test
- * @summary java.lang.Character API conformance: constants (radix/surrogate/code
- *          point), digit/forDigit, category predicates, case conversion, space
- *          and ISO-control classification, Java-identifier predicates, numeric
- *          value/type, surrogate-pair and code-point helpers, and reverseBytes.
+ * @summary java.lang.Character conformance (white-box structural + black-box
+ *          behavioral, numeric/comparison focus): constants, digit/forDigit,
+ *          category predicates, case conversion, space/ISO-control, identifier
+ *          predicates, numeric value/type, surrogate/code-point helpers,
+ *          codePointOf, reverseBytes/compare/compareTo.
+ *
+ * Design case
+ * -----------
+ * 1. Contract: Character is an immutable wrapper over a UTF-16 code unit; static
+ *    methods classify/convert chars/code points, map digits to numeric values, and
+ *    order chars.
+ * 2. Usage: digit(ch, radix) for parsing; forDigit(n, radix) for formatting;
+ *    getNumericValue/charValue/compare/compareTo for numeric and comparison use.
+ * 3. Composition: forDigit(digit('F',16),16)=='f'; codePointOf(getName(cp)) round-trip;
+ *    codepoint digit/getNumericValue overloads mirror the char forms.
+ * 4. Invariants: valueOf cache for chars; equals by char value only; hashCode == value.
+ * 5. Boundary/exception: digit returns -1 for out-of-range radix/non-digit; forDigit
+ *    returns '\0' out of range; codePointOf throws IllegalArgumentException unknown.
  * @run main CharacterTest
  */
 
@@ -162,7 +176,98 @@ public class CharacterTest {
         check(!Character.valueOf('a').equals(Character.valueOf('b')), "!equals different");
     }
 
-    public static void main(String[] args) {
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Character");
+            check(!c.isInterface(), "Character is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Character is final");
+            check(c.getSuperclass() == Object.class, "Character extends Object directly");
+            check(Comparable.class.isAssignableFrom(c), "Character implements Comparable");
+            check(c.getField("MIN_VALUE").getType() == char.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("MIN_VALUE").getModifiers()),
+                  "MIN_VALUE is public static final char");
+            check(c.getMethod("digit", char.class, int.class).getReturnType() == int.class,
+                  "digit(char,int) returns int");
+            check(c.getMethod("digit", int.class, int.class).getReturnType() == int.class,
+                  "digit(int,int) returns int");
+            check(c.getMethod("valueOf", char.class).getReturnType() == Character.class,
+                  "valueOf(char) returns Character");
+            check(c.getMethod("codePointOf", String.class).getReturnType() == int.class,
+                  "codePointOf(String) returns int");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testCodepointNumericAndCompare() {
+        // Codepoint overloads of digit/getNumericValue/isDigit mirror the char forms.
+        check(Character.digit(0x41, 16) == 10, "digit(codepoint 'A',16) == 10");
+        check(Character.digit(0x39, 10) == 9, "digit(codepoint '9',10) == 9");
+        check(Character.digit(0x41, 10) == -1, "digit(codepoint 'A',10) == -1");
+        check(Character.isDigit(0x39) && !Character.isDigit(0x41), "isDigit(codepoint)");
+        check(Character.getNumericValue(0x41) == 10, "getNumericValue(codepoint 'A') == 10");
+        check(Character.getNumericValue(0x39) == 9, "getNumericValue(codepoint '9') == 9");
+
+        // Composition: forDigit(digit(ch)) round-trips case-insensitively.
+        check(Character.forDigit(Character.digit('F', 16), 16) == 'f',
+              "forDigit(digit('F',16),16) == 'f'");
+
+        // codePointOf(getName) round-trip via the stable Unicode name database.
+        check(Character.codePointOf("LATIN CAPITAL LETTER A") == 0x41,
+              "codePointOf(\"LATIN CAPITAL LETTER A\")");
+        check(Character.codePointOf(Character.getName(0x41)) == 0x41,
+              "codePointOf(getName(0x41)) round-trip");
+        try {
+            Character.codePointOf("NO SUCH CHARACTER NAME");
+            throw new AssertionError("codePointOf(unknown) should throw");
+        } catch (IllegalArgumentException expected) {
+            passed++;
+        }
+
+        // compareTo is the instance counterpart of compare.
+        check(Character.valueOf('a').compareTo(Character.valueOf('b')) < 0, "compareTo < 0");
+        check(Character.valueOf('b').compareTo(Character.valueOf('a')) > 0, "compareTo > 0");
+        check(Character.valueOf('a').compareTo(Character.valueOf('a')) == 0, "compareTo == 0");
+    }
+
+    static void testSupplementaryCase() {
+        check(Character.isLetter(0x10400), "isLetter(U+10400 Deseret)");
+        check(Character.isUpperCase(0x10400), "isUpperCase(0x10400)");
+        check(Character.isLowerCase(0x10428), "isLowerCase(0x10428)");
+        check(Character.toLowerCase(0x10400) == 0x10428, "toLowerCase(0x10400)");
+        check(Character.toUpperCase(0x10428) == 0x10400, "toUpperCase(0x10428)");
+        check(Character.isTitleCase(0x01C5), "isTitleCase(0x01C5)");
+        check(Character.toUpperCase(0x01C5) == 0x01C4, "toUpperCase titlecase -> 0x01C4");
+        check(Character.toLowerCase(0x01C5) == 0x01C6, "toLowerCase titlecase -> 0x01C6");
+        check(Character.toTitleCase('a') == 'A', "toTitleCase('a')");
+        check(Character.toTitleCase(0x01C6) == 0x01C5, "toTitleCase(0x01C6)");
+    }
+
+    static void testWhitespaceEdge() {
+        // U+00A0 NBSP and U+2007 FIGURE SPACE are space separators but are
+        // explicitly excluded from isWhitespace (no-break spaces).
+        check(!Character.isWhitespace('\u00A0'), "!isWhitespace(NBSP)");
+        check(!Character.isWhitespace('\u2007'), "!isWhitespace(FIGURE SPACE)");
+        check(Character.isWhitespace('\u2000'), "isWhitespace(EN QUAD)");
+        check(Character.isSpaceChar('\u00A0'), "isSpaceChar(NBSP)");
+        check(Character.isSpaceChar('\u2007'), "isSpaceChar(FIGURE SPACE)");
+        check(Character.isSpaceChar('\u2000'), "isSpaceChar(EN QUAD)");
+        check(!Character.isSpaceChar('\t'), "!isSpaceChar(tab)");
+        check(!Character.isWhitespace('\u00AD'), "!isWhitespace(soft hyphen)");
+    }
+
+    static void testNumericEdge() {
+        check(Character.getNumericValue('\u2167') == 8, "getNumericValue(roman VIII)");
+        check(Character.getNumericValue('\u216B') == 12, "getNumericValue(roman XII)");
+        check(Character.digit('\uFF15', 10) == 5, "digit(fullwidth 5,10)");
+        check(Character.digit('\uFF21', 16) == 10, "digit(fullwidth A,16)");
+        check(Character.isDigit('\uFF15'), "isDigit(fullwidth 5)");
+        check(Character.isDigit(0x0660), "isDigit(arabic-indic 0)");
+    }
+
+    // ---- Black-box / behavioral ----
+    static void testBlackBox() {
         testConstants();
         testDigit();
         testForDigit();
@@ -174,6 +279,15 @@ public class CharacterTest {
         testSurrogates();
         testCodePoint();
         testMisc();
+        testCodepointNumericAndCompare();
+        testSupplementaryCase();
+        testWhitespaceEdge();
+        testNumericEdge();
+    }
+
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

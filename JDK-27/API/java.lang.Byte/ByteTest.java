@@ -1,9 +1,22 @@
 /*
  * @test
- * @summary java.lang.Byte API conformance: constants, parseByte (decimal and
- *          radix, overflow, no whitespace trim), valueOf (full -128..127 cache),
- *          decode (0x/#/octal/sign), toString/toUnsignedInt/toUnsignedLong,
- *          comparison (incl. unsigned), and hashCode/equals.
+ * @summary java.lang.Byte conformance (white-box structural + black-box
+ *          behavioral): constants, parsing, decode, string/unsigned conversion,
+ *          comparison (incl. unsigned), boxing.
+ *
+ * Design case
+ * -----------
+ * 1. Contract: Byte is an immutable wrapper over an 8-bit signed byte; parse/decode
+ *    factories reject malformed input with NumberFormatException.
+ * 2. Usage: valueOf/parseByte/decode -> byteValue()/intValue() -> toString/
+ *    toUnsignedInt/toUnsignedLong -> compare/compareUnsigned/compareTo.
+ * 3. Composition: valueOf(byte) [whole range cached] -> byteValue -> toString ->
+ *    parseByte round-trip; autobox -> arithmetic -> rebox -> compareTo -> equals;
+ *    compareUnsigned treats the sign bit as magnitude.
+ * 4. Invariants: immutability; the entire byte range cached by valueOf(byte);
+ *    equals by byte value only; hashCode == value.
+ * 5. Boundary/exception: MIN_VALUE==-128/MAX_VALUE==127/SIZE==8/BYTES==1; parse
+ *    overflow NFE; toUnsignedInt(-1)==255.
  * @run main ByteTest
  */
 
@@ -113,27 +126,10 @@ public class ByteTest {
         check(Byte.compare((byte) 1, (byte) 1) == 0, "compare(1,1) == 0");
         check(Byte.valueOf((byte) 1).compareTo(Byte.valueOf((byte) 2)) < 0, "compareTo < 0");
 
-        // Byte.compareUnsigned was added in Java 9; JDK 8 expresses the same
-        // unsigned ordering via Integer.compareUnsigned(Byte.toUnsignedInt(...)).
-        try {
-            java.lang.reflect.Method m = Byte.class.getMethod("compareUnsigned",
-                                                              byte.class, byte.class);
-            check((Integer) m.invoke(null, (byte) -1, (byte) 0) > 0, "compareUnsigned(-1,0) > 0");
-            check((Integer) m.invoke(null, (byte) 1, (byte) -1) < 0, "compareUnsigned(1,-1) < 0");
-            check((Integer) m.invoke(null, (byte) 1, (byte) 1) == 0, "compareUnsigned(1,1) == 0");
-        } catch (NoSuchMethodException e) {
-            check(Integer.compareUnsigned(Byte.toUnsignedInt((byte) -1),
-                                          Byte.toUnsignedInt((byte) 0)) > 0,
-                  "unsigned(-1) > unsigned(0) [JDK8]");
-            check(Integer.compareUnsigned(Byte.toUnsignedInt((byte) 1),
-                                          Byte.toUnsignedInt((byte) -1)) < 0,
-                  "unsigned(1) < unsigned(-1) [JDK8]");
-            check(Integer.compareUnsigned(Byte.toUnsignedInt((byte) 1),
-                                          Byte.toUnsignedInt((byte) 1)) == 0,
-                  "unsigned(1) == unsigned(1) [JDK8]");
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        // Unsigned comparison treats the sign bit as magnitude (JDK 9+).
+        check(Byte.compareUnsigned((byte) -1, (byte) 0) > 0, "compareUnsigned(-1,0) > 0");
+        check(Byte.compareUnsigned((byte) 1, (byte) -1) < 0, "compareUnsigned(1,-1) < 0");
+        check(Byte.compareUnsigned((byte) 1, (byte) 1) == 0, "compareUnsigned(1,1) == 0");
     }
 
     static void testHashCodeEquals() {
@@ -150,7 +146,43 @@ public class ByteTest {
         check(Byte.valueOf((byte) 42).doubleValue() == 42.0, "doubleValue");
     }
 
-    public static void main(String[] args) {
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Byte");
+            check(!c.isInterface(), "Byte is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Byte is final");
+            check(c.getSuperclass() == Number.class, "Byte extends Number");
+            check(Comparable.class.isAssignableFrom(c), "Byte implements Comparable");
+            check(c.getField("MAX_VALUE").getType() == byte.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("MAX_VALUE").getModifiers()),
+                  "MAX_VALUE is public static final byte");
+            check(c.getMethod("parseByte", String.class).getReturnType() == byte.class,
+                  "parseByte(String) returns byte");
+            check(c.getMethod("valueOf", byte.class).getReturnType() == Byte.class,
+                  "valueOf(byte) returns Byte");
+            check(c.getMethod("compareUnsigned", byte.class, byte.class).getReturnType()
+                  == int.class, "compareUnsigned(byte,byte) returns int");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testBoxing() {
+        // JLS 5.1.7: autoboxing maps the byte literal through Byte.valueOf(byte).
+        Byte boxed = 42;
+        check(boxed == Byte.valueOf((byte) 42), "autobox 42 uses cached valueOf");
+        byte unboxed = boxed;                      // unboxing via byteValue()
+        check(unboxed == 42, "unboxing recovers byte");
+        Byte sum = (byte) (boxed + 8);             // unbox, add, rebox
+        check(sum == Byte.valueOf((byte) 50), "boxed arithmetic re-boxes");
+        check(sum.compareTo(boxed) > 0, "compareTo after arithmetic");
+        check(!sum.equals(boxed), "!equals distinct values");
+        check(sum.hashCode() == 50, "hashCode follows value");
+    }
+
+    // ---- Black-box / behavioral ----
+    static void testBlackBox() {
         testConstants();
         testParseByte();
         testParseByteRadix();
@@ -159,6 +191,12 @@ public class ByteTest {
         testToStringUnsigned();
         testCompare();
         testHashCodeEquals();
+        testBoxing();
+    }
+
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

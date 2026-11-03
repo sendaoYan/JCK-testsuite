@@ -1,9 +1,22 @@
 /*
  * @test
- * @summary java.lang.Integer API conformance: constants, parsing (parseInt,
- *          parseUnsignedInt, valueOf, decode), string conversion (toString and
- *          the to{Hex,Octal,Binary,Unsigned}String family), bit operations,
- *          unsigned arithmetic, comparison, and the boxed-value cache.
+ * @summary java.lang.Integer conformance (white-box structural + black-box
+ *          behavioral): constants, parsing, string conversion, bit operations,
+ *          unsigned arithmetic, comparison, boxing, and the valueOf cache.
+ *
+ * Design case
+ * -----------
+ * 1. Contract: Integer is an immutable wrapper over a 32-bit signed int; parse/
+ *    decode factories reject malformed input with NumberFormatException.
+ * 2. Usage: valueOf/parseInt/decode -> intValue()/longValue() -> toString(radix)/
+ *    to{Hex,Octal,Binary,Unsigned}String -> compare/compareUnsigned/compareTo.
+ * 3. Composition: valueOf(int) [cache -128..127] -> intValue -> toString(radix) ->
+ *    parseInt(radix) round-trip; autobox -> arithmetic -> rebox -> compareTo ->
+ *    equals/hashCode; bitCount/highestOneBit/lowestOneBit/numberOfLeadingZeros.
+ * 4. Invariants: immutability; valueOf identity for -128..127, distinct-but-equal
+ *    otherwise; equals by int value only; hashCode == value.
+ * 5. Boundary/exception: MIN_VALUE/MAX_VALUE/SIZE==32/BYTES==4; parse overflow NFE;
+ *    divideUnsigned/remainderUnsigned by zero throw ArithmeticException.
  * @run main IntegerTest
  */
 
@@ -195,15 +208,18 @@ public class IntegerTest {
 
     static void testGetInteger() {
         System.setProperty("jck.int.get", "42");
-        check(Integer.getInteger("jck.int.get") == 42, "getInteger(property)");
-        check(Integer.getInteger("jck.int.def", 7) == 7, "getInteger(default int)");
-        check(Integer.getInteger("jck.int.def", Integer.valueOf(9)) == 9,
-              "getInteger(default Integer)");
-        check(Integer.getInteger("jck.int.missing") == null, "getInteger(missing) == null");
         System.setProperty("jck.int.bad", "not-a-number");
-        check(Integer.getInteger("jck.int.bad") == null, "getInteger(bad value) == null");
-        System.clearProperty("jck.int.get");
-        System.clearProperty("jck.int.bad");
+        try {
+            check(Integer.getInteger("jck.int.get") == 42, "getInteger(property)");
+            check(Integer.getInteger("jck.int.def", 7) == 7, "getInteger(default int)");
+            check(Integer.getInteger("jck.int.def", Integer.valueOf(9)) == 9,
+                  "getInteger(default Integer)");
+            check(Integer.getInteger("jck.int.missing") == null, "getInteger(missing) == null");
+            check(Integer.getInteger("jck.int.bad") == null, "getInteger(bad value) == null");
+        } finally {
+            System.clearProperty("jck.int.get");
+            System.clearProperty("jck.int.bad");
+        }
     }
 
     static void testConversions() {
@@ -310,7 +326,49 @@ public class IntegerTest {
         check(Integer.min(Integer.MIN_VALUE, Integer.MAX_VALUE) == Integer.MIN_VALUE, "min");
     }
 
-    public static void main(String[] args) {
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Integer");
+            check(!c.isInterface(), "Integer is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Integer is final");
+            check(c.getSuperclass() == Number.class, "Integer extends Number");
+            check(Number.class.getSuperclass() == Object.class, "Number extends Object");
+            check(Comparable.class.isAssignableFrom(c), "Integer implements Comparable");
+            check(c.getField("MAX_VALUE").getType() == int.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("MAX_VALUE").getModifiers())
+                  && java.lang.reflect.Modifier.isFinal(c.getField("MAX_VALUE").getModifiers()),
+                  "MAX_VALUE is public static final int");
+            check(c.getMethod("parseInt", String.class).getReturnType() == int.class,
+                  "parseInt(String) returns int");
+            check(c.getMethod("valueOf", int.class).getReturnType() == Integer.class,
+                  "valueOf(int) returns Integer");
+            check(c.getMethod("toString", int.class, int.class).getReturnType() == String.class,
+                  "toString(int,int) returns String");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testBoxing() {
+        // JLS 5.1.7: autoboxing maps the int literal through Integer.valueOf(int).
+        Integer boxed = 42;
+        check(boxed == Integer.valueOf(42), "autobox 42 uses cached valueOf");
+        int unboxed = boxed;                       // unboxing via intValue()
+        check(unboxed == 42, "unboxing recovers int");
+        Integer sum = boxed + 8;                   // unbox, add, rebox
+        check(sum == Integer.valueOf(50), "boxed arithmetic re-boxes");
+        check(sum.compareTo(boxed) > 0, "compareTo after arithmetic");
+        check(!sum.equals(boxed), "!equals distinct values");
+        check(sum.hashCode() == 50, "hashCode follows value");
+        Integer big1 = 128, big2 = 128;
+        check(big1 != big2, "autobox 128 not cached (distinct references)");
+        check(big1.equals(big2) && big1.intValue() == big2.intValue(),
+              "distinct autobox instances are equal by value");
+    }
+
+    // ---- Black-box / behavioral ----
+    static void testBlackBox() {
         testConstants();
         testParseInt();
         testParseIntRadix();
@@ -326,6 +384,12 @@ public class IntegerTest {
         testBitOps();
         testUnsignedOps();
         testSumMaxMin();
+        testBoxing();
+    }
+
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,9 +1,22 @@
 /*
  * @test
- * @summary java.lang.Long API conformance: constants, parsing (parseLong,
- *          parseUnsignedLong, valueOf, decode), string conversion (toString and
- *          the to{Hex,Octal,Binary,Unsigned}String family), bit operations,
- *          unsigned arithmetic, comparison, and the boxed-value cache.
+ * @summary java.lang.Long conformance (white-box structural + black-box
+ *          behavioral): constants, parsing, string conversion, bit operations,
+ *          unsigned arithmetic, comparison, boxing, and the valueOf cache.
+ *
+ * Design case
+ * -----------
+ * 1. Contract: Long is an immutable wrapper over a 64-bit signed long; parse/decode
+ *    factories reject malformed input with NumberFormatException.
+ * 2. Usage: valueOf/parseLong/decode -> longValue()/intValue() -> toString(radix)/
+ *    to{Hex,Octal,Binary,Unsigned}String -> compare/compareUnsigned/compareTo.
+ * 3. Composition: valueOf(long) [cache -128..127] -> longValue -> toString(radix) ->
+ *    parseLong(radix) round-trip; autobox -> arithmetic -> rebox -> compareTo ->
+ *    equals/hashCode; bitCount/highestOneBit/lowestOneBit/numberOfLeadingZeros.
+ * 4. Invariants: immutability; valueOf identity for -128..127, distinct-but-equal
+ *    otherwise; equals by long value only; hashCode == (int)(v ^ (v>>>32)).
+ * 5. Boundary/exception: MIN_VALUE/MAX_VALUE/SIZE==64/BYTES==8; parse overflow NFE;
+ *    divideUnsigned/remainderUnsigned by zero throw ArithmeticException.
  * @run main LongTest
  */
 
@@ -270,7 +283,50 @@ public class LongTest {
         check(Long.min(1L, 2L) == 1L, "min(1,2)");
     }
 
-    public static void main(String[] args) {
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Long");
+            check(!c.isInterface(), "Long is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Long is final");
+            check(c.getSuperclass() == Number.class, "Long extends Number");
+            check(Number.class.getSuperclass() == Object.class, "Number extends Object");
+            check(Comparable.class.isAssignableFrom(c), "Long implements Comparable");
+            check(c.getField("MAX_VALUE").getType() == long.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("MAX_VALUE").getModifiers())
+                  && java.lang.reflect.Modifier.isFinal(c.getField("MAX_VALUE").getModifiers()),
+                  "MAX_VALUE is public static final long");
+            check(c.getMethod("parseLong", String.class).getReturnType() == long.class,
+                  "parseLong(String) returns long");
+            check(c.getMethod("valueOf", long.class).getReturnType() == Long.class,
+                  "valueOf(long) returns Long");
+            check(c.getMethod("toString", long.class, int.class).getReturnType() == String.class,
+                  "toString(long,int) returns String");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testBoxing() {
+        // JLS 5.1.7: autoboxing maps the long literal through Long.valueOf(long).
+        Long boxed = 42L;
+        check(boxed == Long.valueOf(42L), "autobox 42 uses cached valueOf");
+        long unboxed = boxed;                      // unboxing via longValue()
+        check(unboxed == 42L, "unboxing recovers long");
+        Long sum = boxed + 8L;                     // unbox, add, rebox
+        check(sum == Long.valueOf(50L), "boxed arithmetic re-boxes");
+        check(sum.compareTo(boxed) > 0, "compareTo after arithmetic");
+        check(boxed.compareTo(Long.valueOf(42L)) == 0, "compareTo equal");
+        check(!sum.equals(boxed), "!equals distinct values");
+        check(sum.hashCode() == 50, "hashCode follows value");
+        Long big1 = 128L, big2 = 128L;
+        check(big1 != big2, "autobox 128 not cached (distinct references)");
+        check(big1.equals(big2) && big1.longValue() == big2.longValue(),
+              "distinct autobox instances are equal by value");
+    }
+
+    // ---- Black-box / behavioral ----
+    static void testBlackBox() {
         testConstants();
         testParseLong();
         testParseLongRadix();
@@ -285,6 +341,12 @@ public class LongTest {
         testBitOps();
         testUnsignedOps();
         testSumMaxMin();
+        testBoxing();
+    }
+
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,9 +1,22 @@
 /*
  * @test
- * @summary java.lang.Float API conformance: constants (incl. bit patterns for
- *          MIN_NORMAL/MIN_VALUE), parseFloat (whitespace trim, f/d suffix, hex,
- *          NaN/Infinity, NFE vs NPE on null), NaN/-0.0 semantics, bit conversion
- *          (floatToIntBits/intBitsToFloat), compare/equals, and hashCode.
+ * @summary java.lang.Float conformance (white-box structural + black-box
+ *          behavioral): constants, parseFloat, NaN/-0.0 semantics, bit conversion,
+ *          float16ToFloat, sum/max/min, boxing, compare/equals, hashCode.
+ *
+ * Design case
+ * -----------
+ * 1. Contract: Float is an immutable wrapper over a 32-bit IEEE-754 float;
+ *    parseFloat accepts decimal/hex/NaN/Infinity with optional whitespace and a
+ *    trailing f/d suffix, throws NFE on malformed input and NPE on null.
+ * 2. Usage: parseFloat/valueOf -> floatValue -> floatToIntBits/intBitsToFloat
+ *    round-trip -> compare/equals -> toString round-trip.
+ * 3. Composition: intBitsToFloat(floatToIntBits(x)) == x for non-NaN; NaN and
+ *    signed zero distinguished by bit pattern; compare orders -0.0 < +0.0, NaN max.
+ * 4. Invariants: immutability; equals by bit pattern (NaN==NaN, -0.0!=+0.0);
+ *    hashCode == floatToIntBits(value).
+ * 5. Boundary/exception: SIZE==32/BYTES==4; MIN_VALUE subnormal; NaN/Infinity
+ *    propagate through isNaN/isInfinite/isFinite; float16ToFloat decodes binary16.
  * @run main FloatTest
  */
 
@@ -134,7 +147,62 @@ public class FloatTest {
         check(Float.valueOf("1.5") == 1.5f, "valueOf(String)");
     }
 
-    public static void main(String[] args) {
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Float");
+            check(!c.isInterface(), "Float is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Float is final");
+            check(c.getSuperclass() == Number.class, "Float extends Number");
+            check(Comparable.class.isAssignableFrom(c), "Float implements Comparable");
+            check(c.getField("MAX_VALUE").getType() == float.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("MAX_VALUE").getModifiers()),
+                  "MAX_VALUE is public static final float");
+            check(c.getMethod("parseFloat", String.class).getReturnType() == float.class,
+                  "parseFloat(String) returns float");
+            check(c.getMethod("valueOf", float.class).getReturnType() == Float.class,
+                  "valueOf(float) returns Float");
+            check(c.getMethod("floatToIntBits", float.class).getReturnType() == int.class,
+                  "floatToIntBits(float) returns int");
+            check(c.getMethod("float16ToFloat", short.class).getReturnType() == float.class,
+                  "float16ToFloat(short) returns float");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testSumMaxMin() {
+        check(Float.sum(1.5f, 2.5f) == 4.0f, "sum(1.5,2.5)");
+        check(Float.max(1.5f, 2.5f) == 2.5f && Float.min(1.5f, 2.5f) == 1.5f,
+              "max/min floats");
+        check(Float.isNaN(Float.sum(Float.NaN, 1.0f)), "sum with NaN is NaN");
+        check(Float.isNaN(Float.max(Float.NaN, 1.0f)), "max(NaN, x) is NaN");
+        check(Float.compare(Float.max(-0.0f, 0.0f), 0.0f) == 0, "max(-0.0,0.0) == +0.0");
+    }
+
+    static void testFloat16() {
+        check(Float.float16ToFloat((short) 0x3C00) == 1.0f, "float16ToFloat(0x3C00)==1.0");
+        check(Float.float16ToFloat((short) 0x0000) == 0.0f, "float16ToFloat(0x0000)==0.0");
+        check(Float.float16ToFloat((short) 0x3800) == 0.5f, "float16ToFloat(0x3800)==0.5");
+        check(Float.float16ToFloat((short) 0xBC00) == -1.0f, "float16ToFloat(0xBC00)==-1.0");
+        check(Float.float16ToFloat((short) 0x7C00) == Float.POSITIVE_INFINITY,
+              "float16ToFloat(0x7C00)==+Inf");
+        check(Float.float16ToFloat((short) 0xFC00) == Float.NEGATIVE_INFINITY,
+              "float16ToFloat(0xFC00)==-Inf");
+        check(Float.isNaN(Float.float16ToFloat((short) 0x7E00)), "float16ToFloat(0x7E00) is NaN");
+    }
+
+    static void testBoxing() {
+        Float boxed = 1.5f;
+        check(boxed.floatValue() == 1.5f, "unboxing recovers float");
+        Float sum = boxed + 0.5f;                  // unbox, add, rebox
+        check(sum == 2.0f, "boxed arithmetic re-boxes");
+        check(sum.compareTo(boxed) > 0, "compareTo after arithmetic");
+        check(Float.isNaN(Float.NaN + 0.0f), "autobox arithmetic propagates NaN");
+    }
+
+    // ---- Black-box / behavioral ----
+    static void testBlackBox() {
         testConstants();
         testParse();
         testNaNInfinity();
@@ -142,6 +210,14 @@ public class FloatTest {
         testBitConversion();
         testCompareEquals();
         testHashCodeToString();
+        testSumMaxMin();
+        testFloat16();
+        testBoxing();
+    }
+
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,8 +1,20 @@
 /*
  * @test
- * @summary java.lang.Boolean API conformance: TRUE/FALSE constants, parseBoolean,
- *          valueOf (singleton caching), booleanValue, hashCode (1231/1237),
- *          equals/compareTo/compare (false < true), toString, and getBoolean.
+ * @summary java.lang.Boolean conformance (white-box structural + black-box
+ *          behavioral): TRUE/FALSE constants, parseBoolean, valueOf singleton,
+ *          booleanValue, hashCode (1231/1237), equals/compareTo/compare,
+ *          logicalAnd/Or/Xor, boxing, and getBoolean.
+ *
+ * Design case
+ * -----------
+ * 1. Contract: Boolean is an immutable wrapper with exactly two singleton instances,
+ *    TRUE and FALSE; parseBoolean is case-insensitive for "true" and never throws.
+ * 2. Usage: valueOf(boolean) -> booleanValue; valueOf(String) -> parse; toString;
+ *    compare/compareTo order false before true; logicalAnd/Or/Xor combine values.
+ * 3. Composition: valueOf(parseBoolean(s)).booleanValue() round-trip; autobox/unbox;
+ *    logicalAnd/Or/Xor -> compareTo -> equals/hashCode.
+ * 4. Invariants: TRUE/FALSE singletons; equals by boolean value only; hashCode 1231/1237.
+ * 5. Boundary/exception: parseBoolean(null)==false (no NPE); getBoolean defaults false.
  * @run main BooleanTest
  */
 
@@ -14,7 +26,28 @@ public class BooleanTest {
         passed++;
     }
 
-    public static void main(String[] args) {
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Boolean");
+            check(!c.isInterface(), "Boolean is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Boolean is final");
+            check(c.getSuperclass() == Object.class, "Boolean extends Object directly");
+            check(Comparable.class.isAssignableFrom(c), "Boolean implements Comparable");
+            check(c.getField("TRUE").getType() == Boolean.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("TRUE").getModifiers()),
+                  "TRUE is public static final Boolean");
+            check(c.getMethod("parseBoolean", String.class).getReturnType() == boolean.class,
+                  "parseBoolean(String) returns boolean");
+            check(c.getMethod("valueOf", boolean.class).getReturnType() == Boolean.class,
+                  "valueOf(boolean) returns Boolean");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    // ---- Black-box / behavioral ----
+    static void testBlackBox() {
         check(Boolean.TRUE, "TRUE is true");
         check(!Boolean.FALSE, "FALSE is false");
         check(Boolean.TYPE == boolean.class, "TYPE == boolean.class");
@@ -58,12 +91,34 @@ public class BooleanTest {
         check(Boolean.compare(true, false) > 0, "compare(true,false) > 0");
         check(Boolean.compare(true, true) == 0, "compare(true,true) == 0");
 
+        // Logical combinators (Java 8+).
+        check(Boolean.logicalAnd(true, true) == true && Boolean.logicalAnd(true, false) == false,
+              "logicalAnd");
+        check(Boolean.logicalOr(false, true) == true && Boolean.logicalOr(false, false) == false,
+              "logicalOr");
+        check(Boolean.logicalXor(true, false) == true && Boolean.logicalXor(true, true) == false,
+              "logicalXor");
+
+        // Autoboxing/unboxing: literal -> valueOf(boolean), and back via booleanValue().
+        Boolean boxed = true;
+        check(boxed == Boolean.TRUE, "autobox true == TRUE");
+        boolean unboxed = boxed;
+        check(unboxed, "unboxing recovers boolean");
+        check((boxed && Boolean.FALSE) == false, "boxed logical composition");
+
         // getBoolean reads a system property and defaults to false.
         System.setProperty("jck.bool.get", "true");
-        check(Boolean.getBoolean("jck.bool.get"), "getBoolean(set property)");
-        check(!Boolean.getBoolean("jck.bool.missing"), "getBoolean(missing) == false");
-        System.clearProperty("jck.bool.get");
+        try {
+            check(Boolean.getBoolean("jck.bool.get"), "getBoolean(set property)");
+            check(!Boolean.getBoolean("jck.bool.missing"), "getBoolean(missing) == false");
+        } finally {
+            System.clearProperty("jck.bool.get");
+        }
+    }
 
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

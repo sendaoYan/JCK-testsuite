@@ -1,9 +1,22 @@
 /*
  * @test
- * @summary java.lang.Short API conformance: constants, parseShort (decimal and
- *          radix, overflow, no whitespace trim), valueOf (-128..127 cache only),
- *          decode (0x/#/octal/sign), toString/toUnsignedInt/toUnsignedLong,
- *          comparison (incl. unsigned), reverseBytes, and hashCode/equals.
+ * @summary java.lang.Short conformance (white-box structural + black-box
+ *          behavioral): constants, parsing, decode, string/unsigned conversion,
+ *          comparison (incl. unsigned), boxing.
+ *
+ * Design case
+ * -----------
+ * 1. Contract: Short is an immutable wrapper over a 16-bit signed short; parse/
+ *    decode factories reject malformed input with NumberFormatException.
+ * 2. Usage: valueOf/parseShort/decode -> shortValue()/intValue() -> toString/
+ *    toUnsignedInt/toUnsignedLong -> compare/compareUnsigned/compareTo.
+ * 3. Composition: valueOf(short) [cache -128..127] -> shortValue -> toString ->
+ *    parseShort round-trip; autobox -> arithmetic -> rebox -> compareTo -> equals;
+ *    compareUnsigned treats the sign bit as magnitude.
+ * 4. Invariants: immutability; valueOf identity for -128..127; equals by short
+ *    value only; hashCode == value.
+ * 5. Boundary/exception: MIN_VALUE==-32768/MAX_VALUE==32767/SIZE==16/BYTES==2;
+ *    parse overflow NFE; reverseBytes swaps bytes.
  * @run main ShortTest
  */
 
@@ -111,27 +124,10 @@ public class ShortTest {
         check(Short.compare((short) 1, (short) 1) == 0, "compare(1,1) == 0");
         check(Short.valueOf((short) 1).compareTo(Short.valueOf((short) 2)) < 0, "compareTo < 0");
 
-        // Short.compareUnsigned was added in Java 9; JDK 8 expresses the same
-        // unsigned ordering via Integer.compareUnsigned(Short.toUnsignedInt(...)).
-        try {
-            java.lang.reflect.Method m = Short.class.getMethod("compareUnsigned",
-                                                               short.class, short.class);
-            check((Integer) m.invoke(null, (short) -1, (short) 0) > 0, "compareUnsigned(-1,0) > 0");
-            check((Integer) m.invoke(null, (short) 1, (short) -1) < 0, "compareUnsigned(1,-1) < 0");
-            check((Integer) m.invoke(null, (short) 1, (short) 1) == 0, "compareUnsigned(1,1) == 0");
-        } catch (NoSuchMethodException e) {
-            check(Integer.compareUnsigned(Short.toUnsignedInt((short) -1),
-                                          Short.toUnsignedInt((short) 0)) > 0,
-                  "unsigned(-1) > unsigned(0) [JDK8]");
-            check(Integer.compareUnsigned(Short.toUnsignedInt((short) 1),
-                                          Short.toUnsignedInt((short) -1)) < 0,
-                  "unsigned(1) < unsigned(-1) [JDK8]");
-            check(Integer.compareUnsigned(Short.toUnsignedInt((short) 1),
-                                          Short.toUnsignedInt((short) 1)) == 0,
-                  "unsigned(1) == unsigned(1) [JDK8]");
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        // Unsigned comparison treats the sign bit as magnitude (JDK 9+).
+        check(Short.compareUnsigned((short) -1, (short) 0) > 0, "compareUnsigned(-1,0) > 0");
+        check(Short.compareUnsigned((short) 1, (short) -1) < 0, "compareUnsigned(1,-1) < 0");
+        check(Short.compareUnsigned((short) 1, (short) 1) == 0, "compareUnsigned(1,1) == 0");
     }
 
     static void testReverseBytes() {
@@ -153,7 +149,43 @@ public class ShortTest {
         check(Short.valueOf((short) 42).doubleValue() == 42.0, "doubleValue");
     }
 
-    public static void main(String[] args) {
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Short");
+            check(!c.isInterface(), "Short is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Short is final");
+            check(c.getSuperclass() == Number.class, "Short extends Number");
+            check(Comparable.class.isAssignableFrom(c), "Short implements Comparable");
+            check(c.getField("MAX_VALUE").getType() == short.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("MAX_VALUE").getModifiers()),
+                  "MAX_VALUE is public static final short");
+            check(c.getMethod("parseShort", String.class).getReturnType() == short.class,
+                  "parseShort(String) returns short");
+            check(c.getMethod("valueOf", short.class).getReturnType() == Short.class,
+                  "valueOf(short) returns Short");
+            check(c.getMethod("compareUnsigned", short.class, short.class).getReturnType()
+                  == int.class, "compareUnsigned(short,short) returns int");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testBoxing() {
+        // JLS 5.1.7: autoboxing maps the short literal through Short.valueOf(short).
+        Short boxed = 42;
+        check(boxed == Short.valueOf((short) 42), "autobox 42 uses cached valueOf");
+        short unboxed = boxed;                     // unboxing via shortValue()
+        check(unboxed == 42, "unboxing recovers short");
+        Short sum = (short) (boxed + 8);           // unbox, add, rebox
+        check(sum == Short.valueOf((short) 50), "boxed arithmetic re-boxes");
+        check(sum.compareTo(boxed) > 0, "compareTo after arithmetic");
+        check(!sum.equals(boxed), "!equals distinct values");
+        check(sum.hashCode() == 50, "hashCode follows value");
+    }
+
+    // ---- Black-box / behavioral ----
+    static void testBlackBox() {
         testConstants();
         testParseShort();
         testParseShortRadix();
@@ -163,6 +195,12 @@ public class ShortTest {
         testCompare();
         testReverseBytes();
         testHashCodeEquals();
+        testBoxing();
+    }
+
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,9 +1,22 @@
 /*
  * @test
- * @summary java.lang.Double API conformance: constants (incl. bit patterns for
- *          MIN_NORMAL/MIN_VALUE), parseDouble (whitespace trim, f/d suffix, hex,
- *          NaN/Infinity, NFE vs NPE on null), NaN/-0.0 semantics, bit conversion
- *          (doubleToLongBits/longBitsToDouble), compare/equals, and hashCode.
+ * @summary java.lang.Double conformance (white-box structural + black-box
+ *          behavioral): constants, parseDouble, NaN/-0.0 semantics, bit conversion,
+ *          sum/max/min, boxing, compare/equals, hashCode.
+ *
+ * Design case
+ * -----------
+ * 1. Contract: Double is an immutable wrapper over a 64-bit IEEE-754 double;
+ *    parseDouble accepts decimal/hex/NaN/Infinity with optional whitespace and a
+ *    trailing f/d suffix, throws NFE on malformed input and NPE on null.
+ * 2. Usage: parseDouble/valueOf -> doubleValue -> doubleToLongBits/longBitsToDouble
+ *    round-trip -> compare/equals -> toString round-trip.
+ * 3. Composition: longBitsToDouble(doubleToLongBits(x)) == x for non-NaN; NaN and
+ *    signed zero distinguished by bit pattern; compare orders -0.0 < +0.0, NaN max.
+ * 4. Invariants: immutability; equals by bit pattern (NaN==NaN, -0.0!=+0.0);
+ *    hashCode == (int)(bits ^ (bits>>>32)).
+ * 5. Boundary/exception: SIZE==64/BYTES==8; MIN_VALUE subnormal; NaN/Infinity
+ *    propagate through isNaN/isInfinite/isFinite.
  * @run main DoubleTest
  */
 
@@ -134,7 +147,48 @@ public class DoubleTest {
         check(Double.valueOf("1.5") == 1.5, "valueOf(String)");
     }
 
-    public static void main(String[] args) {
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Double");
+            check(!c.isInterface(), "Double is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Double is final");
+            check(c.getSuperclass() == Number.class, "Double extends Number");
+            check(Comparable.class.isAssignableFrom(c), "Double implements Comparable");
+            check(c.getField("MAX_VALUE").getType() == double.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("MAX_VALUE").getModifiers()),
+                  "MAX_VALUE is public static final double");
+            check(c.getMethod("parseDouble", String.class).getReturnType() == double.class,
+                  "parseDouble(String) returns double");
+            check(c.getMethod("valueOf", double.class).getReturnType() == Double.class,
+                  "valueOf(double) returns Double");
+            check(c.getMethod("doubleToLongBits", double.class).getReturnType() == long.class,
+                  "doubleToLongBits(double) returns long");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testSumMaxMin() {
+        check(Double.sum(1.5, 2.5) == 4.0, "sum(1.5,2.5)");
+        check(Double.max(1.5, 2.5) == 2.5 && Double.min(1.5, 2.5) == 1.5,
+              "max/min doubles");
+        check(Double.isNaN(Double.sum(Double.NaN, 1.0)), "sum with NaN is NaN");
+        check(Double.isNaN(Double.max(Double.NaN, 1.0)), "max(NaN, x) is NaN");
+        check(Double.compare(Double.max(-0.0, 0.0), 0.0) == 0, "max(-0.0,0.0) == +0.0");
+    }
+
+    static void testBoxing() {
+        Double boxed = 1.5;
+        check(boxed.doubleValue() == 1.5, "unboxing recovers double");
+        Double sum = boxed + 0.5;                  // unbox, add, rebox
+        check(sum == 2.0, "boxed arithmetic re-boxes");
+        check(sum.compareTo(boxed) > 0, "compareTo after arithmetic");
+        check(Double.isNaN(Double.NaN + 0.0), "autobox arithmetic propagates NaN");
+    }
+
+    // ---- Black-box / behavioral ----
+    static void testBlackBox() {
         testConstants();
         testParse();
         testNaNInfinity();
@@ -142,6 +196,13 @@ public class DoubleTest {
         testBitConversion();
         testCompareEquals();
         testHashCodeToString();
+        testSumMaxMin();
+        testBoxing();
+    }
+
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
