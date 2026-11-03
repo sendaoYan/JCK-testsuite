@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.lang.annotation.ElementType conformance: enum constants/valueOf/ordinal.
+ * @summary java.lang.annotation.ElementType conformance: white-box structure + black-box behavior.
  * @run main ElementTypeTest
  */
 
 import java.lang.annotation.ElementType;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ElementTypeTest {
     static int passed;
@@ -14,26 +16,73 @@ public class ElementTypeTest {
         passed++;
     }
 
-    static void testElementType() {
-        check(ElementType.values().length >= 10, "at least ten values");
-        check(ElementType.valueOf("TYPE") == ElementType.TYPE, "valueOf TYPE");
-        check(ElementType.valueOf("FIELD") == ElementType.FIELD, "valueOf FIELD");
-        check(ElementType.valueOf("METHOD") == ElementType.METHOD, "valueOf METHOD");
-        check(ElementType.valueOf("PARAMETER") == ElementType.PARAMETER, "valueOf PARAMETER");
-        check(ElementType.valueOf("CONSTRUCTOR") == ElementType.CONSTRUCTOR, "valueOf CONSTRUCTOR");
-        check(ElementType.valueOf("LOCAL_VARIABLE") == ElementType.LOCAL_VARIABLE,
-              "valueOf LOCAL_VARIABLE");
-        check(ElementType.valueOf("ANNOTATION_TYPE") == ElementType.ANNOTATION_TYPE,
-              "valueOf ANNOTATION_TYPE");
-        check(ElementType.valueOf("PACKAGE") == ElementType.PACKAGE, "valueOf PACKAGE");
-        check(ElementType.valueOf("TYPE_PARAMETER") == ElementType.TYPE_PARAMETER,
-              "valueOf TYPE_PARAMETER");
-        check(ElementType.valueOf("TYPE_USE") == ElementType.TYPE_USE, "valueOf TYPE_USE");
-        check(ElementType.TYPE.ordinal() == 0, "TYPE ordinal 0");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.annotation.ElementType");
+        check(c.isEnum(), "ElementType is an enum");
+        check(c.getSuperclass() == java.lang.Enum.class, "extends Enum");
+        check(c.getDeclaredFields().length >= 13, "constants declared as fields");
+        check(c.getDeclaredMethods().length >= 2, "values/valueOf declared");
+        check(c.getEnumConstants() != null, "getEnumConstants non-null");
     }
 
-    public static void main(String[] args) {
-        testElementType();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        // exact constant set (order per declaration)
+        ElementType[] vals = ElementType.values();
+        List<String> names = new ArrayList<>();
+        for (ElementType v : vals) names.add(v.name());
+        check(String.join(",", names).equals(
+                "TYPE,FIELD,METHOD,PARAMETER,CONSTRUCTOR,LOCAL_VARIABLE,ANNOTATION_TYPE,PACKAGE,"
+                + "TYPE_PARAMETER,TYPE_USE,MODULE,RECORD_COMPONENT"),
+              "constants and declaration order: " + names);
+        check(vals.length == 12, "exactly 12 constants");
+
+        // values() returns a fresh array each call
+        vals[0] = null;
+        check(ElementType.values()[0] == ElementType.TYPE, "values() defensive copy");
+
+        // valueOf round-trip for every constant
+        for (ElementType v : ElementType.values()) {
+            check(ElementType.valueOf(v.name()) == v, "valueOf round-trip " + v);
+        }
+
+        // valueOf with unknown name throws IllegalArgumentException
+        try {
+            ElementType.valueOf("NOPE");
+            check(false, "valueOf unknown should throw");
+        } catch (IllegalArgumentException expected) {
+            check(true, "valueOf unknown throws IAE");
+        }
+
+        // ordinals are stable positions in the declaration order
+        check(ElementType.TYPE.ordinal() == 0, "TYPE ordinal 0");
+        check(ElementType.PACKAGE.ordinal() == 7, "PACKAGE ordinal 7");
+        check(ElementType.MODULE.ordinal() == 10, "MODULE ordinal 10");
+        check(ElementType.RECORD_COMPONENT.ordinal() == 11, "RECORD_COMPONENT ordinal 11");
+
+        // enum mechanics: compareTo/name/toString are usable and consistent
+        check(ElementType.TYPE.compareTo(ElementType.FIELD) < 0, "compareTo by ordinal");
+        check(ElementType.RECORD_COMPONENT.compareTo(ElementType.TYPE) > 0, "compareTo last");
+        check(ElementType.TYPE_USE.name().equals("TYPE_USE"), "name");
+        check(ElementType.TYPE_USE.toString().equals("TYPE_USE"), "toString same as name");
+
+        // equals is identity for enum constants
+        check(ElementType.valueOf("TYPE").equals(ElementType.TYPE), "equals identity");
+
+        // values are usable inside @Target arrays (compile-time domain); spot-check runtime
+        // membership semantics used by frameworks
+        boolean hasModule = false, hasRecord = false;
+        for (ElementType v : ElementType.values()) {
+            if (v == ElementType.MODULE) hasModule = true;
+            if (v == ElementType.RECORD_COMPONENT) hasRecord = true;
+        }
+        check(hasModule && hasRecord, "MODULE and RECORD_COMPONENT present");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
