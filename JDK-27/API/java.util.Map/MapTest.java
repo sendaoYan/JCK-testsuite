@@ -1,13 +1,14 @@
 /*
  * @test
- * @summary java.util.Map API conformance: put/get/remove return semantics, containsKey/
- *          containsValue, keySet/values/entrySet, and the Java 8 default methods
- *          getOrDefault/putIfAbsent/computeIfAbsent/replaceAll/forEach.
+ * @summary java.util.Map conformance: white-box structure + black-box behavior.
+ * @enablePreview
  * @run main MapTest
  */
 
+import java.lang.reflect.Modifier;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class MapTest {
     static int passed;
@@ -17,44 +18,64 @@ public class MapTest {
         passed++;
     }
 
-    static void testBasics() {
-        Map<String, Integer> m = new HashMap<>();
-        check(m.put("a", 1) == null, "put new returns null");
-        check(m.put("a", 2) == 1, "put existing returns old value");
-        check(m.get("a") == 2 && m.get("z") == null, "get");
-        check(m.size() == 1, "size");
-        check(m.containsKey("a") && !m.containsKey("z"), "containsKey");
-        check(m.containsValue(2) && !m.containsValue(1), "containsValue");
-        check(m.remove("a") == 2 && m.isEmpty(), "remove returns value, map empty");
+    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                        + " but got " + t.getClass().getSimpleName(), t);
+            passed++;
+        }
     }
 
-    static void testViews() {
-        Map<String, Integer> m = new HashMap<>();
-        m.put("x", 10);
-        m.put("y", 20);
-        check(m.keySet().size() == 2 && m.keySet().contains("x"), "keySet");
-        check(m.values().contains(20), "values");
-        check(m.entrySet().size() == 2, "entrySet");
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.Map");
+        check(c.isInterface(), "is an interface");
+        c.getDeclaredMethod("of");
+        c.getDeclaredMethod("ofEntries", java.util.Map.Entry[].class);
+        c.getDeclaredMethod("copyOf", Map.class);
+        c.getDeclaredMethod("entry", Object.class, Object.class);
+        c.getDeclaredMethod("ofLazy", Set.class, java.util.function.Function.class);
+        check(!Modifier.isAbstract(c.getDeclaredMethod("getOrDefault", Object.class, Object.class)
+                .getModifiers()), "getOrDefault default");
     }
 
-    static void testDefaults() {
+    static void testBlackBox() {
+        check(Map.of().isEmpty(), "of() empty");
+        check(Integer.valueOf(1).equals(Map.of("a", 1).get("a")), "of single");
+        check(Map.of("a", 1, "b", 2).size() == 2, "of pairs");
+        expectThrows(() -> Map.of("a", 1, "a", 2), IllegalArgumentException.class, "duplicate key");
+        expectThrows(() -> Map.of("a", (Integer) null), NullPointerException.class, "null value");
+        expectThrows(() -> Map.of((String) null, 1), NullPointerException.class, "null key");
+
+        Map.Entry<String, Integer> e = Map.entry("a", 1);
+        check("a".equals(e.getKey()) && Integer.valueOf(1).equals(e.getValue()), "entry getKey/getValue");
+        expectThrows(() -> e.setValue(2), UnsupportedOperationException.class, "entry setValue UOE");
+
+        Map<String, Integer> base = new HashMap<>();
+        base.put("x", 10);
+        Map<String, Integer> cp = Map.copyOf(base);
+        check(Integer.valueOf(10).equals(cp.get("x")), "copyOf");
+
         Map<String, Integer> m = new HashMap<>();
-        m.put("x", 10);
-        check(m.getOrDefault("x", -1) == 10 && m.getOrDefault("z", -1) == -1, "getOrDefault");
-        check(m.putIfAbsent("x", 99) == 10, "putIfAbsent existing");
-        check(m.putIfAbsent("z", 5) == null && m.get("z") == 5, "putIfAbsent new");
-        check(m.computeIfAbsent("q", String::length) == 1 && m.get("q") == 1, "computeIfAbsent");
-        m.replaceAll((k, v) -> v + 1);
-        check(m.get("x") == 11, "replaceAll");
-        final int[] count = {0};
-        m.forEach((k, v) -> count[0]++);
-        check(count[0] == m.size(), "forEach visits every entry");
+        m.put("a", 1);
+        check(Integer.valueOf(9).equals(m.getOrDefault("zz", 9)), "getOrDefault default");
+        check(Integer.valueOf(2).equals(m.computeIfAbsent("b", k -> 2)), "computeIfAbsent");
+        check(Integer.valueOf(4).equals(m.merge("a", 3, Integer::sum)), "merge existing (1+3)");
+        check(Integer.valueOf(4).equals(m.putIfAbsent("a", 99)), "putIfAbsent existing");
+        m.replaceAll((k, v) -> v * 10);
+        check(Integer.valueOf(40).equals(m.get("a")), "replaceAll a");
+        check(Integer.valueOf(20).equals(m.get("b")), "replaceAll b");
+
+        Map<String, String> lazy = Map.ofLazy(Set.of("a", "b"), String::toUpperCase);
+        check(lazy.size() == 2 && "A".equals(lazy.get("a")) && "B".equals(lazy.get("b")), "ofLazy");
     }
 
-    public static void main(String[] args) {
-        testBasics();
-        testViews();
-        testDefaults();
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

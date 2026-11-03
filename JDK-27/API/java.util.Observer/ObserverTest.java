@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.Observer API conformance: update is invoked with the source and argument.
+ * @summary java.util.Observer conformance: white-box structure + black-box behavior.
  * @run main ObserverTest
  */
 
@@ -15,20 +15,36 @@ public class ObserverTest {
         passed++;
     }
 
-    static void testObserver() {
-        final Object[] seen = new Object[2];
-        Observer o = (src, arg) -> {
-            seen[0] = src;
-            seen[1] = arg;
-        };
-        Observable src = new Observable();
-        o.update(src, "x");
-        check(seen[0] == src, "update receives the source");
-        check("x".equals(seen[1]), "update receives the argument");
+    static class Src extends Observable {
+        public void fire(Object arg) { setChanged(); notifyObservers(arg); }
     }
 
-    public static void main(String[] args) {
-        testObserver();
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.Observer");
+        check(c.isInterface(), "is an interface");
+        check(c.getDeclaredMethods().length == 1, "single abstract method");
+        check(c.getDeclaredMethod("update", Observable.class, Object.class).getReturnType()
+                == void.class, "update returns void");
+    }
+
+    static void testBlackBox() {
+        Src src = new Src();
+        final Observable[] gotO = {null};
+        final Object[] gotA = {null};
+        Observer o1 = (o, a) -> { gotO[0] = o; gotA[0] = a; };
+        final int[] count = {0};
+        Observer o2 = (o, a) -> count[0]++;
+        src.addObserver(o1);
+        src.addObserver(o2);
+        src.fire("x");
+        check(gotO[0] == src, "update receives the Observable");
+        check("x".equals(gotA[0]), "update receives the arg");
+        check(count[0] == 1, "all observers notified");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

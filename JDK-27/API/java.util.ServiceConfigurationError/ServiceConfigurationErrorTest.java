@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.ServiceConfigurationError API conformance: constructors and inheritance.
+ * @summary java.util.ServiceConfigurationError conformance: white-box structure + black-box behavior.
  * @run main ServiceConfigurationErrorTest
  */
 
@@ -14,18 +14,29 @@ public class ServiceConfigurationErrorTest {
         passed++;
     }
 
-    static void testServiceConfigurationError() {
-        ServiceConfigurationError e = new ServiceConfigurationError("msg");
-        check(e instanceof Error, "extends Error");
-        check("msg".equals(e.getMessage()), "message from (String) ctor");
-
-        RuntimeException cause = new RuntimeException();
-        ServiceConfigurationError e2 = new ServiceConfigurationError("m", cause);
-        check(e2.getCause() == cause, "(String,Throwable) ctor sets cause");
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.ServiceConfigurationError");
+        check(c.getSuperclass() == Error.class, "extends Error");
+        c.getDeclaredConstructor(String.class);
+        c.getDeclaredConstructor(String.class, Throwable.class);
     }
 
-    public static void main(String[] args) {
-        testServiceConfigurationError();
+    static void testBlackBox() {
+        check("msg".equals(new ServiceConfigurationError("msg").getMessage()), "String ctor message");
+        Throwable cause = new IllegalStateException("c");
+        check(cause == new ServiceConfigurationError("m", cause).getCause(), "cause preserved");
+        boolean caught = false;
+        try {
+            throw new ServiceConfigurationError("e");
+        } catch (Error e) {
+            caught = true;
+        }
+        check(caught, "catchable as Error");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

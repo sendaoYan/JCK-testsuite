@@ -1,9 +1,10 @@
 /*
  * @test
- * @summary java.util.IllegalFormatPrecisionException API conformance: getPrecision.
+ * @summary java.util.IllegalFormatPrecisionException conformance: white-box structure + black-box behavior.
  * @run main IllegalFormatPrecisionExceptionTest
  */
 
+import java.util.Formatter;
 import java.util.IllegalFormatException;
 import java.util.IllegalFormatPrecisionException;
 
@@ -15,14 +16,38 @@ public class IllegalFormatPrecisionExceptionTest {
         passed++;
     }
 
-    static void testIllegalFormatPrecisionException() {
-        IllegalFormatPrecisionException e = new IllegalFormatPrecisionException(5);
-        check(e instanceof IllegalFormatException, "extends IllegalFormatException");
-        check(e.getPrecision() == 5, "getPrecision");
+    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                        + " but got " + t.getClass().getSimpleName(), t);
+            passed++;
+        }
     }
 
-    public static void main(String[] args) {
-        testIllegalFormatPrecisionException();
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.IllegalFormatPrecisionException");
+        check(c.getSuperclass() == IllegalFormatException.class, "extends IllegalFormatException");
+        c.getDeclaredConstructor(int.class);
+        check(c.getDeclaredMethod("getPrecision").getReturnType() == int.class, "getPrecision int");
+    }
+
+    static void testBlackBox() {
+        IllegalFormatPrecisionException e = new IllegalFormatPrecisionException(2);
+        check(e.getPrecision() == 2, "getPrecision");
+        check("2".equals(e.getMessage()), "getMessage");
+
+        final Formatter f = new Formatter();
+        expectThrows(() -> f.format("%.2d", 1), IllegalFormatPrecisionException.class,
+                "precision on integer");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

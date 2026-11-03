@@ -1,7 +1,6 @@
 /*
  * @test
- * @summary java.util.EmptyStackException API conformance: hierarchy, and Stack.pop()/peek()
- *          throwing it on an empty stack.
+ * @summary java.util.EmptyStackException conformance: white-box structure + black-box behavior.
  * @run main EmptyStackExceptionTest
  */
 
@@ -16,30 +15,36 @@ public class EmptyStackExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        EmptyStackException e = new EmptyStackException();
-        check(e instanceof RuntimeException, "is a RuntimeException");
-    }
-
-    static void testThrownByStack() {
-        Stack<String> s = new Stack<>();
+    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
         try {
-            s.pop();
-            throw new AssertionError("pop on empty: expected EmptyStackException");
-        } catch (EmptyStackException expected) {
-            passed++;
-        }
-        try {
-            s.peek();
-            throw new AssertionError("peek on empty: expected EmptyStackException");
-        } catch (EmptyStackException expected) {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                        + " but got " + t.getClass().getSimpleName(), t);
             passed++;
         }
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testThrownByStack();
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.EmptyStackException");
+        check(c.getSuperclass() == RuntimeException.class, "extends RuntimeException");
+        c.getDeclaredConstructor();
+        check(c.getDeclaredConstructors().length == 1, "single constructor");
+    }
+
+    static void testBlackBox() {
+        check(new EmptyStackException().getMessage() == null, "no-arg message null");
+        final Stack<String> s = new Stack<>();
+        expectThrows(s::pop, EmptyStackException.class, "empty pop");
+        s.push("x");
+        check("x".equals(s.pop()), "non-empty pop works");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

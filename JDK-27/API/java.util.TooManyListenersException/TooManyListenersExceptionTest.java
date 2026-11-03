@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.TooManyListenersException API conformance: constructors and inheritance.
+ * @summary java.util.TooManyListenersException conformance: white-box structure + black-box behavior.
  * @run main TooManyListenersExceptionTest
  */
 
@@ -14,15 +14,30 @@ public class TooManyListenersExceptionTest {
         passed++;
     }
 
-    static void testTooManyListenersException() {
-        TooManyListenersException e = new TooManyListenersException("msg");
-        check(e instanceof Exception, "extends Exception");
-        check("msg".equals(e.getMessage()), "message from (String) ctor");
-        check(new TooManyListenersException().getMessage() == null, "no-arg ctor has null message");
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.TooManyListenersException");
+        check(c.getSuperclass() == Exception.class, "extends Exception (checked)");
+        c.getDeclaredConstructor();
+        c.getDeclaredConstructor(String.class);
+        check(c.getDeclaredConstructors().length == 2, "two constructors");
     }
 
-    public static void main(String[] args) {
-        testTooManyListenersException();
+    static void testBlackBox() {
+        check(new TooManyListenersException().getMessage() == null, "no-arg message null");
+        check("too many".equals(new TooManyListenersException("too many").getMessage()),
+                "String ctor message");
+        boolean caught = false;
+        try {
+            throw new TooManyListenersException("m");
+        } catch (TooManyListenersException e) {
+            caught = true;
+        }
+        check(caught, "catchable as checked exception");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
