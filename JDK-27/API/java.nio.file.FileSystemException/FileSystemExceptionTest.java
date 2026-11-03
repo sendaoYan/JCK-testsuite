@@ -1,10 +1,9 @@
 /*
  * @test
- * @summary java.nio.file.FileSystemException conformance: file/other/reason accessors.
+ * @summary java.nio.file.FileSystemException conformance: white-box structure + black-box behavior.
  * @run main FileSystemExceptionTest
  */
 
-import java.io.IOException;
 import java.nio.file.FileSystemException;
 
 public class FileSystemExceptionTest {
@@ -15,21 +14,49 @@ public class FileSystemExceptionTest {
         passed++;
     }
 
-    static void testFileSystemException() {
-        check(IOException.class.isAssignableFrom(FileSystemException.class),
-              "extends IOException");
-        FileSystemException e = new FileSystemException("file", "other", "reason");
-        check("file".equals(e.getFile()), "getFile");
-        check("other".equals(e.getOtherFile()), "getOtherFile");
-        check("reason".equals(e.getReason()), "getReason");
-        check(e.getMessage() != null, "getMessage");
-        FileSystemException e2 = new FileSystemException("onlyfile");
-        check("onlyfile".equals(e2.getFile()), "single-arg getFile");
-        check(e2.getOtherFile() == null, "single-arg other null");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() {
+        check(java.io.IOException.class.isAssignableFrom(FileSystemException.class), "hierarchy: extends IOException");
+
+        FileSystemException e = new FileSystemException("f", "o", "r");
+        check("f".equals(e.getFile()), "getFile");
+        check("o".equals(e.getOtherFile()), "getOtherFile");
+        check("r".equals(e.getReason()), "getReason");
+        FileSystemException e2 = new FileSystemException("only");
+        check(e2.getOtherFile() == null && e2.getReason() == null, "1-arg nulls");
     }
 
-    public static void main(String[] args) {
-        testFileSystemException();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("jck");
+        try {
+            // a real failure carries the offending path in getFile()
+            java.nio.file.Path missing = dir.resolve("ghost");
+            try {
+                java.nio.file.Files.readAttributes(missing,
+                        java.nio.file.attribute.BasicFileAttributes.class);
+                check(false, "readAttributes on missing file should fail");
+            } catch (java.nio.file.NoSuchFileException e) {
+                check(e.getFile().endsWith("ghost"), "getFile carries path");
+                check(e.getOtherFile() == null, "single file involved");
+            }
+            // message format "file -> other (reason)" when both present
+            FileSystemException e = new FileSystemException("a", "b", "why");
+            check(e.getMessage() != null && e.getMessage().contains("a")
+                  && e.getMessage().contains("b") && e.getMessage().contains("why"),
+                  "message composes file/other/reason");
+            FileSystemException single = new FileSystemException("solo");
+            check(single.getMessage() != null && single.getMessage().contains("solo"),
+                  "message composes single file");
+        } finally {
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

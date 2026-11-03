@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.nio.channels.IllegalSelectorException conformance: hierarchy and constructor.
+ * @summary java.nio.channels.IllegalSelectorException conformance: white-box structure + black-box behavior.
  * @run main IllegalSelectorExceptionTest
  */
 
@@ -14,15 +14,30 @@ public class IllegalSelectorExceptionTest {
         passed++;
     }
 
-    static void testIllegalSelectorException() {
-        check(IllegalArgumentException.class.isAssignableFrom(IllegalSelectorException.class), "extends IllegalArgumentException");
-        IllegalSelectorException e = new IllegalSelectorException();
-        check(e.getMessage() == null, "no-arg message null");
-        check(e instanceof IllegalArgumentException, "instanceof IllegalArgumentException");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() {
+        check(java.lang.IllegalArgumentException.class.isAssignableFrom(IllegalSelectorException.class), "hierarchy: extends java.lang.IllegalArgumentException");
+        check(new IllegalSelectorException() != null, "no-arg constructor");
+        check(new IllegalSelectorException().getMessage() == null, "no-arg message is null");
+        check(new IllegalSelectorException().getCause() == null, "no cause by default");
     }
 
-    public static void main(String[] args) {
-        testIllegalSelectorException();
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        IllegalSelectorException e = new IllegalSelectorException();
+        check(e.getMessage() == null, "no message");
+        check(e instanceof IllegalArgumentException, "IllegalArgumentException family");
+        try {
+            throw e;
+        } catch (IllegalSelectorException again) {
+            check(again == e, "rethrow preserves identity");
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

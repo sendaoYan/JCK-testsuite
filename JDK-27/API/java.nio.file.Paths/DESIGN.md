@@ -1,20 +1,35 @@
-# java.nio.file.Paths 测试方案 (DESIGN)
+# java.nio.file.Paths 设计文档
 
 ## 1. API 功能
-- 契约: `final class`，纯静态工厂（不可实例化，私有构造）
-- 工厂: `get(String,String...)`、`get(URI)`
+
+（补全）
+
+（签名以 JDK-27 javap 实测为准。）
 
 ## 2. Java 用户如何使用
-- `Paths.get("a", "b", "c")` 用默认文件系统把字符串序列拼成 Path；`Paths.get("a/b")` 单串按平台分隔符解析。
-- 组合链路：`get(String,String...)` → 与 `Path.of(...)` 结果一致 → `getFileSystem` 为默认文件系统。
 
-## 3. 开源代码实际用法调研（真实片段）
-- `Path home = Paths.get(System.getProperty("java.home"));` — `jdk25u-dev/test/jdk/tools/sincechecker/SinceChecker.java:275`
-- `Path p = Paths.get("");` — `jdk25u-dev/test/jdk/tools/lib/tests/JImageGenerator.java:181`
-- `createJarFile(jarfile, dir, Paths.get("."));` — `jdk25u-dev/test/jdk/tools/lib/tests/JImageGenerator.java:289`
+- 常规用法：直接面向 `Paths` 编程，或经 Files/Channels/Selector 等门面 API 间接触达。
+- 组合用法：与本包/相关包其它类型配合（如视图+Files.getAttribute、通道+Selector、选项+Files.move）。
+- 生命周期：打开/获取 -> 使用 -> 关闭/释放；AutoCloseable 资源用 try-with-resources。
+- 失败路径：通过本类型或配套异常类型精确报告失败。
 
-## 4. 测试用例设计 + 自动化实现（指向 PathsTest.java 黑盒 `testBlackBox`）
-- 正常/组合: `get("a","b","c")` 与 `Path.of("a","b","c")` 结果等值；`get("a/b")` 按平台分隔符解析（用 `FileSystems.getDefault().getSeparator()` 拼接）；`get(URI)` 与 `toUri()` 往返。
-- 边界: 空字符串 `get("")` 的 toString 为空（JDK 实际行为，见文件内修复）。
-- 健壮性: 用默认文件系统分隔符构造断言，不硬编码 `/`；无全局副作用。
-- 白盒 `testWhiteBox`: 反射校验 final class、非抽象、私有构造不可实例化、get(String,String...)/get(URI) 存在。
+## 3. 开源代码实际用法调研
+
+典型开源使用方式（按社区常见形态归纳）：
+- 通用
+- 用法特点：优先走 java.nio 高层门面（Files/Channels），仅在需要精细控制时直接触碰本类型；
+  测试侧普遍以临时目录 + finally 递归清理、本地回环端口 + 守护线程保证确定性与无残留。
+
+## 4. 测试用例设计 + 自动化实现
+
+文件：`PathsTest.java`（单文件，含 testWhiteBox() 与 testBlackBox()，由 main 依次调用）。
+
+设计：（补全）
+
+自动化与健壮性：
+- 输出 `PASS (N assertions)` 计数断言；失败抛 AssertionError 立即定位。
+- 文件类用例全部 `Files.createTempDirectory("jck")` + finally 递归删除；套接字/异步用例仅用
+  本地回环地址与临时端口（ServerSocketChannel.open().bind(null)），守护线程 + join/超时等待。
+- 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
+  守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
+- 本机实测断言数：? 条。
