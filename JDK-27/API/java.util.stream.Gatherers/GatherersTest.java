@@ -1,77 +1,97 @@
 /*
  * @test
- * @summary java.util.stream.Gatherers conformance: windowFixed, windowSliding, fold, scan, mapConcurrent.
+ * @summary java.util.stream.Gatherers conformance: white-box structure + black-box behavior.
  * @run main GatherersTest
  */
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Gatherers;
 import java.util.stream.Stream;
 
 public class GatherersTest {
     static int passed;
-
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-
-    static void testWindowFixed() {
-        List<List<Integer>> got = Stream.of(1, 2, 3, 4, 5).gather(Gatherers.windowFixed(2)).toList();
-        check(got.equals(List.of(List.of(1, 2), List.of(3, 4), List.of(5))),
-              "windowFixed(2) with partial last window");
+    static void expectThrows(Class<? extends Throwable> ex, Runnable r, String msg) {
+        try { r.run(); } catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (threw " + t + ")");
+        }
+        throw new AssertionError(msg + " (no exception)");
     }
 
-    static void testWindowSliding() {
-        List<List<Integer>> got = Stream.of(1, 2, 3, 4, 5).gather(Gatherers.windowSliding(2)).toList();
-        check(got.equals(List.of(List.of(1, 2), List.of(2, 3), List.of(3, 4), List.of(4, 5))),
-              "windowSliding(2) overlapping windows");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.stream.Gatherers");
+        check(!c.isInterface() && !c.isEnum(), "Gatherers is a class");
+        check(Modifier.isFinal(c.getModifiers()), "Gatherers is final");
+        String[] names = Arrays.stream(c.getDeclaredMethods())
+                .filter(m -> Modifier.isPublic(m.getModifiers()))
+                .map(Method::getName)
+                .distinct()
+                .sorted()
+                .toArray(String[]::new);
+        check(Arrays.equals(names, new String[]{"fold", "mapConcurrent", "scan", "windowFixed", "windowSliding"}),
+              "exactly the five public factory methods");
     }
 
-    static void testFold() {
-        List<Integer> got = Stream.of(1, 2, 3, 4, 5).gather(Gatherers.fold(() -> 0, Integer::sum)).toList();
-        check(got.equals(List.of(15)), "fold reduces to a single element");
-    }
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        // windowFixed
+        check(Stream.of(1, 2, 3, 4, 5).gather(Gatherers.windowFixed(2)).toList()
+                .equals(List.of(List.of(1, 2), List.of(3, 4), List.of(5))),
+                "windowFixed(2) with partial last window");
+        check(Stream.of(1, 2, 3, 4).gather(Gatherers.windowFixed(2)).toList()
+                .equals(List.of(List.of(1, 2), List.of(3, 4))),
+                "windowFixed(2) exact multiple has no partial window");
+        check(Stream.of(1, 2, 3).gather(Gatherers.windowFixed(1)).toList()
+                .equals(List.of(List.of(1), List.of(2), List.of(3))),
+                "windowFixed(1) singletons");
 
-    static void testScan() {
-        List<Integer> got = Stream.of(1, 2, 3, 4, 5).gather(Gatherers.scan(() -> 0, Integer::sum)).toList();
-        check(got.equals(List.of(1, 3, 6, 10, 15)), "scan emits running totals");
-    }
+        // windowSliding
+        check(Stream.of(1, 2, 3, 4, 5).gather(Gatherers.windowSliding(2)).toList()
+                .equals(List.of(List.of(1, 2), List.of(2, 3), List.of(3, 4), List.of(4, 5))),
+                "windowSliding(2) overlapping windows");
+        check(Stream.of(1, 2, 3).gather(Gatherers.windowSliding(1)).toList()
+                .equals(List.of(List.of(1), List.of(2), List.of(3))),
+                "windowSliding(1) singletons");
 
-    static void testMapConcurrent() {
-        List<Integer> got = Stream.of(1, 2, 3, 4, 5)
+        // fold
+        check(Stream.of(1, 2, 3, 4, 5).gather(Gatherers.fold(() -> 0, Integer::sum)).toList()
+                .equals(List.of(15)), "fold reduces to a single element");
+        check(Stream.of("a", "b", "c").gather(Gatherers.fold(() -> "", (a, b) -> a + b)).toList()
+                .equals(List.of("abc")), "fold string concatenation");
+
+        // scan
+        check(Stream.of(1, 2, 3, 4, 5).gather(Gatherers.scan(() -> 0, Integer::sum)).toList()
+                .equals(List.of(1, 3, 6, 10, 15)), "scan emits running totals");
+
+        // mapConcurrent
+        check(Stream.of(1, 2, 3, 4, 5)
                 .gather(Gatherers.mapConcurrent(4, x -> x * 2))
                 .sorted()
-                .toList();
-        check(got.equals(List.of(2, 4, 6, 8, 10)), "mapConcurrent applies the mapping");
+                .toList()
+                .equals(List.of(2, 4, 6, 8, 10)), "mapConcurrent applies the mapping");
+
+        // invalid sizes
+        expectThrows(IllegalArgumentException.class, () -> Gatherers.windowFixed(0),
+                "windowFixed(0) -> IllegalArgumentException");
+        expectThrows(IllegalArgumentException.class, () -> Gatherers.windowSliding(0),
+                "windowSliding(0) -> IllegalArgumentException");
+        expectThrows(IllegalArgumentException.class, () -> Gatherers.windowSliding(-1),
+                "windowSliding(-1) -> IllegalArgumentException");
+        expectThrows(IllegalArgumentException.class, () -> Gatherers.mapConcurrent(0, x -> x),
+                "mapConcurrent(0) -> IllegalArgumentException");
     }
 
-    static void testInvalidSizes() {
-        boolean threw;
-        threw = false;
-        try { Gatherers.windowFixed(0); } catch (IllegalArgumentException e) { threw = true; }
-        check(threw, "windowFixed(0) throws IllegalArgumentException");
-        threw = false;
-        try { Gatherers.windowSliding(0); } catch (IllegalArgumentException e) { threw = true; }
-        check(threw, "windowSliding(0) throws IllegalArgumentException");
-        threw = false;
-        try { Gatherers.windowSliding(-1); } catch (IllegalArgumentException e) { threw = true; }
-        check(threw, "windowSliding(-1) throws IllegalArgumentException");
-    }
-
-    static void testClassShape() {
-        check(!Gatherers.class.isInterface() && !Gatherers.class.isEnum(), "Gatherers is a class");
-        check(java.lang.reflect.Modifier.isFinal(Gatherers.class.getModifiers()), "Gatherers is final");
-    }
-
-    public static void main(String[] args) {
-        testWindowFixed();
-        testWindowSliding();
-        testFold();
-        testScan();
-        testMapConcurrent();
-        testInvalidSizes();
-        testClassShape();
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.stream.Sink.ChainedDouble conformance: package-private SPI chained sink class hierarchy and members (reflection).
+ * @summary java.util.stream.Sink.ChainedDouble conformance: package-private SPI (reflection) + accessibility.
  * @run main ChainedDoubleTest
  */
 
@@ -12,16 +12,14 @@ import java.util.Arrays;
 
 public class ChainedDoubleTest {
     static int passed;
-
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
 
     static boolean hasMethod(Class<?> c, String name, int paramCount) {
-        for (Method m : c.getDeclaredMethods()) {
+        for (Method m : c.getDeclaredMethods())
             if (m.getName().equals(name) && m.getParameterCount() == paramCount) return true;
-        }
         return false;
     }
 
@@ -29,7 +27,7 @@ public class ChainedDoubleTest {
         return Arrays.stream(c.getInterfaces()).map(Class::getName).sorted().toArray(String[]::new);
     }
 
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.stream.Sink$ChainedDouble");
         check(!c.isInterface(), "is a class");
         check(Modifier.isAbstract(c.getModifiers()), "is abstract");
@@ -41,18 +39,29 @@ public class ChainedDoubleTest {
         check(hasMethod(c, "cancellationRequested", 0), "cancellationRequested() declared");
 
         boolean hasField = false;
-        for (Field f : c.getDeclaredFields()) {
-            if (f.getName().equals("downstream")
-                    && f.getType().getName().equals("java.util.stream.Sink")) hasField = true;
-        }
+        for (Field f : c.getDeclaredFields())
+            if (f.getName().equals("downstream") && f.getType().getName().equals("java.util.stream.Sink"))
+                hasField = true;
         check(hasField, "downstream field of type Sink declared");
 
         boolean hasCtor = false;
-        for (Constructor<?> ct : c.getDeclaredConstructors()) {
+        for (Constructor<?> ct : c.getDeclaredConstructors())
             if (ct.getParameterCount() == 1
                     && ct.getParameterTypes()[0].getName().equals("java.util.stream.Sink")) hasCtor = true;
-        }
         check(hasCtor, "constructor taking a downstream Sink declared");
+    }
+
+    static void testBlackBox() throws Exception {
+        // The nested SPI type is declared public, but its enclosing type is
+        // package-private, so the SPI is unreachable from outside java.util.stream.
+        Class<?> enclosing = Class.forName("java.util.stream.Sink");
+        check(!Modifier.isPublic(enclosing.getModifiers()),
+              "enclosing type is package-private (SPI unreachable outside package)");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
