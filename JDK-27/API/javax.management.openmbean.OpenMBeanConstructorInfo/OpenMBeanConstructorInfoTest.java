@@ -1,34 +1,44 @@
 /*
  * @test
- * @summary javax.management.openmbean.OpenMBeanConstructorInfo conformance: white-box structure.
+ * @summary javax.management.openmbean.OpenMBeanConstructorInfo conformance: white-box structure + black-box behavior.
  * @run main OpenMBeanConstructorInfoTest
  */
 
-import java.lang.reflect.Modifier;
-
+import javax.management.openmbean.*;
+import javax.management.*;
+import java.lang.reflect.*;
+import java.util.*;
 public class OpenMBeanConstructorInfoTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
-        return false;
-    }
+    static boolean hasMethod(Class<?> c, String n) { for (Method m : c.getMethods()) if (m.getName().equals(n)) return true; return false; }
 
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.openmbean.OpenMBeanConstructorInfo");
-        check(c.isInterface(), "is interface");
         check(Modifier.isPublic(c.getModifiers()), "public");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "getDescription"), "has getDescription");
-        check(has(mm, "getName"), "has getName");
-        check(has(mm, "getSignature"), "has getSignature");
-        check(has(mm, "equals"), "has equals");
-        check(has(mm, "hashCode"), "has hashCode");
-        check(has(mm, "toString"), "has toString");
+        check(c.isInterface(), "is interface");
+        check(hasMethod(c, "getName"), "getName");
+        check(hasMethod(c, "getDescription"), "getDescription");
+        check(hasMethod(c, "getSignature"), "getSignature");
+
+    }
+
+    static void testBlackBox() throws Exception {
+        OpenMBeanParameterInfo[] sig = { new OpenMBeanParameterInfoSupport("p", "param", SimpleType.INTEGER) };
+        OpenMBeanConstructorInfo ci = new OpenMBeanConstructorInfoSupport("ctor", "constructor", sig);
+        check(ci.getName().equals("ctor"), "name");
+        check(ci.getDescription().equals("constructor"), "description");
+        check(ci.getSignature().length == 1, "signature length");
+        check(ci.getSignature()[0].getName().equals("p"), "signature param name");
+        check(ci.equals(ci), "equals");
+        check(ci.hashCode() == ci.hashCode(), "hashCode");
+        check(ci.toString() != null, "toString");
+
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

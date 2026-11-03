@@ -11,7 +11,16 @@ import java.util.*;
 public class DiagTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.Diag");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
+        { boolean f=false; for (java.lang.reflect.Method mm : c.getMethods()) if (mm.getName().equals("isError")) f=true; check(f, "has isError"); }
+        { boolean f=false; for (java.lang.reflect.Method mm : c.getMethods()) if (mm.getName().equals("getCode")) f=true; check(f, "has getCode"); }
+        { boolean f=false; for (java.lang.reflect.Method mm : c.getMethods()) if (mm.getName().equals("getPosition")) f=true; check(f, "has getPosition"); }
+    }
+
+    static void testBlackBox() throws Exception {
+
         try (JShell js = JShell.create()) {
             ErroneousSnippet es = (ErroneousSnippet) js.eval("int = ;").get(0).snippet();
             List<Diag> ds = js.diagnostics(es).toList();
@@ -20,6 +29,11 @@ public class DiagTest {
             check(ds.get(0).getCode() != null, "code");
             check(ds.get(0).getPosition() >= 0 || ds.get(0).getPosition() == Diag.NOPOS, "position");
         }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

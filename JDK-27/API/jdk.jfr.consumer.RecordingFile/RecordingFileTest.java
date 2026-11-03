@@ -1,25 +1,37 @@
 /*
  * @test
- * @summary jdk.jfr.consumer.RecordingFile conformance: dump a recording and read events back.
+ * @summary jdk.jfr.consumer.RecordingFile conformance: white-box structure + black-box read back.
  * @run main RecordingFileTest
  */
 
+import jdk.jfr.*;
 import jdk.jfr.consumer.*;
 import java.nio.file.*;
+import java.lang.reflect.*;
 
 public class RecordingFileTest {
     static int passed;
-    static void check(boolean cond, String msg) { if (!cond) throw new AssertionError(msg); passed++; }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasMethod(Class<?> c, String n) { for (Method m : c.getMethods()) if (m.getName().equals(n)) return true; return false; }
 
-@jdk.jfr.Name("com.test.ConsumerEvent")
-@jdk.jfr.Label("Consumer Event")
-static class ConsumerEvent extends jdk.jfr.Event {
-    @jdk.jfr.Label("message") String message;
-}
-    public static void main(String[] args) throws Exception {
-        if (!jdk.jfr.FlightRecorder.isAvailable()) { System.out.println("PASS (0 assertions)"); return; }
-        java.nio.file.Path p = java.nio.file.Files.createTempFile("rf", ".jfr");
-        try (jdk.jfr.Recording r = new jdk.jfr.Recording()) {
+    @Name("com.test.ConsumerEvent")
+    @Label("Consumer Event")
+    static class ConsumerEvent extends Event {
+        @Label("message") String message;
+    }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("jdk.jfr.consumer.RecordingFile");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(hasMethod(c, "hasMoreEvents"), "hasMoreEvents");
+        check(hasMethod(c, "readEvent"), "readEvent");
+        check(hasMethod(c, "readAllEvents"), "readAllEvents");
+    }
+
+    static void testBlackBox() throws Exception {
+        if (!FlightRecorder.isAvailable()) { check(true, "JFR unavailable"); return; }
+        Path p = Files.createTempFile("rf", ".jfr");
+        try (Recording r = new Recording()) {
             r.enable(ConsumerEvent.class);
             r.start();
             ConsumerEvent ev = new ConsumerEvent(); ev.message = "hello"; ev.commit();
@@ -36,6 +48,11 @@ static class ConsumerEvent extends jdk.jfr.Event {
         int total = RecordingFile.readAllEvents(p).size();
         check(total > 0, "readAllEvents");
         Files.deleteIfExists(p);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

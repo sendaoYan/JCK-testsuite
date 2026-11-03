@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary jdk.dynalink.DynamicLinkerFactory conformance: configure factory and create linker.
+ * @summary jdk.dynalink.DynamicLinkerFactory conformance: white-box structure + black-box behavior.
  * @run main DynamicLinkerFactoryTest
  */
 
@@ -10,18 +10,38 @@ import jdk.dynalink.linker.support.*;
 import jdk.dynalink.beans.*;
 import jdk.dynalink.support.*;
 import java.lang.invoke.*;
+import java.lang.reflect.*;
 import java.util.*;
 
 public class DynamicLinkerFactoryTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    public static void main(String[] args) throws Exception {
+    static boolean hasMethod(Class<?> c, String n) { for (Method m : c.getMethods()) if (m.getName().equals(n)) return true; return false; }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("jdk.dynalink.DynamicLinkerFactory");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(hasMethod(c, "createLinker"), "createLinker");
+        check(hasMethod(c, "getAutoLoadingErrors"), "getAutoLoadingErrors");
+        check(hasMethod(c, "setSyncOnRelink"), "setSyncOnRelink");
+        check(hasMethod(c, "setUnstableRelinkThreshold"), "setUnstableRelinkThreshold");
+
+    }
+
+    static void testBlackBox() throws Exception {
         DynamicLinkerFactory f = new DynamicLinkerFactory();
         f.setSyncOnRelink(true);
         f.setUnstableRelinkThreshold(4);
         f.setPrioritizedLinkers(new BeansLinker());
         check(f.createLinker() != null, "createLinker");
         check(f.getAutoLoadingErrors() != null, "auto loading errors");
+        check(f.createLinker().getLinkerServices() != null, "second linker services");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

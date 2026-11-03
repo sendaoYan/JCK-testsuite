@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary jdk.dynalink.linker.support.SimpleLinkRequest conformance: link request fields.
+ * @summary jdk.dynalink.linker.support.SimpleLinkRequest conformance: white-box structure + black-box behavior.
  * @run main SimpleLinkRequestTest
  */
 
@@ -10,18 +10,44 @@ import jdk.dynalink.linker.support.*;
 import jdk.dynalink.beans.*;
 import jdk.dynalink.support.*;
 import java.lang.invoke.*;
+import java.lang.reflect.*;
 import java.util.*;
 
 public class SimpleLinkRequestTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    public static void main(String[] args) throws Exception {
+    static boolean hasMethod(Class<?> c, String n) { for (Method m : c.getMethods()) if (m.getName().equals(n)) return true; return false; }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("jdk.dynalink.linker.support.SimpleLinkRequest");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(LinkRequest.class.isAssignableFrom(c), "implements LinkRequest");
+        check(hasMethod(c, "getArguments"), "getArguments");
+        check(hasMethod(c, "getReceiver"), "getReceiver");
+        check(hasMethod(c, "getCallSiteDescriptor"), "getCallSiteDescriptor");
+        check(hasMethod(c, "isCallSiteUnstable"), "isCallSiteUnstable");
+        check(hasMethod(c, "replaceArguments"), "replaceArguments");
+
+    }
+
+    static void testBlackBox() throws Exception {
         CallSiteDescriptor csd = new CallSiteDescriptor(MethodHandles.lookup(), StandardOperation.GET, MethodType.methodType(Object.class, Object.class));
         SimpleLinkRequest r = new SimpleLinkRequest(csd, false, "obj");
         check(r.getReceiver().equals("obj"), "receiver");
         check(r.getArguments().length == 1, "arguments");
         check(r.getCallSiteDescriptor() == csd, "descriptor");
         check(!r.isCallSiteUnstable(), "stable");
+        SimpleLinkRequest r2 = new SimpleLinkRequest(csd, true, "a", "b");
+        check(r2.isCallSiteUnstable(), "unstable");
+        check(r2.getArguments().length == 2, "two args");
+        LinkRequest r3 = r.replaceArguments(csd, "x");
+        check(r3.getArguments().length == 1, "replaceArguments");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

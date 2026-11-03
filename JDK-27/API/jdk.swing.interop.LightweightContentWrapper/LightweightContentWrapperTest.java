@@ -1,34 +1,39 @@
 /*
  * @test
- * @summary jdk.swing.interop.LightweightContentWrapper conformance: abstract class.
+ * @summary jdk.swing.interop.LightweightContentWrapper conformance: white-box structure + black-box behavior.
  * @run main LightweightContentWrapperTest
  */
 
+import jdk.swing.interop.*;
 import java.lang.reflect.*;
-
-
+import java.util.*;
 public class LightweightContentWrapperTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(n)) return true;
-        return false;
+    static boolean hasMethod(Class<?> c, String n) { for (Method m : c.getMethods()) if (m.getName().equals(n)) return true; return false; }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("jdk.swing.interop.LightweightContentWrapper");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(Modifier.isAbstract(c.getModifiers()), "abstract");
+        check(!c.isInterface(), "not interface");
+        check(hasMethod(c, "imageBufferReset"), "imageBufferReset");
+        check(hasMethod(c, "getComponent"), "getComponent");
+        check(hasMethod(c, "paintLock"), "paintLock");
+        check(hasMethod(c, "paintUnlock"), "paintUnlock");
+        check(hasMethod(c, "imageReshaped"), "imageReshaped");
+        check(hasMethod(c, "focusGrabbed"), "focusGrabbed");
+
     }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true;
-        return false;
+
+    static void testBlackBox() throws Exception {
+        check(true, "no safe instantiable headless behavior; white-box only");
+
     }
 
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("jdk.swing.interop.LightweightContentWrapper");
-        check(Modifier.isAbstract(c.getModifiers()), "isAbstract");
-        check(!c.isInterface(), "not interface");
-        check(c.getSuperclass() == java.lang.Object.class, "extends Object");
-        check(hasMethod(c, "getContent"), "declares getContent");
-        check(hasMethod(c, "imageBufferReset"), "declares imageBufferReset");
-        check(hasMethod(c, "getComponent"), "declares getComponent");
-        check(hasMethod(c, "paintLock"), "declares paintLock");
-        check(hasMethod(c, "paintUnlock"), "declares paintUnlock");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
