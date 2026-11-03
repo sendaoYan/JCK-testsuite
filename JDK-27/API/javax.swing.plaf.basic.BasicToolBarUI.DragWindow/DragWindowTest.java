@@ -1,9 +1,8 @@
 /*
  * @test
- * @summary javax.swing.plaf.basic.BasicToolBarUI.DragWindow conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.basic.BasicToolBarUI.DragWindow conformance: white-box structure + black-box behavior.
  * @run main DragWindowTest
  */
-
 import java.lang.reflect.Modifier;
 
 public class DragWindowTest {
@@ -12,7 +11,20 @@ public class DragWindowTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+    static boolean hasDeclaredMethod(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            if (m.getName().equals(name)) return true;
+        }
+        return false;
+    }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.basic.BasicToolBarUI$DragWindow");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -21,9 +33,24 @@ public class DragWindowTest {
         check(c.isEnum() == false, "is enum");
         check(Modifier.isPublic(mods) == false, "public modifier");
         check(Modifier.isProtected(mods) == true, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.awt.Window"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.awt.Window"), "superclass java.awt.Window");
+        check(c.getInterfaces().length == 0, "no direct interfaces");
+
+        check(hasDeclaredMethod(c, "getOrientation"), "declares method getOrientation");
+        check(hasDeclaredMethod(c, "setOrientation"), "declares method setOrientation");
+        check(hasDeclaredMethod(c, "getOffset"), "declares method getOffset");
+        check(hasDeclaredMethod(c, "setOffset"), "declares method setOffset");
+        check(hasDeclaredMethod(c, "paint"), "declares method paint");
     }
+
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("javax.swing.plaf.basic.BasicToolBarUI$DragWindow");
+        java.lang.reflect.Constructor<?>[] ctors = c.getDeclaredConstructors();
+        check(ctors.length >= 1, "has constructors");
+        for (java.lang.reflect.Constructor<?> ctor : ctors) {
+            check(!Modifier.isPublic(ctor.getModifiers()), "constructor not public");
+        }
+    }
+
 }

@@ -1,9 +1,8 @@
 /*
  * @test
- * @summary javax.swing.plaf.basic.BasicSplitPaneDivider.VerticalDragController conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.basic.BasicSplitPaneDivider.VerticalDragController conformance: white-box structure + black-box behavior.
  * @run main VerticalDragControllerTest
  */
-
 import java.lang.reflect.Modifier;
 
 public class VerticalDragControllerTest {
@@ -12,7 +11,20 @@ public class VerticalDragControllerTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+    static boolean hasDeclaredMethod(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            if (m.getName().equals(name)) return true;
+        }
+        return false;
+    }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.basic.BasicSplitPaneDivider$VerticalDragController");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -21,9 +33,21 @@ public class VerticalDragControllerTest {
         check(c.isEnum() == false, "is enum");
         check(Modifier.isPublic(mods) == false, "public modifier");
         check(Modifier.isProtected(mods) == true, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.plaf.basic.BasicSplitPaneDivider$DragController"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.plaf.basic.BasicSplitPaneDivider$DragController"), "superclass javax.swing.plaf.basic.BasicSplitPaneDivider$DragController");
+        check(c.getInterfaces().length == 0, "no direct interfaces");
+
+        check(hasDeclaredMethod(c, "getNeededLocation"), "declares method getNeededLocation");
+        check(hasDeclaredMethod(c, "positionForMouseEvent"), "declares method positionForMouseEvent");
     }
+
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("javax.swing.plaf.basic.BasicSplitPaneDivider$VerticalDragController");
+        java.lang.reflect.Constructor<?>[] ctors = c.getDeclaredConstructors();
+        check(ctors.length >= 1, "has constructors");
+        for (java.lang.reflect.Constructor<?> ctor : ctors) {
+            check(!Modifier.isPublic(ctor.getModifiers()), "constructor not public");
+        }
+    }
+
 }
