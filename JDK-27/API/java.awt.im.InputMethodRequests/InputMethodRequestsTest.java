@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.awt.im.InputMethodRequests conformance: reflected type shape.
+ * @summary java.awt.im.InputMethodRequests conformance: white-box structure + black-box behavior.
  * @run main InputMethodRequestsTest
  */
 
@@ -8,31 +8,51 @@ import java.lang.reflect.*;
 
 public class InputMethodRequestsTest {
     static int passed;
-
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static boolean hasMethod(Class<?> c, String n) {
+        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+    static boolean hasInterface(Class<?> c, String n) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true;
+        return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.awt.im.InputMethodRequests", false, InputMethodRequestsTest.class.getClassLoader());
         check(c != null, "type loads: java.awt.im.InputMethodRequests");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
-              "public/protected/member");
-        if (c.isEnum()) {
-            check(c.getEnumConstants() != null, "enum has constants");
-        } else {
-            check(c.getEnumConstants() == null, "non-enum returns null constants");
-        }
+        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(), "public/protected/member");
+        if (c.isEnum()) check(c.getEnumConstants() != null, "enum has constants");
+        else check(c.getEnumConstants() == null, "non-enum returns null constants");
         check(c.getDeclaredConstructors() != null, "constructors array non-null");
         check(c.getDeclaredMethods() != null, "methods array non-null");
         check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) {
-            check(Modifier.isInterface(m), "interface modifier consistent");
-        } else if (c != Object.class) {
-            check(c.getSuperclass() != null, "class superclass non-null");
-        }
+        if (c.isInterface()) check(Modifier.isInterface(m), "interface modifier consistent");
+        else if (c != Object.class) check(c.getSuperclass() != null, "class superclass non-null");
+        check(c.isInterface(), "is interface");
+    }
+
+    static void testBlackBox() throws Exception {
+        java.awt.im.InputMethodRequests r = new java.awt.im.InputMethodRequests() {
+            public java.awt.Rectangle getTextLocation(java.awt.font.TextHitInfo h) { return null; }
+            public java.awt.font.TextHitInfo getLocationOffset(int x, int y) { return null; }
+            public int getInsertPositionOffset() { return 0; }
+            public java.text.AttributedCharacterIterator getCommittedText(int b, int e, java.text.AttributedCharacterIterator.Attribute[] a) { return null; }
+            public int getCommittedTextLength() { return 0; }
+            public java.text.AttributedCharacterIterator cancelLatestCommittedText(java.text.AttributedCharacterIterator.Attribute[] a) { return null; }
+            public java.text.AttributedCharacterIterator getSelectedText(java.text.AttributedCharacterIterator.Attribute[] a) { return null; }
+        };
+        check(r.getTextLocation(null) == null, "getTextLocation null");
+        check(r.getLocationOffset(0, 0) == null, "getLocationOffset null");
+        check(r.getInsertPositionOffset() == 0, "getInsertPositionOffset 0");
+        check(r.getCommittedText(0, 1, null) == null, "getCommittedText null");
+        check(r.getCommittedTextLength() == 0, "getCommittedTextLength 0");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

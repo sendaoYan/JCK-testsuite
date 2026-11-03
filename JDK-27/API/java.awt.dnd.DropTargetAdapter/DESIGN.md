@@ -1,0 +1,15 @@
+# java.awt.dnd.DropTargetAdapter 测试设计
+
+## 1. API 功能
+拖拽目标适配器抽象类，空实现 DropTargetListener。
+
+## 2. Java 用户如何使用
+匿名继承并调用各空实现方法。
+
+## 3. 开源代码实际用法调研
+JDK 源码: ~/git/jdk25u-dev/src/java.desktop/share/classes/java/awt/dnd/DropTargetAdapter.java
+
+## 4. 测试用例设计 + 自动化实现
+白盒: 抽象、实现 DropTargetListener；黑盒: 匿名实现调用空方法。
+
+自动化实现位于同目录 `DropTargetAdapterTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
