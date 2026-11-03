@@ -1,10 +1,26 @@
 /*
  * @test
- * @summary java.util.Arrays API conformance: sort (primitives, Object natural, with
- *          Comparator, ranges, parallelSort), binarySearch return values, equals/
- *          deepEquals, fill, copyOf/copyOfRange (truncate/pad), asList (fixed-size view),
- *          and toString/deepToString/hashCode.
+ * @summary java.util.Arrays conformance. White-box: Class.forName + class modifiers/
+ *          member shape. Black-box: sort (primitives, Object natural with ClassCastException
+ *          for non-Comparable, Comparator, ranges, stability, parallelSort), binarySearch
+ *          (natural + Comparator + insertion points), copyOf/copyOfRange (truncate/pad/
+ *          negative/from>to/from<0), fill, equals/deepEquals, compare/compareUnsigned/mismatch,
+ *          setAll/parallelSetAll, stream, asList fixed-size view, and toString/deepToString/
+ *          hashCode/deepHashCode.
  * @run main ArraysTest
+ *
+ * 设计案：
+ * 1. 契约：Arrays 是数组工具类，sort 原地排序（基本类型快排、对象归并稳定）、
+ *    binarySearch 要求有序、copyOf/copyOfRange 截断或补零/null、equals/deepEquals 按内容比较、
+ *    asList 返回固定大小视图、stream 提供流式遍历。
+ * 2. 用户场景：构造数组 → sort 排序 → binarySearch 查找 → copyOf 拷贝/扩容 → fill 填充 →
+ *    compare/mismatch 比较 → setAll 生成 → stream 聚合 → asList 视图读写。
+ * 3. 组合流程：见各 test*，均为「构造 → 多步组合 → 断言」。
+ * 4. 不变量：sort 后元素有序且为原多重集；copyOf 返回新数组；asList 与原数组双向联动。
+ * 5. 边界/异常：sort(Object[]) 元素不可比较抛 ClassCastException；copyOf 负长度抛
+ *    NegativeArraySizeException；copyOfRange from<0 抛 IndexOutOfBoundsException、from>to
+ *    抛 IllegalArgumentException、to 超界则补 null；asList 的 add/remove/clear 抛
+ *    UnsupportedOperationException。
  */
 
 import java.util.Arrays;
@@ -16,6 +32,36 @@ public class ArraysTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) {
+                passed++;
+            } else {
+                throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                        + " but got " + t.getClass().getName(), t);
+            }
+        }
+    }
+
+    // ---- white-box: 结构/反射断言 ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.Arrays");
+        check(!c.isInterface(), "Arrays is a class");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "Arrays public");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Arrays final");
+        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "Arrays concrete");
+        check(java.lang.reflect.Modifier.isPrivate(c.getDeclaredConstructor().getModifiers()),
+              "Arrays private constructor");
+        c.getMethod("sort", int[].class);
+        c.getMethod("binarySearch", int[].class, int.class);
+        c.getMethod("copyOf", int[].class, int.class);
+        c.getMethod("equals", int[].class, int[].class);
+        check(true, "key public static methods present");
     }
 
     static void testSort() {
@@ -37,9 +83,22 @@ public class ArraysTest {
         check(Arrays.equals(t, new String[]{"apple", "banana", "cherry"}),
               "sort(T[], Comparator) by length");
 
+        String[] st = {"bb", "aa", "c", "d"};
+        Arrays.sort(st, Comparator.comparingInt(String::length));
+        check(Arrays.equals(st, new String[]{"c", "d", "bb", "aa"}),
+              "Object sort stable for equal keys");
+
         int[] p = {5, 2, 4, 1, 3};
         Arrays.parallelSort(p);
         check(Arrays.equals(p, new int[]{1, 2, 3, 4, 5}), "parallelSort(int[])");
+
+        String[] ps = {"bb", "aa", "c"};
+        Arrays.parallelSort(ps, Comparator.comparingInt(String::length));
+        check(Arrays.equals(ps, new String[]{"c", "bb", "aa"}), "parallelSort(T[], Comparator)");
+
+        Object[] nc = {new Object(), new Object()};
+        expect(ClassCastException.class, () -> Arrays.sort(nc),
+              "sort non-Comparable throws ClassCastException");
     }
 
     static void testBinarySearch() {
@@ -50,9 +109,15 @@ public class ArraysTest {
         check(Arrays.binarySearch(a, 9) == 4, "binarySearch last");
         check(Arrays.binarySearch(a, 10) == -6, "binarySearch after last");
         check(Arrays.binarySearch(a, 1, 3, 5) == 2, "binarySearch in range");
+
+        Integer[] ia = {1, 3, 5, 7, 9};
+        check(Arrays.binarySearch(ia, 5, Comparator.naturalOrder()) == 2,
+              "binarySearch with Comparator");
+        check(Arrays.binarySearch(ia, 2, Comparator.naturalOrder()) == -2,
+              "binarySearch with Comparator insertion point");
     }
 
-    static void testEqualsFill() {
+    static void testEqualsFillCompare() {
         check(Arrays.equals(new int[]{1, 2, 3}, new int[]{1, 2, 3}), "equals int[]");
         check(!Arrays.equals(new int[]{1, 2, 3}, new int[]{1, 2, 4}), "!equals int[]");
         check(Arrays.equals(new String[]{"a", "b"}, new String[]{"a", "b"}), "equals Object[]");
@@ -66,6 +131,22 @@ public class ArraysTest {
         check(Arrays.equals(f, new int[]{7, 7, 7, 7}), "fill");
         Arrays.fill(f, 1, 3, 9);
         check(Arrays.equals(f, new int[]{7, 9, 9, 7}), "fill range");
+
+        check(Arrays.compare(new int[]{1, 2}, new int[]{1, 3}) < 0, "compare lexicographic <");
+        check(Arrays.compare(new int[]{1, 2}, new int[]{1, 1}) > 0, "compare lexicographic >");
+        check(Arrays.compare(new int[]{1, 2}, new int[]{1, 2}) == 0, "compare equal");
+        check(Arrays.compare(new int[]{-1}, new int[]{0}) < 0, "compare signed -1 < 0");
+        check(Arrays.compareUnsigned(new int[]{-1}, new int[]{0}) > 0,
+              "compareUnsigned 0xFFFFFFFF > 0");
+        check(Arrays.compareUnsigned(new byte[]{-1}, new byte[]{0}) > 0,
+              "compareUnsigned byte 255 > 0");
+
+        check(Arrays.mismatch(new int[]{1, 2, 3}, new int[]{1, 2, 4}) == 2,
+              "mismatch index");
+        check(Arrays.mismatch(new int[]{1, 2, 3}, new int[]{1, 2, 3}) == -1,
+              "mismatch equal -1");
+        check(Arrays.mismatch(new int[]{1, 2}, new int[]{1, 2, 3}) == 2,
+              "mismatch prefix returns min length");
     }
 
     static void testCopy() {
@@ -76,6 +157,36 @@ public class ArraysTest {
         check(Arrays.equals(Arrays.copyOfRange(a, 1, 3), new int[]{2, 3}), "copyOfRange");
         check(Arrays.copyOf(a, 3) != a, "copyOf returns new array");
         check(Arrays.copyOf(a, 0).length == 0, "copyOf to length 0");
+
+        expect(NegativeArraySizeException.class, () -> Arrays.copyOf(a, -1),
+              "copyOf negative length");
+
+        expect(IllegalArgumentException.class, () -> Arrays.copyOfRange(a, 3, 2),
+              "copyOfRange from>to IAE");
+        expect(IndexOutOfBoundsException.class, () -> Arrays.copyOfRange(a, -1, 2),
+              "copyOfRange from<0 IOOBE");
+        String[] padded = Arrays.copyOfRange(new String[]{"a"}, 0, 3);
+        check(Arrays.equals(padded, new String[]{"a", null, null}),
+              "copyOfRange to>length pads null");
+    }
+
+    static void testSetAllStream() {
+        int[] a = new int[5];
+        Arrays.setAll(a, i -> i * i);
+        check(Arrays.equals(a, new int[]{0, 1, 4, 9, 16}), "setAll(int[])");
+        String[] s = new String[3];
+        Arrays.setAll(s, i -> "n" + i);
+        check(Arrays.equals(s, new String[]{"n0", "n1", "n2"}), "setAll(T[])");
+        int[] p = new int[5];
+        Arrays.parallelSetAll(p, i -> i + 1);
+        check(Arrays.equals(p, new int[]{1, 2, 3, 4, 5}), "parallelSetAll");
+
+        check(Arrays.stream(new int[]{1, 2, 3}).sum() == 6, "stream(int[]) sum");
+        check(Arrays.equals(Arrays.stream(new int[]{1, 2, 3, 4}, 1, 3).toArray(),
+                            new int[]{2, 3}), "stream(int[], range)");
+        check(Arrays.stream(new String[]{"a", "b"}).count() == 2, "stream(T[]) count");
+        check(Arrays.stream(new String[]{"a", "b"}).reduce("", (x, y) -> x + y).equals("ab"),
+              "stream(T[]) reduce");
     }
 
     static void testAsList() {
@@ -86,12 +197,10 @@ public class ArraysTest {
         check(arr[0].equals("A"), "asList.set reflects in backing array");
         arr[1] = "B";
         check(list.get(1).equals("B"), "backing array change reflects in list");
-        try {
-            list.add("d");
-            throw new AssertionError("asList.add: expected UnsupportedOperationException");
-        } catch (UnsupportedOperationException expected) {
-            passed++;
-        }
+
+        expect(UnsupportedOperationException.class, () -> list.add("d"), "asList.add UOE");
+        expect(UnsupportedOperationException.class, () -> list.remove(0), "asList.remove UOE");
+        expect(UnsupportedOperationException.class, list::clear, "asList.clear UOE");
     }
 
     static void testToStringHash() {
@@ -103,13 +212,17 @@ public class ArraysTest {
               "hashCode stable");
         check(Arrays.hashCode(new int[]{1, 2}) != Arrays.hashCode(new int[]{1, 3}),
               "hashCode varies");
+        check(Arrays.deepHashCode(new int[][]{{1, 2}}) == Arrays.deepHashCode(new int[][]{{1, 2}}),
+              "deepHashCode stable");
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testSort();
         testBinarySearch();
-        testEqualsFill();
+        testEqualsFillCompare();
         testCopy();
+        testSetAllStream();
         testAsList();
         testToStringHash();
         System.out.println("PASS (" + passed + " assertions)");
