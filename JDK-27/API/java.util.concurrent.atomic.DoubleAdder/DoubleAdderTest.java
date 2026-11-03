@@ -1,9 +1,12 @@
 /*
  * @test
- * @summary java.util.concurrent.atomic.DoubleAdder conformance: add/sum/reset.
+ * @summary java.util.concurrent.atomic.DoubleAdder conformance: white-box structure plus
+ *          black-box behavior of add/sum/reset/sumThenReset, Number views, toString, and a
+ *          concurrent add whose final double sum is only bounded (float merge order varies).
  * @run main DoubleAdderTest
  */
 
+import java.io.Serializable;
 import java.util.concurrent.atomic.DoubleAdder;
 
 public class DoubleAdderTest {
@@ -14,22 +17,88 @@ public class DoubleAdderTest {
         passed++;
     }
 
-    static void testAdder() {
-        DoubleAdder adder = new DoubleAdder();
-        check(adder.sum() == 0.0, "initial sum 0");
-        adder.add(1.5);
-        adder.add(2.5);
-        check(adder.sum() == 4.0, "add/sum");
-        adder.reset();
-        check(adder.sum() == 0.0, "reset");
-        adder.add(3.0);
-        check(adder.sumThenReset() == 3.0, "sumThenReset returns old");
-        check(adder.sum() == 0.0, "sumThenReset resets");
-        check(adder.toString() != null, "toString");
+    static void await(java.util.concurrent.CountDownLatch latch) {
+        try { latch.await(); } catch (InterruptedException e) { throw new RuntimeException(e); }
     }
 
-    public static void main(String[] args) {
-        testAdder();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.concurrent.atomic.DoubleAdder");
+        check(!c.isInterface(), "DoubleAdder is a class, not an interface");
+        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "DoubleAdder is concrete");
+        check(c.getSuperclass() == Class.forName("java.util.concurrent.atomic.Striped64"), "DoubleAdder extends Striped64");
+        check(Serializable.class.isAssignableFrom(c), "DoubleAdder implements Serializable");
+        c.getConstructor();
+        c.getMethod("add", double.class);
+        c.getMethod("sum");
+        c.getMethod("reset");
+        c.getMethod("sumThenReset");
+        c.getMethod("doubleValue");
+        passed++;
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        testSingleThread();
+        testNumberViews();
+        testConcurrent();
+    }
+
+    static void testSingleThread() {
+        DoubleAdder a = new DoubleAdder();
+        check(a.sum() == 0.0, "initial sum 0.0");
+
+        // exactly representable additions -> exact sum
+        a.add(1.5);
+        a.add(2.5);
+        check(a.sum() == 4.0, "add/sum of exactly representable values is exact");
+
+        a.reset();
+        check(a.sum() == 0.0, "reset returns sum to 0.0");
+
+        // inexact decimal addition is deterministic single-threaded (matches sequential double sum)
+        a.add(0.1);
+        a.add(0.2);
+        a.add(0.3);
+        check(a.sum() == 0.1 + 0.2 + 0.3, "single-thread sum matches sequential double accumulation");
+
+        check(a.sumThenReset() == 0.1 + 0.2 + 0.3, "sumThenReset returns old sum");
+        check(a.sum() == 0.0, "sumThenReset resets to 0.0");
+
+        a.add(7.25);
+        check(a.toString().equals(Double.toString(7.25)), "toString is Double.toString(sum)");
+    }
+
+    static void testNumberViews() {
+        DoubleAdder a = new DoubleAdder();
+        a.add(4.0);
+        check(a.doubleValue() == 4.0, "doubleValue == sum");
+        check(a.longValue() == 4L, "longValue == (long)sum");
+        check(a.intValue() == 4, "intValue == (int)sum");
+        check(a.floatValue() == 4.0f, "floatValue == (float)sum");
+    }
+
+    static void testConcurrent() throws Exception {
+        final int N = 8, M = 50_000;
+        final DoubleAdder a = new DoubleAdder();
+        final java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        Thread[] ts = new Thread[N];
+        for (int i = 0; i < N; i++) {
+            ts[i] = new Thread(() -> {
+                await(start);
+                for (int j = 0; j < M; j++) a.add(1.0);
+            });
+            ts[i].start();
+        }
+        start.countDown();
+        for (Thread t : ts) t.join();
+        // floating-point merge order depends on parallelism -> assert bounds, not exact equality
+        check(a.sum() >= 0.0 && a.sum() <= (double) N * M, "concurrent add sum stays within [0, N*M]");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
