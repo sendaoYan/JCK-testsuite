@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.plaf.InsetsUIResource conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.InsetsUIResource conformance: white-box structure + black-box behavior.
  * @run main InsetsUIResourceTest
  */
 
@@ -12,7 +12,14 @@ public class InsetsUIResourceTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.InsetsUIResource");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -25,6 +32,11 @@ public class InsetsUIResourceTest {
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 1, "interface count");
         check(c.getInterfaces()[0].getName().equals("javax.swing.plaf.UIResource"), "interface 0");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.plaf.InsetsUIResource ins = new javax.swing.plaf.InsetsUIResource(1, 2, 3, 4);
+        check(ins instanceof javax.swing.plaf.UIResource, "is UIResource");
+        check(ins.top == 1 && ins.left == 2 && ins.bottom == 3 && ins.right == 4, "fields");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.plaf.FontUIResource conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.FontUIResource conformance: white-box structure + black-box behavior.
  * @run main FontUIResourceTest
  */
 
@@ -12,7 +12,14 @@ public class FontUIResourceTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.FontUIResource");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -25,6 +32,15 @@ public class FontUIResourceTest {
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 1, "interface count");
         check(c.getInterfaces()[0].getName().equals("javax.swing.plaf.UIResource"), "interface 0");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.plaf.FontUIResource f = new javax.swing.plaf.FontUIResource("Dialog", java.awt.Font.BOLD, 14);
+        check(f instanceof javax.swing.plaf.UIResource, "is UIResource");
+        check("Dialog".equals(f.getName()), "font name");
+        check(f.getSize() == 14, "size");
+        check(f.getStyle() == java.awt.Font.BOLD, "style");
+        javax.swing.plaf.FontUIResource f2 = new javax.swing.plaf.FontUIResource(f);
+        check(f2.getSize() == 14 && f2.getStyle() == java.awt.Font.BOLD, "copy ctor");
     }
 }

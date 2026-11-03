@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary javax.swing.plaf.OptionPaneUI conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.OptionPaneUI conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main OptionPaneUITest
  */
 
 import java.lang.reflect.Modifier;
+import java.awt.EventQueue;
 
 public class OptionPaneUITest {
     static int passed;
@@ -12,7 +14,36 @@ public class OptionPaneUITest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
+    }
+
+    static Object reflectNew(String className, Class<?>[] paramTypes, Object... args) throws Exception {
+        Class<?> c = Class.forName(className);
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(paramTypes);
+        ctor.setAccessible(true);
+        return ctor.newInstance(args);
+    }
+
     public static void main(String[] args) throws Exception {
+        runOnEDT(OptionPaneUITest::testWhiteBox);
+        runOnEDT(OptionPaneUITest::testBlackBox);
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.OptionPaneUI");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +55,13 @@ public class OptionPaneUITest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.plaf.ComponentUI"), "superclass");
         check(Modifier.isAbstract(mods) == true, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.JOptionPane op = new javax.swing.JOptionPane("msg");
+        javax.swing.plaf.OptionPaneUI ui = (javax.swing.plaf.OptionPaneUI) op.getUI();
+        check(ui != null, "optionpane UI non-null");
+        ui.selectInitialValue(op);
+        check(ui.containsCustomComponents(op) == false, "no custom components");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.plaf.ActionMapUIResource conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.ActionMapUIResource conformance: white-box structure + black-box behavior.
  * @run main ActionMapUIResourceTest
  */
 
@@ -12,7 +12,14 @@ public class ActionMapUIResourceTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.ActionMapUIResource");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -25,6 +32,19 @@ public class ActionMapUIResourceTest {
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 1, "interface count");
         check(c.getInterfaces()[0].getName().equals("javax.swing.plaf.UIResource"), "interface 0");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.plaf.ActionMapUIResource m = new javax.swing.plaf.ActionMapUIResource();
+        check(m instanceof javax.swing.plaf.UIResource, "is UIResource");
+        check(m.size() == 0, "initially empty");
+        javax.swing.Action a = new javax.swing.AbstractAction() { public void actionPerformed(java.awt.event.ActionEvent e) {} };
+        m.put("open", a);
+        check(m.get("open") == a, "put/get roundtrip");
+        check(m.size() == 1, "size 1 after put");
+        check(m.keys() != null, "keys non-null");
+        m.remove("open");
+        check(m.get("open") == null, "remove clears");
+        check(m.size() == 0, "size back to 0");
     }
 }

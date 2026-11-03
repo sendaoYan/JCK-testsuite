@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.plaf.basic.BasicButtonListener conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.basic.BasicButtonListener conformance: white-box structure + black-box behavior.
  * @run main BasicButtonListenerTest
  */
 
@@ -12,7 +12,14 @@ public class BasicButtonListenerTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.basic.BasicButtonListener");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -29,6 +36,25 @@ public class BasicButtonListenerTest {
         check(c.getInterfaces()[2].getName().equals("java.awt.event.FocusListener"), "interface 2");
         check(c.getInterfaces()[3].getName().equals("javax.swing.event.ChangeListener"), "interface 3");
         check(c.getInterfaces()[4].getName().equals("java.beans.PropertyChangeListener"), "interface 4");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.JButton b = new javax.swing.JButton("X");
+        javax.swing.plaf.basic.BasicButtonListener l = new javax.swing.plaf.basic.BasicButtonListener(b);
+        check(l != null, "constructs");
+        l.propertyChange(new java.beans.PropertyChangeEvent(b, "text", "a", "b"));
+        l.stateChanged(new javax.swing.event.ChangeEvent(b));
+        l.focusGained(new java.awt.event.FocusEvent(b, java.awt.event.FocusEvent.FOCUS_GAINED));
+        l.focusLost(new java.awt.event.FocusEvent(b, java.awt.event.FocusEvent.FOCUS_LOST));
+        l.mouseClicked(new java.awt.event.MouseEvent(b, java.awt.event.MouseEvent.MOUSE_CLICKED, 0L, 0, 0, 0, 1, false));
+        l.mousePressed(new java.awt.event.MouseEvent(b, java.awt.event.MouseEvent.MOUSE_PRESSED, 0L, 0, 0, 0, 1, false));
+        l.mouseReleased(new java.awt.event.MouseEvent(b, java.awt.event.MouseEvent.MOUSE_RELEASED, 0L, 0, 0, 0, 1, false));
+        l.mouseEntered(new java.awt.event.MouseEvent(b, java.awt.event.MouseEvent.MOUSE_ENTERED, 0L, 0, 0, 0, 0, false));
+        l.mouseExited(new java.awt.event.MouseEvent(b, java.awt.event.MouseEvent.MOUSE_EXITED, 0L, 0, 0, 0, 0, false));
+        l.mouseMoved(new java.awt.event.MouseEvent(b, java.awt.event.MouseEvent.MOUSE_MOVED, 0L, 0, 0, 0, 0, false));
+        l.mouseDragged(new java.awt.event.MouseEvent(b, java.awt.event.MouseEvent.MOUSE_DRAGGED, 0L, 0, 0, 0, 0, false));
+        l.installKeyboardActions(b);
+        l.uninstallKeyboardActions(b);
+        check(true, "listener methods callable");
     }
 }

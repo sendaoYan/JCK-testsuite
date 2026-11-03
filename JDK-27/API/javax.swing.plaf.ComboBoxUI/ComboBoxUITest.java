@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary javax.swing.plaf.ComboBoxUI conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.ComboBoxUI conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main ComboBoxUITest
  */
 
 import java.lang.reflect.Modifier;
+import java.awt.EventQueue;
 
 public class ComboBoxUITest {
     static int passed;
@@ -12,7 +14,36 @@ public class ComboBoxUITest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
+    }
+
+    static Object reflectNew(String className, Class<?>[] paramTypes, Object... args) throws Exception {
+        Class<?> c = Class.forName(className);
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(paramTypes);
+        ctor.setAccessible(true);
+        return ctor.newInstance(args);
+    }
+
     public static void main(String[] args) throws Exception {
+        runOnEDT(ComboBoxUITest::testWhiteBox);
+        runOnEDT(ComboBoxUITest::testBlackBox);
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.ComboBoxUI");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +55,14 @@ public class ComboBoxUITest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.plaf.ComponentUI"), "superclass");
         check(Modifier.isAbstract(mods) == true, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.JComboBox<Object> cb = new javax.swing.JComboBox<>(new Object[]{"a", "b"});
+        javax.swing.plaf.ComboBoxUI ui = (javax.swing.plaf.ComboBoxUI) cb.getUI();
+        check(ui != null, "combobox UI non-null");
+        ui.setPopupVisible(cb, false);
+        check(ui.isPopupVisible(cb) == false, "popup hidden");
+        check(ui.isFocusTraversable(cb) == true, "focus traversable");
     }
 }

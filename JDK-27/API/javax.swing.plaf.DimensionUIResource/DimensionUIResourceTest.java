@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.plaf.DimensionUIResource conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.DimensionUIResource conformance: white-box structure + black-box behavior.
  * @run main DimensionUIResourceTest
  */
 
@@ -12,7 +12,14 @@ public class DimensionUIResourceTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.DimensionUIResource");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -25,6 +32,13 @@ public class DimensionUIResourceTest {
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 1, "interface count");
         check(c.getInterfaces()[0].getName().equals("javax.swing.plaf.UIResource"), "interface 0");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.plaf.DimensionUIResource d = new javax.swing.plaf.DimensionUIResource(30, 40);
+        check(d instanceof javax.swing.plaf.UIResource, "is UIResource");
+        check(d.width == 30 && d.height == 40, "width/height");
+        d.width = 55;
+        check(d.width == 55, "mutable");
     }
 }

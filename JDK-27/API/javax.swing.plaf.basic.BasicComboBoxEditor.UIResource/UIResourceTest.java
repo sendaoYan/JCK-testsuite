@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.plaf.basic.BasicComboBoxEditor.UIResource conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.basic.BasicComboBoxEditor.UIResource conformance: white-box structure + black-box behavior.
  * @run main UIResourceTest
  */
 
@@ -12,7 +12,14 @@ public class UIResourceTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.basic.BasicComboBoxEditor$UIResource");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -25,6 +32,13 @@ public class UIResourceTest {
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 1, "interface count");
         check(c.getInterfaces()[0].getName().equals("javax.swing.plaf.UIResource"), "interface 0");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.plaf.basic.BasicComboBoxEditor.UIResource ed = new javax.swing.plaf.basic.BasicComboBoxEditor.UIResource();
+        check(ed instanceof javax.swing.plaf.UIResource, "is UIResource");
+        check(ed.getEditorComponent() instanceof javax.swing.JTextField, "editor component");
+        ed.setItem("x");
+        check("x".equals(ed.getItem()), "set/get item");
     }
 }

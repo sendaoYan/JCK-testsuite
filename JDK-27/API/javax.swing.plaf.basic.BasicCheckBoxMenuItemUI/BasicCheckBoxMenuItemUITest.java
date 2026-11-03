@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary javax.swing.plaf.basic.BasicCheckBoxMenuItemUI conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.basic.BasicCheckBoxMenuItemUI conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main BasicCheckBoxMenuItemUITest
  */
 
 import java.lang.reflect.Modifier;
+import java.awt.EventQueue;
 
 public class BasicCheckBoxMenuItemUITest {
     static int passed;
@@ -12,7 +14,36 @@ public class BasicCheckBoxMenuItemUITest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
+    }
+
+    static Object reflectNew(String className, Class<?>[] paramTypes, Object... args) throws Exception {
+        Class<?> c = Class.forName(className);
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(paramTypes);
+        ctor.setAccessible(true);
+        return ctor.newInstance(args);
+    }
+
     public static void main(String[] args) throws Exception {
+        runOnEDT(BasicCheckBoxMenuItemUITest::testWhiteBox);
+        runOnEDT(BasicCheckBoxMenuItemUITest::testBlackBox);
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.basic.BasicCheckBoxMenuItemUI");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +55,14 @@ public class BasicCheckBoxMenuItemUITest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.plaf.basic.BasicMenuItemUI"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.JCheckBoxMenuItem mi = new javax.swing.JCheckBoxMenuItem("X");
+        javax.swing.plaf.basic.BasicCheckBoxMenuItemUI ui = new javax.swing.plaf.basic.BasicCheckBoxMenuItemUI();
+        check(javax.swing.plaf.basic.BasicCheckBoxMenuItemUI.createUI(mi) instanceof javax.swing.plaf.basic.BasicCheckBoxMenuItemUI, "createUI");
+        mi.setUI(ui);
+        check(mi.getUI() == ui, "installed");
+        mi.setUI(null);
     }
 }

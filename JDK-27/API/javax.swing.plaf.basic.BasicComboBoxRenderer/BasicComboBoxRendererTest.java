@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.plaf.basic.BasicComboBoxRenderer conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.basic.BasicComboBoxRenderer conformance: white-box structure + black-box behavior.
  * @run main BasicComboBoxRendererTest
  */
 
@@ -12,7 +12,14 @@ public class BasicComboBoxRendererTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.basic.BasicComboBoxRenderer");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -26,6 +33,15 @@ public class BasicComboBoxRendererTest {
         check(c.getInterfaces().length == 2, "interface count");
         check(c.getInterfaces()[0].getName().equals("javax.swing.ListCellRenderer"), "interface 0");
         check(c.getInterfaces()[1].getName().equals("java.io.Serializable"), "interface 1");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.plaf.basic.BasicComboBoxRenderer r = new javax.swing.plaf.basic.BasicComboBoxRenderer();
+        check(r instanceof javax.swing.JLabel, "is JLabel");
+        javax.swing.JList<Object> list = new javax.swing.JList<>();
+        java.awt.Component c = r.getListCellRendererComponent(list, "item", 0, false, false);
+        check(c == r, "returns itself");
+        check("item".equals(r.getText()), "sets text");
+        check(r.getPreferredSize() != null, "preferred size non-null");
     }
 }

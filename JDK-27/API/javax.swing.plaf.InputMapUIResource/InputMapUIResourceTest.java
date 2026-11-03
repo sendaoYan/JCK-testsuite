@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.plaf.InputMapUIResource conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.InputMapUIResource conformance: white-box structure + black-box behavior.
  * @run main InputMapUIResourceTest
  */
 
@@ -12,7 +12,14 @@ public class InputMapUIResourceTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.InputMapUIResource");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -25,6 +32,16 @@ public class InputMapUIResourceTest {
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 1, "interface count");
         check(c.getInterfaces()[0].getName().equals("javax.swing.plaf.UIResource"), "interface 0");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.plaf.InputMapUIResource m = new javax.swing.plaf.InputMapUIResource();
+        check(m instanceof javax.swing.plaf.UIResource, "is UIResource");
+        javax.swing.KeyStroke ks = javax.swing.KeyStroke.getKeyStroke('X');
+        m.put(ks, "cmd");
+        check("cmd".equals(m.get(ks)), "put/get");
+        check(m.size() == 1, "size 1");
+        m.remove(ks);
+        check(m.get(ks) == null, "remove");
     }
 }

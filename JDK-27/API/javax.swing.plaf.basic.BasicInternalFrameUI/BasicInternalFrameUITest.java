@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary javax.swing.plaf.basic.BasicInternalFrameUI conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.basic.BasicInternalFrameUI conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main BasicInternalFrameUITest
  */
 
 import java.lang.reflect.Modifier;
+import java.awt.EventQueue;
 
 public class BasicInternalFrameUITest {
     static int passed;
@@ -12,7 +14,36 @@ public class BasicInternalFrameUITest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
+    }
+
+    static Object reflectNew(String className, Class<?>[] paramTypes, Object... args) throws Exception {
+        Class<?> c = Class.forName(className);
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(paramTypes);
+        ctor.setAccessible(true);
+        return ctor.newInstance(args);
+    }
+
     public static void main(String[] args) throws Exception {
+        runOnEDT(BasicInternalFrameUITest::testWhiteBox);
+        runOnEDT(BasicInternalFrameUITest::testBlackBox);
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.basic.BasicInternalFrameUI");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +55,20 @@ public class BasicInternalFrameUITest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.plaf.InternalFrameUI"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.JInternalFrame f = new javax.swing.JInternalFrame("t");
+        javax.swing.plaf.basic.BasicInternalFrameUI ui = new javax.swing.plaf.basic.BasicInternalFrameUI(f);
+        check(javax.swing.plaf.basic.BasicInternalFrameUI.createUI(f) instanceof javax.swing.plaf.basic.BasicInternalFrameUI, "createUI");
+        f.setUI(ui);
+        check(f.getUI() == ui, "installed");
+        check(ui.getNorthPane() != null, "north pane non-null");
+        ui.getSouthPane();
+        ui.getWestPane();
+        ui.getEastPane();
+        check(true, "south/west/east pane getters callable");
+        check(ui.isKeyBindingActive() == false, "key binding not active");
+        f.setUI(null);
     }
 }

@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary javax.swing.plaf.basic.BasicFileChooserUI.AcceptAllFileFilter conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.basic.BasicFileChooserUI.AcceptAllFileFilter conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main AcceptAllFileFilterTest
  */
 
 import java.lang.reflect.Modifier;
+import java.awt.EventQueue;
 
 public class AcceptAllFileFilterTest {
     static int passed;
@@ -12,7 +14,36 @@ public class AcceptAllFileFilterTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
+    }
+
+    static Object reflectNew(String className, Class<?>[] paramTypes, Object... args) throws Exception {
+        Class<?> c = Class.forName(className);
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(paramTypes);
+        ctor.setAccessible(true);
+        return ctor.newInstance(args);
+    }
+
     public static void main(String[] args) throws Exception {
+        runOnEDT(AcceptAllFileFilterTest::testWhiteBox);
+        runOnEDT(AcceptAllFileFilterTest::testBlackBox);
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.basic.BasicFileChooserUI$AcceptAllFileFilter");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +55,16 @@ public class AcceptAllFileFilterTest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.filechooser.FileFilter"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+        javax.swing.plaf.basic.BasicFileChooserUI ui = new javax.swing.plaf.basic.BasicFileChooserUI(fc);
+        ui.installUI(fc);
+        javax.swing.filechooser.FileFilter ff = ui.getAcceptAllFileFilter(fc);
+        check(ff != null, "accept all filter non-null");
+        check(ff.accept(new java.io.File("anything.txt")), "accepts all files");
+        check(ff.getDescription() != null, "description non-null");
+        ui.uninstallUI(fc);
     }
 }
