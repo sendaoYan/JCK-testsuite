@@ -138,7 +138,98 @@ public class StringBuilderTest {
         check(sb.capacity() == 5, "trimToSize capacity == length");
     }
 
-    public static void main(String[] args) {
+    static boolean isSynchronized(Class<?> c, String name, Class<?>... params) throws Exception {
+        return java.lang.reflect.Modifier.isSynchronized(
+            c.getMethod(name, params).getModifiers());
+    }
+
+    static void testCompareTo() {
+        check(new StringBuilder("abc").compareTo(new StringBuilder("abc")) == 0, "compareTo equal");
+        check(new StringBuilder("abc").compareTo(new StringBuilder("abd")) < 0, "compareTo <");
+        check(new StringBuilder("abd").compareTo(new StringBuilder("abc")) > 0, "compareTo >");
+        check(new StringBuilder("ab").compareTo(new StringBuilder("abc")) < 0, "compareTo prefix");
+        Comparable<StringBuilder> c = new StringBuilder("x");
+        check(c.compareTo(new StringBuilder("x")) == 0, "compareTo via Comparable");
+    }
+
+    static void testIndexOfFromIndex() {
+        StringBuilder sb = new StringBuilder("banana");
+        check(sb.indexOf("an", 1) == 1, "indexOf(str,1)");
+        check(sb.indexOf("an", 2) == 3, "indexOf(str,2)");
+        check(sb.indexOf("zz", 0) == -1, "indexOf missing");
+        check(sb.lastIndexOf("an", 5) == 3, "lastIndexOf(str,5)");
+        check(sb.lastIndexOf("an", 2) == 1, "lastIndexOf(str,2)");
+    }
+
+    static void testInsertOverloads() {
+        StringBuilder sb = new StringBuilder("x");
+        sb.insert(1, new char[]{'a', 'b'});
+        check(sb.toString().equals("xab"), "insert char[]");
+        sb.setLength(1);
+        sb.insert(1, 2.5);
+        check(sb.toString().equals("x2.5"), "insert double");
+        sb.setLength(1);
+        sb.insert(1, 99L);
+        check(sb.toString().equals("x99"), "insert long");
+        sb.setLength(1);
+        sb.insert(1, 3.14f);
+        check(sb.toString().equals("x3.14"), "insert float");
+        sb.setLength(1);
+        sb.insert(1, Integer.valueOf(7));
+        check(sb.toString().equals("x7"), "insert Object");
+    }
+
+    static void testStreams() {
+        StringBuilder sb = new StringBuilder("ab");
+        check(sb.chars().count() == 2, "chars count");
+        check(sb.codePoints().count() == 2, "codePoints count");
+        check(sb.chars().sum() == 'a' + 'b', "chars sum");
+    }
+
+    static void testNotSynchronized() throws Exception {
+        check(!isSynchronized(StringBuilder.class, "append", String.class),
+              "StringBuilder.append not synchronized");
+        check(!isSynchronized(StringBuilder.class, "reverse"),
+              "StringBuilder.reverse not synchronized");
+        check(!isSynchronized(StringBuilder.class, "toString"),
+              "StringBuilder.toString not synchronized");
+    }
+
+    // ---------- white-box: structural / reflection ----------
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) {
+            if (i.getName().equals(name)) return true;
+        }
+        return false;
+    }
+
+    static boolean hasMethod(Class<?> c, String name, Class<?>... params) {
+        try {
+            c.getMethod(name, params);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.StringBuilder");
+        check(!c.isInterface(), "StringBuilder not an interface");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "StringBuilder is final");
+        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "StringBuilder not abstract");
+        check(c.getSuperclass().getName().equals("java.lang.AbstractStringBuilder"),
+              "extends AbstractStringBuilder");
+        check(hasInterface(c, "java.lang.Appendable"), "implements Appendable");
+        check(hasInterface(c, "java.io.Serializable"), "implements Serializable");
+        check(hasInterface(c, "java.lang.Comparable"), "implements Comparable");
+        check(hasInterface(c, "java.lang.CharSequence"), "implements CharSequence");
+        check(hasMethod(c, "append", String.class), "method append(String)");
+        check(hasMethod(c, "reverse"), "method reverse()");
+        check(hasMethod(c, "compareTo", StringBuilder.class), "method compareTo(StringBuilder)");
+    }
+
+    // ---------- black-box: behavioral composition ----------
+    static void testBlackBox() throws Exception {
         testConstructors();
         testAppend();
         testAppendCodePoint();
@@ -146,6 +237,16 @@ public class StringBuilderTest {
         testInsertDelete();
         testReverseSubstringIndex();
         testCapacity();
+        testCompareTo();
+        testIndexOfFromIndex();
+        testInsertOverloads();
+        testStreams();
+        testNotSynchronized();
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

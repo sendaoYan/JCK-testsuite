@@ -196,7 +196,139 @@ public class StringTest {
         check(s.codePoints().count() == 2, "codePoints() counts code points");
     }
 
-    public static void main(String[] args) {
+    static void expectIAE(Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            passed++;
+        }
+    }
+
+    static void expectNPE(Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+    }
+
+    static void expectIOOBE(Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected IndexOutOfBoundsException");
+        } catch (IndexOutOfBoundsException expected) {
+            passed++;
+        }
+    }
+
+    static void testBlankStrip() {
+        check("".isBlank() && "   ".isBlank() && "\t\n".isBlank(), "isBlank true");
+        check("\u2000\u2003".isBlank(), "isBlank U+2000/U+2003 whitespace");
+        check(!"\u00A0\u2007".isBlank(), "!isBlank no-break spaces (not whitespace)");
+        check(!"abc".isBlank() && !" a ".isBlank(), "!isBlank with content");
+        check("  a b  ".strip().equals("a b"), "strip both ends");
+        check("\u2000a\u2000".strip().equals("a"), "strip removes U+2000");
+        check("\u00A0\u00A0x\u00A0".strip().equals("\u00A0\u00A0x\u00A0"), "strip keeps NBSP (not whitespace)");
+        check("\u2000x".stripLeading().equals("x"), "stripLeading");
+        check("x\u2000".stripTrailing().equals("x"), "stripTrailing");
+        check("  a b  ".trim().equals("a b"), "trim (<= U+0020)");
+        check("\u2000a".trim().equals("\u2000a"), "trim leaves U+2000");
+        check("\u00A0a\u00A0".trim().equals("\u00A0a\u00A0"), "trim leaves NBSP");
+    }
+
+    static void testRepeatIndentLines() {
+        check("ab".repeat(3).equals("ababab"), "repeat(3)");
+        check("ab".repeat(0).equals("") && "ab".repeat(1).equals("ab"), "repeat(0/1)");
+        check("".repeat(100).equals(""), "repeat empty");
+        expectIAE(() -> "x".repeat(-1), "repeat negative");
+
+        check("a\nb".lines().count() == 2, "lines count");
+        check("a\nb\n".lines().count() == 2, "lines drops trailing empty");
+        check("a\r\nb\rc".lines().count() == 3, "lines splits CRLF and CR");
+        check("".lines().count() == 0, "empty lines == 0");
+        check("a\nb".lines().toList().equals(java.util.List.of("a", "b")), "lines order");
+
+        check("a\nb".indent(2).equals("  a\n  b\n"), "indent(+2)");
+        check("  a\n  b".indent(-1).equals(" a\n b\n"), "indent(-1)");
+        check("a\r\nb".indent(0).equals("a\nb\n"), "indent(0) normalizes terminators");
+        check("a\nb\n".indent(0).equals("a\nb\n"), "indent(0) trailing newline preserved");
+        check("".indent(3).equals(""), "indent empty");
+    }
+
+    static void testTransform() {
+        check("abc".transform(s -> s + "!").equals("abc!"), "transform append");
+        check("aBc".transform(String::toUpperCase).equals("ABC"), "transform toUpperCase");
+        check("42".transform(Integer::parseInt).intValue() == 42, "transform -> Integer");
+        check("x".transform(s -> null) == null, "transform null result allowed");
+    }
+
+    static void testFormattedTranslateEscapes() {
+        check("%s-%d".formatted("x", 5).equals("x-5"), "formatted");
+        check(String.format(Locale.ROOT, "%04d|%.1f", 7, 3.14).equals("0007|3.1"),
+              "format padding/precision (fixed locale)");
+        check("a\\tb".translateEscapes().equals("a\tb"), "translateEscapes \\t");
+        check("a\\nb".translateEscapes().equals("a\nb"), "translateEscapes \\n");
+        check("\\\\".translateEscapes().equals("\\"), "translateEscapes \\\\ -> \\");
+        check("\\101".translateEscapes().equals("A"), "translateEscapes octal \\101 -> A");
+        check(("a\\" + "\n" + "b").translateEscapes().equals("ab"), "translateEscapes line continuation");
+        expectIAE(() -> "\\q".translateEscapes(), "translateEscapes invalid \\q");
+    }
+
+    static void testStripIndent() {
+        check("    a\n      b\n    c".stripIndent().equals("a\n  b\nc"), "stripIndent");
+        check("  \n    a\n    ".stripIndent().equals("\na\n"), "stripIndent blank lines");
+        check("a".stripIndent().equals("a"), "stripIndent single line");
+        check("".stripIndent().equals(""), "stripIndent empty");
+    }
+
+    static void testJoinAndCodePointBounds() {
+        check(String.join(",", "a", null, "b").equals("a,null,b"), "join null element -> \"null\"");
+        expectNPE(() -> String.join(null, "a", "b"), "join null delimiter NPE");
+        expectSIOOBE(() -> "abc".codePointAt(3), "codePointAt(3) at length");
+        expectSIOOBE(() -> "abc".codePointBefore(0), "codePointBefore(0)");
+        expectIOOBE(() -> "abc".codePointCount(0, 4), "codePointCount(0,4) overflow");
+    }
+
+    // ---------- white-box: structural / reflection ----------
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) {
+            if (i.getName().equals(name)) return true;
+        }
+        return false;
+    }
+
+    static boolean hasMethod(Class<?> c, String name, Class<?>... params) {
+        try {
+            c.getMethod(name, params);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.String");
+        check(!c.isInterface(), "String not an interface");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "String is final");
+        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "String not abstract");
+        check(c.getSuperclass() == Object.class, "String extends Object");
+        check(hasInterface(c, "java.io.Serializable"), "implements Serializable");
+        check(hasInterface(c, "java.lang.Comparable"), "implements Comparable");
+        check(hasInterface(c, "java.lang.CharSequence"), "implements CharSequence");
+        check(hasInterface(c, "java.lang.constant.Constable"), "implements Constable");
+        check(hasInterface(c, "java.lang.constant.ConstantDesc"), "implements ConstantDesc");
+        check(hasMethod(c, "length"), "method length()");
+        check(hasMethod(c, "charAt", int.class), "method charAt(int)");
+        check(hasMethod(c, "compareTo", String.class), "method compareTo(String)");
+        check(hasMethod(c, "isBlank"), "method isBlank()");
+        check(hasMethod(c, "repeat", int.class), "method repeat(int)");
+        check(hasMethod(c, "strip"), "method strip()");
+    }
+
+    // ---------- black-box: behavioral composition ----------
+    static void testBlackBox() {
         testLengthCharAt();
         testCodePoints();
         testGetCharsBytes();
@@ -212,6 +344,17 @@ public class StringTest {
         testValueOf();
         testContainsJoinFormat();
         testStreams();
+        testBlankStrip();
+        testRepeatIndentLines();
+        testTransform();
+        testFormattedTranslateEscapes();
+        testStripIndent();
+        testJoinAndCodePointBounds();
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
