@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.tools.javac.Main conformance: compile entry point.
+ * @summary com.sun.tools.javac.Main conformance: white-box structure + black-box behavior.
  * @run main MainTest
  */
 
@@ -27,12 +27,25 @@ public class MainTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = load("com.sun.tools.javac.Main");
         check(!c.isInterface(), "not an interface");
         check(methodNames(c).contains("compile"), "compile");
         new com.sun.tools.javac.Main();
         check(com.sun.tools.javac.Main.compile(new String[]{"-version"}) == 0, "compile -version == 0");
+    }
+
+    static void testBlackBox() throws Exception {
+        check(com.sun.tools.javac.Main.compile(new String[]{"-version"}) == 0, "compile -version == 0");
+        java.io.StringWriter sw = new java.io.StringWriter();
+        int rc = com.sun.tools.javac.Main.compile(new String[]{"-version"}, new java.io.PrintWriter(sw));
+        check(rc == 0, "compile -version (PrintWriter) == 0");
+        check(sw.toString().length() > 0, "PrintWriter captured output");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.tools.attach.VirtualMachine conformance: list factory and abstract hierarchy.
+ * @summary com.sun.tools.attach.VirtualMachine conformance: white-box structure + black-box behavior.
  * @run main VirtualMachineTest
  */
 
@@ -27,7 +27,7 @@ public class VirtualMachineTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = load("com.sun.tools.attach.VirtualMachine");
         check(Modifier.isAbstract(c.getModifiers()), "abstract");
         Set<String> m = methodNames(c);
@@ -36,6 +36,22 @@ public class VirtualMachineTest {
         java.util.List<com.sun.tools.attach.VirtualMachineDescriptor> ds = com.sun.tools.attach.VirtualMachine.list();
         check(ds != null, "list non-null");
         for (com.sun.tools.attach.VirtualMachineDescriptor d : ds) { check(d.id() != null, "id non-null"); check(d.displayName() != null, "displayName non-null"); check(d.provider() != null, "provider non-null"); }
+    }
+
+    static void testBlackBox() throws Exception {
+        java.util.List<com.sun.tools.attach.VirtualMachineDescriptor> ds = com.sun.tools.attach.VirtualMachine.list();
+        check(ds != null, "list non-null");
+        for (com.sun.tools.attach.VirtualMachineDescriptor d : ds) {
+            check(d.id() != null && !d.id().isEmpty(), "id non-empty");
+            check(d.displayName() != null, "displayName non-null");
+            check(d.provider() != null, "provider non-null");
+        }
+        check(com.sun.tools.attach.VirtualMachine.list().size() == ds.size(), "list deterministic");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

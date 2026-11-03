@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.tools.attach.spi.AttachProvider conformance: provider registry.
+ * @summary com.sun.tools.attach.spi.AttachProvider conformance: white-box structure + black-box behavior.
  * @run main AttachProviderTest
  */
 
@@ -27,7 +27,7 @@ public class AttachProviderTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = load("com.sun.tools.attach.spi.AttachProvider");
         check(Modifier.isAbstract(c.getModifiers()), "abstract");
         Set<String> m = methodNames(c);
@@ -40,6 +40,22 @@ public class AttachProviderTest {
         check(ps != null, "providers non-null");
         check(!ps.isEmpty(), "providers non-empty");
         for (com.sun.tools.attach.spi.AttachProvider p : ps) { check(p.name() != null, "provider name"); check(p.type() != null, "provider type"); }
+    }
+
+    static void testBlackBox() throws Exception {
+        java.util.List<com.sun.tools.attach.spi.AttachProvider> ps = com.sun.tools.attach.spi.AttachProvider.providers();
+        check(ps != null && !ps.isEmpty(), "providers non-empty");
+        com.sun.tools.attach.spi.AttachProvider p = ps.get(0);
+        check(p.name() != null, "name non-null");
+        check(p.type() != null, "type non-null");
+        java.util.List<com.sun.tools.attach.VirtualMachineDescriptor> vms = p.listVirtualMachines();
+        check(vms != null, "listVirtualMachines non-null");
+        for (com.sun.tools.attach.VirtualMachineDescriptor d : vms) check(d != null, "descriptor non-null");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

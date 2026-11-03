@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.tools.jconsole.JConsolePlugin conformance: plugin lifecycle.
+ * @summary com.sun.tools.jconsole.JConsolePlugin conformance: white-box structure + black-box behavior.
  * @run main JConsolePluginTest
  */
 
@@ -27,7 +27,7 @@ public class JConsolePluginTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = load("com.sun.tools.jconsole.JConsolePlugin");
         check(Modifier.isAbstract(c.getModifiers()), "abstract");
         Set<String> m = methodNames(c);
@@ -42,6 +42,25 @@ public class JConsolePluginTest {
         };
         check(p.getContext() == null, "getContext null");
         p.dispose();
+    }
+
+    static void testBlackBox() throws Exception {
+        com.sun.tools.jconsole.JConsolePlugin p = new com.sun.tools.jconsole.JConsolePlugin() {
+            public java.util.Map<String,javax.swing.JPanel> getTabs() { return new java.util.HashMap<>(); }
+            public javax.swing.SwingWorker<?,?> newSwingWorker() { return null; }
+        };
+        check(p.getContext() == null, "getContext null initially");
+        check(p.getTabs().isEmpty(), "getTabs empty");
+        check(p.newSwingWorker() == null, "newSwingWorker null");
+        p.dispose();
+        java.beans.PropertyChangeListener l = new java.beans.PropertyChangeListener() { public void propertyChange(java.beans.PropertyChangeEvent e) {} };
+        p.addContextPropertyChangeListener(l);
+        p.removeContextPropertyChangeListener(l);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

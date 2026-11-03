@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.tools.attach.AgentInitializationException conformance: exception accessors.
+ * @summary com.sun.tools.attach.AgentInitializationException conformance: white-box structure + black-box behavior.
  * @run main AgentInitializationExceptionTest
  */
 
@@ -27,13 +27,31 @@ public class AgentInitializationExceptionTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         com.sun.tools.attach.AgentInitializationException e = new com.sun.tools.attach.AgentInitializationException("msg", 5);
         check(e.getMessage().equals("msg"), "message");
         check(e.returnValue() == 5, "returnValue");
         check(e instanceof java.lang.Exception, "extends Exception");
         new com.sun.tools.attach.AgentInitializationException();
         new com.sun.tools.attach.AgentInitializationException("only msg");
+    }
+
+    static void testBlackBox() throws Exception {
+        com.sun.tools.attach.AgentInitializationException e = new com.sun.tools.attach.AgentInitializationException("msg", 5);
+        check(e.getMessage().equals("msg"), "message");
+        check(e.returnValue() == 5, "returnValue");
+        com.sun.tools.attach.AgentInitializationException e0 = new com.sun.tools.attach.AgentInitializationException();
+        check(e0.returnValue() == 0, "default returnValue 0");
+        check(e0.getMessage() == null, "default message null");
+        com.sun.tools.attach.AgentInitializationException e1 = new com.sun.tools.attach.AgentInitializationException("only msg");
+        check(e1.returnValue() == 0, "returnValue 0");
+        check(e1.getMessage().equals("only msg"), "message");
+        check(e instanceof java.lang.Exception, "extends Exception");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

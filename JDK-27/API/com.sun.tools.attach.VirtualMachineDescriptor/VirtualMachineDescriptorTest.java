@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.tools.attach.VirtualMachineDescriptor conformance: descriptor accessors.
+ * @summary com.sun.tools.attach.VirtualMachineDescriptor conformance: white-box structure + black-box behavior.
  * @run main VirtualMachineDescriptorTest
  */
 
@@ -27,7 +27,7 @@ public class VirtualMachineDescriptorTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         com.sun.tools.attach.spi.AttachProvider p = com.sun.tools.attach.spi.AttachProvider.providers().get(0);
         check(p != null, "provider non-null");
         com.sun.tools.attach.VirtualMachineDescriptor d = new com.sun.tools.attach.VirtualMachineDescriptor(p, "123", "MyVM");
@@ -41,6 +41,27 @@ public class VirtualMachineDescriptorTest {
         com.sun.tools.attach.VirtualMachineDescriptor d3 = new com.sun.tools.attach.VirtualMachineDescriptor(p, "123");
         check(d3.id().equals("123"), "id 2-arg");
         check(d3.provider() == p, "provider 2-arg");
+    }
+
+    static void testBlackBox() throws Exception {
+        com.sun.tools.attach.spi.AttachProvider p = com.sun.tools.attach.spi.AttachProvider.providers().get(0);
+        com.sun.tools.attach.VirtualMachineDescriptor d = new com.sun.tools.attach.VirtualMachineDescriptor(p, "123", "MyVM");
+        check(d.provider() == p, "provider");
+        check(d.id().equals("123"), "id");
+        check(d.displayName().equals("MyVM"), "displayName");
+        com.sun.tools.attach.VirtualMachineDescriptor d2 = new com.sun.tools.attach.VirtualMachineDescriptor(p, "123", "MyVM");
+        check(d.equals(d2), "equals");
+        check(d.hashCode() == d2.hashCode(), "hashCode");
+        com.sun.tools.attach.VirtualMachineDescriptor d3 = new com.sun.tools.attach.VirtualMachineDescriptor(p, "123");
+        check(d3.id().equals("123"), "id 2-arg");
+        check(d3.displayName().equals("123"), "displayName == id in 2-arg ctor");
+        check(!d.equals(new Object()), "not equals Object");
+        check(d.toString() != null, "toString");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

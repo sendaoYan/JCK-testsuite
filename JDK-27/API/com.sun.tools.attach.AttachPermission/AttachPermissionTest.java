@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.tools.attach.AttachPermission conformance: permission.
+ * @summary com.sun.tools.attach.AttachPermission conformance: white-box structure + black-box behavior.
  * @run main AttachPermissionTest
  */
 
@@ -27,11 +27,28 @@ public class AttachPermissionTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         com.sun.tools.attach.AttachPermission p = new com.sun.tools.attach.AttachPermission("attachVirtualMachine");
         check(p.getName().equals("attachVirtualMachine"), "name");
         check(p instanceof java.security.BasicPermission, "extends BasicPermission");
         new com.sun.tools.attach.AttachPermission("attachVirtualMachine", "");
+    }
+
+    static void testBlackBox() throws Exception {
+        com.sun.tools.attach.AttachPermission p = new com.sun.tools.attach.AttachPermission("attachVirtualMachine");
+        check(p.getName().equals("attachVirtualMachine"), "getName");
+        check(p.getActions().equals(""), "getActions empty");
+        com.sun.tools.attach.AttachPermission p2 = new com.sun.tools.attach.AttachPermission("attachVirtualMachine");
+        check(p.equals(p2), "equals");
+        check(p.hashCode() == p2.hashCode(), "hashCode");
+        check(p.implies(p2), "implies");
+        new com.sun.tools.attach.AttachPermission("attachVirtualMachine", "");
+        check(p instanceof java.security.BasicPermission, "extends BasicPermission");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

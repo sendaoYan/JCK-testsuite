@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.source.doctree.ParamTree conformance: reflection shape checks.
+ * @summary com.sun.source.doctree.ParamTree conformance: white-box structure + black-box behavior.
  * @run main ParamTreeTest
  */
 
@@ -24,13 +24,38 @@ public class ParamTreeTest {
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("com.sun.source.doctree.ParamTree");
         check(c != null, "com.sun.source.doctree.ParamTree loads");
         check(c.getName().equals("com.sun.source.doctree.ParamTree"), "binary name is com.sun.source.doctree.ParamTree");
         check(Modifier.isPublic(c.getModifiers()), "com.sun.source.doctree.ParamTree is public");
         check(c.isInterface(), "com.sun.source.doctree.ParamTree is an interface");
         check(ifaceNames(c).equals(java.util.Set.of("com.sun.source.doctree.BlockTagTree")), "direct superinterfaces");
+    }
+
+    static void testBlackBox() throws Exception {
+        javax.tools.JavaCompiler c = javax.tools.ToolProvider.getSystemJavaCompiler();
+        javax.tools.DiagnosticCollector<javax.tools.JavaFileObject> diags = new javax.tools.DiagnosticCollector<>();
+        javax.tools.StandardJavaFileManager fm = c.getStandardFileManager(diags, java.util.Locale.ROOT, null);
+        com.sun.source.util.JavacTask t = (com.sun.source.util.JavacTask) c.getTask(null, fm, diags, java.util.List.of("-proc:none"), null, null);
+        com.sun.source.util.DocTreeFactory f = com.sun.source.util.DocTrees.instance(t).getDocTreeFactory();
+        javax.lang.model.element.Name nm = t.getElements().getName("x");
+        com.sun.source.doctree.ParamTree node = f.newParamTree(false, f.newIdentifierTree(nm), java.util.List.of(f.newTextTree("d")));
+        com.sun.source.doctree.ParamTree n = node;
+        check(n.getKind() == com.sun.source.doctree.DocTree.Kind.PARAM, "kind");
+        check(!n.isTypeParameter(), "isTypeParameter");
+        check(n.getName().getName().toString().equals("x"), "getName");
+        check(n.getDescription().size() == 1, "getDescription size");
+        final boolean[] ok = new boolean[1];
+        n.accept(new com.sun.source.util.SimpleDocTreeVisitor<Void,Void>() {
+            @Override public Void visitParam(com.sun.source.doctree.ParamTree node, Void v) { ok[0]=true; return null; }
+        }, null);
+        check(ok[0], "accept dispatches");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
