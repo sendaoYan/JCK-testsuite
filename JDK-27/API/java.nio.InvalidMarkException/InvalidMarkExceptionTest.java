@@ -1,9 +1,10 @@
 /*
  * @test
- * @summary java.nio.InvalidMarkException API conformance: reset without a mark.
+ * @summary java.nio.InvalidMarkException conformance: white-box structure + black-box ctor chain and trigger.
  * @run main InvalidMarkExceptionTest
  */
 
+import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
 import java.nio.InvalidMarkException;
 
@@ -15,18 +16,47 @@ public class InvalidMarkExceptionTest {
         passed++;
     }
 
-    static void testInvalidMarkException() {
-        ByteBuffer buf = ByteBuffer.allocate(4);
+    static void expect(Class<? extends Throwable> ex, Runnable r, String msg) {
         try {
-            buf.reset();
-            check(false, "reset without a mark should throw");
-        } catch (InvalidMarkException e) {
-            check(true, "reset without a mark throws InvalidMarkException");
+            r.run();
+        } catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": wrong exception " + t, t);
         }
+        throw new AssertionError(msg + ": no exception thrown");
     }
 
-    public static void main(String[] args) {
-        testInvalidMarkException();
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.nio.InvalidMarkException");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(!Modifier.isFinal(c.getModifiers()), "not final");
+        check(c.getSuperclass() == IllegalStateException.class, "superclass is IllegalStateException");
+        check(c.getConstructor() != null, "no-arg constructor present");
+    }
+
+    static void testBlackBox() {
+        InvalidMarkException e = new InvalidMarkException();
+        check(e instanceof IllegalStateException, "is IllegalStateException");
+        check(e instanceof RuntimeException, "is RuntimeException");
+        check(e.getMessage() == null, "no message");
+        check(e.getCause() == null, "no cause");
+        check(e.getStackTrace().length > 0, "stack trace captured");
+
+        ByteBuffer buf = ByteBuffer.allocate(4);
+        expect(InvalidMarkException.class, () -> buf.reset(), "reset without a mark throws");
+
+        // mark then reset works, then clearing (discards mark) and resetting throws again.
+        buf.mark();
+        buf.position(2);
+        buf.reset();
+        check(buf.position() == 0, "reset returns to marked position");
+        buf.clear();
+        expect(InvalidMarkException.class, () -> buf.reset(), "reset after clear (mark discarded) throws");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

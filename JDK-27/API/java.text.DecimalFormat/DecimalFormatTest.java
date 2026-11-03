@@ -6,9 +6,11 @@
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.AttributedCharacterIterator;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.ParseException;
+import java.util.Currency;
 import java.util.Locale;
 
 public class DecimalFormatTest {
@@ -134,6 +136,78 @@ public class DecimalFormatTest {
         check(!a.equals(d), "different pattern not equal");
     }
 
+    static void testBlackBox() {
+        // no-arg and String constructors
+        check("#,##0.###".equals(new DecimalFormat().toPattern()), "no-arg ctor default pattern");
+        check("#,##0.00".equals(new DecimalFormat("#,##0.00").toPattern()), "ctor(String) pattern");
+
+        // integer/fraction digit getters and setters
+        DecimalFormat df = new DecimalFormat("#,##0.00", SYM);
+        check(df.getMaximumFractionDigits() == 2, "getMaximumFractionDigits");
+        check(df.getMinimumFractionDigits() == 2, "getMinimumFractionDigits");
+        check(df.getMinimumIntegerDigits() == 1, "getMinimumIntegerDigits");
+        check(df.getMaximumIntegerDigits() > 1, "getMaximumIntegerDigits non-trivial");
+        df.setMinimumFractionDigits(1);
+        df.setMaximumFractionDigits(3);
+        df.setMinimumIntegerDigits(2);
+        df.setMaximumIntegerDigits(5);
+        check(df.getMinimumFractionDigits() == 1, "setMinimumFractionDigits");
+        check(df.getMaximumFractionDigits() == 3, "setMaximumFractionDigits");
+        check(df.getMinimumIntegerDigits() == 2, "setMinimumIntegerDigits");
+        check(df.getMaximumIntegerDigits() == 5, "setMaximumIntegerDigits");
+        check("1,234.5".equals(df.format(1234.5)), "digit setters affect format");
+
+        // rounding mode getter/setter
+        df.setRoundingMode(RoundingMode.HALF_UP);
+        check(df.getRoundingMode() == RoundingMode.HALF_UP, "getRoundingMode/setRoundingMode");
+
+        // positive suffix
+        DecimalFormat ps = new DecimalFormat("#,##0.00", SYM);
+        ps.setPositiveSuffix("+");
+        check("+".equals(ps.getPositiveSuffix()), "getPositiveSuffix/setPositiveSuffix");
+        check("1,234.50+".equals(ps.format(1234.5)), "positive suffix affects format");
+
+        // grouping used
+        DecimalFormat gu = new DecimalFormat("#,##0.00", SYM);
+        gu.setGroupingUsed(false);
+        check(!gu.isGroupingUsed(), "setGroupingUsed/isGroupingUsed");
+        check("1234.50".equals(gu.format(1234.5)), "grouping off format");
+
+        // currency
+        DecimalFormat cu = new DecimalFormat("#,##0.00", SYM);
+        check(Currency.getInstance("USD").equals(cu.getCurrency()), "default currency USD");
+        cu.setCurrency(Currency.getInstance("EUR"));
+        check(Currency.getInstance("EUR").equals(cu.getCurrency()), "setCurrency/getCurrency EUR");
+
+        // setDecimalFormatSymbols
+        DecimalFormatSymbols custom = DecimalFormatSymbols.getInstance(US);
+        custom.setDecimalSeparator(';');
+        DecimalFormat sd = new DecimalFormat("0.00", SYM);
+        sd.setDecimalFormatSymbols(custom);
+        check(custom.equals(sd.getDecimalFormatSymbols()), "setDecimalFormatSymbols/getDecimalFormatSymbols");
+        check("1;50".equals(sd.format(1.5)), "custom symbols affect format");
+
+        // strict mode
+        DecimalFormat sr = new DecimalFormat("0.00", SYM);
+        check(!sr.isStrict(), "isStrict default false");
+        sr.setStrict(true);
+        check(sr.isStrict(), "setStrict(true)");
+
+        // localized pattern
+        DecimalFormat lp = new DecimalFormat("#,##0.00", SYM);
+        check("#,##0.00".equals(lp.toLocalizedPattern()), "toLocalizedPattern US");
+        lp.applyLocalizedPattern("0.00");
+        check("1.50".equals(lp.format(1.5)), "applyLocalizedPattern format");
+        check("1234.50".equals(lp.format(1234.5)), "applyLocalizedPattern no grouping");
+
+        // formatToCharacterIterator
+        DecimalFormat fi = new DecimalFormat("#,##0.00", SYM);
+        AttributedCharacterIterator it = fi.formatToCharacterIterator(1234.5);
+        StringBuilder sb = new StringBuilder();
+        for (char ch = it.first(); ch != AttributedCharacterIterator.DONE; ch = it.next()) sb.append(ch);
+        check("1,234.50".equals(sb.toString()), "formatToCharacterIterator text");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPatternFormats();
@@ -143,6 +217,7 @@ public class DecimalFormatTest {
         testRoundingModes();
         testSymbolsAndPatternMutation();
         testEqualsCloneHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -4,10 +4,32 @@
  * @run main RuntimeTest
  */
 
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Modifier;
 
 public class RuntimeTest {
     static int passed;
+
+    interface IOAction { void run() throws IOException; }
+
+    static void expectIOException(IOAction r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected IOException");
+        } catch (IOException expected) {
+            passed++;
+        }
+    }
+
+    static void expectUnsatisfiedLinkError(Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected UnsatisfiedLinkError");
+        } catch (UnsatisfiedLinkError expected) {
+            passed++;
+        }
+    }
 
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
@@ -58,6 +80,46 @@ public class RuntimeTest {
         passed++;
     }
 
+    // ---- Part 2b: black-box for shutdown hooks, exec, load/loadLibrary ----
+    static void testBlackBox() {
+        Runtime r = Runtime.getRuntime();
+
+        // addShutdownHook / removeShutdownHook roundtrip (no leftover hooks).
+        Thread hook = new Thread(() -> {});
+        r.addShutdownHook(hook);
+        try {
+            r.addShutdownHook(hook);
+            throw new AssertionError("addShutdownHook twice: expected IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            passed++;
+        }
+        check(r.removeShutdownHook(hook), "removeShutdownHook returns true after add");
+        check(!r.removeShutdownHook(hook), "removeShutdownHook returns false when not registered");
+        try {
+            r.addShutdownHook(null);
+            throw new AssertionError("addShutdownHook(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+
+        // exec overloads: a missing command yields IOException before any process is spawned.
+        expectIOException(() -> r.exec("jck-no-such-cmd-xyz"), "exec(String)");
+        expectIOException(() -> r.exec("jck-no-such-cmd-xyz", new String[0]), "exec(String,String[])");
+        expectIOException(() -> r.exec("jck-no-such-cmd-xyz", new String[0], new File(".")),
+                          "exec(String,String[],File)");
+        expectIOException(() -> r.exec(new String[]{"jck-no-such-cmd-xyz"}), "exec(String[])");
+        expectIOException(() -> r.exec(new String[]{"jck-no-such-cmd-xyz"}, new String[0]),
+                          "exec(String[],String[])");
+        expectIOException(() -> r.exec(new String[]{"jck-no-such-cmd-xyz"}, new String[0], new File(".")),
+                          "exec(String[],String[],File)");
+
+        // load / loadLibrary with a missing library -> UnsatisfiedLinkError.
+        expectUnsatisfiedLinkError(() -> r.load("/jck/no/such/lib.so"), "load(missing path)");
+        expectUnsatisfiedLinkError(() -> r.loadLibrary("jck_no_such_lib_xyz"), "loadLibrary(missing)");
+
+        // exit(int) and halt(int) terminate the JVM, so they are intentionally not invoked.
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSingleton();
@@ -65,6 +127,7 @@ public class RuntimeTest {
         testMemory();
         testVersion();
         testGC();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

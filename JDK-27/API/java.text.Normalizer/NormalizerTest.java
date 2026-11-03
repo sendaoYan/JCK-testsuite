@@ -72,12 +72,16 @@ public class NormalizerTest {
         expectThrows(() -> Normalizer.isNormalized(null, Form.NFC), NullPointerException.class, "isNormalized(null) NPE");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testCanonicalComposition();
         testCompatibilityComposition();
         testIsNormalized();
         testIdempotentAndNull();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -88,12 +88,36 @@ public class CollatorTest {
         check(a.equals(a), "reflexive equals");
     }
 
+    // Minimal concrete subclass to exercise the protected Collator() constructor.
+    static class MinimalCollator extends Collator {
+        public int compare(String a, String b) { return a.compareTo(b); }
+        public CollationKey getCollationKey(String s) { return null; }
+        public int hashCode() { return 7; }
+    }
+
+    static void testBlackBox() {
+        MinimalCollator c = new MinimalCollator();
+        check(c != null, "protected constructor via subclass");
+        check(c.compare("a", "b") < 0, "subclass compare a,b < 0");
+        check(c.compare("b", "a") > 0, "subclass compare b,a > 0");
+        check(c.equals("a", "a") && !c.equals("a", "b"), "subclass equals(String,String)");
+        check(c.getStrength() == Collator.TERTIARY, "protected ctor default strength TERTIARY");
+        check(c.getDecomposition() == Collator.CANONICAL_DECOMPOSITION,
+              "protected ctor default decomposition CANONICAL");
+        c.setStrength(Collator.PRIMARY);
+        check(c.getStrength() == Collator.PRIMARY, "setStrength PRIMARY");
+        c.setDecomposition(Collator.FULL_DECOMPOSITION);
+        check(c.getDecomposition() == Collator.FULL_DECOMPOSITION, "setDecomposition FULL");
+        check(c.equals(c), "reflexive equals");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testCompare();
         testStrength();
         testCollationKey();
         testDecompositionAndContract();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -124,11 +124,15 @@ public class MatchResultTest {
               "toMatchResult returns MatchResult");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testDefaultNamedMethods();
         testBareDefaults();
         testMatcherAsMatchResult();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

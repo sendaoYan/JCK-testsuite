@@ -43,6 +43,19 @@ public class ObjectTest {
         }
     }
 
+    // Exposes Object.finalize() (protected, deprecated for removal) to prove the
+    // no-op super.finalize() is reachable from a subclass.
+    static class Finalizable {
+        void invokeFinalize() {
+            try {
+                finalize();
+            } catch (Throwable t) {
+                throw new AssertionError(t);
+            }
+        }
+        @Override protected void finalize() throws Throwable { super.finalize(); }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.Object");
@@ -151,6 +164,13 @@ public class ObjectTest {
         }
     }
 
+    // ---- Part 2b: black-box for the deprecated protected finalize() ----
+    static void testBlackBox() throws Exception {
+        // finalize() is protected; prove it is reachable and a no-op via a subclass.
+        new Finalizable().invokeFinalize();
+        passed++;
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testGetClass();
@@ -160,6 +180,7 @@ public class ObjectTest {
         testMonitorErrors();
         testWaitNotify();
         testWaitTimeout();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

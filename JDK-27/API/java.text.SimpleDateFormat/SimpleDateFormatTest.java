@@ -147,6 +147,20 @@ public class SimpleDateFormatTest {
         check(!a.equals(d), "different pattern not equal");
     }
 
+    static void testBlackBox() {
+        DateFormatSymbols dfs = DateFormatSymbols.getInstance(US);
+        SimpleDateFormat s1 = new SimpleDateFormat("yyyy-MM-dd", dfs);
+        s1.setTimeZone(UTC);
+        check("1970-01-01".equals(s1.format(EPOCH)), "ctor(String,DateFormatSymbols) format");
+        check(dfs.equals(s1.getDateFormatSymbols()), "ctor(String,DateFormatSymbols) symbols round-trip");
+
+        SimpleDateFormat s2 = new SimpleDateFormat();
+        s2.setTimeZone(UTC);
+        String out = s2.format(EPOCH);
+        check(out != null && out.length() > 0, "no-arg ctor formats non-empty");
+        check(s2.toPattern() != null && s2.toPattern().length() > 0, "no-arg ctor has a pattern");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPatternLetters();
@@ -155,6 +169,7 @@ public class SimpleDateFormatTest {
         testPatternMutation();
         testCharacterIteratorAndSymbols();
         testEqualsCloneHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

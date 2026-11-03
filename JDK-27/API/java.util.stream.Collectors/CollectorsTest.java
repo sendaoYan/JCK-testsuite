@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -206,6 +208,62 @@ public class CollectorsTest {
         check(ds.getSum() == 6.0 && ds.getCount() == 3L, "summarizingDouble");
     }
 
+    // ===================== 黑盒 / 补测（tranche-8 未覆盖方法） =====================
+    static void testBlackBox() {
+        // averagingDouble / averagingLong（长度取平均，值精确为整数平均）
+        check(Stream.of("a", "bb", "ccc").collect(Collectors.averagingDouble(String::length)) == 2.0,
+              "averagingDouble");
+        check(Stream.of("a", "bb", "ccc").collect(Collectors.averagingLong(String::length)) == 2.0,
+              "averagingLong");
+        check(Stream.<String>empty().collect(Collectors.averagingDouble(String::length)) == 0.0,
+              "averagingDouble empty == 0.0");
+        check(Stream.<String>empty().collect(Collectors.averagingLong(String::length)) == 0.0,
+              "averagingLong empty == 0.0");
+
+        // groupingByConcurrent(Function)：返回 ConcurrentMap，分组按长度
+        Map<Integer, List<String>> g1 = Stream.of("a", "bb", "cc", "ddd").collect(
+            Collectors.groupingByConcurrent(String::length));
+        check(g1 instanceof ConcurrentMap, "groupingByConcurrent returns ConcurrentMap");
+        check(g1.get(1).equals(List.of("a")) && g1.get(3).equals(List.of("ddd")),
+              "groupingByConcurrent single-element groups");
+        check(g1.get(2).size() == 2 && g1.get(2).contains("bb") && g1.get(2).contains("cc"),
+              "groupingByConcurrent multi-element group values (order-independent)");
+
+        // groupingByConcurrent(Function, Collector)：自定义 downstream
+        Map<Integer, Set<String>> g2 = Stream.of("a", "bb", "cc", "ddd").collect(
+            Collectors.groupingByConcurrent(String::length, Collectors.toSet()));
+        check(g2.get(2).equals(Set.of("bb", "cc")), "groupingByConcurrent with toSet downstream");
+
+        // groupingByConcurrent(Function, Supplier, Collector)：指定 ConcurrentMap 工厂 + counting
+        Map<Integer, Long> g3 = Stream.of("a", "bb", "cc", "ddd").collect(
+            Collectors.groupingByConcurrent(String::length,
+                ConcurrentSkipListMap::new, Collectors.counting()));
+        check(g3 instanceof ConcurrentSkipListMap, "groupingByConcurrent with map factory");
+        check(g3.get(1) == 1L && g3.get(2) == 2L && g3.get(3) == 1L,
+              "groupingByConcurrent counting downstream");
+
+        // toConcurrentMap(Function, Function)
+        Map<Integer, String> m1 = Stream.of("a", "bb", "ccc").collect(
+            Collectors.toConcurrentMap(String::length, s -> s));
+        check(m1 instanceof ConcurrentMap, "toConcurrentMap returns ConcurrentMap");
+        check(m1.get(1).equals("a") && m1.get(3).equals("ccc"), "toConcurrentMap contents");
+        expectThrows(IllegalStateException.class,
+            () -> Stream.of("a", "b", "cc").collect(Collectors.toConcurrentMap(String::length, s -> s)),
+            "toConcurrentMap duplicate key");
+
+        // toConcurrentMap(Function, Function, BinaryOperator)
+        Map<Integer, String> m2 = Stream.of("a", "b", "cc").collect(
+            Collectors.toConcurrentMap(String::length, s -> s, (s1, s2) -> s1 + s2));
+        check(m2.get(1).equals("ab") && m2.get(2).equals("cc"), "toConcurrentMap with merge");
+
+        // toConcurrentMap(Function, Function, BinaryOperator, Supplier)
+        Map<Integer, String> m3 = Stream.of("a", "b", "cc").collect(
+            Collectors.toConcurrentMap(String::length, s -> s, (s1, s2) -> s1 + s2,
+                ConcurrentSkipListMap::new));
+        check(m3 instanceof ConcurrentSkipListMap, "toConcurrentMap with map factory");
+        check(m3.get(1).equals("ab") && m3.get(2).equals("cc"), "toConcurrentMap factory contents");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBasicCollectors();
@@ -215,6 +273,7 @@ public class CollectorsTest {
         testReductionCollectors();
         testMappingFlatMappingFiltering();
         testSummarizing();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

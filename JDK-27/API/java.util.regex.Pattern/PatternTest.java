@@ -235,8 +235,8 @@ public class PatternTest {
         check(Pattern.compile("\\bword\\b").matcher("a word here").find(), "word boundary");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testCompileFlags();
         testMatchesConvenience();
         testMatcherGroups();
@@ -247,6 +247,10 @@ public class PatternTest {
         testNamedGroups();
         testPredicatesAndStream();
         testEdgePatterns();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

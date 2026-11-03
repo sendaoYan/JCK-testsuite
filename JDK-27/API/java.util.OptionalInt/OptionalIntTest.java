@@ -129,12 +129,16 @@ public class OptionalIntTest {
         check(OptionalInt.empty().toString().equals("OptionalInt.empty"), "toString empty");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testOfGet();
         testOrElse();
         testIfPresentAndStream();
         testEqualsToString();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

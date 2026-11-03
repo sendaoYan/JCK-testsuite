@@ -82,12 +82,42 @@ public class ProcessBuilderTest {
         }
     }
 
+    // ---- Part 2b: black-box for the (List) constructor and startPipeline ----
+    static void testBlackBox() throws Exception {
+        // (List) constructor
+        ProcessBuilder pb = new ProcessBuilder(List.of("a", "b", "c"));
+        check(pb.command().equals(List.of("a", "b", "c")), "ProcessBuilder(List) command roundtrip");
+
+        // startPipeline(empty) -> empty list, no process started.
+        List<Process> empty = ProcessBuilder.startPipeline(List.of());
+        check(empty.isEmpty(), "startPipeline(empty) returns empty list");
+
+        // startPipeline with a single missing command -> IOException (nothing left running).
+        try {
+            ProcessBuilder.startPipeline(List.of(new ProcessBuilder("jck-no-such-cmd-xyz")));
+            throw new AssertionError("startPipeline(missing command): expected IOException");
+        } catch (java.io.IOException expected) {
+            passed++;
+        }
+
+        // A non-last stage must have redirectOutput == PIPE; violation throws before any start.
+        ProcessBuilder a = new ProcessBuilder("jck-cmd-a").redirectOutput(ProcessBuilder.Redirect.INHERIT);
+        ProcessBuilder b = new ProcessBuilder("jck-cmd-b");
+        try {
+            ProcessBuilder.startPipeline(List.of(a, b));
+            throw new AssertionError("startPipeline(non-last redirectOutput != PIPE): expected IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            passed++;
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testCommand();
         testEnvironment();
         testDirectoryAndRedirect();
         testStartMissingCommand();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

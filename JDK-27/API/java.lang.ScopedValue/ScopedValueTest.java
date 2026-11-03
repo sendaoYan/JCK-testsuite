@@ -63,11 +63,15 @@ public class ScopedValueTest {
         car.run(() -> check("x".equals(a.get()) && b.get() == 3, "both values bound"));
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testUnbound();
         testBound();
         testWhereMultiple();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

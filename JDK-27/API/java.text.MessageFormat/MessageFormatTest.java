@@ -11,6 +11,7 @@ import java.text.Format;
 import java.text.MessageFormat;
 import java.text.NumberFormat;
 import java.text.ParseException;
+import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -129,6 +130,39 @@ public class MessageFormatTest {
         check(!a.equals(new MessageFormat("{0}", US)), "different pattern not equal");
     }
 
+    static void testBlackBox() {
+        MessageFormat mf = new MessageFormat("{0} {1} {2}", US);
+        NumberFormat nf = NumberFormat.getIntegerInstance(US);
+        mf.setFormat(1, nf);
+        Format[] g = mf.getFormats();
+        check(g != null && g.length == 3, "getFormats length 3 after setFormat");
+        check(g[1] == nf, "setFormat(1, NumberFormat) applied at index 1");
+
+        mf.setFormats(new Format[]{nf, nf, nf});
+        Format[] all = mf.getFormats();
+        check(all != null && all.length == 3, "setFormats/getFormats length 3");
+        check(all[0] == nf && all[1] == nf && all[2] == nf, "setFormats applied to every element");
+        check("7 8 9".equals(mf.format(new Object[]{7, 8, 9})), "setFormats formats integers");
+
+        // parseObject with number formats returns Number values
+        ParsePosition pp = new ParsePosition(0);
+        Object r = mf.parseObject("11 22 33", pp);
+        check(r instanceof Object[], "parseObject returns Object[]");
+        Object[] parts = (Object[]) r;
+        check(parts.length == 3, "parseObject length 3");
+        check(((Number) parts[0]).longValue() == 11L && ((Number) parts[2]).longValue() == 33L,
+              "parseObject number values");
+        check(pp.getIndex() == "11 22 33".length(), "parseObject advances index");
+
+        // parseObject on a plain pattern returns String values
+        MessageFormat plain = new MessageFormat("{0} {1} {2}", US);
+        ParsePosition pp2 = new ParsePosition(0);
+        Object[] strParts = (Object[]) plain.parseObject("a b c", pp2);
+        check(strParts.length == 3, "plain parseObject length 3");
+        check("a".equals(strParts[0]) && "c".equals(strParts[2]), "plain parseObject String values");
+        check(pp2.getIndex() == "a b c".length(), "plain parseObject advances index");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBasicSubstitution();
@@ -137,6 +171,7 @@ public class MessageFormatTest {
         testParse();
         testPatternAndLocale();
         testIteratorEqualsClone();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

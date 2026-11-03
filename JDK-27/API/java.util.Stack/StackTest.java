@@ -110,12 +110,16 @@ public class StackTest {
         check(s.capacity() >= 3, "inherited capacity");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testPushPop();
         testPeek();
         testSearch();
         testInheritedVector();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

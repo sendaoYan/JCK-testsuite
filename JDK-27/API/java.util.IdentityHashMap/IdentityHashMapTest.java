@@ -104,12 +104,62 @@ public class IdentityHashMapTest {
         check(!a.equals(c), "!equals when key/value differ by reference");
     }
 
+    static void testBlackBox() {
+        IdentityHashMap<String, String> sized = new IdentityHashMap<>(16);
+        sized.put("k", "v");
+        check(sized.get("k").equals("v"), "ctor (int) works");
+
+        IdentityHashMap<String, String> src = new IdentityHashMap<>();
+        String key = new String("x");
+        src.put(key, "val");
+        IdentityHashMap<String, String> copy = new IdentityHashMap<>(src);
+        check(copy.size() == 1 && copy.get(key).equals("val"), "ctor (Map) copies by identity");
+        check(copy.get(new String("x")) == null, "copy still uses identity for get");
+
+        IdentityHashMap<String, String> dest = new IdentityHashMap<>();
+        dest.putAll(src);
+        check(dest.size() == 1 && dest.get(key).equals("val"), "putAll copies");
+
+        // clone independent + equal
+        IdentityHashMap<String, String> orig = new IdentityHashMap<>();
+        String k = new String("k");
+        orig.put(k, "v");
+        @SuppressWarnings("unchecked")
+        IdentityHashMap<String, String> cloned = (IdentityHashMap<String, String>) orig.clone();
+        check(cloned != orig && cloned.equals(orig), "clone independent and equal");
+        cloned.put(new String("k2"), "v2");
+        check(orig.size() == 1, "clone structural independence");
+
+        // forEach visits every mapping
+        final int[] count = {0};
+        orig.forEach((kk, vv) -> { count[0]++; });
+        check(count[0] == 1, "forEach visits all mappings");
+
+        // replaceAll transforms values in place
+        IdentityHashMap<String, Integer> nums = new IdentityHashMap<>();
+        String nk = new String("n");
+        nums.put(nk, 1);
+        nums.replaceAll((kk, vv) -> vv * 10);
+        check(nums.get(nk) == 10, "replaceAll transforms values");
+
+        // replace(K, oldValue, newValue) uses identity (==) comparison for the old value
+        IdentityHashMap<String, String> r = new IdentityHashMap<>();
+        String rk = new String("rk");
+        String v1 = new String("val");
+        String v2 = new String("val");
+        r.put(rk, v1);
+        check(!r.replace(rk, v2, "replaced"), "replace(K,old,new) equal-but-not-identical old returns false");
+        check(r.replace(rk, v1, "replaced"), "replace(K,old,new) identical old returns true");
+        check(r.get(rk).equals("replaced"), "replace(K,old,new) updated value");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testKeyIdentity();
         testValueIdentity();
         testNullKeyAndViews();
         testEqualsUsesIdentity();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

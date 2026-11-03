@@ -96,6 +96,20 @@ public class ChoiceFormatTest {
         check(!a.equals(new ChoiceFormat("0#none|1#one")), "different choices not equal");
     }
 
+    static void testBlackBox() throws Exception {
+        ChoiceFormat cf = new ChoiceFormat("0#none|1#one|2#many");
+        cf.applyPattern("0#no|1#yes");
+        check("0.0#no|1.0#yes".equals(cf.toPattern()), "applyPattern/toPattern round-trip");
+        check(cf.toString().contains("0.0#no|1.0#yes"), "toString contains pattern");
+        check("no".equals(cf.format(-1.0)), "applyPattern format -1 -> no");
+        check("no".equals(cf.format(0.0)), "applyPattern format 0 -> no");
+        check("yes".equals(cf.format(1.0)), "applyPattern format 1 -> yes");
+        check("yes".equals(cf.format(100.0)), "applyPattern format 100 -> yes");
+        check("yes".equals(cf.format(1L)), "applyPattern format(long)");
+        check(cf.parse("no").doubleValue() == 0.0, "applyPattern parse no -> 0.0");
+        check(cf.parse("yes").doubleValue() == 1.0, "applyPattern parse yes -> 1.0");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPatternRange();
@@ -103,6 +117,7 @@ public class ChoiceFormatTest {
         testNextPreviousDouble();
         testChoices();
         testStrictAndContract();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

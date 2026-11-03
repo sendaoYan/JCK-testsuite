@@ -99,11 +99,48 @@ public class WeakHashMapTest {
         check(m.isEmpty(), "clear");
     }
 
+    static void testBlackBox() {
+        WeakHashMap<String, Integer> a = new WeakHashMap<>(16, 0.75f);
+        a.put("x", 1);
+        check(a.get("x") == 1, "ctor (int,float) works");
+        WeakHashMap<String, Integer> b = new WeakHashMap<>(8);
+        b.put("y", 2);
+        check(b.get("y") == 2, "ctor (int) works");
+
+        // copy constructor + putAll populate independent content
+        WeakHashMap<String, Integer> src = new WeakHashMap<>();
+        src.put("a", 1);
+        src.put("b", 2);
+        WeakHashMap<String, Integer> copy = new WeakHashMap<>(src);
+        check(copy.equals(src) && copy.size() == 2, "ctor (Map) copies");
+        copy.put("c", 3);
+        check(src.size() == 2, "ctor (Map) independent");
+
+        WeakHashMap<String, Integer> dest = new WeakHashMap<>();
+        dest.putAll(src);
+        check(dest.equals(src) && dest.size() == 2, "putAll copies");
+
+        // newWeakHashMap(int) static factory (JDK 19+)
+        WeakHashMap<String, Integer> viaFactory = WeakHashMap.newWeakHashMap(8);
+        viaFactory.put("z", 9);
+        check(viaFactory.get("z") == 9, "newWeakHashMap(int) factory");
+
+        // forEach visits every mapping
+        final int[] count = {0};
+        src.forEach((k, v) -> { count[0] += v; });
+        check(count[0] == 3, "forEach sums values");
+
+        // replaceAll transforms values in place
+        src.replaceAll((k, v) -> v * 10);
+        check(src.get("a") == 10 && src.get("b") == 20, "replaceAll transforms values");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBasicContract();
         testNullSemantics();
         testViewsAndEquals();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

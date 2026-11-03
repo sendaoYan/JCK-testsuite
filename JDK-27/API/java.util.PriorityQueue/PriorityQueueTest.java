@@ -158,6 +158,57 @@ public class PriorityQueueTest {
         check(fromCol.peek() == 1, "ctor from Collection heapifies");
     }
 
+    static void testBlackBox() {
+        PriorityQueue<Integer> sized = new PriorityQueue<>(8);
+        sized.add(1);
+        check(sized.peek() == 1, "ctor (int) works");
+        PriorityQueue<Integer> cmp = new PriorityQueue<>(8, Comparator.reverseOrder());
+        cmp.add(1);
+        cmp.add(2);
+        check(cmp.peek() == 2, "ctor (int, Comparator) works");
+
+        // copy constructor from another PriorityQueue preserves the multiset
+        PriorityQueue<Integer> src = new PriorityQueue<>(Arrays.asList(3, 1, 2));
+        PriorityQueue<Integer> copy = new PriorityQueue<>(src);
+        int[] sorted = {1, 2, 3};
+        for (int i = 0; i < 3; i++) check(copy.poll() == sorted[i], "ctor (PriorityQueue) poll order");
+
+        // iterator covers all elements (order unspecified), forEach as well
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(5, 1, 4, 2, 3));
+        int count = 0;
+        for (java.util.Iterator<Integer> it = q.iterator(); it.hasNext(); it.next()) count++;
+        check(count == 5, "iterator covers all elements");
+        java.util.List<Integer> seen = new java.util.ArrayList<>();
+        q.forEach(seen::add);
+        java.util.Collections.sort(seen);
+        check(seen.equals(Arrays.asList(1, 2, 3, 4, 5)), "forEach visits all (sorted)");
+
+        // removeAll / retainAll operate by element equality
+        PriorityQueue<Integer> r = new PriorityQueue<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(r.removeAll(Arrays.asList(2, 4)), "removeAll returns true");
+        int[] afterRemove = {1, 3, 5};
+        for (int i = 0; i < 3; i++) check(r.poll() == afterRemove[i], "removeAll leftover");
+        PriorityQueue<Integer> t = new PriorityQueue<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(t.retainAll(Arrays.asList(1, 3, 5)), "retainAll returns true");
+        int[] afterRetain = {1, 3, 5};
+        for (int i = 0; i < 3; i++) check(t.poll() == afterRetain[i], "retainAll kept");
+
+        // spliterator reports SIZED|SUBSIZED|NONNULL and covers all
+        PriorityQueue<Integer> sp = new PriorityQueue<>(Arrays.asList(3, 1, 2));
+        java.util.Spliterator<Integer> spl = sp.spliterator();
+        check(spl.estimateSize() == 3, "spliterator estimateSize");
+        check(spl.hasCharacteristics(java.util.Spliterator.SIZED | java.util.Spliterator.SUBSIZED
+                | java.util.Spliterator.NONNULL), "spliterator characteristics");
+        java.util.List<Integer> splGathered = new java.util.ArrayList<>();
+        spl.forEachRemaining(splGathered::add);
+        java.util.Collections.sort(splGathered);
+        check(splGathered.equals(Arrays.asList(1, 2, 3)), "spliterator covers all (sorted)");
+
+        // clear empties
+        q.clear();
+        check(q.isEmpty() && q.size() == 0, "clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testNaturalOrder();
@@ -168,6 +219,7 @@ public class PriorityQueueTest {
         testRemoveContainsRemoveIf();
         testToArray();
         testConstructorFromCollectionAndSortedSet();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

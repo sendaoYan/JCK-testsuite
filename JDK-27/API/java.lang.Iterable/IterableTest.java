@@ -62,11 +62,15 @@ public class IterableTest {
         check(count[0] == 3, "spliterator visits all elements");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testIterator();
         testForEach();
         testSpliterator();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

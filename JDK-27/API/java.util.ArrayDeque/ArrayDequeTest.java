@@ -172,6 +172,57 @@ public class ArrayDequeTest {
         check(d.isEmpty(), "drained after growth");
     }
 
+    static void testBlackBox() {
+        ArrayDeque<Integer> d = new ArrayDeque<>();
+        d.addAll(Arrays.asList(1, 2, 3, 4, 5));
+
+        // forEach iterates head-to-tail in encounter order
+        java.util.List<Integer> seen = new java.util.ArrayList<>();
+        d.forEach(seen::add);
+        check(seen.equals(Arrays.asList(1, 2, 3, 4, 5)), "forEach encounter order");
+
+        // clone produces an independent, content-equal deque
+        ArrayDeque<Integer> c = d.clone();
+        check(c != d, "clone returns a distinct instance");
+        check(Arrays.equals(c.toArray(), d.toArray()), "clone content equal");
+        c.addLast(99);
+        check(d.size() == 5 && c.size() == 6, "clone structural independence");
+
+        // removeAll removes every matching element
+        check(d.removeAll(Arrays.asList(2, 4)), "removeAll returns true");
+        check(Arrays.equals(d.toArray(), new Object[]{1, 3, 5}), "removeAll removed matching");
+        check(!d.removeAll(Arrays.asList(9, 10)), "removeAll absent returns false");
+
+        // retainAll keeps only matching elements
+        ArrayDeque<Integer> r = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(r.retainAll(Arrays.asList(1, 3, 5)), "retainAll returns true");
+        check(Arrays.equals(r.toArray(), new Object[]{1, 3, 5}), "retainAll kept matching");
+        check(!r.retainAll(Arrays.asList(1, 3, 5)), "retainAll no-op returns false");
+
+        // removeIf removes matching predicate
+        ArrayDeque<Integer> f = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4, 5, 6));
+        check(f.removeIf(x -> x % 2 == 0), "removeIf returns true");
+        check(Arrays.equals(f.toArray(), new Object[]{1, 3, 5}), "removeIf removed evens");
+
+        // spliterator reports ORDERED|NONNULL|SIZED|SUBSIZED and covers all in order
+        java.util.Spliterator<Integer> sp = d.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED
+                | java.util.Spliterator.NONNULL
+                | java.util.Spliterator.SIZED
+                | java.util.Spliterator.SUBSIZED),
+              "spliterator characteristics");
+        java.util.List<Integer> gathered = new java.util.ArrayList<>();
+        sp.forEachRemaining(gathered::add);
+        check(gathered.equals(Arrays.asList(1, 3, 5)), "spliterator order");
+
+        // clear empties the deque
+        d.clear();
+        check(d.isEmpty() && d.size() == 0, "clear empties");
+        d.addLast(7);
+        check(!d.isEmpty(), "reusable after clear");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testQueue();
@@ -181,6 +232,7 @@ public class ArrayDequeTest {
         testNullRejection();
         testIterators();
         testGrowth();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

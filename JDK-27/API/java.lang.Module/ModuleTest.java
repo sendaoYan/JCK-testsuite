@@ -65,10 +65,48 @@ public class ModuleTest {
         check(unnamed.addOpens("p.q", m) == unnamed, "unnamed addOpens is a no-op returning this");
     }
 
+    // ---- Part 2b: black-box for addUses/canUse/getAnnotations ----
+    static void testBlackBox() {
+        Module unnamed = ModuleTest.class.getModule();
+        Module javaBase = String.class.getModule();
+
+        // addUses: no-op on an unnamed module, IllegalCallerException on a named module
+        // when the caller is not the module itself.
+        check(unnamed.addUses(Runnable.class) == unnamed, "unnamed addUses is a no-op returning this");
+        try {
+            javaBase.addUses(Runnable.class);
+            throw new AssertionError("addUses on java.base from unnamed caller: expected IllegalCallerException");
+        } catch (IllegalCallerException expected) {
+            passed++;
+        }
+        try {
+            unnamed.addUses(null);
+            throw new AssertionError("addUses(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+
+        // canUse: always true on an unnamed module; false for an undeclared service on java.base.
+        check(unnamed.canUse(Runnable.class), "unnamed canUse(Runnable) true");
+        check(unnamed.canUse(String.class), "unnamed canUse(String) true");
+        check(!javaBase.canUse(Runnable.class), "java.base canUse(Runnable) false by default");
+        try {
+            unnamed.canUse(null);
+            throw new AssertionError("canUse(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+
+        // getAnnotations: empty for both java.base and the unnamed module.
+        check(javaBase.getAnnotations().length == 0, "java.base has no annotations");
+        check(unnamed.getAnnotations().length == 0, "unnamed module has no annotations");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testJavaBase();
         testUnnamedModule();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

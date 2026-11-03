@@ -8,6 +8,7 @@
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
@@ -16,6 +17,9 @@ import java.util.function.UnaryOperator;
 import java.util.stream.BaseStream;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 public class StreamTest {
@@ -190,12 +194,42 @@ public class StreamTest {
         check(collected3.equals(List.of(1, 2, 3)), "collect 3-arg");
     }
 
+    // ===================== 黑盒 / 补测（tranche-8 未覆盖方法） =====================
+    static void testBlackBox() {
+        // mapToDouble / mapToLong
+        check(Stream.of("1.0", "2.0").mapToDouble(Double::parseDouble).sum() == 3.0,
+              "mapToDouble parse");
+        check(Stream.of("1", "2").mapToLong(Long::parseLong).sum() == 3L, "mapToLong parse");
+        check(Stream.of(1, 2, 3).mapToLong(Integer::longValue).sum() == 6L, "mapToLong unbox");
+        check(Stream.of(1, 2, 3).mapToDouble(Integer::doubleValue).sum() == 6.0, "mapToDouble unbox");
+
+        // flatMapToInt / flatMapToLong / flatMapToDouble
+        check(Arrays.equals(Stream.of(1, 2).flatMapToInt(x -> IntStream.of(x, x * 10)).toArray(),
+                            new int[]{1, 10, 2, 20}), "flatMapToInt");
+        check(Stream.of(1, 2).flatMapToLong(x -> LongStream.of(x, x * 10L)).sum() == 33L,
+              "flatMapToLong");
+        check(Stream.of(1.0, 2.0).flatMapToDouble(x -> DoubleStream.of(x, x * 10.0)).sum() == 33.0,
+              "flatMapToDouble");
+
+        // mapMultiToInt / mapMultiToLong / mapMultiToDouble（每元素展开多个）
+        check(Stream.of(1, 2).mapMultiToInt((x, sink) -> { sink.accept(x); sink.accept(x * 10); }).sum() == 33,
+              "mapMultiToInt");
+        check(Stream.of(1, 2).mapMultiToLong((x, sink) -> { sink.accept(x); sink.accept(x * 10L); }).sum() == 33L,
+              "mapMultiToLong");
+        check(Stream.of(1.0, 2.0).mapMultiToDouble((x, sink) -> { sink.accept(x); sink.accept(x * 10.0); }).sum() == 33.0,
+              "mapMultiToDouble");
+        // mapMultiToInt 零展开 -> 空流
+        check(Stream.of(1, 2).mapMultiToInt((x, sink) -> {}).count() == 0L,
+              "mapMultiToInt zero emission");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testFactories();
         testLazinessAndShortCircuit();
         testIntermediateOps();
         testTerminalOps();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

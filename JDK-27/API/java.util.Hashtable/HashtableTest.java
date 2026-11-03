@@ -167,6 +167,40 @@ public class HashtableTest {
         check(!a.equals(b), "!equals different content");
     }
 
+    static void testBlackBox() {
+        Hashtable<String, Integer> a = new Hashtable<>(16, 0.75f);
+        a.put("x", 1);
+        check(a.get("x") == 1, "ctor (int,float) works");
+        Hashtable<String, Integer> b = new Hashtable<>(8);
+        b.put("y", 2);
+        check(b.get("y") == 2, "ctor (int) works");
+
+        Hashtable<String, Integer> src = new Hashtable<>();
+        src.put("a", 1);
+        src.put("b", 2);
+        Hashtable<String, Integer> dest = new Hashtable<>();
+        dest.putAll(src);
+        check(dest.equals(src) && dest.size() == 2, "putAll copies");
+
+        // toString renders "{key=value, ...}" containing each mapping
+        String s = src.toString();
+        check(s.startsWith("{") && s.endsWith("}"), "toString wrapped in braces");
+        check(s.contains("a=1") && s.contains("b=2"), "toString contains mappings");
+
+        // rehash is protected; expose via a minimal subclass to assert it is callable and
+        // preserves all mappings.
+        class ExposedHashtable extends Hashtable<String, Integer> {
+            void rehashExposed() { rehash(); }
+        }
+        ExposedHashtable ht = new ExposedHashtable();
+        for (int i = 0; i < 100; i++) ht.put("k" + i, i);
+        ht.rehashExposed();
+        check(ht.size() == 100, "rehash preserves size");
+        boolean allPresent = true;
+        for (int i = 0; i < 100; i++) allPresent &= ht.get("k" + i) == i;
+        check(allPresent, "rehash preserves all mappings");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBasicContract();
@@ -174,6 +208,7 @@ public class HashtableTest {
         testContainsAndEnumeration();
         testDefaultMethodsAndViews();
         testEqualsHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

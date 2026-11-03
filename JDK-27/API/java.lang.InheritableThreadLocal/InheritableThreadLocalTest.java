@@ -7,6 +7,11 @@
 public class InheritableThreadLocalTest {
     static int passed;
 
+    // Exposes the protected childValue() so we can assert the default identity behavior.
+    static class DefaultITL extends InheritableThreadLocal<String> {
+        String child(String parentValue) { return childValue(parentValue); }
+    }
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
@@ -50,11 +55,20 @@ public class InheritableThreadLocalTest {
               "InheritableThreadLocal extends ThreadLocal");
     }
 
+    // ---- Part 2b: black-box for the default childValue(Object) ----
+    static void testBlackBox() {
+        DefaultITL itl = new DefaultITL();
+        String parent = "parent-value";
+        check(parent == itl.child(parent), "default childValue returns the parent value unchanged");
+        check("x" == itl.child("x"), "default childValue is identity for any value");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testIsThreadLocal();
         testInheritance();
         testChildValueOverride();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

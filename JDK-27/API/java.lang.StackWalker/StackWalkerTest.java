@@ -62,12 +62,16 @@ public class StackWalkerTest {
         }
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testWalk();
         testForEach();
         testGetCallerClass();
         testInstances();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -156,13 +156,17 @@ public class OptionalTest {
         check(Optional.empty().toString().equals("Optional.empty"), "toString empty");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testCreation();
         testGetOrElse();
         testMonadic();
         testOrStreamIfPresentOrElse();
         testIfPresentEqualsToString();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

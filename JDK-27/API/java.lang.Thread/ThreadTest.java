@@ -9,6 +9,14 @@ import java.lang.reflect.Modifier;
 public class ThreadTest {
     static int passed;
 
+    // Exposes the protected 5-arg constructor and the protected final clone().
+    static class T extends Thread {
+        T(ThreadGroup g, Runnable r, String name, long stackSize, boolean inherit) {
+            super(g, r, name, stackSize, inherit);
+        }
+        Object doClone() throws CloneNotSupportedException { return clone(); }
+    }
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
@@ -139,6 +147,73 @@ public class ThreadTest {
         }
     }
 
+    // ---- Part 2b: black-box for the previously uncovered Thread methods ----
+    static void testBlackBox() throws Exception {
+        Thread current = Thread.currentThread();
+
+        // activeCount / enumerate (static)
+        check(Thread.activeCount() >= 1, "activeCount >= 1");
+        Thread[] arr = new Thread[Thread.activeCount() + 8];
+        int n = Thread.enumerate(arr);
+        check(n >= 1, "enumerate returns >= 1 thread");
+
+        // getStackTrace
+        StackTraceElement[] st = current.getStackTrace();
+        check(st != null && st.length > 0, "getStackTrace non-empty");
+
+        // dumpStack (prints to stderr, must not throw) and checkAccess (no SM -> no-op)
+        Thread.dumpStack();
+        passed++;
+        current.checkAccess();
+        passed++;
+
+        // threadId / toString
+        check(current.threadId() > 0, "threadId positive");
+        String s = current.toString();
+        check(s.startsWith("Thread[") && s.contains(current.getName()), "toString format");
+
+        // setContextClassLoader roundtrip (restored in finally)
+        ClassLoader origCl = current.getContextClassLoader();
+        try {
+            ClassLoader custom = new ClassLoader(ClassLoader.getSystemClassLoader()) { };
+            current.setContextClassLoader(custom);
+            check(current.getContextClassLoader() == custom, "setContextClassLoader sets");
+            current.setContextClassLoader(origCl);
+            check(current.getContextClassLoader() == origCl, "setContextClassLoader restored");
+        } finally {
+            current.setContextClassLoader(origCl);
+        }
+
+        // (ThreadGroup, Runnable) and (ThreadGroup, String) constructors
+        ThreadGroup g = new ThreadGroup("bb-group");
+        Thread t1 = new Thread(g, () -> {});
+        check(t1.getThreadGroup() == g, "Thread(ThreadGroup,Runnable) group");
+        Thread t2 = new Thread(g, "named-in-group");
+        check(t2.getThreadGroup() == g && "named-in-group".equals(t2.getName()),
+              "Thread(ThreadGroup,String)");
+
+        // Protected 5-arg constructor via subclass.
+        T t3 = new T(g, () -> {}, "five-arg", 0L, true);
+        check("five-arg".equals(t3.getName()) && t3.getThreadGroup() == g,
+              "5-arg constructor sets name and group");
+
+        // clone() is protected final and always throws CloneNotSupportedException.
+        try {
+            t3.doClone();
+            throw new AssertionError("Thread.clone: expected CloneNotSupportedException");
+        } catch (CloneNotSupportedException expected) {
+            passed++;
+        }
+
+        // startVirtualThread: returns a started virtual thread.
+        final boolean[] ran = {false};
+        Thread vt = Thread.startVirtualThread(() -> ran[0] = true);
+        vt.join();
+        check(ran[0], "virtual thread ran");
+        check(vt.isVirtual(), "isVirtual true");
+        check(vt.getState() == Thread.State.TERMINATED, "virtual thread terminated");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testCurrentAndFields();
@@ -150,6 +225,7 @@ public class ThreadTest {
         testInterruptFlag();
         testSleepInterrupted();
         testHoldsLock();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

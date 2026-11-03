@@ -5,8 +5,10 @@
  */
 
 import java.math.RoundingMode;
+import java.text.FieldPosition;
 import java.text.NumberFormat;
 import java.text.ParseException;
+import java.text.ParsePosition;
 import java.util.Currency;
 import java.util.Locale;
 
@@ -126,6 +128,46 @@ public class NumberFormatTest {
         check(!a.equals(NumberFormat.getCurrencyInstance(US)), "number != currency");
     }
 
+    // Minimal concrete subclass to exercise the protected NumberFormat() constructor.
+    static class MinimalNumberFormat extends NumberFormat {
+        public StringBuffer format(double number, StringBuffer toAppendTo, FieldPosition pos) {
+            return toAppendTo.append("d:").append(number);
+        }
+        public StringBuffer format(long number, StringBuffer toAppendTo, FieldPosition pos) {
+            return toAppendTo.append("l:").append(number);
+        }
+        public Number parse(String source, ParsePosition parsePosition) {
+            parsePosition.setIndex(source.length());
+            return Long.valueOf(42L);
+        }
+    }
+
+    static void testBlackBox() {
+        MinimalNumberFormat mnf = new MinimalNumberFormat();
+        check(mnf != null, "protected constructor via subclass");
+        check("d:1.5".equals(mnf.format(1.5)), "subclass format(double)");
+        check("l:7".equals(mnf.format(7L)), "subclass format(long)");
+
+        ParsePosition pp = new ParsePosition(0);
+        Object n = mnf.parseObject("garbage", pp);
+        check(n instanceof Long && ((Long) n).longValue() == 42L, "subclass parseObject returns Number");
+        check(pp.getIndex() == "garbage".length(), "subclass parseObject advances position");
+
+        NumberFormat nf = NumberFormat.getNumberInstance(US);
+        nf.setMaximumIntegerDigits(4);
+        check(nf.getMaximumIntegerDigits() == 4, "setMaximumIntegerDigits/getMaximumIntegerDigits");
+        nf.setMinimumFractionDigits(3);
+        check(nf.getMinimumFractionDigits() == 3, "setMinimumFractionDigits/getMinimumFractionDigits");
+        check(!nf.isStrict(), "isStrict default false");
+        nf.setStrict(true);
+        check(nf.isStrict(), "setStrict(true)");
+
+        ParsePosition pp2 = new ParsePosition(0);
+        Object v = nf.parseObject("42", pp2);
+        check(v instanceof Number && ((Number) v).longValue() == 42L, "parseObject on real NumberFormat");
+        check(pp2.getIndex() == 2, "real parseObject position");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testFactoryFormats();
@@ -133,6 +175,7 @@ public class NumberFormatTest {
         testParse();
         testCurrencyAndRounding();
         testEqualsCloneHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

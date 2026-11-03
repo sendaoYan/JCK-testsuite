@@ -98,6 +98,36 @@ public class BreakIteratorTest {
         check(Arrays.equals(boundaries(clone, "abc"), new int[]{0, 1, 2, 3}), "clone produces same boundaries");
     }
 
+    // Minimal concrete subclass to exercise the protected BreakIterator() constructor
+    // and the non-abstract methods inherited from the abstract class.
+    static class MinimalBreakIterator extends BreakIterator {
+        public int first() { return BreakIterator.DONE; }
+        public int last() { return BreakIterator.DONE; }
+        public int next(int n) { return BreakIterator.DONE; }
+        public int next() { return BreakIterator.DONE; }
+        public int previous() { return BreakIterator.DONE; }
+        public int following(int offset) { return BreakIterator.DONE; }
+        public int current() { return 0; }
+        public CharacterIterator getText() { return null; }
+        public void setText(CharacterIterator newText) { }
+    }
+
+    static void testBlackBox() {
+        MinimalBreakIterator bi = new MinimalBreakIterator();
+        check(bi != null, "protected constructor via subclass");
+        check(bi.first() == BreakIterator.DONE, "subclass first()");
+        check(bi.last() == BreakIterator.DONE, "subclass last()");
+        check(bi.next() == BreakIterator.DONE, "subclass next()");
+        check(bi.next(2) == BreakIterator.DONE, "subclass next(int)");
+        check(bi.previous() == BreakIterator.DONE, "subclass previous()");
+        check(bi.following(0) == BreakIterator.DONE, "subclass following(int)");
+        check(bi.current() == 0, "subclass current()");
+        bi.setText("abc"); // non-abstract setText(String)
+        check(bi.getText() == null, "subclass getText()");
+        Object clone = bi.clone();
+        check(clone != null && clone.getClass() == MinimalBreakIterator.class, "clone of subclass");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testCharacterBoundaries();
@@ -106,6 +136,7 @@ public class BreakIteratorTest {
         testLineBoundaries();
         testNavigation();
         testTextAndClone();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -81,12 +81,16 @@ public class RuleBasedCollatorTest {
         check(!a.equals(d), "different rules not equal");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testRuleCompare();
         testInvalidRules();
         testCollationElementIterator();
         testContract();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

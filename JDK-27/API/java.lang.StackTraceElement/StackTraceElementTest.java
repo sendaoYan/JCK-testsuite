@@ -70,12 +70,16 @@ public class StackTraceElementTest {
         check(a.hashCode() == b.hashCode(), "equal elements have equal hashCode");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testGetters();
         testSevenArgConstructor();
         testToString();
         testEqualsHashCode();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

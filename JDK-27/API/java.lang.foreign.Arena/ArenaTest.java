@@ -78,12 +78,16 @@ public class ArenaTest {
         check(a.scope().isAlive(), "auto arena scope still alive");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testConfined();
         testGlobal();
         testShared();
         testAuto();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

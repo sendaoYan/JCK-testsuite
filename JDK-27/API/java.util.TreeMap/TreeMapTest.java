@@ -156,6 +156,83 @@ public class TreeMapTest {
         check(natural.containsKey("k") && natural.get("k") == null, "null value allowed");
     }
 
+    static void testBlackBox() {
+        // default-method style compute/replace/merge/putIfAbsent on TreeMap
+        TreeMap<String, Integer> m = new TreeMap<>();
+        check(m.putIfAbsent("a", 1) == null, "putIfAbsent absent inserts");
+        check(m.putIfAbsent("a", 9) == 1, "putIfAbsent present returns existing");
+        check(m.computeIfAbsent("b", k -> 2) == 2, "computeIfAbsent computes");
+        check(m.computeIfAbsent("b", k -> 99) == 2, "computeIfAbsent present no-op");
+        check(m.computeIfAbsent("c", k -> null) == null && !m.containsKey("c"),
+              "computeIfAbsent null result does not insert");
+        check(m.computeIfPresent("b", (k, v) -> v * 10) == 20, "computeIfPresent computes");
+        check(m.computeIfPresent("z", (k, v) -> 1) == null, "computeIfPresent absent no-op");
+        check(m.compute("b", (k, v) -> v + 1) == 21, "compute computes");
+        check(m.compute("d", (k, v) -> v == null ? 4 : v) == 4, "compute on absent");
+        check(m.merge("b", 9, Integer::sum) == 30, "merge combines");
+        check(m.merge("e", 5, Integer::sum) == 5, "merge absent inserts");
+        check(m.replace("a", 10) == 1 && m.get("a") == 10, "replace(K,V)");
+        check(m.replace("a", 10, 11) && m.get("a") == 11, "replace(K,old,new) matching");
+        check(!m.replace("a", 999, 1), "replace(K,old,new) non-matching");
+        m.replaceAll((k, v) -> v + 100);
+        check(m.get("a") == 111 && m.get("b") == 130, "replaceAll transforms");
+
+        // containsValue / floorEntry / navigableKeySet / putAll / entrySet / values / forEach
+        check(m.containsValue(111) && !m.containsValue(0), "containsValue");
+        check(m.floorEntry("b").getKey().equals("b"), "floorEntry exact");
+        check(m.floorEntry("a0").getKey().equals("a"), "floorEntry lower bound");
+
+        java.util.NavigableSet<String> nks = m.navigableKeySet();
+        check(nks.first().equals("a") && nks.last().equals("e"), "navigableKeySet first/last");
+        check(nks.remove("e") && !m.containsKey("e"), "navigableKeySet.remove reflects");
+
+        java.util.Map<String, Integer> src = new java.util.HashMap<>();
+        src.put("f", 6);
+        src.put("g", 7);
+        m.putAll(src);
+        check(m.get("f") == 6 && m.get("g") == 7, "putAll copies");
+
+        check(m.entrySet().size() == m.size(), "entrySet size");
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        m.forEach((k, v) -> keys.add(k));
+        check(keys.equals(new ArrayList<>(m.keySet())), "forEach covers all keys");
+        java.util.List<Integer> vals = new ArrayList<>(m.values());
+        java.util.List<String> ks = new ArrayList<>(m.keySet());
+        check(vals.size() == ks.size(), "values size matches keys");
+        for (int i = 0; i < ks.size(); i++) {
+            check(m.get(ks.get(i)).equals(vals.get(i)), "values order matches keys");
+        }
+
+        // putFirst / putLast always throw UnsupportedOperationException (sorted map)
+        expectThrows(() -> m.putFirst("z", 1), UnsupportedOperationException.class, "putFirst UOE");
+        expectThrows(() -> m.putLast("z", 1), UnsupportedOperationException.class, "putLast UOE");
+
+        // constructors from Map and SortedMap
+        java.util.Map<String, Integer> plain = new java.util.HashMap<>();
+        plain.put("b", 2);
+        plain.put("a", 1);
+        TreeMap<String, Integer> fromMap = new TreeMap<>(plain);
+        check(fromMap.firstKey().equals("a") && fromMap.lastKey().equals("b"), "ctor (Map) sorts");
+
+        java.util.SortedMap<String, Integer> sm = new TreeMap<>(Comparator.reverseOrder());
+        sm.put("a", 1);
+        sm.put("b", 2);
+        TreeMap<String, Integer> fromSorted = new TreeMap<>(sm);
+        check(fromSorted.firstKey().equals("b") && fromSorted.lastKey().equals("a"),
+              "ctor (SortedMap) preserves comparator");
+
+        // clone independent + equal; clear empties
+        TreeMap<String, Integer> orig = new TreeMap<>();
+        orig.put("x", 1);
+        @SuppressWarnings("unchecked")
+        TreeMap<String, Integer> cloned = (TreeMap<String, Integer>) orig.clone();
+        check(cloned != orig && cloned.equals(orig), "clone independent and equal");
+        cloned.put("y", 2);
+        check(orig.size() == 1, "clone structural independence");
+        orig.clear();
+        check(orig.isEmpty(), "clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testNaturalOrder();
@@ -163,6 +240,7 @@ public class TreeMapTest {
         testNavigable();
         testRangeViewsAndLinkage();
         testNullKeyRejection();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

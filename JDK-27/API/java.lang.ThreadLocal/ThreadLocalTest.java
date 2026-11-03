@@ -9,6 +9,11 @@ import java.lang.reflect.Method;
 public class ThreadLocalTest {
     static int passed;
 
+    // Exposes the protected initialValue() so we can assert the default null return.
+    static class DefaultTL extends ThreadLocal<String> {
+        String init() { return initialValue(); }
+    }
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
@@ -66,12 +71,18 @@ public class ThreadLocalTest {
         check(other[0] == null, "other thread sees null (isolated)");
     }
 
+    // ---- Part 2b: black-box for the default initialValue() ----
+    static void testBlackBox() {
+        check(new DefaultTL().init() == null, "default initialValue returns null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBasic();
         testInitialValueOverride();
         testWithInitial();
         testThreadIsolation();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

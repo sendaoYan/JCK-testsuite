@@ -7,6 +7,13 @@
 public class ThreadGroupTest {
     static int passed;
 
+    // Records the uncaught exception delivered to the group.
+    static class RecordingGroup extends ThreadGroup {
+        Throwable caught;
+        RecordingGroup(String name) { super(name); }
+        @Override public void uncaughtException(Thread t, Throwable e) { caught = e; }
+    }
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
@@ -92,6 +99,41 @@ public class ThreadGroupTest {
         check(g.getName() != null, "group still usable after destroy()");
     }
 
+    // ---- Part 2b: black-box for checkAccess/interrupt/uncaughtException ----
+    static void testBlackBox() throws Exception {
+        // checkAccess is a no-op when no SecurityManager is installed.
+        new ThreadGroup("bb-tg").checkAccess();
+        passed++;
+
+        // interrupt() interrupts every thread in the group.
+        ThreadGroup ig = new ThreadGroup("interrupt-group");
+        final boolean[] interrupted = {false};
+        Thread t = new Thread(ig, () -> {
+            try {
+                Thread.sleep(60_000);
+            } catch (InterruptedException e) {
+                interrupted[0] = true;
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        for (int i = 0; i < 10_000 && t.getState() != Thread.State.TIMED_WAITING; i++) {
+            Thread.yield();
+        }
+        ig.interrupt();
+        t.join();
+        check(interrupted[0], "ThreadGroup.interrupt() interrupts member threads");
+
+        // uncaughtException is the JVM hook invoked when a member thread dies
+        // with an uncaught exception; a recording subclass observes it.
+        RecordingGroup rg = new RecordingGroup("uncaught-group");
+        Thread t2 = new Thread(rg, () -> { throw new RuntimeException("boom"); });
+        t2.setDaemon(true);
+        t2.start();
+        t2.join();
+        check(rg.caught instanceof RuntimeException, "group.uncaughtException invoked on uncaught exception");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testCurrentGroup();
@@ -101,6 +143,7 @@ public class ThreadGroupTest {
         testDaemonFlag();
         testActiveGroupCountAndList();
         testDestroyEmpty();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

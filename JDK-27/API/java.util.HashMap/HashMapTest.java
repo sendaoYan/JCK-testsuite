@@ -195,12 +195,50 @@ public class HashMapTest {
         check(a.isEmpty() && a.size() == 0, "clear empties");
     }
 
+    static void testBlackBox() {
+        // capacity + load-factor constructors are callable and store mappings
+        HashMap<String, Integer> a = new HashMap<>(16, 0.75f);
+        a.put("x", 1);
+        check(a.get("x") == 1, "ctor (int,float) works");
+        HashMap<String, Integer> b = new HashMap<>(8);
+        b.put("y", 2);
+        check(b.get("y") == 2, "ctor (int) works");
+
+        // copy constructor + putAll populate independent content
+        HashMap<String, Integer> src = new HashMap<>();
+        src.put("a", 1);
+        src.put("b", 2);
+        HashMap<String, Integer> copy = new HashMap<>(src);
+        check(copy.equals(src) && copy.size() == 2, "ctor (Map) copies");
+        copy.put("c", 3);
+        check(src.size() == 2, "ctor (Map) independent");
+
+        HashMap<String, Integer> dest = new HashMap<>();
+        dest.putAll(src);
+        check(dest.equals(src) && dest.size() == 2, "putAll copies");
+
+        // clone produces shallow but structurally independent copy
+        HashMap<String, Integer> orig = new HashMap<>();
+        orig.put("k", 1);
+        @SuppressWarnings("unchecked")
+        HashMap<String, Integer> cloned = (HashMap<String, Integer>) orig.clone();
+        check(cloned != orig && cloned.equals(orig), "clone independent and equal");
+        cloned.put("k2", 2);
+        check(orig.size() == 1 && !orig.containsKey("k2"), "clone structural independence");
+
+        // newHashMap(int) static factory (JDK 19+)
+        HashMap<String, Integer> viaFactory = HashMap.newHashMap(16);
+        viaFactory.put("z", 9);
+        check(viaFactory.get("z") == 9, "newHashMap(int) factory");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testContractChain();
         testNullSemantics();
         testViewsAndFailFast();
         testEqualsHashCodeClearForEach();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

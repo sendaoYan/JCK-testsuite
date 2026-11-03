@@ -26,18 +26,30 @@
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.NavigableSet;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.Random;
+import java.util.SequencedCollection;
+import java.util.SequencedMap;
+import java.util.SequencedSet;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 public class CollectionsTest {
     static int passed;
@@ -244,6 +256,173 @@ public class CollectionsTest {
         check(lifo.peek() == 1, "asLifoQueue peek returns next");
     }
 
+    static void testBlackBox() {
+        // ---- checked* wrappers enforce runtime type checks ----
+        Collection<String> cc = Collections.checkedCollection(new ArrayList<>(), String.class);
+        cc.add("x");
+        check(cc.size() == 1 && cc.contains("x"), "checkedCollection accepts correct type");
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Collection rawCc = cc;
+        expect(ClassCastException.class, () -> rawCc.add(1), "checkedCollection rejects wrong type");
+
+        Set<String> cs = Collections.checkedSet(new HashSet<>(), String.class);
+        cs.add("x");
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Set rawCs = cs;
+        expect(ClassCastException.class, () -> rawCs.add(2), "checkedSet rejects wrong type");
+
+        Queue<String> cq = Collections.checkedQueue(new ArrayDeque<>(), String.class);
+        cq.offer("x");
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Queue rawCq = cq;
+        expect(ClassCastException.class, () -> rawCq.offer(3), "checkedQueue rejects wrong type");
+
+        SortedSet<String> css = Collections.checkedSortedSet(new TreeSet<>(), String.class);
+        css.add("a");
+        check(css.first().equals("a"), "checkedSortedSet accepts correct type");
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        SortedSet rawCss = css;
+        expect(ClassCastException.class, () -> rawCss.add(4), "checkedSortedSet rejects wrong type");
+
+        NavigableSet<String> cns = Collections.checkedNavigableSet(new TreeSet<>(), String.class);
+        cns.add("a");
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        NavigableSet rawCns = cns;
+        expect(ClassCastException.class, () -> rawCns.add(5), "checkedNavigableSet rejects wrong type");
+
+        Map<String, Integer> cm = Collections.checkedMap(new HashMap<>(), String.class, Integer.class);
+        cm.put("k", 1);
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Map rawCm = cm;
+        expect(ClassCastException.class, () -> rawCm.put(6, 1), "checkedMap rejects wrong key type");
+        expect(ClassCastException.class, () -> rawCm.put("k", "v"), "checkedMap rejects wrong value type");
+
+        SortedMap<String, Integer> csm = Collections.checkedSortedMap(new TreeMap<>(), String.class, Integer.class);
+        csm.put("a", 1);
+        check(csm.get("a") == 1, "checkedSortedMap accepts correct type");
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        SortedMap rawCsm = csm;
+        expect(ClassCastException.class, () -> rawCsm.put("b", "v"), "checkedSortedMap rejects wrong value type");
+
+        NavigableMap<String, Integer> cnm = Collections.checkedNavigableMap(new TreeMap<>(), String.class, Integer.class);
+        cnm.put("a", 1);
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        NavigableMap rawCnm = cnm;
+        expect(ClassCastException.class, () -> rawCnm.put(7, 1), "checkedNavigableMap rejects wrong key type");
+
+        // ---- empty sorted/navigable wrappers: empty + unmodifiable ----
+        SortedMap<Object, Object> esm = Collections.emptySortedMap();
+        check(esm.isEmpty() && esm.size() == 0, "emptySortedMap empty");
+        check(esm.comparator() == null, "emptySortedMap natural comparator null");
+        expect(UnsupportedOperationException.class, () -> esm.put("k", 1), "emptySortedMap.put UOE");
+
+        NavigableMap<Object, Object> enm = Collections.emptyNavigableMap();
+        check(enm.isEmpty() && enm.firstEntry() == null && enm.lastEntry() == null,
+              "emptyNavigableMap empty first/last null");
+        expect(UnsupportedOperationException.class, () -> enm.put("k", 1), "emptyNavigableMap.put UOE");
+
+        SortedSet<Object> ess = Collections.emptySortedSet();
+        check(ess.isEmpty() && ess.size() == 0, "emptySortedSet empty");
+        expect(UnsupportedOperationException.class, () -> ess.add("x"), "emptySortedSet.add UOE");
+
+        NavigableSet<Object> ens = Collections.emptyNavigableSet();
+        check(ens.isEmpty() && ens.size() == 0, "emptyNavigableSet empty");
+        check(ens.ceiling("a") == null && ens.floor("a") == null,
+              "emptyNavigableSet ceiling/floor null");
+        expect(NoSuchElementException.class, ens::first, "emptyNavigableSet.first NSEE");
+        expect(UnsupportedOperationException.class, () -> ens.add("x"), "emptyNavigableSet.add UOE");
+
+        // ---- newSequencedSetFromMap: SequencedSet view over a SequencedMap ----
+        SequencedMap<String, Boolean> backing = new LinkedHashMap<>();
+        SequencedSet<String> seqSet = Collections.newSequencedSetFromMap(backing);
+        check(seqSet.add("a") && seqSet.add("b"), "newSequencedSetFromMap add");
+        check(!seqSet.add("a"), "newSequencedSetFromMap duplicate rejected");
+        check(seqSet.size() == 2 && seqSet.contains("a"), "newSequencedSetFromMap content");
+        check(seqSet.remove("a") && !seqSet.contains("a"), "newSequencedSetFromMap remove");
+        seqSet.addFirst("z");
+        seqSet.addLast("w");
+        check(seqSet.getFirst().equals("z") && seqSet.getLast().equals("w"),
+              "newSequencedSetFromMap sequenced order");
+
+        // ---- synchronized* wrappers delegate read/write (mutable) ----
+        Collection<Integer> sc = Collections.synchronizedCollection(new ArrayList<>());
+        sc.add(1);
+        check(sc.contains(1) && sc.size() == 1, "synchronizedCollection delegates");
+
+        Set<Integer> ssync = Collections.synchronizedSet(new HashSet<>());
+        ssync.add(1);
+        check(ssync.contains(1), "synchronizedSet delegates");
+
+        Map<String, Integer> smsync = Collections.synchronizedMap(new HashMap<>());
+        smsync.put("k", 1);
+        check(smsync.get("k") == 1, "synchronizedMap delegates");
+
+        SortedMap<String, Integer> ssmsync = Collections.synchronizedSortedMap(new TreeMap<>());
+        ssmsync.put("b", 2);
+        ssmsync.put("a", 1);
+        check(ssmsync.firstKey().equals("a") && ssmsync.get("b") == 2, "synchronizedSortedMap delegates");
+
+        NavigableMap<String, Integer> snmsync = Collections.synchronizedNavigableMap(new TreeMap<>());
+        snmsync.put("a", 1);
+        check(snmsync.firstKey().equals("a"), "synchronizedNavigableMap delegates");
+
+        SortedSet<Integer> sssync = Collections.synchronizedSortedSet(new TreeSet<>());
+        sssync.add(2);
+        sssync.add(1);
+        check(sssync.first() == 1, "synchronizedSortedSet delegates");
+
+        NavigableSet<Integer> snssync = Collections.synchronizedNavigableSet(new TreeSet<>());
+        snssync.add(5);
+        check(snssync.first() == 5, "synchronizedNavigableSet delegates");
+
+        // ---- unmodifiable* wrappers: read works, write throws UOE ----
+        Collection<Integer> uc = Collections.unmodifiableCollection(new ArrayList<>(Arrays.asList(1, 2)));
+        check(uc.size() == 2 && uc.contains(1), "unmodifiableCollection read");
+        expect(UnsupportedOperationException.class, () -> uc.add(3), "unmodifiableCollection.add UOE");
+        expect(UnsupportedOperationException.class, uc::clear, "unmodifiableCollection.clear UOE");
+
+        Set<Integer> us = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(1, 2)));
+        expect(UnsupportedOperationException.class, () -> us.add(3), "unmodifiableSet.add UOE");
+
+        SortedMap<String, Integer> treeBase = new TreeMap<>();
+        treeBase.put("a", 1);
+        SortedMap<String, Integer> usm = Collections.unmodifiableSortedMap(treeBase);
+        check(usm.get("a") == 1 && usm.firstKey().equals("a"), "unmodifiableSortedMap read");
+        expect(UnsupportedOperationException.class, () -> usm.put("b", 2), "unmodifiableSortedMap.put UOE");
+
+        NavigableMap<String, Integer> navBase = new TreeMap<>();
+        navBase.put("a", 1);
+        NavigableMap<String, Integer> unm = Collections.unmodifiableNavigableMap(navBase);
+        check(unm.firstKey().equals("a"), "unmodifiableNavigableMap read");
+        expect(UnsupportedOperationException.class, () -> unm.put("b", 2), "unmodifiableNavigableMap.put UOE");
+
+        SortedSet<Integer> sortedBase = new TreeSet<>(Arrays.asList(1, 2));
+        SortedSet<Integer> uss = Collections.unmodifiableSortedSet(sortedBase);
+        check(uss.first() == 1, "unmodifiableSortedSet read");
+        expect(UnsupportedOperationException.class, () -> uss.add(3), "unmodifiableSortedSet.add UOE");
+
+        NavigableSet<Integer> navSetBase = new TreeSet<>(Arrays.asList(1, 2));
+        NavigableSet<Integer> uns = Collections.unmodifiableNavigableSet(navSetBase);
+        check(uns.first() == 1, "unmodifiableNavigableSet read");
+        expect(UnsupportedOperationException.class, () -> uns.add(3), "unmodifiableNavigableSet.add UOE");
+
+        SequencedCollection<Integer> seqCollBase = new ArrayList<>(Arrays.asList(1, 2, 3));
+        SequencedCollection<Integer> usqc = Collections.unmodifiableSequencedCollection(seqCollBase);
+        check(usqc.getFirst() == 1 && usqc.getLast() == 3, "unmodifiableSequencedCollection read");
+        expect(UnsupportedOperationException.class, () -> usqc.add(4), "unmodifiableSequencedCollection.add UOE");
+
+        SequencedMap<String, Integer> seqMapBase = new LinkedHashMap<>();
+        seqMapBase.put("a", 1);
+        SequencedMap<String, Integer> usqm = Collections.unmodifiableSequencedMap(seqMapBase);
+        check(usqm.firstEntry().getKey().equals("a"), "unmodifiableSequencedMap read");
+        expect(UnsupportedOperationException.class, () -> usqm.put("b", 2), "unmodifiableSequencedMap.put UOE");
+
+        SequencedSet<Integer> seqSetBase = new LinkedHashSet<>(Arrays.asList(1, 2));
+        SequencedSet<Integer> usqs = Collections.unmodifiableSequencedSet(seqSetBase);
+        check(usqs.getFirst() == 1, "unmodifiableSequencedSet read");
+        expect(UnsupportedOperationException.class, () -> usqs.add(3), "unmodifiableSequencedSet.add UOE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSortBinarySearch();
@@ -254,6 +433,7 @@ public class CollectionsTest {
         testUnmodifiable();
         testEmptySingleton();
         testEnumerationListNewSetAsLifo();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

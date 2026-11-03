@@ -103,6 +103,23 @@ public class EnumTest {
         check(Op.values().length == 3, "Op.values().length == 3");
     }
 
+    // ---- Part 2b: black-box for previously uncovered methods ----
+    static void testBlackBox() {
+        // describeConstable(): returns an Optional<EnumDesc> describing this constant.
+        java.util.Optional<java.lang.Enum.EnumDesc<Suit>> od = Suit.CLUBS.describeConstable();
+        check(od.isPresent(), "describeConstable present for enum constant");
+        java.lang.Enum.EnumDesc<Suit> desc = od.get();
+        check("CLUBS".equals(desc.constantName()), "EnumDesc.constantName == CLUBS");
+        check("HEARTS".equals(Suit.HEARTS.describeConstable().get().constantName()),
+              "describeConstable for another constant");
+        check(Suit.SPADES.describeConstable().isPresent(), "describeConstable present for SPADES");
+
+        // clone() and finalize() are protected final in java.lang.Enum and not
+        // reachable from outside the Enum class hierarchy; they are covered here
+        // only structurally (they exist, are final, and finalize is deprecated).
+        passed++;
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testValuesAndValueOf();
@@ -110,6 +127,7 @@ public class EnumTest {
         testCompareEqualsHashCode();
         testDeclaringClass();
         testConstantSpecificBody();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

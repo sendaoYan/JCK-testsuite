@@ -187,6 +187,43 @@ public class LinkedListTest {
         expect(ConcurrentModificationException.class, d2::next, "descendingIterator fail-fast");
     }
 
+    static void testBlackBox() {
+        LinkedList<Integer> list = new LinkedList<>(Arrays.asList(1, 2, 3));
+
+        // toArray() and toArray(T[])
+        check(Arrays.equals(list.toArray(), new Object[]{1, 2, 3}), "toArray()");
+        check(Arrays.equals(list.toArray(new Integer[0]), new Integer[]{1, 2, 3}), "toArray(T[])");
+        Integer[] padded = list.toArray(new Integer[5]);
+        check(padded.length == 5 && padded[0] == 1 && padded[3] == null, "toArray(T[]) pads null");
+
+        // reversed() is a reversed-ordered, live view
+        java.util.Deque<Integer> rev = list.reversed();
+        check(new java.util.ArrayList<>(rev).equals(Arrays.asList(3, 2, 1)), "reversed() order");
+        check(rev.getFirst() == 3 && rev.getLast() == 1, "reversed() Deque first/last");
+        rev.addFirst(9);
+        check(list.getLast() == 9, "reversed() view reflects to backing list");
+
+        // spliterator reports ORDERED|SIZED|SUBSIZED and iterates in order
+        java.util.Spliterator<Integer> sp = list.spliterator();
+        check(sp.estimateSize() == 4, "spliterator estimateSize");
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED | java.util.Spliterator.SIZED
+                | java.util.Spliterator.SUBSIZED), "spliterator characteristics");
+        java.util.List<Integer> gathered = new java.util.ArrayList<>();
+        sp.forEachRemaining(gathered::add);
+        check(gathered.equals(Arrays.asList(1, 2, 3, 9)), "spliterator order");
+
+        // clone independent + equal
+        @SuppressWarnings("unchecked")
+        LinkedList<Integer> cloned = (LinkedList<Integer>) list.clone();
+        check(cloned != list && cloned.equals(list), "clone independent and equal");
+        cloned.add(100);
+        check(list.size() == 4 && !list.contains(100), "clone structural independence");
+
+        // clear empties
+        list.clear();
+        check(list.isEmpty() && list.size() == 0, "clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testContractChain();
@@ -196,6 +233,7 @@ public class LinkedListTest {
         testNullTolerance();
         testStackPushPop();
         testDescendingListIteratorFailFast();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

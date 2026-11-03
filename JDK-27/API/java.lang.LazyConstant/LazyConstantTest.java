@@ -43,10 +43,14 @@ public class LazyConstantTest {
         check(lc.toString() != null, "toString non-null");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testOfAndGet();
         testContract();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

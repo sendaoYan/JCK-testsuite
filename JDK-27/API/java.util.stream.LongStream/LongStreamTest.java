@@ -7,8 +7,14 @@
  */
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.LongSummaryStatistics;
+import java.util.OptionalLong;
+import java.util.PrimitiveIterator;
+import java.util.Spliterator;
 import java.util.function.LongFunction;
 import java.util.function.LongPredicate;
 import java.util.stream.BaseStream;
@@ -113,12 +119,71 @@ public class LongStreamTest {
               "empty stats min/max sentinel");
     }
 
+    // ===================== 黑盒 / 补测（tranche-8 未覆盖方法） =====================
+    static void testBlackBox() {
+        // takeWhile / dropWhile（默认方法）
+        check(Arrays.equals(LongStream.of(1L, 2L, 3L, 4L).takeWhile(x -> x < 3L).toArray(),
+                            new long[]{1L, 2L}), "takeWhile");
+        check(Arrays.equals(LongStream.of(1L, 2L, 3L, 4L).dropWhile(x -> x < 3L).toArray(),
+                            new long[]{3L, 4L}), "dropWhile");
+        check(LongStream.of(1L, 2L).takeWhile(x -> x > 0L).count() == 2L, "takeWhile all match");
+        check(LongStream.of(1L, 2L).dropWhile(x -> x > 0L).count() == 0L, "dropWhile all match");
+        check(LongStream.empty().takeWhile(x -> true).count() == 0L, "takeWhile empty");
+
+        // flatMap(LongFunction)
+        check(Arrays.equals(LongStream.of(1L, 2L).flatMap(x -> LongStream.of(x, x * 10L)).toArray(),
+                            new long[]{1L, 10L, 2L, 20L}), "flatMap");
+
+        // peek(LongConsumer)：每元素执行一次且流内容不变
+        final long[] peeked = {0L};
+        long sum = LongStream.of(1L, 2L, 3L).peek(x -> peeked[0]++).sum();
+        check(sum == 6L && peeked[0] == 3L, "peek side-effect per element");
+
+        // forEachOrdered(LongConsumer)：按 encounter order
+        List<Long> order = new ArrayList<>();
+        LongStream.of(3L, 1L, 2L).forEachOrdered(order::add);
+        check(order.equals(List.of(3L, 1L, 2L)), "forEachOrdered encounter order");
+
+        // iterator()：PrimitiveIterator.OfLong
+        PrimitiveIterator.OfLong it = LongStream.of(1L, 2L).iterator();
+        check(it.hasNext() && it.nextLong() == 1L && it.nextLong() == 2L && !it.hasNext(),
+              "iterator nextLong traversal");
+        // BaseStream 默认 iterator()：返回 Iterator<Long>
+        Iterator<Long> rawIt = ((BaseStream<Long, LongStream>) LongStream.of(1L, 2L)).iterator();
+        check(rawIt.hasNext() && rawIt.next() == 1L, "BaseStream iterator()");
+
+        // findAny()：存在且落在范围内；空流为空
+        OptionalLong fa = LongStream.of(1L, 2L, 3L).findAny();
+        check(fa.isPresent() && fa.getAsLong() >= 1L && fa.getAsLong() <= 3L, "findAny present");
+        check(!LongStream.empty().findAny().isPresent(), "empty findAny");
+
+        // parallel() / sequential()：协变返回 LongStream
+        LongStream p = LongStream.of(1L, 2L).parallel();
+        check(p.isParallel(), "parallel() covariant isParallel");
+        check(!p.sequential().isParallel(), "sequential() covariant");
+        check(p.sequential().sum() == 3L, "sequential() covariant still consumable");
+        // BaseStream 默认 parallel()/sequential()
+        BaseStream<Long, LongStream> bs = LongStream.of(1L, 2L);
+        check(!bs.isParallel(), "BaseStream default isParallel false");
+        check(bs.parallel().isParallel(), "BaseStream parallel()");
+        check(!bs.sequential().isParallel(), "BaseStream sequential()");
+
+        // spliterator()：Spliterator.OfLong 与 BaseStream 默认 Spliterator
+        Spliterator.OfLong spl = LongStream.of(1L, 2L, 3L).spliterator();
+        check(spl.estimateSize() == 3L, "spliterator estimateSize");
+        check(spl.hasCharacteristics(Spliterator.ORDERED), "spliterator ORDERED");
+        Spliterator<Long> rawSpl =
+            ((BaseStream<Long, LongStream>) LongStream.of(1L, 2L)).spliterator();
+        check(rawSpl != null, "BaseStream spliterator()");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testRange();
         testReductions();
         testIntermediateAndConversion();
         testSummaryStatistics();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

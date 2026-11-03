@@ -91,12 +91,27 @@ public class DateFormatSymbolsTest {
         check(!a.equals(d), "mutated clone not equal");
     }
 
+    static void testBlackBox() {
+        DateFormatSymbols us = new DateFormatSymbols(Locale.US);
+        check("January".equals(us.getMonths()[0]), "ctor(Locale.US) months[0]");
+        check("Sunday".equals(us.getWeekdays()[Calendar.SUNDAY]), "ctor(Locale.US) weekdays[SUNDAY]");
+        check("AD".equals(us.getEras()[1]), "ctor(Locale.US) eras[1]");
+        check("AM".equals(us.getAmPmStrings()[0]), "ctor(Locale.US) ampm[0]");
+
+        DateFormatSymbols def = new DateFormatSymbols();
+        check(def.getMonths() != null && def.getMonths().length == 13, "no-arg ctor months length 13");
+        check(def.getWeekdays() != null && def.getWeekdays().length == 8, "no-arg ctor weekdays length 8");
+        check(def.getEras() != null && def.getEras().length == 2, "no-arg ctor eras length 2");
+        check(def.getAmPmStrings() != null && def.getAmPmStrings().length == 2, "no-arg ctor ampm length 2");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testUsSymbols();
         testMutation();
         testZoneStrings();
         testEqualsCloneHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

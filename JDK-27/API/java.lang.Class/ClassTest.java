@@ -4,6 +4,9 @@
  * @run main ClassTest
  */
 
+import java.lang.constant.ConstantDesc;
+import java.lang.invoke.TypeDescriptor;
+import java.lang.reflect.AccessFlag;
 import java.lang.reflect.Modifier;
 
 public class ClassTest {
@@ -12,6 +15,7 @@ public class ClassTest {
     @interface Marker {}
 
     static class Member {}
+    public static class PublicMember {}
     static interface Iface extends Runnable {}
 
     static int passed;
@@ -174,6 +178,133 @@ public class ClassTest {
         check(!Member.class.isSynthetic(), "member not synthetic");
     }
 
+    // ---- Part 2b: black-box for previously uncovered methods ----
+    static void testBlackBox() throws Exception {
+        // accessFlags(): Set<AccessFlag>
+        check(String.class.accessFlags().contains(AccessFlag.PUBLIC), "String accessFlags PUBLIC");
+        check(String.class.accessFlags().contains(AccessFlag.FINAL), "String accessFlags FINAL");
+        check(int.class.accessFlags().contains(AccessFlag.PUBLIC), "int accessFlags PUBLIC");
+        check(Runnable.class.accessFlags().contains(AccessFlag.INTERFACE), "Runnable accessFlags INTERFACE");
+
+        // arrayType() / componentType() (Class view + TypeDescriptor.OfField view)
+        check(int.class.arrayType() == int[].class, "int.arrayType() == int[]");
+        check(String.class.arrayType() == String[].class, "String.arrayType() == String[]");
+        check(int[].class.arrayType() == int[][].class, "int[].arrayType() == int[][]");
+        check(int[].class.componentType() == int.class, "int[].componentType() == int");
+        check(int.class.componentType() == null, "primitive componentType() == null");
+        try {
+            void.class.arrayType();
+            throw new AssertionError("void.arrayType(): expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException expected) {
+            passed++;
+        }
+        TypeDescriptor.OfField<?> tf = String[].class;
+        check(tf.componentType() == String.class, "OfField.componentType()");
+        check(tf.arrayType() == String[][].class, "OfField.arrayType()");
+
+        // desiredAssertionStatus(): deterministic; primitives never enable assertions
+        check(!int.class.desiredAssertionStatus(), "int desiredAssertionStatus false");
+        check(String.class.desiredAssertionStatus() == String.class.desiredAssertionStatus(),
+              "desiredAssertionStatus stable");
+
+        // forPrimitiveName()
+        check(Class.forPrimitiveName("int") == int.class, "forPrimitiveName(int)");
+        check(Class.forPrimitiveName("void") == void.class, "forPrimitiveName(void)");
+        check(Class.forPrimitiveName("boolean") == boolean.class, "forPrimitiveName(boolean)");
+        check(Class.forPrimitiveName("double") == double.class, "forPrimitiveName(double)");
+        check(Class.forPrimitiveName("java.lang.String") == null, "forPrimitiveName(non-primitive) == null");
+        try {
+            Class.forPrimitiveName(null);
+            throw new AssertionError("forPrimitiveName(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+
+        // getAnnotatedSuperclass / getAnnotatedInterfaces
+        check(Integer.class.getAnnotatedSuperclass().getType() == Number.class,
+              "Integer annotated superclass is Number");
+        check(Object.class.getAnnotatedSuperclass() == null, "Object annotated superclass null");
+        check(int.class.getAnnotatedSuperclass() == null, "primitive annotated superclass null");
+        check(Runnable.class.getAnnotatedInterfaces().length == 0,
+              "Runnable has no annotated interfaces");
+        check(Iface.class.getAnnotatedInterfaces().length == 1
+              && Iface.class.getAnnotatedInterfaces()[0].getType() == Runnable.class,
+              "Iface annotated interface is Runnable");
+
+        // getClasses(): public member classes (including inherited)
+        boolean foundPublicMember = false;
+        for (Class<?> mc : ClassTest.class.getClasses()) if (mc == PublicMember.class) foundPublicMember = true;
+        check(foundPublicMember, "getClasses includes PublicMember");
+
+        // getDeclaredAnnotationsByType(): repeatable-annotation-aware lookup
+        check(Override.class.getDeclaredAnnotationsByType(java.lang.annotation.Target.class).length == 1,
+              "Override has one @Target");
+        check(String.class.getDeclaredAnnotationsByType(Deprecated.class).length == 0,
+              "String has no @Deprecated");
+
+        // getEnclosingMethod / getEnclosingConstructor
+        class LocalInBlackBox {}
+        check(LocalInBlackBox.class.getEnclosingMethod() != null, "local class has enclosing method");
+        check("testBlackBox".equals(LocalInBlackBox.class.getEnclosingMethod().getName()),
+              "enclosing method name is testBlackBox");
+        check(LocalInBlackBox.class.getEnclosingConstructor() == null, "local class has no enclosing ctor");
+        check(Member.class.getEnclosingMethod() == null, "member class has no enclosing method");
+        check(Member.class.getEnclosingConstructor() == null, "member class has no enclosing ctor");
+
+        // nest: getNestHost / getNestMembers / isNestmateOf
+        check(String.class.getNestHost() == String.class, "String nest host is itself");
+        check(Member.class.getNestHost() == ClassTest.class, "Member nest host is ClassTest");
+        check(int.class.getNestHost() == int.class, "primitive nest host is itself");
+        check(Member.class.isNestmateOf(ClassTest.class), "Member is nestmate of ClassTest");
+        check(ClassTest.class.isNestmateOf(Member.class), "ClassTest is nestmate of Member");
+        check(!String.class.isNestmateOf(Integer.class), "String not nestmate of Integer");
+        check(int.class.isNestmateOf(int.class), "primitive nestmate of itself");
+        check(!int.class.isNestmateOf(long.class), "different primitives not nestmates");
+        check(int.class.getNestMembers().length == 1 && int.class.getNestMembers()[0] == int.class,
+              "primitive nest members == {this}");
+        boolean foundMemberNest = false;
+        for (Class<?> c : ClassTest.class.getNestMembers()) if (c == Member.class) foundMemberNest = true;
+        check(foundMemberNest, "ClassTest.getNestMembers includes Member");
+
+        // getPermittedSubclasses / isSealed (using the sealed java.lang.constant.ConstantDesc)
+        check(ConstantDesc.class.isSealed(), "ConstantDesc is sealed");
+        check(ConstantDesc.class.getPermittedSubclasses() != null
+              && ConstantDesc.class.getPermittedSubclasses().length > 0,
+              "ConstantDesc has permitted subclasses");
+        check(!String.class.isSealed(), "String is not sealed");
+        check(String.class.getPermittedSubclasses() == null, "String permitted subclasses null");
+        check(!int.class.isSealed(), "primitive not sealed");
+        check(int.class.getPermittedSubclasses() == null, "primitive permitted subclasses null");
+
+        // getProtectionDomain / getResource / getSigners
+        check(String.class.getProtectionDomain() != null, "bootstrap class has ProtectionDomain");
+        check(String.class.getResource("Object.class") != null, "getResource resolves java/lang/Object.class");
+        check(String.class.getResource("jck/No/Such.class") == null, "getResource missing -> null");
+        check(String.class.getSigners() == null, "bootstrap class signers null");
+
+        // newInstance() (deprecated but still functional for public nullary ctor)
+        check(StringBuilder.class.newInstance() instanceof StringBuilder, "newInstance public nullary ctor");
+        try {
+            Runnable.class.newInstance();
+            throw new AssertionError("newInstance(interface): expected InstantiationException");
+        } catch (InstantiationException expected) {
+            passed++;
+        }
+
+        // toGenericString / toString
+        check(String.class.toGenericString().equals("public final class java.lang.String"),
+              "toGenericString for String");
+        check(int.class.toGenericString().equals("int"), "toGenericString for int");
+        check(int[].class.toGenericString().equals("int[]"), "toGenericString for int[]");
+        check(Runnable.class.toGenericString().contains("java.lang.Runnable")
+              && Runnable.class.toGenericString().contains("interface"),
+              "toGenericString for interface");
+        check(String.class.toString().equals("class java.lang.String"), "toString class");
+        check(int.class.toString().equals("int"), "toString primitive");
+        check(Runnable.class.toString().equals("interface java.lang.Runnable"), "toString interface");
+        check(int[].class.toString().equals("class [I"), "toString array");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPrimitive();
@@ -189,6 +320,7 @@ public class ClassTest {
         testModifiers();
         testDeclaredMembers();
         testClassKinds();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

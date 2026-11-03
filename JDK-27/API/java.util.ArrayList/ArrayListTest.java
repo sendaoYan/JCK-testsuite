@@ -225,6 +225,36 @@ public class ArrayListTest {
         check(!a.equals(b), "empty != non-empty");
     }
 
+    static void testBlackBox() {
+        ArrayList<String> list = new ArrayList<>();
+        list.addAll(Arrays.asList("a", "b", "c", "d"));
+
+        // ensureCapacity: no observable content change; still usable afterwards
+        list.ensureCapacity(100);
+        check(list.size() == 4 && list.equals(Arrays.asList("a", "b", "c", "d")),
+              "ensureCapacity preserves content");
+
+        // forEach in index order
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        list.forEach(seen::add);
+        check(seen.equals(Arrays.asList("a", "b", "c", "d")), "forEach index order");
+
+        // trimToSize shrinks backing storage; content is unchanged and list stays usable
+        list.trimToSize();
+        check(list.equals(Arrays.asList("a", "b", "c", "d")), "trimToSize preserves content");
+        list.add("e");
+        check(list.size() == 5 && list.get(4).equals("e"), "usable after trimToSize");
+
+        // removeRange is protected; expose via a minimal subclass to assert observable behavior
+        class ExposedArrayList extends ArrayList<String> {
+            ExposedArrayList(java.util.Collection<String> c) { super(c); }
+            void removeRangeExposed(int from, int to) { removeRange(from, to); }
+        }
+        ExposedArrayList ex = new ExposedArrayList(Arrays.asList("a", "b", "c", "d", "e"));
+        ex.removeRangeExposed(1, 4);
+        check(ex.equals(Arrays.asList("a", "e")), "removeRange removes [from,to) and shifts");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testConstruction();
@@ -236,6 +266,7 @@ public class ArrayListTest {
         testSubListView();
         testToArray();
         testEqualsHashCodeClear();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

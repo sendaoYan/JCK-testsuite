@@ -5,8 +5,10 @@
  */
 
 import java.text.DateFormat;
+import java.text.FieldPosition;
 import java.text.NumberFormat;
 import java.text.ParseException;
+import java.text.ParsePosition;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
@@ -122,11 +124,41 @@ public class DateFormatTest {
         check(!a.equals(new Object()), "!equals foreign object");
     }
 
+    // Minimal concrete subclass to exercise the protected DateFormat() constructor.
+    static class MinimalDateFormat extends DateFormat {
+        public StringBuffer format(Date date, StringBuffer toAppendTo, FieldPosition pos) {
+            return toAppendTo.append("d:").append(date.getTime());
+        }
+        public Date parse(String source, ParsePosition pos) {
+            pos.setIndex(source.length());
+            return new Date(42L);
+        }
+    }
+
+    static void testBlackBox() {
+        MinimalDateFormat mdf = new MinimalDateFormat();
+        check(mdf != null, "protected constructor via subclass");
+        check("d:0".equals(mdf.format(new Date(0L))), "subclass format");
+
+        ParsePosition pp = new ParsePosition(0);
+        Object parsed = mdf.parseObject("anything", pp);
+        check(parsed instanceof Date && ((Date) parsed).getTime() == 42L, "subclass parseObject returns Date");
+        check(pp.getIndex() == "anything".length(), "subclass parseObject advances position");
+
+        DateFormat real = DateFormat.getDateInstance(DateFormat.SHORT, US);
+        real.setTimeZone(UTC);
+        ParsePosition pp2 = new ParsePosition(0);
+        Object d = real.parseObject("1/1/70", pp2);
+        check(d instanceof Date && ((Date) d).getTime() == 0L, "parseObject on real DateFormat");
+        check(pp2.getIndex() == "1/1/70".length(), "real parseObject position");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testFactoryFormatStrings();
         testParseLenientAndProperties();
         testEqualsCloneHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -7,8 +7,14 @@
  */
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.IntSummaryStatistics;
+import java.util.Iterator;
 import java.util.List;
+import java.util.OptionalInt;
+import java.util.PrimitiveIterator;
+import java.util.Spliterator;
 import java.util.function.IntFunction;
 import java.util.function.IntPredicate;
 import java.util.stream.BaseStream;
@@ -114,12 +120,71 @@ public class IntStreamTest {
               "empty stats min/max sentinel");
     }
 
+    // ===================== 黑盒 / 补测（tranche-8 未覆盖方法） =====================
+    static void testBlackBox() {
+        // takeWhile / dropWhile（默认方法）
+        check(Arrays.equals(IntStream.of(1, 2, 3, 4).takeWhile(x -> x < 3).toArray(),
+                            new int[]{1, 2}), "takeWhile");
+        check(Arrays.equals(IntStream.of(1, 2, 3, 4).dropWhile(x -> x < 3).toArray(),
+                            new int[]{3, 4}), "dropWhile");
+        check(IntStream.of(1, 2).takeWhile(x -> x > 0).count() == 2L, "takeWhile all match");
+        check(IntStream.of(1, 2).dropWhile(x -> x > 0).count() == 0L, "dropWhile all match");
+        check(IntStream.empty().takeWhile(x -> true).count() == 0L, "takeWhile empty");
+
+        // flatMap(IntFunction)
+        check(Arrays.equals(IntStream.of(1, 2).flatMap(x -> IntStream.of(x, x * 10)).toArray(),
+                            new int[]{1, 10, 2, 20}), "flatMap");
+
+        // peek(IntConsumer)：每元素执行一次且流内容不变
+        final int[] peeked = {0};
+        int sum = IntStream.of(1, 2, 3).peek(x -> peeked[0]++).sum();
+        check(sum == 6 && peeked[0] == 3, "peek side-effect per element");
+
+        // forEachOrdered(IntConsumer)：按 encounter order
+        List<Integer> order = new ArrayList<>();
+        IntStream.of(3, 1, 2).forEachOrdered(order::add);
+        check(order.equals(List.of(3, 1, 2)), "forEachOrdered encounter order");
+
+        // iterator()：PrimitiveIterator.OfInt
+        PrimitiveIterator.OfInt it = IntStream.of(1, 2).iterator();
+        check(it.hasNext() && it.nextInt() == 1 && it.nextInt() == 2 && !it.hasNext(),
+              "iterator nextInt traversal");
+        // BaseStream 默认 iterator()：返回 Iterator<Integer>
+        Iterator<Integer> rawIt = ((BaseStream<Integer, IntStream>) IntStream.of(1, 2)).iterator();
+        check(rawIt.hasNext() && rawIt.next() == 1, "BaseStream iterator()");
+
+        // findAny()：存在且落在范围内；空流为空
+        OptionalInt fa = IntStream.of(1, 2, 3).findAny();
+        check(fa.isPresent() && fa.getAsInt() >= 1 && fa.getAsInt() <= 3, "findAny present");
+        check(!IntStream.empty().findAny().isPresent(), "empty findAny");
+
+        // parallel() / sequential()：协变返回 IntStream
+        IntStream p = IntStream.of(1, 2).parallel();
+        check(p.isParallel(), "parallel() covariant isParallel");
+        check(!p.sequential().isParallel(), "sequential() covariant");
+        check(p.sequential().sum() == 3, "sequential() covariant still consumable");
+        // BaseStream 默认 parallel()/sequential()
+        BaseStream<Integer, IntStream> bs = IntStream.of(1, 2);
+        check(!bs.isParallel(), "BaseStream default isParallel false");
+        check(bs.parallel().isParallel(), "BaseStream parallel()");
+        check(!bs.sequential().isParallel(), "BaseStream sequential()");
+
+        // spliterator()：Spliterator.OfInt 与 BaseStream 默认 Spliterator
+        Spliterator.OfInt spl = IntStream.of(1, 2, 3).spliterator();
+        check(spl.estimateSize() == 3L, "spliterator estimateSize");
+        check(spl.hasCharacteristics(Spliterator.ORDERED), "spliterator ORDERED");
+        Spliterator<Integer> rawSpl =
+            ((BaseStream<Integer, IntStream>) IntStream.of(1, 2)).spliterator();
+        check(rawSpl != null, "BaseStream spliterator()");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testRange();
         testReductions();
         testIntermediateAndConversion();
         testSummaryStatistics();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

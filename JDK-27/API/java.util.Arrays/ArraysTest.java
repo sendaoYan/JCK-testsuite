@@ -216,6 +216,71 @@ public class ArraysTest {
               "deepHashCode stable");
     }
 
+    static void testBlackBox() {
+        // parallelPrefix (full array + range) for int/long/double/Object
+        int[] ia = {1, 2, 3, 4, 5};
+        Arrays.parallelPrefix(ia, (a, b) -> a + b);
+        check(Arrays.equals(ia, new int[]{1, 3, 6, 10, 15}), "parallelPrefix(int[], op) cumulative sum");
+
+        int[] ir = {1, 2, 3, 4, 5};
+        Arrays.parallelPrefix(ir, 1, 4, (a, b) -> a + b);
+        check(Arrays.equals(ir, new int[]{1, 2, 5, 9, 5}), "parallelPrefix(int[], range, op)");
+
+        long[] la = {1, 2, 3, 4};
+        Arrays.parallelPrefix(la, (a, b) -> a * b);
+        check(Arrays.equals(la, new long[]{1, 2, 6, 24}), "parallelPrefix(long[], op) cumulative product");
+
+        long[] lr = {1, 2, 3, 4};
+        Arrays.parallelPrefix(lr, 0, 3, (a, b) -> a * b);
+        check(Arrays.equals(lr, new long[]{1, 2, 6, 4}), "parallelPrefix(long[], range, op)");
+
+        double[] da = {1.0, 2.0, 3.0, 4.0};
+        Arrays.parallelPrefix(da, (a, b) -> a + b);
+        check(Arrays.equals(da, new double[]{1.0, 3.0, 6.0, 10.0}), "parallelPrefix(double[], op)");
+
+        double[] dr = {1.0, 2.0, 3.0, 4.0};
+        Arrays.parallelPrefix(dr, 1, 3, (a, b) -> a + b);
+        check(Arrays.equals(dr, new double[]{1.0, 2.0, 5.0, 4.0}), "parallelPrefix(double[], range, op)");
+
+        String[] sa = {"a", "b", "c"};
+        Arrays.parallelPrefix(sa, (a, b) -> a + b);
+        check(Arrays.equals(sa, new String[]{"a", "ab", "abc"}), "parallelPrefix(Object[], op) concat");
+
+        String[] sr = {"a", "b", "c", "d"};
+        Arrays.parallelPrefix(sr, 1, 3, (a, b) -> a + b);
+        check(Arrays.equals(sr, new String[]{"a", "b", "bc", "d"}), "parallelPrefix(Object[], range, op)");
+
+        // spliterator over primitive/object array ranges
+        java.util.Spliterator.OfDouble dsp = Arrays.spliterator(new double[]{1, 2, 3, 4, 5}, 1, 4);
+        check(dsp.estimateSize() == 3, "spliterator(double[], range) estimateSize");
+        check(dsp.hasCharacteristics(java.util.Spliterator.ORDERED | java.util.Spliterator.SIZED
+                | java.util.Spliterator.SUBSIZED | java.util.Spliterator.IMMUTABLE),
+              "spliterator(double[], range) characteristics");
+        double[] dacc = new double[3];
+        final int[] di = {0};
+        dsp.forEachRemaining((double x) -> dacc[di[0]++] = x);
+        check(Arrays.equals(dacc, new double[]{2, 3, 4}), "spliterator(double[], range) elements");
+
+        java.util.Spliterator.OfLong lsp = Arrays.spliterator(new long[]{1, 2, 3, 4, 5}, 2, 5);
+        check(lsp.estimateSize() == 3, "spliterator(long[], range) estimateSize");
+        long[] lacc = new long[3];
+        final int[] li = {0};
+        lsp.forEachRemaining((long x) -> lacc[li[0]++] = x);
+        check(Arrays.equals(lacc, new long[]{3, 4, 5}), "spliterator(long[], range) elements");
+
+        java.util.Spliterator<String> osp = Arrays.spliterator(new String[]{"a", "b", "c", "d"}, 1, 3);
+        check(osp.estimateSize() == 2, "spliterator(Object[], range) estimateSize");
+        java.util.List<String> olist = new java.util.ArrayList<>();
+        osp.forEachRemaining(olist::add);
+        check(olist.equals(Arrays.asList("b", "c")), "spliterator(Object[], range) elements");
+
+        java.util.Spliterator<String> all = Arrays.spliterator(new String[]{"x", "y"});
+        check(all.estimateSize() == 2, "spliterator(Object[]) estimateSize");
+        java.util.List<String> allList = new java.util.ArrayList<>();
+        all.forEachRemaining(allList::add);
+        check(allList.equals(Arrays.asList("x", "y")), "spliterator(Object[]) elements");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSort();
@@ -225,6 +290,7 @@ public class ArraysTest {
         testSetAllStream();
         testAsList();
         testToStringHash();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

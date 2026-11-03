@@ -293,8 +293,8 @@ public class MatcherTest {
         check(m.toString().startsWith("java.util.regex.Matcher["), "toString prefix");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testFindLoop();
         testMatchesLookingAtFind();
         testGroupCountAndNamed();
@@ -308,6 +308,10 @@ public class MatcherTest {
         testQuoteReplacement();
         testResultsAndToMatchResult();
         testHasMatchAndToString();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -18,6 +18,13 @@ public class ThrowableTest {
         Custom(String m) { super(m); }
     }
 
+    // Exposes the protected (String, Throwable, boolean, boolean) constructor.
+    static class SuppressionThrowable extends Throwable {
+        SuppressionThrowable(String m, Throwable c, boolean enableSuppression, boolean writableStackTrace) {
+            super(m, c, enableSuppression, writableStackTrace);
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.Throwable");
@@ -144,6 +151,23 @@ public class ThrowableTest {
         check(bos.toString().contains("Throwable: x"), "printStackTrace writes to stream");
     }
 
+    // ---- Part 2b: black-box for the protected (String, Throwable, boolean, boolean) ctor ----
+    static void testBlackBox() {
+        Exception cause = new Exception("cause");
+
+        SuppressionThrowable e = new SuppressionThrowable("m", cause, false, false);
+        check("m".equals(e.getMessage()) && e.getCause() == cause, "4-arg ctor sets message and cause");
+        e.addSuppressed(new Exception("s"));
+        check(e.getSuppressed().length == 0, "enableSuppression=false -> addSuppressed is a no-op");
+        e.setStackTrace(new StackTraceElement[]{ new StackTraceElement("C", "m", "F.java", 1) });
+        check(e.getStackTrace().length == 0, "writableStackTrace=false -> stack trace stays empty");
+
+        SuppressionThrowable e2 = new SuppressionThrowable("m2", cause, true, true);
+        e2.addSuppressed(new Exception("s2"));
+        check(e2.getSuppressed().length == 1, "enableSuppression=true -> addSuppressed records");
+        check(e2.getStackTrace().length > 0, "writableStackTrace=true -> stack trace filled");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testConstructors();
@@ -152,6 +176,7 @@ public class ThrowableTest {
         testStackTrace();
         testToStringAndMessage();
         testPrintStackTrace();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

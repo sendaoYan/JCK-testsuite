@@ -41,9 +41,13 @@ public class RuntimePermissionTest {
         check(p.hashCode() == new RuntimePermission("getClassLoader").hashCode(), "hashCode");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testRuntimePermission();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

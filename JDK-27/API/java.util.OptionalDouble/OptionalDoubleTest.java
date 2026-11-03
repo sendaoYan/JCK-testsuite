@@ -127,12 +127,16 @@ public class OptionalDoubleTest {
         check(OptionalDouble.empty().toString().equals("OptionalDouble.empty"), "toString empty");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testOfGet();
         testOrElse();
         testIfPresentAndStream();
         testEqualsToString();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

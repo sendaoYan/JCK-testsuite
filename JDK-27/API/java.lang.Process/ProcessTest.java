@@ -23,14 +23,17 @@ public class ProcessTest {
     static class MockProcess extends Process {
         final ByteArrayOutputStream captured = new ByteArrayOutputStream();
         int exit;
+        boolean destroyed;
         MockProcess(int exit) { this.exit = exit; }
         public OutputStream getOutputStream() { return captured; }
         public InputStream getInputStream() { return new ByteArrayInputStream("in".getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
         public InputStream getErrorStream() { return new ByteArrayInputStream("err".getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
         public int waitFor() { return exit; }
         public int exitValue() { return exit; }
-        public void destroy() { exit = 0; }
+        public void destroy() { destroyed = true; exit = 0; }
         public void close() throws IOException { destroy(); }
+        @Override public long pid() { return 12345L; }
+        @Override public boolean supportsNormalTermination() { return true; }
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -79,12 +82,44 @@ public class ProcessTest {
         check(p.waitFor(java.time.Duration.ofMillis(100)), "waitFor(Duration) returns true when already exited");
     }
 
+    // ---- Part 2b: black-box for the previously uncovered Process methods ----
+    static void testBlackBox() throws Exception {
+        // getErrorStream: reads the error bytes directly.
+        MockProcess p = new MockProcess(0);
+        String err = new String(p.getErrorStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        check("err".equals(err), "getErrorStream returns the error bytes");
+
+        // destroyForcibly: delegates to destroy() and returns this.
+        MockProcess pf = new MockProcess(9);
+        check(pf.destroyForcibly() == pf, "destroyForcibly returns this");
+        check(pf.destroyed, "destroyForcibly invokes destroy()");
+
+        // pid / supportsNormalTermination (concrete members, overridden by the mock).
+        check(p.pid() == 12345L, "pid returns the mock pid");
+        check(p.supportsNormalTermination(), "supportsNormalTermination true");
+
+        // onExit: completes with this Process once waitFor() returns.
+        check(p.onExit().get() == p, "onExit completes with this Process");
+
+        // toHandle/info/children/descendants default to throwing UnsupportedOperationException
+        // for a subclass that does not provide a real process handle.
+        try { p.toHandle(); throw new AssertionError("toHandle default: expected UnsupportedOperationException"); }
+        catch (UnsupportedOperationException expected) { passed++; }
+        try { p.info(); throw new AssertionError("info default: expected UnsupportedOperationException"); }
+        catch (UnsupportedOperationException expected) { passed++; }
+        try { p.children(); throw new AssertionError("children default: expected UnsupportedOperationException"); }
+        catch (UnsupportedOperationException expected) { passed++; }
+        try { p.descendants(); throw new AssertionError("descendants default: expected UnsupportedOperationException"); }
+        catch (UnsupportedOperationException expected) { passed++; }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testReaders();
         testWriters();
         testExitAndAlive();
         testWaitForDuration();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

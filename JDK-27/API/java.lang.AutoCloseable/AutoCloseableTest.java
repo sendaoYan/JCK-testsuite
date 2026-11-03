@@ -61,10 +61,14 @@ public class AutoCloseableTest {
         throw new AssertionError("expected IOException from close()");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testCloseOrderAndOnce();
         testCloseThrows();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

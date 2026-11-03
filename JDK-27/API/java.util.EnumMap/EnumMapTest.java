@@ -153,6 +153,36 @@ public class EnumMapTest {
         check(map.isEmpty(), "clear");
     }
 
+    static void testBlackBox() {
+        // putAll copies all mappings from any Map with matching key type
+        EnumMap<Color, String> target = new EnumMap<>(Color.class);
+        target.put(Color.RED, "old");
+        Map<Color, String> src = new java.util.HashMap<>();
+        src.put(Color.GREEN, "green");
+        src.put(Color.BLUE, "blue");
+        src.put(Color.RED, "red");
+        target.putAll(src);
+        check(target.size() == 3, "putAll copies all mappings");
+        check(target.get(Color.RED).equals("red") && target.get(Color.GREEN).equals("green")
+              && target.get(Color.BLUE).equals("blue"), "putAll overwrites and inserts");
+        check(new ArrayList<>(target.keySet()).equals(Arrays.asList(Color.RED, Color.GREEN, Color.BLUE)),
+              "putAll keeps declaration order");
+
+        // hashCode follows the Map contract: equal maps have equal hashCode
+        EnumMap<Color, String> a = new EnumMap<>(Color.class);
+        a.put(Color.RED, "red");
+        a.put(Color.GREEN, "green");
+        a.put(Color.BLUE, "blue");
+        EnumMap<Color, String> b = new EnumMap<>(Color.class);
+        b.put(Color.BLUE, "blue");
+        b.put(Color.GREEN, "green");
+        b.put(Color.RED, "red");
+        check(a.equals(b), "equal EnumMaps are equal");
+        check(a.hashCode() == b.hashCode(), "equal EnumMaps have equal hashCode");
+        b.put(Color.BLUE, "changed");
+        check(!a.equals(b), "different content not equal");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testOrderAndOps();
@@ -160,6 +190,7 @@ public class EnumMapTest {
         testDefaultMethods();
         testConstructorsAndClone();
         testViews();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -99,12 +99,33 @@ public class DecimalFormatSymbolsTest {
         check(!a.equals(d), "mutated clone not equal");
     }
 
+    static void testBlackBox() {
+        DecimalFormatSymbols us = new DecimalFormatSymbols(Locale.US);
+        check(us.getDecimalSeparator() == '.', "ctor(Locale.US) decimal separator");
+        check(us.getGroupingSeparator() == ',', "ctor(Locale.US) grouping separator");
+        check(us.getZeroDigit() == '0', "ctor(Locale.US) zero digit");
+
+        DecimalFormatSymbols def = new DecimalFormatSymbols();
+        check(def.getDecimalSeparator() != 0, "no-arg ctor decimal separator set");
+        check(def.getGroupingSeparator() != 0, "no-arg ctor grouping separator set");
+        check(def.getInfinity() != null && def.getNaN() != null, "no-arg ctor infinity/NaN non-null");
+
+        DecimalFormatSymbols m = DecimalFormatSymbols.getInstance(US);
+        m.setDigit('D');
+        check(m.getDigit() == 'D', "setDigit/getDigit");
+        m.setPatternSeparator(':');
+        check(m.getPatternSeparator() == ':', "setPatternSeparator/getPatternSeparator");
+        m.setMonetaryGroupingSeparator(' ');
+        check(m.getMonetaryGroupingSeparator() == ' ', "setMonetaryGroupingSeparator/getMonetaryGroupingSeparator");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testUsSymbols();
         testMutation();
         testCurrency();
         testEqualsCloneHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

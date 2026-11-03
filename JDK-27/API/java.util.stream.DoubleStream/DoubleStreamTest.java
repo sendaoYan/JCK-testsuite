@@ -6,8 +6,14 @@
  */
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
+import java.util.Iterator;
 import java.util.List;
+import java.util.OptionalDouble;
+import java.util.PrimitiveIterator;
+import java.util.Spliterator;
 import java.util.function.DoubleFunction;
 import java.util.function.DoublePredicate;
 import java.util.stream.BaseStream;
@@ -105,11 +111,70 @@ public class DoubleStreamTest {
               "empty stats min/max sentinel");
     }
 
+    // ===================== 黑盒 / 补测（tranche-8 未覆盖方法） =====================
+    static void testBlackBox() {
+        // takeWhile / dropWhile（默认方法）
+        check(Arrays.equals(DoubleStream.of(1.0, 2.0, 3.0, 4.0).takeWhile(x -> x < 3.0).toArray(),
+                            new double[]{1.0, 2.0}), "takeWhile");
+        check(Arrays.equals(DoubleStream.of(1.0, 2.0, 3.0, 4.0).dropWhile(x -> x < 3.0).toArray(),
+                            new double[]{3.0, 4.0}), "dropWhile");
+        check(DoubleStream.of(1.0, 2.0).takeWhile(x -> x > 0.0).count() == 2L, "takeWhile all match");
+        check(DoubleStream.of(1.0, 2.0).dropWhile(x -> x > 0.0).count() == 0L, "dropWhile all match");
+        check(DoubleStream.empty().takeWhile(x -> true).count() == 0L, "takeWhile empty");
+
+        // flatMap(DoubleFunction)
+        check(Arrays.equals(DoubleStream.of(1.0, 2.0).flatMap(x -> DoubleStream.of(x, x * 10.0)).toArray(),
+                            new double[]{1.0, 10.0, 2.0, 20.0}), "flatMap");
+
+        // peek(DoubleConsumer)：每元素执行一次且流内容不变
+        final double[] peeked = {0.0};
+        double sum = DoubleStream.of(1.0, 2.0, 3.0).peek(x -> peeked[0]++).sum();
+        check(sum == 6.0 && peeked[0] == 3.0, "peek side-effect per element");
+
+        // forEachOrdered(DoubleConsumer)：按 encounter order
+        List<Double> order = new ArrayList<>();
+        DoubleStream.of(3.0, 1.0, 2.0).forEachOrdered(order::add);
+        check(order.equals(List.of(3.0, 1.0, 2.0)), "forEachOrdered encounter order");
+
+        // iterator()：PrimitiveIterator.OfDouble
+        PrimitiveIterator.OfDouble it = DoubleStream.of(1.0, 2.0).iterator();
+        check(it.hasNext() && it.nextDouble() == 1.0 && it.nextDouble() == 2.0 && !it.hasNext(),
+              "iterator nextDouble traversal");
+        // BaseStream 默认 iterator()：返回 Iterator<Double>
+        Iterator<Double> rawIt = ((BaseStream<Double, DoubleStream>) DoubleStream.of(1.0, 2.0)).iterator();
+        check(rawIt.hasNext() && rawIt.next() == 1.0, "BaseStream iterator()");
+
+        // findAny()：存在且落在范围内；空流为空
+        OptionalDouble fa = DoubleStream.of(1.0, 2.0, 3.0).findAny();
+        check(fa.isPresent() && fa.getAsDouble() >= 1.0 && fa.getAsDouble() <= 3.0, "findAny present");
+        check(!DoubleStream.empty().findAny().isPresent(), "empty findAny");
+
+        // parallel() / sequential()：协变返回 DoubleStream
+        DoubleStream p = DoubleStream.of(1.0, 2.0).parallel();
+        check(p.isParallel(), "parallel() covariant isParallel");
+        check(!p.sequential().isParallel(), "sequential() covariant");
+        check(p.sequential().sum() == 3.0, "sequential() covariant still consumable");
+        // BaseStream 默认 parallel()/sequential()
+        BaseStream<Double, DoubleStream> bs = DoubleStream.of(1.0, 2.0);
+        check(!bs.isParallel(), "BaseStream default isParallel false");
+        check(bs.parallel().isParallel(), "BaseStream parallel()");
+        check(!bs.sequential().isParallel(), "BaseStream sequential()");
+
+        // spliterator()：Spliterator.OfDouble 与 BaseStream 默认 Spliterator
+        Spliterator.OfDouble spl = DoubleStream.of(1.0, 2.0, 3.0).spliterator();
+        check(spl.estimateSize() == 3L, "spliterator estimateSize");
+        check(spl.hasCharacteristics(Spliterator.ORDERED), "spliterator ORDERED");
+        Spliterator<Double> rawSpl =
+            ((BaseStream<Double, DoubleStream>) DoubleStream.of(1.0, 2.0)).spliterator();
+        check(rawSpl != null, "BaseStream spliterator()");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testReductions();
         testIntermediateAndConversion();
         testSummaryStatistics();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

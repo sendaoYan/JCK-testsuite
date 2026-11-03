@@ -4,9 +4,13 @@
  * @run main SystemTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Properties;
 
 public class SystemTest {
     static int passed;
@@ -171,6 +175,59 @@ public class SystemTest {
         passed++;
     }
 
+    // ---- Part 2b: black-box for setIn/setOut/setProperties/load/loadLibrary/inheritedChannel ----
+    static void testBlackBox() throws Exception {
+        // setIn / setOut / setProperties roundtrips, always restored (finally-guarded).
+        java.io.InputStream origIn = System.in;
+        PrintStream origOut = System.out;
+        Properties origProps = System.getProperties();
+        try {
+            java.io.InputStream newIn = new ByteArrayInputStream(new byte[0]);
+            System.setIn(newIn);
+            check(System.in == newIn, "setIn sets System.in");
+            System.setIn(origIn);
+            check(System.in == origIn, "setIn restored");
+
+            PrintStream newOut = new PrintStream(new ByteArrayOutputStream());
+            System.setOut(newOut);
+            check(System.out == newOut, "setOut sets System.out");
+            System.setOut(origOut);
+            check(System.out == origOut, "setOut restored");
+
+            Properties newProps = new Properties();
+            newProps.setProperty("jck.sys.props", "hello");
+            System.setProperties(newProps);
+            check(System.getProperties() == newProps, "setProperties sets the properties object");
+            System.setProperties(origProps);
+            check(System.getProperties() == origProps, "setProperties restored");
+        } finally {
+            System.setIn(origIn);
+            System.setOut(origOut);
+            System.setProperties(origProps);
+        }
+
+        // inheritedChannel(): null or a Channel in a normal run; must not throw.
+        java.nio.channels.Channel ch = System.inheritedChannel();
+        check(ch == null || ch instanceof java.nio.channels.Channel,
+              "inheritedChannel returns null or a Channel");
+
+        // load / loadLibrary with a missing library -> UnsatisfiedLinkError.
+        try {
+            System.load("/jck/no/such/lib.so");
+            throw new AssertionError("System.load(missing): expected UnsatisfiedLinkError");
+        } catch (UnsatisfiedLinkError expected) {
+            passed++;
+        }
+        try {
+            System.loadLibrary("jck_no_such_lib_xyz");
+            throw new AssertionError("System.loadLibrary(missing): expected UnsatisfiedLinkError");
+        } catch (UnsatisfiedLinkError expected) {
+            passed++;
+        }
+
+        // System.exit(int) terminates the JVM, so it is intentionally not invoked.
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testStreams();
@@ -182,6 +239,7 @@ public class SystemTest {
         testTime();
         testLoggerAndMapLibraryName();
         testGC();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

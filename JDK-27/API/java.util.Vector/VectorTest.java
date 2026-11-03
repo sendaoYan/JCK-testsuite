@@ -183,6 +183,73 @@ public class VectorTest {
         expect(ConcurrentModificationException.class, it::next, "iterator fail-fast");
     }
 
+    static void testBlackBox() {
+        Vector<Integer> sized = new Vector<>(5);
+        sized.add(1);
+        check(sized.get(0) == 1, "ctor (int) works");
+
+        // containsAll
+        Vector<Integer> v = new Vector<>(Arrays.asList(1, 2, 3, 4));
+        check(v.containsAll(Arrays.asList(2, 4)), "containsAll true");
+        check(!v.containsAll(Arrays.asList(2, 9)), "containsAll false");
+
+        // forEach in index order
+        java.util.List<Integer> seen = new java.util.ArrayList<>();
+        v.forEach(seen::add);
+        check(seen.equals(Arrays.asList(1, 2, 3, 4)), "forEach index order");
+
+        // listIterator() and listIterator(index) traversal
+        java.util.ListIterator<Integer> li = v.listIterator();
+        check(li.next() == 1 && li.next() == 2, "listIterator() forward");
+        check(li.previous() == 2, "listIterator() previous");
+        java.util.ListIterator<Integer> li2 = v.listIterator(2);
+        check(li2.next() == 3, "listIterator(index) starts at index");
+
+        // sort / replaceAll
+        Vector<Integer> toSort = new Vector<>(Arrays.asList(3, 1, 2));
+        toSort.sort(java.util.Comparator.naturalOrder());
+        check(toSort.equals(Arrays.asList(1, 2, 3)), "sort natural");
+        toSort.replaceAll(x -> x * 10);
+        check(toSort.equals(Arrays.asList(10, 20, 30)), "replaceAll transforms");
+
+        // removeIf / removeAllElements / clear
+        Vector<Integer> r = new Vector<>(Arrays.asList(1, 2, 3, 4, 5, 6));
+        check(r.removeIf(x -> x % 2 == 0), "removeIf returns true");
+        check(r.equals(Arrays.asList(1, 3, 5)), "removeIf removed evens");
+        r.removeAllElements();
+        check(r.isEmpty() && r.size() == 0, "removeAllElements empties");
+        r.add(7);
+        check(r.size() == 1, "reusable after removeAllElements");
+        r.clear();
+        check(r.isEmpty(), "clear empties");
+
+        // removeRange is protected; expose via a minimal subclass
+        class ExposedVector extends Vector<Integer> {
+            ExposedVector(java.util.Collection<Integer> c) { super(c); }
+            void removeRangeExposed(int from, int to) { removeRange(from, to); }
+        }
+        ExposedVector ev = new ExposedVector(Arrays.asList(1, 2, 3, 4, 5));
+        ev.removeRangeExposed(1, 3);
+        check(ev.equals(Arrays.asList(1, 4, 5)), "removeRange removes [from,to)");
+
+        // clone independent + equal
+        Vector<Integer> orig = new Vector<>(Arrays.asList(1, 2, 3));
+        @SuppressWarnings("unchecked")
+        Vector<Integer> cloned = (Vector<Integer>) orig.clone();
+        check(cloned != orig && cloned.equals(orig), "clone independent and equal");
+        cloned.add(4);
+        check(orig.size() == 3, "clone structural independence");
+
+        // spliterator reports ORDERED|SIZED|SUBSIZED and iterates in order
+        java.util.Spliterator<Integer> sp = v.spliterator();
+        check(sp.estimateSize() == 4, "spliterator estimateSize");
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED | java.util.Spliterator.SIZED
+                | java.util.Spliterator.SUBSIZED), "spliterator characteristics");
+        java.util.List<Integer> gathered = new java.util.ArrayList<>();
+        sp.forEachRemaining(gathered::add);
+        check(gathered.equals(Arrays.asList(1, 2, 3, 4)), "spliterator order");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testCapacity();
@@ -193,6 +260,7 @@ public class VectorTest {
         testSetSize();
         testEqualsHashCodeSubList();
         testIteratorFailFast();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

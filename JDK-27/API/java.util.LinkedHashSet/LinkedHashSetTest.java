@@ -88,11 +88,34 @@ public class LinkedHashSetTest {
         check(!a.equals(b), "!equals different content");
     }
 
+    static void testBlackBox() {
+        LinkedHashSet<String> a = new LinkedHashSet<>(16, 0.75f);
+        a.add("x");
+        check(a.contains("x"), "ctor (int,float) works");
+        LinkedHashSet<String> b = new LinkedHashSet<>(8);
+        b.add("y");
+        check(b.contains("y"), "ctor (int) works");
+
+        LinkedHashSet<String> viaFactory = LinkedHashSet.newLinkedHashSet(8);
+        viaFactory.add("z");
+        check(viaFactory.contains("z"), "newLinkedHashSet(int) factory");
+
+        LinkedHashSet<String> s = new LinkedHashSet<>(Arrays.asList("a", "b", "c"));
+        java.util.Spliterator<String> sp = s.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED | java.util.Spliterator.DISTINCT),
+              "spliterator characteristics ORDERED|DISTINCT");
+        java.util.List<String> gathered = new java.util.ArrayList<>();
+        sp.forEachRemaining(gathered::add);
+        check(gathered.equals(Arrays.asList("a", "b", "c")), "spliterator preserves insertion order");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testInsertionOrderAndDedup();
         testSequencedOps();
         testEqualsHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

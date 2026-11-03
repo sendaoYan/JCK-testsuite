@@ -46,10 +46,38 @@ public class PackageTest {
         check(p.hashCode() == p.hashCode(), "hashCode stable");
     }
 
+    // ---- Part 2b: black-box for the previously uncovered Package query methods ----
+    static void testBlackBox() {
+        Package p = Object.class.getPackage(); // java.lang
+
+        // Manifest attribute getters are all absent for the bootstrap java.lang package.
+        check(p.getImplementationTitle() == null, "getImplementationTitle null");
+        check(p.getImplementationVersion() == null, "getImplementationVersion null");
+        check(p.getSpecificationVendor() == null, "getSpecificationVendor null");
+        check(p.getSpecificationVersion() == null, "getSpecificationVersion null");
+
+        // Annotation query methods on a package that carries no annotations.
+        check(p.getDeclaredAnnotations().length == 0, "getDeclaredAnnotations empty");
+        check(p.getAnnotationsByType(Deprecated.class).length == 0, "getAnnotationsByType empty");
+        check(p.getDeclaredAnnotationsByType(Deprecated.class).length == 0,
+              "getDeclaredAnnotationsByType empty");
+        check(p.getDeclaredAnnotation(Deprecated.class) == null, "getDeclaredAnnotation null");
+        check(!p.isAnnotationPresent(Deprecated.class), "isAnnotationPresent false");
+
+        // isCompatibleWith: java.lang has no spec version, so it must throw NumberFormatException.
+        try {
+            p.isCompatibleWith("1.0");
+            throw new AssertionError("isCompatibleWith(null specVersion): expected NumberFormatException");
+        } catch (NumberFormatException expected) {
+            passed++;
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPackage();
         testAttributes();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

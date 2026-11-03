@@ -148,6 +148,52 @@ public class TreeSetTest {
                      "comparator-order add null");
     }
 
+    static void testBlackBox() {
+        // addAll union
+        TreeSet<Integer> set = new TreeSet<>(Arrays.asList(1, 2, 3));
+        check(set.addAll(Arrays.asList(3, 4, 5)), "addAll returns true");
+        check(set.size() == 5 && set.first() == 1 && set.last() == 5, "addAll union");
+        check(!set.addAll(Arrays.asList(1, 2)), "addAll no-op returns false");
+
+        // isEmpty / clear / clone
+        check(!set.isEmpty(), "isEmpty non-empty");
+        @SuppressWarnings("unchecked")
+        TreeSet<Integer> cloned = (TreeSet<Integer>) set.clone();
+        check(cloned != set && cloned.equals(set), "clone independent and equal");
+        cloned.add(6);
+        check(set.size() == 5, "clone structural independence");
+        TreeSet<Integer> toClear = new TreeSet<>(set);
+        toClear.clear();
+        check(toClear.isEmpty() && toClear.size() == 0, "clear empties");
+
+        // ctor from SortedSet preserves comparator
+        java.util.SortedSet<Integer> rev = new TreeSet<>(Comparator.reverseOrder());
+        rev.add(1);
+        rev.add(2);
+        rev.add(3);
+        TreeSet<Integer> fromSorted = new TreeSet<>(rev);
+        check(fromSorted.first() == 3 && fromSorted.last() == 1, "ctor (SortedSet) preserves comparator");
+
+        // iterator iterates in sorted order
+        TreeSet<Integer> iter = new TreeSet<>(Arrays.asList(3, 1, 2));
+        java.util.Iterator<Integer> it = iter.iterator();
+        check(it.next() == 1 && it.next() == 2 && it.next() == 3 && !it.hasNext(),
+              "iterator sorted order");
+
+        // spliterator reports ORDERED|DISTINCT and iterates in sorted order
+        java.util.Spliterator<Integer> sp = iter.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED | java.util.Spliterator.DISTINCT),
+              "spliterator characteristics");
+        java.util.List<Integer> gathered = new java.util.ArrayList<>();
+        sp.forEachRemaining(gathered::add);
+        check(gathered.equals(Arrays.asList(1, 2, 3)), "spliterator sorted order");
+
+        // addFirst / addLast always throw UnsupportedOperationException (sorted set)
+        expectThrows(() -> set.addFirst(99), UnsupportedOperationException.class, "addFirst UOE");
+        expectThrows(() -> set.addLast(99), UnsupportedOperationException.class, "addLast UOE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testNaturalOrder();
@@ -155,6 +201,7 @@ public class TreeSetTest {
         testNavigable();
         testRangeViewsAndDescending();
         testNullRejection();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

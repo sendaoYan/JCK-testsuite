@@ -4,6 +4,7 @@
  * @run main BidiTest
  */
 
+import java.text.AttributedString;
 import java.text.Bidi;
 
 public class BidiTest {
@@ -85,6 +86,32 @@ public class BidiTest {
         check(line.getRunLevel(0) == 0, "line run level 0");
     }
 
+    static void testBlackBox() {
+        // char[] constructor with explicit range and no embeddings
+        char[] text = "abc".toCharArray();
+        Bidi cb = new Bidi(text, 0, null, 0, 3, Bidi.DIRECTION_LEFT_TO_RIGHT);
+        check(cb.isLeftToRight() && !cb.isRightToLeft(), "Bidi(char[],...) is LTR");
+        check(cb.getLength() == 3, "Bidi(char[],...) length 3");
+        check(cb.getRunCount() == 1, "Bidi(char[],...) single run");
+        check(cb.getBaseLevel() == 0, "Bidi(char[],...) base level 0");
+
+        // char[] constructor with explicit embedding levels
+        Bidi eb = new Bidi(text, 0, new byte[]{0, 0, 0}, 0, 3, Bidi.DIRECTION_LEFT_TO_RIGHT);
+        check(eb.isLeftToRight(), "Bidi(char[],embeddings) LTR");
+        check(eb.getLevelAt(0) == 0 && eb.getLevelAt(2) == 0, "Bidi(char[],embeddings) levels");
+
+        // AttributedCharacterIterator constructor (plain LTR text)
+        Bidi ab = new Bidi(new AttributedString("abc").getIterator());
+        check(ab.isLeftToRight() && !ab.isRightToLeft(), "Bidi(AttributedCharacterIterator) LTR");
+        check(ab.getLength() == 3, "Bidi(AttributedCharacterIterator) length");
+        check(ab.getRunCount() == 1, "Bidi(AttributedCharacterIterator) single run");
+
+        // AttributedCharacterIterator constructor on mixed text
+        Bidi mb = new Bidi(new AttributedString("aאb").getIterator()); // a alef b
+        check(mb.isMixed(), "Bidi(AttributedCharacterIterator) mixed");
+        check(mb.getRunCount() == 3, "Bidi(AttributedCharacterIterator) 3 runs");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testLeftToRight();
@@ -93,6 +120,7 @@ public class BidiTest {
         testRequiresBidi();
         testReorderVisually();
         testCreateLineBidi();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

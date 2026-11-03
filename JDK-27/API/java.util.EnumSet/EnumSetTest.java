@@ -152,12 +152,25 @@ public class EnumSetTest {
         check(!set.remove(null), "remove null returns false");
     }
 
+    static void testBlackBox() {
+        EnumSet<Color> set = EnumSet.of(Color.RED, Color.BLUE, Color.GREEN);
+        java.util.Spliterator<Color> sp = set.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        check(sp.hasCharacteristics(java.util.Spliterator.SIZED | java.util.Spliterator.SUBSIZED),
+              "spliterator reports SIZED|SUBSIZED");
+        java.util.List<Color> gathered = new java.util.ArrayList<>();
+        sp.forEachRemaining(gathered::add);
+        check(gathered.equals(Arrays.asList(Color.RED, Color.GREEN, Color.BLUE)),
+              "spliterator iterates in declaration order");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testFactories();
         testAddRemoveIteration();
         testCollectionOpsAndClone();
         testNullRejection();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

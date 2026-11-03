@@ -116,6 +116,49 @@ public class HashSetTest {
         }
     }
 
+    static void testBlackBox() {
+        HashSet<String> a = new HashSet<>(16, 0.75f);
+        a.add("x");
+        check(a.contains("x"), "ctor (int,float) works");
+        HashSet<String> b = new HashSet<>(8);
+        b.add("y");
+        check(b.contains("y"), "ctor (int) works");
+
+        HashSet<String> viaFactory = HashSet.newHashSet(8);
+        viaFactory.add("z");
+        check(viaFactory.contains("z"), "newHashSet(int) factory");
+
+        HashSet<String> orig = new HashSet<>(Arrays.asList("a", "b", "c"));
+        @SuppressWarnings("unchecked")
+        HashSet<String> cloned = (HashSet<String>) orig.clone();
+        check(cloned != orig && cloned.equals(orig), "clone independent and equal");
+        cloned.add("d");
+        check(orig.size() == 3 && !orig.contains("d"), "clone structural independence");
+
+        // spliterator reports SIZED|DISTINCT and covers all elements
+        java.util.Spliterator<String> sp = orig.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        check(sp.hasCharacteristics(java.util.Spliterator.SIZED | java.util.Spliterator.DISTINCT),
+              "spliterator characteristics SIZED|DISTINCT");
+        List<String> gathered = new ArrayList<>();
+        sp.forEachRemaining(gathered::add);
+        Collections.sort(gathered);
+        check(gathered.equals(Arrays.asList("a", "b", "c")), "spliterator covers all (sorted)");
+
+        // toArray() and toArray(T[]) return the element multiset
+        Object[] arr = orig.toArray();
+        List<String> sortedArr = new ArrayList<>();
+        for (Object o : arr) sortedArr.add((String) o);
+        Collections.sort(sortedArr);
+        check(sortedArr.equals(Arrays.asList("a", "b", "c")), "toArray() multiset");
+
+        String[] tarr = orig.toArray(new String[0]);
+        check(tarr.length == 3, "toArray(T[]) length");
+        List<String> sortedTarr = new ArrayList<>(Arrays.asList(tarr));
+        Collections.sort(sortedTarr);
+        check(sortedTarr.equals(Arrays.asList("a", "b", "c")), "toArray(T[]) multiset");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testAddRemoveContains();
@@ -123,6 +166,7 @@ public class HashSetTest {
         testCollectionOps();
         testEqualsHashCode();
         testIterationAndFailFast();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -135,12 +135,80 @@ public class LinkedHashMapTest {
               "reversed() view order");
     }
 
+    static void testBlackBox() {
+        LinkedHashMap<String, Integer> a = new LinkedHashMap<>(16, 0.75f);
+        a.put("x", 1);
+        check(a.get("x") == 1, "ctor (int,float) works");
+        LinkedHashMap<String, Integer> b = new LinkedHashMap<>(8);
+        b.put("y", 2);
+        check(b.get("y") == 2, "ctor (int) works");
+
+        // copy constructor preserves encounter order of a sequenced source
+        LinkedHashMap<String, Integer> src = new LinkedHashMap<>();
+        src.put("a", 1);
+        src.put("b", 2);
+        src.put("c", 3);
+        LinkedHashMap<String, Integer> copy = new LinkedHashMap<>(src);
+        check(new ArrayList<>(copy.keySet()).equals(Arrays.asList("a", "b", "c")),
+              "ctor (Map) preserves source order");
+        check(copy.equals(src), "ctor (Map) copies content");
+
+        LinkedHashMap<String, Integer> viaFactory = LinkedHashMap.newLinkedHashMap(8);
+        viaFactory.put("z", 9);
+        check(viaFactory.get("z") == 9, "newLinkedHashMap(int) factory");
+
+        // containsValue, getOrDefault, clear
+        check(src.containsValue(2) && !src.containsValue(99), "containsValue");
+        check(src.getOrDefault("b", 0) == 2, "getOrDefault present");
+        check(src.getOrDefault("missing", 7) == 7, "getOrDefault missing");
+        LinkedHashMap<String, Integer> toClear = new LinkedHashMap<>(src);
+        toClear.clear();
+        check(toClear.isEmpty() && toClear.size() == 0, "clear empties");
+
+        // forEach in encounter order
+        java.util.List<String> keysInOrder = new java.util.ArrayList<>();
+        src.forEach((k, v) -> keysInOrder.add(k));
+        check(keysInOrder.equals(Arrays.asList("a", "b", "c")), "forEach encounter order");
+
+        // replaceAll transforms values
+        LinkedHashMap<String, Integer> transformed = new LinkedHashMap<>();
+        transformed.put("a", 1);
+        transformed.put("b", 2);
+        transformed.replaceAll((k, v) -> v * 10);
+        check(transformed.get("a") == 10 && transformed.get("b") == 20, "replaceAll transforms");
+
+        // values() view in encounter order; remove reflects
+        java.util.Collection<Integer> values = src.values();
+        check(new ArrayList<>(values).equals(Arrays.asList(1, 2, 3)), "values() order");
+        check(values.remove(2) && !src.containsKey("b"), "values().remove reflects");
+
+        // entrySet() view: ordered, remove reflects
+        java.util.Set<Map.Entry<String, Integer>> entries = src.entrySet();
+        check(entries.size() == 2, "entrySet size");
+        check(entries.removeIf(e -> e.getKey().equals("c")) && !src.containsKey("c"),
+              "entrySet.removeIf reflects");
+
+        // sequenced views: keySet / values / entrySet with deterministic order
+        LinkedHashMap<String, Integer> seq = new LinkedHashMap<>();
+        seq.put("a", 1);
+        seq.put("b", 2);
+        seq.put("c", 3);
+        check(new ArrayList<>(seq.sequencedKeySet()).equals(Arrays.asList("a", "b", "c")),
+              "sequencedKeySet order");
+        check(new ArrayList<>(seq.sequencedValues()).equals(Arrays.asList(1, 2, 3)),
+              "sequencedValues order");
+        java.util.List<Map.Entry<String, Integer>> seqEntries = new ArrayList<>(seq.sequencedEntrySet());
+        check(seqEntries.get(0).getKey().equals("a") && seqEntries.get(2).getKey().equals("c"),
+              "sequencedEntrySet order");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testInsertionOrder();
         testAccessOrder();
         testRemoveEldestEntry();
         testSequencedMapOps();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -108,12 +108,16 @@ public class PatternSyntaxExceptionTest {
         check(e.getMessage().contains("p"), "getMessage contains pattern");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
+    
+    static void testBlackBox() throws Exception {
         testConstructor();
         testMessageVariants();
         testCompileErrors();
         testIsIllegalArgument();
+    }
+public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
