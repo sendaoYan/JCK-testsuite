@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary javax.swing.filechooser.FileFilter conformance: type shape and supertypes.
+ * @summary javax.swing.filechooser.FileFilter conformance: white-box structure + black-box behavior.
  * @run main FileFilterTest
  */
 
+import java.io.File;
 import java.lang.reflect.Modifier;
+import javax.swing.filechooser.FileFilter;
 
 public class FileFilterTest {
     static int passed;
@@ -12,7 +14,17 @@ public class FileFilterTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    // Concrete FileFilter accepting only a fixed extension, used as a typical user subclass.
+    static class TextFilter extends FileFilter {
+        public boolean accept(File f) {
+            return f != null && f.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".txt");
+        }
+        public String getDescription() { return "Text files"; }
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.filechooser.FileFilter");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +36,30 @@ public class FileFilterTest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
         check(Modifier.isAbstract(mods) == true, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
+        check(c.getDeclaredMethods().length == 2, "two methods: accept + getDescription");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        FileFilter filter = new TextFilter();
+        check("Text files".equals(filter.getDescription()), "getDescription returns subclass value");
+        check(filter.accept(new File("report.txt")), "accept matches .txt");
+        check(filter.accept(new File("REPORT.TXT")), "accept case-insensitive (subclass logic)");
+        check(!filter.accept(new File("report.java")), "accept rejects other extension");
+        check(!filter.accept(null), "accept rejects null defensively");
+
+        // A filter can be used polymorphically, e.g. in a chooser-style selection loop.
+        File[] candidates = { new File("a.txt"), new File("b.jpg"), new File("c.txt") };
+        int accepted = 0;
+        for (File f : candidates) {
+            if (filter.accept(f)) accepted++;
+        }
+        check(accepted == 2, "polymorphic accept over a file list");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

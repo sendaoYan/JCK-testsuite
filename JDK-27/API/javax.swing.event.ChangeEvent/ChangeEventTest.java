@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.event.ChangeEvent conformance: type shape and supertypes.
+ * @summary javax.swing.event.ChangeEvent conformance: white-box structure + black-box behavior.
  * @run main ChangeEventTest
  */
 
@@ -12,7 +12,8 @@ public class ChangeEventTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.event.ChangeEvent");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +25,24 @@ public class ChangeEventTest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.util.EventObject"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
+    }
+
+    static void testBlackBox() {
+        Object source = new Object();
+        javax.swing.event.ChangeEvent ev = new javax.swing.event.ChangeEvent(source);
+        check(ev.getSource() == source, "getSource round-trip");
+
+        // EventObject.toString() should embed the source's own toString().
+        String srcString = "my-change-source";
+        javax.swing.event.ChangeEvent ev2 = new javax.swing.event.ChangeEvent(srcString);
+        check(ev2.getSource() == srcString, "string source identity");
+        check(ev2.getSource().equals(srcString), "string source value");
+        check(ev2.toString().contains(srcString), "toString embeds source");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

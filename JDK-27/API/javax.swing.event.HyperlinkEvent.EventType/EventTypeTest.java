@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.event.HyperlinkEvent.EventType conformance: type shape and supertypes.
+ * @summary javax.swing.event.HyperlinkEvent.EventType conformance: white-box structure + black-box behavior.
  * @run main EventTypeTest
  */
 
@@ -12,7 +12,8 @@ public class EventTypeTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.event.HyperlinkEvent$EventType");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -23,7 +24,30 @@ public class EventTypeTest {
         check(Modifier.isProtected(mods) == false, "protected modifier");
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
+        check(Modifier.isFinal(mods) == true, "final modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
+    }
+
+    static void testBlackBox() {
+        javax.swing.event.HyperlinkEvent.EventType entered = javax.swing.event.HyperlinkEvent.EventType.ENTERED;
+        javax.swing.event.HyperlinkEvent.EventType exited = javax.swing.event.HyperlinkEvent.EventType.EXITED;
+        javax.swing.event.HyperlinkEvent.EventType activated = javax.swing.event.HyperlinkEvent.EventType.ACTIVATED;
+
+        check(entered != null, "ENTERED non-null");
+        check(exited != null, "EXITED non-null");
+        check(activated != null, "ACTIVATED non-null");
+        check(entered.toString().equals("ENTERED"), "ENTERED toString");
+        check(exited.toString().equals("EXITED"), "EXITED toString");
+        check(activated.toString().equals("ACTIVATED"), "ACTIVATED toString");
+        check(entered != exited, "ENTERED != EXITED");
+        check(exited != activated, "EXITED != ACTIVATED");
+        check(activated != entered, "ACTIVATED != ENTERED");
+        check(javax.swing.event.HyperlinkEvent.EventType.ENTERED == entered, "static ENTERED identity stable");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.event.MenuEvent conformance: type shape and supertypes.
+ * @summary javax.swing.event.MenuEvent conformance: white-box structure + black-box behavior.
  * @run main MenuEventTest
  */
 
@@ -12,7 +12,8 @@ public class MenuEventTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.event.MenuEvent");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +25,23 @@ public class MenuEventTest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.util.EventObject"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
+    }
+
+    static void testBlackBox() {
+        Object source = new Object();
+        javax.swing.event.MenuEvent ev = new javax.swing.event.MenuEvent(source);
+        check(ev.getSource() == source, "getSource round-trip");
+
+        javax.swing.JMenu menu = new javax.swing.JMenu("menu");
+        javax.swing.event.MenuEvent menuEvent = new javax.swing.event.MenuEvent(menu);
+        check(menuEvent.getSource() == menu, "menu source round-trip");
+        check(menuEvent.getSource().equals(menu), "menu source equals");
+        check(menuEvent.toString().contains(menu.toString()), "toString embeds menu source");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

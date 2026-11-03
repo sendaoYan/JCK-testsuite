@@ -1,10 +1,13 @@
 /*
  * @test
- * @summary javax.swing.event.MenuListener conformance: type shape and supertypes.
+ * @summary javax.swing.event.MenuListener conformance: white-box structure + black-box behavior.
  * @run main MenuListenerTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import javax.swing.event.MenuEvent;
+import javax.swing.event.MenuListener;
 
 public class MenuListenerTest {
     static int passed;
@@ -12,7 +15,18 @@ public class MenuListenerTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void checkMethod(Class<?> c, String name, Class<?>... params) {
+        try {
+            Method m = c.getMethod(name, params);
+            check(m.getReturnType() == void.class, name + " returns void");
+            check(Modifier.isAbstract(m.getModifiers()), name + " abstract");
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError("missing method " + name);
+        }
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.event.MenuListener");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +38,41 @@ public class MenuListenerTest {
         check(c.getSuperclass() == null, "no superclass");
         check(c.getInterfaces().length == 1, "interface count");
         check(c.getInterfaces()[0].getName().equals("java.util.EventListener"), "interface 0");
+        checkMethod(c, "menuSelected", MenuEvent.class);
+        checkMethod(c, "menuDeselected", MenuEvent.class);
+        checkMethod(c, "menuCanceled", MenuEvent.class);
+        check(c.getDeclaredMethods().length == 3, "declared method count == 3");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        final String[] fired = new String[1];
+        final MenuEvent[] last = new MenuEvent[1];
+        MenuListener l = new MenuListener() {
+            public void menuSelected(MenuEvent e) { fired[0] = "selected"; last[0] = e; }
+            public void menuDeselected(MenuEvent e) { fired[0] = "deselected"; last[0] = e; }
+            public void menuCanceled(MenuEvent e) { fired[0] = "canceled"; last[0] = e; }
+        };
+
+        Object src = new Object();
+        MenuEvent selected = new MenuEvent(src);
+        l.menuSelected(selected);
+        check("selected".equals(fired[0]) && last[0] == selected, "menuSelected fired");
+        check(last[0].getSource() == src, "menuSelected source round-trip");
+
+        MenuEvent deselected = new MenuEvent(src);
+        l.menuDeselected(deselected);
+        check("deselected".equals(fired[0]) && last[0] == deselected, "menuDeselected fired");
+
+        MenuEvent canceled = new MenuEvent(src);
+        l.menuCanceled(canceled);
+        check("canceled".equals(fired[0]) && last[0] == canceled, "menuCanceled fired");
+        check(last[0].getSource() == src, "menuCanceled source round-trip");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

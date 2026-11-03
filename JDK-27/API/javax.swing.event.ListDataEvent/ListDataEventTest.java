@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.swing.event.ListDataEvent conformance: type shape and supertypes.
+ * @summary javax.swing.event.ListDataEvent conformance: white-box structure + black-box behavior.
  * @run main ListDataEventTest
  */
 
@@ -12,7 +12,8 @@ public class ListDataEventTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.event.ListDataEvent");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +25,37 @@ public class ListDataEventTest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.util.EventObject"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
+    }
+
+    static void testBlackBox() {
+        check(javax.swing.event.ListDataEvent.CONTENTS_CHANGED == 0, "CONTENTS_CHANGED == 0");
+        check(javax.swing.event.ListDataEvent.INTERVAL_ADDED == 1, "INTERVAL_ADDED == 1");
+        check(javax.swing.event.ListDataEvent.INTERVAL_REMOVED == 2, "INTERVAL_REMOVED == 2");
+
+        Object source = new Object();
+        javax.swing.event.ListDataEvent ev =
+            new javax.swing.event.ListDataEvent(source, javax.swing.event.ListDataEvent.INTERVAL_ADDED, 4, 9);
+        check(ev.getSource() == source, "getSource round-trip");
+        check(ev.getType() == javax.swing.event.ListDataEvent.INTERVAL_ADDED, "getType round-trip");
+        check(ev.getIndex0() == 4, "getIndex0 round-trip");
+        check(ev.getIndex1() == 9, "getIndex1 round-trip");
+
+        // Constructor normalizes the two indices to ascending order.
+        javax.swing.event.ListDataEvent swapped =
+            new javax.swing.event.ListDataEvent(source, javax.swing.event.ListDataEvent.INTERVAL_REMOVED, 20, 5);
+        check(swapped.getIndex0() == 5, "getIndex0 normalized to min");
+        check(swapped.getIndex1() == 20, "getIndex1 normalized to max");
+        check(swapped.getType() == javax.swing.event.ListDataEvent.INTERVAL_REMOVED, "swapped getType");
+
+        String s = ev.toString();
+        check(s.contains("ListDataEvent"), "toString contains class name");
+        check(s.contains("type=1"), "toString contains type");
+        check(s.contains("index0=4") && s.contains("index1=9"), "toString contains indices");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
