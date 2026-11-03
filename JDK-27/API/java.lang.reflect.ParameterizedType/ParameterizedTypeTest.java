@@ -1,12 +1,14 @@
 /*
  * @test
- * @summary java.lang.reflect.ParameterizedType conformance: raw type/actual type args/owner.
+ * @summary java.lang.reflect.ParameterizedType conformance: white-box structure + black-box behavior.
  * @run main ParameterizedTypeTest
  */
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class ParameterizedTypeTest {
@@ -21,7 +23,24 @@ public class ParameterizedTypeTest {
         Map<String, Integer> map;
     }
 
-    static void testParameterizedType() throws Exception {
+    static class Types {
+        List<String> list;
+        Map<String, List<Integer>> nested;
+        Map.Entry<String, Integer> entry;
+        Outer.Inner<String> inner;
+        Class<?> clazz;
+    }
+
+    static class Outer {
+        class Inner<Q> {
+        }
+    }
+
+    static class StringList extends ArrayList<String> {
+    }
+
+    // ---- Part 1: white-box (structural, retained from previous revision) ----
+    static void testWhiteBox() throws Exception {
         Field f = Sample.class.getDeclaredField("map");
         Type t = f.getGenericType();
         check(t instanceof ParameterizedType, "is ParameterizedType");
@@ -32,10 +51,74 @@ public class ParameterizedTypeTest {
         check(pt.getActualTypeArguments()[1] == Integer.class, "Integer argument");
         check(pt.getOwnerType() == null, "getOwnerType null");
         check(pt.toString() != null, "toString");
+        check(ParameterizedType.class.isInterface(), "is an interface");
+        check(ParameterizedTypeTest.countAbstract(ParameterizedType.class) == 3,
+              "three abstract accessors");
+    }
+
+    static int countAbstract(Class<?> c) {
+        int n = 0;
+        for (java.lang.reflect.Method m : c.getDeclaredMethods())
+            if (java.lang.reflect.Modifier.isAbstract(m.getModifiers())) n++;
+        return n;
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        // 1. simple parameterized field
+        ParameterizedType pt = (ParameterizedType) Types.class.getDeclaredField("list").getGenericType();
+        check(pt.getRawType() == List.class, "list raw type");
+        check(pt.getActualTypeArguments().length == 1
+              && pt.getActualTypeArguments()[0] == String.class, "list single arg String");
+        check(pt.getOwnerType() == null, "top-level type has no owner");
+        check(pt.getTypeName().equals("java.util.List<java.lang.String>"), "list typeName");
+
+        // 2. nested parameterization resolves recursively
+        ParameterizedType npt = (ParameterizedType) Types.class.getDeclaredField("nested").getGenericType();
+        check(npt.getRawType() == Map.class, "nested raw Map");
+        Type arg1 = npt.getActualTypeArguments()[1];
+        check(arg1 instanceof ParameterizedType, "nested arg is PT");
+        check(((ParameterizedType) arg1).getRawType() == List.class, "inner raw List");
+        check(((ParameterizedType) arg1).getActualTypeArguments()[0] == Integer.class,
+              "inner arg Integer");
+        check(npt.getTypeName()
+              .equals("java.util.Map<java.lang.String, java.util.List<java.lang.Integer>>"),
+              "nested typeName");
+
+        // 3. owner type for inner generic types
+        ParameterizedType ept = (ParameterizedType) Types.class.getDeclaredField("entry").getGenericType();
+        check(ept.getOwnerType() == Map.class, "Map.Entry owner is Map");
+        check(ept.getRawType() == Map.Entry.class, "raw is Map.Entry");
+        check(ept.getActualTypeArguments()[0] == String.class
+              && ept.getActualTypeArguments()[1] == Integer.class, "entry args");
+        ParameterizedType ipt = (ParameterizedType) Types.class.getDeclaredField("inner").getGenericType();
+        check(ipt.getOwnerType() == Outer.class, "Outer.Inner owner is Outer");
+        check(ipt.getRawType() == Outer.Inner.class, "raw is Outer.Inner");
+        check(ipt.getActualTypeArguments()[0] == String.class, "inner arg String");
+
+        // 4. wildcard argument keeps its own structure
+        ParameterizedType wpt = (ParameterizedType) Types.class.getDeclaredField("clazz").getGenericType();
+        Type warg = wpt.getActualTypeArguments()[0];
+        check(warg instanceof java.lang.reflect.WildcardType, "Class<?> arg is wildcard");
+        check(warg.getTypeName().equals("?"), "unbounded wildcard name");
+
+        // 5. superclass parameterization
+        ParameterizedType spt = (ParameterizedType) StringList.class.getGenericSuperclass();
+        check(spt.getRawType() == ArrayList.class, "generic superclass raw ArrayList");
+        check(spt.getActualTypeArguments()[0] == String.class, "superclass arg String");
+        check(spt.getOwnerType() == null, "superclass no owner");
+
+        // 6. equality and string forms across repeated lookups
+        ParameterizedType pt2 = (ParameterizedType) Types.class.getDeclaredField("list").getGenericType();
+        check(pt.equals(pt2), "PT equals by value");
+        check(pt.hashCode() == pt2.hashCode(), "PT hashCode consistent");
+        check(pt.toString().equals("java.util.List<java.lang.String>"), "PT toString");
+        check(!pt.equals(npt), "different PTs not equal");
     }
 
     public static void main(String[] args) throws Exception {
-        testParameterizedType();
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
