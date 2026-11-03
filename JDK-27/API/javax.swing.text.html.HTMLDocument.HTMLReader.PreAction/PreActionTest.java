@@ -1,18 +1,19 @@
 /*
  * @test
- * @summary javax.swing.text.html.HTMLDocument.HTMLReader.PreAction conformance: type shape and supertypes.
+ * @summary javax.swing.text.html.HTMLDocument.HTMLReader.PreAction conformance: white-box structure + black-box behavior.
  * @run main PreActionTest
  */
 
 import java.lang.reflect.Modifier;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.html.HTML;
+import javax.swing.text.html.HTMLDocument;
 
 public class PreActionTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    public static void main(String[] args) throws Exception {
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.text.html.HTMLDocument$HTMLReader$PreAction");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +25,21 @@ public class PreActionTest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.text.html.HTMLDocument$HTMLReader$BlockAction"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
+    }
+
+    static void testBlackBox() throws Exception {
+        HTMLDocument doc = new HTMLDocument();
+        HTMLDocument.HTMLReader reader = doc.new HTMLReader(0);
+        HTMLDocument.HTMLReader.PreAction action = reader.new PreAction();
+        check(action instanceof HTMLDocument.HTMLReader.BlockAction, "extends BlockAction");
+        action.start(HTML.Tag.PRE, new SimpleAttributeSet());
+        action.end(HTML.Tag.PRE);
+        check(true, "PreAction start/end complete without error");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

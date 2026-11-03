@@ -1,10 +1,26 @@
 /*
  * @test
- * @summary javax.swing.text.html.ObjectView conformance: type shape and supertypes.
+ * @summary javax.swing.text.html.ObjectView conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main ObjectViewTest
  */
 
+import java.awt.EventQueue;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import javax.swing.JEditorPane;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.text.Element;
+import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.View;
+import javax.swing.text.html.HTML;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.ObjectView;
 
 public class ObjectViewTest {
     static int passed;
@@ -12,7 +28,13 @@ public class ObjectViewTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static boolean throwsIAE(Runnable r) {
+        try { r.run(); return false; }
+        catch (IllegalArgumentException e) { return true; }
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.text.html.ObjectView");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +46,83 @@ public class ObjectViewTest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.text.ComponentView"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
+        check(c.getConstructor(Element.class) != null, "ctor(Element) present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        JFrame frame = new JFrame();
+        JEditorPane editor = new JEditorPane();
+        try {
+            editor.setEditorKit(new HTMLEditorKit());
+            editor.setLocale(Locale.US);
+            editor.setText("<html><body><object classid='java.lang.String'><param name='text' value='x'></object></body></html>");
+            frame.getContentPane().add(editor);
+            frame.setSize(600, 400);
+            frame.setVisible(true);
+            editor.getUI().getRootView(editor).setSize(600, 400);
+
+            HTMLDocument doc = (HTMLDocument) editor.getDocument();
+            Element obj = doc.getElement(doc.getDefaultRootElement(), StyleConstants.NameAttribute, HTML.Tag.OBJECT);
+            check(obj != null, "OBJECT element found");
+
+            ObjectView ov = new ObjectView(obj);
+            check(ov.getElement() == obj, "getElement round trip");
+            check(ov.getStartOffset() == obj.getStartOffset(), "start offset");
+            check(ov.getEndOffset() == obj.getEndOffset(), "end offset");
+
+            // standalone (component not yet created) spans are 0, invalid axis -> IAE
+            check(ov.getPreferredSpan(View.X_AXIS) == 0f, "standalone preferred X == 0");
+            check(ov.getMinimumSpan(View.Y_AXIS) == 0f, "standalone minimum Y == 0");
+            check(throwsIAE(() -> ov.getMaximumSpan(4)), "getMaximumSpan(4) -> IAE");
+
+            // a live ObjectView creates an unloadable-representation JLabel for a
+            // non-Component classid
+            View live = findView(editor.getUI().getRootView(editor), "javax.swing.text.html.ObjectView");
+            check(live instanceof ObjectView, "live ObjectView from tree");
+            if (live instanceof ObjectView) {
+                ObjectView lo = (ObjectView) live;
+                check(lo.getComponent() instanceof JLabel, "unloadable object -> JLabel component");
+                float pref = lo.getPreferredSpan(View.X_AXIS);
+                float min = lo.getMinimumSpan(View.X_AXIS);
+                float max = lo.getMaximumSpan(View.X_AXIS);
+                check(pref >= 0f, "live preferred span >= 0");
+                check(min <= pref && pref <= max, "live min <= pref <= max");
+            }
+        } finally {
+            frame.dispose();
+        }
+    }
+
+    static void collectViews(View v, List<View> out) {
+        out.add(v);
+        int n = v.getViewCount();
+        for (int i = 0; i < n; i++) collectViews(v.getView(i), out);
+    }
+    static View findView(View root, String className) {
+        List<View> all = new ArrayList<View>();
+        collectViews(root, all);
+        for (View v : all) if (v.getClass().getName().equals(className)) return v;
+        return null;
+    }
+
+    public static void main(String[] args) throws Exception {
+        runOnEDT(ObjectViewTest::testWhiteBox);
+        runOnEDT(ObjectViewTest::testBlackBox);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (InvocationTargetException ite) {
+            Throwable t = ite.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
     }
 }

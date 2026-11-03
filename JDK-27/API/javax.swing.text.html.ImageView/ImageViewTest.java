@@ -1,10 +1,29 @@
 /*
  * @test
- * @summary javax.swing.text.html.ImageView conformance: type shape and supertypes.
+ * @summary javax.swing.text.html.ImageView conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main ImageViewTest
  */
 
+import java.awt.EventQueue;
+import java.awt.Rectangle;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import javax.swing.Icon;
+import javax.swing.JEditorPane;
+import javax.swing.JFrame;
+import javax.swing.text.Element;
+import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.Position;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.View;
+import javax.swing.text.html.HTML;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.ImageView;
 
 public class ImageViewTest {
     static int passed;
@@ -12,7 +31,9 @@ public class ImageViewTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.text.html.ImageView");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +45,108 @@ public class ImageViewTest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.text.View"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
+        check(c.getConstructor(Element.class) != null, "ctor(Element) present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        JFrame frame = new JFrame();
+        JEditorPane editor = new JEditorPane();
+        try {
+            editor.setEditorKit(new HTMLEditorKit());
+            editor.setLocale(Locale.US);
+            editor.setText("<html><body><img alt='hello'><img alt='pic' src='http://example.com/x.png'></body></html>");
+            frame.getContentPane().add(editor);
+            frame.setSize(600, 400);
+            frame.setVisible(true);
+            editor.getUI().getRootView(editor).setSize(600, 400);
+
+            HTMLDocument doc = (HTMLDocument) editor.getDocument();
+            List<Element> imgs = new ArrayList<Element>();
+            collectElements(doc.getDefaultRootElement(), HTML.Tag.IMG, imgs);
+            check(imgs.size() == 2, "two IMG elements");
+
+            ImageView v1 = new ImageView(imgs.get(0)); // no src
+            ImageView v2 = new ImageView(imgs.get(1)); // absolute src
+
+            check("hello".equals(v1.getAltText()), "altText from ALT attribute");
+            check("pic".equals(v2.getAltText()), "altText #2");
+
+            check(v1.getImageURL() == null, "imageURL null without src");
+            check(new URL("http://example.com/x.png").equals(v2.getImageURL()), "imageURL from absolute src");
+
+            check(v1.getImage() == null, "image null without src");
+
+            Icon noImg = v1.getNoImageIcon();
+            Icon loading = v1.getLoadingImageIcon();
+            check(noImg instanceof Icon, "getNoImageIcon returns Icon");
+            check(loading instanceof Icon, "getLoadingImageIcon returns Icon");
+
+            check("hello".equals(v1.getToolTipText(0f, 0f, new Rectangle(0, 0, 10, 10))), "tooltip == alt text");
+
+            check(v1.getLoadsSynchronously() == false, "default async load");
+            v1.setLoadsSynchronously(true);
+            check(v1.getLoadsSynchronously() == true, "sync load set true");
+            v1.setLoadsSynchronously(false);
+            check(v1.getLoadsSynchronously() == false, "sync load set false");
+
+            check(v1.getAlignment(View.Y_AXIS) == 1.0f, "alignment Y == 1.0 (default vAlign)");
+            check(v1.getAlignment(View.X_AXIS) == 0.5f, "alignment X == 0.5 (View default)");
+
+            // ImageView defaults min/max to preferred (no explicit overrides)
+            float prefX = v1.getPreferredSpan(View.X_AXIS);
+            float prefY = v1.getPreferredSpan(View.Y_AXIS);
+            check(prefX >= 0f && prefY >= 0f, "preferred spans >= 0");
+            check(v1.getMinimumSpan(View.X_AXIS) == prefX, "min == pref on X");
+            check(v1.getMaximumSpan(View.X_AXIS) == prefX, "max == pref on X");
+            check(v1.getMinimumSpan(View.Y_AXIS) == prefY, "min == pref on Y");
+            check(v1.getMaximumSpan(View.Y_AXIS) == prefY, "max == pref on Y");
+
+            // modelToView: inside -> rectangle, outside -> null
+            Rectangle alloc = new Rectangle(0, 0, 100, 50);
+            int p0 = v1.getStartOffset();
+            int p1 = v1.getEndOffset();
+            check(v1.modelToView(p0, alloc, Position.Bias.Forward) != null, "modelToView(start) non-null");
+            check(v1.modelToView(p1, alloc, Position.Bias.Backward) != null, "modelToView(end) non-null");
+            check(v1.modelToView(p1 + 1, alloc, Position.Bias.Forward) == null, "modelToView(outside) null");
+
+            // viewToModel: left of right edge -> start/Forward, else end/Backward
+            Position.Bias[] bias = new Position.Bias[1];
+            int m1 = v1.viewToModel(10f, 10f, alloc, bias);
+            check(m1 == p0 && bias[0] == Position.Bias.Forward, "viewToModel left -> start/Forward");
+            int m2 = v1.viewToModel(200f, 10f, alloc, bias);
+            check(m2 == p1 && bias[0] == Position.Bias.Backward, "viewToModel right -> end/Backward");
+
+            // setSize is a no-throw layout entry point
+            v1.setSize(80f, 40f);
+            check(true, "setSize callable");
+        } finally {
+            frame.dispose();
+        }
+    }
+
+    static void collectElements(Element e, HTML.Tag tag, List<Element> out) {
+        if (e.getAttributes().getAttribute(StyleConstants.NameAttribute) == tag) out.add(e);
+        for (int i = 0; i < e.getElementCount(); i++) collectElements(e.getElement(i), tag, out);
+    }
+
+    public static void main(String[] args) throws Exception {
+        runOnEDT(ImageViewTest::testWhiteBox);
+        runOnEDT(ImageViewTest::testBlackBox);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (InvocationTargetException ite) {
+            Throwable t = ite.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
     }
 }
