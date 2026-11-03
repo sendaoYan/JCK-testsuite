@@ -1,48 +1,162 @@
 /*
  * @test
- * @summary javax.imageio.metadata.IIOMetadataFormat conformance: interface hierarchy and methods.
+ * @summary javax.imageio.metadata.IIOMetadataFormat conformance: white-box structure + black-box behavior.
  * @run main IIOMetadataFormatTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.List;
+import javax.imageio.ImageTypeSpecifier;
+import javax.imageio.metadata.IIOMetadataFormat;
+import javax.imageio.metadata.IIOMetadataFormatImpl;
 
 public class IIOMetadataFormatTest {
     static int passed;
-    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    public static void main(String[] a) throws Exception {
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void expectThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        boolean thrown = false;
+        try { r.run(); } catch (Throwable t) {
+            thrown = true;
+            check(expected.isAssignableFrom(t.getClass()),
+                  msg + " expected " + expected.getSimpleName() + " but got " + t.getClass().getSimpleName());
+        }
+        check(thrown, msg + " should throw " + expected.getSimpleName());
+    }
+    static int intConst(Class<?> c, String name) throws Exception {
+        Field f = c.getField(name);
+        check(Modifier.isPublic(f.getModifiers()) && Modifier.isStatic(f.getModifiers())
+              && Modifier.isFinal(f.getModifiers()), "constant " + name + " is public static final");
+        check(f.getType() == int.class, "constant " + name + " is int");
+        return f.getInt(null);
+    }
+
+    // minimal concrete format used purely through the interface type
+    static class TestFormat extends IIOMetadataFormatImpl {
+        TestFormat() {
+            super("root", CHILD_POLICY_ALL);
+            addElement("child", "root", 1, 3);
+            addAttribute("root", "count", DATATYPE_INTEGER, true, "5");
+            addAttribute("root", "mode", DATATYPE_STRING, false, null, List.of("fast", "slow"));
+            addAttribute("root", "range", DATATYPE_INTEGER, false, null, "0", "100", true, false);
+            addAttribute("root", "list", DATATYPE_INTEGER, false, 1, 4);
+            addBooleanAttribute("root", "flag", true, false);
+            addObjectValue("root", String.class, false, "dflt");
+        }
+        public boolean canNodeAppear(String elementName, ImageTypeSpecifier imageType) { return true; }
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.imageio.metadata.IIOMetadataFormat");
-        check(c.isInterface(), "isInterface");
-        check(Modifier.isPublic(c.getModifiers()), "public");
-        check(c.getInterfaces().length == 0, "no direct superinterfaces");
-        Set<String> dm = new HashSet<>(); for (Method m : c.getDeclaredMethods()) dm.add(m.getName());
-        check(dm.contains("getRootName"), "method getRootName");
-        check(dm.contains("canNodeAppear"), "method canNodeAppear");
-        check(dm.contains("getElementMinChildren"), "method getElementMinChildren");
-        check(dm.contains("getElementMaxChildren"), "method getElementMaxChildren");
-        check(dm.contains("getElementDescription"), "method getElementDescription");
-        check(dm.contains("getChildPolicy"), "method getChildPolicy");
-        check(dm.contains("getChildNames"), "method getChildNames");
-        check(dm.contains("getAttributeNames"), "method getAttributeNames");
-        check(dm.contains("getAttributeValueType"), "method getAttributeValueType");
-        check(dm.contains("getAttributeDataType"), "method getAttributeDataType");
-        check(dm.contains("isAttributeRequired"), "method isAttributeRequired");
-        check(dm.contains("getAttributeDefaultValue"), "method getAttributeDefaultValue");
-        check(dm.contains("getAttributeEnumerations"), "method getAttributeEnumerations");
-        check(dm.contains("getAttributeMinValue"), "method getAttributeMinValue");
-        check(dm.contains("getAttributeMaxValue"), "method getAttributeMaxValue");
-        check(dm.contains("getAttributeListMinLength"), "method getAttributeListMinLength");
-        check(dm.contains("getAttributeListMaxLength"), "method getAttributeListMaxLength");
-        check(dm.contains("getAttributeDescription"), "method getAttributeDescription");
-        check(dm.contains("getObjectValueType"), "method getObjectValueType");
-        check(dm.contains("getObjectClass"), "method getObjectClass");
-        check(dm.contains("getObjectDefaultValue"), "method getObjectDefaultValue");
-        check(dm.contains("getObjectEnumerations"), "method getObjectEnumerations");
-        check(dm.contains("getObjectMinValue"), "method getObjectMinValue");
-        check(dm.contains("getObjectMaxValue"), "method getObjectMaxValue");
-        check(dm.contains("getObjectArrayMinLength"), "method getObjectArrayMinLength");
-        check(dm.contains("getObjectArrayMaxLength"), "method getObjectArrayMaxLength");
+        check(c != null, "loads");
+        check(c.isInterface(), "is interface");
+        check(!c.isAnnotation(), "is not annotation");
+        check(Modifier.isPublic(c.getModifiers()), "public modifier");
+        check(Modifier.isAbstract(c.getModifiers()), "abstract modifier");
+        // child policy constants
+        check(intConst(c, "CHILD_POLICY_EMPTY") == 0, "CHILD_POLICY_EMPTY == 0");
+        check(intConst(c, "CHILD_POLICY_ALL") == 1, "CHILD_POLICY_ALL == 1");
+        check(intConst(c, "CHILD_POLICY_SOME") == 2, "CHILD_POLICY_SOME == 2");
+        check(intConst(c, "CHILD_POLICY_CHOICE") == 3, "CHILD_POLICY_CHOICE == 3");
+        check(intConst(c, "CHILD_POLICY_SEQUENCE") == 4, "CHILD_POLICY_SEQUENCE == 4");
+        check(intConst(c, "CHILD_POLICY_REPEAT") == 5, "CHILD_POLICY_REPEAT == 5");
+        check(intConst(c, "CHILD_POLICY_MAX") == 5, "CHILD_POLICY_MAX == 5");
+        // value type constants
+        check(intConst(c, "VALUE_NONE") == 0, "VALUE_NONE == 0");
+        check(intConst(c, "VALUE_ARBITRARY") == 1, "VALUE_ARBITRARY == 1");
+        check(intConst(c, "VALUE_RANGE") == 2, "VALUE_RANGE == 2");
+        check(intConst(c, "VALUE_ENUMERATION") == 16, "VALUE_ENUMERATION == 16");
+        check(intConst(c, "VALUE_LIST") == 32, "VALUE_LIST == 32");
+        // datatype constants
+        check(intConst(c, "DATATYPE_STRING") == 0, "DATATYPE_STRING == 0");
+        check(intConst(c, "DATATYPE_BOOLEAN") == 1, "DATATYPE_BOOLEAN == 1");
+        check(intConst(c, "DATATYPE_INTEGER") == 2, "DATATYPE_INTEGER == 2");
+        check(intConst(c, "DATATYPE_FLOAT") == 3, "DATATYPE_FLOAT == 3");
+        check(intConst(c, "DATATYPE_DOUBLE") == 4, "DATATYPE_DOUBLE == 4");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        // exercise a concrete format exclusively through the interface type
+        IIOMetadataFormat f = new TestFormat();
+        check("root".equals(f.getRootName()), "getRootName");
+        check(f.canNodeAppear("root", null), "canNodeAppear true");
+        check(f.getChildPolicy("root") == IIOMetadataFormat.CHILD_POLICY_ALL, "root child policy ALL");
+        check(Arrays.equals(f.getChildNames("root"), new String[]{"child"}), "root child names");
+
+        // REPEAT child multiplicity
+        check(f.getChildPolicy("child") == IIOMetadataFormat.CHILD_POLICY_REPEAT, "child policy REPEAT");
+        check(f.getElementMinChildren("child") == 1, "child min children");
+        check(f.getElementMaxChildren("child") == 3, "child max children");
+
+        // attributes: arbitrary / enumeration / range / list / boolean
+        String[] attrs = f.getAttributeNames("root");
+        check(attrs.length == 5, "root has 5 attributes");
+        check(contains(attrs, "count") && contains(attrs, "mode") && contains(attrs, "range")
+              && contains(attrs, "list") && contains(attrs, "flag"), "attribute names present");
+
+        check(f.getAttributeValueType("root", "count") == IIOMetadataFormat.VALUE_ARBITRARY, "count arbitrary");
+        check(f.getAttributeDataType("root", "count") == IIOMetadataFormat.DATATYPE_INTEGER, "count integer");
+        check(f.isAttributeRequired("root", "count"), "count required");
+        check("5".equals(f.getAttributeDefaultValue("root", "count")), "count default");
+
+        check(f.getAttributeValueType("root", "mode") == IIOMetadataFormat.VALUE_ENUMERATION, "mode enumeration");
+        check(Arrays.equals(f.getAttributeEnumerations("root", "mode"), new String[]{"fast", "slow"}), "mode enumerations");
+        check(f.getAttributeDataType("root", "mode") == IIOMetadataFormat.DATATYPE_STRING, "mode string");
+
+        check(f.getAttributeValueType("root", "range") == IIOMetadataFormat.VALUE_RANGE_MIN_INCLUSIVE, "range min-inclusive");
+        check("0".equals(f.getAttributeMinValue("root", "range")), "range min");
+        check("100".equals(f.getAttributeMaxValue("root", "range")), "range max");
+
+        check(f.getAttributeValueType("root", "list") == IIOMetadataFormat.VALUE_LIST, "list value type");
+        check(f.getAttributeListMinLength("root", "list") == 1, "list min length");
+        check(f.getAttributeListMaxLength("root", "list") == 4, "list max length");
+
+        check(f.getAttributeValueType("root", "flag") == IIOMetadataFormat.VALUE_ENUMERATION, "flag enumeration");
+        check(f.getAttributeDataType("root", "flag") == IIOMetadataFormat.DATATYPE_BOOLEAN, "flag boolean");
+        check(Arrays.equals(f.getAttributeEnumerations("root", "flag"), new String[]{"TRUE", "FALSE"}), "flag enumerations");
+        check("FALSE".equals(f.getAttributeDefaultValue("root", "flag")), "flag default FALSE");
+
+        // object value: arbitrary
+        check(f.getObjectValueType("root") == IIOMetadataFormat.VALUE_ARBITRARY, "object value arbitrary");
+        check(f.getObjectClass("root") == String.class, "object class String");
+        check("dflt".equals(f.getObjectDefaultValue("root")), "object default value");
+
+        // the real standard format instance through the interface type
+        IIOMetadataFormat std = IIOMetadataFormatImpl.getStandardFormatInstance();
+        check("javax_imageio_1.0".equals(std.getRootName()), "standard root name");
+        check(std.getChildPolicy("javax_imageio_1.0") == IIOMetadataFormat.CHILD_POLICY_SOME, "standard root policy SOME");
+        String[] rootChildren = std.getChildNames("javax_imageio_1.0");
+        check(rootChildren != null && contains(rootChildren, "Chroma") && contains(rootChildren, "Text"),
+              "standard root children");
+        check(std.canNodeAppear("Chroma", null) && std.canNodeAppear("Text", null), "standard canNodeAppear");
+        check(std.getChildPolicy("Text") == IIOMetadataFormat.CHILD_POLICY_REPEAT, "Text policy REPEAT");
+        check(std.getElementMinChildren("Text") == 0, "Text min children");
+        check(std.getElementMaxChildren("Text") == Integer.MAX_VALUE, "Text max children");
+
+        // contract exceptions
+        expectThrows(IllegalArgumentException.class, () -> f.getElementMinChildren("root"),
+                     "getElementMinChildren on non-REPEAT");
+        expectThrows(IllegalArgumentException.class, () -> f.getAttributeEnumerations("root", "count"),
+                     "getAttributeEnumerations on non-enumeration");
+        expectThrows(IllegalArgumentException.class, () -> f.getChildPolicy("absent"),
+                     "getChildPolicy unknown element");
+    }
+
+    static boolean contains(String[] arr, String s) {
+        for (String x : arr) if (s.equals(x)) return true;
+        return false;
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

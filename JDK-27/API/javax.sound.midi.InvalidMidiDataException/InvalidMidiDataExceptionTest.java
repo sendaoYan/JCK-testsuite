@@ -1,21 +1,78 @@
 /*
  * @test
- * @summary javax.sound.midi.InvalidMidiDataException conformance: behavioral.
+ * @summary javax.sound.midi.InvalidMidiDataException conformance: white-box structure + black-box behavior.
  * @run main InvalidMidiDataExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import javax.sound.midi.InvalidMidiDataException;
 
 public class InvalidMidiDataExceptionTest {
     static int passed;
-    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    public static void main(String[] a) throws Exception {
-        javax.sound.midi.InvalidMidiDataException e = new javax.sound.midi.InvalidMidiDataException();
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void expectThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        boolean thrown = false;
+        try { r.run(); } catch (Throwable t) {
+            thrown = true;
+            check(expected.isAssignableFrom(t.getClass()),
+                  msg + " expected " + expected.getSimpleName() + " but got " + t.getClass().getSimpleName());
+        }
+        check(thrown, msg + " should throw " + expected.getSimpleName());
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.sound.midi.InvalidMidiDataException");
+        check(c != null, "loads");
+        int mods = c.getModifiers();
+        check(c.isInterface() == false, "is interface");
+        check(c.isAnnotation() == false, "is annotation");
+        check(c.isEnum() == false, "is enum");
+        check(Modifier.isPublic(mods), "public modifier");
+        check(Modifier.isAbstract(mods) == false, "not abstract");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Exception"), "superclass Exception");
+        check(c.getInterfaces().length == 0, "interface count");
+        Constructor<?>[] ctors = c.getDeclaredConstructors();
+        check(ctors.length == 2, "constructor count");
+        boolean hasString = false;
+        for (Constructor<?> k : ctors) {
+            if (k.getParameterTypes().length == 1 && k.getParameterTypes()[0] == String.class) hasString = true;
+        }
+        check(hasString, "String constructor present");
+        boolean hasSvid = false;
+        for (Field f : c.getDeclaredFields()) {
+            if (f.getName().equals("serialVersionUID")) hasSvid = true;
+        }
+        check(hasSvid, "serialVersionUID present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        InvalidMidiDataException e = new InvalidMidiDataException();
+        check(e != null, "no-arg constructor");
         check(e instanceof Exception, "is Exception");
-        javax.sound.midi.InvalidMidiDataException e2 = new javax.sound.midi.InvalidMidiDataException("m");
-        check("m".equals(e2.getMessage()), "message");
+        check(e.getMessage() == null, "no-arg message null");
+
+        InvalidMidiDataException e2 = new InvalidMidiDataException("bad MIDI data");
+        check("bad MIDI data".equals(e2.getMessage()), "String constructor message");
+
+        InvalidMidiDataException e3 = new InvalidMidiDataException("");
+        check("".equals(e3.getMessage()), "empty message");
+
+        expectThrows(InvalidMidiDataException.class,
+                () -> { throw new InvalidMidiDataException("boom"); },
+                "throw/catch round-trip");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

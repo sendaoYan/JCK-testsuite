@@ -1,35 +1,74 @@
 /*
  * @test
- * @summary javax.sound.midi.MidiDevice conformance: interface hierarchy and methods.
+ * @summary javax.sound.midi.MidiDevice conformance: white-box structure + black-box behavior.
+ * @key sound
  * @run main MidiDeviceTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
+import java.lang.reflect.Modifier;
+import javax.sound.midi.MidiDevice;
+import javax.sound.midi.MidiSystem;
+import javax.sound.midi.MidiUnavailableException;
+import javax.sound.midi.Receiver;
+import javax.sound.midi.Transmitter;
 
 public class MidiDeviceTest {
     static int passed;
-    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    public static void main(String[] a) throws Exception {
+    static void check(boolean cond, String msg) { if (!cond) throw new AssertionError(msg); passed++; }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.sound.midi.MidiDevice");
-        check(c.isInterface(), "isInterface");
-        check(Modifier.isPublic(c.getModifiers()), "public");
-        check(c.getInterfaces().length == 1, "direct interface count");
-        Set<String> si = new HashSet<>(); for (Class<?> i : c.getInterfaces()) si.add(i.getName());
-        check(si.contains("java.lang.AutoCloseable"), "extends java.lang.AutoCloseable");
-        Set<String> dm = new HashSet<>(); for (Method m : c.getDeclaredMethods()) dm.add(m.getName());
-        check(dm.contains("getDeviceInfo"), "method getDeviceInfo");
-        check(dm.contains("open"), "method open");
-        check(dm.contains("close"), "method close");
-        check(dm.contains("isOpen"), "method isOpen");
-        check(dm.contains("getMicrosecondPosition"), "method getMicrosecondPosition");
-        check(dm.contains("getMaxReceivers"), "method getMaxReceivers");
-        check(dm.contains("getMaxTransmitters"), "method getMaxTransmitters");
-        check(dm.contains("getReceiver"), "method getReceiver");
-        check(dm.contains("getReceivers"), "method getReceivers");
-        check(dm.contains("getTransmitter"), "method getTransmitter");
-        check(dm.contains("getTransmitters"), "method getTransmitters");
+        check(c.isInterface(), "is interface");
+        check(Modifier.isPublic(c.getModifiers()), "is public");
+        check(c.getInterfaces().length == 1, "one direct superinterface");
+        check(c.getInterfaces()[0].getName().equals("java.lang.AutoCloseable"), "extends AutoCloseable");
+        java.util.Set<String> methods = new java.util.HashSet<>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) methods.add(m.getName());
+        for (String n : new String[]{"getDeviceInfo", "open", "close", "isOpen", "getMicrosecondPosition", "getMaxReceivers", "getMaxTransmitters", "getReceiver", "getReceivers", "getTransmitter", "getTransmitters"})
+            check(methods.contains(n), "method " + n);
+    }
+
+    static void testBlackBox() throws Exception {
+        MidiDevice.Info[] infos = MidiSystem.getMidiDeviceInfo();
+        check(infos != null, "getMidiDeviceInfo non-null array");
+        for (MidiDevice.Info info : infos) {
+            try {
+                MidiDevice dev = MidiSystem.getMidiDevice(info);
+                check(dev != null, "getMidiDevice non-null");
+                check(dev.getDeviceInfo() != null, "getDeviceInfo non-null");
+                check(!dev.isOpen(), "isOpen false before open");
+                dev.open();
+                check(dev.isOpen(), "isOpen true after open");
+                check(dev.getMicrosecondPosition() >= 0L, "microsecond position non-negative");
+                check(dev.getMaxReceivers() >= -1, "maxReceivers >= -1");
+                check(dev.getMaxTransmitters() >= -1, "maxTransmitters >= -1");
+                check(dev.getReceivers() != null, "getReceivers non-null");
+                check(dev.getTransmitters() != null, "getTransmitters non-null");
+                try {
+                    Receiver r = dev.getReceiver();
+                    check(r != null, "getReceiver non-null");
+                    r.close();
+                } catch (MidiUnavailableException expected) {
+                    // device may legitimately expose no receivers
+                }
+                try {
+                    Transmitter tx = dev.getTransmitter();
+                    check(tx != null, "getTransmitter non-null");
+                    tx.close();
+                } catch (MidiUnavailableException expected) {
+                    // device may legitimately expose no transmitters
+                }
+                dev.close();
+                check(!dev.isOpen(), "isOpen false after close");
+            } catch (MidiUnavailableException e) {
+                // device could not be opened on this system; skip it
+            }
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
