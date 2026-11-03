@@ -1,11 +1,17 @@
 /*
  * @test
- * @summary java.io.SyncFailedException API conformance: constructors and inheritance.
+ * @summary java.io.SyncFailedException conformance: white-box structure + black-box
+ *          behavior (the single String constructor; real trigger: FileDescriptor.sync()
+ *          on an unbound descriptor; contrast: sync succeeding on a real file).
  * @run main SyncFailedExceptionTest
  */
 
+import java.io.File;
+import java.io.FileDescriptor;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.io.SyncFailedException;
+import java.lang.reflect.Constructor;
 
 public class SyncFailedExceptionTest {
     static int passed;
@@ -15,14 +21,55 @@ public class SyncFailedExceptionTest {
         passed++;
     }
 
-    static void testSyncFailedException() {
-        SyncFailedException e = new SyncFailedException("m");
-        check(e instanceof IOException, "extends IOException");
-        check("m".equals(e.getMessage()), "message from (String) ctor");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.io.SyncFailedException");
+        check(c.getSuperclass().getName().equals("java.io.IOException"), "extends IOException");
+        int ctors = 0;
+        for (Constructor<?> k : c.getConstructors()) ctors++;
+        check(ctors == 1 && c.getConstructor(String.class) != null,
+              "single public (String) constructor");
     }
 
-    public static void main(String[] args) {
-        testSyncFailedException();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        // 1. constructor keeps the message (the reason sync failed)
+        SyncFailedException sfe = new SyncFailedException("sync failed");
+        check("sync failed".equals(sfe.getMessage()), "(String) message kept");
+        check(sfe.getCause() == null, "no cause");
+
+        // 2. real trigger: syncing a descriptor that is not backed by a real fd
+        try {
+            new FileDescriptor().sync();
+            check(false, "sync on an unbound descriptor must throw");
+        } catch (SyncFailedException expected) {
+            check(expected.getMessage() != null,
+                  "sync failure reports a reason: " + expected.getMessage());
+        }
+
+        // 3. contrast: sync succeeds on a descriptor belonging to a real open file
+        File tmp = File.createTempFile("sfe", ".dat");
+        try (RandomAccessFile raf = new RandomAccessFile(tmp, "rw")) {
+            raf.write(42);
+            FileDescriptor fd = raf.getFD();
+            check(fd.valid(), "descriptor valid while open");
+            fd.sync();
+            passed++;                                  // returned normally
+        } finally {
+            tmp.delete();
+        }
+
+        // 4. caught as IOException by callers that only know about IOException
+        try {
+            throw new SyncFailedException("m");
+        } catch (IOException io) {
+            check(io instanceof SyncFailedException, "catchable as IOException");
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
