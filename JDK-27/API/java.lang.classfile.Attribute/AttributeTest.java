@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.lang.classfile.Attribute conformance: behavioral.
+ * @summary java.lang.classfile.Attribute conformance: white-box structure + black-box behavior.
  * @run main AttributeTest
  */
 
@@ -9,8 +9,10 @@ import java.lang.classfile.attribute.*;
 import java.lang.classfile.constantpool.*;
 import java.lang.classfile.instruction.*;
 import java.lang.constant.*;
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.nio.file.*;
 
 public class AttributeTest {
     static int passed;
@@ -23,11 +25,52 @@ public class AttributeTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+    static final ClassReader[] cap = new ClassReader[1];
+    static final BufWriter[] cap2 = new BufWriter[1];
+    static final BranchInstruction[] br = new BranchInstruction[1];
+    static final SwitchCase[] sc = new SwitchCase[1];
+    static final TableSwitchInstruction[] ts = new TableSwitchInstruction[1];
+    static final LookupSwitchInstruction[] ls = new LookupSwitchInstruction[1];
+    static final ExceptionCatch[] ec = new ExceptionCatch[1];
+    static final TypeAnnotation.TypeArgumentTarget[] ta = new TypeAnnotation.TypeArgumentTarget[1];
+    static final TypeAnnotation.LocalVarTarget[] lvt = new TypeAnnotation.LocalVarTarget[1];
+    static final TypeAnnotation.LocalVarTargetInfo[] lvi = new TypeAnnotation.LocalVarTargetInfo[1];
+    static final StackMapFrameInfo.UninitializedVerificationTypeInfo[] uv = new StackMapFrameInfo.UninitializedVerificationTypeInfo[1];
+    static final TypeAnnotation.OffsetTarget[] ot = new TypeAnnotation.OffsetTarget[1];
+
+    // ---- custom attribute support for black-box above ----
+    static class CA extends CustomAttribute<CA> { CA(AttributeMapper<CA> m) { super(m); } }
+    static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
+    static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.classfile.Attribute");
+        check(c != null, "java.lang.classfile.Attribute loads");
+        check(c.getName().equals("java.lang.classfile.Attribute"), "binary name java.lang.classfile.Attribute");
+        check(Modifier.isPublic(c.getModifiers()), "java.lang.classfile.Attribute is public");
+        check(c.isInterface(), "java.lang.classfile.Attribute is an interface");
+        check(c.getSuperclass() == null, "java.lang.classfile.Attribute has no superclass");
+        check(declares(c, "attributeName"), "declares attributeName");
+        check(declares(c, "attributeMapper"), "declares attributeMapper");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        byte[] b = ClassFile.of().build(ClassDesc.of("pkg.T"), cb -> cb.with(SourceFileAttribute.of("T.java")));
+        ClassModel cm = ClassFile.of().parse(b);
+        java.util.List<Attribute<?>> attrs = cm.attributes();
+        check(attrs.size() >= 1, "class has attributes");
+        Attribute<?> sf = attrs.stream().filter(a -> a.attributeName().stringValue().equals("SourceFile")).findFirst().get();
+        check(sf.attributeName().stringValue().equals("SourceFile"), "attributeName");
+        check(sf.attributeMapper() == Attributes.sourceFile(), "attributeMapper == Attributes.sourceFile()");
+
+    }
 
     public static void main(String[] args) throws Exception {
-        Attribute<?> a = SourceFileAttribute.of("X.java");
-        check("SourceFile".equals(a.attributeName().stringValue()), "attributeName");
-        check(a.attributeMapper() == Attributes.sourceFile(), "attributeMapper");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

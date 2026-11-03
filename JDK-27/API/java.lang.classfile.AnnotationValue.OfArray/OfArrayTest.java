@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.lang.classfile.AnnotationValue.OfArray conformance: behavioral.
+ * @summary java.lang.classfile.AnnotationValue.OfArray conformance: white-box structure + black-box behavior.
  * @run main OfArrayTest
  */
 
@@ -9,8 +9,10 @@ import java.lang.classfile.attribute.*;
 import java.lang.classfile.constantpool.*;
 import java.lang.classfile.instruction.*;
 import java.lang.constant.*;
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.nio.file.*;
 
 public class OfArrayTest {
     static int passed;
@@ -23,10 +25,49 @@ public class OfArrayTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+    static final ClassReader[] cap = new ClassReader[1];
+    static final BufWriter[] cap2 = new BufWriter[1];
+    static final BranchInstruction[] br = new BranchInstruction[1];
+    static final SwitchCase[] sc = new SwitchCase[1];
+    static final TableSwitchInstruction[] ts = new TableSwitchInstruction[1];
+    static final LookupSwitchInstruction[] ls = new LookupSwitchInstruction[1];
+    static final ExceptionCatch[] ec = new ExceptionCatch[1];
+    static final TypeAnnotation.TypeArgumentTarget[] ta = new TypeAnnotation.TypeArgumentTarget[1];
+    static final TypeAnnotation.LocalVarTarget[] lvt = new TypeAnnotation.LocalVarTarget[1];
+    static final TypeAnnotation.LocalVarTargetInfo[] lvi = new TypeAnnotation.LocalVarTargetInfo[1];
+    static final StackMapFrameInfo.UninitializedVerificationTypeInfo[] uv = new StackMapFrameInfo.UninitializedVerificationTypeInfo[1];
+    static final TypeAnnotation.OffsetTarget[] ot = new TypeAnnotation.OffsetTarget[1];
+
+    // ---- custom attribute support for black-box above ----
+    static class CA extends CustomAttribute<CA> { CA(AttributeMapper<CA> m) { super(m); } }
+    static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
+    static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.classfile.AnnotationValue$OfArray");
+        check(c != null, "java.lang.classfile.AnnotationValue.OfArray loads");
+        check(c.getName().equals("java.lang.classfile.AnnotationValue$OfArray"), "binary name java.lang.classfile.AnnotationValue$OfArray");
+        check(Modifier.isPublic(c.getModifiers()), "java.lang.classfile.AnnotationValue.OfArray is public");
+        check(c.isInterface(), "java.lang.classfile.AnnotationValue.OfArray is an interface");
+        check(c.getSuperclass() == null, "java.lang.classfile.AnnotationValue.OfArray has no superclass");
+        check(declares(c, "values"), "declares values");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        AnnotationValue.OfArray v = AnnotationValue.ofArray(AnnotationValue.ofInt(1), AnnotationValue.ofInt(2), AnnotationValue.ofInt(3));
+        check(v.tag() == AnnotationValue.TAG_ARRAY, "tag");
+        check(v.values().size() == 3, "size 3");
+        check(((AnnotationValue.OfInt) v.values().get(0)).intValue() == 1, "first int");
+        check(((AnnotationValue.OfInt) v.values().get(2)).intValue() == 3, "last int");
+
+    }
 
     public static void main(String[] args) throws Exception {
-        AnnotationValue.OfArray v = AnnotationValue.ofArray(AnnotationValue.ofInt(1), AnnotationValue.ofInt(2));
-        check(v.values().size() == 2, "values size");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

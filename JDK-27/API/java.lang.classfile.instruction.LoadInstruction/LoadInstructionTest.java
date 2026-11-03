@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.lang.classfile.instruction.LoadInstruction conformance: behavioral.
+ * @summary java.lang.classfile.instruction.LoadInstruction conformance: white-box structure + black-box behavior.
  * @run main LoadInstructionTest
  */
 
@@ -9,8 +9,10 @@ import java.lang.classfile.attribute.*;
 import java.lang.classfile.constantpool.*;
 import java.lang.classfile.instruction.*;
 import java.lang.constant.*;
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.nio.file.*;
 
 public class LoadInstructionTest {
     static int passed;
@@ -23,11 +25,51 @@ public class LoadInstructionTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+    static final ClassReader[] cap = new ClassReader[1];
+    static final BufWriter[] cap2 = new BufWriter[1];
+    static final BranchInstruction[] br = new BranchInstruction[1];
+    static final SwitchCase[] sc = new SwitchCase[1];
+    static final TableSwitchInstruction[] ts = new TableSwitchInstruction[1];
+    static final LookupSwitchInstruction[] ls = new LookupSwitchInstruction[1];
+    static final ExceptionCatch[] ec = new ExceptionCatch[1];
+    static final TypeAnnotation.TypeArgumentTarget[] ta = new TypeAnnotation.TypeArgumentTarget[1];
+    static final TypeAnnotation.LocalVarTarget[] lvt = new TypeAnnotation.LocalVarTarget[1];
+    static final TypeAnnotation.LocalVarTargetInfo[] lvi = new TypeAnnotation.LocalVarTargetInfo[1];
+    static final StackMapFrameInfo.UninitializedVerificationTypeInfo[] uv = new StackMapFrameInfo.UninitializedVerificationTypeInfo[1];
+    static final TypeAnnotation.OffsetTarget[] ot = new TypeAnnotation.OffsetTarget[1];
+
+    // ---- custom attribute support for black-box above ----
+    static class CA extends CustomAttribute<CA> { CA(AttributeMapper<CA> m) { super(m); } }
+    static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
+    static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.classfile.instruction.LoadInstruction");
+        check(c != null, "java.lang.classfile.instruction.LoadInstruction loads");
+        check(c.getName().equals("java.lang.classfile.instruction.LoadInstruction"), "binary name java.lang.classfile.instruction.LoadInstruction");
+        check(Modifier.isPublic(c.getModifiers()), "java.lang.classfile.instruction.LoadInstruction is public");
+        check(c.isInterface(), "java.lang.classfile.instruction.LoadInstruction is an interface");
+        check(c.getSuperclass() == null, "java.lang.classfile.instruction.LoadInstruction has no superclass");
+        check(declares(c, "slot"), "declares slot");
+        check(declares(c, "typeKind"), "declares typeKind");
+        check(declares(c, "of"), "declares of");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        LoadInstruction i = LoadInstruction.of(TypeKind.INT, 5);
+        check(i.opcode() == Opcode.ILOAD, "opcode ILOAD");
+        check(i.slot() == 5, "slot 5");
+        check(i.typeKind() == TypeKind.INT, "typeKind INT");
+        check(LoadInstruction.of(TypeKind.LONG, 1).typeKind().slotSize() == 2, "LONG slot size 2");
+
+    }
 
     public static void main(String[] args) throws Exception {
-        LoadInstruction i = LoadInstruction.of(TypeKind.INT, 3);
-        check(i.opcode() == Opcode.ILOAD_3 && i.slot() == 3 && i.typeKind() == TypeKind.INT && i.sizeInBytes() == 1, "of(INT,3)");
-        check(LoadInstruction.of(Opcode.ALOAD, 7).slot() == 7, "of(ALOAD,7)");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

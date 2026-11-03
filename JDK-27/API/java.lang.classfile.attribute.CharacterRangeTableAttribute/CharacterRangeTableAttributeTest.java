@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.lang.classfile.attribute.CharacterRangeTableAttribute conformance: behavioral.
+ * @summary java.lang.classfile.attribute.CharacterRangeTableAttribute conformance: white-box structure + black-box behavior.
  * @run main CharacterRangeTableAttributeTest
  */
 
@@ -9,8 +9,10 @@ import java.lang.classfile.attribute.*;
 import java.lang.classfile.constantpool.*;
 import java.lang.classfile.instruction.*;
 import java.lang.constant.*;
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.nio.file.*;
 
 public class CharacterRangeTableAttributeTest {
     static int passed;
@@ -23,10 +25,49 @@ public class CharacterRangeTableAttributeTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+    static final ClassReader[] cap = new ClassReader[1];
+    static final BufWriter[] cap2 = new BufWriter[1];
+    static final BranchInstruction[] br = new BranchInstruction[1];
+    static final SwitchCase[] sc = new SwitchCase[1];
+    static final TableSwitchInstruction[] ts = new TableSwitchInstruction[1];
+    static final LookupSwitchInstruction[] ls = new LookupSwitchInstruction[1];
+    static final ExceptionCatch[] ec = new ExceptionCatch[1];
+    static final TypeAnnotation.TypeArgumentTarget[] ta = new TypeAnnotation.TypeArgumentTarget[1];
+    static final TypeAnnotation.LocalVarTarget[] lvt = new TypeAnnotation.LocalVarTarget[1];
+    static final TypeAnnotation.LocalVarTargetInfo[] lvi = new TypeAnnotation.LocalVarTargetInfo[1];
+    static final StackMapFrameInfo.UninitializedVerificationTypeInfo[] uv = new StackMapFrameInfo.UninitializedVerificationTypeInfo[1];
+    static final TypeAnnotation.OffsetTarget[] ot = new TypeAnnotation.OffsetTarget[1];
+
+    // ---- custom attribute support for black-box above ----
+    static class CA extends CustomAttribute<CA> { CA(AttributeMapper<CA> m) { super(m); } }
+    static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
+    static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.classfile.attribute.CharacterRangeTableAttribute");
+        check(c != null, "java.lang.classfile.attribute.CharacterRangeTableAttribute loads");
+        check(c.getName().equals("java.lang.classfile.attribute.CharacterRangeTableAttribute"), "binary name java.lang.classfile.attribute.CharacterRangeTableAttribute");
+        check(Modifier.isPublic(c.getModifiers()), "java.lang.classfile.attribute.CharacterRangeTableAttribute is public");
+        check(c.isInterface(), "java.lang.classfile.attribute.CharacterRangeTableAttribute is an interface");
+        check(c.getSuperclass() == null, "java.lang.classfile.attribute.CharacterRangeTableAttribute has no superclass");
+        check(declares(c, "characterRangeTable"), "declares characterRangeTable");
+        check(declares(c, "of"), "declares of");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        CharacterRangeInfo i = CharacterRangeInfo.of(0, 5, 0, 10, CharacterRange.FLAG_BLOCK);
+        CharacterRangeTableAttribute a = CharacterRangeTableAttribute.of(java.util.List.of(i));
+        check(a.characterRangeTable().size() == 1, "size");
+        check(a.characterRangeTable().get(0).characterRangeEnd() == 10, "end");
+
+    }
 
     public static void main(String[] args) throws Exception {
-        CharacterRangeTableAttribute a = CharacterRangeTableAttribute.of(List.of(CharacterRangeInfo.of(1, 2, 3, 4, 5)));
-        check(a.characterRangeTable().size() == 1, "characterRangeTable");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

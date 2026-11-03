@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.lang.classfile.instruction.ConstantInstruction.ArgumentConstantInstruction conformance: behavioral.
+ * @summary java.lang.classfile.instruction.ConstantInstruction.ArgumentConstantInstruction conformance: white-box structure + black-box behavior.
  * @run main ArgumentConstantInstructionTest
  */
 
@@ -9,8 +9,10 @@ import java.lang.classfile.attribute.*;
 import java.lang.classfile.constantpool.*;
 import java.lang.classfile.instruction.*;
 import java.lang.constant.*;
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.nio.file.*;
 
 public class ArgumentConstantInstructionTest {
     static int passed;
@@ -23,10 +25,49 @@ public class ArgumentConstantInstructionTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+    static final ClassReader[] cap = new ClassReader[1];
+    static final BufWriter[] cap2 = new BufWriter[1];
+    static final BranchInstruction[] br = new BranchInstruction[1];
+    static final SwitchCase[] sc = new SwitchCase[1];
+    static final TableSwitchInstruction[] ts = new TableSwitchInstruction[1];
+    static final LookupSwitchInstruction[] ls = new LookupSwitchInstruction[1];
+    static final ExceptionCatch[] ec = new ExceptionCatch[1];
+    static final TypeAnnotation.TypeArgumentTarget[] ta = new TypeAnnotation.TypeArgumentTarget[1];
+    static final TypeAnnotation.LocalVarTarget[] lvt = new TypeAnnotation.LocalVarTarget[1];
+    static final TypeAnnotation.LocalVarTargetInfo[] lvi = new TypeAnnotation.LocalVarTargetInfo[1];
+    static final StackMapFrameInfo.UninitializedVerificationTypeInfo[] uv = new StackMapFrameInfo.UninitializedVerificationTypeInfo[1];
+    static final TypeAnnotation.OffsetTarget[] ot = new TypeAnnotation.OffsetTarget[1];
+
+    // ---- custom attribute support for black-box above ----
+    static class CA extends CustomAttribute<CA> { CA(AttributeMapper<CA> m) { super(m); } }
+    static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
+    static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.classfile.instruction.ConstantInstruction$ArgumentConstantInstruction");
+        check(c != null, "java.lang.classfile.instruction.ConstantInstruction.ArgumentConstantInstruction loads");
+        check(c.getName().equals("java.lang.classfile.instruction.ConstantInstruction$ArgumentConstantInstruction"), "binary name java.lang.classfile.instruction.ConstantInstruction$ArgumentConstantInstruction");
+        check(Modifier.isPublic(c.getModifiers()), "java.lang.classfile.instruction.ConstantInstruction.ArgumentConstantInstruction is public");
+        check(c.isInterface(), "java.lang.classfile.instruction.ConstantInstruction.ArgumentConstantInstruction is an interface");
+        check(c.getSuperclass() == null, "java.lang.classfile.instruction.ConstantInstruction.ArgumentConstantInstruction has no superclass");
+        check(declares(c, "constantValue"), "declares constantValue");
+        check(declares(c, "typeKind"), "declares typeKind");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        ConstantInstruction.ArgumentConstantInstruction i = ConstantInstruction.ofArgument(Opcode.SIPUSH, 300);
+        check(i.opcode() == Opcode.SIPUSH, "opcode");
+        check(i.constantValue().equals(300), "constantValue 300");
+        check(i.typeKind() == TypeKind.INT, "typeKind INT");
+
+    }
 
     public static void main(String[] args) throws Exception {
-        ConstantInstruction.ArgumentConstantInstruction i = ConstantInstruction.ofArgument(Opcode.BIPUSH, 7);
-        check(i.opcode() == Opcode.BIPUSH && i.constantValue() == 7, "argument");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

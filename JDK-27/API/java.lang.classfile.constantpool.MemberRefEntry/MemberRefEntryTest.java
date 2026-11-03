@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.lang.classfile.constantpool.MemberRefEntry conformance: behavioral.
+ * @summary java.lang.classfile.constantpool.MemberRefEntry conformance: white-box structure + black-box behavior.
  * @run main MemberRefEntryTest
  */
 
@@ -9,8 +9,10 @@ import java.lang.classfile.attribute.*;
 import java.lang.classfile.constantpool.*;
 import java.lang.classfile.instruction.*;
 import java.lang.constant.*;
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.nio.file.*;
 
 public class MemberRefEntryTest {
     static int passed;
@@ -23,13 +25,52 @@ public class MemberRefEntryTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+    static final ClassReader[] cap = new ClassReader[1];
+    static final BufWriter[] cap2 = new BufWriter[1];
+    static final BranchInstruction[] br = new BranchInstruction[1];
+    static final SwitchCase[] sc = new SwitchCase[1];
+    static final TableSwitchInstruction[] ts = new TableSwitchInstruction[1];
+    static final LookupSwitchInstruction[] ls = new LookupSwitchInstruction[1];
+    static final ExceptionCatch[] ec = new ExceptionCatch[1];
+    static final TypeAnnotation.TypeArgumentTarget[] ta = new TypeAnnotation.TypeArgumentTarget[1];
+    static final TypeAnnotation.LocalVarTarget[] lvt = new TypeAnnotation.LocalVarTarget[1];
+    static final TypeAnnotation.LocalVarTargetInfo[] lvi = new TypeAnnotation.LocalVarTargetInfo[1];
+    static final StackMapFrameInfo.UninitializedVerificationTypeInfo[] uv = new StackMapFrameInfo.UninitializedVerificationTypeInfo[1];
+    static final TypeAnnotation.OffsetTarget[] ot = new TypeAnnotation.OffsetTarget[1];
+
+    // ---- custom attribute support for black-box above ----
+    static class CA extends CustomAttribute<CA> { CA(AttributeMapper<CA> m) { super(m); } }
+    static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
+    static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.classfile.constantpool.MemberRefEntry");
+        check(c != null, "java.lang.classfile.constantpool.MemberRefEntry loads");
+        check(c.getName().equals("java.lang.classfile.constantpool.MemberRefEntry"), "binary name java.lang.classfile.constantpool.MemberRefEntry");
+        check(Modifier.isPublic(c.getModifiers()), "java.lang.classfile.constantpool.MemberRefEntry is public");
+        check(c.isInterface(), "java.lang.classfile.constantpool.MemberRefEntry is an interface");
+        check(c.getSuperclass() == null, "java.lang.classfile.constantpool.MemberRefEntry has no superclass");
+        check(declares(c, "owner"), "declares owner");
+        check(declares(c, "nameAndType"), "declares nameAndType");
+        check(declares(c, "name"), "declares name");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        MemberRefEntry mre = cpb.methodRefEntry(ClassDesc.of("java.lang.Integer"), "valueOf", MethodTypeDesc.of(ClassDesc.of("java.lang.Integer"), ConstantDescs.CD_int));
+        check(mre.owner().asInternalName().equals("java/lang/Integer"), "owner");
+        check(mre.nameAndType().name().stringValue().equals("valueOf"), "nameAndType name");
+        check(mre.name().stringValue().equals("valueOf"), "name default");
+        check(mre.type().stringValue().equals("(I)Ljava/lang/Integer;"), "type default");
+
+    }
 
     public static void main(String[] args) throws Exception {
-        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
-        MemberRefEntry e = cpb.methodRefEntry(ClassDesc.of("java.lang.String"), "length", MethodTypeDesc.of(ConstantDescs.CD_int));
-        check("java/lang/String".equals(e.owner().asInternalName()), "owner");
-        check("length".equals(e.name().stringValue()), "name");
-        check("()I".equals(e.type().stringValue()), "type");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
