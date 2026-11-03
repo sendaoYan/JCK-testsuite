@@ -1,14 +1,10 @@
 /*
  * @test
- * @summary java.util.concurrent.Flow.Subscription conformance: interface and
- *          request() called on subscribe.
+ * @summary java.util.concurrent.Flow$Subscription conformance: white-box structure + black-box behavior.
  * @run main SubscriptionTest
  */
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Flow;
-import java.util.concurrent.SubmissionPublisher;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class SubscriptionTest {
     static int passed;
@@ -18,24 +14,44 @@ public class SubscriptionTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        check(Flow.Subscription.class.isInterface(), "Subscription is an interface");
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    }
 
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.concurrent.Flow$Subscription");
+        check(c.isInterface(), "Subscription is an interface");
+        hasMethod(c, "request", long.class);
+        hasMethod(c, "cancel");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
         SubmissionPublisher<Integer> pub = new SubmissionPublisher<>();
-        final CountDownLatch latch = new CountDownLatch(1);
+        final CountDownLatch requested = new CountDownLatch(1);
         Flow.Subscriber<Integer> sub = new Flow.Subscriber<Integer>() {
             public void onSubscribe(Flow.Subscription s) {
                 s.request(Long.MAX_VALUE);
-                latch.countDown();
+                requested.countDown();
             }
             public void onNext(Integer i) { }
             public void onError(Throwable t) { }
             public void onComplete() { }
         };
         pub.subscribe(sub);
-        check(latch.await(5, TimeUnit.SECONDS), "request() invoked on subscribe");
+        check(requested.await(5, TimeUnit.SECONDS), "request() invoked on subscribe");
         pub.close();
+    }
 
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

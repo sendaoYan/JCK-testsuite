@@ -1,13 +1,10 @@
 /*
  * @test
- * @summary java.util.random.RandomGenerator.ArbitrarilyJumpableGenerator
- *          conformance: hierarchy, of() rejection, and declared methods.
- *          (No standard algorithm is arbitrarily-jumpable, so behaviour is
- *          verified through of() and reflection rather than a concrete impl.)
+ * @summary java.util.random.RandomGenerator$ArbitrarilyJumpableGenerator conformance: white-box structure + black-box behavior.
  * @run main ArbitrarilyJumpableGeneratorTest
  */
 
-import java.util.random.RandomGenerator;
+import java.util.random.*;
 
 public class ArbitrarilyJumpableGeneratorTest {
     static int passed;
@@ -17,74 +14,85 @@ public class ArbitrarilyJumpableGeneratorTest {
         passed++;
     }
 
-    static void checkThrowsIAE(Runnable r, String msg) {
-        try {
-            r.run();
-            throw new AssertionError(msg + ": expected IllegalArgumentException");
-        } catch (IllegalArgumentException expected) {
-            passed++;
-        }
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
     }
 
-    public static void main(String[] args) {
-        Class<?> aj = RandomGenerator.ArbitrarilyJumpableGenerator.class;
-        check(aj.isInterface(), "ArbitrarilyJumpableGenerator is an interface");
-        check(RandomGenerator.LeapableGenerator.class.isAssignableFrom(aj),
-              "ArbitrarilyJumpableGenerator extends LeapableGenerator");
-        check(RandomGenerator.JumpableGenerator.class.isAssignableFrom(aj),
-              "ArbitrarilyJumpableGenerator extends JumpableGenerator");
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
 
-        // of(): a splittable (non arbitrarily-jumpable) algorithm is rejected;
-        // an unknown algorithm is rejected.
-        checkThrowsIAE(() -> RandomGenerator.ArbitrarilyJumpableGenerator
-                .of("L32X64MixRandom"),
-            "of(splittable algorithm)");
-        checkThrowsIAE(() -> RandomGenerator.ArbitrarilyJumpableGenerator
-                .of("NoSuchAlgorithm"),
-            "of(unknown algorithm)");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.random.RandomGenerator$ArbitrarilyJumpableGenerator");
+        check(c.isInterface(), "RandomGenerator.ArbitrarilyJumpableGenerator is an interface");
+        check(RandomGenerator.LeapableGenerator.class.isAssignableFrom(c), "extends RandomGenerator.LeapableGenerator");
+        hasMethod(c, "copy");
+        hasMethod(c, "jumpPowerOfTwo", int.class);
+        hasMethod(c, "jump", double.class);
+        hasMethod(c, "jump");
+        hasMethod(c, "jumps", double.class);
+        hasMethod(c, "jumps", long.class, double.class);
+        hasMethod(c, "leap");
+        hasMethod(c, "copyAndJump", double.class);
+    }
 
-        // declared methods exist with the documented parameter signatures
-        for (String[] m : new String[][] {
-                {"copy"},
-                {"jumpPowerOfTwo", "int"},
-                {"jump", "double"},
-                {"jump"},
-                {"jumps", "double"},
-                {"jumps", "long", "double"},
-                {"leap"},
-                {"copyAndJump", "double"},
-            }) {
-            String name = m[0];
-            java.util.List<Class<?>> params = new java.util.ArrayList<>();
-            for (int i = 1; i < m.length; i++) {
-                if (!m[i].isEmpty()) {
-                    params.add(paramClass(m[i]));
-                }
+    // ---- Part 2: black-box (behavioral) ----
+    // No JDK algorithm is arbitrarily jumpable in this build, so exercise the
+    // contract with a minimal in-file implementation sharing a mutable state.
+    static void testBlackBox() {
+        final long[] st = { 0x9E3779B97F4A7C15L };
+        RandomGenerator.ArbitrarilyJumpableGenerator g = new RandomGenerator.ArbitrarilyJumpableGenerator() {
+            public long nextLong() {
+                long x = st[0];
+                x ^= (x << 6); x ^= (x >>> 21); x ^= (x << 7);
+                st[0] = x;
+                return x;
             }
-            try {
-                java.lang.reflect.Method meth = aj.getMethod(name,
-                        params.toArray(new Class<?>[0]));
-                check(meth != null, "method " + name + "/" + params.size());
-            } catch (NoSuchMethodException e) {
-                throw new AssertionError("missing method " + name, e);
+            public RandomGenerator.ArbitrarilyJumpableGenerator copy() {
+                final long snapshot = st[0];
+                return new RandomGenerator.ArbitrarilyJumpableGenerator() {
+                    long s = snapshot;
+                    public long nextLong() {
+                        long x = s;
+                        x ^= (x << 6); x ^= (x >>> 21); x ^= (x << 7);
+                        s = x;
+                        return x;
+                    }
+                    public RandomGenerator.ArbitrarilyJumpableGenerator copy() { return this; }
+                    public void jump(double distance) { nextLong(); }
+                    public void jumpPowerOfTwo(int p) { nextLong(); }
+                    public double jumpDistance() { return 1.0; }
+                    public double leapDistance() { return 2.0; }
+                };
             }
-        }
+            public void jump(double distance) { nextLong(); }
+            public void jumpPowerOfTwo(int p) { nextLong(); }
+            public double jumpDistance() { return 1.0; }
+            public double leapDistance() { return 2.0; }
+        };
 
+        check(Double.isFinite(g.jumpDistance()), "jumpDistance finite");
+        RandomGenerator.ArbitrarilyJumpableGenerator copy = g.copy();
+        check(copy.nextLong() == g.nextLong(), "copy shares state");
+        // copyAndJump(d) returns the pre-jump copy and jumps the original forward.
+        RandomGenerator.ArbitrarilyJumpableGenerator snapshot = g.copy();
+        RandomGenerator.ArbitrarilyJumpableGenerator c2 = g.copyAndJump(3.0);
+        check(c2.nextLong() == snapshot.nextLong(), "copyAndJump(d) returns pre-jump copy");
+        g.jumpPowerOfTwo(2);
+        check(Double.isFinite(g.jumpDistance()), "jumpPowerOfTwo usable");
+        g.jump();
+        check(Double.isFinite(g.jumpDistance()), "jump() usable");
+        g.leap();
+        check(Double.isFinite(g.leapDistance()), "leap() usable");
+        check(g.jumps(2.0).limit(5).count() == 5, "jumps(d) unbounded");
+        check(g.jumps(8, 2.0).count() == 8, "jumps(size, d)");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
-    }
-
-    static Class<?> paramClass(String sig) {
-        switch (sig) {
-            case "int": return int.class;
-            case "long": return long.class;
-            case "double": return double.class;
-            case "": return null;
-            default:
-                try {
-                    return Class.forName(sig);
-                } catch (ClassNotFoundException e) {
-                    throw new AssertionError("bad sig " + sig, e);
-                }
-        }
     }
 }

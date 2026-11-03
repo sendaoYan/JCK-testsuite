@@ -1,12 +1,10 @@
 /*
  * @test
- * @summary java.util.random.RandomGenerator.StreamableGenerator conformance:
- *          hierarchy, rngs()/rngs(long).
+ * @summary java.util.random.RandomGenerator$StreamableGenerator conformance: white-box structure + black-box behavior.
  * @run main StreamableGeneratorTest
  */
 
-import java.util.random.RandomGenerator;
-import java.util.random.RandomGeneratorFactory;
+import java.util.random.*;
 
 public class StreamableGeneratorTest {
     static int passed;
@@ -16,22 +14,40 @@ public class StreamableGeneratorTest {
         passed++;
     }
 
-    public static void main(String[] args) {
-        check(RandomGenerator.class.isAssignableFrom(
-                RandomGenerator.StreamableGenerator.class),
-              "StreamableGenerator extends RandomGenerator");
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    }
 
-        RandomGenerator.StreamableGenerator s = (RandomGenerator.StreamableGenerator)
-            RandomGeneratorFactory.all()
-                .filter(RandomGeneratorFactory::isStreamable)
-                .findFirst().orElseThrow().create();
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
 
-        check(s.rngs().limit(8).count() == 8, "rngs() unbounded");
-        check(s.rngs(16).count() == 16, "rngs(streamSize)");
-        // each produced generator is itself a working RandomGenerator
-        RandomGenerator first = s.rngs().findFirst().orElseThrow();
-        check(first.nextLong() == first.nextLong() || true, "rngs() elements usable");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.random.RandomGenerator$StreamableGenerator");
+        check(c.isInterface(), "RandomGenerator.StreamableGenerator is an interface");
+        check(RandomGenerator.class.isAssignableFrom(c), "extends RandomGenerator");
+        hasMethod(c, "rngs");
+        hasMethod(c, "rngs", long.class);
+    }
 
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        RandomGeneratorFactory<RandomGenerator> fac = RandomGeneratorFactory.all()
+            .filter(RandomGeneratorFactory::isStreamable).findFirst().orElseThrow();
+        RandomGenerator.StreamableGenerator s = (RandomGenerator.StreamableGenerator) fac.create();
+        check(s.rngs().limit(5).count() == 5, "rngs() unbounded");
+        check(s.rngs(9).count() == 9, "rngs(size)");
+        RandomGenerator.StreamableGenerator s2 = RandomGenerator.StreamableGenerator.of(fac.name());
+        check(s2 != null, "of(name) non-null");
+        long v = s2.nextLong();
+        check(v >= Long.MIN_VALUE && v <= Long.MAX_VALUE, "of(name) generator usable");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,16 +1,11 @@
 /*
  * @test
- * @summary java.util.concurrent.SubmissionPublisher conformance: subscribe,
- *          submit, consume, close, and the introspection accessors.
+ * @summary java.util.concurrent.SubmissionPublisher conformance: white-box structure + black-box behavior.
  * @run main SubmissionPublisherTest
  */
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Flow;
-import java.util.concurrent.SubmissionPublisher;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 
 public class SubmissionPublisherTest {
     static int passed;
@@ -20,13 +15,39 @@ public class SubmissionPublisherTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    }
+
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.concurrent.SubmissionPublisher");
+        check(!c.isInterface(), "class");
+        check(Flow.Publisher.class.isAssignableFrom(c), "implements Flow.Publisher");
+        check(AutoCloseable.class.isAssignableFrom(c), "implements AutoCloseable");
+        hasMethod(c, "subscribe", Flow.Subscriber.class);
+        hasMethod(c, "submit", Object.class);
+        hasMethod(c, "offer", Object.class, java.util.function.BiPredicate.class);
+        hasMethod(c, "close");
+        hasMethod(c, "closeExceptionally", Throwable.class);
+        hasMethod(c, "isClosed");
+        hasMethod(c, "getSubscribers");
+        hasMethod(c, "getNumberOfSubscribers");
+        hasMethod(c, "hasSubscribers");
+        hasMethod(c, "consume", java.util.function.Consumer.class);
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
         SubmissionPublisher<Integer> pub = new SubmissionPublisher<>();
         check(pub.getExecutor() != null, "getExecutor() non-null");
         check(pub.getMaxBufferCapacity() > 0, "getMaxBufferCapacity() > 0");
-        check(!pub.isClosed(), "!isClosed() initially");
-        check(pub.getNumberOfSubscribers() == 0, "no subscribers initially");
-        check(!pub.hasSubscribers(), "!hasSubscribers() initially");
+        check(!pub.isClosed() && pub.getNumberOfSubscribers() == 0, "initial state");
 
         CountDownLatch latch = new CountDownLatch(1);
         Flow.Subscriber<Integer> sub = new Flow.Subscriber<Integer>() {
@@ -36,15 +57,13 @@ public class SubmissionPublisherTest {
             public void onComplete() { }
         };
         pub.subscribe(sub);
-        check(pub.getNumberOfSubscribers() == 1, "one subscriber after subscribe");
-        check(pub.isSubscribed(sub), "isSubscribed()");
-        check(pub.getSubscribers().size() == 1, "getSubscribers() size 1");
+        check(pub.getNumberOfSubscribers() == 1 && pub.isSubscribed(sub), "subscribe registers");
+        check(pub.getSubscribers().size() == 1, "getSubscribers size 1");
         pub.submit(42);
-        check(latch.await(5, TimeUnit.SECONDS), "submit() delivered to subscriber");
+        check(latch.await(5, TimeUnit.SECONDS), "submit delivered");
         pub.close();
-        check(pub.isClosed(), "isClosed() after close()");
+        check(pub.isClosed(), "isClosed after close");
 
-        // consume() collects all submitted items
         SubmissionPublisher<Integer> pub2 = new SubmissionPublisher<>();
         List<Integer> collected = new ArrayList<>();
         pub2.consume(collected::add);
@@ -52,17 +71,17 @@ public class SubmissionPublisherTest {
         pub2.submit(2);
         pub2.close();
         pub2.consume(collected::add).join();
-        check(collected.contains(1) && collected.contains(2), "consume() collects items");
+        check(collected.contains(1) && collected.contains(2), "consume collects items");
 
-        // closeExceptionally()
         SubmissionPublisher<Integer> pub3 = new SubmissionPublisher<>();
         pub3.closeExceptionally(new RuntimeException("closed"));
-        check(pub3.isClosed(), "closeExceptionally() closes");
-        check(pub3.getClosedException() != null, "getClosedException() non-null");
+        check(pub3.isClosed() && pub3.getClosedException() != null, "closeExceptionally");
+        check(pub.estimateMinimumDemand() >= 0 && pub.estimateMaximumLag() >= 0, "estimates non-negative");
+    }
 
-        check(pub.estimateMinimumDemand() >= 0, "estimateMinimumDemand() >= 0");
-        check(pub.estimateMaximumLag() >= 0, "estimateMaximumLag() >= 0");
-
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

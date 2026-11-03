@@ -1,14 +1,10 @@
 /*
  * @test
- * @summary java.util.concurrent.Flow.Subscriber conformance: interface and
- *          onSubscribe/onNext delivery via SubmissionPublisher.
+ * @summary java.util.concurrent.Flow$Subscriber conformance: white-box structure + black-box behavior.
  * @run main SubscriberTest
  */
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Flow;
-import java.util.concurrent.SubmissionPublisher;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class SubscriberTest {
     static int passed;
@@ -18,9 +14,27 @@ public class SubscriberTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        check(Flow.Subscriber.class.isInterface(), "Subscriber is an interface");
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    }
 
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.concurrent.Flow$Subscriber");
+        check(c.isInterface(), "Subscriber is an interface");
+        hasMethod(c, "onSubscribe", Flow.Subscription.class);
+        hasMethod(c, "onNext", Object.class);
+        hasMethod(c, "onError", Throwable.class);
+        hasMethod(c, "onComplete");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
         SubmissionPublisher<Integer> pub = new SubmissionPublisher<>();
         final CountDownLatch latch = new CountDownLatch(1);
         final int[] got = new int[1];
@@ -35,7 +49,11 @@ public class SubscriberTest {
         check(latch.await(5, TimeUnit.SECONDS), "onNext delivered within timeout");
         check(got[0] == 42, "onNext received the submitted item");
         pub.close();
+    }
 
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

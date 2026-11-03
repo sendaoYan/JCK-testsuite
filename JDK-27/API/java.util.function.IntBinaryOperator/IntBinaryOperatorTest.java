@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.util.function.IntBinaryOperator API conformance: applyAsInt.
+ * @summary java.util.function.IntBinaryOperator conformance: white-box structure + black-box behavior.
  * @run main IntBinaryOperatorTest
  */
 
-import java.util.function.IntBinaryOperator;
+import java.util.Comparator;
+import java.util.function.*;
 
 public class IntBinaryOperatorTest {
     static int passed;
@@ -14,15 +15,34 @@ public class IntBinaryOperatorTest {
         passed++;
     }
 
-    static void testIntBinaryOperator() {
-        IntBinaryOperator add = (a, b) -> a + b;
-        check(add.applyAsInt(2, 3) == 5, "applyAsInt");
-        IntBinaryOperator mul = (a, b) -> a * b;
-        check(mul.applyAsInt(4, 5) == 20, "applyAsInt multiply");
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
     }
 
-    public static void main(String[] args) {
-        testIntBinaryOperator();
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.function.IntBinaryOperator");
+        check(c.isInterface(), "IntBinaryOperator is an interface");
+        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
+        hasMethod(c, "applyAsInt", int.class, int.class);
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        IntBinaryOperator add = (a, b) -> a + b;
+        check(add.applyAsInt(3, 4) == 7, "applyAsInt");
+        IntBinaryOperator max = Integer::max;
+        check(max.applyAsInt(9, 2) == 9, "applyAsInt max");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

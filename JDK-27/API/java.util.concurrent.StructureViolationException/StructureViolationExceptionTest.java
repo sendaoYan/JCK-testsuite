@@ -1,12 +1,11 @@
 /*
  * @test
- * @summary java.util.concurrent.StructureViolationException conformance:
- *          constructors and superclass.
- * @run main StructureViolationExceptionTest
+ * @summary java.util.concurrent.StructureViolationException conformance: white-box structure + black-box behavior.
  * @enablePreview
+ * @run main StructureViolationExceptionTest
  */
 
-import java.util.concurrent.StructureViolationException;
+import java.util.concurrent.*;
 
 public class StructureViolationExceptionTest {
     static int passed;
@@ -16,18 +15,35 @@ public class StructureViolationExceptionTest {
         passed++;
     }
 
-    public static void main(String[] args) {
-        check(RuntimeException.class.isAssignableFrom(StructureViolationException.class),
-              "extends RuntimeException");
-        check(!StructureViolationException.class.isInterface(),
-              "StructureViolationException is a final class");
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    }
 
-        StructureViolationException e1 = new StructureViolationException();
-        check(e1 != null, "no-arg constructor");
+    static void hasCtor(Class<?> c, Class<?>... p) {
+        try { c.getConstructor(p); } catch (NoSuchMethodException e) { throw new AssertionError("missing ctor on " + c.getName(), e); }
+        passed++;
+    }
 
-        StructureViolationException e2 = new StructureViolationException("boom");
-        check("boom".equals(e2.getMessage()), "String constructor message");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.concurrent.StructureViolationException");
+        check(c.getSuperclass() == RuntimeException.class, "extends RuntimeException");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "final class");
+        hasCtor(c);
+        hasCtor(c, String.class);
+    }
 
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        StructureViolationException e = new StructureViolationException("m");
+        check(e.getMessage().equals("m"), "message");
+        check(e instanceof RuntimeException, "instanceof RuntimeException");
+        check(new StructureViolationException().getMessage() == null, "no-arg null message");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

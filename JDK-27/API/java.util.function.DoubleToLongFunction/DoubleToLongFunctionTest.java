@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.util.function.DoubleToLongFunction API conformance: applyAsLong.
+ * @summary java.util.function.DoubleToLongFunction conformance: white-box structure + black-box behavior.
  * @run main DoubleToLongFunctionTest
  */
 
-import java.util.function.DoubleToLongFunction;
+import java.util.Comparator;
+import java.util.function.*;
 
 public class DoubleToLongFunctionTest {
     static int passed;
@@ -14,13 +15,32 @@ public class DoubleToLongFunctionTest {
         passed++;
     }
 
-    static void testDoubleToLongFunction() {
-        DoubleToLongFunction trunc = d -> (long) d;
-        check(trunc.applyAsLong(3.9) == 3L, "applyAsLong");
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
     }
 
-    public static void main(String[] args) {
-        testDoubleToLongFunction();
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.function.DoubleToLongFunction");
+        check(c.isInterface(), "DoubleToLongFunction is an interface");
+        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
+        hasMethod(c, "applyAsLong", double.class);
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        DoubleToLongFunction f = d -> (long) d;
+        check(f.applyAsLong(7.9) == 7L, "applyAsLong truncates");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.util.function.IntToDoubleFunction API conformance: applyAsDouble.
+ * @summary java.util.function.IntToDoubleFunction conformance: white-box structure + black-box behavior.
  * @run main IntToDoubleFunctionTest
  */
 
-import java.util.function.IntToDoubleFunction;
+import java.util.Comparator;
+import java.util.function.*;
 
 public class IntToDoubleFunctionTest {
     static int passed;
@@ -14,13 +15,32 @@ public class IntToDoubleFunctionTest {
         passed++;
     }
 
-    static void testIntToDoubleFunction() {
-        IntToDoubleFunction half = i -> i * 1.5;
-        check(half.applyAsDouble(2) == 3.0, "applyAsDouble");
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
     }
 
-    public static void main(String[] args) {
-        testIntToDoubleFunction();
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.function.IntToDoubleFunction");
+        check(c.isInterface(), "IntToDoubleFunction is an interface");
+        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
+        hasMethod(c, "applyAsDouble", int.class);
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        IntToDoubleFunction f = i -> i / 2.0;
+        check(f.applyAsDouble(5) == 2.5, "applyAsDouble");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,12 +1,10 @@
 /*
  * @test
- * @summary java.util.concurrent.Flow.Publisher conformance: interface and
- *          subscribe() against a SubmissionPublisher.
+ * @summary java.util.concurrent.Flow$Publisher conformance: white-box structure + black-box behavior.
  * @run main PublisherTest
  */
 
-import java.util.concurrent.Flow;
-import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.*;
 
 public class PublisherTest {
     static int passed;
@@ -16,9 +14,24 @@ public class PublisherTest {
         passed++;
     }
 
-    public static void main(String[] args) {
-        check(Flow.Publisher.class.isInterface(), "Publisher is an interface");
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    }
 
+    static void hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
+        passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.concurrent.Flow$Publisher");
+        check(c.isInterface(), "Publisher is an interface");
+        hasMethod(c, "subscribe", Flow.Subscriber.class);
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
         Flow.Publisher<Integer> pub = new SubmissionPublisher<>();
         Flow.Subscriber<Integer> sub = new Flow.Subscriber<Integer>() {
             public void onSubscribe(Flow.Subscription s) { s.request(1); }
@@ -30,7 +43,11 @@ public class PublisherTest {
         check(((SubmissionPublisher<Integer>) pub).getNumberOfSubscribers() == 1,
               "subscribe() registers a subscriber");
         ((SubmissionPublisher<Integer>) pub).close();
+    }
 
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
