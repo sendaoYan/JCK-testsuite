@@ -1,11 +1,13 @@
 /*
  * @test
- * @summary java.util.LongSummaryStatistics API conformance: accept, getCount/getSum/getMin/
- *          getMax/getAverage, and combine.
+ * @summary java.util.LongSummaryStatistics conformance: white-box structure plus black-box behavior
+ *          of accept(long)/accept(int)/getCount/getSum/getMin/getMax/getAverage, combine, the
+ *          (count,min,max,sum) constructor, and empty statistics.
  * @run main LongSummaryStatisticsTest
  */
 
 import java.util.LongSummaryStatistics;
+import java.util.function.LongConsumer;
 
 public class LongSummaryStatisticsTest {
     static int passed;
@@ -13,6 +15,40 @@ public class LongSummaryStatisticsTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static void assertThrows(Class<? extends Throwable> exType, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (exType.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (threw " + t + ")");
+        }
+        throw new AssertionError(msg + " (no exception)");
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.LongSummaryStatistics");
+        check(!c.isInterface(), "LongSummaryStatistics is a class");
+        check(LongConsumer.class.isAssignableFrom(c), "implements LongConsumer");
+        c.getMethod("accept", long.class);
+        c.getMethod("accept", int.class);
+        c.getMethod("combine", LongSummaryStatistics.class);
+        c.getMethod("getCount");
+        c.getMethod("getSum");
+        c.getMethod("getMin");
+        c.getMethod("getMax");
+        c.getMethod("getAverage");
+        passed++;
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        testStats();
+        testCombine();
+        testConstructor();
+        testEmpty();
     }
 
     static void testStats() {
@@ -24,6 +60,8 @@ public class LongSummaryStatisticsTest {
         check(stats.getSum() == 60L, "sum");
         check(stats.getMin() == 10L && stats.getMax() == 30L, "min/max");
         check(stats.getAverage() == 20.0, "average");
+        stats.accept(7); // accept(int) widens to long
+        check(stats.getCount() == 4 && stats.getSum() == 67L, "accept(int) widens");
     }
 
     static void testCombine() {
@@ -33,12 +71,33 @@ public class LongSummaryStatisticsTest {
         LongSummaryStatistics other = new LongSummaryStatistics();
         other.accept(20L);
         stats.combine(other);
-        check(stats.getCount() == 3 && stats.getSum() == 60L, "combine");
+        check(stats.getCount() == 3 && stats.getSum() == 60L, "combine count/sum");
+        check(stats.getMin() == 10L && stats.getMax() == 30L, "combine min/max");
     }
 
-    public static void main(String[] args) {
-        testStats();
-        testCombine();
+    static void testConstructor() {
+        LongSummaryStatistics stats = new LongSummaryStatistics(5, 1L, 9L, 30L);
+        check(stats.getCount() == 5, "constructor count");
+        check(stats.getSum() == 30L, "constructor sum");
+        check(stats.getMin() == 1L && stats.getMax() == 9L, "constructor min/max");
+        check(stats.getAverage() == 6.0, "constructor average");
+        assertThrows(IllegalArgumentException.class,
+                () -> new LongSummaryStatistics(-1, 1L, 9L, 30L),
+                "constructor negative count throws IAE");
+    }
+
+    static void testEmpty() {
+        LongSummaryStatistics stats = new LongSummaryStatistics();
+        check(stats.getCount() == 0, "empty count 0");
+        check(stats.getSum() == 0L, "empty sum 0");
+        check(stats.getMin() == Long.MAX_VALUE, "empty min == Long.MAX_VALUE");
+        check(stats.getMax() == Long.MIN_VALUE, "empty max == Long.MIN_VALUE");
+        check(stats.getAverage() == 0.0, "empty average 0.0");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

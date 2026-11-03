@@ -1,6 +1,8 @@
 /*
  * @test
- * @summary java.util.Locale.Builder conformance: language/region/script/variant/extensions.
+ * @summary java.util.Locale.Builder conformance: white-box structure plus black-box behavior
+ *          of language/region/script/variant/extensions, setLocale, setLanguageTag,
+ *          unicode attributes/keywords, clear, and clearExtensions.
  * @run main LocaleBuilderTest
  */
 
@@ -12,6 +14,32 @@ public class LocaleBuilderTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.Locale$Builder");
+        check(!c.isInterface(), "Builder is a class");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Builder is final");
+        c.getMethod("setLanguage", String.class);
+        c.getMethod("setRegion", String.class);
+        c.getMethod("setScript", String.class);
+        c.getMethod("setVariant", String.class);
+        c.getMethod("setLocale", Locale.class);
+        c.getMethod("setLanguageTag", String.class);
+        c.getMethod("setUnicodeLocaleKeyword", String.class, String.class);
+        c.getMethod("addUnicodeLocaleAttribute", String.class);
+        c.getMethod("clear");
+        c.getMethod("clearExtensions");
+        c.getMethod("build");
+        passed++;
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        testBuilder();
+        testLanguageTag();
+        testClearAndExtensions();
     }
 
     static void testBuilder() {
@@ -41,8 +69,26 @@ public class LocaleBuilderTest {
         check("fr".equals(l8.getLanguage()), "clear");
     }
 
-    public static void main(String[] args) {
-        testBuilder();
+    static void testLanguageTag() {
+        Locale l = new Locale.Builder().setLanguageTag("en-US").build();
+        check(Locale.US.equals(l), "setLanguageTag en-US");
+        Locale zh = new Locale.Builder().setLanguageTag("zh-Hans-CN").build();
+        check("zh".equals(zh.getLanguage()) && "Hans".equals(zh.getScript())
+              && "CN".equals(zh.getCountry()), "setLanguageTag with script/region");
+    }
+
+    static void testClearAndExtensions() {
+        Locale l = new Locale.Builder()
+                .setLanguage("en").setRegion("US").setExtension('u', "ca-japanese")
+                .clearExtensions().build();
+        check(!l.hasExtensions(), "clearExtensions removes extensions");
+        check("en".equals(l.getLanguage()) && "US".equals(l.getCountry()),
+              "clearExtensions keeps language/region");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

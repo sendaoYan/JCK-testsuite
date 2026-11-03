@@ -1,8 +1,9 @@
 /*
  * @test
- * @summary java.util.Objects API conformance (Java 8 surface): requireNonNull (with and
- *          without message, returns the object), equals (null-safe), deepEquals (arrays),
- *          hashCode (0 for null), toString (o.toString() / "null"), compare, isNull/nonNull.
+ * @summary java.util.Objects conformance: white-box structure plus black-box behavior of
+ *          requireNonNull (message/supplier variants), equals/deepEquals, hashCode/hash,
+ *          toString/toIdentityString, compare, isNull/nonNull, requireNonNullElse/ElseGet,
+ *          and checkIndex/checkFromToIndex/checkFromIndexSize (int and long).
  * @run main ObjectsTest
  */
 
@@ -16,22 +17,61 @@ public class ObjectsTest {
         passed++;
     }
 
+    static void assertThrows(Class<? extends Throwable> exType, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (exType.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (threw " + t + ")");
+        }
+        throw new AssertionError(msg + " (no exception)");
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.Objects");
+        check(!c.isInterface(), "Objects is a class");
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Objects is final");
+        c.getMethod("requireNonNull", Object.class);
+        c.getMethod("equals", Object.class, Object.class);
+        c.getMethod("deepEquals", Object.class, Object.class);
+        c.getMethod("hash", Object[].class);
+        c.getMethod("toString", Object.class);
+        c.getMethod("compare", Object.class, Object.class, java.util.Comparator.class);
+        c.getMethod("requireNonNullElse", Object.class, Object.class);
+        c.getMethod("checkIndex", int.class, int.class);
+        c.getMethod("checkFromToIndex", int.class, int.class, int.class);
+        passed++;
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        testRequireNonNull();
+        testEquals();
+        testDeepEquals();
+        testHashCode();
+        testToString();
+        testCompare();
+        testIsNull();
+        testRequireNonNullElse();
+        testIndexChecks();
+    }
+
     static void testRequireNonNull() {
         Object o = new Object();
         check(Objects.requireNonNull(o) == o, "requireNonNull returns object");
         check(Objects.requireNonNull(o, "msg") == o, "requireNonNull(msg) returns object");
-        try {
-            Objects.requireNonNull(null);
-            throw new AssertionError("requireNonNull(null): expected NullPointerException");
-        } catch (NullPointerException expected) {
-            passed++;
-        }
+        assertThrows(NullPointerException.class,
+                () -> Objects.requireNonNull(null), "requireNonNull(null) throws NPE");
         try {
             Objects.requireNonNull(null, "boom");
-            throw new AssertionError("requireNonNull(null,msg): expected NullPointerException");
+            throw new AssertionError("expected NPE");
         } catch (NullPointerException e) {
-            check(e.getMessage().equals("boom"), "requireNonNull message carried");
+            check("boom".equals(e.getMessage()), "requireNonNull message carried");
         }
+        assertThrows(NullPointerException.class,
+                () -> Objects.requireNonNull(null, () -> "supplied"),
+                "requireNonNull(null, supplier) throws NPE");
     }
 
     static void testEquals() {
@@ -57,17 +97,17 @@ public class ObjectsTest {
     static void testHashCode() {
         check(Objects.hashCode(null) == 0, "hashCode(null) == 0");
         check(Objects.hashCode("x") == "x".hashCode(), "hashCode delegates");
-        // varargs hash produces a stable value, and null-safe.
         check(Objects.hash("a", "b") == Objects.hash("a", "b"), "hash varargs stable");
-        // Objects.hash() delegates to Arrays.hashCode of an empty array, which is 1.
         check(Objects.hash() == 1, "hash() == 1");
     }
 
     static void testToString() {
-        check(Objects.toString(null).equals("null"), "toString(null) == \"null\"");
-        check(Objects.toString("x").equals("x"), "toString delegates");
-        check(Objects.toString(null, "dflt").equals("dflt"), "toString(null, dflt)");
-        check(Objects.toString("x", "dflt").equals("x"), "toString(non-null, dflt)");
+        check("null".equals(Objects.toString(null)), "toString(null) == \"null\"");
+        check("x".equals(Objects.toString("x")), "toString delegates");
+        check("dflt".equals(Objects.toString(null, "dflt")), "toString(null, dflt)");
+        check("x".equals(Objects.toString("x", "dflt")), "toString(non-null, dflt)");
+        check(Objects.toIdentityString("x").startsWith("java.lang.String@"),
+              "toIdentityString includes class name");
     }
 
     static void testCompare() {
@@ -83,14 +123,36 @@ public class ObjectsTest {
         check(!Objects.nonNull(null), "!nonNull(null)");
     }
 
-    public static void main(String[] args) {
-        testRequireNonNull();
-        testEquals();
-        testDeepEquals();
-        testHashCode();
-        testToString();
-        testCompare();
-        testIsNull();
+    static void testRequireNonNullElse() {
+        check("x".equals(Objects.requireNonNullElse("x", "dflt")), "requireNonNullElse non-null");
+        check("dflt".equals(Objects.requireNonNullElse(null, "dflt")), "requireNonNullElse null");
+        check("got".equals(Objects.requireNonNullElseGet(null, () -> "got")),
+              "requireNonNullElseGet null supplier");
+        check("x".equals(Objects.requireNonNullElseGet("x", () -> "got")),
+              "requireNonNullElseGet non-null (supplier not called)");
+    }
+
+    static void testIndexChecks() {
+        check(Objects.checkIndex(0, 5) == 0, "checkIndex in range");
+        check(Objects.checkIndex(4, 5) == 4, "checkIndex upper bound");
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> Objects.checkIndex(5, 5), "checkIndex == length throws");
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> Objects.checkIndex(-1, 5), "checkIndex negative throws");
+
+        check(Objects.checkFromToIndex(1, 4, 5) == 1, "checkFromToIndex in range");
+        check(Objects.checkFromIndexSize(1, 3, 5) == 1, "checkFromIndexSize in range");
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> Objects.checkFromToIndex(3, 2, 5), "checkFromToIndex from>to throws");
+
+        check(Objects.checkIndex(2L, 5L) == 2L, "checkIndex(long) in range");
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> Objects.checkIndex(5L, 5L), "checkIndex(long) == length throws");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
