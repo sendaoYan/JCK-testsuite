@@ -1,35 +1,47 @@
 /*
  * @test
- * @summary java.lang.management.GarbageCollectorMXBean conformance: count/time/name.
+ * @summary java.lang.management.GarbageCollectorMXBean conformance: white-box structure + black-box behavior.
  * @run main GarbageCollectorMXBeanTest
  */
-
-import java.lang.management.GarbageCollectorMXBean;
-import java.lang.management.ManagementFactory;
-import java.util.List;
+import java.lang.management.*;
+import java.util.*;
 
 public class GarbageCollectorMXBeanTest {
     static int passed;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.management.GarbageCollectorMXBean");
+        check(c.isInterface(), "interface");
+        check(MemoryManagerMXBean.class.isAssignableFrom(c), "extends MemoryManagerMXBean");
+        check(c.getMethod("getCollectionCount").getReturnType() == long.class, "getCollectionCount returns long");
+        check(c.getMethod("getCollectionTime").getReturnType() == long.class, "getCollectionTime returns long");
     }
 
-    static void testGarbageCollectorMXBean() {
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
         List<GarbageCollectorMXBean> gcs = ManagementFactory.getGarbageCollectorMXBeans();
-        check(gcs.size() > 0, "has GC beans");
-        GarbageCollectorMXBean gc = gcs.get(0);
-        check(gc.getName() != null, "getName");
-        check(gc.getCollectionCount() >= 0, "getCollectionCount");
-        check(gc.getCollectionTime() >= 0, "getCollectionTime");
-        check(gc.getMemoryPoolNames() != null, "getMemoryPoolNames");
-        check(gc.getObjectName() != null, "getObjectName");
-        check(gc.isValid(), "isValid");
+        check(!gcs.isEmpty(), "garbage collectors present");
+        List<String> names = new ArrayList<>();
+        for (GarbageCollectorMXBean g : gcs) {
+            check(g.getName() != null && !g.getName().isEmpty(), "GC name non-empty");
+            check(g.getCollectionCount() >= 0, "collection count non-negative");
+            check(g.getCollectionTime() >= 0, "collection time non-negative");
+            check(g.isValid(), "GC valid");
+            check(g.getMemoryPoolNames() != null && g.getMemoryPoolNames().length > 0,
+                  "GC manages at least one pool");
+            check(g.getObjectName() != null, "objectName non-null");
+            names.add(g.getName());
+        }
+        Collections.sort(names);
+        for (int i = 1; i < names.size(); i++) check(!names.get(i).equals(names.get(i - 1)), "GC names distinct");
+        check(ManagementFactory.getGarbageCollectorMXBeans().size() == gcs.size(), "bean list stable");
     }
 
-    public static void main(String[] args) {
-        testGarbageCollectorMXBean();
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
