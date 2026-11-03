@@ -1,46 +1,38 @@
 /*
  * @test
- * @summary java.security.spec.InvalidParameterSpecException conformance: type shape and members.
+ * @summary java.security.spec.InvalidParameterSpecException conformance: white-box structure + black-box behavior.
  * @run main InvalidParameterSpecExceptionTest
  */
 
-import java.lang.reflect.*;
+import java.lang.reflect.Modifier;
+import java.security.GeneralSecurityException;
+import java.security.spec.InvalidParameterSpecException;
 
 public class InvalidParameterSpecExceptionTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.security.spec.InvalidParameterSpecException");
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() {
+        Class<?> c = InvalidParameterSpecException.class;
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
-        check(c.getSuperclass().getName().equals("java.security.GeneralSecurityException"), "superclass");
+        check(c.getSuperclass().getName().equals("java.security.GeneralSecurityException"), "superclass GeneralSecurityException");
+    }
+
+    static void testBlackBox() {
+        InvalidParameterSpecException e0 = new InvalidParameterSpecException();
+        check(e0.getMessage() == null, "no-arg getMessage null");
+
+        InvalidParameterSpecException e1 = new InvalidParameterSpecException("bad params");
+        check("bad params".equals(e1.getMessage()), "String getMessage");
+        check(e1.getCause() == null, "String getCause null");
+
+        check(e0 instanceof GeneralSecurityException, "instanceof GeneralSecurityException");
+    }
+
+    public static void main(String[] args) {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
-    }
-    static boolean hasInterface(Class<?> c, String name) {
-        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkInterfaces(Class<?> c, String[] names) {
-        for (String n : names) check(hasInterface(c, n), "implements " + n);
-    }
-    static void checkMethods(Class<?> c, String[] names) {
-        for (String n : names) check(hasMethod(c, n), "method " + n);
-    }
-    static boolean hasMethod(Class<?> c, String name) {
-        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkEnumConstants(Class<?> c, String[] names) {
-        Object[] cs = c.getEnumConstants();
-        check(cs != null, "enum constants");
-        check(cs.length == names.length, "enum constant count");
-        for (String n : names) check(hasConst(cs, n), "constant " + n);
-    }
-    static boolean hasConst(Object[] cs, String name) {
-        for (Object o : cs) if (((Enum<?>) o).name().equals(name)) return true;
-        return false;
     }
 }

@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary java.security.PublicKey conformance: type shape and members.
+ * @summary java.security.PublicKey conformance: white-box structure + black-box behavior.
  * @run main PublicKeyTest
  */
 
-import java.lang.reflect.*;
+import java.lang.reflect.Modifier;
+import java.security.Key;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PublicKey;
 
 public class PublicKeyTest {
     static int passed;
@@ -12,14 +16,33 @@ public class PublicKeyTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.PublicKey");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
-        check(c.getSuperclass() == null, "no superclass");
         checkInterfaces(c, new String[]{"java.security.AsymmetricKey"});
-        System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+        PublicKey pub = kp.getPublic();
+
+        check(pub instanceof PublicKey, "instanceof PublicKey");
+        check(pub instanceof java.security.AsymmetricKey, "instanceof AsymmetricKey");
+        check(pub instanceof Key, "instanceof Key");
+        check("RSA".equals(pub.getAlgorithm()), "getAlgorithm RSA");
+        check("X.509".equals(pub.getFormat()), "getFormat X.509");
+        check(pub.getEncoded() != null && pub.getEncoded().length > 0, "getEncoded non-empty");
+
+        // AsymmetricKey.getParams() default returns null
+        check(((java.security.AsymmetricKey) pub).getParams() == null, "getParams default null");
+    }
+
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
         return false;
@@ -27,21 +50,10 @@ public class PublicKeyTest {
     static void checkInterfaces(Class<?> c, String[] names) {
         for (String n : names) check(hasInterface(c, n), "implements " + n);
     }
-    static void checkMethods(Class<?> c, String[] names) {
-        for (String n : names) check(hasMethod(c, n), "method " + n);
-    }
-    static boolean hasMethod(Class<?> c, String name) {
-        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkEnumConstants(Class<?> c, String[] names) {
-        Object[] cs = c.getEnumConstants();
-        check(cs != null, "enum constants");
-        check(cs.length == names.length, "enum constant count");
-        for (String n : names) check(hasConst(cs, n), "constant " + n);
-    }
-    static boolean hasConst(Object[] cs, String name) {
-        for (Object o : cs) if (((Enum<?>) o).name().equals(name)) return true;
-        return false;
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

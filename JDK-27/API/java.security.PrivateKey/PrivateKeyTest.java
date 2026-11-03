@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary java.security.PrivateKey conformance: type shape and members.
+ * @summary java.security.PrivateKey conformance: white-box structure + black-box behavior.
  * @run main PrivateKeyTest
  */
 
-import java.lang.reflect.*;
+import java.lang.reflect.Modifier;
+import java.security.Key;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 
 public class PrivateKeyTest {
     static int passed;
@@ -12,14 +16,32 @@ public class PrivateKeyTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.PrivateKey");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
-        check(c.getSuperclass() == null, "no superclass");
         checkInterfaces(c, new String[]{"java.security.AsymmetricKey", "javax.security.auth.Destroyable"});
-        System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+        PrivateKey priv = kp.getPrivate();
+
+        check(priv instanceof PrivateKey, "instanceof PrivateKey");
+        check(priv instanceof java.security.AsymmetricKey, "instanceof AsymmetricKey");
+        check(priv instanceof Key, "instanceof Key");
+        check(priv instanceof javax.security.auth.Destroyable, "instanceof Destroyable");
+        check("RSA".equals(priv.getAlgorithm()), "getAlgorithm RSA");
+        check("PKCS#8".equals(priv.getFormat()), "getFormat PKCS#8");
+        check(priv.getEncoded() != null && priv.getEncoded().length > 0, "getEncoded non-empty");
+        check(((java.security.AsymmetricKey) priv).getParams() == null, "getParams default null");
+    }
+
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
         return false;
@@ -27,21 +49,10 @@ public class PrivateKeyTest {
     static void checkInterfaces(Class<?> c, String[] names) {
         for (String n : names) check(hasInterface(c, n), "implements " + n);
     }
-    static void checkMethods(Class<?> c, String[] names) {
-        for (String n : names) check(hasMethod(c, n), "method " + n);
-    }
-    static boolean hasMethod(Class<?> c, String name) {
-        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkEnumConstants(Class<?> c, String[] names) {
-        Object[] cs = c.getEnumConstants();
-        check(cs != null, "enum constants");
-        check(cs.length == names.length, "enum constant count");
-        for (String n : names) check(hasConst(cs, n), "constant " + n);
-    }
-    static boolean hasConst(Object[] cs, String name) {
-        for (Object o : cs) if (((Enum<?>) o).name().equals(name)) return true;
-        return false;
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

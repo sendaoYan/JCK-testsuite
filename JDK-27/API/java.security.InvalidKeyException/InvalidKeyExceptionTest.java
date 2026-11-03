@@ -1,10 +1,13 @@
 /*
  * @test
- * @summary java.security.InvalidKeyException conformance: type shape and members.
+ * @summary java.security.InvalidKeyException conformance: white-box structure + black-box behavior.
  * @run main InvalidKeyExceptionTest
  */
 
 import java.lang.reflect.*;
+import java.security.InvalidKeyException;
+import java.security.KeyException;
+import java.security.GeneralSecurityException;
 
 public class InvalidKeyExceptionTest {
     static int passed;
@@ -12,11 +15,40 @@ public class InvalidKeyExceptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.InvalidKeyException");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
         check(c.getSuperclass().getName().equals("java.security.KeyException"), "superclass");
+        check(c.getInterfaces().length == 0, "no interfaces");
+        check(c.getDeclaredConstructors().length == 4, "constructor count");
+        check(c.getDeclaredMethods().length == 0, "no declared methods");
+    }
+    static void testBlackBox() {
+        InvalidKeyException e = new InvalidKeyException();
+        check(e != null, "no-arg non-null");
+        check(e.getMessage() == null, "no-arg getMessage null");
+        check(e.getCause() == null, "no-arg getCause null");
+
+        InvalidKeyException m = new InvalidKeyException("boom");
+        check("boom".equals(m.getMessage()), "String ctor message");
+        check(m.getCause() == null, "String ctor getCause null");
+
+        Throwable t = new RuntimeException("cause");
+        InvalidKeyException st = new InvalidKeyException("msg", t);
+        check("msg".equals(st.getMessage()), "String+Throwable ctor message");
+        check(st.getCause() == t, "String+Throwable ctor cause");
+
+        InvalidKeyException tt = new InvalidKeyException(t);
+        check(tt.getCause() == t, "Throwable ctor cause");
+        check(tt.getMessage() != null, "Throwable ctor message non-null");
+
+        check(e instanceof KeyException, "instanceof KeyException");
+        check(e instanceof GeneralSecurityException, "instanceof GeneralSecurityException");
+    }
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

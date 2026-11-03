@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.security.DigestException conformance: type shape and members.
+ * @summary java.security.DigestException conformance: white-box structure + black-box behavior.
  * @run main DigestExceptionTest
  */
 
 import java.lang.reflect.*;
+import java.security.DigestException;
+import java.security.GeneralSecurityException;
 
 public class DigestExceptionTest {
     static int passed;
@@ -12,11 +14,39 @@ public class DigestExceptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.DigestException");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
         check(c.getSuperclass().getName().equals("java.security.GeneralSecurityException"), "superclass");
+        check(c.getInterfaces().length == 0, "no interfaces");
+        check(c.getDeclaredConstructors().length == 4, "constructor count");
+        check(c.getDeclaredMethods().length == 0, "no declared methods");
+    }
+    static void testBlackBox() {
+        DigestException e = new DigestException();
+        check(e != null, "no-arg non-null");
+        check(e.getMessage() == null, "no-arg getMessage null");
+        check(e.getCause() == null, "no-arg getCause null");
+
+        DigestException m = new DigestException("boom");
+        check("boom".equals(m.getMessage()), "String ctor message");
+        check(m.getCause() == null, "String ctor getCause null");
+
+        Throwable t = new RuntimeException("cause");
+        DigestException st = new DigestException("msg", t);
+        check("msg".equals(st.getMessage()), "String+Throwable ctor message");
+        check(st.getCause() == t, "String+Throwable ctor cause");
+
+        DigestException tt = new DigestException(t);
+        check(tt.getCause() == t, "Throwable ctor cause");
+        check(tt.getMessage() != null, "Throwable ctor message non-null");
+
+        check(e instanceof GeneralSecurityException, "instanceof GeneralSecurityException");
+    }
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

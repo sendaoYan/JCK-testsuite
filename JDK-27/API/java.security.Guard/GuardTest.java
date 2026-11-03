@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.security.Guard conformance: type shape and members.
+ * @summary java.security.Guard conformance: white-box structure + black-box behavior.
  * @run main GuardTest
  */
 
-import java.lang.reflect.*;
+import java.lang.reflect.Modifier;
+import java.security.AllPermission;
+import java.security.Guard;
 
 public class GuardTest {
     static int passed;
@@ -12,36 +14,59 @@ public class GuardTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.Guard");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         checkMethods(c, new String[]{"checkGuard"});
-        System.out.println("PASS (" + passed + " assertions)");
     }
-    static boolean hasInterface(Class<?> c, String name) {
-        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        // Permission implements Guard
+        AllPermission all = new AllPermission();
+        check(all instanceof Guard, "AllPermission instanceof Guard");
+
+        // A custom Guard can permit without throwing
+        Guard allow = new Guard() {
+            public void checkGuard(Object o) { /* allow */ }
+        };
+        boolean noThrow = true;
+        try {
+            allow.checkGuard(new Object());
+        } catch (SecurityException e) {
+            noThrow = false;
+        }
+        check(noThrow, "custom permissive Guard does not throw");
+
+        // A custom Guard can deny
+        Guard deny = new Guard() {
+            public void checkGuard(Object o) { throw new SecurityException("no"); }
+        };
+        boolean threw = false;
+        try {
+            deny.checkGuard("target");
+        } catch (SecurityException e) {
+            threw = true;
+            check("no".equals(e.getMessage()), "deny message");
+        }
+        check(threw, "custom Guard can throw SecurityException");
+    }
+
+    static boolean hasMethod(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
         return false;
-    }
-    static void checkInterfaces(Class<?> c, String[] names) {
-        for (String n : names) check(hasInterface(c, n), "implements " + n);
     }
     static void checkMethods(Class<?> c, String[] names) {
         for (String n : names) check(hasMethod(c, n), "method " + n);
     }
-    static boolean hasMethod(Class<?> c, String name) {
-        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkEnumConstants(Class<?> c, String[] names) {
-        Object[] cs = c.getEnumConstants();
-        check(cs != null, "enum constants");
-        check(cs.length == names.length, "enum constant count");
-        for (String n : names) check(hasConst(cs, n), "constant " + n);
-    }
-    static boolean hasConst(Object[] cs, String name) {
-        for (Object o : cs) if (((Enum<?>) o).name().equals(name)) return true;
-        return false;
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }
