@@ -131,6 +131,41 @@ public class DelayQueueTest {
         expectThrows(() -> q.offer(null), NullPointerException.class, "offer(null)");
     }
 
+    static void testBlackBox() {
+        // constructor(Collection) with distinct deadlines (deterministic head order)
+        NanoItem e1 = new NanoItem(-1_000_000_000L, 10); // later expired
+        NanoItem e2 = new NanoItem(-2_000_000_000L, 11); // earlier expired (head)
+        List<NanoItem> seed = new ArrayList<>();
+        seed.add(e1);
+        seed.add(e2);
+        DelayQueue<NanoItem> q = new DelayQueue<>(seed);
+        check(q.size() == 2, "constructor(Collection) copies");
+
+        // iterator enumerates all
+        java.util.Iterator<NanoItem> it = q.iterator();
+        int count = 0;
+        while (it.hasNext()) { it.next(); count++; }
+        check(count == 2, "iterator enumerates all");
+
+        // toArray / toArray(T[])
+        Object[] arr = q.toArray();
+        check(arr.length == 2, "toArray()");
+        NanoItem[] typed = q.toArray(new NanoItem[0]);
+        check(typed.length == 2, "toArray(T[])");
+
+        // remove() (head) / remove(Object)
+        check(q.remove() == e2, "remove() returns earliest-deadline head");
+        check(q.remove(e1), "remove(Object) true");
+        check(!q.remove(e1), "remove(Object) missing false");
+        check(q.isEmpty(), "empty after removes");
+
+        // clear
+        q.add(new NanoItem(-1_000_000_000L, 12));
+        q.add(new NanoItem(-1_000_000_000L, 13));
+        q.clear();
+        check(q.isEmpty(), "clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testExpiredImmediate();
@@ -139,6 +174,7 @@ public class DelayQueueTest {
         testTakeImmediateForExpired();
         testDrainToExpiredOnly();
         testNullRejection();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -48,6 +48,13 @@ public class ReentrantLockTest {
         return t;
     }
 
+    // Exposes the protected introspection methods for the black-box harness.
+    static class ExposedReentrantLock extends ReentrantLock {
+        Thread owner() { return getOwner(); }
+        java.util.Collection<Thread> queuedThreads() { return getQueuedThreads(); }
+        java.util.Collection<Thread> waitingThreads(Condition c) { return getWaitingThreads(c); }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.concurrent.locks.ReentrantLock");
@@ -269,6 +276,21 @@ public class ReentrantLockTest {
                      "unlock without hold throws IllegalMonitorStateException");
     }
 
+    static void testBlackBox() {
+        ExposedReentrantLock lock = new ExposedReentrantLock();
+        check(lock.owner() == null, "getOwner null when unlocked");
+        lock.lock();
+        check(lock.owner() == Thread.currentThread(), "getOwner current thread when locked");
+        check(lock.queuedThreads().isEmpty(), "getQueuedThreads empty");
+        Condition cond = lock.newCondition();
+        check(lock.waitingThreads(cond).isEmpty(), "getWaitingThreads empty");
+        check(lock.toString() != null && lock.toString().contains("[Locked by thread"),
+              "toString reports locked");
+        lock.unlock();
+        check(lock.owner() == null, "getOwner null after unlock");
+        check(lock.toString().contains("[Unlocked]"), "toString reports unlocked");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testLockUnlockReentrancy();
@@ -281,6 +303,7 @@ public class ReentrantLockTest {
         testConditionTimeout();
         testConditionSignalAll();
         testUnlockWithoutHold();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

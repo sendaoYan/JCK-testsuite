@@ -98,12 +98,24 @@ public class CountDownLatchTest {
         }
     }
 
+    static void testBlackBox() {
+        CountDownLatch latch = new CountDownLatch(3);
+        String s = latch.toString();
+        check(s != null && s.contains("Count = 3"), "toString contains count 3");
+        latch.countDown();
+        check(latch.toString().contains("Count = 2"), "toString reflects decrement");
+        latch.countDown();
+        latch.countDown();
+        check(latch.toString().contains("Count = 0"), "toString at zero");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testCountDown();
         testAwaitBlocking();
         testAwait();
         testNegativeCount();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

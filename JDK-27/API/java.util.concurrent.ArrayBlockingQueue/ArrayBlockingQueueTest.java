@@ -151,6 +151,66 @@ public class ArrayBlockingQueueTest {
         check(nonFair.peek() == 9, "non-fair constructor works");
     }
 
+    static void testBlackBox() {
+        // Constructor (int, boolean, Collection)
+        List<String> seed = Arrays.asList("a", "b");
+        ArrayBlockingQueue<String> q = new ArrayBlockingQueue<>(4, true, seed);
+        check(q.size() == 2, "constructor(Collection) copies elements");
+        check(q.contains("a") && q.contains("b"), "contains after constructor");
+        check(!q.contains("z"), "contains missing false");
+        q.add("c");
+
+        // toArray()/toArray(T[])
+        Object[] arr = q.toArray();
+        check(arr.length == 3 && "a".equals(arr[0]) && "c".equals(arr[2]), "toArray() FIFO");
+        String[] typed = q.toArray(new String[0]);
+        check(typed.length == 3 && "a".equals(typed[0]), "toArray(T[])");
+        String[] sized = q.toArray(new String[5]);
+        check(sized.length == 5 && sized[3] == null, "toArray(T[bigger]) pads null");
+
+        // forEach preserves FIFO order
+        List<String> seen = new ArrayList<>();
+        q.forEach(seen::add);
+        check(seen.equals(Arrays.asList("a", "b", "c")), "forEach FIFO order");
+
+        // iterator order + remove via iterator
+        java.util.Iterator<String> it = q.iterator();
+        check(it.hasNext() && "a".equals(it.next()), "iterator next");
+        it.remove();
+        check(!q.contains("a") && q.size() == 2, "iterator.remove removes element");
+
+        // remove(Object)
+        check(q.remove("b"), "remove(Object) true");
+        check(!q.remove("b"), "remove(Object) missing false");
+
+        // removeAll / retainAll
+        q.clear();
+        q.addAll(Arrays.asList("x", "y", "z"));
+        check(q.removeAll(Arrays.asList("x", "z")), "removeAll true");
+        check(q.size() == 1 && "y".equals(q.peek()), "removeAll result");
+        q.clear();
+        q.addAll(Arrays.asList("x", "y", "z"));
+        check(q.retainAll(Arrays.asList("x", "y")), "retainAll true");
+        check(q.size() == 2 && q.contains("x") && q.contains("y"), "retainAll result");
+
+        // removeIf
+        q.removeIf(s -> s.equals("x"));
+        check(q.size() == 1 && "y".equals(q.peek()), "removeIf removes matching");
+
+        // spliterator
+        q.clear();
+        q.addAll(Arrays.asList("1", "2", "3"));
+        java.util.Spliterator<String> sp = q.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED), "spliterator ORDERED");
+        List<String> viaSp = new ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        check(viaSp.equals(Arrays.asList("1", "2", "3")), "spliterator forEachRemaining order");
+
+        // toString
+        check(q.toString() != null && q.toString().contains("1"), "toString non-null with content");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBoundedSemantics();
@@ -159,6 +219,7 @@ public class ArrayBlockingQueueTest {
         testOfferTimeoutImmediate();
         testDrainTo();
         testFairConstructor();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -145,6 +145,59 @@ public class LinkedBlockingQueueTest {
         check(!q.contains(null), "contains(null) returns false");
     }
 
+    static void testBlackBox() {
+        // constructor(Collection)
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(Arrays.asList(1, 2, 3));
+        check(q.size() == 3, "constructor(Collection) copies");
+
+        // toArray / toArray(T[])
+        Object[] arr = q.toArray();
+        check(arr.length == 3 && arr[0].equals(1), "toArray()");
+        Integer[] typed = q.toArray(new Integer[0]);
+        check(typed.length == 3 && typed[2] == 3, "toArray(T[])");
+
+        // forEach
+        List<Integer> seen = new ArrayList<>();
+        q.forEach(seen::add);
+        check(seen.equals(Arrays.asList(1, 2, 3)), "forEach order");
+
+        // iterator
+        java.util.Iterator<Integer> it = q.iterator();
+        check(it.next() == 1 && it.next() == 2 && it.next() == 3, "iterator order");
+
+        // remove(Object)
+        check(q.remove(2), "remove(Object) true");
+        check(!q.remove(99), "remove(Object) missing false");
+        check(q.size() == 2, "size after remove");
+
+        // removeAll / retainAll / removeIf
+        q.clear();
+        q.addAll(Arrays.asList(1, 2, 3, 4, 5));
+        check(q.removeAll(Arrays.asList(1, 3, 5)), "removeAll true");
+        check(q.size() == 2 && q.contains(2) && q.contains(4), "removeAll result");
+        check(q.retainAll(Arrays.asList(2)), "retainAll true");
+        check(q.size() == 1 && q.contains(2), "retainAll result");
+        q.add(3);
+        q.removeIf(x -> x % 2 == 0);
+        check(q.size() == 1 && q.contains(3), "removeIf removes even");
+
+        // spliterator
+        LinkedBlockingQueue<Integer> spq = new LinkedBlockingQueue<>(Arrays.asList(1, 2, 3));
+        java.util.Spliterator<Integer> sp = spq.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        List<Integer> viaSp = new ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        check(viaSp.equals(Arrays.asList(1, 2, 3)), "spliterator order");
+
+        // clear
+        spq.clear();
+        check(spq.isEmpty(), "clear empties");
+
+        // toString
+        LinkedBlockingQueue<Integer> ts = new LinkedBlockingQueue<>(Arrays.asList(1, 2));
+        check(ts.toString() != null && ts.toString().contains("1"), "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testUnboundedAndBounded();
@@ -152,6 +205,7 @@ public class LinkedBlockingQueueTest {
         testPutBlocksWhenFull();
         testDrainTo();
         testNullRejection();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

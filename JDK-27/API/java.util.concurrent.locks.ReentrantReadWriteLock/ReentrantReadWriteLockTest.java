@@ -49,6 +49,15 @@ public class ReentrantReadWriteLockTest {
         return t;
     }
 
+    // Exposes the protected introspection methods for the black-box harness.
+    static class ExposedRRWL extends ReentrantReadWriteLock {
+        Thread owner() { return getOwner(); }
+        java.util.Collection<Thread> queuedThreads() { return getQueuedThreads(); }
+        java.util.Collection<Thread> queuedReaderThreads() { return getQueuedReaderThreads(); }
+        java.util.Collection<Thread> queuedWriterThreads() { return getQueuedWriterThreads(); }
+        java.util.Collection<Thread> waitingThreads(Condition c) { return getWaitingThreads(c); }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.concurrent.locks.ReentrantReadWriteLock");
@@ -200,6 +209,33 @@ public class ReentrantReadWriteLockTest {
         rl.unlock();
     }
 
+    static void testBlackBox() {
+        ExposedRRWL rwl = new ExposedRRWL();
+        check(rwl.owner() == null, "getOwner null when unlocked");
+
+        check(!rwl.hasQueuedThreads(), "hasQueuedThreads false");
+        check(rwl.getQueueLength() == 0, "getQueueLength 0");
+        check(rwl.queuedThreads().isEmpty(), "getQueuedThreads empty");
+        check(rwl.queuedReaderThreads().isEmpty(), "getQueuedReaderThreads empty");
+        check(rwl.queuedWriterThreads().isEmpty(), "getQueuedWriterThreads empty");
+        Thread t = new Thread(() -> {});
+        check(!rwl.hasQueuedThread(t), "hasQueuedThread false for non-queued thread");
+
+        ReentrantReadWriteLock.WriteLock wl = rwl.writeLock();
+        wl.lock();
+        check(rwl.owner() == Thread.currentThread(), "getOwner current thread when write locked");
+
+        Condition cond = wl.newCondition();
+        check(!rwl.hasWaiters(cond), "hasWaiters false");
+        check(rwl.getWaitQueueLength(cond) == 0, "getWaitQueueLength 0");
+        check(rwl.waitingThreads(cond).isEmpty(), "getWaitingThreads empty");
+
+        check(rwl.toString() != null && rwl.toString().length() > 0, "toString non-null");
+
+        wl.unlock();
+        check(rwl.owner() == null, "getOwner null after write unlock");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testWriteExclusivityAndReentrancy();
@@ -211,6 +247,7 @@ public class ReentrantReadWriteLockTest {
         testWriteLockConditionAwaitSignal();
         testFairness();
         testReadLockTryLockTimeout();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

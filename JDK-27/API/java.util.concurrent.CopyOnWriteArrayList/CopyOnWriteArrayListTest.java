@@ -133,6 +133,76 @@ public class CopyOnWriteArrayListTest {
         check(!a.equals(b), "!equals different content");
     }
 
+    static void testBlackBox() {
+        // constructor(Object[])
+        CopyOnWriteArrayList<String> fromArr = new CopyOnWriteArrayList<>(new String[]{"a", "b", "c"});
+        check(fromArr.size() == 3 && "a".equals(fromArr.get(0)), "constructor(Object[])");
+
+        // addFirst/addLast/getFirst/getLast/removeFirst/removeLast (SequencedCollection)
+        CopyOnWriteArrayList<Integer> l = new CopyOnWriteArrayList<>();
+        l.addLast(2);
+        l.addFirst(1);
+        l.addLast(3);
+        check(l.getFirst() == 1 && l.getLast() == 3, "getFirst/getLast");
+        check(l.removeFirst() == 1, "removeFirst returns first");
+        check(l.removeLast() == 3, "removeLast returns last");
+        check(l.getFirst() == 2 && l.getLast() == 2, "remaining single element");
+
+        // reversed()
+        CopyOnWriteArrayList<Integer> r = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3));
+        List<Integer> rev = r.reversed();
+        check(rev.equals(Arrays.asList(3, 2, 1)), "reversed() order");
+
+        // clone()
+        Object c = r.clone();
+        check(c instanceof CopyOnWriteArrayList && c != r, "clone() distinct");
+        check(((CopyOnWriteArrayList<Integer>) c).equals(r), "clone() equals");
+
+        // containsAll
+        check(r.containsAll(Arrays.asList(1, 3)) && !r.containsAll(Arrays.asList(1, 9)), "containsAll");
+
+        // forEach
+        ArrayList<Integer> seen = new ArrayList<>();
+        r.forEach(seen::add);
+        check(seen.equals(Arrays.asList(1, 2, 3)), "forEach order");
+
+        // hashCode
+        check(r.hashCode() == Arrays.asList(1, 2, 3).hashCode(), "hashCode matches List contract");
+
+        // listIterator() / listIterator(int)
+        Iterator<Integer> li = r.listIterator();
+        check(li.hasNext() && li.next() == 1, "listIterator() next");
+        java.util.ListIterator<Integer> li2 = r.listIterator(1);
+        check(li2.next() == 2 && li2.previous() == 2, "listIterator(int)");
+
+        // removeAll / retainAll / removeIf
+        CopyOnWriteArrayList<Integer> bulk = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(bulk.removeAll(Arrays.asList(1, 3, 5)), "removeAll true");
+        check(bulk.equals(Arrays.asList(2, 4)), "removeAll result");
+        check(bulk.retainAll(Arrays.asList(2)), "retainAll true");
+        check(bulk.equals(Arrays.asList(2)), "retainAll result");
+        bulk.add(3);
+        bulk.removeIf(x -> x % 2 == 0);
+        check(bulk.equals(Arrays.asList(3)), "removeIf removes even");
+
+        // spliterator
+        CopyOnWriteArrayList<Integer> spl = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3));
+        java.util.Spliterator<Integer> sp = spl.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        ArrayList<Integer> viaSp = new ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        check(viaSp.equals(Arrays.asList(1, 2, 3)), "spliterator order");
+
+        // toArray / toArray(T[])
+        Object[] arr = spl.toArray();
+        check(arr.length == 3 && arr[0].equals(1), "toArray()");
+        Integer[] typed = spl.toArray(new Integer[0]);
+        check(typed.length == 3 && typed[2] == 3, "toArray(T[])");
+
+        // toString
+        check(spl.toString() != null && spl.toString().contains("1"), "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testListSemantics();
@@ -141,6 +211,7 @@ public class CopyOnWriteArrayListTest {
         testSubList();
         testSortReplaceAll();
         testEquals();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

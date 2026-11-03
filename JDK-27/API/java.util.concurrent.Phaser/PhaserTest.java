@@ -88,12 +88,50 @@ public class PhaserTest {
         check(mainResult == 1 && workerResult[0] == 1, "both parties advance to phase 1");
     }
 
+    static class RecordingPhaser extends Phaser {
+        boolean advanced;
+        RecordingPhaser(int parties) { super(parties); }
+        protected boolean onAdvance(int phase, int registeredParties) {
+            advanced = true;
+            return super.onAdvance(phase, registeredParties);
+        }
+    }
+
+    static void testBlackBox() throws Exception {
+        // constructors (Phaser)/(Phaser,int) + getParent/getRoot
+        Phaser root = new Phaser(1);
+        Phaser child = new Phaser(root, 1);
+        check(child.getParent() == root, "getParent returns parent");
+        check(child.getRoot() == root && root.getRoot() == root, "getRoot returns root");
+        Phaser child2 = new Phaser(root);
+        check(child2.getParent() == root, "constructor(Phaser) registers as child");
+
+        // onAdvance override invoked on phase advance
+        RecordingPhaser rp = new RecordingPhaser(1);
+        check(!rp.advanced, "onAdvance not yet called");
+        rp.arriveAndDeregister();
+        check(rp.advanced, "onAdvance called on advance");
+        check(rp.isTerminated(), "terminated after deregister");
+
+        // awaitAdvanceInterruptibly(int) / timed variant for an already-completed phase
+        Phaser p = new Phaser(1);
+        int phase = p.arrive(); // completes phase 0, advances to 1
+        check(phase == 0, "arrive returns arrival phase 0");
+        check(p.awaitAdvanceInterruptibly(0) == 1, "awaitAdvanceInterruptibly(0) returns current phase");
+        check(p.awaitAdvanceInterruptibly(0, 1, TimeUnit.NANOSECONDS) == 1,
+              "awaitAdvanceInterruptibly(0,1,ns) returns current phase");
+
+        // toString
+        check(p.toString() != null && p.toString().length() > 0, "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSingleParty();
         testRegisterDeregister();
         testTerminationOnZeroParties();
         testTwoThreadAdvance();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

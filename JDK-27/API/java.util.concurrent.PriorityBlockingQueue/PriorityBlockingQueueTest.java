@@ -132,6 +132,67 @@ public class PriorityBlockingQueueTest {
         expectThrows(() -> q.offer(null), NullPointerException.class, "offer(null)");
     }
 
+    static void testBlackBox() {
+        // constructors (int)/(Collection)
+        PriorityBlockingQueue<Integer> c1 = new PriorityBlockingQueue<>(16);
+        check(c1.isEmpty(), "constructor(int) empty");
+        PriorityBlockingQueue<Integer> c2 = new PriorityBlockingQueue<>(Arrays.asList(3, 1, 2));
+        check(c2.size() == 3 && c2.peek() == 1, "constructor(Collection) heapified");
+
+        // contains
+        check(c2.contains(2) && !c2.contains(99), "contains");
+
+        // toArray / toArray(T[])
+        Object[] arr = c2.toArray();
+        Arrays.sort(arr);
+        check(arr.length == 3 && arr[0].equals(1) && arr[2].equals(3), "toArray() contents");
+        Integer[] typed = c2.toArray(new Integer[0]);
+        check(typed.length == 3, "toArray(T[]) length");
+
+        // forEach
+        List<Integer> seen = new ArrayList<>();
+        c2.forEach(seen::add);
+        seen.sort(Integer::compareTo);
+        check(seen.equals(Arrays.asList(1, 2, 3)), "forEach contents");
+
+        // iterator enumerates all (heap order, not sorted)
+        java.util.Iterator<Integer> it = c2.iterator();
+        int n = 0;
+        while (it.hasNext()) { it.next(); n++; }
+        check(n == 3, "iterator enumerates all");
+
+        // remove(Object)
+        check(c2.remove(2), "remove(Object) true");
+        check(!c2.remove(99), "remove(Object) missing false");
+
+        // removeAll / retainAll / removeIf
+        PriorityBlockingQueue<Integer> q = new PriorityBlockingQueue<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(q.removeAll(Arrays.asList(1, 3, 5)), "removeAll true");
+        check(q.size() == 2 && q.contains(2) && q.contains(4), "removeAll result");
+        check(q.retainAll(Arrays.asList(2)), "retainAll true");
+        check(q.size() == 1 && q.contains(2), "retainAll result");
+        q.add(3);
+        q.removeIf(x -> x % 2 == 0);
+        check(q.size() == 1 && q.contains(3), "removeIf removes even");
+
+        // spliterator
+        PriorityBlockingQueue<Integer> spq = new PriorityBlockingQueue<>(Arrays.asList(3, 1, 2));
+        java.util.Spliterator<Integer> sp = spq.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        List<Integer> viaSp = new ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        viaSp.sort(Integer::compareTo);
+        check(viaSp.equals(Arrays.asList(1, 2, 3)), "spliterator contents");
+
+        // clear
+        spq.clear();
+        check(spq.isEmpty(), "clear empties");
+
+        // toString
+        PriorityBlockingQueue<Integer> ts = new PriorityBlockingQueue<>(Arrays.asList(1, 2));
+        check(ts.toString() != null && ts.toString().contains("1"), "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testNaturalOrdering();
@@ -139,6 +200,7 @@ public class PriorityBlockingQueueTest {
         testTakeBlocksWhenEmpty();
         testDrainToAndRemainingCapacity();
         testNullRejection();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

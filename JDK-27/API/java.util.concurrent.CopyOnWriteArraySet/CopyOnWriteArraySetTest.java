@@ -93,12 +93,49 @@ public class CopyOnWriteArraySetTest {
         check(a.equals(new CopyOnWriteArraySet<>(Arrays.asList(3))), "retainAll result");
     }
 
+    static void testBlackBox() {
+        CopyOnWriteArraySet<Integer> s = new CopyOnWriteArraySet<>(Arrays.asList(3, 1, 2, 2));
+        check(s.size() == 3, "dedup on construction");
+
+        // toArray / toArray(T[])
+        Object[] arr = s.toArray();
+        ArrayList<Integer> arrSorted = new ArrayList<>();
+        for (Object o : arr) arrSorted.add((Integer) o);
+        arrSorted.sort(Integer::compareTo);
+        check(arrSorted.equals(Arrays.asList(1, 2, 3)), "toArray() contents");
+        Integer[] typed = s.toArray(new Integer[0]);
+        check(typed.length == 3, "toArray(T[]) length");
+
+        // forEach
+        ArrayList<Integer> seen = new ArrayList<>();
+        s.forEach(seen::add);
+        seen.sort(Integer::compareTo);
+        check(seen.equals(Arrays.asList(1, 2, 3)), "forEach contents");
+
+        // removeIf
+        s.removeIf(x -> x % 2 == 0);
+        check(s.size() == 2 && s.contains(1) && s.contains(3) && !s.contains(2), "removeIf");
+
+        // spliterator
+        java.util.Spliterator<Integer> sp = s.spliterator();
+        check(sp.estimateSize() == 2, "spliterator estimateSize");
+        ArrayList<Integer> viaSp = new ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        viaSp.sort(Integer::compareTo);
+        check(viaSp.equals(Arrays.asList(1, 3)), "spliterator contents");
+
+        // clear
+        s.clear();
+        check(s.isEmpty(), "clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSetSemantics();
         testAddAllDedup();
         testIteratorSnapshot();
         testBulkOperationsAndEquals();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -181,6 +181,28 @@ public class StampedLockTest {
         check(o != 0, "tryOptimisticRead non-zero when free");
     }
 
+    static void testBlackBox() throws Exception {
+        StampedLock sl = new StampedLock();
+        check(!sl.tryUnlockWrite(), "tryUnlockWrite false when not write locked");
+        check(!sl.tryUnlockRead(), "tryUnlockRead false when not read locked");
+
+        long w = sl.writeLock();
+        check(sl.tryUnlockWrite(), "tryUnlockWrite true when write locked");
+        check(!sl.isWriteLocked(), "write released via tryUnlockWrite");
+        long r = sl.readLock();
+        check(sl.tryUnlockRead(), "tryUnlockRead true when read locked");
+        check(!sl.isReadLocked(), "read released via tryUnlockRead");
+
+        long wi = sl.writeLockInterruptibly();
+        check(wi != 0 && sl.isWriteLocked(), "writeLockInterruptibly acquires");
+        sl.unlockWrite(wi);
+        long ri = sl.readLockInterruptibly();
+        check(ri != 0 && sl.isReadLocked(), "readLockInterruptibly acquires");
+        sl.unlockRead(ri);
+
+        check(sl.toString() != null && sl.toString().length() > 0, "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testWriteLock();
@@ -193,6 +215,7 @@ public class StampedLockTest {
         testUnlockGeneric();
         testLockViews();
         testTryLocksWhenFree();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

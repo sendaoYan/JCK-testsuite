@@ -119,12 +119,42 @@ public class ConcurrentLinkedQueueTest {
         check(q.contains(99) && q.size() == 4, "modification applied");
     }
 
+    static void testBlackBox() {
+        ConcurrentLinkedQueue<Integer> q = new ConcurrentLinkedQueue<>(Arrays.asList(1, 2, 3, 4, 5));
+
+        // forEach order
+        java.util.ArrayList<Integer> seen = new java.util.ArrayList<>();
+        q.forEach(seen::add);
+        check(seen.equals(Arrays.asList(1, 2, 3, 4, 5)), "forEach order");
+
+        // removeAll / retainAll / removeIf
+        check(q.removeAll(Arrays.asList(1, 3, 5)), "removeAll true");
+        check(q.size() == 2 && q.contains(2) && q.contains(4), "removeAll result");
+        check(q.retainAll(Arrays.asList(2)), "retainAll true");
+        check(q.size() == 1 && q.contains(2), "retainAll result");
+        q.add(3);
+        q.removeIf(x -> x % 2 == 0);
+        check(q.size() == 1 && q.contains(3), "removeIf removes even");
+
+        // spliterator
+        ConcurrentLinkedQueue<Integer> spq = new ConcurrentLinkedQueue<>(Arrays.asList(1, 2, 3));
+        java.util.Spliterator<Integer> sp = spq.spliterator();
+        check(sp.estimateSize() == Long.MAX_VALUE, "spliterator estimateSize Long.MAX_VALUE");
+        java.util.ArrayList<Integer> viaSp = new java.util.ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        check(viaSp.equals(Arrays.asList(1, 2, 3)), "spliterator order");
+
+        // toString
+        check(spq.toString() != null && spq.toString().contains("1"), "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testQueueSemantics();
         testNullRejection();
         testToArrayAndAddAll();
         testWeaklyConsistentIterator();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

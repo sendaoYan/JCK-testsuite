@@ -177,6 +177,112 @@ public class ConcurrentHashMapTest {
         check(reduceKeys == 3, "reduceKeysToInt sums key lengths");
     }
 
+    static void testBlackBox() {
+        // Constructors (int), (Map), (int,float), (int,float,int)
+        ConcurrentHashMap<String, Integer> c1 = new ConcurrentHashMap<>(16);
+        check(c1.isEmpty(), "constructor(int) empty");
+        java.util.Map<String, Integer> seed = new java.util.HashMap<>();
+        seed.put("a", 1);
+        seed.put("b", 2);
+        ConcurrentHashMap<String, Integer> c2 = new ConcurrentHashMap<>(seed);
+        check(c2.size() == 2 && c2.get("a") == 1, "constructor(Map) copies");
+        check(new ConcurrentHashMap<String, Integer>(32, 0.75f).isEmpty(), "constructor(int,float) empty");
+        check(new ConcurrentHashMap<String, Integer>(32, 0.75f, 16).isEmpty(), "constructor(int,float,int) empty");
+
+        // putAll
+        ConcurrentHashMap<String, Integer> m = new ConcurrentHashMap<>();
+        m.putAll(seed);
+        check(m.size() == 2 && m.get("b") == 2, "putAll");
+
+        // computeIfPresent
+        m.computeIfPresent("a", (k, v) -> v + 10);
+        check(m.get("a") == 11, "computeIfPresent present computes");
+        check(m.computeIfPresent("zz", (k, v) -> 99) == null && !m.containsKey("zz"),
+              "computeIfPresent absent no-op");
+
+        // replaceAll
+        m.replaceAll((k, v) -> v * 2);
+        check(m.get("a") == 22 && m.get("b") == 4, "replaceAll maps values");
+
+        // elements()/keys() enumerations
+        java.util.Enumeration<Integer> en = m.elements();
+        int sum = 0;
+        while (en.hasMoreElements()) sum += en.nextElement();
+        check(sum == 26, "elements() enumerates values");
+        java.util.Enumeration<String> keys = m.keys();
+        int keyCount = 0;
+        while (keys.hasMoreElements()) { keys.nextElement(); keyCount++; }
+        check(keyCount == 2, "keys() enumerates keys");
+
+        // equals/hashCode (Map contract vs a plain HashMap)
+        java.util.HashMap<String, Integer> hm = new java.util.HashMap<>(m);
+        check(m.equals(hm) && hm.equals(m), "equals plain map");
+        check(m.hashCode() == hm.hashCode(), "hashCode matches Map contract");
+
+        // newKeySet(int)
+        java.util.Set<String> ks = ConcurrentHashMap.<String>newKeySet(8);
+        check(ks.add("x") && ks.add("y") && ks.size() == 2, "newKeySet(int)");
+
+        // search / searchKeys / searchEntries
+        ConcurrentHashMap<String, Integer> s = new ConcurrentHashMap<>();
+        s.put("aa", 1);
+        s.put("bbb", 2);
+        s.put("c", 3);
+        check(s.search(1, (k, v) -> v == 2 ? v : null) == 2, "search finds value 2");
+        check("bbb".equals(s.searchKeys(1, k -> k.length() == 3 ? k : null)),
+              "searchKeys finds key of length 3");
+        java.util.Map.Entry<String, Integer> ef = s.searchEntries(1, e -> e.getValue() == 3 ? e : null);
+        check(ef != null && "c".equals(ef.getKey()), "searchEntries finds entry");
+
+        // reduce (full), reduceKeys, reduceEntries
+        check(s.reduce(1, (k, v) -> k.length(), Integer::sum) == 6, "reduce sums key lengths");
+        check(s.reduceKeys(1, (k1, k2) -> k1 + k2).length() == 6, "reduceKeys concatenates keys");
+        check(s.reduceKeys(1, String::length, Integer::sum) == 6, "reduceKeys(transformer,reducer)");
+        check(s.reduceEntries(1, e -> e.getValue(), Integer::sum) == 6, "reduceEntries(transformer,reducer)");
+        java.util.Map.Entry<String, Integer> eSum = s.reduceEntries(1,
+                (e1, e2) -> new java.util.AbstractMap.SimpleImmutableEntry<>("", e1.getValue() + e2.getValue()));
+        check(eSum.getValue() == 6, "reduceEntries(reducer) sums values");
+
+        // reduceToInt / reduceToLong / reduceToDouble
+        check(s.reduceToInt(1, (k, v) -> v, 0, Integer::sum) == 6, "reduceToInt sums values");
+        check(s.reduceToLong(1, (k, v) -> (long) v, 0L, Long::sum) == 6L, "reduceToLong sums values");
+        check(s.reduceToDouble(1, (k, v) -> (double) v, 0.0, Double::sum) == 6.0, "reduceToDouble sums values");
+
+        // reduceKeysTo* / reduceValuesTo* / reduceEntriesTo*
+        check(s.reduceKeysToLong(1, k -> (long) k.length(), 0L, Long::sum) == 6L, "reduceKeysToLong");
+        check(s.reduceKeysToDouble(1, k -> (double) k.length(), 0.0, Double::sum) == 6.0, "reduceKeysToDouble");
+        check(s.reduceValuesToInt(1, v -> v, 0, Integer::sum) == 6, "reduceValuesToInt");
+        check(s.reduceValuesToLong(1, v -> (long) v, 0L, Long::sum) == 6L, "reduceValuesToLong");
+        check(s.reduceValuesToDouble(1, v -> (double) v, 0.0, Double::sum) == 6.0, "reduceValuesToDouble");
+        check(s.reduceEntriesToInt(1, e -> e.getValue(), 0, Integer::sum) == 6, "reduceEntriesToInt");
+        check(s.reduceEntriesToLong(1, e -> (long) e.getValue(), 0L, Long::sum) == 6L, "reduceEntriesToLong");
+        check(s.reduceEntriesToDouble(1, e -> (double) e.getValue(), 0.0, Double::sum) == 6.0, "reduceEntriesToDouble");
+
+        // forEachKey/Value/Entry (long, Consumer) and (long, Function, Consumer)
+        final java.util.ArrayList<String> seenKeys = new java.util.ArrayList<>();
+        s.forEachKey(1, seenKeys::add);
+        seenKeys.sort(String::compareTo);
+        check(seenKeys.toString().equals("[aa, bbb, c]"), "forEachKey(long,Consumer)");
+        final int[] keyLenSum = {0};
+        s.forEachKey(1, String::length, len -> keyLenSum[0] += len);
+        check(keyLenSum[0] == 6, "forEachKey(long,Function,Consumer)");
+        final int[] valSum = {0};
+        s.forEachValue(1, v -> valSum[0] += v);
+        check(valSum[0] == 6, "forEachValue(long,Consumer)");
+        final int[] valDoubled = {0};
+        s.forEachValue(1, v -> v * 2, d -> valDoubled[0] += d);
+        check(valDoubled[0] == 12, "forEachValue(long,Function,Consumer)");
+        final java.util.ArrayList<String> seenEntries = new java.util.ArrayList<>();
+        s.forEachEntry(1, e -> seenEntries.add(e.getKey() + "=" + e.getValue()));
+        check(seenEntries.size() == 3, "forEachEntry(long,Consumer)");
+        final int[] entryValSum = {0};
+        s.forEachEntry(1, e -> e.getValue(), v -> entryValSum[0] += v);
+        check(entryValSum[0] == 6, "forEachEntry(long,Function,Consumer)");
+
+        // toString
+        check(s.toString() != null && s.toString().contains("aa"), "toString non-null with content");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPutGetRemove();
@@ -185,6 +291,7 @@ public class ConcurrentHashMapTest {
         testViewsAndNewKeySet();
         testWeaklyConsistentIterator();
         testBulkOperations();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

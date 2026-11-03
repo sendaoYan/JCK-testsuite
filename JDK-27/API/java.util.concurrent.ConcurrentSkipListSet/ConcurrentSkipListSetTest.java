@@ -123,6 +123,56 @@ public class ConcurrentSkipListSetTest {
         expectThrows(() -> s.remove(null), NullPointerException.class, "remove(null)");
     }
 
+    static void testBlackBox() {
+        // constructors (Collection)/(SortedSet)
+        ConcurrentSkipListSet<Integer> s1 = new ConcurrentSkipListSet<>(java.util.Arrays.asList(3, 1, 2));
+        check(s1.size() == 3 && s1.first() == 1 && s1.last() == 3, "constructor(Collection) sorts");
+        java.util.TreeSet<Integer> ts = new java.util.TreeSet<>(java.util.Arrays.asList(5, 2, 9));
+        ConcurrentSkipListSet<Integer> s2 = new ConcurrentSkipListSet<>(ts);
+        check(s2.first() == 2 && s2.last() == 9, "constructor(SortedSet) keeps order");
+
+        // addFirst / addLast (SequencedSet) always throw UnsupportedOperationException
+        ConcurrentSkipListSet<Integer> s = new ConcurrentSkipListSet<>();
+        s.add(3);
+        s.add(5);
+        expectThrows(() -> s.addFirst(1), UnsupportedOperationException.class,
+                     "addFirst throws UnsupportedOperationException");
+        expectThrows(() -> s.addLast(7), UnsupportedOperationException.class,
+                     "addLast throws UnsupportedOperationException");
+
+        // equals
+        ConcurrentSkipListSet<Integer> eq = new ConcurrentSkipListSet<>(java.util.Arrays.asList(3, 5));
+        check(s.equals(eq) && eq.equals(s), "equals content");
+        eq.add(99);
+        check(!s.equals(eq), "!equals different content");
+
+        // iterator (sorted order)
+        Iterator<Integer> it = s.iterator();
+        check(it.next() == 3 && it.next() == 5, "iterator sorted");
+
+        // removeAll
+        check(s.removeAll(java.util.Arrays.asList(3)), "removeAll true");
+        check(s.size() == 1 && s.contains(5), "removeAll result");
+
+        // spliterator
+        ConcurrentSkipListSet<Integer> sps = new ConcurrentSkipListSet<>(java.util.Arrays.asList(3, 1, 2));
+        java.util.Spliterator<Integer> sp = sps.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        java.util.ArrayList<Integer> viaSp = new java.util.ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        check(viaSp.equals(java.util.Arrays.asList(1, 2, 3)), "spliterator sorted order");
+
+        // clone() (covariant and Object)
+        ConcurrentSkipListSet<Integer> copy = sps.clone();
+        check(copy.equals(sps) && copy != sps, "clone() equals but distinct");
+        Object oCopy = sps.clone();
+        check(oCopy instanceof ConcurrentSkipListSet, "clone() Object return type");
+
+        // clear
+        sps.clear();
+        check(sps.isEmpty(), "clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSortedAddAndNavigation();
@@ -131,6 +181,7 @@ public class ConcurrentSkipListSetTest {
         testDescending();
         testSubSets();
         testNullRejection();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

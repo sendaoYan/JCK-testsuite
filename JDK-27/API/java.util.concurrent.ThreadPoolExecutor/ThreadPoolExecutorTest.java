@@ -152,12 +152,82 @@ public class ThreadPoolExecutorTest {
         }
     }
 
+    static class HookingTPE extends ThreadPoolExecutor {
+        int beforeCount, afterCount, terminatedCount;
+        HookingTPE(int core, int max, long keepAlive, TimeUnit unit,
+                   java.util.concurrent.BlockingQueue<Runnable> workQueue) {
+            super(core, max, keepAlive, unit, workQueue);
+        }
+        protected void beforeExecute(Thread t, Runnable r) { beforeCount++; }
+        protected void afterExecute(Runnable r, Throwable t) { afterCount++; }
+        protected void terminated() { terminatedCount++; }
+    }
+
+    static void testBlackBox() throws Exception {
+        // constructor variants with ThreadFactory / RejectedExecutionHandler
+        java.util.concurrent.ThreadFactory tf = r -> { Thread t = new Thread(r); t.setDaemon(true); return t; };
+        java.util.concurrent.RejectedExecutionHandler reh =
+                (r, e) -> { throw new RejectedExecutionException("rejected"); };
+        ThreadPoolExecutor t1 = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<Runnable>(), tf);
+        check(t1.getThreadFactory() == tf, "constructor(...,ThreadFactory) getThreadFactory");
+        t1.shutdown();
+        t1.awaitTermination(10, TimeUnit.SECONDS);
+
+        ThreadPoolExecutor t2 = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<Runnable>(1), reh);
+        check(t2.getRejectedExecutionHandler() == reh, "constructor(...,RejectedExecutionHandler)");
+        t2.shutdown();
+        t2.awaitTermination(10, TimeUnit.SECONDS);
+
+        ThreadPoolExecutor t3 = new ThreadPoolExecutor(1, 1, 60L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<Runnable>(1), tf, reh);
+        check(t3.getThreadFactory() == tf && t3.getRejectedExecutionHandler() == reh,
+              "constructor(...,ThreadFactory,RejectedExecutionHandler)");
+
+        // setThreadFactory / setRejectedExecutionHandler
+        java.util.concurrent.ThreadFactory tf2 = r -> { Thread t = new Thread(r); t.setDaemon(true); return t; };
+        t3.setThreadFactory(tf2);
+        check(t3.getThreadFactory() == tf2, "setThreadFactory");
+        java.util.concurrent.RejectedExecutionHandler reh2 = (r, e) -> { };
+        t3.setRejectedExecutionHandler(reh2);
+        check(t3.getRejectedExecutionHandler() == reh2, "setRejectedExecutionHandler");
+
+        // allowCoreThreadTimeOut / allowsCoreThreadTimeOut
+        check(!t3.allowsCoreThreadTimeOut(), "allowsCoreThreadTimeOut default false");
+        t3.allowCoreThreadTimeOut(true);
+        check(t3.allowsCoreThreadTimeOut(), "allowCoreThreadTimeOut(true) sets true");
+
+        // isShutdown / isTerminating / purge / remove
+        check(!t3.isShutdown(), "not shutdown initially");
+        check(!t3.isTerminating(), "not terminating initially");
+        t3.purge();
+        check(true, "purge callable");
+        check(!t3.remove(() -> { }), "remove(non-queued) false");
+        t3.shutdown();
+        t3.awaitTermination(10, TimeUnit.SECONDS);
+
+        // beforeExecute / afterExecute / terminated hooks
+        HookingTPE h = new HookingTPE(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>());
+        h.execute(() -> { });
+        h.shutdown();
+        h.awaitTermination(10, TimeUnit.SECONDS);
+        check(h.beforeCount == 1, "beforeExecute invoked once");
+        check(h.afterCount == 1, "afterExecute invoked once");
+        check(h.terminatedCount == 1, "terminated invoked once");
+        check(!h.isTerminating(), "isTerminating false after termination");
+
+        // toString
+        check(h.toString() != null && h.toString().length() > 0, "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSubmitAndTerminate();
         testCoreMaxQueueSemantics();
         testPrestartAndConfig();
         testRejection();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

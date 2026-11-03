@@ -118,6 +118,71 @@ public class ConcurrentLinkedDequeTest {
         check(it.next() == 3 && it.next() == 2 && it.next() == 1, "descendingIterator order");
     }
 
+    static void testBlackBox() {
+        // constructor(Collection) + getFirst/getLast + element
+        ConcurrentLinkedDeque<String> d = new ConcurrentLinkedDeque<>(java.util.Arrays.asList("a", "b", "c"));
+        check(d.size() == 3, "constructor(Collection) copies");
+        check("a".equals(d.getFirst()) && "c".equals(d.getLast()), "getFirst/getLast");
+        check("a".equals(d.element()), "element returns head");
+
+        // queue-style offer/peek/poll
+        check(d.offer("d"), "offer adds to tail");
+        check("a".equals(d.peek()), "peek head");
+        check("a".equals(d.poll()), "poll head");
+        check("b".equals(d.peek()), "peek after poll");
+
+        // addAll
+        ConcurrentLinkedDeque<String> d2 = new ConcurrentLinkedDeque<>();
+        check(d2.addAll(java.util.Arrays.asList("x", "y")), "addAll true");
+        check(d2.size() == 2, "addAll size");
+
+        // remove()/remove(Object)
+        check("b".equals(d.remove()), "remove() returns head");
+        check(d.remove("c"), "remove(Object) true");
+        check(!d.remove("zzz"), "remove(Object) missing false");
+
+        // removeAll / retainAll / removeIf
+        ConcurrentLinkedDeque<Integer> q = new ConcurrentLinkedDeque<>(java.util.Arrays.asList(1, 2, 3, 4, 5));
+        check(q.removeAll(java.util.Arrays.asList(1, 3, 5)), "removeAll true");
+        check(q.size() == 2 && q.contains(2) && q.contains(4), "removeAll result");
+        check(q.retainAll(java.util.Arrays.asList(2)), "retainAll true");
+        check(q.size() == 1 && q.contains(2), "retainAll result");
+        q.add(3);
+        q.removeIf(x -> x % 2 == 0);
+        check(q.size() == 1 && q.contains(3), "removeIf removes even");
+
+        // forEach order
+        ConcurrentLinkedDeque<Integer> f = new ConcurrentLinkedDeque<>(java.util.Arrays.asList(1, 2, 3));
+        java.util.ArrayList<Integer> seen = new java.util.ArrayList<>();
+        f.forEach(seen::add);
+        check(seen.equals(java.util.Arrays.asList(1, 2, 3)), "forEach order");
+
+        // iterator
+        Iterator<Integer> it = f.iterator();
+        check(it.next() == 1 && it.next() == 2 && it.next() == 3, "iterator order");
+
+        // toArray / toArray(T[])
+        Object[] arr = f.toArray();
+        check(arr.length == 3 && arr[0].equals(1), "toArray()");
+        Integer[] typed = f.toArray(new Integer[0]);
+        check(typed.length == 3 && typed[0] == 1 && typed[2] == 3, "toArray(T[])");
+
+        // clear
+        f.clear();
+        check(f.isEmpty(), "clear empties");
+
+        // spliterator
+        ConcurrentLinkedDeque<Integer> spd = new ConcurrentLinkedDeque<>(java.util.Arrays.asList(1, 2, 3));
+        java.util.Spliterator<Integer> sp = spd.spliterator();
+        check(sp.estimateSize() == Long.MAX_VALUE, "spliterator estimateSize Long.MAX_VALUE");
+        java.util.ArrayList<Integer> viaSp = new java.util.ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        check(viaSp.equals(java.util.Arrays.asList(1, 2, 3)), "spliterator order");
+
+        // toString
+        check(spd.toString() != null && spd.toString().contains("1"), "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testDequeSemantics();
@@ -125,6 +190,7 @@ public class ConcurrentLinkedDequeTest {
         testOccurrenceRemoval();
         testNullRejection();
         testDescendingIterator();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

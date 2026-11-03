@@ -53,6 +53,18 @@ public class DelayedTest {
               "getDelay is abstract");
     }
 
+    // Fixed (wall-clock-free) Delayed implementation with an explicit nanosecond delay.
+    static final class FixedDelay implements Delayed {
+        private final long delayNanos;
+        FixedDelay(long delayNanos) { this.delayNanos = delayNanos; }
+        public long getDelay(TimeUnit unit) {
+            return unit.convert(delayNanos, TimeUnit.NANOSECONDS);
+        }
+        public int compareTo(Delayed o) {
+            return Long.compare(delayNanos, ((FixedDelay) o).delayNanos);
+        }
+    }
+
     // ---- Part 2: black-box (behavioral) ----
     static void testGetDelayAndCompareTo() {
         D d = new D(1_000_000_000L); // ~1s in the future
@@ -82,10 +94,22 @@ public class DelayedTest {
         check(q.poll() == null, "future item not yet pollable");
     }
 
+    static void testBlackBox() {
+        FixedDelay one = new FixedDelay(2_000_000_000L); // 2 seconds
+        FixedDelay two = new FixedDelay(1_000_000_000L); // 1 second
+        check(one.getDelay(TimeUnit.SECONDS) == 2L, "getDelay(SECONDS) exact");
+        check(two.getDelay(TimeUnit.MILLISECONDS) == 1000L, "getDelay(MILLISECONDS) exact");
+        check(two.getDelay(TimeUnit.MICROSECONDS) == 1_000_000L, "getDelay(MICROSECONDS) exact");
+        check(two.getDelay(TimeUnit.NANOSECONDS) == 1_000_000_000L, "getDelay(NANOSECONDS) exact");
+        check(one.compareTo(two) > 0 && two.compareTo(one) < 0, "compareTo by delay");
+        check(two.compareTo(new FixedDelay(1_000_000_000L)) == 0, "compareTo equal delays");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testGetDelayAndCompareTo();
         testDelayQueueUsage();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

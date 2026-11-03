@@ -122,6 +122,38 @@ public class SynchronousQueueTest {
         check(nonFair.isEmpty(), "non-fair constructor works");
     }
 
+    static void testBlackBox() {
+        SynchronousQueue<String> q = new SynchronousQueue<>();
+        check(!q.contains("x"), "contains always false");
+        check(!q.containsAll(java.util.Arrays.asList("x")), "containsAll non-empty false");
+        check(q.containsAll(new java.util.ArrayList<String>()), "containsAll empty collection true");
+
+        // remove / removeAll / retainAll
+        check(!q.remove("x"), "remove(Object) false");
+        check(!q.removeAll(java.util.Arrays.asList("x")), "removeAll false");
+        check(!q.retainAll(java.util.Arrays.asList("x")), "retainAll false");
+
+        // drainTo
+        java.util.List<String> drained = new java.util.ArrayList<>();
+        check(q.drainTo(drained) == 0, "drainTo returns 0");
+        check(q.drainTo(drained, 10) == 0 && drained.isEmpty(), "drainTo(max) returns 0");
+
+        // iterator
+        java.util.Iterator<String> it = q.iterator();
+        check(!it.hasNext(), "iterator has no elements");
+
+        // spliterator
+        java.util.Spliterator<String> sp = q.spliterator();
+        check(sp.estimateSize() == 0, "spliterator estimateSize 0");
+
+        // toArray / toArray(T[])
+        check(q.toArray().length == 0, "toArray() empty");
+        check(q.toArray(new String[0]).length == 0, "toArray(T[]) empty");
+
+        // toString
+        check(q.toString() != null && q.toString().contains("["), "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testNoCapacity();
@@ -129,6 +161,7 @@ public class SynchronousQueueTest {
         testPutBlocksUntilTake();
         testImmediateTimeout();
         testFairConstructor();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

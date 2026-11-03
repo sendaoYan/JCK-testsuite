@@ -102,12 +102,26 @@ public class TimeUnitTest {
         check(elapsedMs >= 50, "timedWait does not return early (elapsed " + elapsedMs + "ms)");
     }
 
+    static void testBlackBox() {
+        check(TimeUnit.DAYS.toDays(2) == 2L, "DAYS.toDays identity");
+        check(TimeUnit.MICROSECONDS.toMicros(5) == 5L, "MICROSECONDS.toMicros identity");
+        check(TimeUnit.NANOSECONDS.toNanos(7) == 7L, "NANOSECONDS.toNanos identity");
+        check(TimeUnit.MINUTES.toSeconds(-2) == -120L, "negative conversion minutes->seconds");
+        check(TimeUnit.of(ChronoUnit.MICROS) == TimeUnit.MICROSECONDS, "of(MICROS)");
+        check(TimeUnit.of(ChronoUnit.SECONDS) == TimeUnit.SECONDS, "of(SECONDS)");
+        check(TimeUnit.of(ChronoUnit.DAYS) == TimeUnit.DAYS, "of(DAYS)");
+        check(TimeUnit.SECONDS.toChronoUnit() == ChronoUnit.SECONDS, "SECONDS.toChronoUnit");
+        check(TimeUnit.NANOSECONDS.convert(Duration.ofNanos(123)) == 123L, "convert(Duration) nanos");
+        check(TimeUnit.MICROSECONDS.convert(Duration.ofNanos(1500)) == 1L, "convert(Duration) truncates nanos to micros");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testConvert();
         testSleep();
         testTimedJoin();
         testTimedWait();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

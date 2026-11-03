@@ -146,6 +146,87 @@ public class ConcurrentSkipListMapTest {
         check(m.replace("a", 2, 20) && m.get("a") == 20, "replace(K,old,new)");
     }
 
+    static void testBlackBox() {
+        // constructors (Map)/(SortedMap) + isEmpty
+        java.util.HashMap<Integer, String> hm = new java.util.HashMap<>();
+        hm.put(1, "a");
+        hm.put(2, "b");
+        ConcurrentSkipListMap<Integer, String> m1 = new ConcurrentSkipListMap<>(hm);
+        check(m1.size() == 2 && m1.get(1).equals("a"), "constructor(Map) copies");
+        java.util.TreeMap<Integer, String> tm = new java.util.TreeMap<>();
+        tm.put(3, "c");
+        tm.put(1, "a");
+        ConcurrentSkipListMap<Integer, String> m2 = new ConcurrentSkipListMap<>(tm);
+        check(m2.firstKey() == 1 && m2.get(3).equals("c"), "constructor(SortedMap) keeps order");
+        check(new ConcurrentSkipListMap<Integer, String>().isEmpty(), "isEmpty initially");
+
+        ConcurrentSkipListMap<Integer, String> m = new ConcurrentSkipListMap<>();
+        m.put(1, "a");
+        m.put(3, "c");
+        m.put(5, "e");
+
+        // putFirst / putLast (SequencedMap) always throw UnsupportedOperationException
+        expectThrows(() -> m.putFirst(0, "zero"), UnsupportedOperationException.class,
+                     "putFirst throws UnsupportedOperationException");
+        expectThrows(() -> m.putLast(6, "six"), UnsupportedOperationException.class,
+                     "putLast throws UnsupportedOperationException");
+
+        // ceilingEntry/floorEntry/higherEntry/lowerEntry (entry versions)
+        Map.Entry<Integer, String> ce = m.ceilingEntry(4);
+        check(ce.getKey() == 5 && "e".equals(ce.getValue()), "ceilingEntry");
+        check(m.floorEntry(4).getKey() == 3, "floorEntry");
+        check(m.higherEntry(3).getKey() == 5, "higherEntry");
+        check(m.lowerEntry(3).getKey() == 1, "lowerEntry");
+        check(m.ceilingEntry(99) == null && m.lowerEntry(0) == null, "boundary entries null");
+
+        // containsValue / getOrDefault
+        check(m.containsValue("c") && !m.containsValue("zzz"), "containsValue");
+        check("c".equals(m.getOrDefault(3, "default")), "getOrDefault present");
+        check("default".equals(m.getOrDefault(99, "default")), "getOrDefault missing");
+
+        // computeIfPresent
+        check("a!".equals(m.computeIfPresent(1, (k, v) -> v + "!")), "computeIfPresent present");
+        check(m.computeIfPresent(99, (k, v) -> "x") == null && !m.containsKey(99),
+              "computeIfPresent absent no-op");
+
+        // replaceAll
+        m.replaceAll((k, v) -> v.toUpperCase());
+        check("C".equals(m.get(3)), "replaceAll maps values");
+
+        // remove(Object)/remove(Object,Object)
+        check("A!".equals(m.remove(1)), "remove(Object) returns value");
+        check(!m.containsKey(1), "remove(Object) applied");
+        check(!m.remove(3, "WRONG"), "remove(K,V) non-matching false");
+        check(m.remove(3, "C"), "remove(K,V) matching true");
+
+        // views: entrySet/keySet/navigableKeySet/values
+        m.clear();
+        m.put(2, "b");
+        m.put(1, "a");
+        check(m.entrySet().size() == 2, "entrySet size");
+        check(m.keySet().size() == 2 && m.keySet().contains(1), "keySet");
+        java.util.NavigableSet<Integer> nks = m.navigableKeySet();
+        check(nks.first() == 1 && nks.last() == 2, "navigableKeySet order");
+        check(m.values().size() == 2 && m.values().contains("a"), "values");
+
+        // forEach(BiConsumer)
+        java.util.ArrayList<String> seen = new java.util.ArrayList<>();
+        m.forEach((k, v) -> seen.add(k + "=" + v));
+        seen.sort(String::compareTo);
+        check(seen.toString().equals("[1=a, 2=b]"), "forEach(BiConsumer)");
+
+        // clone() (covariant and Object return types)
+        ConcurrentSkipListMap<Integer, String> copy = m.clone();
+        check(copy.equals(m) && copy != m, "clone() equals but distinct");
+        check(copy.firstKey() == 1 && copy.lastKey() == 2, "clone() preserves order");
+        Object oCopy = m.clone();
+        check(oCopy instanceof ConcurrentSkipListMap, "clone() Object return type");
+
+        // clear
+        m.clear();
+        check(m.isEmpty(), "clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSortedNavigation();
@@ -155,6 +236,7 @@ public class ConcurrentSkipListMapTest {
         testComparator();
         testNullRejection();
         testDefaultMethods();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

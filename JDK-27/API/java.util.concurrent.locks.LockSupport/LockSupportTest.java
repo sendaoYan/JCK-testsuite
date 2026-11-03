@@ -118,6 +118,16 @@ public class LockSupportTest {
         check(true, "park(Object) with prior permit returns immediately");
     }
 
+    static void testBlackBox() {
+        // parkUntil with a deadline in the past returns immediately (deterministic)
+        LockSupport.parkUntil(0L);
+        check(true, "parkUntil(0) returns immediately");
+        LockSupport.parkUntil(new Object(), 0L);
+        check(true, "parkUntil(blocker,0) returns immediately");
+        LockSupport.parkNanos(new Object(), 1L);
+        check(true, "parkNanos(blocker,1) returns immediately");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPermitSemantics();
@@ -126,6 +136,7 @@ public class LockSupportTest {
         testGetBlockerNullArgument();
         testSetCurrentBlockerAndCrossThread();
         testParkObjectPermit();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -158,6 +158,88 @@ public class LinkedBlockingDequeTest {
         expectThrows(() -> d.offerFirst(null), NullPointerException.class, "offerFirst(null)");
     }
 
+    static void testBlackBox() throws Exception {
+        // constructor(Collection) + getFirst/getLast + element + offer/peek/poll
+        LinkedBlockingDeque<String> d = new LinkedBlockingDeque<>(Arrays.asList("a", "b", "c"));
+        check(d.size() == 3, "constructor(Collection) copies");
+        check("a".equals(d.getFirst()) && "c".equals(d.getLast()), "getFirst/getLast");
+        check("a".equals(d.element()), "element returns head");
+        check(d.offer("d"), "offer appends tail");
+        check("a".equals(d.peek()), "peek head");
+        check("a".equals(d.poll()), "poll head");
+        check("b".equals(d.peek()), "peek after poll");
+
+        // offer(timeout) / poll(timeout) on a bounded deque
+        LinkedBlockingDeque<String> bounded = new LinkedBlockingDeque<>(1);
+        check(bounded.offer("x"), "offer on bounded");
+        check(!bounded.offer("y", 1, java.util.concurrent.TimeUnit.NANOSECONDS), "offer(timeout) false when full");
+        check("x".equals(bounded.poll(1, java.util.concurrent.TimeUnit.NANOSECONDS)), "poll(timeout) returns existing");
+        check(bounded.poll(1, java.util.concurrent.TimeUnit.NANOSECONDS) == null, "poll(timeout) null when empty");
+
+        // put / take (blocking handoff)
+        LinkedBlockingDeque<Integer> bd = new LinkedBlockingDeque<>(1);
+        bd.put(42);
+        AtomicInteger taken = new AtomicInteger(-1);
+        CountDownLatch done = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            try { taken.set(bd.take()); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            finally { done.countDown(); }
+        });
+        done.await();
+        check(taken.get() == 42, "take receives put value");
+        t.join();
+
+        // remove()/remove(Object)
+        LinkedBlockingDeque<String> rr = new LinkedBlockingDeque<>(Arrays.asList("a", "b", "c"));
+        check("a".equals(rr.remove()), "remove() returns head");
+        check(rr.remove("c"), "remove(Object) true");
+        check(!rr.remove("zzz"), "remove(Object) missing false");
+
+        // removeAll / retainAll / removeIf
+        LinkedBlockingDeque<Integer> q = new LinkedBlockingDeque<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(q.removeAll(Arrays.asList(1, 3, 5)), "removeAll true");
+        check(q.size() == 2 && q.contains(2) && q.contains(4), "removeAll result");
+        check(q.retainAll(Arrays.asList(2)), "retainAll true");
+        check(q.size() == 1 && q.contains(2), "retainAll result");
+        q.add(3);
+        q.removeIf(x -> x % 2 == 0);
+        check(q.size() == 1 && q.contains(3), "removeIf removes even");
+
+        // addAll
+        LinkedBlockingDeque<Integer> d2 = new LinkedBlockingDeque<>();
+        check(d2.addAll(Arrays.asList(1, 2)), "addAll true");
+        check(d2.size() == 2, "addAll size");
+
+        // forEach / iterator
+        LinkedBlockingDeque<Integer> f = new LinkedBlockingDeque<>(Arrays.asList(1, 2, 3));
+        List<Integer> seen = new ArrayList<>();
+        f.forEach(seen::add);
+        check(seen.equals(Arrays.asList(1, 2, 3)), "forEach order");
+        Iterator<Integer> it = f.iterator();
+        check(it.next() == 1 && it.next() == 2 && it.next() == 3, "iterator order");
+
+        // toArray / toArray(T[])
+        Object[] arr = f.toArray();
+        check(arr.length == 3 && arr[0].equals(1), "toArray()");
+        Integer[] typed = f.toArray(new Integer[0]);
+        check(typed.length == 3 && typed[2] == 3, "toArray(T[])");
+
+        // spliterator
+        java.util.Spliterator<Integer> sp = f.spliterator();
+        check(sp.estimateSize() == 3, "spliterator estimateSize");
+        List<Integer> viaSp = new ArrayList<>();
+        sp.forEachRemaining(viaSp::add);
+        check(viaSp.equals(Arrays.asList(1, 2, 3)), "spliterator order");
+
+        // clear
+        f.clear();
+        check(f.isEmpty(), "clear empties");
+
+        // toString
+        LinkedBlockingDeque<Integer> ts = new LinkedBlockingDeque<>(Arrays.asList(1, 2));
+        check(ts.toString() != null && ts.toString().contains("1"), "toString non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testDequeSemantics();
@@ -166,6 +248,7 @@ public class LinkedBlockingDequeTest {
         testOccurrenceRemoval();
         testDrainToAndRemainingCapacity();
         testDescendingIteratorAndNull();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
