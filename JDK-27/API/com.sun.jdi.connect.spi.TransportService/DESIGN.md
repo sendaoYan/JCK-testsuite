@@ -1,0 +1,27 @@
+# com.sun.jdi.connect.spi.TransportService 行为化测试设计
+
+## 1. API 功能
+SPI 抽象：Connection（字节包读写）、TransportService（传输服务与 Capabilities/ListenKey），供第三方传输实现。
+
+公开成员（JDK-27 javap）：
+  - `public abstract class com.sun.jdi.connect.spi.TransportService {`
+  - `public com.sun.jdi.connect.spi.TransportService();`
+  - `public abstract java.lang.String name();`
+  - `public abstract java.lang.String description();`
+  - `public abstract com.sun.jdi.connect.spi.TransportService$Capabilities capabilities();`
+  - `public abstract com.sun.jdi.connect.spi.Connection attach(java.lang.String, long, long) throws java.io.IOException;`
+  - `public abstract com.sun.jdi.connect.spi.TransportService$ListenKey startListening(java.lang.String) throws java.io.IOException;`
+  - `public abstract com.sun.jdi.connect.spi.TransportService$ListenKey startListening() throws java.io.IOException;`
+  - `public abstract void stopListening(com.sun.jdi.connect.spi.TransportService$ListenKey) throws java.io.IOException;`
+  - `public abstract com.sun.jdi.connect.spi.Connection accept(com.sun.jdi.connect.spi.TransportService$ListenKey, long, long) throws java.io.IOException;`
+
+## 2. Java 用户如何使用
+传输实现者继承 Connection 实现 readPacket/writePacket/close/isOpen，继承 TransportService 实现 name/capabilities/attach/startListening/accept。
+
+## 3. 开源代码实际用法调研
+来源：~/git/jdk25u-dev/src/jdk.jdi/share/classes/com/sun/jdi/connect/spi/Connection.java 与 TransportService.java 的 javadoc；test/jdk/com/sun/jdi/connect/ 下的 SPI 相关用例。
+
+## 4. 测试用例设计 + 自动化实现
+testBlackBox 用匿名子类实现抽象方法，断言 isOpen/readPacket 返回约定值、name/capabilities 可调用。
+
+实现见同目录 `TransportServiceTest.java` 的 `testWhiteBox()`（结构/继承/成员形态）与 `testBlackBox()`（组合操作行为断言）。
