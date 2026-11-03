@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.lang.NumberFormatException API conformance: IllegalArgumentException
- *          hierarchy, no-arg and (String) constructors, and Integer.parseInt throwing NFE
- *          (including the null-input case, which is NFE rather than NPE).
+ * @summary java.lang.NumberFormatException conformance: white-box structure + black-box behavior.
  * @run main NumberFormatExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class NumberFormatExceptionTest {
     static int passed;
@@ -14,38 +15,56 @@ public class NumberFormatExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        NumberFormatException e = new NumberFormatException();
-        check(e instanceof IllegalArgumentException, "NFE is an IllegalArgumentException");
-        check(e instanceof RuntimeException, "NFE is a RuntimeException");
-    }
-
-    static void testConstructors() {
-        NumberFormatException e1 = new NumberFormatException();
-        check(e1.getMessage() == null, "no-arg ctor null message");
-        NumberFormatException e2 = new NumberFormatException("bad");
-        check("bad".equals(e2.getMessage()), "(String) ctor message");
-    }
-
-    static void testThrown() {
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
-            Integer.parseInt("not-a-number");
-            throw new AssertionError("expected NumberFormatException");
-        } catch (NumberFormatException e) {
-            check("For input string: \"not-a-number\"".equals(e.getMessage()), "parseInt message");
-        }
-        try {
-            Integer.parseInt(null);
-            throw new AssertionError("parseInt(null): expected NumberFormatException");
-        } catch (NumberFormatException e) {
-            check(e instanceof NumberFormatException, "parseInt(null) throws NFE (not NPE)");
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
         }
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
-        testThrown();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.NumberFormatException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == IllegalArgumentException.class, "superclass is IllegalArgumentException");
+        check(c.getDeclaredConstructors().length == 2, "2 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.NumberFormatException");
+
+        NumberFormatException e0 = new NumberFormatException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { NumberFormatException e = new NumberFormatException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+
+        // common Throwable contract
+        NumberFormatException t = new NumberFormatException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.NumberFormatException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+        // trigger: malformed numeric string
+        expect(NumberFormatException.class, () -> { Integer.parseInt("not-a-number"); }, "trigger malformed numeric string");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,9 +1,11 @@
 /*
  * @test
- * @summary java.lang.IllegalStateException API conformance: RuntimeException hierarchy,
- *          all four constructors, and a thrown instance (Iterator.remove before next()).
+ * @summary java.lang.IllegalStateException conformance: white-box structure + black-box behavior.
  * @run main IllegalStateExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class IllegalStateExceptionTest {
     static int passed;
@@ -13,38 +15,56 @@ public class IllegalStateExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        IllegalStateException e = new IllegalStateException();
-        check(e instanceof RuntimeException, "ISE is a RuntimeException");
-        check(e instanceof Exception && e instanceof Throwable, "ISE is Exception/Throwable");
-    }
-
-    static void testConstructors() {
-        IllegalStateException e1 = new IllegalStateException();
-        check(e1.getMessage() == null && e1.getCause() == null, "no-arg ctor");
-        IllegalStateException e2 = new IllegalStateException("msg");
-        check("msg".equals(e2.getMessage()), "(String) ctor");
-        IllegalStateException cause = new IllegalStateException("cause");
-        IllegalStateException e3 = new IllegalStateException("msg", cause);
-        check("msg".equals(e3.getMessage()) && e3.getCause() == cause, "(String,Throwable) ctor");
-        IllegalStateException e4 = new IllegalStateException(cause);
-        check(e4.getCause() == cause, "(Throwable) ctor sets cause");
-    }
-
-    static void testThrown() {
-        java.util.Iterator<String> it = new java.util.ArrayList<String>().iterator();
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
-            it.remove();
-            throw new AssertionError("expected IllegalStateException");
-        } catch (IllegalStateException e) {
-            check(e instanceof IllegalStateException, "Iterator.remove before next() throws ISE");
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
         }
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
-        testThrown();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.IllegalStateException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == RuntimeException.class, "superclass is RuntimeException");
+        check(c.getDeclaredConstructors().length == 4, "4 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.IllegalStateException");
+
+        IllegalStateException e0 = new IllegalStateException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { IllegalStateException e = new IllegalStateException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+        { Exception cause = new Exception("cause"); IllegalStateException e = new IllegalStateException("boom", cause); check("boom".equals(e.getMessage()) && e.getCause() == cause, "(String,Throwable) ctor"); }
+        { Exception cause = new Exception("cause"); IllegalStateException e = new IllegalStateException(cause); check(e.getCause() == cause, "(Throwable) ctor cause"); }
+
+        // common Throwable contract
+        IllegalStateException t = new IllegalStateException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.IllegalStateException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

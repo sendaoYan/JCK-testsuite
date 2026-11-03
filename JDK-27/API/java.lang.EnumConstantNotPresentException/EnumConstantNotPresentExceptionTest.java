@@ -1,8 +1,11 @@
 /*
  * @test
- * @summary java.lang.EnumConstantNotPresentException API conformance: enumType/constantName.
+ * @summary java.lang.EnumConstantNotPresentException conformance: white-box structure + black-box behavior.
  * @run main EnumConstantNotPresentExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class EnumConstantNotPresentExceptionTest {
     static int passed;
@@ -12,19 +15,54 @@ public class EnumConstantNotPresentExceptionTest {
         passed++;
     }
 
-    enum Color { RED, GREEN }
-
-    static void testEnumConstantNotPresentException() {
-        EnumConstantNotPresentException e =
-            new EnumConstantNotPresentException(Color.class, "BLUE");
-        check(e instanceof RuntimeException, "extends RuntimeException");
-        check("BLUE".equals(e.constantName()), "constantName");
-        check(e.getMessage() != null && e.getMessage().contains("BLUE"),
-              "message contains the constant name");
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
+        }
     }
 
-    public static void main(String[] args) {
-        testEnumConstantNotPresentException();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.EnumConstantNotPresentException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == RuntimeException.class, "superclass is RuntimeException");
+        check(c.getDeclaredConstructors().length == 1, "1 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.EnumConstantNotPresentException");
+
+        { EnumConstantNotPresentException e = new EnumConstantNotPresentException(Thread.State.class, "RUNNING"); check(e.getMessage() != null, "(Class,String) ctor non-null message"); }
+
+        // common Throwable contract
+        EnumConstantNotPresentException t = new EnumConstantNotPresentException(Thread.State.class, "RUNNING");
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.EnumConstantNotPresentException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+        { EnumConstantNotPresentException e = new EnumConstantNotPresentException(Thread.State.class, "RUNNING"); check(e.enumType() == Thread.State.class, "enumType"); }
+        { EnumConstantNotPresentException e = new EnumConstantNotPresentException(Thread.State.class, "RUNNING"); check("RUNNING".equals(e.constantName()), "constantName"); }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

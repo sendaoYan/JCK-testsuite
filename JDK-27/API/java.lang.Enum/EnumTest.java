@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.lang.Enum API conformance: values/valueOf (incl. IllegalArgumentException
- *          and NullPointerException), ordinal, name vs toString, compareTo (ordinal
- *          order), identity equals/hashCode, getDeclaringClass, Enum.valueOf, and
- *          constant-specific class bodies with abstract members.
+ * @summary java.lang.Enum conformance: white-box structure + black-box behavior.
  * @run main EnumTest
  */
+
+import java.lang.reflect.Modifier;
 
 public class EnumTest {
     enum Suit { CLUBS, DIAMONDS, HEARTS, SPADES }
@@ -27,6 +26,19 @@ public class EnumTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Enum");
+        check(Modifier.isAbstract(c.getModifiers()), "Enum is abstract");
+        check(c.getSuperclass() == Object.class, "Enum extends Object");
+        check(Comparable.class.isAssignableFrom(c), "Enum implements Comparable");
+        check(Modifier.isFinal(c.getMethod("name").getModifiers()), "name() final");
+        check(Modifier.isFinal(c.getMethod("ordinal").getModifiers()), "ordinal() final");
+        check(Modifier.isFinal(c.getMethod("equals", Object.class).getModifiers()), "equals final");
+        check(Modifier.isFinal(c.getMethod("hashCode").getModifiers()), "hashCode final");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testValuesAndValueOf() {
         Suit[] all = Suit.values();
         check(all.length == 4, "values().length == 4");
@@ -56,7 +68,6 @@ public class EnumTest {
         check(Suit.DIAMONDS.ordinal() == 1, "DIAMONDS.ordinal() == 1");
         check(Suit.SPADES.ordinal() == 3, "SPADES.ordinal() == 3");
         check(Suit.HEARTS.name().equals("HEARTS"), "name() == constant name");
-        // For an enum that does not override toString, toString() == name().
         check(Suit.HEARTS.toString().equals("HEARTS"), "default toString() == name()");
     }
 
@@ -70,7 +81,6 @@ public class EnumTest {
         check(!Suit.HEARTS.equals(null), "!equals null");
         check(Suit.HEARTS.equals(Suit.valueOf("HEARTS")), "valueOf returns same instance");
 
-        // Enum.equals/hashCode are final and identity-based; constants are singletons.
         check(Suit.HEARTS.hashCode() == Suit.HEARTS.hashCode(), "hashCode stable");
         check(Suit.HEARTS.hashCode() == Suit.valueOf("HEARTS").hashCode(), "same constant same hashCode");
         check(System.identityHashCode(Suit.HEARTS) == Suit.HEARTS.hashCode(),
@@ -93,7 +103,8 @@ public class EnumTest {
         check(Op.values().length == 3, "Op.values().length == 3");
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testValuesAndValueOf();
         testOrdinalName();
         testCompareEqualsHashCode();

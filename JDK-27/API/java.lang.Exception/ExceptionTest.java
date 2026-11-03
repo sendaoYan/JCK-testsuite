@@ -1,8 +1,6 @@
 /*
  * @test
- * @summary java.lang.Exception API conformance: checked-exception hierarchy (Exception ->
- *          Throwable, not RuntimeException), all four constructors, and message/cause
- *          propagation including the (Throwable) constructor's message == cause.toString().
+ * @summary java.lang.Exception conformance: white-box structure + black-box behavior.
  * @run main ExceptionTest
  */
 
@@ -14,6 +12,17 @@ public class ExceptionTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Exception");
+        check(c.getSuperclass() == Throwable.class, "Exception extends Throwable");
+        check(!c.isInterface(), "Exception is a class");
+        check(c.getConstructor() != null && c.getConstructor(String.class) != null
+              && c.getConstructor(String.class, Throwable.class) != null
+              && c.getConstructor(Throwable.class) != null, "four constructors present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testHierarchy() {
         Exception e = new Exception();
         check(e instanceof Throwable, "Exception is a Throwable");
@@ -33,7 +42,8 @@ public class ExceptionTest {
               "(Throwable) ctor message == cause.toString()");
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testHierarchy();
         testConstructors();
         System.out.println("PASS (" + passed + " assertions)");

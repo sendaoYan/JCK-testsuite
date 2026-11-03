@@ -1,8 +1,7 @@
 /*
  * @test
- * @summary java.lang.Iterable API conformance: iterator() traversal order, default
- *          forEach(Consumer) visiting every element in order, and default spliterator()
- *          estimate/forEachRemaining.
+ * @summary java.lang.Iterable conformance: white-box structure + black-box behavior
+ *          (iterator() traversal, default forEach, default spliterator).
  * @run main IterableTest
  */
 
@@ -19,6 +18,19 @@ public class IterableTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Iterable");
+        check(c.isInterface(), "Iterable is an interface");
+        check(c.getMethod("iterator").getReturnType() == Iterator.class,
+              "iterator() returns Iterator");
+        check(c.getMethod("forEach", java.util.function.Consumer.class).isDefault(),
+              "forEach(Consumer) is a default method");
+        check(c.getMethod("spliterator").isDefault(),
+              "spliterator() is a default method");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testIterator() {
         Iterable<String> it = Arrays.asList("a", "b", "c");
         Iterator<String> i = it.iterator();
@@ -50,7 +62,8 @@ public class IterableTest {
         check(count[0] == 3, "spliterator visits all elements");
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testIterator();
         testForEach();
         testSpliterator();

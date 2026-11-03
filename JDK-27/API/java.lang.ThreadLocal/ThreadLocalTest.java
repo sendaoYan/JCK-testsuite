@@ -1,9 +1,10 @@
 /*
  * @test
- * @summary java.lang.ThreadLocal API conformance: get/set/remove, default null initialValue,
- *          initialValue override, ThreadLocal.withInitial, and per-thread isolation.
+ * @summary java.lang.ThreadLocal conformance: white-box structure + black-box behavior.
  * @run main ThreadLocalTest
  */
+
+import java.lang.reflect.Method;
 
 public class ThreadLocalTest {
     static int passed;
@@ -13,6 +14,21 @@ public class ThreadLocalTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.ThreadLocal");
+        check(!c.isInterface(), "ThreadLocal is a class");
+        check(c.getSuperclass() == Object.class, "ThreadLocal extends Object");
+        Method[] ms = c.getDeclaredMethods();
+        check(has(ms, "get") && has(ms, "set") && has(ms, "remove"), "get/set/remove present");
+    }
+
+    static boolean has(Method[] ms, String name) {
+        for (Method m : ms) if (m.getName().equals(name)) return true;
+        return false;
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testBasic() {
         ThreadLocal<String> tl = new ThreadLocal<>();
         check(tl.get() == null, "initial value null by default");
@@ -43,6 +59,7 @@ public class ThreadLocalTest {
         tl.set("main");
         final String[] other = new String[1];
         Thread t = new Thread(() -> other[0] = tl.get());
+        t.setDaemon(true);
         t.start();
         t.join();
         check("main".equals(tl.get()), "main thread value unchanged");
@@ -50,6 +67,7 @@ public class ThreadLocalTest {
     }
 
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testBasic();
         testInitialValueOverride();
         testWithInitial();

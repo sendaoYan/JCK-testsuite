@@ -1,9 +1,11 @@
 /*
  * @test
- * @summary java.lang.NoClassDefFoundError API conformance: LinkageError hierarchy and the
- *          no-arg/(String) constructors.
+ * @summary java.lang.NoClassDefFoundError conformance: white-box structure + black-box behavior.
  * @run main NoClassDefFoundErrorTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class NoClassDefFoundErrorTest {
     static int passed;
@@ -13,22 +15,54 @@ public class NoClassDefFoundErrorTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        NoClassDefFoundError e = new NoClassDefFoundError();
-        check(e instanceof LinkageError, "NCDFE is a LinkageError");
-        check(e instanceof Error, "NCDFE is an Error");
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
+        }
     }
 
-    static void testConstructors() {
-        NoClassDefFoundError e1 = new NoClassDefFoundError();
-        check(e1.getMessage() == null, "no-arg ctor null message");
-        NoClassDefFoundError e2 = new NoClassDefFoundError("C");
-        check("C".equals(e2.getMessage()), "(String) ctor message");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.NoClassDefFoundError");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == LinkageError.class, "superclass is LinkageError");
+        check(c.getDeclaredConstructors().length == 2, "2 public constructors");
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.NoClassDefFoundError");
+
+        NoClassDefFoundError e0 = new NoClassDefFoundError();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { NoClassDefFoundError e = new NoClassDefFoundError("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+
+        // common Throwable contract
+        NoClassDefFoundError t = new NoClassDefFoundError();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.NoClassDefFoundError"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

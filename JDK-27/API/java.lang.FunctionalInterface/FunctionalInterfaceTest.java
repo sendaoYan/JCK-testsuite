@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary java.lang.FunctionalInterface API conformance: RUNTIME retention, TYPE target,
- *          usable as a lambda target, and reflected presence on an annotated interface.
+ * @summary java.lang.FunctionalInterface conformance: white-box structure + black-box behavior
+ *          (RUNTIME retention, TYPE target, usable as lambda target, reflected presence).
  * @run main FunctionalInterfaceTest
  */
 
@@ -21,16 +21,20 @@ public class FunctionalInterfaceTest {
     @FunctionalInterface
     interface FI { int apply(int x); }
 
-    static void testRetentionAndTarget() {
-        check(FunctionalInterface.class.getAnnotation(Retention.class).value()
-              == RetentionPolicy.RUNTIME, "RUNTIME retention");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() {
+        Class<?> c = FunctionalInterface.class;
+        check(c.isAnnotation(), "FunctionalInterface is an annotation type");
+        check(c.getAnnotation(Retention.class).value() == RetentionPolicy.RUNTIME,
+              "RUNTIME retention");
         boolean hasType = false;
-        for (ElementType e : FunctionalInterface.class.getAnnotation(Target.class).value()) {
+        for (ElementType e : c.getAnnotation(Target.class).value()) {
             if (e == ElementType.TYPE) hasType = true;
         }
         check(hasType, "@Target includes TYPE");
     }
 
+    // ---- Part 2: black-box (behavioral) ----
     static void testUsableAsLambda() {
         FI f = x -> x * 2;
         check(f.apply(3) == 6, "@FunctionalInterface type used as a lambda target");
@@ -42,7 +46,7 @@ public class FunctionalInterfaceTest {
     }
 
     public static void main(String[] args) {
-        testRetentionAndTarget();
+        testWhiteBox();
         testUsableAsLambda();
         testPresent();
         System.out.println("PASS (" + passed + " assertions)");

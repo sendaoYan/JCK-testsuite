@@ -1,8 +1,8 @@
 /*
  * @test
- * @summary java.lang.AutoCloseable API conformance: try-with-resources closes resources in
- *          reverse declaration order, close() runs exactly once, and an exception thrown
- *          from close() propagates.
+ * @summary java.lang.AutoCloseable conformance: white-box structure + black-box behavior
+ *          (try-with-resources closes in reverse order, close runs once, close() exception
+ *          propagates).
  * @run main AutoCloseableTest
  */
 
@@ -18,6 +18,18 @@ public class AutoCloseableTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.AutoCloseable");
+        check(c.isInterface(), "AutoCloseable is an interface");
+        java.lang.reflect.Method close = c.getMethod("close");
+        check(close.getReturnType() == void.class, "close() returns void");
+        check(close.getExceptionTypes().length == 1
+              && close.getExceptionTypes()[0] == Exception.class,
+              "close() throws Exception");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static final List<String> log = new ArrayList<>();
 
     static class Resource implements AutoCloseable {
@@ -50,6 +62,7 @@ public class AutoCloseableTest {
     }
 
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testCloseOrderAndOnce();
         testCloseThrows();
         System.out.println("PASS (" + passed + " assertions)");

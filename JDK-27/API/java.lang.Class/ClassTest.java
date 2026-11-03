@@ -1,10 +1,6 @@
 /*
  * @test
- * @summary java.lang.Class API conformance: name/simple/canonical/type name,
- *          superclass/interfaces/modifiers, primitive/array/enum/annotation
- *          classification, component types, forName (init flags + ClassNotFoundException),
- *          class loaders (bootstrap null), isInstance/isAssignableFrom/cast/asSubclass,
- *          and declared-member introspection.
+ * @summary java.lang.Class conformance: white-box structure + black-box behavior.
  * @run main ClassTest
  */
 
@@ -25,6 +21,17 @@ public class ClassTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Class");
+        check(Modifier.isFinal(c.getModifiers()), "Class is final");
+        check(!c.isInterface(), "Class is a class");
+        check(c.getSuperclass() == Object.class, "Class extends Object");
+        // Class has no public constructor (instances are created by the JVM).
+        check(c.getConstructors().length == 0, "Class has no public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testPrimitive() {
         check(int.class.isPrimitive(), "int.class.isPrimitive()");
         check(int.class.getName().equals("int"), "int.class.getName() == int");
@@ -46,6 +53,7 @@ public class ClassTest {
         check(String.class.getTypeName().equals("java.lang.String"), "String getTypeName");
         check(String[].class.getName().equals("[Ljava.lang.String;"), "String[] getName");
         check(int[].class.getName().equals("[I"), "int[] getName");
+        check(Member.class.getCanonicalName().equals("ClassTest.Member"), "nested class canonical name");
     }
 
     static void testHierarchy() {
@@ -65,6 +73,7 @@ public class ClassTest {
         check(Iface.class.isInterface(), "Iface.isInterface()");
         check(Iface.class.getInterfaces().length == 1
               && Iface.class.getInterfaces()[0] == Runnable.class, "Iface extends Runnable");
+        check(Iface.class.isAssignableFrom(Iface.class), "interface assignable from itself");
     }
 
     static void testArrays() {
@@ -166,6 +175,7 @@ public class ClassTest {
     }
 
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testPrimitive();
         testNames();
         testHierarchy();

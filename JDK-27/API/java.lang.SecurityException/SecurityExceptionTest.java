@@ -1,9 +1,11 @@
 /*
  * @test
- * @summary java.lang.SecurityException API conformance: RuntimeException hierarchy and all
- *          four constructors.
+ * @summary java.lang.SecurityException conformance: white-box structure + black-box behavior.
  * @run main SecurityExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class SecurityExceptionTest {
     static int passed;
@@ -13,28 +15,56 @@ public class SecurityExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        SecurityException e = new SecurityException();
-        check(e instanceof RuntimeException, "SecurityException is a RuntimeException");
-        check(e instanceof Exception && e instanceof Throwable,
-              "SecurityException is Exception/Throwable");
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
+        }
     }
 
-    static void testConstructors() {
-        SecurityException e1 = new SecurityException();
-        check(e1.getMessage() == null && e1.getCause() == null, "no-arg ctor");
-        SecurityException e2 = new SecurityException("msg");
-        check("msg".equals(e2.getMessage()), "(String) ctor");
-        SecurityException cause = new SecurityException("cause");
-        SecurityException e3 = new SecurityException("msg", cause);
-        check("msg".equals(e3.getMessage()) && e3.getCause() == cause, "(String,Throwable) ctor");
-        SecurityException e4 = new SecurityException(cause);
-        check(e4.getCause() == cause, "(Throwable) ctor sets cause");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.SecurityException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == RuntimeException.class, "superclass is RuntimeException");
+        check(c.getDeclaredConstructors().length == 4, "4 public constructors");
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.SecurityException");
+
+        SecurityException e0 = new SecurityException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { SecurityException e = new SecurityException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+        { Exception cause = new Exception("cause"); SecurityException e = new SecurityException("boom", cause); check("boom".equals(e.getMessage()) && e.getCause() == cause, "(String,Throwable) ctor"); }
+        { Exception cause = new Exception("cause"); SecurityException e = new SecurityException(cause); check(e.getCause() == cause, "(Throwable) ctor cause"); }
+
+        // common Throwable contract
+        SecurityException t = new SecurityException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.SecurityException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

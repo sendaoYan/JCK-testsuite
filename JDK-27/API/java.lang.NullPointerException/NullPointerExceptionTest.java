@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.lang.NullPointerException API conformance: RuntimeException hierarchy,
- *          no-arg and (String) constructors, and a null dereference throwing NPE with a
- *          null message.
+ * @summary java.lang.NullPointerException conformance: white-box structure + black-box behavior.
  * @run main NullPointerExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class NullPointerExceptionTest {
     static int passed;
@@ -14,33 +15,56 @@ public class NullPointerExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        NullPointerException e = new NullPointerException();
-        check(e instanceof RuntimeException, "NPE is a RuntimeException");
-        check(e instanceof Exception && e instanceof Throwable, "NPE is Exception/Throwable");
-    }
-
-    static void testConstructors() {
-        NullPointerException e1 = new NullPointerException();
-        check(e1.getMessage() == null, "no-arg ctor null message");
-        NullPointerException e2 = new NullPointerException("npe");
-        check("npe".equals(e2.getMessage()), "(String) ctor message");
-    }
-
-    static void testThrown() {
-        String s = null;
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
-            s.length();
-            throw new AssertionError("expected NullPointerException");
-        } catch (NullPointerException e) {
-            check(e instanceof RuntimeException, "JVM-thrown NPE is a RuntimeException");
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
         }
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
-        testThrown();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.NullPointerException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == RuntimeException.class, "superclass is RuntimeException");
+        check(c.getDeclaredConstructors().length == 2, "2 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.NullPointerException");
+
+        NullPointerException e0 = new NullPointerException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { NullPointerException e = new NullPointerException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+
+        // common Throwable contract
+        NullPointerException t = new NullPointerException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.NullPointerException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+        // trigger: null dereference
+        expect(NullPointerException.class, () -> { String s = null; s.length(); }, "trigger null dereference");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

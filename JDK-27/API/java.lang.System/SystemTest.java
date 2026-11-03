@@ -1,13 +1,10 @@
 /*
  * @test
- * @summary java.lang.System API conformance: standard streams (non-null), arraycopy
- *          (copy, partial, overlapping forward/backward, length 0, NullPointerException,
- *          IndexOutOfBoundsException, ArrayStoreException for type mismatch), properties
- *          (get/set/clear), environment map, identityHashCode (incl. null -> 0),
- *          lineSeparator, and the time APIs (currentTimeMillis range, nanoTime monotonic).
+ * @summary java.lang.System conformance: white-box structure + black-box behavior.
  * @run main SystemTest
  */
 
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -46,6 +43,17 @@ public class SystemTest {
         }
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.System");
+        check(Modifier.isFinal(c.getModifiers()), "System is final");
+        check(!c.isInterface(), "System is a class");
+        check(c.getConstructors().length == 0, "System has no public constructors");
+        check(c.getField("in") != null && c.getField("out") != null && c.getField("err") != null,
+              "in/out/err fields present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testStreams() {
         check(System.in != null, "System.in != null");
         check(System.out != null, "System.out != null");
@@ -93,7 +101,6 @@ public class SystemTest {
         // Element type mismatch.
         expectASE(() -> System.arraycopy(new Object[]{"a", Integer.valueOf(1)}, 0,
                                          new String[2], 0, 2), "arraycopy element type mismatch");
-        // Primitive type mismatch (no widening) between int[] and long[].
         expectASE(() -> System.arraycopy(new int[]{1}, 0, new long[1], 0, 1),
                   "arraycopy int[] -> long[]");
     }
@@ -103,15 +110,20 @@ public class SystemTest {
         check(props != null, "getProperties != null");
         check(System.getProperty("java.version") != null
               && !System.getProperty("java.version").isEmpty(), "java.version set");
-        check(System.getProperty("user.home") != null, "user.home set");
-
+        check(System.getProperty("os.name") != null && !System.getProperty("os.name").isEmpty(),
+              "os.name set");
         check(System.getProperty("jck.sys.absent", "dflt").equals("dflt"),
               "getProperty with default");
-        check(System.setProperty("jck.sys.test", "v1") == null, "setProperty returns null initially");
-        check(System.getProperty("jck.sys.test").equals("v1"), "getProperty returns set value");
-        check(System.setProperty("jck.sys.test", "v2").equals("v1"), "setProperty returns old value");
-        check(System.clearProperty("jck.sys.test").equals("v2"), "clearProperty returns old value");
-        check(System.getProperty("jck.sys.test") == null, "cleared property is null");
+        // Isolated set/get/clear on a unique key, restored via clearProperty.
+        try {
+            check(System.setProperty("jck.sys.test", "v1") == null, "setProperty returns null initially");
+            check(System.getProperty("jck.sys.test").equals("v1"), "getProperty returns set value");
+            check(System.setProperty("jck.sys.test", "v2").equals("v1"), "setProperty returns old value");
+            check(System.clearProperty("jck.sys.test").equals("v2"), "clearProperty returns old value");
+            check(System.getProperty("jck.sys.test") == null, "cleared property is null");
+        } finally {
+            System.clearProperty("jck.sys.test");
+        }
     }
 
     static void testEnv() {
@@ -144,6 +156,14 @@ public class SystemTest {
         check(t2 >= t1, "nanoTime monotonic");
     }
 
+    static void testLoggerAndMapLibraryName() {
+        System.Logger log = System.getLogger("jck-system-logger");
+        check(log != null, "getLogger non-null");
+        check("jck-system-logger".equals(log.getName()), "logger name");
+        check(System.mapLibraryName("foo") != null && !System.mapLibraryName("foo").isEmpty(),
+              "mapLibraryName non-empty");
+    }
+
     static void testGC() {
         // These must be callable without throwing; their effect is not asserted.
         System.gc();
@@ -151,7 +171,8 @@ public class SystemTest {
         passed++;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testStreams();
         testArraycopy();
         testProperties();
@@ -159,6 +180,7 @@ public class SystemTest {
         testIdentityHashCode();
         testLineSeparator();
         testTime();
+        testLoggerAndMapLibraryName();
         testGC();
         System.out.println("PASS (" + passed + " assertions)");
     }

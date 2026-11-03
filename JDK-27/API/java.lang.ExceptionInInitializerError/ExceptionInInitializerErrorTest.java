@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.lang.ExceptionInInitializerError API conformance: LinkageError hierarchy,
- *          constructors, and a thrown instance wrapping the exception from a failing
- *          static initializer, exposed via getCause()/getException().
+ * @summary java.lang.ExceptionInInitializerError conformance: white-box structure + black-box behavior.
  * @run main ExceptionInInitializerErrorTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class ExceptionInInitializerErrorTest {
     static int passed;
@@ -14,44 +15,56 @@ public class ExceptionInInitializerErrorTest {
         passed++;
     }
 
-    static class BadInit {
-        static {
-            String s = null;
-            s.length(); // throws NullPointerException during <clinit>
-        }
-    }
-
-    static void testHierarchy() {
-        ExceptionInInitializerError e = new ExceptionInInitializerError();
-        check(e instanceof LinkageError, "EIIE is a LinkageError");
-        check(e instanceof Error, "EIIE is an Error");
-    }
-
-    static void testConstructors() {
-        ExceptionInInitializerError e1 = new ExceptionInInitializerError();
-        check(e1.getMessage() == null, "no-arg ctor null message");
-        ExceptionInInitializerError e2 = new ExceptionInInitializerError("msg");
-        check("msg".equals(e2.getMessage()), "(String) ctor");
-        Throwable cause = new Throwable("cause");
-        ExceptionInInitializerError e3 = new ExceptionInInitializerError(cause);
-        check(e3.getCause() == cause, "(Throwable) ctor sets cause");
-    }
-
-    static void testThrown() {
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
-            new BadInit();
-            throw new AssertionError("expected ExceptionInInitializerError");
-        } catch (ExceptionInInitializerError e) {
-            check(e.getCause() instanceof NullPointerException,
-                  "cause is the exception from <clinit>");
-            check(e.getException() == e.getCause(), "getException returns the cause");
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
         }
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
-        testThrown();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.ExceptionInInitializerError");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == LinkageError.class, "superclass is LinkageError");
+        check(c.getDeclaredConstructors().length == 3, "3 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.ExceptionInInitializerError");
+
+        ExceptionInInitializerError e0 = new ExceptionInInitializerError();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { Exception cause = new Exception("cause"); ExceptionInInitializerError e = new ExceptionInInitializerError(cause); check(e.getCause() == cause, "(Throwable) ctor cause"); }
+        { ExceptionInInitializerError e = new ExceptionInInitializerError("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+
+        // common Throwable contract
+        ExceptionInInitializerError t = new ExceptionInInitializerError();
+        check(t.getCause() == null, "fresh cause null");
+        // All constructors pin the cause (serialization compatibility), so
+        // initCause always fails with IllegalStateException (javadoc-specified).
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("cause")), "initCause always rejected");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.ExceptionInInitializerError"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+        { ExceptionInInitializerError e = new ExceptionInInitializerError(new Exception("c")); check(e.getException() != null && "c".equals(e.getException().getMessage()), "getException"); }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

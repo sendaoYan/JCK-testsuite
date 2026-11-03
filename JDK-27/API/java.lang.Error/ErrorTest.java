@@ -1,7 +1,6 @@
 /*
  * @test
- * @summary java.lang.Error API conformance: hierarchy (Error -> Throwable, not Exception),
- *          all four constructors, and message/cause propagation.
+ * @summary java.lang.Error conformance: white-box structure + black-box behavior.
  * @run main ErrorTest
  */
 
@@ -13,6 +12,17 @@ public class ErrorTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Error");
+        check(c.getSuperclass() == Throwable.class, "Error extends Throwable");
+        check(!c.isInterface(), "Error is a class");
+        check(c.getConstructor() != null && c.getConstructor(String.class) != null
+              && c.getConstructor(String.class, Throwable.class) != null
+              && c.getConstructor(Throwable.class) != null, "four constructors present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testHierarchy() {
         Throwable t = new Error();
         check(t instanceof Error, "Error is a Throwable");
@@ -32,7 +42,8 @@ public class ErrorTest {
               "(Throwable) ctor message == cause.toString()");
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testHierarchy();
         testConstructors();
         System.out.println("PASS (" + passed + " assertions)");

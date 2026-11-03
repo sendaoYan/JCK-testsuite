@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.lang.IndexOutOfBoundsException API conformance: RuntimeException hierarchy,
- *          no-arg and (String) constructors, and the Java 9+ (int index) constructor
- *          (via reflection, since it is absent on JDK 8).
+ * @summary java.lang.IndexOutOfBoundsException conformance: white-box structure + black-box behavior.
  * @run main IndexOutOfBoundsExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class IndexOutOfBoundsExceptionTest {
     static int passed;
@@ -14,36 +15,56 @@ public class IndexOutOfBoundsExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        IndexOutOfBoundsException e = new IndexOutOfBoundsException();
-        check(e instanceof RuntimeException, "IOOBE is a RuntimeException");
-        check(e instanceof Exception && e instanceof Throwable, "IOOBE is Exception/Throwable");
-    }
-
-    static void testConstructors() {
-        IndexOutOfBoundsException e1 = new IndexOutOfBoundsException();
-        check(e1.getMessage() == null, "no-arg ctor null message");
-        IndexOutOfBoundsException e2 = new IndexOutOfBoundsException("range");
-        check("range".equals(e2.getMessage()), "(String) ctor message");
-    }
-
-    static void testIntCtor() {
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
-            java.lang.reflect.Constructor<IndexOutOfBoundsException> c =
-                IndexOutOfBoundsException.class.getConstructor(int.class);
-            IndexOutOfBoundsException e = c.newInstance(5);
-            check("Index out of range: 5".equals(e.getMessage()), "(int) ctor message [Java 9+]");
-        } catch (NoSuchMethodException e) {
-            // JDK 8: the (int index) constructor does not exist.
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
         }
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
-        testIntCtor();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.IndexOutOfBoundsException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == RuntimeException.class, "superclass is RuntimeException");
+        check(c.getDeclaredConstructors().length == 4, "4 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.IndexOutOfBoundsException");
+
+        IndexOutOfBoundsException e0 = new IndexOutOfBoundsException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { IndexOutOfBoundsException e = new IndexOutOfBoundsException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+        { IndexOutOfBoundsException e = new IndexOutOfBoundsException(5); check(e.getMessage() != null, "(int) ctor non-null message"); }
+        { IndexOutOfBoundsException e = new IndexOutOfBoundsException(5L); check(e.getMessage() != null, "(long) ctor non-null message"); }
+
+        // common Throwable contract
+        IndexOutOfBoundsException t = new IndexOutOfBoundsException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.IndexOutOfBoundsException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

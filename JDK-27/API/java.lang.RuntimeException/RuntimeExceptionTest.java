@@ -1,8 +1,6 @@
 /*
  * @test
- * @summary java.lang.RuntimeException API conformance: unchecked-exception hierarchy
- *          (RuntimeException -> Exception -> Throwable), all four constructors, and
- *          message/cause propagation.
+ * @summary java.lang.RuntimeException conformance: white-box structure + black-box behavior.
  * @run main RuntimeExceptionTest
  */
 
@@ -14,6 +12,17 @@ public class RuntimeExceptionTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.RuntimeException");
+        check(c.getSuperclass() == Exception.class, "RuntimeException extends Exception");
+        check(!c.isInterface(), "RuntimeException is a class");
+        check(c.getConstructor() != null && c.getConstructor(String.class) != null
+              && c.getConstructor(String.class, Throwable.class) != null
+              && c.getConstructor(Throwable.class) != null, "four constructors present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testHierarchy() {
         RuntimeException e = new RuntimeException();
         check(e instanceof Exception, "RuntimeException is an Exception");
@@ -33,7 +42,8 @@ public class RuntimeExceptionTest {
               "(Throwable) ctor message == cause.toString()");
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testHierarchy();
         testConstructors();
         System.out.println("PASS (" + passed + " assertions)");

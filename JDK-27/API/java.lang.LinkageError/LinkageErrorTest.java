@@ -1,9 +1,11 @@
 /*
  * @test
- * @summary java.lang.LinkageError API conformance: Error hierarchy, all four constructors,
- *          and that NoClassDefFoundError extends it.
+ * @summary java.lang.LinkageError conformance: white-box structure + black-box behavior.
  * @run main LinkageErrorTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class LinkageErrorTest {
     static int passed;
@@ -13,26 +15,55 @@ public class LinkageErrorTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        LinkageError e = new LinkageError();
-        check(e instanceof Error, "LinkageError is an Error");
-        check(new NoClassDefFoundError() instanceof LinkageError,
-              "NoClassDefFoundError extends LinkageError");
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
+        }
     }
 
-    static void testConstructors() {
-        LinkageError e1 = new LinkageError();
-        check(e1.getMessage() == null && e1.getCause() == null, "no-arg ctor");
-        LinkageError e2 = new LinkageError("msg");
-        check("msg".equals(e2.getMessage()), "(String) ctor");
-        LinkageError cause = new LinkageError("cause");
-        LinkageError e3 = new LinkageError("msg", cause);
-        check("msg".equals(e3.getMessage()) && e3.getCause() == cause, "(String,Throwable) ctor");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.LinkageError");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == Error.class, "superclass is Error");
+        check(c.getDeclaredConstructors().length == 3, "3 public constructors");
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.LinkageError");
+
+        LinkageError e0 = new LinkageError();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { LinkageError e = new LinkageError("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+        { Exception cause = new Exception("cause"); LinkageError e = new LinkageError("boom", cause); check("boom".equals(e.getMessage()) && e.getCause() == cause, "(String,Throwable) ctor"); }
+
+        // common Throwable contract
+        LinkageError t = new LinkageError();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.LinkageError"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

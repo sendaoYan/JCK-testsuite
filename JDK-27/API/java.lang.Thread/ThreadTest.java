@@ -1,10 +1,10 @@
 /*
  * @test
- * @summary java.lang.Thread API conformance: currentThread, name, id, priority, daemon,
- *          ThreadGroup, state transitions (NEW/RUNNABLE/TERMINATED), start vs run, join,
- *          sleep, and interrupt/isInterrupted/interrupted.
+ * @summary java.lang.Thread conformance: white-box structure + black-box behavior.
  * @run main ThreadTest
  */
+
+import java.lang.reflect.Modifier;
 
 public class ThreadTest {
     static int passed;
@@ -14,6 +14,17 @@ public class ThreadTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Thread");
+        check(!c.isInterface(), "Thread is a class");
+        check(!Modifier.isFinal(c.getModifiers()), "Thread is subclassable (not final)");
+        check(Runnable.class.isAssignableFrom(c), "Thread implements Runnable");
+        check(Modifier.isNative(c.getMethod("currentThread").getModifiers()), "currentThread native");
+        check(Modifier.isStatic(c.getMethod("sleep", long.class).getModifiers()), "sleep static");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testCurrentAndFields() {
         Thread t = Thread.currentThread();
         check(t == Thread.currentThread(), "currentThread returns the calling thread");
@@ -29,6 +40,7 @@ public class ThreadTest {
         check(!t.isDaemon(), "main thread non-daemon");
         check(t.getThreadGroup() != null, "thread group non-null");
         check(t.getState() == Thread.State.RUNNABLE, "current thread RUNNABLE");
+        check(t.getContextClassLoader() != null, "context class loader non-null");
     }
 
     static void testPrioritySetter() {
@@ -63,12 +75,18 @@ public class ThreadTest {
     static void testStartRunJoin() throws Exception {
         final boolean[] ran = {false};
         Thread t = new Thread(() -> ran[0] = true, "worker");
+        t.setDaemon(true);
+        check(t.isDaemon(), "daemon flag set before start");
         check(!t.isAlive() && t.getState() == Thread.State.NEW, "NEW before start");
         t.start();
         t.join();
         check(ran[0], "run executed");
         check(!t.isAlive(), "not alive after join");
         check(t.getState() == Thread.State.TERMINATED, "TERMINATED after join");
+        // join on an already-terminated thread returns immediately.
+        long start = System.nanoTime();
+        t.join();
+        check(System.nanoTime() - start < 1_000_000_000L, "join on terminated thread returns promptly");
     }
 
     static void testRunDirect() {
@@ -103,6 +121,7 @@ public class ThreadTest {
                 interrupted[0] = true;
             }
         });
+        t.setDaemon(true);
         t.start();
         for (int i = 0; i < 10_000 && t.getState() != Thread.State.TIMED_WAITING; i++) {
             Thread.yield();
@@ -112,7 +131,16 @@ public class ThreadTest {
         check(interrupted[0], "sleep throws InterruptedException on interrupt");
     }
 
+    static void testHoldsLock() {
+        Object lock = new Object();
+        check(!Thread.holdsLock(lock), "holdsLock false when not held");
+        synchronized (lock) {
+            check(Thread.holdsLock(lock), "holdsLock true when held");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testCurrentAndFields();
         testPrioritySetter();
         testNames();
@@ -121,6 +149,7 @@ public class ThreadTest {
         testSleep();
         testInterruptFlag();
         testSleepInterrupted();
+        testHoldsLock();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

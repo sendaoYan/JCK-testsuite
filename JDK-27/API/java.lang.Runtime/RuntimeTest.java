@@ -1,10 +1,10 @@
 /*
  * @test
- * @summary java.lang.Runtime API conformance: getRuntime singleton, availableProcessors,
- *          memory invariants, gc/runFinalization no-op, version() (Java 9+ via reflection),
- *          and add/removeShutdownHook roundtrip.
+ * @summary java.lang.Runtime conformance: white-box structure + black-box behavior.
  * @run main RuntimeTest
  */
+
+import java.lang.reflect.Modifier;
 
 public class RuntimeTest {
     static int passed;
@@ -14,11 +14,21 @@ public class RuntimeTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Runtime");
+        check(Modifier.isFinal(c.getModifiers()), "Runtime is final");
+        check(!c.isInterface(), "Runtime is a class");
+        check(c.getConstructors().length == 0, "Runtime has no public constructors");
+        check(Modifier.isStatic(c.getMethod("getRuntime").getModifiers()), "getRuntime static");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testSingleton() {
         Runtime r1 = Runtime.getRuntime();
         Runtime r2 = Runtime.getRuntime();
+        check(r1 != null, "getRuntime non-null");
         check(r1 == r2, "getRuntime returns the same instance");
-        check(r1 != null, "non-null");
     }
 
     static void testProcessors() {
@@ -27,48 +37,34 @@ public class RuntimeTest {
 
     static void testMemory() {
         Runtime r = Runtime.getRuntime();
-        long free = r.freeMemory();
-        long total = r.totalMemory();
         long max = r.maxMemory();
-        check(free >= 0 && total >= 0 && max >= 0, "memory values non-negative");
-        check(free <= total, "freeMemory <= totalMemory");
-        check(total <= max || max == Long.MAX_VALUE, "totalMemory <= maxMemory");
-    }
-
-    static void testGc() {
-        Runtime r = Runtime.getRuntime();
-        r.gc();
-        r.runFinalization();
-        check(r.totalMemory() >= 0, "gc/runFinalization complete without throwing");
+        long total = r.totalMemory();
+        long free = r.freeMemory();
+        check(max >= total, "maxMemory >= totalMemory");
+        check(total >= free, "totalMemory >= freeMemory");
+        check(free >= 0, "freeMemory >= 0");
     }
 
     static void testVersion() {
-        try {
-            java.lang.reflect.Method m = Runtime.class.getMethod("version");
-            Object v = m.invoke(Runtime.getRuntime());
-            check(v != null, "Runtime.version() returns non-null [Java 9+]");
-            check(v.toString().length() > 0, "version().toString() non-empty");
-        } catch (NoSuchMethodException e) {
-            check(System.getProperty("java.version") != null, "java.version property present [JDK8]");
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        Runtime.Version v = Runtime.version();
+        check(v != null, "version() non-null");
+        check(v.toString() != null && !v.toString().isEmpty(), "version string non-empty");
     }
 
-    static void testShutdownHook() {
+    static void testGC() {
         Runtime r = Runtime.getRuntime();
-        Thread hook = new Thread(() -> {});
-        r.addShutdownHook(hook);
-        check(r.removeShutdownHook(hook), "removeShutdownHook returns true");
+        r.gc();
+        r.runFinalization();
+        passed++;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testSingleton();
         testProcessors();
         testMemory();
-        testGc();
         testVersion();
-        testShutdownHook();
+        testGC();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

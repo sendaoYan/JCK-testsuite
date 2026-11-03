@@ -1,8 +1,6 @@
 /*
  * @test
- * @summary java.lang.InheritableThreadLocal API conformance: extends ThreadLocal, child
- *          threads inherit the parent's value at creation time, and childValue override
- *          transforms the inherited value.
+ * @summary java.lang.InheritableThreadLocal conformance: white-box structure + black-box behavior.
  * @run main InheritableThreadLocalTest
  */
 
@@ -14,11 +12,20 @@ public class InheritableThreadLocalTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.InheritableThreadLocal");
+        check(c.getSuperclass() == ThreadLocal.class, "extends ThreadLocal");
+        check(!c.isInterface(), "is a class");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testInheritance() throws Exception {
         InheritableThreadLocal<String> itl = new InheritableThreadLocal<>();
         itl.set("parent");
         final String[] childVal = {null};
         Thread t = new Thread(() -> childVal[0] = itl.get());
+        t.setDaemon(true);
         t.start();
         t.join();
         check("parent".equals(childVal[0]), "child inherits parent's value");
@@ -32,6 +39,7 @@ public class InheritableThreadLocalTest {
         itl.set("p");
         final String[] childVal = {null};
         Thread t = new Thread(() -> childVal[0] = itl.get());
+        t.setDaemon(true);
         t.start();
         t.join();
         check("p-child".equals(childVal[0]), "childValue transforms parent value");
@@ -43,6 +51,7 @@ public class InheritableThreadLocalTest {
     }
 
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testIsThreadLocal();
         testInheritance();
         testChildValueOverride();

@@ -1,10 +1,10 @@
 /*
  * @test
- * @summary java.lang.Throwable API conformance: constructors, getMessage/getCause/initCause,
- *          addSuppressed/getSuppressed, getStackTrace/setStackTrace/fillInStackTrace,
- *          toString/getLocalizedMessage/printStackTrace, and argument validation.
+ * @summary java.lang.Throwable conformance: white-box structure + black-box behavior.
  * @run main ThrowableTest
  */
+
+import java.lang.reflect.Modifier;
 
 public class ThrowableTest {
     static int passed;
@@ -18,6 +18,19 @@ public class ThrowableTest {
         Custom(String m) { super(m); }
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Throwable");
+        check(!c.isInterface(), "Throwable is a class");
+        check(c.getSuperclass() == Object.class, "Throwable extends Object");
+        check(!Modifier.isFinal(c.getModifiers()), "Throwable is subclassable");
+        check(java.io.Serializable.class.isAssignableFrom(c), "Throwable is Serializable");
+        check(c.getConstructor() != null && c.getConstructor(String.class) != null
+              && c.getConstructor(String.class, Throwable.class) != null
+              && c.getConstructor(Throwable.class) != null, "four constructors present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testConstructors() {
         Throwable t1 = new Throwable();
         check(t1.getMessage() == null && t1.getCause() == null, "no-arg ctor");
@@ -131,7 +144,8 @@ public class ThrowableTest {
         check(bos.toString().contains("Throwable: x"), "printStackTrace writes to stream");
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testConstructors();
         testInitCause();
         testSuppressed();

@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary java.lang.Readable API conformance: read(CharBuffer) copies characters and
- *          returns the count, returns -1 at end of input, and throws NPE for a null buffer.
+ * @summary java.lang.Readable conformance: white-box structure + black-box behavior
+ *          (read(CharBuffer) copies and returns count, -1 at EOF, NPE for null).
  * @run main ReadableTest
  */
 
@@ -16,6 +16,20 @@ public class ReadableTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Readable");
+        check(c.isInterface(), "Readable is an interface");
+        java.lang.reflect.Method read = c.getMethod("read", CharBuffer.class);
+        check(read.getReturnType() == int.class, "read(CharBuffer) returns int");
+        boolean throwsIO = false;
+        for (Class<?> t : read.getExceptionTypes()) {
+            if (t == java.io.IOException.class) throwsIO = true;
+        }
+        check(throwsIO, "read(CharBuffer) declares IOException");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static void testRead() throws Exception {
         Readable r = new StringReader("hello");
         CharBuffer buf = CharBuffer.allocate(3);
@@ -39,6 +53,7 @@ public class ReadableTest {
     }
 
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testRead();
         testNull();
         System.out.println("PASS (" + passed + " assertions)");

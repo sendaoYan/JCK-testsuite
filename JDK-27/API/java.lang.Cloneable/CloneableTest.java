@@ -1,8 +1,8 @@
 /*
  * @test
- * @summary java.lang.Cloneable API conformance: Object.clone() throws
- *          CloneNotSupportedException when the class does not implement Cloneable, and a
- *          shallow copy (distinct instance, equal fields, same class) when it does.
+ * @summary java.lang.Cloneable conformance: white-box structure + black-box behavior
+ *          (Object.clone() throws CloneNotSupportedException without Cloneable, shallow copy
+ *          with it).
  * @run main CloneableTest
  */
 
@@ -14,6 +14,15 @@ public class CloneableTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Cloneable");
+        check(c.isInterface(), "Cloneable is an interface");
+        check(c.getMethods().length == 0 && c.getDeclaredMethods().length == 0,
+              "Cloneable is a marker interface (no methods)");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
     static class NotCloneable {
         public Object clone() throws CloneNotSupportedException { return super.clone(); }
     }
@@ -43,6 +52,7 @@ public class CloneableTest {
     }
 
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testNotCloneable();
         testCloneable();
         System.out.println("PASS (" + passed + " assertions)");

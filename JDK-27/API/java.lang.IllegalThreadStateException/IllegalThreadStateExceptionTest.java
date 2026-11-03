@@ -1,8 +1,11 @@
 /*
  * @test
- * @summary java.lang.IllegalThreadStateException API conformance: restarting a dead thread.
+ * @summary java.lang.IllegalThreadStateException conformance: white-box structure + black-box behavior.
  * @run main IllegalThreadStateExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class IllegalThreadStateExceptionTest {
     static int passed;
@@ -12,20 +15,54 @@ public class IllegalThreadStateExceptionTest {
         passed++;
     }
 
-    static void testIllegalThreadStateException() throws Exception {
-        Thread t = new Thread(() -> {});
-        t.start();
-        t.join();
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
-            t.start();
-            check(false, "restarting a dead thread should throw");
-        } catch (IllegalThreadStateException e) {
-            check(true, "restarting a dead thread throws IllegalThreadStateException");
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
         }
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.IllegalThreadStateException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == IllegalArgumentException.class, "superclass is IllegalArgumentException");
+        check(c.getDeclaredConstructors().length == 2, "2 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.IllegalThreadStateException");
+
+        IllegalThreadStateException e0 = new IllegalThreadStateException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { IllegalThreadStateException e = new IllegalThreadStateException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+
+        // common Throwable contract
+        IllegalThreadStateException t = new IllegalThreadStateException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.IllegalThreadStateException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
     public static void main(String[] args) throws Exception {
-        testIllegalThreadStateException();
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

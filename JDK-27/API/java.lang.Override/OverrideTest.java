@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary java.lang.Override API conformance: SOURCE retention, METHOD target, and
- *          source-retained absence of the annotation at runtime.
+ * @summary java.lang.Override conformance: white-box structure + black-box behavior
+ *          (SOURCE retention, METHOD target, source-retained absence at runtime).
  * @run main OverrideTest
  */
 
@@ -21,23 +21,27 @@ public class OverrideTest {
     static class Base { void m() {} }
     static class Sub extends Base { @Override void m() {} }
 
-    static void testRetentionAndTarget() {
-        check(Override.class.getAnnotation(Retention.class).value() == RetentionPolicy.SOURCE,
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() {
+        Class<?> c = Override.class;
+        check(c.isAnnotation(), "Override is an annotation type");
+        check(c.getAnnotation(Retention.class).value() == RetentionPolicy.SOURCE,
               "SOURCE retention");
         boolean hasMethod = false;
-        for (ElementType e : Override.class.getAnnotation(Target.class).value()) {
+        for (ElementType e : c.getAnnotation(Target.class).value()) {
             if (e == ElementType.METHOD) hasMethod = true;
         }
         check(hasMethod, "@Target includes METHOD");
     }
 
+    // ---- Part 2: black-box (behavioral) ----
     static void testSourceRetained() throws Exception {
         check(!Sub.class.getDeclaredMethod("m").isAnnotationPresent(Override.class),
               "@Override is source-retained (absent at runtime)");
     }
 
     public static void main(String[] args) throws Exception {
-        testRetentionAndTarget();
+        testWhiteBox();
         testSourceRetained();
         System.out.println("PASS (" + passed + " assertions)");
     }

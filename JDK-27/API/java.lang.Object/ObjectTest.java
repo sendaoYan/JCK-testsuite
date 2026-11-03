@@ -1,11 +1,11 @@
 /*
  * @test
- * @summary java.lang.Object API conformance: getClass (final, runtime class),
- *          hashCode (identity), equals (reference equality), toString format,
- *          clone (Cloneable contract + CloneNotSupportedException), and the
- *          wait/notify/notifyAll monitor protocol (incl. IllegalMonitorStateException).
+ * @summary java.lang.Object conformance: white-box structure + black-box behavior.
  * @run main ObjectTest
  */
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
 public class ObjectTest {
     static int passed;
@@ -26,7 +26,8 @@ public class ObjectTest {
 
     static class CloneableThing implements Cloneable {
         int x;
-        CloneableThing(int x) { this.x = x; }
+        int[] ref;
+        CloneableThing(int x, int[] ref) { this.x = x; this.ref = ref; }
         @Override public CloneableThing clone() {
             try {
                 return (CloneableThing) super.clone();
@@ -42,13 +43,28 @@ public class ObjectTest {
         }
     }
 
-    static void testGetClass() throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Object");
+        check(c.getSuperclass() == null, "Object has no superclass");
+        check(!c.isInterface(), "Object is a class, not an interface");
+        check(!Modifier.isAbstract(c.getModifiers()), "Object is concrete");
+        Method getClass = c.getMethod("getClass");
+        check(Modifier.isFinal(getClass.getModifiers()), "getClass() is final");
+        check(Modifier.isFinal(c.getMethod("notify").getModifiers()), "notify() is final");
+        check(Modifier.isFinal(c.getMethod("notifyAll").getModifiers()), "notifyAll() is final");
+        check(Modifier.isFinal(c.getMethod("wait").getModifiers()), "wait() is final");
+        check(Modifier.isFinal(c.getMethod("wait", long.class).getModifiers()), "wait(long) is final");
+        check(Modifier.isFinal(c.getMethod("wait", long.class, int.class).getModifiers()), "wait(long,int) is final");
+        check(Modifier.isNative(c.getMethod("hashCode").getModifiers()), "hashCode() is native");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testGetClass() {
         Object o = new Object();
         check(o.getClass() == Object.class, "new Object().getClass() == Object.class");
         check("s".getClass() == String.class, "\"s\".getClass() == String.class");
         check(new int[0].getClass() == int[].class, "int[].getClass() == int[].class");
-        java.lang.reflect.Method getClass = Object.class.getMethod("getClass");
-        check(java.lang.reflect.Modifier.isFinal(getClass.getModifiers()), "getClass() is final");
     }
 
     static void testHashCodeEquals() {
@@ -57,10 +73,9 @@ public class ObjectTest {
         check(a.equals(a), "equals is reflexive");
         check(!a.equals(b), "distinct objects not equals");
         check(!a.equals(null), "!equals(null)");
+        check(a.equals(b) == b.equals(a), "equals is symmetric");
         check(a.hashCode() == System.identityHashCode(a), "default hashCode == identityHashCode");
         check(a.hashCode() == a.hashCode(), "hashCode stable across calls");
-        // equals => equal hashCodes (reflexive pair trivially satisfies this)
-        check(a.hashCode() == a.hashCode(), "equal objects have equal hashCode");
     }
 
     static void testToString() {
@@ -70,11 +85,13 @@ public class ObjectTest {
     }
 
     static void testClone() throws Exception {
-        CloneableThing c = new CloneableThing(7);
+        int[] shared = new int[] { 7 };
+        CloneableThing c = new CloneableThing(7, shared);
         CloneableThing d = c.clone();
         check(c != d, "clone returns a distinct object");
         check(c.getClass() == d.getClass(), "clone has same runtime class");
         check(d.x == 7, "clone copies field values (shallow)");
+        check(d.ref == c.ref, "clone is a shallow copy (reference fields shared)");
 
         NotCloneable n = new NotCloneable();
         try {
@@ -135,6 +152,7 @@ public class ObjectTest {
     }
 
     public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testGetClass();
         testHashCodeEquals();
         testToString();

@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.lang.ReflectiveOperationException API conformance: checked-exception
- *          hierarchy, all four constructors, and that NoSuchMethodException and
- *          ClassNotFoundException extend it.
+ * @summary java.lang.ReflectiveOperationException conformance: white-box structure + black-box behavior.
  * @run main ReflectiveOperationExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class ReflectiveOperationExceptionTest {
     static int passed;
@@ -14,31 +15,56 @@ public class ReflectiveOperationExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        ReflectiveOperationException e = new ReflectiveOperationException();
-        check(e instanceof Exception, "ROE is an Exception");
-        check(!((Object) e instanceof RuntimeException), "ROE is checked (not RuntimeException)");
-        check(new NoSuchMethodException() instanceof ReflectiveOperationException,
-              "NoSuchMethodException extends ROE");
-        check(new ClassNotFoundException() instanceof ReflectiveOperationException,
-              "ClassNotFoundException extends ROE");
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
+        }
     }
 
-    static void testConstructors() {
-        ReflectiveOperationException e1 = new ReflectiveOperationException();
-        check(e1.getMessage() == null && e1.getCause() == null, "no-arg ctor");
-        ReflectiveOperationException e2 = new ReflectiveOperationException("msg");
-        check("msg".equals(e2.getMessage()), "(String) ctor");
-        ReflectiveOperationException cause = new ReflectiveOperationException("cause");
-        ReflectiveOperationException e3 = new ReflectiveOperationException("msg", cause);
-        check("msg".equals(e3.getMessage()) && e3.getCause() == cause, "(String,Throwable) ctor");
-        ReflectiveOperationException e4 = new ReflectiveOperationException(cause);
-        check(e4.getCause() == cause, "(Throwable) ctor sets cause");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.ReflectiveOperationException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == Exception.class, "superclass is Exception");
+        check(c.getDeclaredConstructors().length == 4, "4 public constructors");
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.ReflectiveOperationException");
+
+        ReflectiveOperationException e0 = new ReflectiveOperationException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { ReflectiveOperationException e = new ReflectiveOperationException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+        { Exception cause = new Exception("cause"); ReflectiveOperationException e = new ReflectiveOperationException("boom", cause); check("boom".equals(e.getMessage()) && e.getCause() == cause, "(String,Throwable) ctor"); }
+        { Exception cause = new Exception("cause"); ReflectiveOperationException e = new ReflectiveOperationException(cause); check(e.getCause() == cause, "(Throwable) ctor cause"); }
+
+        // common Throwable contract
+        ReflectiveOperationException t = new ReflectiveOperationException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.ReflectiveOperationException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

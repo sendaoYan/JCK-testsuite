@@ -1,15 +1,64 @@
 /*
  * @test
- * @summary java.lang.MatchException conformance: exception hierarchy and constructors.
+ * @summary java.lang.MatchException conformance: white-box structure + black-box behavior.
  * @run main MatchExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+
 public class MatchExceptionTest {
     static int passed;
-    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
-    public static void main(String[] args) {
-        check(java.lang.RuntimeException.class.isAssignableFrom(MatchException.class), "extends RuntimeException");
-        Throwable c = new IllegalArgumentException("c"); MatchException e = new MatchException("m", c); check("m".equals(e.getMessage()), "message"); check(e.getCause() == c, "cause");
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
+        }
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.MatchException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == RuntimeException.class, "superclass is RuntimeException");
+        check(c.getDeclaredConstructors().length == 1, "1 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.MatchException");
+
+        { Exception cause = new Exception("cause"); MatchException e = new MatchException("boom", cause); check("boom".equals(e.getMessage()) && e.getCause() == cause, "(String,Throwable) ctor"); }
+
+        // common Throwable contract
+        MatchException t = new MatchException("boom", new Exception("cause"));
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set by constructor");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause after ctor-set cause");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.MatchException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,8 +1,7 @@
 /*
  * @test
- * @summary java.lang.Deprecated API conformance: RUNTIME retention, METHOD target, runtime
- *          presence on a deprecated method, and the Java 9+ since()/forRemoval() members
- *          (via reflection).
+ * @summary java.lang.Deprecated conformance: white-box structure + black-box behavior
+ *          (RUNTIME retention, METHOD target, runtime presence, Java 9+ since()/forRemoval()).
  * @run main DeprecatedTest
  */
 
@@ -22,16 +21,21 @@ public class DeprecatedTest {
     @Deprecated
     static void old() {}
 
-    static void testRetentionAndTarget() {
-        check(Deprecated.class.getAnnotation(Retention.class).value() == RetentionPolicy.RUNTIME,
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() {
+        Class<?> c = Deprecated.class;
+        check(c.isAnnotation(), "Deprecated is an annotation type");
+        check(c.getAnnotation(Retention.class).value() == RetentionPolicy.RUNTIME,
               "RUNTIME retention");
-        boolean hasMethod = false;
-        for (ElementType e : Deprecated.class.getAnnotation(Target.class).value()) {
+        boolean hasMethod = false, hasType = false;
+        for (ElementType e : c.getAnnotation(Target.class).value()) {
             if (e == ElementType.METHOD) hasMethod = true;
+            if (e == ElementType.TYPE) hasType = true;
         }
-        check(hasMethod, "@Target includes METHOD");
+        check(hasMethod && hasType, "@Target includes METHOD and TYPE");
     }
 
+    // ---- Part 2: black-box (behavioral) ----
     static void testPresent() throws Exception {
         check(DeprecatedTest.class.getDeclaredMethod("old").isAnnotationPresent(Deprecated.class),
               "@Deprecated retained at runtime on a method");
@@ -49,7 +53,7 @@ public class DeprecatedTest {
     }
 
     public static void main(String[] args) throws Exception {
-        testRetentionAndTarget();
+        testWhiteBox();
         testPresent();
         testSinceForRemoval();
         System.out.println("PASS (" + passed + " assertions)");

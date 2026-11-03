@@ -1,9 +1,11 @@
 /*
  * @test
- * @summary java.lang.IllegalAccessException API conformance: ReflectiveOperationException
- *          hierarchy, checked status, and the no-arg/(String) constructors.
+ * @summary java.lang.IllegalAccessException conformance: white-box structure + black-box behavior.
  * @run main IllegalAccessExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class IllegalAccessExceptionTest {
     static int passed;
@@ -13,23 +15,54 @@ public class IllegalAccessExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        IllegalAccessException e = new IllegalAccessException();
-        check(e instanceof ReflectiveOperationException, "IAE is a ReflectiveOperationException");
-        check(e instanceof Exception, "IAE is an Exception");
-        check(!((Object) e instanceof RuntimeException), "IAE is checked (not RuntimeException)");
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
+        }
     }
 
-    static void testConstructors() {
-        IllegalAccessException e1 = new IllegalAccessException();
-        check(e1.getMessage() == null, "no-arg ctor null message");
-        IllegalAccessException e2 = new IllegalAccessException("m");
-        check("m".equals(e2.getMessage()), "(String) ctor message");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.IllegalAccessException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == ReflectiveOperationException.class, "superclass is ReflectiveOperationException");
+        check(c.getDeclaredConstructors().length == 2, "2 public constructors");
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.IllegalAccessException");
+
+        IllegalAccessException e0 = new IllegalAccessException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { IllegalAccessException e = new IllegalAccessException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+
+        // common Throwable contract
+        IllegalAccessException t = new IllegalAccessException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.IllegalAccessException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

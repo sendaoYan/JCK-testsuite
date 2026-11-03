@@ -1,8 +1,11 @@
 /*
  * @test
- * @summary java.lang.CloneNotSupportedException API conformance: constructors and inheritance.
+ * @summary java.lang.CloneNotSupportedException conformance: white-box structure + black-box behavior.
  * @run main CloneNotSupportedExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class CloneNotSupportedExceptionTest {
     static int passed;
@@ -12,15 +15,54 @@ public class CloneNotSupportedExceptionTest {
         passed++;
     }
 
-    static void testCloneNotSupportedException() {
-        CloneNotSupportedException e = new CloneNotSupportedException("m");
-        check(e instanceof Exception, "extends Exception");
-        check("m".equals(e.getMessage()), "message from (String) ctor");
-        check(new CloneNotSupportedException().getMessage() == null, "no-arg ctor has null message");
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
+        }
     }
 
-    public static void main(String[] args) {
-        testCloneNotSupportedException();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.CloneNotSupportedException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == Exception.class, "superclass is Exception");
+        check(c.getDeclaredConstructors().length == 2, "2 public constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.CloneNotSupportedException");
+
+        CloneNotSupportedException e0 = new CloneNotSupportedException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { CloneNotSupportedException e = new CloneNotSupportedException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+
+        // common Throwable contract
+        CloneNotSupportedException t = new CloneNotSupportedException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.CloneNotSupportedException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

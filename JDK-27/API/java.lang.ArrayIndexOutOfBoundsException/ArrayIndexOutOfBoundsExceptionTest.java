@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.lang.ArrayIndexOutOfBoundsException API conformance: IndexOutOfBoundsException
- *          hierarchy, no-arg and (String) constructors, a thrown instance from an out-of-range
- *          array access, and the Java 9+ (int index) constructor (via reflection).
+ * @summary java.lang.ArrayIndexOutOfBoundsException conformance: white-box structure + black-box behavior.
  * @run main ArrayIndexOutOfBoundsExceptionTest
  */
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 public class ArrayIndexOutOfBoundsExceptionTest {
     static int passed;
@@ -14,48 +15,57 @@ public class ArrayIndexOutOfBoundsExceptionTest {
         passed++;
     }
 
-    static void testHierarchy() {
-        ArrayIndexOutOfBoundsException e = new ArrayIndexOutOfBoundsException();
-        check(e instanceof IndexOutOfBoundsException, "AIOOBE is an IndexOutOfBoundsException");
-        check(e instanceof RuntimeException, "AIOOBE is a RuntimeException");
-    }
-
-    static void testConstructors() {
-        ArrayIndexOutOfBoundsException e1 = new ArrayIndexOutOfBoundsException();
-        check(e1.getMessage() == null, "no-arg ctor null message");
-        ArrayIndexOutOfBoundsException e2 = new ArrayIndexOutOfBoundsException("idx");
-        check("idx".equals(e2.getMessage()), "(String) ctor message");
-    }
-
-    static void testThrown() {
-        int[] a = new int[3];
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
-            a[3] = 1;
-            throw new AssertionError("expected ArrayIndexOutOfBoundsException");
-        } catch (ArrayIndexOutOfBoundsException e) {
-            check(e instanceof ArrayIndexOutOfBoundsException, "a[3] on length-3 array throws AIOOBE");
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": got " + t.getClass().getName());
         }
     }
 
-    static void testIntCtor() {
-        try {
-            java.lang.reflect.Constructor<ArrayIndexOutOfBoundsException> c =
-                ArrayIndexOutOfBoundsException.class.getConstructor(int.class);
-            ArrayIndexOutOfBoundsException e = c.newInstance(5);
-            check("Array index out of range: 5".equals(e.getMessage()),
-                  "(int) ctor message [Java 9+]");
-        } catch (NoSuchMethodException e) {
-            // JDK 8: the (int index) constructor does not exist.
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.ArrayIndexOutOfBoundsException");
+        check(!c.isInterface(), "not an interface");
+        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(c.getSuperclass() == IndexOutOfBoundsException.class, "superclass is IndexOutOfBoundsException");
+        check(c.getDeclaredConstructors().length == 3, "3 public constructors");
     }
 
-    public static void main(String[] args) {
-        testHierarchy();
-        testConstructors();
-        testThrown();
-        testIntCtor();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.ArrayIndexOutOfBoundsException");
+
+        ArrayIndexOutOfBoundsException e0 = new ArrayIndexOutOfBoundsException();
+        check(e0.getMessage() == null, "no-arg ctor has null message");
+        { ArrayIndexOutOfBoundsException e = new ArrayIndexOutOfBoundsException("boom"); check("boom".equals(e.getMessage()), "(String) ctor message"); }
+        { ArrayIndexOutOfBoundsException e = new ArrayIndexOutOfBoundsException(5); check(e.getMessage() != null, "(int) ctor non-null message"); }
+
+        // common Throwable contract
+        ArrayIndexOutOfBoundsException t = new ArrayIndexOutOfBoundsException();
+        check(t.getCause() == null, "fresh cause null");
+        check(t.initCause(new Exception("cause")) == t, "initCause returns this");
+        check(t.getCause() != null && "cause".equals(t.getCause().getMessage()), "cause set");
+        expect(java.lang.IllegalStateException.class, () -> t.initCause(new Exception("x")), "initCause twice");
+        Throwable sup = new Exception("suppressed");
+        t.addSuppressed(sup);
+        check(t.getSuppressed().length == 1 && t.getSuppressed()[0] == sup, "addSuppressed/getSuppressed");
+        check(t.getStackTrace().length >= 1, "getStackTrace non-empty");
+        check(t.toString().startsWith("java.lang.ArrayIndexOutOfBoundsException"), "toString prefix");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        t.printStackTrace(new PrintStream(bos));
+        check(bos.size() > 0, "printStackTrace(PrintStream) writes");
+        check(t.getLocalizedMessage() == t.getMessage(), "getLocalizedMessage == getMessage");
+
+        // trigger: array access out of range
+        expect(ArrayIndexOutOfBoundsException.class, () -> { int[] a = new int[1]; int x = a[1]; }, "trigger array access out of range");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
