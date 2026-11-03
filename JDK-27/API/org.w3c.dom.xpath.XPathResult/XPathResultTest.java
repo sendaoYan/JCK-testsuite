@@ -18,7 +18,9 @@ public class XPathResultTest {
         return Class.forName(c).getField(f).getShort(null);
     }
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> k = L("org.w3c.dom.xpath.XPathResult");
         check(k.isInterface(), "org.w3c.dom.xpath.XPathResult is an interface");
         check(k.getInterfaces().length == 0, "XPathResult declares no superinterface");
@@ -41,6 +43,47 @@ public class XPathResultTest {
         check(k.getMethod("getSnapshotLength") != null, "getSnapshotLength()");
         check(k.getMethod("iterateNext") != null, "iterateNext()");
         check(k.getMethod("snapshotItem", int.class) != null, "snapshotItem(int)");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(org.w3c.dom.xpath.XPathResult.ANY_TYPE == 0, "ANY_TYPE == 0");
+        check(org.w3c.dom.xpath.XPathResult.NUMBER_TYPE == 1, "NUMBER_TYPE == 1");
+        check(org.w3c.dom.xpath.XPathResult.STRING_TYPE == 2, "STRING_TYPE == 2");
+        check(org.w3c.dom.xpath.XPathResult.BOOLEAN_TYPE == 3, "BOOLEAN_TYPE == 3");
+        check(org.w3c.dom.xpath.XPathResult.UNORDERED_NODE_ITERATOR_TYPE == 4, "UNORDERED_NODE_ITERATOR_TYPE == 4");
+        check(org.w3c.dom.xpath.XPathResult.ORDERED_NODE_ITERATOR_TYPE == 5, "ORDERED_NODE_ITERATOR_TYPE == 5");
+        check(org.w3c.dom.xpath.XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE == 6, "UNORDERED_NODE_SNAPSHOT_TYPE == 6");
+        check(org.w3c.dom.xpath.XPathResult.ORDERED_NODE_SNAPSHOT_TYPE == 7, "ORDERED_NODE_SNAPSHOT_TYPE == 7");
+        check(org.w3c.dom.xpath.XPathResult.ANY_UNORDERED_NODE_TYPE == 8, "ANY_UNORDERED_NODE_TYPE == 8");
+        check(org.w3c.dom.xpath.XPathResult.FIRST_ORDERED_NODE_TYPE == 9, "FIRST_ORDERED_NODE_TYPE == 9");
+        org.w3c.dom.xpath.XPathResult a = new org.w3c.dom.xpath.XPathResult(){
+            public short getResultType() { return (short)2; }
+            public double getNumberValue() { return 6.25; }
+            public java.lang.String getStringValue() { return "s"; }
+            public boolean getBooleanValue() { return true; }
+            public org.w3c.dom.Node getSingleNodeValue() { return null; }
+            public boolean getInvalidIteratorState() { return true; }
+            public int getSnapshotLength() { return 3; }
+            public org.w3c.dom.Node iterateNext() { return null; }
+            public org.w3c.dom.Node snapshotItem(int p0) { return null; }
+        };
+        check(a != null, "anon impl of XPathResult");
+        check(a.getResultType() == (short)2, "getResultType() returns fixed default");
+        check(a.getNumberValue() == 6.25, "getNumberValue() returns fixed default");
+        check("s".equals(a.getStringValue()), "getStringValue() returns fixed default");
+        check(a.getBooleanValue() == true, "getBooleanValue() returns fixed default");
+        check(a.getSingleNodeValue() == null, "getSingleNodeValue() returns fixed default");
+        check(a.getInvalidIteratorState() == true, "getInvalidIteratorState() returns fixed default");
+        check(a.getSnapshotLength() == 3, "getSnapshotLength() returns fixed default");
+        check(a.iterateNext() == null, "iterateNext() returns fixed default");
+        check(a.snapshotItem(3) == null, "snapshotItem() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

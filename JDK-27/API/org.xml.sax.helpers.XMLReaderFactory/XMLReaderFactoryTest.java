@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.helpers.XMLReaderFactory conformance: API type verification.
+ * @summary org.xml.sax.helpers.XMLReaderFactory conformance: white-box structure + black-box behavior.
  * @run main XMLReaderFactoryTest
  */
 
@@ -34,7 +34,9 @@ public class XMLReaderFactoryTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.helpers.XMLReaderFactory");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
@@ -43,6 +45,24 @@ public class XMLReaderFactoryTest {
 
         org.xml.sax.XMLReader r = org.xml.sax.helpers.XMLReaderFactory.createXMLReader();
         check(r != null, "createXMLReader");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.XMLReader r = org.xml.sax.helpers.XMLReaderFactory.createXMLReader();
+        check(r != null, "createXMLReader()");
+        r.setContentHandler(new org.xml.sax.helpers.DefaultHandler());
+        r.parse(new org.xml.sax.InputSource(new java.io.StringReader("<r/>")));
+        check(true, "created reader parses");
+        check(org.xml.sax.helpers.XMLReaderFactory.createXMLReader("com.sun.org.apache.xerces.internal.parsers.SAXParser") != null, "createXMLReader(className)");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

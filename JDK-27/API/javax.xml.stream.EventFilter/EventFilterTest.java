@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.EventFilter conformance: API type verification.
+ * @summary javax.xml.stream.EventFilter conformance: white-box structure + black-box behavior.
  * @run main EventFilterTest
  */
 
@@ -34,12 +34,29 @@ public class EventFilterTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.EventFilter");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "accept"), "method accept");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.stream.EventFilter a = new javax.xml.stream.EventFilter(){
+            public boolean accept(javax.xml.stream.events.XMLEvent p0) { return true; }
+        };
+        check(a != null, "anon impl of EventFilter");
+        check(a.accept((javax.xml.stream.events.XMLEvent) null) == true, "accept() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.helpers.XMLReaderAdapter conformance: API type verification.
+ * @summary org.xml.sax.helpers.XMLReaderAdapter conformance: white-box structure + black-box behavior.
  * @run main XMLReaderAdapterTest
  */
 
@@ -34,7 +34,9 @@ public class XMLReaderAdapterTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.helpers.XMLReaderAdapter");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -62,6 +64,26 @@ public class XMLReaderAdapterTest {
         org.xml.sax.XMLReader r = org.xml.sax.helpers.XMLReaderFactory.createXMLReader();
         org.xml.sax.helpers.XMLReaderAdapter a = new org.xml.sax.helpers.XMLReaderAdapter(r);
         check(true, "ctor");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.XMLReader reader = org.xml.sax.helpers.XMLReaderFactory.createXMLReader();
+        org.xml.sax.helpers.XMLReaderAdapter a = new org.xml.sax.helpers.XMLReaderAdapter(reader);
+        check(a != null, "ctor");
+        a.setDocumentHandler(null); check(true, "setDocumentHandler callable");
+        a.setDTDHandler(null); check(true, "setDTDHandler callable");
+        a.setEntityResolver(null); check(true, "setEntityResolver callable");
+        a.setErrorHandler(null); check(true, "setErrorHandler callable");
+        check(a instanceof org.xml.sax.Parser, "is Parser");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

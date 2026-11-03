@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.sax.SAXSource conformance: API type verification.
+ * @summary javax.xml.transform.sax.SAXSource conformance: white-box structure + black-box behavior.
  * @run main SAXSourceTest
  */
 
@@ -34,7 +34,9 @@ public class SAXSourceTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.sax.SAXSource");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -53,6 +55,25 @@ public class SAXSourceTest {
         javax.xml.transform.sax.SAXSource s = new javax.xml.transform.sax.SAXSource();
         check(s.getInputSource() == null, "inputSource null");
         check(s.isEmpty(), "isEmpty");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.transform.sax.SAXSource s = new javax.xml.transform.sax.SAXSource();
+        check(s.getInputSource() == null && s.getXMLReader() == null, "no-arg empty");
+        org.xml.sax.InputSource is = new org.xml.sax.InputSource(new java.io.StringReader("<r/>"));
+        javax.xml.transform.sax.SAXSource s2 = new javax.xml.transform.sax.SAXSource(is);
+        check(s2.getInputSource() == is, "InputSource ctor");
+        s2.setXMLReader(null); check(s2.getXMLReader() == null, "xml reader null");
+        s2.setSystemId("sys"); check("sys".equals(s2.getSystemId()), "setSystemId");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

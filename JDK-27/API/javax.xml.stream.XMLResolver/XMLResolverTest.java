@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.XMLResolver conformance: API type verification.
+ * @summary javax.xml.stream.XMLResolver conformance: white-box structure + black-box behavior.
  * @run main XMLResolverTest
  */
 
@@ -34,12 +34,29 @@ public class XMLResolverTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.XMLResolver");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "resolveEntity"), "method resolveEntity");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.stream.XMLResolver a = new javax.xml.stream.XMLResolver(){
+            public java.lang.Object resolveEntity(java.lang.String p0, java.lang.String p1, java.lang.String p2, java.lang.String p3) { return null; }
+        };
+        check(a != null, "anon impl of XMLResolver");
+        check(a.resolveEntity("s", "s", "s", "s") == null, "resolveEntity() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

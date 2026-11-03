@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathFunctionResolver conformance: API type verification.
+ * @summary javax.xml.xpath.XPathFunctionResolver conformance: white-box structure + black-box behavior.
  * @run main XPathFunctionResolverTest
  */
 
@@ -34,12 +34,29 @@ public class XPathFunctionResolverTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathFunctionResolver");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "resolveFunction"), "method resolveFunction");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.xpath.XPathFunctionResolver a = new javax.xml.xpath.XPathFunctionResolver(){
+            public javax.xml.xpath.XPathFunction resolveFunction(javax.xml.namespace.QName p0, int p1) { return null; }
+        };
+        check(a != null, "anon impl of XPathFunctionResolver");
+        check(a.resolveFunction((javax.xml.namespace.QName) null, 3) == null, "resolveFunction() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

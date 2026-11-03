@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.ErrorHandler conformance: API type verification.
+ * @summary org.xml.sax.ErrorHandler conformance: white-box structure + black-box behavior.
  * @run main ErrorHandlerTest
  */
 
@@ -34,7 +34,9 @@ public class ErrorHandlerTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.ErrorHandler");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -42,6 +44,25 @@ public class ErrorHandlerTest {
         check(hasMethod(c, "error"), "method error");
         check(hasMethod(c, "fatalError"), "method fatalError");
         check(hasMethod(c, "warning"), "method warning");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.ErrorHandler a = new org.xml.sax.ErrorHandler(){
+            public void warning(org.xml.sax.SAXParseException p0) { }
+            public void error(org.xml.sax.SAXParseException p0) { }
+            public void fatalError(org.xml.sax.SAXParseException p0) { }
+        };
+        check(a != null, "anon impl of ErrorHandler");
+        a.warning((org.xml.sax.SAXParseException) null);
+        a.error((org.xml.sax.SAXParseException) null);
+        a.fatalError((org.xml.sax.SAXParseException) null);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

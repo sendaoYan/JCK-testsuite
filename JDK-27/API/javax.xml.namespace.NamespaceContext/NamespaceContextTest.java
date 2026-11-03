@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.namespace.NamespaceContext conformance: API type verification.
+ * @summary javax.xml.namespace.NamespaceContext conformance: white-box structure + black-box behavior.
  * @run main NamespaceContextTest
  */
 
@@ -34,7 +34,9 @@ public class NamespaceContextTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.namespace.NamespaceContext");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -42,6 +44,25 @@ public class NamespaceContextTest {
         check(hasMethod(c, "getNamespaceURI"), "method getNamespaceURI");
         check(hasMethod(c, "getPrefix"), "method getPrefix");
         check(hasMethod(c, "getPrefixes"), "method getPrefixes");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.namespace.NamespaceContext a = new javax.xml.namespace.NamespaceContext(){
+            public java.lang.String getNamespaceURI(java.lang.String p0) { return "s"; }
+            public java.lang.String getPrefix(java.lang.String p0) { return "s"; }
+            public java.util.Iterator<java.lang.String> getPrefixes(java.lang.String p0) { return null; }
+        };
+        check(a != null, "anon impl of NamespaceContext");
+        check("s".equals(a.getNamespaceURI("s")), "getNamespaceURI() returns fixed default");
+        check("s".equals(a.getPrefix("s")), "getPrefix() returns fixed default");
+        check(a.getPrefixes("s") == null, "getPrefixes() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

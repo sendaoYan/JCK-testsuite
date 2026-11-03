@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.helpers.AttributeListImpl conformance: API type verification.
+ * @summary org.xml.sax.helpers.AttributeListImpl conformance: white-box structure + black-box behavior.
  * @run main AttributeListImplTest
  */
 
@@ -34,7 +34,9 @@ public class AttributeListImplTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.helpers.AttributeListImpl");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -54,6 +56,36 @@ public class AttributeListImplTest {
         check(a.getLength() == 1, "length");
         check("value".equals(a.getValue("name")), "value");
         check("name".equals(a.getName(0)), "name");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.helpers.AttributeListImpl a = new org.xml.sax.helpers.AttributeListImpl();
+        check(a.getLength() == 0, "initially empty");
+        a.addAttribute("name", "CDATA", "value");
+        check(a.getLength() == 1, "addAttribute");
+        check("name".equals(a.getName(0)) && "CDATA".equals(a.getType(0)) && "value".equals(a.getValue(0)), "getters");
+        check("value".equals(a.getValue("name")), "getValue(name)");
+        check("CDATA".equals(a.getType("name")), "getType(name)");
+        a.addAttribute("n2", "ID", "v2");
+        a.removeAttribute("name");
+        check(a.getLength() == 1 && "n2".equals(a.getName(0)), "removeAttribute");
+        a.clear(); check(a.getLength() == 0, "clear");
+        org.xml.sax.helpers.AttributeListImpl src = new org.xml.sax.helpers.AttributeListImpl();
+        src.addAttribute("k", "CDATA", "v");
+        org.xml.sax.helpers.AttributeListImpl copy = new org.xml.sax.helpers.AttributeListImpl(src);
+        check(copy.getLength() == 1 && "v".equals(copy.getValue("k")), "copy ctor");
+        org.xml.sax.helpers.AttributeListImpl dst = new org.xml.sax.helpers.AttributeListImpl();
+        dst.setAttributeList(src);
+        check(dst.getLength() == 1, "setAttributeList");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

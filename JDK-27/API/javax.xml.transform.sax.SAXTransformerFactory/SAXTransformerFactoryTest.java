@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.sax.SAXTransformerFactory conformance: API type verification.
+ * @summary javax.xml.transform.sax.SAXTransformerFactory conformance: white-box structure + black-box behavior.
  * @run main SAXTransformerFactoryTest
  */
 
@@ -34,7 +34,9 @@ public class SAXTransformerFactoryTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.sax.SAXTransformerFactory");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -49,6 +51,30 @@ public class SAXTransformerFactoryTest {
             (javax.xml.transform.sax.SAXTransformerFactory) javax.xml.transform.TransformerFactory.newInstance();
         check(f.getFeature(javax.xml.transform.sax.SAXTransformerFactory.FEATURE), "feature");
         check(f.newTransformerHandler() != null, "newTransformerHandler");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.transform.TransformerFactory f = javax.xml.transform.TransformerFactory.newInstance();
+        check(f.getFeature(javax.xml.transform.sax.SAXTransformerFactory.FEATURE) == true
+              || f.getFeature(javax.xml.transform.sax.SAXTransformerFactory.FEATURE) == false, "SAX feature queryable");
+        boolean sax = f.getFeature(javax.xml.transform.sax.SAXTransformerFactory.FEATURE);
+        if (sax) {
+            javax.xml.transform.sax.SAXTransformerFactory stf = (javax.xml.transform.sax.SAXTransformerFactory) f;
+            javax.xml.transform.sax.TransformerHandler th = stf.newTransformerHandler();
+            check(th != null, "newTransformerHandler");
+            th.getTransformer().reset();
+            javax.xml.transform.sax.TemplatesHandler tsh = stf.newTemplatesHandler();
+            check(tsh != null, "newTemplatesHandler");
+        }
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

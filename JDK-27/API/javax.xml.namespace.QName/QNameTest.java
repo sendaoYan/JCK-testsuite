@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.namespace.QName conformance: API type verification.
+ * @summary javax.xml.namespace.QName conformance: white-box structure + black-box behavior.
  * @run main QNameTest
  */
 
@@ -34,7 +34,9 @@ public class QNameTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.namespace.QName");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -56,6 +58,35 @@ public class QNameTest {
         check(q.hashCode() == new javax.xml.namespace.QName("http://ns", "local").hashCode(), "hashCode");
         check("{http://ns}local".equals(q.toString()), "toString");
         check(javax.xml.namespace.QName.valueOf("{http://ns}local").equals(new javax.xml.namespace.QName("http://ns", "local")), "valueOf");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.namespace.QName q = new javax.xml.namespace.QName("http://ns", "local", "p");
+        check("http://ns".equals(q.getNamespaceURI()) && "local".equals(q.getLocalPart()) && "p".equals(q.getPrefix()), "3-arg ctor");
+        javax.xml.namespace.QName q2 = new javax.xml.namespace.QName("http://ns", "local");
+        check("http://ns".equals(q2.getNamespaceURI()) && q2.getPrefix().equals(javax.xml.XMLConstants.DEFAULT_NS_PREFIX), "2-arg ctor prefix empty");
+        check(q.equals(q2), "equals ignores prefix");
+        check(q.hashCode() == q2.hashCode(), "hashCode consistent");
+        javax.xml.namespace.QName q3 = new javax.xml.namespace.QName("local");
+        check(q3.getNamespaceURI().equals(javax.xml.XMLConstants.NULL_NS_URI), "1-arg ctor null ns");
+        check("{http://ns}local".equals(q.toString()), "toString with ns");
+        check("local".equals(q3.toString()), "toString without ns");
+        javax.xml.namespace.QName v = javax.xml.namespace.QName.valueOf("{http://ns}local");
+        check("http://ns".equals(v.getNamespaceURI()) && "local".equals(v.getLocalPart()), "valueOf");
+        check(!q.equals(null) && !q.equals("str"), "equals non-QName false");
+        boolean ok = false;
+        try { new javax.xml.namespace.QName("http://ns", (String) null); }
+        catch (IllegalArgumentException e) { ok = true; }
+        check(ok, "null local part -> IllegalArgumentException");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

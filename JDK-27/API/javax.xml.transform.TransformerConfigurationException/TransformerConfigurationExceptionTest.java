@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.TransformerConfigurationException conformance: API type verification.
+ * @summary javax.xml.transform.TransformerConfigurationException conformance: white-box structure + black-box behavior.
  * @run main TransformerConfigurationExceptionTest
  */
 
@@ -34,7 +34,9 @@ public class TransformerConfigurationExceptionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.TransformerConfigurationException");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -44,6 +46,23 @@ public class TransformerConfigurationExceptionTest {
             new javax.xml.transform.TransformerConfigurationException("m", (javax.xml.transform.SourceLocator) null, new RuntimeException("c"));
         check("m".equals(e.getMessage()), "msg");
         check(e.getCause() != null, "cause");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.transform.TransformerConfigurationException e = new javax.xml.transform.TransformerConfigurationException("cfg");
+        check("cfg".equals(e.getMessage()), "message ctor");
+        check(e instanceof javax.xml.transform.TransformerException, "subclass");
+        javax.xml.transform.TransformerConfigurationException e2 = new javax.xml.transform.TransformerConfigurationException();
+        check("Configuration Error".equals(e2.getMessage()), "no-arg default message");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

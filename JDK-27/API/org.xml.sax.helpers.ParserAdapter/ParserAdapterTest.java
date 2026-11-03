@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.helpers.ParserAdapter conformance: API type verification.
+ * @summary org.xml.sax.helpers.ParserAdapter conformance: white-box structure + black-box behavior.
  * @run main ParserAdapterTest
  */
 
@@ -34,7 +34,9 @@ public class ParserAdapterTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.helpers.ParserAdapter");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -62,6 +64,29 @@ public class ParserAdapterTest {
         check(hasMethod(c, "setProperty"), "method setProperty");
         check(hasMethod(c, "startDocument"), "method startDocument");
         check(hasMethod(c, "startElement"), "method startElement");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.Parser parser = org.xml.sax.helpers.ParserFactory.makeParser("com.sun.org.apache.xerces.internal.parsers.SAXParser");
+        org.xml.sax.helpers.ParserAdapter pa = new org.xml.sax.helpers.ParserAdapter(parser);
+        check(pa != null, "ctor with Parser");
+        pa.setContentHandler(null); check(pa.getContentHandler() == null, "content handler");
+        pa.setErrorHandler(null); check(pa.getErrorHandler() == null, "error handler");
+        pa.setEntityResolver(null); check(pa.getEntityResolver() == null, "entity resolver");
+        check(pa instanceof org.xml.sax.XMLReader, "is XMLReader");
+        boolean noarg = false;
+        try { new org.xml.sax.helpers.ParserAdapter(); }
+        catch (org.xml.sax.SAXException e) { noarg = true; }
+        check(noarg, "no-arg ctor -> SAXException without system property");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

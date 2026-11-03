@@ -18,13 +18,34 @@ public class RGBColorTest {
         return Class.forName(c).getField(f).getShort(null);
     }
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> k = L("org.w3c.dom.css.RGBColor");
         check(k.isInterface(), "org.w3c.dom.css.RGBColor is an interface");
         check(k.getInterfaces().length == 0, "RGBColor declares no superinterface");
         check(k.getMethod("getRed") != null, "getRed()");
         check(k.getMethod("getGreen") != null, "getGreen()");
         check(k.getMethod("getBlue") != null, "getBlue()");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.w3c.dom.css.RGBColor a = new org.w3c.dom.css.RGBColor(){
+            public org.w3c.dom.css.CSSPrimitiveValue getRed() { return null; }
+            public org.w3c.dom.css.CSSPrimitiveValue getGreen() { return null; }
+            public org.w3c.dom.css.CSSPrimitiveValue getBlue() { return null; }
+        };
+        check(a != null, "anon impl of RGBColor");
+        check(a.getRed() == null, "getRed() returns fixed default");
+        check(a.getGreen() == null, "getGreen() returns fixed default");
+        check(a.getBlue() == null, "getBlue() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

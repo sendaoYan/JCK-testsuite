@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.OutputKeys conformance: API type verification.
+ * @summary javax.xml.transform.OutputKeys conformance: white-box structure + black-box behavior.
  * @run main OutputKeysTest
  */
 
@@ -34,7 +34,9 @@ public class OutputKeysTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.OutputKeys");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -55,6 +57,28 @@ public class OutputKeysTest {
         check(javax.xml.transform.OutputKeys.ENCODING != null, "ENCODING");
         check(javax.xml.transform.OutputKeys.INDENT != null, "INDENT");
         check(javax.xml.transform.OutputKeys.MEDIA_TYPE != null, "MEDIA_TYPE");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check("method".equals(javax.xml.transform.OutputKeys.METHOD), "METHOD");
+        check("version".equals(javax.xml.transform.OutputKeys.VERSION), "VERSION");
+        check("encoding".equals(javax.xml.transform.OutputKeys.ENCODING), "ENCODING");
+        check("omit-xml-declaration".equals(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION), "OMIT_XML_DECLARATION");
+        check("standalone".equals(javax.xml.transform.OutputKeys.STANDALONE), "STANDALONE");
+        check("doctype-public".equals(javax.xml.transform.OutputKeys.DOCTYPE_PUBLIC), "DOCTYPE_PUBLIC");
+        check("doctype-system".equals(javax.xml.transform.OutputKeys.DOCTYPE_SYSTEM), "DOCTYPE_SYSTEM");
+        check("cdata-section-elements".equals(javax.xml.transform.OutputKeys.CDATA_SECTION_ELEMENTS), "CDATA_SECTION_ELEMENTS");
+        check("indent".equals(javax.xml.transform.OutputKeys.INDENT), "INDENT");
+        check("media-type".equals(javax.xml.transform.OutputKeys.MEDIA_TYPE), "MEDIA_TYPE");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

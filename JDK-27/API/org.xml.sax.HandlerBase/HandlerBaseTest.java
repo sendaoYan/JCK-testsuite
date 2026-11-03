@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.HandlerBase conformance: API type verification.
+ * @summary org.xml.sax.HandlerBase conformance: white-box structure + black-box behavior.
  * @run main HandlerBaseTest
  */
 
@@ -34,7 +34,9 @@ public class HandlerBaseTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.HandlerBase");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -62,6 +64,28 @@ public class HandlerBaseTest {
         h.startDocument();
         h.endDocument();
         check(true, "no-throw");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.HandlerBase h = new org.xml.sax.HandlerBase();
+        check(h != null, "instantiable");
+        javax.xml.parsers.SAXParser p = javax.xml.parsers.SAXParserFactory.newInstance().newSAXParser();
+        // HandlerBase implements the legacy 4 handler interfaces
+        p.parse(new java.io.ByteArrayInputStream("<r/>".getBytes("UTF-8")), h);
+        check(true, "HandlerBase usable as SAX handler");
+        check(h instanceof org.xml.sax.EntityResolver && h instanceof org.xml.sax.DTDHandler
+              && h instanceof org.xml.sax.DocumentHandler && h instanceof org.xml.sax.ErrorHandler, "4 interfaces");
+        h.resolveEntity("pub", "sys");
+        check(true, "resolveEntity callable");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

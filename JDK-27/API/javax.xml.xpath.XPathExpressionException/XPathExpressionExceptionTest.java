@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathExpressionException conformance: API type verification.
+ * @summary javax.xml.xpath.XPathExpressionException conformance: white-box structure + black-box behavior.
  * @run main XPathExpressionExceptionTest
  */
 
@@ -34,7 +34,9 @@ public class XPathExpressionExceptionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathExpressionException");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -42,6 +44,22 @@ public class XPathExpressionExceptionTest {
 
         javax.xml.xpath.XPathExpressionException e = new javax.xml.xpath.XPathExpressionException("m");
         check("m".equals(e.getMessage()), "msg");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.xpath.XPathExpressionException e = new javax.xml.xpath.XPathExpressionException("bad");
+        check("bad".equals(e.getMessage()) && e.getCause() == null, "message ctor");
+        java.lang.Throwable c = new RuntimeException("r");
+        check(new javax.xml.xpath.XPathExpressionException(c).getCause() == c, "throwable ctor");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

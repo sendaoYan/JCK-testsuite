@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.ext.Locator2Impl conformance: API type verification.
+ * @summary org.xml.sax.ext.Locator2Impl conformance: white-box structure + black-box behavior.
  * @run main Locator2ImplTest
  */
 
@@ -34,7 +34,9 @@ public class Locator2ImplTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.ext.Locator2Impl");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -50,6 +52,25 @@ public class Locator2ImplTest {
         l.setEncoding("UTF-8");
         check("1.0".equals(l.getXMLVersion()), "xmlVersion");
         check("UTF-8".equals(l.getEncoding()), "encoding");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.ext.Locator2Impl l = new org.xml.sax.ext.Locator2Impl();
+        l.setXMLVersion("1.1"); l.setEncoding("UTF-8");
+        check("1.1".equals(l.getXMLVersion()) && "UTF-8".equals(l.getEncoding()), "xml version + encoding");
+        org.xml.sax.helpers.LocatorImpl base = new org.xml.sax.helpers.LocatorImpl();
+        base.setLineNumber(3);
+        org.xml.sax.ext.Locator2Impl copy = new org.xml.sax.ext.Locator2Impl(base);
+        check(copy.getLineNumber() == 3, "copy ctor inherits locator");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

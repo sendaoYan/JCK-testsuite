@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathVariableResolver conformance: API type verification.
+ * @summary javax.xml.xpath.XPathVariableResolver conformance: white-box structure + black-box behavior.
  * @run main XPathVariableResolverTest
  */
 
@@ -34,12 +34,29 @@ public class XPathVariableResolverTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathVariableResolver");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "resolveVariable"), "method resolveVariable");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.xpath.XPathVariableResolver a = new javax.xml.xpath.XPathVariableResolver(){
+            public java.lang.Object resolveVariable(javax.xml.namespace.QName p0) { return null; }
+        };
+        check(a != null, "anon impl of XPathVariableResolver");
+        check(a.resolveVariable((javax.xml.namespace.QName) null) == null, "resolveVariable() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

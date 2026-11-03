@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.XMLEventFactory conformance: API type verification.
+ * @summary javax.xml.stream.XMLEventFactory conformance: white-box structure + black-box behavior.
  * @run main XMLEventFactoryTest
  */
 
@@ -34,7 +34,9 @@ public class XMLEventFactoryTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.XMLEventFactory");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -68,6 +70,36 @@ public class XMLEventFactoryTest {
         check("hello".equals(f.createCharacters("hello").getData()), "characters");
         check("c".equals(f.createComment("c").getText()), "comment");
         check(f.createEndDocument().isEndDocument(), "endDocument");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.stream.XMLEventFactory f = javax.xml.stream.XMLEventFactory.newFactory();
+        check(f != null, "newFactory");
+        javax.xml.stream.events.StartElement se = f.createStartElement("p", "http://ns", "local");
+        check(se.getName().getLocalPart().equals("local"), "createStartElement local");
+        check("http://ns".equals(se.getName().getNamespaceURI()), "createStartElement ns");
+        javax.xml.stream.events.EndElement ee = f.createEndElement("p", "http://ns", "local");
+        check("local".equals(ee.getName().getLocalPart()), "createEndElement");
+        javax.xml.stream.events.Attribute at = f.createAttribute("k", "v");
+        check("k".equals(at.getName().getLocalPart()) && "v".equals(at.getValue()), "createAttribute");
+        javax.xml.stream.events.Characters ch = f.createCharacters("txt");
+        check(ch.isCharacters() && "txt".equals(ch.getData()), "createCharacters");
+        javax.xml.stream.events.StartDocument sd = f.createStartDocument();
+        check(sd.isStartDocument(), "createStartDocument");
+        javax.xml.stream.events.Comment cm = f.createComment("c");
+        check("c".equals(cm.getText()), "createComment");
+        javax.xml.stream.events.Namespace ns = f.createNamespace("p", "u");
+        check("p".equals(ns.getPrefix()) && "u".equals(ns.getNamespaceURI()), "createNamespace");
+        check(javax.xml.stream.XMLEventFactory.newInstance() != null, "newInstance");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

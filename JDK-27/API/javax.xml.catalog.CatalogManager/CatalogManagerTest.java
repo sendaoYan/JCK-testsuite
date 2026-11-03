@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.catalog.CatalogManager conformance: API type verification.
+ * @summary javax.xml.catalog.CatalogManager conformance: white-box structure + black-box behavior.
  * @run main CatalogManagerTest
  */
 
@@ -34,7 +34,9 @@ public class CatalogManagerTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.catalog.CatalogManager");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
@@ -46,6 +48,22 @@ public class CatalogManagerTest {
         check(r != null, "catalogResolver");
         javax.xml.catalog.Catalog cat = javax.xml.catalog.CatalogManager.catalog(javax.xml.catalog.CatalogFeatures.defaults());
         check(cat != null, "catalog");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.catalog.CatalogFeatures cf = javax.xml.catalog.CatalogFeatures.defaults();
+        javax.xml.catalog.CatalogResolver cr = javax.xml.catalog.CatalogManager.catalogResolver(cf);
+        check(cr != null, "catalogResolver(CatalogFeatures)");
+        check(javax.xml.catalog.CatalogManager.catalogResolver(cf, new java.net.URI[0]) != null, "catalogResolver(CatalogFeatures, URIs)");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.datatype.XMLGregorianCalendar conformance: API type verification.
+ * @summary javax.xml.datatype.XMLGregorianCalendar conformance: white-box structure + black-box behavior.
  * @run main XMLGregorianCalendarTest
  */
 
@@ -34,7 +34,9 @@ public class XMLGregorianCalendarTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.datatype.XMLGregorianCalendar");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -86,6 +88,41 @@ public class XMLGregorianCalendarTest {
         check(x.getSecond() == 6, "second");
         check(x.getXMLSchemaType() == javax.xml.datatype.DatatypeConstants.DATETIME, "schemaType");
         check(x.toXMLFormat() != null, "toXMLFormat");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.datatype.DatatypeFactory f = javax.xml.datatype.DatatypeFactory.newInstance();
+        javax.xml.datatype.XMLGregorianCalendar c = f.newXMLGregorianCalendar("2019-03-04T05:06:07.5Z");
+        check(c.getYear() == 2019 && c.getMonth() == 3 && c.getDay() == 4, "date fields");
+        check(c.getHour() == 5 && c.getMinute() == 6 && c.getSecond() == 7, "time fields");
+        check(c.getFractionalSecond() != null && c.getFractionalSecond().compareTo(new java.math.BigDecimal("0.5")) == 0, "fractional second");
+        check(c.getTimezone() == 0, "UTC timezone");
+        check(c.isValid(), "valid");
+        check("2019-03-04T05:06:07.5Z".equals(c.toXMLFormat()), "XML format round-trip");
+        javax.xml.datatype.XMLGregorianCalendar c2 = f.newXMLGregorianCalendar("2020-12-31T23:59:59+01:00");
+        check(c.compare(c2) < 0, "compare chronological");
+        javax.xml.datatype.XMLGregorianCalendar c3 = (javax.xml.datatype.XMLGregorianCalendar) c.clone();
+        check(c3 != c && c3.equals(c) && c3.hashCode() == c.hashCode(), "clone");
+        check(c.getXMLSchemaType().equals(javax.xml.datatype.DatatypeConstants.DATETIME), "schema type");
+        java.util.GregorianCalendar gc = c.toGregorianCalendar();
+        check(gc.get(java.util.Calendar.YEAR) == 2019, "toGregorianCalendar year");
+        check(c.equals(f.newXMLGregorianCalendar("2019-03-04T05:06:07.5Z")), "equals");
+        c.setDay(15); check(c.getDay() == 15, "setDay");
+        c.reset(); check(c.getDay() == 4, "reset restores original day");
+        javax.xml.datatype.XMLGregorianCalendar c4 = f.newXMLGregorianCalendar("2019-03-04T05:06:07.5");
+        javax.xml.datatype.XMLGregorianCalendar n = c4.normalize();
+        check(n.getTimezone() == javax.xml.datatype.DatatypeConstants.FIELD_UNDEFINED, "normalize keeps undefined timezone");
+        javax.xml.datatype.XMLGregorianCalendar c5 = f.newXMLGregorianCalendar("2000-03-04T23:00:00+03:00");
+        check(c5.normalize().getTimezone() == 0, "normalize converts zoned calendar to UTC");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

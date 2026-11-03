@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.ext.EntityResolver2 conformance: API type verification.
+ * @summary org.xml.sax.ext.EntityResolver2 conformance: white-box structure + black-box behavior.
  * @run main EntityResolver2Test
  */
 
@@ -34,7 +34,9 @@ public class EntityResolver2Test {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.ext.EntityResolver2");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -42,6 +44,25 @@ public class EntityResolver2Test {
         check(hasInterface(c, "org.xml.sax.EntityResolver"), "interface org.xml.sax.EntityResolver");
         check(hasMethod(c, "getExternalSubset"), "method getExternalSubset");
         check(hasMethod(c, "resolveEntity"), "method resolveEntity");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.ext.EntityResolver2 a = new org.xml.sax.ext.EntityResolver2(){
+            public org.xml.sax.InputSource getExternalSubset(java.lang.String p0, java.lang.String p1) { return null; }
+            public org.xml.sax.InputSource resolveEntity(java.lang.String p0, java.lang.String p1, java.lang.String p2, java.lang.String p3) { return null; }
+            public org.xml.sax.InputSource resolveEntity(java.lang.String p0, java.lang.String p1) { return null; }
+        };
+        check(a != null, "anon impl of EntityResolver2");
+        check(a.getExternalSubset("s", "s") == null, "getExternalSubset() returns fixed default");
+        check(a.resolveEntity("s", "s", "s", "s") == null, "resolveEntity() returns fixed default");
+        check(a.resolveEntity("s", "s") == null, "resolveEntity() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

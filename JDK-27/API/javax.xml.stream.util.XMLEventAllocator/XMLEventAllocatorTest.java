@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.util.XMLEventAllocator conformance: API type verification.
+ * @summary javax.xml.stream.util.XMLEventAllocator conformance: white-box structure + black-box behavior.
  * @run main XMLEventAllocatorTest
  */
 
@@ -34,13 +34,34 @@ public class XMLEventAllocatorTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.util.XMLEventAllocator");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "allocate"), "method allocate");
         check(hasMethod(c, "newInstance"), "method newInstance");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.stream.util.XMLEventAllocator a = new javax.xml.stream.util.XMLEventAllocator(){
+            public javax.xml.stream.util.XMLEventAllocator newInstance() { return null; }
+            public javax.xml.stream.events.XMLEvent allocate(javax.xml.stream.XMLStreamReader p0) { return null; }
+            public void allocate(javax.xml.stream.XMLStreamReader p0, javax.xml.stream.util.XMLEventConsumer p1) { }
+        };
+        check(a != null, "anon impl of XMLEventAllocator");
+        check(a.newInstance() == null, "newInstance() returns fixed default");
+        check(a.allocate((javax.xml.stream.XMLStreamReader) null) == null, "allocate() returns fixed default");
+        a.allocate((javax.xml.stream.XMLStreamReader) null, (javax.xml.stream.util.XMLEventConsumer) null);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

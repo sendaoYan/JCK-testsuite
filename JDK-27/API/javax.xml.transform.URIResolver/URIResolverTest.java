@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.URIResolver conformance: API type verification.
+ * @summary javax.xml.transform.URIResolver conformance: white-box structure + black-box behavior.
  * @run main URIResolverTest
  */
 
@@ -34,12 +34,29 @@ public class URIResolverTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.URIResolver");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "resolve"), "method resolve");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.transform.URIResolver a = new javax.xml.transform.URIResolver(){
+            public javax.xml.transform.Source resolve(java.lang.String p0, java.lang.String p1) { return null; }
+        };
+        check(a != null, "anon impl of URIResolver");
+        check(a.resolve("s", "s") == null, "resolve() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

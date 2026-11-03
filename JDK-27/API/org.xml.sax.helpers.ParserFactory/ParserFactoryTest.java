@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.helpers.ParserFactory conformance: API type verification.
+ * @summary org.xml.sax.helpers.ParserFactory conformance: white-box structure + black-box behavior.
  * @run main ParserFactoryTest
  */
 
@@ -34,12 +34,31 @@ public class ParserFactoryTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.helpers.ParserFactory");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
         check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
         check(hasMethod(c, "makeParser"), "method makeParser");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        boolean ok = false;
+        try { org.xml.sax.helpers.ParserFactory.makeParser(); }
+        catch (NullPointerException e) { ok = true; }
+        check(ok, "makeParser() without property -> NullPointerException");
+        check(org.xml.sax.helpers.ParserFactory.makeParser("com.sun.org.apache.xerces.internal.parsers.SAXParser") != null, "makeParser(className)");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

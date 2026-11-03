@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.FactoryConfigurationError conformance: API type verification.
+ * @summary javax.xml.stream.FactoryConfigurationError conformance: white-box structure + black-box behavior.
  * @run main FactoryConfigurationErrorTest
  */
 
@@ -34,7 +34,9 @@ public class FactoryConfigurationErrorTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.FactoryConfigurationError");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -45,6 +47,29 @@ public class FactoryConfigurationErrorTest {
 
         javax.xml.stream.FactoryConfigurationError e = new javax.xml.stream.FactoryConfigurationError(new Exception("x"));
         check("x".equals(e.getException().getMessage()), "getException");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.stream.FactoryConfigurationError e = new javax.xml.stream.FactoryConfigurationError("why");
+        check("why".equals(e.getMessage()), "message ctor");
+        java.lang.Exception c = new java.io.IOException("io");
+        javax.xml.stream.FactoryConfigurationError e2 = new javax.xml.stream.FactoryConfigurationError(c);
+        check(e2.getException() == c && e2.getCause() == c, "exception ctor");
+        check("io".equals(e2.getMessage()), "message from exception");
+        javax.xml.stream.FactoryConfigurationError e3 = new javax.xml.stream.FactoryConfigurationError(c, "extra");
+        check("extra".equals(e3.getMessage()) && e3.getException() == c, "(exception, message)");
+        javax.xml.stream.FactoryConfigurationError e4 = new javax.xml.stream.FactoryConfigurationError();
+        check(e4.getMessage() == null && e4.getException() == null, "no-arg");
+        check(e instanceof java.lang.Error, "is Error");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

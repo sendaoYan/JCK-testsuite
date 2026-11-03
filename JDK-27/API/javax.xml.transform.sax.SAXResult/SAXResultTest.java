@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.sax.SAXResult conformance: API type verification.
+ * @summary javax.xml.transform.sax.SAXResult conformance: white-box structure + black-box behavior.
  * @run main SAXResultTest
  */
 
@@ -34,7 +34,9 @@ public class SAXResultTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.sax.SAXResult");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -53,6 +55,22 @@ public class SAXResultTest {
         org.xml.sax.helpers.DefaultHandler h = new org.xml.sax.helpers.DefaultHandler();
         r.setHandler(h);
         check(r.getHandler() == h, "setHandler");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.transform.sax.SAXResult r = new javax.xml.transform.sax.SAXResult();
+        check(r.getHandler() == null, "no-arg empty");
+        r.setSystemId("sys"); check("sys".equals(r.getSystemId()), "setSystemId");
+        r.setLexicalHandler(null); check(r.getLexicalHandler() == null, "lexical handler null");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

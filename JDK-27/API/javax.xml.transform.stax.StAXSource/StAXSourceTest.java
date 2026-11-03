@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.stax.StAXSource conformance: API type verification.
+ * @summary javax.xml.transform.stax.StAXSource conformance: white-box structure + black-box behavior.
  * @run main StAXSourceTest
  */
 
@@ -34,7 +34,9 @@ public class StAXSourceTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.stax.StAXSource");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -50,6 +52,28 @@ public class StAXSourceTest {
         javax.xml.stream.XMLStreamReader reader = javax.xml.stream.XMLInputFactory.newFactory().createXMLStreamReader(new java.io.StringReader("<a/>"));
         javax.xml.transform.stax.StAXSource s = new javax.xml.transform.stax.StAXSource(reader);
         check(s.getXMLStreamReader() == reader, "getXMLStreamReader");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.stream.XMLEventReader er = javax.xml.stream.XMLInputFactory.newFactory().createXMLEventReader(new java.io.StringReader("<r/>"));
+        javax.xml.transform.stax.StAXSource s = new javax.xml.transform.stax.StAXSource(er);
+        check(s.getXMLEventReader() == er, "event reader round-trip");
+        boolean sok = false;
+        try { s.setSystemId("sys"); }
+        catch (UnsupportedOperationException e) { sok = true; }
+        check(sok, "setSystemId -> UnsupportedOperationException");
+        javax.xml.stream.XMLStreamReader sr = javax.xml.stream.XMLInputFactory.newFactory().createXMLStreamReader(new java.io.StringReader("<r/>"));
+        javax.xml.transform.stax.StAXSource s2 = new javax.xml.transform.stax.StAXSource(sr);
+        check(s2.getXMLStreamReader() == sr, "stream reader round-trip");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.InputSource conformance: API type verification.
+ * @summary org.xml.sax.InputSource conformance: white-box structure + black-box behavior.
  * @run main InputSourceTest
  */
 
@@ -34,7 +34,9 @@ public class InputSourceTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.InputSource");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -57,6 +59,33 @@ public class InputSourceTest {
         check("p".equals(s.getPublicId()), "publicId");
         check("s".equals(s.getSystemId()), "systemId");
         check(!s.isEmpty(), "not empty");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.InputSource is = new org.xml.sax.InputSource();
+        check(is.getPublicId() == null && is.getSystemId() == null, "no-arg empty");
+        is.setPublicId("pub"); is.setSystemId("sys"); is.setEncoding("UTF-8");
+        check("pub".equals(is.getPublicId()) && "sys".equals(is.getSystemId()) && "UTF-8".equals(is.getEncoding()), "setters");
+        java.io.ByteArrayInputStream bs = new java.io.ByteArrayInputStream("<r/>".getBytes("UTF-8"));
+        is.setByteStream(bs);
+        check(is.getByteStream() == bs && is.getCharacterStream() == null, "byte stream round-trip");
+        check(!is.isEmpty(), "isEmpty false with byte stream");
+        java.io.StringReader sr = new java.io.StringReader("<r/>");
+        org.xml.sax.InputSource is2 = new org.xml.sax.InputSource(sr);
+        check(is2.getCharacterStream() == sr, "reader ctor");
+        org.xml.sax.InputSource is3 = new org.xml.sax.InputSource("sys");
+        check("sys".equals(is3.getSystemId()), "systemId ctor");
+        org.xml.sax.InputSource is4 = new org.xml.sax.InputSource(new java.io.ByteArrayInputStream("<r/>".getBytes("UTF-8")));
+        check(is4.getByteStream() != null, "stream ctor");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.validation.Validator conformance: API type verification.
+ * @summary javax.xml.validation.Validator conformance: white-box structure + black-box behavior.
  * @run main ValidatorTest
  */
 
@@ -34,7 +34,9 @@ public class ValidatorTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.validation.Validator");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -53,6 +55,36 @@ public class ValidatorTest {
         javax.xml.validation.Validator v = javax.xml.validation.SchemaFactory.newInstance(javax.xml.XMLConstants.W3C_XML_SCHEMA_NS_URI).newSchema().newValidator();
         v.reset();
         check(true, "reset");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        String XSD = "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'><xs:element name='n' type='xs:integer'/></xs:schema>";
+        javax.xml.validation.Schema s = javax.xml.validation.SchemaFactory.newInstance(javax.xml.XMLConstants.W3C_XML_SCHEMA_NS_URI)
+            .newSchema(new javax.xml.transform.stream.StreamSource(new java.io.StringReader(XSD)));
+        javax.xml.validation.Validator v = s.newValidator();
+        // valid document passes
+        v.validate(new javax.xml.transform.stream.StreamSource(new java.io.StringReader("<n>123</n>")));
+        check(true, "valid document validates");
+        // invalid document -> SAXParseException (subclass of SAXException)
+        boolean ok = false;
+        try { v.validate(new javax.xml.transform.stream.StreamSource(new java.io.StringReader("<n>abc</n>"))); }
+        catch (org.xml.sax.SAXException e) { ok = true; }
+        check(ok, "invalid document -> SAXException");
+        // error handler round-trip
+        v.setErrorHandler(null); check(v.getErrorHandler() == null, "error handler null");
+        v.setResourceResolver(null); check(v.getResourceResolver() == null, "resource resolver null");
+        v.reset();
+        v.validate(new javax.xml.transform.stream.StreamSource(new java.io.StringReader("<n>123</n>")));
+        check(true, "validator reusable after reset");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

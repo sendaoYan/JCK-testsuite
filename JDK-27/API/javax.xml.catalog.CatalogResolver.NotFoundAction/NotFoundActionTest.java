@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.catalog.CatalogResolver.NotFoundAction conformance: API type verification.
+ * @summary javax.xml.catalog.CatalogResolver.NotFoundAction conformance: white-box structure + black-box behavior.
  * @run main NotFoundActionTest
  */
 
@@ -34,7 +34,9 @@ public class NotFoundActionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.catalog.CatalogResolver$NotFoundAction");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isEnum(), "is enum");
@@ -53,6 +55,23 @@ public class NotFoundActionTest {
 
         check(javax.xml.catalog.CatalogResolver.NotFoundAction.getType("strict") == javax.xml.catalog.CatalogResolver.NotFoundAction.STRICT, "getType");
         check(javax.xml.catalog.CatalogResolver.NotFoundAction.valueOf("CONTINUE") == javax.xml.catalog.CatalogResolver.NotFoundAction.CONTINUE, "valueOf");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check(javax.xml.catalog.CatalogResolver.NotFoundAction.valueOf("STRICT") == javax.xml.catalog.CatalogResolver.NotFoundAction.STRICT, "valueOf STRICT");
+        check(javax.xml.catalog.CatalogResolver.NotFoundAction.valueOf("CONTINUE") == javax.xml.catalog.CatalogResolver.NotFoundAction.CONTINUE, "valueOf CONTINUE");
+        check(javax.xml.catalog.CatalogResolver.NotFoundAction.valueOf("IGNORE") == javax.xml.catalog.CatalogResolver.NotFoundAction.IGNORE, "valueOf IGNORE");
+        check(javax.xml.catalog.CatalogResolver.NotFoundAction.getType("strict") == javax.xml.catalog.CatalogResolver.NotFoundAction.STRICT, "getType strict");
+        check(javax.xml.catalog.CatalogResolver.NotFoundAction.values().length == 3, "three constants");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

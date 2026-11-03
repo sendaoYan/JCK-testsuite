@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.parsers.ParserConfigurationException conformance: API type verification.
+ * @summary javax.xml.parsers.ParserConfigurationException conformance: white-box structure + black-box behavior.
  * @run main ParserConfigurationExceptionTest
  */
 
@@ -34,7 +34,9 @@ public class ParserConfigurationExceptionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.parsers.ParserConfigurationException");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -42,6 +44,25 @@ public class ParserConfigurationExceptionTest {
 
         javax.xml.parsers.ParserConfigurationException e = new javax.xml.parsers.ParserConfigurationException("m");
         check("m".equals(e.getMessage()), "msg");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.parsers.ParserConfigurationException e = new javax.xml.parsers.ParserConfigurationException("cfg");
+        check("cfg".equals(e.getMessage()), "message ctor");
+        check(e.getCause() == null, "no cause by default");
+        javax.xml.parsers.ParserConfigurationException e2 = new javax.xml.parsers.ParserConfigurationException();
+        check(e2.getMessage() == null, "null message ctor");
+        check(e.toString().startsWith("javax.xml.parsers.ParserConfigurationException"), "toString prefix");
+        check(e instanceof java.lang.Exception, "is Exception");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

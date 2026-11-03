@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.DocumentHandler conformance: API type verification.
+ * @summary org.xml.sax.DocumentHandler conformance: white-box structure + black-box behavior.
  * @run main DocumentHandlerTest
  */
 
@@ -34,7 +34,9 @@ public class DocumentHandlerTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.DocumentHandler");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -47,6 +49,35 @@ public class DocumentHandlerTest {
         check(hasMethod(c, "setDocumentLocator"), "method setDocumentLocator");
         check(hasMethod(c, "startDocument"), "method startDocument");
         check(hasMethod(c, "startElement"), "method startElement");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.DocumentHandler a = new org.xml.sax.DocumentHandler(){
+            public void setDocumentLocator(org.xml.sax.Locator p0) { }
+            public void startDocument() { }
+            public void endDocument() { }
+            public void startElement(java.lang.String p0, org.xml.sax.AttributeList p1) { }
+            public void endElement(java.lang.String p0) { }
+            public void characters(char[] p0, int p1, int p2) { }
+            public void ignorableWhitespace(char[] p0, int p1, int p2) { }
+            public void processingInstruction(java.lang.String p0, java.lang.String p1) { }
+        };
+        check(a != null, "anon impl of DocumentHandler");
+        a.setDocumentLocator((org.xml.sax.Locator) null);
+        a.startDocument();
+        a.endDocument();
+        a.startElement("s", (org.xml.sax.AttributeList) null);
+        a.endElement("s");
+        a.characters((char[]) null, 3, 3);
+        a.ignorableWhitespace((char[]) null, 3, 3);
+        a.processingInstruction("s", "s");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.SAXException conformance: API type verification.
+ * @summary org.xml.sax.SAXException conformance: white-box structure + black-box behavior.
  * @run main SAXExceptionTest
  */
 
@@ -34,7 +34,9 @@ public class SAXExceptionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.SAXException");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -47,6 +49,29 @@ public class SAXExceptionTest {
         org.xml.sax.SAXException e = new org.xml.sax.SAXException("m", new Exception("c"));
         check("m".equals(e.getMessage()), "msg");
         check("c".equals(e.getException().getMessage()), "getException");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.SAXException e = new org.xml.sax.SAXException("m");
+        check("m".equals(e.getMessage()) && e.getException() == null, "message ctor");
+        java.lang.Exception c = new java.io.IOException("io");
+        org.xml.sax.SAXException e2 = new org.xml.sax.SAXException(c);
+        check(e2.getException() == c && e2.getCause() == c, "exception ctor");
+        org.xml.sax.SAXException e3 = new org.xml.sax.SAXException("m", c);
+        check("m".equals(e3.getMessage()) && e3.getException() == c, "message + exception");
+        org.xml.sax.SAXException e4 = new org.xml.sax.SAXException();
+        check(e4.getMessage() == null && e4.getException() == null, "no-arg");
+        check(e.toString().startsWith("org.xml.sax.SAXException"), "toString prefix");
+        check(e instanceof java.lang.Exception, "is Exception");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.helpers.LocatorImpl conformance: API type verification.
+ * @summary org.xml.sax.helpers.LocatorImpl conformance: white-box structure + black-box behavior.
  * @run main LocatorImplTest
  */
 
@@ -34,7 +34,9 @@ public class LocatorImplTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.helpers.LocatorImpl");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -58,6 +60,24 @@ public class LocatorImplTest {
         check("s".equals(l.getSystemId()), "systemId");
         check(l.getLineNumber() == 3, "line");
         check(l.getColumnNumber() == 4, "column");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.helpers.LocatorImpl l = new org.xml.sax.helpers.LocatorImpl();
+        l.setPublicId("pub"); l.setSystemId("sys"); l.setLineNumber(10); l.setColumnNumber(5);
+        check("pub".equals(l.getPublicId()) && "sys".equals(l.getSystemId()), "public/system id");
+        check(l.getLineNumber() == 10 && l.getColumnNumber() == 5, "line/column");
+        org.xml.sax.helpers.LocatorImpl copy = new org.xml.sax.helpers.LocatorImpl(l);
+        check(copy.getLineNumber() == 10 && copy.getSystemId().equals("sys"), "copy ctor");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.Parser conformance: API type verification.
+ * @summary org.xml.sax.Parser conformance: white-box structure + black-box behavior.
  * @run main ParserTest
  */
 
@@ -34,7 +34,9 @@ public class ParserTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.Parser");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -45,6 +47,33 @@ public class ParserTest {
         check(hasMethod(c, "setEntityResolver"), "method setEntityResolver");
         check(hasMethod(c, "setErrorHandler"), "method setErrorHandler");
         check(hasMethod(c, "setLocale"), "method setLocale");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.Parser a = new org.xml.sax.Parser(){
+            public void setLocale(java.util.Locale p0) { }
+            public void setEntityResolver(org.xml.sax.EntityResolver p0) { }
+            public void setDTDHandler(org.xml.sax.DTDHandler p0) { }
+            public void setDocumentHandler(org.xml.sax.DocumentHandler p0) { }
+            public void setErrorHandler(org.xml.sax.ErrorHandler p0) { }
+            public void parse(org.xml.sax.InputSource p0) { }
+            public void parse(java.lang.String p0) { }
+        };
+        check(a != null, "anon impl of Parser");
+        a.setLocale((java.util.Locale) null);
+        a.setEntityResolver((org.xml.sax.EntityResolver) null);
+        a.setDTDHandler((org.xml.sax.DTDHandler) null);
+        a.setDocumentHandler((org.xml.sax.DocumentHandler) null);
+        a.setErrorHandler((org.xml.sax.ErrorHandler) null);
+        a.parse((org.xml.sax.InputSource) null);
+        a.parse("s");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

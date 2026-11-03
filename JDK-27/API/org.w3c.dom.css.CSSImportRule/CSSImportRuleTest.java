@@ -18,7 +18,9 @@ public class CSSImportRuleTest {
         return Class.forName(c).getField(f).getShort(null);
     }
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> k = L("org.w3c.dom.css.CSSImportRule");
         check(k.isInterface(), "org.w3c.dom.css.CSSImportRule is an interface");
         check(L("org.w3c.dom.css.CSSRule").isAssignableFrom(k), "CSSImportRule extends CSSRule");
@@ -26,6 +28,35 @@ public class CSSImportRuleTest {
         check(k.getMethod("getHref") != null, "getHref()");
         check(k.getMethod("getMedia") != null, "getMedia()");
         check(k.getMethod("getStyleSheet") != null, "getStyleSheet()");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.w3c.dom.css.CSSImportRule a = new org.w3c.dom.css.CSSImportRule(){
+            public java.lang.String getHref() { return "s"; }
+            public org.w3c.dom.stylesheets.MediaList getMedia() { return null; }
+            public org.w3c.dom.css.CSSStyleSheet getStyleSheet() { return null; }
+            public short getType() { return (short)2; }
+            public java.lang.String getCssText() { return "s"; }
+            public void setCssText(java.lang.String p0) { }
+            public org.w3c.dom.css.CSSStyleSheet getParentStyleSheet() { return null; }
+            public org.w3c.dom.css.CSSRule getParentRule() { return null; }
+        };
+        check(a != null, "anon impl of CSSImportRule");
+        check("s".equals(a.getHref()), "getHref() returns fixed default");
+        check(a.getMedia() == null, "getMedia() returns fixed default");
+        check(a.getStyleSheet() == null, "getStyleSheet() returns fixed default");
+        check(a.getType() == (short)2, "getType() returns fixed default");
+        check("s".equals(a.getCssText()), "getCssText() returns fixed default");
+        a.setCssText("s");
+        check(a.getParentStyleSheet() == null, "getParentStyleSheet() returns fixed default");
+        check(a.getParentRule() == null, "getParentRule() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

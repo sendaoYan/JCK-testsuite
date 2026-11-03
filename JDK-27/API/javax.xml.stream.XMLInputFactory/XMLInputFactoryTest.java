@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.XMLInputFactory conformance: API type verification.
+ * @summary javax.xml.stream.XMLInputFactory conformance: white-box structure + black-box behavior.
  * @run main XMLInputFactoryTest
  */
 
@@ -34,7 +34,9 @@ public class XMLInputFactoryTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.XMLInputFactory");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -70,6 +72,41 @@ public class XMLInputFactoryTest {
         check(r.next() == javax.xml.stream.XMLStreamConstants.START_ELEMENT, "START_ELEMENT");
         check("a".equals(r.getLocalName()), "localName");
         r.close();
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.stream.XMLInputFactory f = javax.xml.stream.XMLInputFactory.newFactory();
+        check(f != null, "newFactory");
+        javax.xml.stream.XMLStreamReader r = f.createXMLStreamReader(new java.io.StringReader("<root><item id='a'>one</item><item id='b'>two</item></root>"));
+        StringBuilder events = new StringBuilder();
+        while (r.hasNext()) {
+            int ev = r.next();
+            if (ev == javax.xml.stream.XMLStreamConstants.START_ELEMENT) events.append(r.getLocalName()).append(";");
+        }
+        r.close();
+        check("root;item;item;".equals(events.toString()), "stream reader start elements, got " + events);
+        // XMLEventReader
+        javax.xml.stream.XMLEventReader er = f.createXMLEventReader(new java.io.StringReader("<root/>"));
+        check(er.hasNext() && er.nextEvent().isStartDocument(), "event reader first event start document");
+        check(er.nextEvent().isStartElement(), "event reader second event start element");
+        er.close();
+        // property
+        check(f.isPropertySupported(javax.xml.stream.XMLInputFactory.IS_NAMESPACE_AWARE), "IS_NAMESPACE_AWARE supported");
+        check(!f.isPropertySupported("http://example.invalid/nope"), "unknown property unsupported");
+        boolean ok = false;
+        try { f.getProperty("http://example.invalid/nope"); }
+        catch (IllegalArgumentException e) { ok = true; }
+        check(ok, "getProperty(unknown) -> IllegalArgumentException");
+        check(javax.xml.stream.XMLInputFactory.newInstance() != null, "newInstance");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.TransformerException conformance: API type verification.
+ * @summary javax.xml.transform.TransformerException conformance: white-box structure + black-box behavior.
  * @run main TransformerExceptionTest
  */
 
@@ -34,7 +34,9 @@ public class TransformerExceptionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.TransformerException");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -52,6 +54,28 @@ public class TransformerExceptionTest {
         check("m".equals(e.getMessage()), "msg");
         check(e.getLocator() == null, "locator null");
         check(e.getException() == null, "exception null");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.transform.TransformerException e = new javax.xml.transform.TransformerException("m");
+        check("m".equals(e.getMessage()), "message ctor");
+        check(e.getException() == null && e.getLocator() == null, "null exception/locator");
+        java.lang.Throwable c = new RuntimeException("r");
+        javax.xml.transform.TransformerException e2 = new javax.xml.transform.TransformerException("m", c);
+        check(e2.getException() == c && e2.getCause() == c, "throwable ctor");
+        javax.xml.transform.TransformerException e3 = new javax.xml.transform.TransformerException(c);
+        check(e3.getException() == c && "java.lang.RuntimeException: r".equals(e3.getMessage()), "throwable-only ctor");
+        e3.setLocator(null); check(e3.getLocator() == null, "setLocator null");
+        check(e3.getLocationAsString() == null, "getLocationAsString null without locator");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

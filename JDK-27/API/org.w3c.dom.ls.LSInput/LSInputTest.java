@@ -18,7 +18,9 @@ public class LSInputTest {
         return Class.forName(c).getField(f).getShort(null);
     }
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> k = L("org.w3c.dom.ls.LSInput");
         check(k.isInterface(), "org.w3c.dom.ls.LSInput is an interface");
         check(k.getInterfaces().length == 0, "LSInput declares no superinterface");
@@ -34,6 +36,51 @@ public class LSInputTest {
         check(k.getMethod("getEncoding") != null, "getEncoding()");
         check(k.getMethod("getCertifiedText") != null, "getCertifiedText()");
         check(k.getMethod("setCertifiedText", boolean.class) != null, "setCertifiedText(boolean)");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.w3c.dom.ls.LSInput a = new org.w3c.dom.ls.LSInput(){
+            public java.io.Reader getCharacterStream() { return null; }
+            public void setCharacterStream(java.io.Reader p0) { }
+            public java.io.InputStream getByteStream() { return null; }
+            public void setByteStream(java.io.InputStream p0) { }
+            public java.lang.String getStringData() { return "s"; }
+            public void setStringData(java.lang.String p0) { }
+            public java.lang.String getSystemId() { return "s"; }
+            public void setSystemId(java.lang.String p0) { }
+            public java.lang.String getPublicId() { return "s"; }
+            public void setPublicId(java.lang.String p0) { }
+            public java.lang.String getBaseURI() { return "s"; }
+            public void setBaseURI(java.lang.String p0) { }
+            public java.lang.String getEncoding() { return "s"; }
+            public void setEncoding(java.lang.String p0) { }
+            public boolean getCertifiedText() { return true; }
+            public void setCertifiedText(boolean p0) { }
+        };
+        check(a != null, "anon impl of LSInput");
+        check(a.getCharacterStream() == null, "getCharacterStream() returns fixed default");
+        a.setCharacterStream((java.io.Reader) null);
+        check(a.getByteStream() == null, "getByteStream() returns fixed default");
+        a.setByteStream((java.io.InputStream) null);
+        check("s".equals(a.getStringData()), "getStringData() returns fixed default");
+        a.setStringData("s");
+        check("s".equals(a.getSystemId()), "getSystemId() returns fixed default");
+        a.setSystemId("s");
+        check("s".equals(a.getPublicId()), "getPublicId() returns fixed default");
+        a.setPublicId("s");
+        check("s".equals(a.getBaseURI()), "getBaseURI() returns fixed default");
+        a.setBaseURI("s");
+        check("s".equals(a.getEncoding()), "getEncoding() returns fixed default");
+        a.setEncoding("s");
+        check(a.getCertifiedText() == true, "getCertifiedText() returns fixed default");
+        a.setCertifiedText(true);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

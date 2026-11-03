@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathEvaluationResult.XPathResultType conformance: API type verification.
+ * @summary javax.xml.xpath.XPathEvaluationResult.XPathResultType conformance: white-box structure + black-box behavior.
  * @run main XPathResultTypeTest
  */
 
@@ -34,7 +34,9 @@ public class XPathResultTypeTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathEvaluationResult$XPathResultType");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isEnum(), "is enum");
@@ -56,6 +58,27 @@ public class XPathResultTypeTest {
         check(hasField(c, "NODESET"), "enum constant NODESET");
         check(hasField(c, "NUMBER"), "enum constant NUMBER");
         check(hasField(c, "STRING"), "enum constant STRING");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.ANY != null, "ANY");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.BOOLEAN != null, "BOOLEAN");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.NUMBER != null, "NUMBER");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.STRING != null, "STRING");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.NODESET != null, "NODESET");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.NODE != null, "NODE");
+        check("BOOLEAN".equals(javax.xml.xpath.XPathEvaluationResult.XPathResultType.BOOLEAN.toString()), "toString");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.valueOf("NUMBER") == javax.xml.xpath.XPathEvaluationResult.XPathResultType.NUMBER, "valueOf");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.values().length == 6, "six enum constants");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

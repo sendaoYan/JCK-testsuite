@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.Attributes conformance: API type verification.
+ * @summary org.xml.sax.Attributes conformance: white-box structure + black-box behavior.
  * @run main AttributesTest
  */
 
@@ -34,7 +34,9 @@ public class AttributesTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.Attributes");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -46,6 +48,43 @@ public class AttributesTest {
         check(hasMethod(c, "getType"), "method getType");
         check(hasMethod(c, "getURI"), "method getURI");
         check(hasMethod(c, "getValue"), "method getValue");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.Attributes a = new org.xml.sax.Attributes(){
+            public int getLength() { return 3; }
+            public java.lang.String getURI(int p0) { return "s"; }
+            public java.lang.String getLocalName(int p0) { return "s"; }
+            public java.lang.String getQName(int p0) { return "s"; }
+            public java.lang.String getType(int p0) { return "s"; }
+            public java.lang.String getValue(int p0) { return "s"; }
+            public int getIndex(java.lang.String p0, java.lang.String p1) { return 3; }
+            public int getIndex(java.lang.String p0) { return 3; }
+            public java.lang.String getType(java.lang.String p0, java.lang.String p1) { return "s"; }
+            public java.lang.String getType(java.lang.String p0) { return "s"; }
+            public java.lang.String getValue(java.lang.String p0, java.lang.String p1) { return "s"; }
+            public java.lang.String getValue(java.lang.String p0) { return "s"; }
+        };
+        check(a != null, "anon impl of Attributes");
+        check(a.getLength() == 3, "getLength() returns fixed default");
+        check("s".equals(a.getURI(3)), "getURI() returns fixed default");
+        check("s".equals(a.getLocalName(3)), "getLocalName() returns fixed default");
+        check("s".equals(a.getQName(3)), "getQName() returns fixed default");
+        check("s".equals(a.getType(3)), "getType() returns fixed default");
+        check("s".equals(a.getValue(3)), "getValue() returns fixed default");
+        check(a.getIndex("s", "s") == 3, "getIndex() returns fixed default");
+        check(a.getIndex("s") == 3, "getIndex() returns fixed default");
+        check("s".equals(a.getType("s", "s")), "getType() returns fixed default");
+        check("s".equals(a.getType("s")), "getType() returns fixed default");
+        check("s".equals(a.getValue("s", "s")), "getValue() returns fixed default");
+        check("s".equals(a.getValue("s")), "getValue() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

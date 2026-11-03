@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPath conformance: API type verification.
+ * @summary javax.xml.xpath.XPath conformance: white-box structure + black-box behavior.
  * @run main XPathTest
  */
 
@@ -34,7 +34,9 @@ public class XPathTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPath");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -54,6 +56,43 @@ public class XPathTest {
         check(x.compile("1+1") != null, "compile");
         check("2".equals(x.evaluate("1+1", (Object) null)), "evaluate string");
         check(((Double) x.evaluate("1+1", (Object) null, javax.xml.xpath.XPathConstants.NUMBER)).doubleValue() == 2.0, "evaluate number");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.xpath.XPath a = new javax.xml.xpath.XPath(){
+            public void reset() { }
+            public void setXPathVariableResolver(javax.xml.xpath.XPathVariableResolver p0) { }
+            public javax.xml.xpath.XPathVariableResolver getXPathVariableResolver() { return null; }
+            public void setXPathFunctionResolver(javax.xml.xpath.XPathFunctionResolver p0) { }
+            public javax.xml.xpath.XPathFunctionResolver getXPathFunctionResolver() { return null; }
+            public void setNamespaceContext(javax.xml.namespace.NamespaceContext p0) { }
+            public javax.xml.namespace.NamespaceContext getNamespaceContext() { return null; }
+            public javax.xml.xpath.XPathExpression compile(java.lang.String p0) { return null; }
+            public java.lang.Object evaluate(java.lang.String p0, java.lang.Object p1, javax.xml.namespace.QName p2) { return null; }
+            public java.lang.String evaluate(java.lang.String p0, java.lang.Object p1) { return "s"; }
+            public java.lang.Object evaluate(java.lang.String p0, org.xml.sax.InputSource p1, javax.xml.namespace.QName p2) { return null; }
+            public java.lang.String evaluate(java.lang.String p0, org.xml.sax.InputSource p1) { return "s"; }
+        };
+        check(a != null, "anon impl of XPath");
+        a.reset();
+        a.setXPathVariableResolver((javax.xml.xpath.XPathVariableResolver) null);
+        check(a.getXPathVariableResolver() == null, "getXPathVariableResolver() returns fixed default");
+        a.setXPathFunctionResolver((javax.xml.xpath.XPathFunctionResolver) null);
+        check(a.getXPathFunctionResolver() == null, "getXPathFunctionResolver() returns fixed default");
+        a.setNamespaceContext((javax.xml.namespace.NamespaceContext) null);
+        check(a.getNamespaceContext() == null, "getNamespaceContext() returns fixed default");
+        check(a.compile("s") == null, "compile() returns fixed default");
+        check(a.evaluate("s", (java.lang.Object) null, (javax.xml.namespace.QName) null) == null, "evaluate() returns fixed default");
+        check("s".equals(a.evaluate("s", (java.lang.Object) null)), "evaluate() returns fixed default");
+        check(a.evaluate("s", (org.xml.sax.InputSource) null, (javax.xml.namespace.QName) null) == null, "evaluate() returns fixed default");
+        check("s".equals(a.evaluate("s", (org.xml.sax.InputSource) null)), "evaluate() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

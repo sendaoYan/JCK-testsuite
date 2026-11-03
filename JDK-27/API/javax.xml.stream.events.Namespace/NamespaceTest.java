@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.events.Namespace conformance: API type verification.
+ * @summary javax.xml.stream.events.Namespace conformance: white-box structure + black-box behavior.
  * @run main NamespaceTest
  */
 
@@ -34,7 +34,9 @@ public class NamespaceTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.events.Namespace");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -43,6 +45,65 @@ public class NamespaceTest {
         check(hasMethod(c, "getNamespaceURI"), "method getNamespaceURI");
         check(hasMethod(c, "getPrefix"), "method getPrefix");
         check(hasMethod(c, "isDefaultNamespaceDeclaration"), "method isDefaultNamespaceDeclaration");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.stream.events.Namespace a = new javax.xml.stream.events.Namespace(){
+            public java.lang.String getPrefix() { return "s"; }
+            public java.lang.String getNamespaceURI() { return "s"; }
+            public boolean isDefaultNamespaceDeclaration() { return true; }
+            public javax.xml.namespace.QName getName() { return null; }
+            public java.lang.String getValue() { return "s"; }
+            public java.lang.String getDTDType() { return "s"; }
+            public boolean isSpecified() { return true; }
+            public int getEventType() { return 3; }
+            public javax.xml.stream.Location getLocation() { return null; }
+            public boolean isStartElement() { return true; }
+            public boolean isAttribute() { return true; }
+            public boolean isNamespace() { return true; }
+            public boolean isEndElement() { return true; }
+            public boolean isEntityReference() { return true; }
+            public boolean isProcessingInstruction() { return true; }
+            public boolean isCharacters() { return true; }
+            public boolean isStartDocument() { return true; }
+            public boolean isEndDocument() { return true; }
+            public javax.xml.stream.events.StartElement asStartElement() { return null; }
+            public javax.xml.stream.events.EndElement asEndElement() { return null; }
+            public javax.xml.stream.events.Characters asCharacters() { return null; }
+            public javax.xml.namespace.QName getSchemaType() { return null; }
+            public void writeAsEncodedUnicode(java.io.Writer p0) { }
+        };
+        check(a != null, "anon impl of Namespace");
+        check("s".equals(a.getPrefix()), "getPrefix() returns fixed default");
+        check("s".equals(a.getNamespaceURI()), "getNamespaceURI() returns fixed default");
+        check(a.isDefaultNamespaceDeclaration() == true, "isDefaultNamespaceDeclaration() returns fixed default");
+        check(a.getName() == null, "getName() returns fixed default");
+        check("s".equals(a.getValue()), "getValue() returns fixed default");
+        check("s".equals(a.getDTDType()), "getDTDType() returns fixed default");
+        check(a.isSpecified() == true, "isSpecified() returns fixed default");
+        check(a.getEventType() == 3, "getEventType() returns fixed default");
+        check(a.getLocation() == null, "getLocation() returns fixed default");
+        check(a.isStartElement() == true, "isStartElement() returns fixed default");
+        check(a.isAttribute() == true, "isAttribute() returns fixed default");
+        check(a.isNamespace() == true, "isNamespace() returns fixed default");
+        check(a.isEndElement() == true, "isEndElement() returns fixed default");
+        check(a.isEntityReference() == true, "isEntityReference() returns fixed default");
+        check(a.isProcessingInstruction() == true, "isProcessingInstruction() returns fixed default");
+        check(a.isCharacters() == true, "isCharacters() returns fixed default");
+        check(a.isStartDocument() == true, "isStartDocument() returns fixed default");
+        check(a.isEndDocument() == true, "isEndDocument() returns fixed default");
+        check(a.asStartElement() == null, "asStartElement() returns fixed default");
+        check(a.asEndElement() == null, "asEndElement() returns fixed default");
+        check(a.asCharacters() == null, "asCharacters() returns fixed default");
+        check(a.getSchemaType() == null, "getSchemaType() returns fixed default");
+        a.writeAsEncodedUnicode((java.io.Writer) null);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

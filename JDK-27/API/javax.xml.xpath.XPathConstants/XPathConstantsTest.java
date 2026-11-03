@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathConstants conformance: API type verification.
+ * @summary javax.xml.xpath.XPathConstants conformance: white-box structure + black-box behavior.
  * @run main XPathConstantsTest
  */
 
@@ -34,7 +34,9 @@ public class XPathConstantsTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathConstants");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -52,6 +54,28 @@ public class XPathConstantsTest {
         check(javax.xml.xpath.XPathConstants.NODESET != null, "NODESET");
         check(javax.xml.xpath.XPathConstants.NODE != null, "NODE");
         check("http://java.sun.com/jaxp/xpath/dom".equals(javax.xml.xpath.XPathConstants.DOM_OBJECT_MODEL), "DOM_OBJECT_MODEL");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check("http://www.w3.org/1999/XSL/Transform".equals(javax.xml.xpath.XPathConstants.NUMBER.getNamespaceURI()), "NUMBER ns");
+        check("NUMBER".equals(javax.xml.xpath.XPathConstants.NUMBER.getLocalPart()), "NUMBER local");
+        check("STRING".equals(javax.xml.xpath.XPathConstants.STRING.getLocalPart()), "STRING local");
+        check("BOOLEAN".equals(javax.xml.xpath.XPathConstants.BOOLEAN.getLocalPart()), "BOOLEAN local");
+        check("NODESET".equals(javax.xml.xpath.XPathConstants.NODESET.getLocalPart()), "NODESET local");
+        check("NODE".equals(javax.xml.xpath.XPathConstants.NODE.getLocalPart()), "NODE local");
+        check("http://java.sun.com/jaxp/xpath/dom".equals(javax.xml.xpath.XPathConstants.DOM_OBJECT_MODEL), "DOM_OBJECT_MODEL");
+        check(javax.xml.xpath.XPathConstants.NUMBER != javax.xml.xpath.XPathConstants.STRING
+              && javax.xml.xpath.XPathConstants.NODESET != javax.xml.xpath.XPathConstants.NODE,
+              "distinct constant QNames");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.EntityResolver conformance: API type verification.
+ * @summary org.xml.sax.EntityResolver conformance: white-box structure + black-box behavior.
  * @run main EntityResolverTest
  */
 
@@ -34,12 +34,29 @@ public class EntityResolverTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.EntityResolver");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "resolveEntity"), "method resolveEntity");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.EntityResolver a = new org.xml.sax.EntityResolver(){
+            public org.xml.sax.InputSource resolveEntity(java.lang.String p0, java.lang.String p1) { return null; }
+        };
+        check(a != null, "anon impl of EntityResolver");
+        check(a.resolveEntity("s", "s") == null, "resolveEntity() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

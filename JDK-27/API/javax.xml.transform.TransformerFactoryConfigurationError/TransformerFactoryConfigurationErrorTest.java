@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.TransformerFactoryConfigurationError conformance: API type verification.
+ * @summary javax.xml.transform.TransformerFactoryConfigurationError conformance: white-box structure + black-box behavior.
  * @run main TransformerFactoryConfigurationErrorTest
  */
 
@@ -34,7 +34,9 @@ public class TransformerFactoryConfigurationErrorTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.TransformerFactoryConfigurationError");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -45,6 +47,27 @@ public class TransformerFactoryConfigurationErrorTest {
 
         javax.xml.transform.TransformerFactoryConfigurationError e = new javax.xml.transform.TransformerFactoryConfigurationError("m");
         check("m".equals(e.getMessage()), "msg");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.transform.TransformerFactoryConfigurationError e = new javax.xml.transform.TransformerFactoryConfigurationError("why");
+        check("why".equals(e.getMessage()), "message ctor");
+        java.lang.Exception cause = new java.io.IOException("io");
+        javax.xml.transform.TransformerFactoryConfigurationError e2 = new javax.xml.transform.TransformerFactoryConfigurationError(cause);
+        check(e2.getException() == cause && e2.getCause() == cause, "exception ctor");
+        check("java.io.IOException: io".equals(e2.getMessage()), "message from exception");
+        javax.xml.transform.TransformerFactoryConfigurationError e3 = new javax.xml.transform.TransformerFactoryConfigurationError(cause, "extra");
+        check("extra".equals(e3.getMessage()) && e3.getException() == cause, "(exception, message)");
+        check(e instanceof java.lang.Error, "is Error");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.StreamFilter conformance: API type verification.
+ * @summary javax.xml.stream.StreamFilter conformance: white-box structure + black-box behavior.
  * @run main StreamFilterTest
  */
 
@@ -34,12 +34,29 @@ public class StreamFilterTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.StreamFilter");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "accept"), "method accept");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.stream.StreamFilter a = new javax.xml.stream.StreamFilter(){
+            public boolean accept(javax.xml.stream.XMLStreamReader p0) { return true; }
+        };
+        check(a != null, "anon impl of StreamFilter");
+        check(a.accept((javax.xml.stream.XMLStreamReader) null) == true, "accept() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

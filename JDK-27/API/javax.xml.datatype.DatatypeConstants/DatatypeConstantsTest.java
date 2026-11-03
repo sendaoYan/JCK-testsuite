@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.datatype.DatatypeConstants conformance: API type verification.
+ * @summary javax.xml.datatype.DatatypeConstants conformance: white-box structure + black-box behavior.
  * @run main DatatypeConstantsTest
  */
 
@@ -34,7 +34,9 @@ public class DatatypeConstantsTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.datatype.DatatypeConstants");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
@@ -84,6 +86,32 @@ public class DatatypeConstantsTest {
         check(javax.xml.datatype.DatatypeConstants.INDETERMINATE == 2, "INDETERMINATE");
         check(javax.xml.datatype.DatatypeConstants.DATETIME != null, "DATETIME");
         check(javax.xml.datatype.DatatypeConstants.DURATION != null, "DURATION");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check(javax.xml.datatype.DatatypeConstants.JANUARY == 1 && javax.xml.datatype.DatatypeConstants.DECEMBER == 12, "month constants");
+        check(javax.xml.datatype.DatatypeConstants.LESSER == -1 && javax.xml.datatype.DatatypeConstants.EQUAL == 0
+              && javax.xml.datatype.DatatypeConstants.GREATER == 1 && javax.xml.datatype.DatatypeConstants.INDETERMINATE == 2, "comparison constants");
+        check(javax.xml.datatype.DatatypeConstants.FIELD_UNDEFINED == -2147483648, "FIELD_UNDEFINED");
+        check(javax.xml.datatype.DatatypeConstants.MAX_TIMEZONE_OFFSET == -840, "MAX_TIMEZONE_OFFSET");
+        check(javax.xml.datatype.DatatypeConstants.MIN_TIMEZONE_OFFSET == 840, "MIN_TIMEZONE_OFFSET");
+        check(javax.xml.datatype.DatatypeConstants.YEARS != null && javax.xml.datatype.DatatypeConstants.SECONDS != null, "Field constants");
+        check("YEARS".equals(javax.xml.datatype.DatatypeConstants.YEARS.toString()), "Field toString");
+        check(javax.xml.datatype.DatatypeConstants.YEARS.getId() == 0, "Field YEARS id");
+        check(javax.xml.datatype.DatatypeConstants.DURATION.getLocalPart().equals("duration"), "DURATION QName");
+        check(javax.xml.datatype.DatatypeConstants.DATETIME.getLocalPart().equals("dateTime"), "DATETIME QName");
+        check(javax.xml.datatype.DatatypeConstants.DATE.getLocalPart().equals("date"), "DATE QName");
+        check(javax.xml.datatype.DatatypeConstants.TIME.getLocalPart().equals("time"), "TIME QName");
+        check(javax.xml.datatype.DatatypeConstants.DURATION_DAYTIME.getLocalPart().equals("dayTimeDuration"), "DURATION_DAYTIME QName");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.helpers.AttributesImpl conformance: API type verification.
+ * @summary org.xml.sax.helpers.AttributesImpl conformance: white-box structure + black-box behavior.
  * @run main AttributesImplTest
  */
 
@@ -34,7 +34,9 @@ public class AttributesImplTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.helpers.AttributesImpl");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -65,6 +67,46 @@ public class AttributesImplTest {
         check("local".equals(a.getLocalName(0)), "localName");
         check("q".equals(a.getQName(0)), "qName");
         check("uri".equals(a.getURI(0)), "uri");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.helpers.AttributesImpl a = new org.xml.sax.helpers.AttributesImpl();
+        check(a.getLength() == 0, "initially empty");
+        a.addAttribute("urn:ns", "local", "p:local", "CDATA", "val");
+        check(a.getLength() == 1, "addAttribute increments length");
+        check("urn:ns".equals(a.getURI(0)), "getURI");
+        check("local".equals(a.getLocalName(0)), "getLocalName");
+        check("p:local".equals(a.getQName(0)), "getQName");
+        check("CDATA".equals(a.getType(0)), "getType(int)");
+        check("val".equals(a.getValue(0)), "getValue(int)");
+        check(a.getIndex("p:local") == 0, "getIndex(qName)");
+        check(a.getIndex("urn:ns", "local") == 0, "getIndex(uri,local)");
+        check("val".equals(a.getValue("p:local")), "getValue(qName)");
+        check("val".equals(a.getValue("urn:ns", "local")), "getValue(uri,local)");
+        check(a.getType("p:local").equals("CDATA"), "getType(qName)");
+        a.setAttribute(0, "urn:2", "l2", "p:l2", "CDATA", "v2");
+        check("v2".equals(a.getValue(0)) && "l2".equals(a.getLocalName(0)), "setAttribute(int)");
+        a.setValue(0, "v3"); check("v3".equals(a.getValue(0)), "setValue(int)");
+        a.removeAttribute(0); check(a.getLength() == 0, "removeAttribute");
+        a.addAttribute("", "", "q", "CDATA", "x");
+        a.clear(); check(a.getLength() == 0, "clear");
+        // copy ctor + setAttributes
+        org.xml.sax.helpers.AttributesImpl src = new org.xml.sax.helpers.AttributesImpl();
+        src.addAttribute("", "", "k", "CDATA", "v");
+        org.xml.sax.helpers.AttributesImpl copy = new org.xml.sax.helpers.AttributesImpl(src);
+        check(copy.getLength() == 1 && "v".equals(copy.getValue("k")), "copy ctor");
+        org.xml.sax.helpers.AttributesImpl dst = new org.xml.sax.helpers.AttributesImpl();
+        dst.setAttributes(src);
+        check(dst.getLength() == 1, "setAttributes");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

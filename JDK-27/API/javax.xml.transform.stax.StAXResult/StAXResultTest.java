@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.stax.StAXResult conformance: API type verification.
+ * @summary javax.xml.transform.stax.StAXResult conformance: white-box structure + black-box behavior.
  * @run main StAXResultTest
  */
 
@@ -34,7 +34,9 @@ public class StAXResultTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.stax.StAXResult");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -49,6 +51,28 @@ public class StAXResultTest {
         javax.xml.stream.XMLStreamWriter w = javax.xml.stream.XMLOutputFactory.newFactory().createXMLStreamWriter(new java.io.StringWriter());
         javax.xml.transform.stax.StAXResult r = new javax.xml.transform.stax.StAXResult(w);
         check(r.getXMLStreamWriter() == w, "getXMLStreamWriter");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.stream.XMLEventWriter w = javax.xml.stream.XMLOutputFactory.newFactory().createXMLEventWriter(new java.io.StringWriter());
+        javax.xml.transform.stax.StAXResult r = new javax.xml.transform.stax.StAXResult(w);
+        check(r.getXMLEventWriter() == w, "event writer round-trip");
+        boolean sok = false;
+        try { r.setSystemId("sys"); }
+        catch (UnsupportedOperationException e) { sok = true; }
+        check(sok, "setSystemId -> UnsupportedOperationException");
+        javax.xml.stream.XMLStreamWriter sw = javax.xml.stream.XMLOutputFactory.newFactory().createXMLStreamWriter(new java.io.StringWriter());
+        javax.xml.transform.stax.StAXResult r2 = new javax.xml.transform.stax.StAXResult(sw);
+        check(r2.getXMLStreamWriter() == sw, "stream writer round-trip");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

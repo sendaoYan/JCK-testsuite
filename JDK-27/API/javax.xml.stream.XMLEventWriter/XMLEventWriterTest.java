@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.XMLEventWriter conformance: API type verification.
+ * @summary javax.xml.stream.XMLEventWriter conformance: white-box structure + black-box behavior.
  * @run main XMLEventWriterTest
  */
 
@@ -34,7 +34,9 @@ public class XMLEventWriterTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.XMLEventWriter");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -48,6 +50,35 @@ public class XMLEventWriterTest {
         check(hasMethod(c, "setDefaultNamespace"), "method setDefaultNamespace");
         check(hasMethod(c, "setNamespaceContext"), "method setNamespaceContext");
         check(hasMethod(c, "setPrefix"), "method setPrefix");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.stream.XMLEventFactory ef = javax.xml.stream.XMLEventFactory.newFactory();
+        java.io.StringWriter sw = new java.io.StringWriter();
+        javax.xml.stream.XMLEventWriter w = javax.xml.stream.XMLOutputFactory.newFactory().createXMLEventWriter(sw);
+        w.add(ef.createStartDocument());
+        w.add(ef.createStartElement("", "", "e"));
+        w.add(ef.createAttribute("k", "v"));
+        w.add(ef.createCharacters("hi"));
+        w.add(ef.createEndElement("", "", "e"));
+        w.add(ef.createEndDocument());
+        w.flush();
+        w.close();
+        check(sw.toString().contains("<e") && sw.toString().contains("k=\"v\"") && sw.toString().contains("hi"), "event writer output, got " + sw);
+        // namespace context round-trip
+        javax.xml.stream.XMLEventWriter w2 = javax.xml.stream.XMLOutputFactory.newFactory().createXMLEventWriter(new java.io.StringWriter());
+        w2.setDefaultNamespace("urn:d"); check("urn:d".equals(w2.getNamespaceContext().getNamespaceURI("")), "setDefaultNamespace");
+        w2.setPrefix("p", "urn:p"); check("p".equals(w2.getPrefix("urn:p")), "set/getPrefix");
+        w2.close();
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

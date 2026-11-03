@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.SAXParseException conformance: API type verification.
+ * @summary org.xml.sax.SAXParseException conformance: white-box structure + black-box behavior.
  * @run main SAXParseExceptionTest
  */
 
@@ -34,7 +34,9 @@ public class SAXParseExceptionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.SAXParseException");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -51,6 +53,26 @@ public class SAXParseExceptionTest {
         check("sys".equals(e.getSystemId()), "systemId");
         check(e.getLineNumber() == 5, "line");
         check(e.getColumnNumber() == 6, "column");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.SAXParseException e = new org.xml.sax.SAXParseException("m", "pub", "sys", 10, 5);
+        check("m".equals(e.getMessage()), "message");
+        check("pub".equals(e.getPublicId()) && "sys".equals(e.getSystemId()), "ids");
+        check(e.getLineNumber() == 10 && e.getColumnNumber() == 5, "line/column");
+        check(e.toString().startsWith("org.xml.sax.SAXParseException"), "toString prefix");
+        org.xml.sax.SAXParseException e2 = new org.xml.sax.SAXParseException("m2", "pub", "sys", 1, 2, new RuntimeException("c"));
+        check("m2".equals(e2.getMessage()) && e2.getCause() != null, "6-arg ctor");
+        check(e instanceof org.xml.sax.SAXException, "subclass of SAXException");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

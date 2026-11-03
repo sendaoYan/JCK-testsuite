@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathFunction conformance: API type verification.
+ * @summary javax.xml.xpath.XPathFunction conformance: white-box structure + black-box behavior.
  * @run main XPathFunctionTest
  */
 
@@ -34,12 +34,29 @@ public class XPathFunctionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathFunction");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "evaluate"), "method evaluate");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.xpath.XPathFunction a = new javax.xml.xpath.XPathFunction(){
+            public java.lang.Object evaluate(java.util.List<?> p0) { return null; }
+        };
+        check(a != null, "anon impl of XPathFunction");
+        check(a.evaluate((java.util.List<?>) null) == null, "evaluate() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

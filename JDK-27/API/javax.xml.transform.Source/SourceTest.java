@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.Source conformance: API type verification.
+ * @summary javax.xml.transform.Source conformance: white-box structure + black-box behavior.
  * @run main SourceTest
  */
 
@@ -34,7 +34,9 @@ public class SourceTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.Source");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -42,6 +44,23 @@ public class SourceTest {
         check(hasMethod(c, "getSystemId"), "method getSystemId");
         check(hasMethod(c, "isEmpty"), "method isEmpty");
         check(hasMethod(c, "setSystemId"), "method setSystemId");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.transform.Source a = new javax.xml.transform.Source(){
+            public void setSystemId(java.lang.String p0) { }
+            public java.lang.String getSystemId() { return "s"; }
+        };
+        check(a != null, "anon impl of Source");
+        a.setSystemId("s");
+        check("s".equals(a.getSystemId()), "getSystemId() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

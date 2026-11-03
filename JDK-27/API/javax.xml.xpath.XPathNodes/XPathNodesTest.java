@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathNodes conformance: API type verification.
+ * @summary javax.xml.xpath.XPathNodes conformance: white-box structure + black-box behavior.
  * @run main XPathNodesTest
  */
 
@@ -34,7 +34,9 @@ public class XPathNodesTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathNodes");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -43,6 +45,25 @@ public class XPathNodesTest {
         check(hasMethod(c, "get"), "method get");
         check(hasMethod(c, "iterator"), "method iterator");
         check(hasMethod(c, "size"), "method size");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.xpath.XPathNodes a = new javax.xml.xpath.XPathNodes(){
+            public java.util.Iterator<org.w3c.dom.Node> iterator() { return null; }
+            public int size() { return 3; }
+            public org.w3c.dom.Node get(int p0) { return null; }
+        };
+        check(a != null, "anon impl of XPathNodes");
+        check(a.iterator() == null, "iterator() returns fixed default");
+        check(a.size() == 3, "size() returns fixed default");
+        check(a.get(3) == null, "get() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

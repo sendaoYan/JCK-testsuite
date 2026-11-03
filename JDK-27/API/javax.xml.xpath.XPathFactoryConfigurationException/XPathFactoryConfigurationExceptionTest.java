@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathFactoryConfigurationException conformance: API type verification.
+ * @summary javax.xml.xpath.XPathFactoryConfigurationException conformance: white-box structure + black-box behavior.
  * @run main XPathFactoryConfigurationExceptionTest
  */
 
@@ -34,7 +34,9 @@ public class XPathFactoryConfigurationExceptionTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathFactoryConfigurationException");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -42,6 +44,20 @@ public class XPathFactoryConfigurationExceptionTest {
 
         javax.xml.xpath.XPathFactoryConfigurationException e = new javax.xml.xpath.XPathFactoryConfigurationException("m");
         check("m".equals(e.getMessage()), "msg");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.xpath.XPathFactoryConfigurationException e = new javax.xml.xpath.XPathFactoryConfigurationException("cfg");
+        check("cfg".equals(e.getMessage()) && e instanceof javax.xml.xpath.XPathException, "subclass of XPathException");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

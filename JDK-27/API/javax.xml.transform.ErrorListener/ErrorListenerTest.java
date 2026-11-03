@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.ErrorListener conformance: API type verification.
+ * @summary javax.xml.transform.ErrorListener conformance: white-box structure + black-box behavior.
  * @run main ErrorListenerTest
  */
 
@@ -34,7 +34,9 @@ public class ErrorListenerTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.ErrorListener");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -42,6 +44,25 @@ public class ErrorListenerTest {
         check(hasMethod(c, "error"), "method error");
         check(hasMethod(c, "fatalError"), "method fatalError");
         check(hasMethod(c, "warning"), "method warning");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.transform.ErrorListener a = new javax.xml.transform.ErrorListener(){
+            public void warning(javax.xml.transform.TransformerException p0) { }
+            public void error(javax.xml.transform.TransformerException p0) { }
+            public void fatalError(javax.xml.transform.TransformerException p0) { }
+        };
+        check(a != null, "anon impl of ErrorListener");
+        a.warning((javax.xml.transform.TransformerException) null);
+        a.error((javax.xml.transform.TransformerException) null);
+        a.fatalError((javax.xml.transform.TransformerException) null);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

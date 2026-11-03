@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.catalog.Catalog conformance: API type verification.
+ * @summary javax.xml.catalog.Catalog conformance: white-box structure + black-box behavior.
  * @run main CatalogTest
  */
 
@@ -34,7 +34,9 @@ public class CatalogTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.catalog.Catalog");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -43,6 +45,27 @@ public class CatalogTest {
         check(hasMethod(c, "matchPublic"), "method matchPublic");
         check(hasMethod(c, "matchSystem"), "method matchSystem");
         check(hasMethod(c, "matchURI"), "method matchURI");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.catalog.Catalog a = new javax.xml.catalog.Catalog(){
+            public java.lang.String matchSystem(java.lang.String p0) { return "s"; }
+            public java.lang.String matchPublic(java.lang.String p0) { return "s"; }
+            public java.lang.String matchURI(java.lang.String p0) { return "s"; }
+            public java.util.stream.Stream<javax.xml.catalog.Catalog> catalogs() { return null; }
+        };
+        check(a != null, "anon impl of Catalog");
+        check("s".equals(a.matchSystem("s")), "matchSystem() returns fixed default");
+        check("s".equals(a.matchPublic("s")), "matchPublic() returns fixed default");
+        check("s".equals(a.matchURI("s")), "matchURI() returns fixed default");
+        check(a.catalogs() == null, "catalogs() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

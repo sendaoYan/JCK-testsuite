@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.catalog.CatalogResolver conformance: API type verification.
+ * @summary javax.xml.catalog.CatalogResolver conformance: white-box structure + black-box behavior.
  * @run main CatalogResolverTest
  */
 
@@ -34,7 +34,9 @@ public class CatalogResolverTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.catalog.CatalogResolver");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -46,6 +48,28 @@ public class CatalogResolverTest {
         check(hasMethod(c, "resolve"), "method resolve");
         check(hasMethod(c, "resolveEntity"), "method resolveEntity");
         check(hasMethod(c, "resolveResource"), "method resolveResource");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.catalog.CatalogFeatures cf = javax.xml.catalog.CatalogFeatures.builder()
+            .with(javax.xml.catalog.CatalogFeatures.Feature.RESOLVE, "continue").build();
+        javax.xml.catalog.CatalogResolver cr = javax.xml.catalog.CatalogManager.catalogResolver(cf);
+        check(cr != null, "resolver obtained");
+        check(cr instanceof org.xml.sax.EntityResolver, "EntityResolver");
+        check(cr instanceof javax.xml.stream.XMLResolver, "XMLResolver");
+        check(cr instanceof javax.xml.transform.URIResolver, "URIResolver");
+        check(cr instanceof org.w3c.dom.ls.LSResourceResolver, "LSResourceResolver");
+        check(cr.resolveEntity(null, "http://example.invalid/dtd") == null, "resolveEntity unknown null");
+        check(cr.resolve("http://example.invalid/uri", null) != null, "resolve returns Source for resolvable URI");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

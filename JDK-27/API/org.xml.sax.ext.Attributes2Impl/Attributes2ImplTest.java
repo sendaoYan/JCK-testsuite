@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.ext.Attributes2Impl conformance: API type verification.
+ * @summary org.xml.sax.ext.Attributes2Impl conformance: white-box structure + black-box behavior.
  * @run main Attributes2ImplTest
  */
 
@@ -34,7 +34,9 @@ public class Attributes2ImplTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.ext.Attributes2Impl");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -54,6 +56,31 @@ public class Attributes2ImplTest {
         a.setSpecified(0, true);
         check(a.isDeclared(0), "isDeclared");
         check(a.isSpecified(0), "isSpecified");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.xml.sax.ext.Attributes2Impl a = new org.xml.sax.ext.Attributes2Impl();
+        a.addAttribute("", "k", "k", "CDATA", "v");
+        check(a.isSpecified(0), "isSpecified(int) default true");
+        check(!a.isDeclared(0), "isDeclared(int) default false");
+        check(a.isSpecified("k"), "isSpecified(qName) default true");
+        check(!a.isDeclared("k"), "isDeclared(qName) default false");
+        check(a.isSpecified("", "k"), "isSpecified(uri,localName) default true");
+        a.setSpecified(0, false); check(!a.isSpecified(0), "setSpecified(int) false");
+        check(!a.isSpecified("k"), "isSpecified(qName) reflects false");
+        a.setDeclared(0, true); check(a.isDeclared(0), "setDeclared(int) true");
+        check(a.isDeclared("k"), "isDeclared(qName) reflects true");
+        org.xml.sax.ext.Attributes2Impl copy = new org.xml.sax.ext.Attributes2Impl(a);
+        check(copy.getLength() == 1, "copy ctor");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

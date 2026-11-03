@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.XMLOutputFactory conformance: API type verification.
+ * @summary javax.xml.stream.XMLOutputFactory conformance: white-box structure + black-box behavior.
  * @run main XMLOutputFactoryTest
  */
 
@@ -34,7 +34,9 @@ public class XMLOutputFactoryTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.XMLOutputFactory");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -58,6 +60,46 @@ public class XMLOutputFactoryTest {
         w.writeEndDocument();
         w.flush();
         check(sw.toString().contains("root"), "output contains root");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.stream.XMLOutputFactory f = javax.xml.stream.XMLOutputFactory.newFactory();
+        check(f != null, "newFactory");
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        javax.xml.stream.XMLStreamWriter w = f.createXMLStreamWriter(bos, "UTF-8");
+        w.writeStartDocument("UTF-8", "1.0");
+        w.writeStartElement("x");
+        w.writeAttribute("k", "v");
+        w.writeCharacters("hi");
+        w.writeEndElement();
+        w.writeEndDocument();
+        w.close();
+        check("<?xml version=\"1.0\" encoding=\"UTF-8\"?><x k=\"v\">hi</x>".equals(bos.toString("UTF-8")), "stream writer exact output, got " + bos.toString("UTF-8"));
+        // XMLEventWriter
+        java.io.StringWriter sw = new java.io.StringWriter();
+        javax.xml.stream.XMLEventWriter ew = f.createXMLEventWriter(sw);
+        javax.xml.stream.XMLEventFactory ef = javax.xml.stream.XMLEventFactory.newFactory();
+        ew.add(ef.createStartDocument());
+        ew.add(ef.createStartElement("", "", "e"));
+        ew.add(ef.createEndElement("", "", "e"));
+        ew.add(ef.createEndDocument());
+        ew.close();
+        check(sw.toString().contains("<e") && sw.toString().contains("</e>"), "event writer output contains element");
+        check(!f.isPropertySupported("http://example.invalid/nope"), "unknown property unsupported");
+        boolean ok = false;
+        try { f.getProperty("http://example.invalid/nope"); }
+        catch (IllegalArgumentException e) { ok = true; }
+        check(ok, "getProperty(unknown) -> IllegalArgumentException");
+        check(javax.xml.stream.XMLOutputFactory.newInstance() != null, "newInstance");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

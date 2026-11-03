@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.AttributeList conformance: API type verification.
+ * @summary org.xml.sax.AttributeList conformance: white-box structure + black-box behavior.
  * @run main AttributeListTest
  */
 
@@ -34,7 +34,9 @@ public class AttributeListTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.AttributeList");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -43,6 +45,31 @@ public class AttributeListTest {
         check(hasMethod(c, "getName"), "method getName");
         check(hasMethod(c, "getType"), "method getType");
         check(hasMethod(c, "getValue"), "method getValue");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.AttributeList a = new org.xml.sax.AttributeList(){
+            public int getLength() { return 3; }
+            public java.lang.String getName(int p0) { return "s"; }
+            public java.lang.String getType(int p0) { return "s"; }
+            public java.lang.String getValue(int p0) { return "s"; }
+            public java.lang.String getType(java.lang.String p0) { return "s"; }
+            public java.lang.String getValue(java.lang.String p0) { return "s"; }
+        };
+        check(a != null, "anon impl of AttributeList");
+        check(a.getLength() == 3, "getLength() returns fixed default");
+        check("s".equals(a.getName(3)), "getName() returns fixed default");
+        check("s".equals(a.getType(3)), "getType() returns fixed default");
+        check("s".equals(a.getValue(3)), "getValue() returns fixed default");
+        check("s".equals(a.getType("s")), "getType() returns fixed default");
+        check("s".equals(a.getValue("s")), "getValue() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

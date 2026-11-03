@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.catalog.CatalogFeatures.Builder conformance: API type verification.
+ * @summary javax.xml.catalog.CatalogFeatures.Builder conformance: white-box structure + black-box behavior.
  * @run main BuilderTest
  */
 
@@ -34,7 +34,9 @@ public class BuilderTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.catalog.CatalogFeatures$Builder");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -45,6 +47,23 @@ public class BuilderTest {
         javax.xml.catalog.CatalogFeatures.Builder b = javax.xml.catalog.CatalogFeatures.builder();
         check(b.with(javax.xml.catalog.CatalogFeatures.Feature.DEFER, "true") == b, "with returns this");
         check(b.build() != null, "build");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.catalog.CatalogFeatures.Builder b = javax.xml.catalog.CatalogFeatures.builder();
+        check(b != null, "builder()");
+        check(b.with(javax.xml.catalog.CatalogFeatures.Feature.RESOLVE, "continue") == b, "with returns this");
+        javax.xml.catalog.CatalogFeatures cf = b.build();
+        check("continue".equals(cf.get(javax.xml.catalog.CatalogFeatures.Feature.RESOLVE)), "build applies with");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

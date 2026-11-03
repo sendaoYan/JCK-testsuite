@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.datatype.Duration conformance: API type verification.
+ * @summary javax.xml.datatype.Duration conformance: white-box structure + black-box behavior.
  * @run main DurationTest
  */
 
@@ -34,7 +34,9 @@ public class DurationTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.datatype.Duration");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -73,6 +75,39 @@ public class DurationTest {
         check(d.getSeconds() == 6, "seconds");
         check(d.getSign() == 1, "sign");
         check(d.toString() != null, "toString");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.datatype.DatatypeFactory f = javax.xml.datatype.DatatypeFactory.newInstance();
+        javax.xml.datatype.Duration d = f.newDuration("P1Y2M3DT4H5M6S");
+        check(d.getYears() == 1 && d.getMonths() == 2 && d.getDays() == 3, "date fields");
+        check(d.getHours() == 4 && d.getMinutes() == 5 && d.getSeconds() == 6, "time fields");
+        check(d.isSet(javax.xml.datatype.DatatypeConstants.YEARS), "YEARS set");
+        check(((Number) d.getField(javax.xml.datatype.DatatypeConstants.YEARS)).intValue() == 1, "getField YEARS");
+        check(d.getSign() == 1, "sign positive");
+        javax.xml.datatype.Duration neg = d.negate();
+        check(neg.getSign() == -1 && neg.getYears() == 1, "negate");
+        javax.xml.datatype.Duration two = d.multiply(2);
+        check(two.getYears() == 2 && two.getHours() == 8, "multiply(int)");
+        javax.xml.datatype.Duration sum = d.add(d);
+        check(sum.getYears() == 2 && sum.getSeconds() == 12, "add");
+        javax.xml.datatype.Duration diff = sum.subtract(d);
+        check(diff.getYears() == 1 && diff.getSeconds() == 6, "subtract");
+        check(d.compare(d) == 0, "compare equal");
+        check(d.isLongerThan(neg), "isLongerThan");
+        check(neg.isShorterThan(d), "isShorterThan");
+        check(d.equals(f.newDuration("P1Y2M3DT4H5M6S")), "equals");
+        check(d.hashCode() == f.newDuration("P1Y2M3DT4H5M6S").hashCode(), "hashCode consistent");
+        check(d.getXMLSchemaType().equals(javax.xml.datatype.DatatypeConstants.DURATION), "schema type duration");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

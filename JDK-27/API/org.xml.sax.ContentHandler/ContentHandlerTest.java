@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.ContentHandler conformance: API type verification.
+ * @summary org.xml.sax.ContentHandler conformance: white-box structure + black-box behavior.
  * @run main ContentHandlerTest
  */
 
@@ -34,7 +34,9 @@ public class ContentHandlerTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.ContentHandler");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -51,6 +53,41 @@ public class ContentHandlerTest {
         check(hasMethod(c, "startDocument"), "method startDocument");
         check(hasMethod(c, "startElement"), "method startElement");
         check(hasMethod(c, "startPrefixMapping"), "method startPrefixMapping");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.ContentHandler a = new org.xml.sax.ContentHandler(){
+            public void setDocumentLocator(org.xml.sax.Locator p0) { }
+            public void startDocument() { }
+            public void endDocument() { }
+            public void startPrefixMapping(java.lang.String p0, java.lang.String p1) { }
+            public void endPrefixMapping(java.lang.String p0) { }
+            public void startElement(java.lang.String p0, java.lang.String p1, java.lang.String p2, org.xml.sax.Attributes p3) { }
+            public void endElement(java.lang.String p0, java.lang.String p1, java.lang.String p2) { }
+            public void characters(char[] p0, int p1, int p2) { }
+            public void ignorableWhitespace(char[] p0, int p1, int p2) { }
+            public void processingInstruction(java.lang.String p0, java.lang.String p1) { }
+            public void skippedEntity(java.lang.String p0) { }
+        };
+        check(a != null, "anon impl of ContentHandler");
+        a.setDocumentLocator((org.xml.sax.Locator) null);
+        a.startDocument();
+        a.endDocument();
+        a.startPrefixMapping("s", "s");
+        a.endPrefixMapping("s");
+        a.startElement("s", "s", "s", (org.xml.sax.Attributes) null);
+        a.endElement("s", "s", "s");
+        a.characters((char[]) null, 3, 3);
+        a.ignorableWhitespace((char[]) null, 3, 3);
+        a.processingInstruction("s", "s");
+        a.skippedEntity("s");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

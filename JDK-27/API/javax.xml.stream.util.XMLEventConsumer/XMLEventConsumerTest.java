@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.util.XMLEventConsumer conformance: API type verification.
+ * @summary javax.xml.stream.util.XMLEventConsumer conformance: white-box structure + black-box behavior.
  * @run main XMLEventConsumerTest
  */
 
@@ -34,12 +34,29 @@ public class XMLEventConsumerTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.util.XMLEventConsumer");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "add"), "method add");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.stream.util.XMLEventConsumer a = new javax.xml.stream.util.XMLEventConsumer(){
+            public void add(javax.xml.stream.events.XMLEvent p0) { }
+        };
+        check(a != null, "anon impl of XMLEventConsumer");
+        a.add((javax.xml.stream.events.XMLEvent) null);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

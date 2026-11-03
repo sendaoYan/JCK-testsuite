@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.transform.Result conformance: API type verification.
+ * @summary javax.xml.transform.Result conformance: white-box structure + black-box behavior.
  * @run main ResultTest
  */
 
@@ -34,7 +34,9 @@ public class ResultTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.transform.Result");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -43,6 +45,25 @@ public class ResultTest {
         check(hasMethod(c, "setSystemId"), "method setSystemId");
         check(hasField(c, "PI_DISABLE_OUTPUT_ESCAPING"), "field PI_DISABLE_OUTPUT_ESCAPING");
         check(hasField(c, "PI_ENABLE_OUTPUT_ESCAPING"), "field PI_ENABLE_OUTPUT_ESCAPING");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(javax.xml.transform.Result.PI_DISABLE_OUTPUT_ESCAPING.equals("javax.xml.transform.disable-output-escaping"), "PI_DISABLE_OUTPUT_ESCAPING");
+        check(javax.xml.transform.Result.PI_ENABLE_OUTPUT_ESCAPING.equals("javax.xml.transform.enable-output-escaping"), "PI_ENABLE_OUTPUT_ESCAPING");
+        javax.xml.transform.Result a = new javax.xml.transform.Result(){
+            public void setSystemId(java.lang.String p0) { }
+            public java.lang.String getSystemId() { return "s"; }
+        };
+        check(a != null, "anon impl of Result");
+        a.setSystemId("s");
+        check("s".equals(a.getSystemId()), "getSystemId() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

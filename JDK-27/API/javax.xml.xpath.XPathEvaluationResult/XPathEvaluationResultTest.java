@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.xpath.XPathEvaluationResult conformance: API type verification.
+ * @summary javax.xml.xpath.XPathEvaluationResult conformance: white-box structure + black-box behavior.
  * @run main XPathEvaluationResultTest
  */
 
@@ -34,13 +34,32 @@ public class XPathEvaluationResultTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.xpath.XPathEvaluationResult");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasMethod(c, "type"), "method type");
         check(hasMethod(c, "value"), "method value");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.xpath.XPathEvaluationResult a = new javax.xml.xpath.XPathEvaluationResult(){
+            public javax.xml.xpath.XPathEvaluationResult.XPathResultType type() { return null; }
+            public java.lang.Object value() { return null; }
+        };
+        check(a != null, "anon impl of XPathEvaluationResult");
+        check(a.type() == null, "type() returns fixed default");
+        check(a.value() == null, "value() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.XMLFilter conformance: API type verification.
+ * @summary org.xml.sax.XMLFilter conformance: white-box structure + black-box behavior.
  * @run main XMLFilterTest
  */
 
@@ -34,7 +34,9 @@ public class XMLFilterTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.XMLFilter");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -42,6 +44,51 @@ public class XMLFilterTest {
         check(hasInterface(c, "org.xml.sax.XMLReader"), "interface org.xml.sax.XMLReader");
         check(hasMethod(c, "getParent"), "method getParent");
         check(hasMethod(c, "setParent"), "method setParent");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.XMLFilter a = new org.xml.sax.XMLFilter(){
+            public void setParent(org.xml.sax.XMLReader p0) { }
+            public org.xml.sax.XMLReader getParent() { return null; }
+            public boolean getFeature(java.lang.String p0) { return true; }
+            public void setFeature(java.lang.String p0, boolean p1) { }
+            public java.lang.Object getProperty(java.lang.String p0) { return null; }
+            public void setProperty(java.lang.String p0, java.lang.Object p1) { }
+            public void setEntityResolver(org.xml.sax.EntityResolver p0) { }
+            public org.xml.sax.EntityResolver getEntityResolver() { return null; }
+            public void setDTDHandler(org.xml.sax.DTDHandler p0) { }
+            public org.xml.sax.DTDHandler getDTDHandler() { return null; }
+            public void setContentHandler(org.xml.sax.ContentHandler p0) { }
+            public org.xml.sax.ContentHandler getContentHandler() { return null; }
+            public void setErrorHandler(org.xml.sax.ErrorHandler p0) { }
+            public org.xml.sax.ErrorHandler getErrorHandler() { return null; }
+            public void parse(org.xml.sax.InputSource p0) { }
+            public void parse(java.lang.String p0) { }
+        };
+        check(a != null, "anon impl of XMLFilter");
+        a.setParent((org.xml.sax.XMLReader) null);
+        check(a.getParent() == null, "getParent() returns fixed default");
+        check(a.getFeature("s") == true, "getFeature() returns fixed default");
+        a.setFeature("s", true);
+        check(a.getProperty("s") == null, "getProperty() returns fixed default");
+        a.setProperty("s", (java.lang.Object) null);
+        a.setEntityResolver((org.xml.sax.EntityResolver) null);
+        check(a.getEntityResolver() == null, "getEntityResolver() returns fixed default");
+        a.setDTDHandler((org.xml.sax.DTDHandler) null);
+        check(a.getDTDHandler() == null, "getDTDHandler() returns fixed default");
+        a.setContentHandler((org.xml.sax.ContentHandler) null);
+        check(a.getContentHandler() == null, "getContentHandler() returns fixed default");
+        a.setErrorHandler((org.xml.sax.ErrorHandler) null);
+        check(a.getErrorHandler() == null, "getErrorHandler() returns fixed default");
+        a.parse((org.xml.sax.InputSource) null);
+        a.parse("s");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

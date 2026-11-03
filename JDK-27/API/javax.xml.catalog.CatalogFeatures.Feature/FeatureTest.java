@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.catalog.CatalogFeatures.Feature conformance: API type verification.
+ * @summary javax.xml.catalog.CatalogFeatures.Feature conformance: white-box structure + black-box behavior.
  * @run main FeatureTest
  */
 
@@ -34,7 +34,9 @@ public class FeatureTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.catalog.CatalogFeatures$Feature");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isEnum(), "is enum");
@@ -57,6 +59,24 @@ public class FeatureTest {
         javax.xml.catalog.CatalogFeatures.Feature f = javax.xml.catalog.CatalogFeatures.Feature.PREFER;
         check(f.getPropertyName() != null, "getPropertyName");
         check("public".equals(f.defaultValue()), "defaultValue");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check("javax.xml.catalog.files".equals(javax.xml.catalog.CatalogFeatures.Feature.FILES.getPropertyName()), "FILES property name");
+        check("javax.xml.catalog.prefer".equals(javax.xml.catalog.CatalogFeatures.Feature.PREFER.getPropertyName()), "PREFER property name");
+        check("javax.xml.catalog.defer".equals(javax.xml.catalog.CatalogFeatures.Feature.DEFER.getPropertyName()), "DEFER property name");
+        check("javax.xml.catalog.resolve".equals(javax.xml.catalog.CatalogFeatures.Feature.RESOLVE.getPropertyName()), "RESOLVE property name");
+        check(javax.xml.catalog.CatalogFeatures.Feature.valueOf("PREFER") == javax.xml.catalog.CatalogFeatures.Feature.PREFER, "valueOf");
+        check(javax.xml.catalog.CatalogFeatures.Feature.values().length == 4, "four features");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

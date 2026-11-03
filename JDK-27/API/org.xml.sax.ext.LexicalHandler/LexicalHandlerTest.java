@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.xml.sax.ext.LexicalHandler conformance: API type verification.
+ * @summary org.xml.sax.ext.LexicalHandler conformance: white-box structure + black-box behavior.
  * @run main LexicalHandlerTest
  */
 
@@ -34,7 +34,9 @@ public class LexicalHandlerTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("org.xml.sax.ext.LexicalHandler");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -46,6 +48,33 @@ public class LexicalHandlerTest {
         check(hasMethod(c, "startCDATA"), "method startCDATA");
         check(hasMethod(c, "startDTD"), "method startDTD");
         check(hasMethod(c, "startEntity"), "method startEntity");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        org.xml.sax.ext.LexicalHandler a = new org.xml.sax.ext.LexicalHandler(){
+            public void startDTD(java.lang.String p0, java.lang.String p1, java.lang.String p2) { }
+            public void endDTD() { }
+            public void startEntity(java.lang.String p0) { }
+            public void endEntity(java.lang.String p0) { }
+            public void startCDATA() { }
+            public void endCDATA() { }
+            public void comment(char[] p0, int p1, int p2) { }
+        };
+        check(a != null, "anon impl of LexicalHandler");
+        a.startDTD("s", "s", "s");
+        a.endDTD();
+        a.startEntity("s");
+        a.endEntity("s");
+        a.startCDATA();
+        a.endCDATA();
+        a.comment((char[]) null, 3, 3);
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

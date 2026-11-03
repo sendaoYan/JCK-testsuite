@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.util.StreamReaderDelegate conformance: API type verification.
+ * @summary javax.xml.stream.util.StreamReaderDelegate conformance: white-box structure + black-box behavior.
  * @run main StreamReaderDelegateTest
  */
 
@@ -34,7 +34,9 @@ public class StreamReaderDelegateTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.util.StreamReaderDelegate");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -86,6 +88,25 @@ public class StreamReaderDelegateTest {
 
         javax.xml.stream.util.StreamReaderDelegate d = new javax.xml.stream.util.StreamReaderDelegate();
         check(d.getParent() == null, "parent null");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.stream.XMLStreamReader base = javax.xml.stream.XMLInputFactory.newFactory().createXMLStreamReader(new java.io.StringReader("<r/>"));
+        javax.xml.stream.util.StreamReaderDelegate d = new javax.xml.stream.util.StreamReaderDelegate(base);
+        check(d.getParent() == base, "parent round-trip");
+        d.close();
+        d.setParent(null); check(d.getParent() == null, "setParent null");
+        javax.xml.stream.util.StreamReaderDelegate d2 = new javax.xml.stream.util.StreamReaderDelegate();
+        check(d2.getParent() == null, "no-arg empty");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

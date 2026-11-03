@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.stream.XMLStreamConstants conformance: API type verification.
+ * @summary javax.xml.stream.XMLStreamConstants conformance: white-box structure + black-box behavior.
  * @run main XMLStreamConstantsTest
  */
 
@@ -34,7 +34,9 @@ public class XMLStreamConstantsTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.stream.XMLStreamConstants");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -54,6 +56,33 @@ public class XMLStreamConstantsTest {
         check(hasField(c, "SPACE"), "field SPACE");
         check(hasField(c, "START_DOCUMENT"), "field START_DOCUMENT");
         check(hasField(c, "START_ELEMENT"), "field START_ELEMENT");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check(javax.xml.stream.XMLStreamConstants.START_ELEMENT == 1, "START_ELEMENT");
+        check(javax.xml.stream.XMLStreamConstants.END_ELEMENT == 2, "END_ELEMENT");
+        check(javax.xml.stream.XMLStreamConstants.PROCESSING_INSTRUCTION == 3, "PROCESSING_INSTRUCTION");
+        check(javax.xml.stream.XMLStreamConstants.CHARACTERS == 4, "CHARACTERS");
+        check(javax.xml.stream.XMLStreamConstants.COMMENT == 5, "COMMENT");
+        check(javax.xml.stream.XMLStreamConstants.SPACE == 6, "SPACE");
+        check(javax.xml.stream.XMLStreamConstants.START_DOCUMENT == 7, "START_DOCUMENT");
+        check(javax.xml.stream.XMLStreamConstants.END_DOCUMENT == 8, "END_DOCUMENT");
+        check(javax.xml.stream.XMLStreamConstants.ENTITY_REFERENCE == 9, "ENTITY_REFERENCE");
+        check(javax.xml.stream.XMLStreamConstants.ATTRIBUTE == 10, "ATTRIBUTE");
+        check(javax.xml.stream.XMLStreamConstants.DTD == 11, "DTD");
+        check(javax.xml.stream.XMLStreamConstants.CDATA == 12, "CDATA");
+        check(javax.xml.stream.XMLStreamConstants.NAMESPACE == 13, "NAMESPACE");
+        check(javax.xml.stream.XMLStreamConstants.NOTATION_DECLARATION == 14, "NOTATION_DECLARATION");
+        check(javax.xml.stream.XMLStreamConstants.ENTITY_DECLARATION == 15, "ENTITY_DECLARATION");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
