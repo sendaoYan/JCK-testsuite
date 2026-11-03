@@ -1,11 +1,22 @@
 /*
  * @test
- * @summary java.util.IdentityHashMap API conformance: reference-identity key semantics
- *          (get/containsKey/remove), size, and distinct-equal keys.
+ * @summary java.util.IdentityHashMap 一致性：白盒（反射结构）+ 黑盒（引用相等语义）。
  * @run main IdentityHashMapTest
+ *
+ * 白盒（结构）：Class.forName 加载、继承 AbstractMap、实现 Map/Cloneable/Serializable、
+ *   put/get/remove/containsKey/视图成员形态。
+ * 黑盒（行为）设计案：
+ * 1. 契约：IdentityHashMap 用引用相等 (==) 比较 key 与 value（get/containsKey/containsValue/
+ *    remove/equals 全用 ==，而非 equals/hashCode）；允许 null key；不保证迭代顺序。
+ * 2. 场景：new IdentityHashMap() -> 放入两个内容相等但引用不同的 String 作为两个 key ->
+ *    get/containsKey/remove 按引用命中 -> containsValue 按引用命中 -> 视图联动 -> equals。
+ * 3. 组合链路：放入 k1/k2（内容同为 "x"）-> 验证两条独立映射 -> 按引用 remove k1 -> 视图迭代。
+ * 4. 不变量：size 区分引用不同但 equals 相等的 key；value 比较也用 ==。
+ * 5. 边界：null key 允许；equals 的 key 但不同引用视为不同条目。
  */
 
 import java.util.IdentityHashMap;
+import java.util.Map;
 
 public class IdentityHashMapTest {
     static int passed;
@@ -15,22 +26,90 @@ public class IdentityHashMapTest {
         passed++;
     }
 
-    static void testIdentitySemantics() {
+    static boolean hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); return true; }
+        catch (NoSuchMethodException e) { return false; }
+    }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.IdentityHashMap");
+        check(!c.isInterface() && !c.isEnum() && !c.isAnnotation(), "concrete class");
+        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "not abstract");
+        check(c.getSuperclass().getName().equals("java.util.AbstractMap"), "extends AbstractMap");
+        check(Map.class.isAssignableFrom(c), "implements Map");
+        check(Cloneable.class.isAssignableFrom(c), "implements Cloneable");
+        check(hasMethod(c, "put", Object.class, Object.class), "put(K,V)");
+        check(hasMethod(c, "get", Object.class), "get(Object)");
+        check(hasMethod(c, "remove", Object.class), "remove(Object)");
+        check(hasMethod(c, "containsKey", Object.class), "containsKey");
+        check(hasMethod(c, "keySet") && hasMethod(c, "entrySet") && hasMethod(c, "values"), "views");
+    }
+
+    static void testKeyIdentity() {
         IdentityHashMap<String, String> m = new IdentityHashMap<>();
         String k1 = new String("x");
         String k2 = new String("x");
         m.put(k1, "v1");
         m.put(k2, "v2");
-        check(m.size() == 2, "two distinct equal strings are two keys");
+        check(m.size() == 2, "two equal-but-distinct keys are two mappings");
         check("v1".equals(m.get(k1)) && "v2".equals(m.get(k2)), "get by identity");
-        check(m.get("x") == null, "get by equal-but-not-identical key returns null");
-        check(m.containsKey(k1) && !m.containsKey(new String("x")), "containsKey identity");
+        check(m.get(new String("x")) == null, "get by equal-but-not-identical returns null");
+        check(m.containsKey(k1) && !m.containsKey(new String("x")), "containsKey by identity");
+        check(m.remove(new String("x")) == null, "remove by equal-but-not-identical no-op");
+        check(m.size() == 2, "size unchanged after non-identical remove");
         m.remove(k1);
-        check(m.size() == 1 && !m.containsKey(k1), "remove by identity");
+        check(m.size() == 1 && !m.containsKey(k1) && m.containsKey(k2), "remove by identity");
     }
 
-    public static void main(String[] args) {
-        testIdentitySemantics();
+    static void testValueIdentity() {
+        IdentityHashMap<String, String> m = new IdentityHashMap<>();
+        String v1 = new String("val");
+        String v2 = new String("val");
+        m.put("a", v1);
+        check(m.containsValue(v1), "containsValue by identity (same ref)");
+        check(!m.containsValue(v2), "containsValue: equal-but-not-identical value not found");
+        check(!m.remove("a", v2), "remove(K,V): value not identical -> false");
+        check(m.remove("a", v1), "remove(K,V): identical value -> true");
+        check(m.isEmpty(), "entry removed");
+    }
+
+    static void testNullKeyAndViews() {
+        IdentityHashMap<String, Integer> m = new IdentityHashMap<>();
+        m.put(null, 1);
+        m.put("k", 2);
+        check(m.get(null) == 1, "null key allowed and retrievable");
+        check(m.containsKey(null), "containsKey null");
+
+        check(m.keySet().size() == 2, "keySet size");
+        check(m.values().size() == 2, "values size");
+        check(m.entrySet().size() == 2, "entrySet size");
+        check(m.keySet().remove(null) && !m.containsKey(null), "keySet.remove reflects");
+        for (Map.Entry<String, Integer> e : m.entrySet()) {
+            check(m.get(e.getKey()).equals(e.getValue()), "entrySet matches map");
+        }
+        m.clear();
+        check(m.isEmpty(), "clear");
+    }
+
+    static void testEqualsUsesIdentity() {
+        String shared = new String("k");
+        IdentityHashMap<String, String> a = new IdentityHashMap<>();
+        a.put(shared, "v");
+        IdentityHashMap<String, String> b = new IdentityHashMap<>();
+        b.put(shared, "v");
+        check(a.equals(b) && a.hashCode() == b.hashCode(), "equals/hashCode by identity");
+
+        IdentityHashMap<String, String> c = new IdentityHashMap<>();
+        c.put(new String("k"), new String("v"));
+        check(!a.equals(c), "!equals when key/value differ by reference");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testKeyIdentity();
+        testValueIdentity();
+        testNullKeyAndViews();
+        testEqualsUsesIdentity();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
