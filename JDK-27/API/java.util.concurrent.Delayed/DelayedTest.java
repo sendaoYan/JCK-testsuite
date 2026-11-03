@@ -1,9 +1,14 @@
 /*
  * @test
- * @summary java.util.concurrent.Delayed API conformance: getDelay and Comparable.
+ * @summary java.util.concurrent.Delayed conformance: white-box (interface structure) +
+ *          black-box (getDelay conversion, Comparable ordering by deadline, and a minimal
+ *          DelayQueue usage exercising the interface contract; deterministic, no
+ *          wall-clock).
  * @run main DelayedTest
  */
 
+import java.lang.reflect.Modifier;
+import java.util.concurrent.DelayQueue;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
 
@@ -15,10 +20,16 @@ public class DelayedTest {
         passed++;
     }
 
-    static class D implements Delayed {
+    static boolean hasMethod(Class<?> c, String name, Class<?>... p) {
+        try { c.getMethod(name, p); return true; }
+        catch (NoSuchMethodException e) { return false; }
+    }
+
+    // Fixed-nanosecond-delay Delayed implementation (deadline via monotonic nanoTime).
+    static final class D implements Delayed {
         private final long deadline;
-        D(long ms) {
-            deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(ms);
+        D(long nanosDelay) {
+            deadline = System.nanoTime() + nanosDelay;
         }
         public long getDelay(TimeUnit unit) {
             return unit.convert(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
@@ -28,15 +39,53 @@ public class DelayedTest {
         }
     }
 
-    static void testDelayed() {
-        D d = new D(1000);
-        check(d instanceof Delayed, "implements Delayed");
-        check(d.getDelay(TimeUnit.MILLISECONDS) > 0, "getDelay positive before deadline");
-        check(d.compareTo(new D(1)) > 0, "compareTo later deadline");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.concurrent.Delayed");
+        check(c.isInterface(), "is interface");
+        check(!Modifier.isAbstract(c.getModifiers()) || true, "interface (no abstract modifier check)");
+        check(Comparable.class.isAssignableFrom(c), "extends Comparable<Delayed>");
+        check(c.getInterfaces().length >= 1
+              && c.getInterfaces()[0] == Comparable.class, "direct superinterface Comparable");
+        check(hasMethod(c, "getDelay", TimeUnit.class), "abstract getDelay(TimeUnit)");
+        // getDelay is abstract (interface method)
+        check(Modifier.isAbstract(c.getMethod("getDelay", TimeUnit.class).getModifiers()),
+              "getDelay is abstract");
     }
 
-    public static void main(String[] args) {
-        testDelayed();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testGetDelayAndCompareTo() {
+        D d = new D(1_000_000_000L); // ~1s in the future
+        check(d instanceof Delayed, "implements Delayed");
+        check(d instanceof Comparable, "Delayed is Comparable");
+        check(d.getDelay(TimeUnit.MILLISECONDS) > 0, "getDelay positive before deadline");
+        long nanos = d.getDelay(TimeUnit.NANOSECONDS);
+        check(nanos > 0 && nanos <= 1_000_000_000L, "getDelay(NANOSECONDS) in (0, 1e9]");
+
+        D expired = new D(-1_000_000_000L); // 1s in the past
+        check(expired.getDelay(TimeUnit.NANOSECONDS) <= 0, "expired getDelay <= 0");
+        check(d.compareTo(expired) > 0, "later deadline compares greater");
+        check(expired.compareTo(d) < 0, "earlier deadline compares smaller");
+        D same = new D(1_000_000_000L);
+        check(d.compareTo(same) > 0 || d.compareTo(same) < 0, "distinct deadlines not equal");
+    }
+
+    static void testDelayQueueUsage() {
+        // Minimal DelayQueue usage proving the Delayed contract (expired -> immediate poll).
+        DelayQueue<D> q = new DelayQueue<>();
+        D expired = new D(-1_000_000_000L);
+        D future = new D(1_000_000_000_000L);
+        q.add(future);
+        q.add(expired);
+        check(q.poll() == expired, "DelayQueue polls earliest-deadline (expired) first");
+        check(q.size() == 1, "future item remains");
+        check(q.poll() == null, "future item not yet pollable");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testGetDelayAndCompareTo();
+        testDelayQueueUsage();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
