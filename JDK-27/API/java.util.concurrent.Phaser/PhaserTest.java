@@ -1,11 +1,12 @@
 /*
  * @test
- * @summary java.util.concurrent.Phaser API conformance: phase advancement with a single
- *          registered party.
+ * @summary java.util.concurrent.Phaser conformance: white-box structure + black-box
+ *          behavior (register/arrive/advance/deregister/termination).
  * @run main PhaserTest
  */
 
 import java.util.concurrent.Phaser;
+import java.util.concurrent.TimeUnit;
 
 public class PhaserTest {
     static int passed;
@@ -15,19 +16,84 @@ public class PhaserTest {
         passed++;
     }
 
-    static void testPhaser() {
+    static Class<?> cls(String n) {
+        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    }
+
+    static void hasMethod(Class<?> c, String n, Class<?>... p) {
+        try { c.getMethod(n, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + n + " on " + c.getName(), e); }
+        passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = cls("java.util.concurrent.Phaser");
+        check(!c.isInterface(), "Phaser is a class");
+        hasMethod(c, "register");
+        hasMethod(c, "bulkRegister", int.class);
+        hasMethod(c, "arrive");
+        hasMethod(c, "arriveAndDeregister");
+        hasMethod(c, "arriveAndAwaitAdvance");
+        hasMethod(c, "awaitAdvance", int.class);
+        hasMethod(c, "getPhase");
+        hasMethod(c, "getRegisteredParties");
+        hasMethod(c, "getArrivedParties");
+        hasMethod(c, "getUnarrivedParties");
+        hasMethod(c, "forceTermination");
+        hasMethod(c, "isTerminated");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testSingleParty() {
         Phaser ph = new Phaser(1);
         check(ph.getRegisteredParties() == 1, "one registered party");
         check(ph.getPhase() == 0, "initial phase 0");
-        // arriveAndAwaitAdvance returns the phase number advanced TO, not the
-        // phase the party arrived on.
+        check(ph.getArrivedParties() == 0, "no arrived parties");
+        check(ph.getUnarrivedParties() == 1, "one unarrived party");
+        // arriveAndAwaitAdvance returns the phase advanced TO
         check(ph.arriveAndAwaitAdvance() == 1, "arriveAndAwaitAdvance advances to 1");
         check(ph.getPhase() == 1, "phase advanced to 1");
         check(ph.arrive() == 1, "arrive returns current phase 1");
     }
 
-    public static void main(String[] args) {
-        testPhaser();
+    static void testRegisterDeregister() {
+        Phaser ph = new Phaser();
+        check(ph.getRegisteredParties() == 0, "zero parties initially");
+        check(ph.register() == 0, "register returns current phase");
+        check(ph.getRegisteredParties() == 1, "one party after register");
+        ph.bulkRegister(2);
+        check(ph.getRegisteredParties() == 3, "three parties after bulkRegister(2)");
+        check(ph.arriveAndDeregister() == 0, "arriveAndDeregister returns current phase");
+        check(ph.getRegisteredParties() == 2, "deregister removes one party");
+        ph.forceTermination();
+        check(ph.isTerminated(), "forceTermination terminates the phaser");
+    }
+
+    static void testTerminationOnZeroParties() {
+        Phaser one = new Phaser(1);
+        check(one.arriveAndDeregister() == 0, "single party deregisters");
+        check(one.isTerminated(), "terminates when parties reach zero (default onAdvance)");
+    }
+
+    static void testTwoThreadAdvance() throws Exception {
+        Phaser ph = new Phaser(1);
+        ph.register(); // two registered parties now
+        final int[] workerResult = new int[1];
+        Thread t = new Thread(() -> workerResult[0] = ph.arriveAndAwaitAdvance());
+        t.start();
+        int mainResult = ph.arriveAndAwaitAdvance();
+        t.join(5000);
+        check(!t.isAlive(), "worker finished");
+        check(ph.getPhase() == 1, "phase advanced to 1");
+        check(mainResult == 1 && workerResult[0] == 1, "both parties advance to phase 1");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testSingleParty();
+        testRegisterDeregister();
+        testTerminationOnZeroParties();
+        testTwoThreadAdvance();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
