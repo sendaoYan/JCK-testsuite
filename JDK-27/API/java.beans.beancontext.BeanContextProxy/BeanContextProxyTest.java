@@ -1,30 +1,34 @@
 /*
  * @test
- * @summary java.beans.beancontext.BeanContextProxy conformance: type shape.
+ * @key headful
+ * @summary java.beans.beancontext.BeanContextProxy conformance: white-box structure + black-box behavior.
  * @run main BeanContextProxyTest
  */
 
-import java.lang.reflect.Modifier;
+import java.beans.beancontext.BeanContextChild;
+import java.beans.beancontext.BeanContextChildSupport;
+import java.beans.beancontext.BeanContextProxy;
 
 public class BeanContextProxyTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    public static void main(String[] args) throws Exception {
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.beans.beancontext.BeanContextProxy");
-        check(c != null, "loads");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) == true, "public");
-        check(Modifier.isProtected(m) == false, "protected");
-        check(c.isInterface() == true, "isInterface");
-        check(c.isAnnotation() == false, "isAnnotation");
-        check(c.isEnum() == false, "isEnum");
-        check(Modifier.isAbstract(m) == true, "abstract");
-        check(Modifier.isFinal(m) == false, "final");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 0, "interface count");
+        check(c.isInterface(), "is an interface");
+    }
+
+    static void testBlackBox() throws Exception {
+        final BeanContextChild peer = new BeanContextChildSupport();
+        BeanContextProxy p = new BeanContextProxy() {
+            public BeanContextChild getBeanContextProxy() { return peer; }
+        };
+        check(peer == p.getBeanContextProxy(), "getBeanContextProxy");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

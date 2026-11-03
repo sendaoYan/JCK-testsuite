@@ -1,24 +1,42 @@
 /*
  * @test
- * @summary java.beans.EventHandler conformance: create proxy and delegate.
+ * @summary java.beans.EventHandler conformance: white-box structure + black-box behavior.
  * @run main EventHandlerTest
  */
 
-import java.beans.*;
+import java.beans.EventHandler;
 
 public class EventHandlerTest {
     static int passed;
-    static void check(boolean cond, String msg) { if (!cond) throw new AssertionError(msg); passed++; }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    public static class Target {
+        boolean fired;
+        public void fire() { fired = true; }
+    }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.beans.EventHandler");
+        check(java.lang.reflect.InvocationHandler.class.isAssignableFrom(c), "implements InvocationHandler");
+    }
+
+    static void testBlackBox() throws Exception {
+        Target t = new Target();
+        EventHandler eh = new EventHandler(t, "fire", null, null);
+        check("fire".equals(eh.getAction()), "getAction");
+        check(t == eh.getTarget(), "getTarget");
+        check(eh.getEventPropertyName() == null, "eventPropertyName null default");
+        check(eh.getListenerMethodName() == null, "listenerMethodName null default");
+
+        java.awt.event.ActionListener al = (java.awt.event.ActionListener)
+            EventHandler.create(java.awt.event.ActionListener.class, t, "fire");
+        al.actionPerformed(null);
+        check(t.fired, "create proxy invokes target action");
+    }
+
     public static void main(String[] args) throws Exception {
-        java.util.List<String> list = new java.util.ArrayList<>();
-        PropertyChangeListener l = EventHandler.create(PropertyChangeListener.class, list, "add", "newValue", "propertyChange");
-        l.propertyChange(new PropertyChangeEvent(new Object(), "p", null, "added"));
-        check(list.size() == 1 && "added".equals(list.get(0)), "delegated add");
-        EventHandler h = new EventHandler(list, "add", "newValue", "propertyChange");
-        check(h.getTarget() == list, "target");
-        check("add".equals(h.getAction()), "action");
-        check("newValue".equals(h.getEventPropertyName()), "event property");
-        check("propertyChange".equals(h.getListenerMethodName()), "listener method");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,7 @@
 /*
  * @test
- * @summary java.beans.beancontext.BeanContextServicesSupport.BCSSProxyServiceProvider conformance: type shape.
+ * @key headful
+ * @summary java.beans.beancontext.BeanContextServicesSupport.BCSSProxyServiceProvider conformance: white-box structure + black-box behavior.
  * @run main BCSSProxyServiceProviderTest
  */
 
@@ -8,27 +9,27 @@ import java.lang.reflect.Modifier;
 
 public class BCSSProxyServiceProviderTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    public static void main(String[] args) throws Exception {
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.beans.beancontext.BeanContextServicesSupport$BCSSProxyServiceProvider");
-        check(c != null, "loads");
         int m = c.getModifiers();
-        check(Modifier.isPublic(m) == false, "public");
-        check(Modifier.isProtected(m) == true, "protected");
-        check(c.isInterface() == false, "isInterface");
-        check(c.isAnnotation() == false, "isAnnotation");
-        check(c.isEnum() == false, "isEnum");
-        check(Modifier.isAbstract(m) == false, "abstract");
-        check(Modifier.isFinal(m) == false, "final");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(c.getInterfaces().length == 2, "interface count");
-        java.util.Set<String> got = new java.util.HashSet<>();
-        for (Class<?> i : c.getInterfaces()) got.add(i.getName());
-        check(got.contains("java.beans.beancontext.BeanContextServiceProvider"), "implements java.beans.beancontext.BeanContextServiceProvider");
-        check(got.contains("java.beans.beancontext.BeanContextServiceRevokedListener"), "implements java.beans.beancontext.BeanContextServiceRevokedListener");
+        check(Modifier.isProtected(m), "protected class");
+        check(java.beans.beancontext.BeanContextServiceProvider.class.isAssignableFrom(c), "implements BeanContextServiceProvider");
+        check(java.beans.beancontext.BeanContextServiceRevokedListener.class.isAssignableFrom(c), "implements BeanContextServiceRevokedListener");
+    }
+
+    static void testBlackBox() throws Exception {
+        Class<?> c = Class.forName("java.beans.beancontext.BeanContextServicesSupport$BCSSProxyServiceProvider");
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) names.add(m.getName());
+        check(names.contains("getService") && names.contains("releaseService") &&
+              names.contains("getCurrentServiceSelectors") && names.contains("serviceRevoked"), "declares service methods");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

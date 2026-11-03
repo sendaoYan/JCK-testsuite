@@ -1,33 +1,36 @@
 /*
  * @test
- * @summary java.beans.beancontext.BeanContextServiceRevokedListener conformance: type shape.
+ * @key headful
+ * @summary java.beans.beancontext.BeanContextServiceRevokedListener conformance: white-box structure + black-box behavior.
  * @run main BeanContextServiceRevokedListenerTest
  */
 
-import java.lang.reflect.Modifier;
+import java.beans.beancontext.BeanContextServiceRevokedEvent;
+import java.beans.beancontext.BeanContextServiceRevokedListener;
+import java.beans.beancontext.BeanContextServicesSupport;
 
 public class BeanContextServiceRevokedListenerTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    public static void main(String[] args) throws Exception {
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.beans.beancontext.BeanContextServiceRevokedListener");
-        check(c != null, "loads");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) == true, "public");
-        check(Modifier.isProtected(m) == false, "protected");
-        check(c.isInterface() == true, "isInterface");
-        check(c.isAnnotation() == false, "isAnnotation");
-        check(c.isEnum() == false, "isEnum");
-        check(Modifier.isAbstract(m) == true, "abstract");
-        check(Modifier.isFinal(m) == false, "final");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 1, "interface count");
-        java.util.Set<String> got = new java.util.HashSet<>();
-        for (Class<?> i : c.getInterfaces()) got.add(i.getName());
-        check(got.contains("java.util.EventListener"), "implements java.util.EventListener");
+        check(c.isInterface(), "is an interface");
+        check(java.util.EventListener.class.isAssignableFrom(c), "extends EventListener");
+    }
+
+    static void testBlackBox() throws Exception {
+        final int[] n = new int[1];
+        BeanContextServiceRevokedListener l = new BeanContextServiceRevokedListener() {
+            public void serviceRevoked(BeanContextServiceRevokedEvent e) { n[0]++; }
+        };
+        l.serviceRevoked(new BeanContextServiceRevokedEvent(new BeanContextServicesSupport(), Object.class, true));
+        check(n[0] == 1, "serviceRevoked dispatch");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

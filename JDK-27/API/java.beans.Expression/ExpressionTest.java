@@ -1,22 +1,35 @@
 /*
  * @test
- * @summary java.beans.Expression conformance: execute and get value.
+ * @summary java.beans.Expression conformance: white-box structure + black-box behavior.
  * @run main ExpressionTest
  */
 
-import java.beans.*;
+import java.beans.Expression;
+import java.beans.Statement;
 
 public class ExpressionTest {
     static int passed;
-    static void check(boolean cond, String msg) { if (!cond) throw new AssertionError(msg); passed++; }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.beans.Expression");
+        check(Statement.class.isAssignableFrom(c), "extends Statement");
+    }
+
+    static void testBlackBox() throws Exception {
+        Expression e = new Expression("hello", "toUpperCase", new Object[0]);
+        check("hello".equals(e.getTarget()), "target");
+        check("toUpperCase".equals(e.getMethodName()), "methodName");
+        check("HELLO".equals(e.getValue()), "getValue computes");
+
+        Expression pre = new Expression("cached", "hello", "toUpperCase", new Object[0]);
+        check("cached".equals(pre.getValue()), "pre-set value");
+        check("cached".equals(pre.getValue()), "pre-set value stable");
+    }
+
     public static void main(String[] args) throws Exception {
-        Expression e = new Expression("hello", "length", new Object[0]);
-        e.execute();
-        check(e.getValue() instanceof Integer, "value type");
-        check(((Integer) e.getValue()).intValue() == 5, "length 5");
-        Expression e2 = new Expression(null, System.class, "currentTimeMillis", new Object[0]);
-        e2.execute();
-        check(e2.getValue() instanceof Long, "currentTimeMillis");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

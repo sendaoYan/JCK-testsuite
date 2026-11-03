@@ -1,33 +1,40 @@
 /*
  * @test
- * @summary java.beans.VetoableChangeListenerProxy conformance: type shape.
+ * @summary java.beans.VetoableChangeListenerProxy conformance: white-box structure + black-box behavior.
  * @run main VetoableChangeListenerProxyTest
  */
 
-import java.lang.reflect.Modifier;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyVetoException;
+import java.beans.VetoableChangeListener;
+import java.beans.VetoableChangeListenerProxy;
+import java.util.EventListenerProxy;
 
 public class VetoableChangeListenerProxyTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    public static void main(String[] args) throws Exception {
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.beans.VetoableChangeListenerProxy");
-        check(c != null, "loads");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) == true, "public");
-        check(Modifier.isProtected(m) == false, "protected");
-        check(c.isInterface() == false, "isInterface");
-        check(c.isAnnotation() == false, "isAnnotation");
-        check(c.isEnum() == false, "isEnum");
-        check(Modifier.isAbstract(m) == false, "abstract");
-        check(Modifier.isFinal(m) == false, "final");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.util.EventListenerProxy"), "superclass");
-        check(c.getInterfaces().length == 1, "interface count");
-        java.util.Set<String> got = new java.util.HashSet<>();
-        for (Class<?> i : c.getInterfaces()) got.add(i.getName());
-        check(got.contains("java.beans.VetoableChangeListener"), "implements java.beans.VetoableChangeListener");
+        check(EventListenerProxy.class.isAssignableFrom(c), "extends EventListenerProxy");
+        check(VetoableChangeListener.class.isAssignableFrom(c), "implements VetoableChangeListener");
+    }
+
+    static void testBlackBox() throws Exception {
+        final String[] got = new String[1];
+        VetoableChangeListener inner = new VetoableChangeListener() {
+            public void vetoableChange(PropertyChangeEvent e) { got[0] = e.getPropertyName(); }
+        };
+        VetoableChangeListenerProxy proxy = new VetoableChangeListenerProxy("foo", inner);
+        check("foo".equals(proxy.getPropertyName()), "getPropertyName");
+        check(inner == proxy.getListener(), "getListener");
+        proxy.vetoableChange(new PropertyChangeEvent(new Object(), "bar", null, null));
+        check("bar".equals(got[0]), "delegates vetoableChange");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

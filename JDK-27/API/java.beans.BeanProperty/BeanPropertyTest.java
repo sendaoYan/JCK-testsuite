@@ -1,33 +1,45 @@
 /*
  * @test
- * @summary java.beans.BeanProperty conformance: type shape.
+ * @summary java.beans.BeanProperty conformance: white-box structure + black-box behavior.
  * @run main BeanPropertyTest
  */
 
-import java.lang.reflect.Modifier;
+import java.beans.BeanProperty;
 
 public class BeanPropertyTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    public static class Bean {
+        @BeanProperty
+        public int getFoo() { return 1; }
+        @BeanProperty(bound = false, expert = true, description = "d")
+        public int getBar() { return 2; }
     }
-    public static void main(String[] args) throws Exception {
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.beans.BeanProperty");
-        check(c != null, "loads");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) == true, "public");
-        check(Modifier.isProtected(m) == false, "protected");
-        check(c.isInterface() == true, "isInterface");
-        check(c.isAnnotation() == true, "isAnnotation");
-        check(c.isEnum() == false, "isEnum");
-        check(Modifier.isAbstract(m) == true, "abstract");
-        check(Modifier.isFinal(m) == false, "final");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 1, "interface count");
-        java.util.Set<String> got = new java.util.HashSet<>();
-        for (Class<?> i : c.getInterfaces()) got.add(i.getName());
-        check(got.contains("java.lang.annotation.Annotation"), "implements java.lang.annotation.Annotation");
+        check(c.isAnnotation(), "is an annotation");
+        check(c.getMethod("bound").getReturnType() == boolean.class, "bound returns boolean");
+    }
+
+    static void testBlackBox() throws Exception {
+        BeanProperty foo = Bean.class.getMethod("getFoo").getAnnotation(BeanProperty.class);
+        check(foo != null, "foo annotation present");
+        check(foo.bound(), "bound default true");
+        check(!foo.expert() && !foo.hidden() && !foo.preferred() && !foo.required() && !foo.visualUpdate(), "other bool defaults false");
+        check("".equals(foo.description()), "description default empty");
+        check(foo.enumerationValues().length == 0, "enumerationValues default empty");
+
+        BeanProperty bar = Bean.class.getMethod("getBar").getAnnotation(BeanProperty.class);
+        check(!bar.bound(), "bound false");
+        check(bar.expert(), "expert true");
+        check("d".equals(bar.description()), "description d");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

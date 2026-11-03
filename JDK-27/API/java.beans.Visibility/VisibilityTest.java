@@ -1,30 +1,38 @@
 /*
  * @test
- * @summary java.beans.Visibility conformance: type shape.
+ * @summary java.beans.Visibility conformance: white-box structure + black-box behavior.
  * @run main VisibilityTest
  */
 
-import java.lang.reflect.Modifier;
+import java.beans.Visibility;
 
 public class VisibilityTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    public static void main(String[] args) throws Exception {
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.beans.Visibility");
-        check(c != null, "loads");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) == true, "public");
-        check(Modifier.isProtected(m) == false, "protected");
-        check(c.isInterface() == true, "isInterface");
-        check(c.isAnnotation() == false, "isAnnotation");
-        check(c.isEnum() == false, "isEnum");
-        check(Modifier.isAbstract(m) == true, "abstract");
-        check(Modifier.isFinal(m) == false, "final");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 0, "interface count");
+        check(c.isInterface(), "is an interface");
+    }
+
+    static void testBlackBox() throws Exception {
+        final boolean[] state = new boolean[]{true};
+        Visibility v = new Visibility() {
+            public boolean needsGui() { return state[0]; }
+            public void dontUseGui() { state[0] = false; }
+            public void okToUseGui() { state[0] = true; }
+            public boolean avoidingGui() { return !state[0]; }
+        };
+        check(v.needsGui(), "needsGui initial");
+        v.dontUseGui();
+        check(v.avoidingGui(), "avoidingGui after dontUseGui");
+        v.okToUseGui();
+        check(v.needsGui(), "needsGui after okToUseGui");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

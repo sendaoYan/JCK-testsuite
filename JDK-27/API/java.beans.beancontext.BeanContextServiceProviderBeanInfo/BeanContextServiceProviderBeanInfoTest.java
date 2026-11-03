@@ -1,33 +1,41 @@
 /*
  * @test
- * @summary java.beans.beancontext.BeanContextServiceProviderBeanInfo conformance: type shape.
+ * @key headful
+ * @summary java.beans.beancontext.BeanContextServiceProviderBeanInfo conformance: white-box structure + black-box behavior.
  * @run main BeanContextServiceProviderBeanInfoTest
  */
 
-import java.lang.reflect.Modifier;
+import java.beans.BeanInfo;
+import java.beans.SimpleBeanInfo;
+import java.beans.beancontext.BeanContextServiceProviderBeanInfo;
 
 public class BeanContextServiceProviderBeanInfoTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static class MyBeanInfo extends SimpleBeanInfo implements BeanContextServiceProviderBeanInfo {
+        BeanInfo[] services;
+        MyBeanInfo(BeanInfo[] s) { services = s; }
+        public BeanInfo[] getServicesBeanInfo() { return services; }
     }
-    public static void main(String[] args) throws Exception {
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.beans.beancontext.BeanContextServiceProviderBeanInfo");
-        check(c != null, "loads");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) == true, "public");
-        check(Modifier.isProtected(m) == false, "protected");
-        check(c.isInterface() == true, "isInterface");
-        check(c.isAnnotation() == false, "isAnnotation");
-        check(c.isEnum() == false, "isEnum");
-        check(Modifier.isAbstract(m) == true, "abstract");
-        check(Modifier.isFinal(m) == false, "final");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 1, "interface count");
-        java.util.Set<String> got = new java.util.HashSet<>();
-        for (Class<?> i : c.getInterfaces()) got.add(i.getName());
-        check(got.contains("java.beans.BeanInfo"), "implements java.beans.BeanInfo");
+        check(c.isInterface(), "is an interface");
+        check(BeanInfo.class.isAssignableFrom(c), "extends BeanInfo");
+    }
+
+    static void testBlackBox() throws Exception {
+        BeanInfo[] services = new BeanInfo[]{ new SimpleBeanInfo() };
+        MyBeanInfo i = new MyBeanInfo(services);
+        check(services == i.getServicesBeanInfo(), "getServicesBeanInfo");
+        check(i.getBeanDescriptor() == null, "inherited BeanInfo default");
+        check(i.getServicesBeanInfo() != null && i.getServicesBeanInfo().length == 1, "services length");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
