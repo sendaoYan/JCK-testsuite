@@ -1,27 +1,36 @@
 /*
  * @test
- * @summary java.net.NoRouteToHostException conformance: API type verification.
+ * @summary java.net.NoRouteToHostException conformance: white-box structure + black-box behavior.
  * @run main NoRouteToHostExceptionTest
  */
 
 import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
+import java.net.*;
 
 public class NoRouteToHostExceptionTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.net.NoRouteToHostException");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(SocketException.class.isAssignableFrom(c), "extends SocketException");
+        check(c.getConstructor(String.class) != null, "ctor(String)");
+        check(c.getConstructor() != null, "ctor()");
+    }
+
+    static void testBlackBox() throws Exception {
+        NoRouteToHostException e = new NoRouteToHostException("no route");
+        check(e.getMessage().equals("no route"), "message");
+        check(e instanceof SocketException, "instanceof SocketException");
+        try { throw e; } catch (SocketException se) { passed++; }
+        NoRouteToHostException e2 = new NoRouteToHostException();
+        check(e2.getMessage() == null, "no-arg message null");
     }
 
     public static void main(String[] args) throws Exception {
-        java.net.NoRouteToHostException e = new java.net.NoRouteToHostException("msg");
-check("msg".equals(e.getMessage()), "message");
-check(e instanceof java.net.SocketException, "extends java.net.SocketException");
-check(e instanceof Exception, "is Exception");
-java.net.NoRouteToHostException e2 = new java.net.NoRouteToHostException();
-check(e2.getMessage() == null, "null message");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
