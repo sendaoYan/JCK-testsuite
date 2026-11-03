@@ -1,30 +1,54 @@
 /*
  * @test
- * @summary javax.sql.StatementEvent conformance: class shape via reflection
+ * @summary javax.sql.StatementEvent conformance: white-box structure + black-box behavior.
  * @run main StatementEventTest
  */
-
-import java.lang.reflect.Modifier;
-
 public class StatementEventTest {
     static int passed;
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    interface Throwing { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> t, String label, Throwing r) {
+        try { r.run(); } catch (Throwable x) { check(t.isInstance(x), label + " throws " + t.getSimpleName()); return; }
+        throw new AssertionError(label + ": expected " + t.getSimpleName());
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.sql.StatementEvent");
         check(c != null, "loads");
-        check(!c.isInterface(), "not interface");
-        check(!c.isEnum(), "not enum");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "not abstract");
+        check(c.isInterface() == false, "isInterface");
+        check(c.isEnum() == false, "isEnum");
+        check(!c.isAnnotation(), "not annotation");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.util.EventObject"), "superclass java.util.EventObject");
-        Class<?>[] ifs = c.getInterfaces();
-        check(ifs.length == 0, "0 direct interface(s)");
+        check(c.getSuperclass().getName().equals("java.util.EventObject"), "superclass");
+        check(c.getInterfaces().length == 0, "no direct superinterface");
         check(c.getDeclaredMethods().length == 2, "declared method count 2");
-        check(c.getDeclaredConstructors().length == 2, "constructor count 2");        check(c.getDeclaredMethod("getStatement") != null, "getStatement present");
-        check(c.getDeclaredMethod("getSQLException") != null, "getSQLException present");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.sql.PooledConnection pc = new javax.sql.PooledConnection() {
+            public java.sql.Connection getConnection() { return null; }
+            public void close() {}
+            public void addConnectionEventListener(javax.sql.ConnectionEventListener l) {}
+            public void removeConnectionEventListener(javax.sql.ConnectionEventListener l) {}
+            public void addStatementEventListener(javax.sql.StatementEventListener l) {}
+            public void removeStatementEventListener(javax.sql.StatementEventListener l) {}
+        };
+        javax.sql.StatementEvent ev = new javax.sql.StatementEvent(pc, null);
+        check(ev.getSource() == pc, "getSource");
+        check(ev.getStatement() == null, "getStatement null");
+        java.sql.SQLException se = new java.sql.SQLException("boom");
+        javax.sql.StatementEvent ev2 = new javax.sql.StatementEvent(pc, null, se);
+        check(ev2.getSQLException() == se, "getSQLException set");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

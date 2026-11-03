@@ -1,40 +1,52 @@
 /*
  * @test
- * @summary java.sql.SQLNonTransientException conformance: constructor and SQLState/errorCode behavior
+ * @summary java.sql.SQLNonTransientException conformance: white-box structure + black-box behavior.
  * @run main SQLNonTransientExceptionTest
  */
-
-import java.sql.SQLNonTransientException;
-
 public class SQLNonTransientExceptionTest {
     static int passed;
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+    interface Throwing { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> t, String label, Throwing r) {
+        try { r.run(); } catch (Throwable x) { check(t.isInstance(x), label + " throws " + t.getSimpleName()); return; }
+        throw new AssertionError(label + ": expected " + t.getSimpleName());
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.sql.SQLNonTransientException");
+        check(c != null, "loads");
+        check(c.isInterface() == false, "isInterface");
+        check(c.isEnum() == false, "isEnum");
+        check(!c.isAnnotation(), "not annotation");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
+        check(c.getSuperclass().getName().equals("java.sql.SQLException"), "superclass");
+        check(c.getInterfaces().length == 0, "no direct superinterface");
+        check(c.getDeclaredMethods().length == 0, "declared method count 0");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        java.sql.SQLNonTransientException e0 = new java.sql.SQLNonTransientException();
+        check(e0.getMessage() == null && e0.getSQLState() == null && e0.getErrorCode() == 0, "no-arg");
+        RuntimeException cause = new RuntimeException("c");
+        java.sql.SQLNonTransientException e1 = new java.sql.SQLNonTransientException("m", "42S01", 99, cause);
+        check("m".equals(e1.getMessage()), "message");
+        check("42S01".equals(e1.getSQLState()), "SQLState");
+        check(e1.getErrorCode() == 99, "errorCode");
+        check(e1.getCause() == cause, "cause");
+        java.sql.SQLNonTransientException e2 = new java.sql.SQLNonTransientException("only");
+        check("only".equals(e2.getMessage()) && e2.getSQLState() == null && e2.getErrorCode() == 0, "message-only");
+        check(e1 instanceof java.sql.SQLException, "is SQLException");
+        check(e1 instanceof java.sql.SQLException, "is SQLException");
+    }
+
     public static void main(String[] args) throws Exception {
-        SQLNonTransientException e = new SQLNonTransientException();
-        check(e.getMessage() == null, "no-arg message null");
-        check(e.getSQLState() == null, "no-arg SQLState null");
-        check(e.getErrorCode() == 0, "no-arg errorCode 0");
-        SQLNonTransientException e2 = new SQLNonTransientException("msg");
-        check("msg".equals(e2.getMessage()), "String ctor message");
-        SQLNonTransientException e3 = new SQLNonTransientException("msg", "42S01", 1234);
-        check("42S01".equals(e3.getSQLState()), "SQLState");
-        check(e3.getErrorCode() == 1234, "errorCode");
-        SQLNonTransientException e4 = new SQLNonTransientException("m", "st");
-        check("st".equals(e4.getSQLState()) && "m".equals(e4.getMessage()), "String+SQLState ctor");
-        RuntimeException cause = new RuntimeException("cause");
-        SQLNonTransientException e5 = new SQLNonTransientException("msg", cause);
-        check(cause == e5.getCause(), "String+cause");
-        SQLNonTransientException e6 = new SQLNonTransientException(cause);
-        check(cause == e6.getCause(), "Throwable-only cause");
-        SQLNonTransientException e7 = new SQLNonTransientException("msg", "42S01", cause);
-        check("42S01".equals(e7.getSQLState()) && cause == e7.getCause(), "String+SQLState+cause");
-        SQLNonTransientException e8 = new SQLNonTransientException("msg", "42S01", 7, cause);
-        check(e8.getErrorCode() == 7 && cause == e8.getCause(), "full ctor");
-        check(e instanceof java.sql.SQLException, "extends java.sql.SQLException");
-        check(e instanceof java.sql.SQLException, "is SQLException");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

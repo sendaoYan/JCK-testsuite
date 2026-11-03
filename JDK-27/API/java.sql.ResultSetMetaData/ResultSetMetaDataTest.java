@@ -1,34 +1,45 @@
 /*
  * @test
- * @summary java.sql.ResultSetMetaData conformance: interface shape, supertypes and constants
+ * @summary java.sql.ResultSetMetaData conformance: white-box structure + black-box behavior.
  * @run main ResultSetMetaDataTest
  */
-
-import java.lang.reflect.Modifier;
-
 public class ResultSetMetaDataTest {
     static int passed;
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    interface Throwing { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> t, String label, Throwing r) {
+        try { r.run(); } catch (Throwable x) { check(t.isInstance(x), label + " throws " + t.getSimpleName()); return; }
+        throw new AssertionError(label + ": expected " + t.getSimpleName());
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.sql.ResultSetMetaData");
         check(c != null, "loads");
-        check(c.isInterface(), "is interface");
-        check(!c.isEnum(), "not enum");
+        check(c.isInterface() == true, "isInterface");
+        check(c.isEnum() == false, "isEnum");
         check(!c.isAnnotation(), "not annotation");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "abstract");
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("java.sql.Wrapper"), "superinterface 0");
         check(c.getDeclaredMethods().length == 21, "declared method count 21");
-        java.lang.reflect.Field f_columnNoNulls = c.getField("columnNoNulls");
-        check(f_columnNoNulls.getInt(null) == 0, "columnNoNulls == 0");
-        java.lang.reflect.Field f_columnNullable = c.getField("columnNullable");
-        check(f_columnNullable.getInt(null) == 1, "columnNullable == 1");
-        java.lang.reflect.Field f_columnNullableUnknown = c.getField("columnNullableUnknown");
-        check(f_columnNullableUnknown.getInt(null) == 2, "columnNullableUnknown == 2");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+check(java.sql.ResultSetMetaData.columnNoNulls == 0, "columnNoNulls");
+check(java.sql.ResultSetMetaData.columnNullable == 1, "columnNullable");
+check(java.sql.ResultSetMetaData.columnNullableUnknown == 2, "columnNullableUnknown");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

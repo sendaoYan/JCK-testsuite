@@ -1,42 +1,49 @@
 /*
  * @test
- * @summary java.sql.ParameterMetaData conformance: interface shape, supertypes and constants
+ * @summary java.sql.ParameterMetaData conformance: white-box structure + black-box behavior.
  * @run main ParameterMetaDataTest
  */
-
-import java.lang.reflect.Modifier;
-
 public class ParameterMetaDataTest {
     static int passed;
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    interface Throwing { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> t, String label, Throwing r) {
+        try { r.run(); } catch (Throwable x) { check(t.isInstance(x), label + " throws " + t.getSimpleName()); return; }
+        throw new AssertionError(label + ": expected " + t.getSimpleName());
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.sql.ParameterMetaData");
         check(c != null, "loads");
-        check(c.isInterface(), "is interface");
-        check(!c.isEnum(), "not enum");
+        check(c.isInterface() == true, "isInterface");
+        check(c.isEnum() == false, "isEnum");
         check(!c.isAnnotation(), "not annotation");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "abstract");
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 1, "1 direct superinterface(s)");
         check(ifs[0].getName().equals("java.sql.Wrapper"), "superinterface 0");
         check(c.getDeclaredMethods().length == 9, "declared method count 9");
-        java.lang.reflect.Field f_parameterNoNulls = c.getField("parameterNoNulls");
-        check(f_parameterNoNulls.getInt(null) == 0, "parameterNoNulls == 0");
-        java.lang.reflect.Field f_parameterNullable = c.getField("parameterNullable");
-        check(f_parameterNullable.getInt(null) == 1, "parameterNullable == 1");
-        java.lang.reflect.Field f_parameterNullableUnknown = c.getField("parameterNullableUnknown");
-        check(f_parameterNullableUnknown.getInt(null) == 2, "parameterNullableUnknown == 2");
-        java.lang.reflect.Field f_parameterModeUnknown = c.getField("parameterModeUnknown");
-        check(f_parameterModeUnknown.getInt(null) == 0, "parameterModeUnknown == 0");
-        java.lang.reflect.Field f_parameterModeIn = c.getField("parameterModeIn");
-        check(f_parameterModeIn.getInt(null) == 1, "parameterModeIn == 1");
-        java.lang.reflect.Field f_parameterModeInOut = c.getField("parameterModeInOut");
-        check(f_parameterModeInOut.getInt(null) == 2, "parameterModeInOut == 2");
-        java.lang.reflect.Field f_parameterModeOut = c.getField("parameterModeOut");
-        check(f_parameterModeOut.getInt(null) == 4, "parameterModeOut == 4");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+check(java.sql.ParameterMetaData.parameterNoNulls == 0, "parameterNoNulls");
+check(java.sql.ParameterMetaData.parameterNullable == 1, "parameterNullable");
+check(java.sql.ParameterMetaData.parameterNullableUnknown == 2, "parameterNullableUnknown");
+check(java.sql.ParameterMetaData.parameterModeUnknown == 0, "parameterModeUnknown");
+check(java.sql.ParameterMetaData.parameterModeIn == 1, "parameterModeIn");
+check(java.sql.ParameterMetaData.parameterModeInOut == 2, "parameterModeInOut");
+check(java.sql.ParameterMetaData.parameterModeOut == 4, "parameterModeOut");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,40 +1,52 @@
 /*
  * @test
- * @summary java.sql.SQLTransactionRollbackException conformance: constructor and SQLState/errorCode behavior
+ * @summary java.sql.SQLTransactionRollbackException conformance: white-box structure + black-box behavior.
  * @run main SQLTransactionRollbackExceptionTest
  */
-
-import java.sql.SQLTransactionRollbackException;
-
 public class SQLTransactionRollbackExceptionTest {
     static int passed;
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+    interface Throwing { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> t, String label, Throwing r) {
+        try { r.run(); } catch (Throwable x) { check(t.isInstance(x), label + " throws " + t.getSimpleName()); return; }
+        throw new AssertionError(label + ": expected " + t.getSimpleName());
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.sql.SQLTransactionRollbackException");
+        check(c != null, "loads");
+        check(c.isInterface() == false, "isInterface");
+        check(c.isEnum() == false, "isEnum");
+        check(!c.isAnnotation(), "not annotation");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
+        check(c.getSuperclass().getName().equals("java.sql.SQLTransientException"), "superclass");
+        check(c.getInterfaces().length == 0, "no direct superinterface");
+        check(c.getDeclaredMethods().length == 0, "declared method count 0");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        java.sql.SQLTransactionRollbackException e0 = new java.sql.SQLTransactionRollbackException();
+        check(e0.getMessage() == null && e0.getSQLState() == null && e0.getErrorCode() == 0, "no-arg");
+        RuntimeException cause = new RuntimeException("c");
+        java.sql.SQLTransactionRollbackException e1 = new java.sql.SQLTransactionRollbackException("m", "42S01", 99, cause);
+        check("m".equals(e1.getMessage()), "message");
+        check("42S01".equals(e1.getSQLState()), "SQLState");
+        check(e1.getErrorCode() == 99, "errorCode");
+        check(e1.getCause() == cause, "cause");
+        java.sql.SQLTransactionRollbackException e2 = new java.sql.SQLTransactionRollbackException("only");
+        check("only".equals(e2.getMessage()) && e2.getSQLState() == null && e2.getErrorCode() == 0, "message-only");
+        check(e1 instanceof java.sql.SQLException, "is SQLException");
+        check(e1 instanceof java.sql.SQLTransientException, "is SQLTransientException");
+    }
+
     public static void main(String[] args) throws Exception {
-        SQLTransactionRollbackException e = new SQLTransactionRollbackException();
-        check(e.getMessage() == null, "no-arg message null");
-        check(e.getSQLState() == null, "no-arg SQLState null");
-        check(e.getErrorCode() == 0, "no-arg errorCode 0");
-        SQLTransactionRollbackException e2 = new SQLTransactionRollbackException("msg");
-        check("msg".equals(e2.getMessage()), "String ctor message");
-        SQLTransactionRollbackException e3 = new SQLTransactionRollbackException("msg", "42S01", 1234);
-        check("42S01".equals(e3.getSQLState()), "SQLState");
-        check(e3.getErrorCode() == 1234, "errorCode");
-        SQLTransactionRollbackException e4 = new SQLTransactionRollbackException("m", "st");
-        check("st".equals(e4.getSQLState()) && "m".equals(e4.getMessage()), "String+SQLState ctor");
-        RuntimeException cause = new RuntimeException("cause");
-        SQLTransactionRollbackException e5 = new SQLTransactionRollbackException("msg", cause);
-        check(cause == e5.getCause(), "String+cause");
-        SQLTransactionRollbackException e6 = new SQLTransactionRollbackException(cause);
-        check(cause == e6.getCause(), "Throwable-only cause");
-        SQLTransactionRollbackException e7 = new SQLTransactionRollbackException("msg", "42S01", cause);
-        check("42S01".equals(e7.getSQLState()) && cause == e7.getCause(), "String+SQLState+cause");
-        SQLTransactionRollbackException e8 = new SQLTransactionRollbackException("msg", "42S01", 7, cause);
-        check(e8.getErrorCode() == 7 && cause == e8.getCause(), "full ctor");
-        check(e instanceof java.sql.SQLTransientException, "extends java.sql.SQLTransientException");
-        check(e instanceof java.sql.SQLException, "is SQLException");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

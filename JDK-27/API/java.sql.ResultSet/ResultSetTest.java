@@ -1,49 +1,55 @@
 /*
  * @test
- * @summary java.sql.ResultSet conformance: interface shape, supertypes and constants
+ * @summary java.sql.ResultSet conformance: white-box structure + black-box behavior.
  * @run main ResultSetTest
  */
-
-import java.lang.reflect.Modifier;
-
 public class ResultSetTest {
     static int passed;
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    interface Throwing { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> t, String label, Throwing r) {
+        try { r.run(); } catch (Throwable x) { check(t.isInstance(x), label + " throws " + t.getSimpleName()); return; }
+        throw new AssertionError(label + ": expected " + t.getSimpleName());
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.sql.ResultSet");
         check(c != null, "loads");
-        check(c.isInterface(), "is interface");
-        check(!c.isEnum(), "not enum");
+        check(c.isInterface() == true, "isInterface");
+        check(c.isEnum() == false, "isEnum");
         check(!c.isAnnotation(), "not annotation");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "abstract");
         Class<?>[] ifs = c.getInterfaces();
         check(ifs.length == 2, "2 direct superinterface(s)");
         check(ifs[0].getName().equals("java.sql.Wrapper"), "superinterface 0");
         check(ifs[1].getName().equals("java.lang.AutoCloseable"), "superinterface 1");
         check(c.getDeclaredMethods().length == 193, "declared method count 193");
-        java.lang.reflect.Field f_FETCH_FORWARD = c.getField("FETCH_FORWARD");
-        check(f_FETCH_FORWARD.getInt(null) == 1000, "FETCH_FORWARD == 1000");
-        java.lang.reflect.Field f_FETCH_REVERSE = c.getField("FETCH_REVERSE");
-        check(f_FETCH_REVERSE.getInt(null) == 1001, "FETCH_REVERSE == 1001");
-        java.lang.reflect.Field f_FETCH_UNKNOWN = c.getField("FETCH_UNKNOWN");
-        check(f_FETCH_UNKNOWN.getInt(null) == 1002, "FETCH_UNKNOWN == 1002");
-        java.lang.reflect.Field f_TYPE_FORWARD_ONLY = c.getField("TYPE_FORWARD_ONLY");
-        check(f_TYPE_FORWARD_ONLY.getInt(null) == 1003, "TYPE_FORWARD_ONLY == 1003");
-        java.lang.reflect.Field f_TYPE_SCROLL_INSENSITIVE = c.getField("TYPE_SCROLL_INSENSITIVE");
-        check(f_TYPE_SCROLL_INSENSITIVE.getInt(null) == 1004, "TYPE_SCROLL_INSENSITIVE == 1004");
-        java.lang.reflect.Field f_TYPE_SCROLL_SENSITIVE = c.getField("TYPE_SCROLL_SENSITIVE");
-        check(f_TYPE_SCROLL_SENSITIVE.getInt(null) == 1005, "TYPE_SCROLL_SENSITIVE == 1005");
-        java.lang.reflect.Field f_CONCUR_READ_ONLY = c.getField("CONCUR_READ_ONLY");
-        check(f_CONCUR_READ_ONLY.getInt(null) == 1007, "CONCUR_READ_ONLY == 1007");
-        java.lang.reflect.Field f_CONCUR_UPDATABLE = c.getField("CONCUR_UPDATABLE");
-        check(f_CONCUR_UPDATABLE.getInt(null) == 1008, "CONCUR_UPDATABLE == 1008");
-        java.lang.reflect.Field f_HOLD_CURSORS_OVER_COMMIT = c.getField("HOLD_CURSORS_OVER_COMMIT");
-        check(f_HOLD_CURSORS_OVER_COMMIT.getInt(null) == 1, "HOLD_CURSORS_OVER_COMMIT == 1");
-        java.lang.reflect.Field f_CLOSE_CURSORS_AT_COMMIT = c.getField("CLOSE_CURSORS_AT_COMMIT");
-        check(f_CLOSE_CURSORS_AT_COMMIT.getInt(null) == 2, "CLOSE_CURSORS_AT_COMMIT == 2");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+check(java.sql.ResultSet.FETCH_FORWARD == 1000, "FETCH_FORWARD");
+check(java.sql.ResultSet.FETCH_REVERSE == 1001, "FETCH_REVERSE");
+check(java.sql.ResultSet.FETCH_UNKNOWN == 1002, "FETCH_UNKNOWN");
+check(java.sql.ResultSet.TYPE_FORWARD_ONLY == 1003, "TYPE_FORWARD_ONLY");
+check(java.sql.ResultSet.TYPE_SCROLL_INSENSITIVE == 1004, "TYPE_SCROLL_INSENSITIVE");
+check(java.sql.ResultSet.TYPE_SCROLL_SENSITIVE == 1005, "TYPE_SCROLL_SENSITIVE");
+check(java.sql.ResultSet.CONCUR_READ_ONLY == 1007, "CONCUR_READ_ONLY");
+check(java.sql.ResultSet.CONCUR_UPDATABLE == 1008, "CONCUR_UPDATABLE");
+check(java.sql.ResultSet.HOLD_CURSORS_OVER_COMMIT == 1, "HOLD_CURSORS_OVER_COMMIT");
+check(java.sql.ResultSet.CLOSE_CURSORS_AT_COMMIT == 2, "CLOSE_CURSORS_AT_COMMIT");
+java.sql.ResultSet rs = (java.sql.ResultSet) java.lang.reflect.Proxy.newProxyInstance(ResultSetTest.class.getClassLoader(), new Class[]{java.sql.ResultSet.class}, (p, m, a) -> java.lang.reflect.InvocationHandler.invokeDefault(p, m, a));
+checkThrows(java.sql.SQLFeatureNotSupportedException.class, "updateObject default", () -> rs.updateObject(1, "x", java.sql.JDBCType.VARCHAR));
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
