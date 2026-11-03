@@ -1,10 +1,17 @@
 /*
  * @test
- * @summary javax.swing.plaf.metal.MetalSplitPaneUI conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.metal.MetalSplitPaneUI conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main MetalSplitPaneUITest
  */
 
+import java.awt.EventQueue;
+import java.awt.Graphics;
+import java.awt.image.BufferedImage;
 import java.lang.reflect.Modifier;
+import javax.swing.JSplitPane;
+import javax.swing.plaf.basic.BasicSplitPaneDivider;
+import javax.swing.plaf.metal.MetalSplitPaneUI;
 
 public class MetalSplitPaneUITest {
     static int passed;
@@ -12,7 +19,35 @@ public class MetalSplitPaneUITest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
+    }
+
+    static void assertNoThrow(ThrowingRunnable r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) { throw new AssertionError(msg + ": " + t, t); }
+        passed++;
+    }
+
     public static void main(String[] args) throws Exception {
+        runOnEDT(MetalSplitPaneUITest::testWhiteBox);
+        runOnEDT(MetalSplitPaneUITest::testBlackBox);
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.metal.MetalSplitPaneUI");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +59,31 @@ public class MetalSplitPaneUITest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.plaf.basic.BasicSplitPaneUI"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        MetalSplitPaneUI ui = new MetalSplitPaneUI();
+        check(ui != null, "ui instance");
+
+        JSplitPane sp = new JSplitPane();
+        sp.setSize(100, 100);
+        check(MetalSplitPaneUI.createUI(sp) instanceof MetalSplitPaneUI, "createUI returns MetalSplitPaneUI");
+
+        assertNoThrow(() -> ui.installUI(sp), "installUI");
+        check(sp.getWidth() > 0, "width positive");
+        check(sp.getHeight() > 0, "height positive");
+
+        BasicSplitPaneDivider divider = ui.createDefaultDivider();
+        check(divider != null, "default divider non-null");
+        check(divider instanceof BasicSplitPaneDivider, "default divider type");
+
+        BufferedImage img = new BufferedImage(100, 100, BufferedImage.TYPE_INT_ARGB);
+        assertNoThrow(() -> {
+            Graphics g = img.createGraphics();
+            g.setClip(0, 0, 100, 100);
+            try { ui.paint(g, sp); } finally { g.dispose(); }
+        }, "paint");
+
+        assertNoThrow(() -> ui.uninstallUI(sp), "uninstallUI");
     }
 }

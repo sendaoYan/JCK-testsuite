@@ -1,10 +1,28 @@
 /*
  * @test
- * @summary javax.swing.plaf.synth.SynthInternalFrameUI conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.synth.SynthInternalFrameUI conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main SynthInternalFrameUITest
  */
 
+import javax.swing.plaf.synth.SynthInternalFrameUI;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Font;
 import java.lang.reflect.Modifier;
+import javax.swing.JComponent;
+import javax.swing.plaf.ComponentUI;
+import javax.swing.plaf.synth.ColorType;
+import javax.swing.plaf.synth.Region;
+import javax.swing.plaf.synth.SynthConstants;
+import javax.swing.plaf.synth.SynthContext;
+import javax.swing.plaf.synth.SynthLookAndFeel;
+import javax.swing.plaf.synth.SynthStyle;
+import javax.swing.plaf.synth.SynthStyleFactory;
+import javax.swing.plaf.synth.SynthUI;
+import javax.swing.*;
+
 
 public class SynthInternalFrameUITest {
     static int passed;
@@ -12,7 +30,36 @@ public class SynthInternalFrameUITest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
+    }
+
+    static SynthStyle minimalStyle() {
+        return new SynthStyle() {
+            protected Color getColorForState(SynthContext c, ColorType t) { return Color.BLACK; }
+            protected Font getFontForState(SynthContext c) { return new Font(Font.DIALOG, Font.PLAIN, 12); }
+        };
+    }
+
     public static void main(String[] args) throws Exception {
+        runOnEDT(SynthInternalFrameUITest::testWhiteBox);
+        runOnEDT(SynthInternalFrameUITest::testBlackBox);
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.synth.SynthInternalFrameUI");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -26,6 +73,15 @@ public class SynthInternalFrameUITest {
         check(c.getInterfaces().length == 2, "interface count");
         check(c.getInterfaces()[0].getName().equals("javax.swing.plaf.synth.SynthUI"), "interface 0");
         check(c.getInterfaces()[1].getName().equals("java.beans.PropertyChangeListener"), "interface 1");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+    static void testBlackBox() throws Exception {
+        JInternalFrame comp = new JInternalFrame();
+        ComponentUI ui = SynthInternalFrameUI.createUI(comp);
+        check(ui != null, "createUI non-null");
+        check(ui instanceof SynthInternalFrameUI, "createUI returns SynthInternalFrameUI");
+        SynthContext ctx = ((SynthUI) ui).getContext(comp);
+        check(ctx != null, "context non-null");
+        check(ctx.getComponent() == comp, "context component");
+        check(ctx.getRegion() != null && "InternalFrame".equals(ctx.getRegion().getName()), "context region");
     }
 }

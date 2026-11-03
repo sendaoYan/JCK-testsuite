@@ -1,10 +1,17 @@
 /*
  * @test
- * @summary javax.swing.plaf.metal.MetalPopupMenuSeparatorUI conformance: type shape and supertypes.
+ * @summary javax.swing.plaf.metal.MetalPopupMenuSeparatorUI conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main MetalPopupMenuSeparatorUITest
  */
 
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Graphics;
+import java.awt.image.BufferedImage;
 import java.lang.reflect.Modifier;
+import javax.swing.JSeparator;
+import javax.swing.plaf.metal.MetalPopupMenuSeparatorUI;
 
 public class MetalPopupMenuSeparatorUITest {
     static int passed;
@@ -12,7 +19,35 @@ public class MetalPopupMenuSeparatorUITest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+    static void runOnEDT(ThrowingRunnable r) throws Exception {
+        try {
+            EventQueue.invokeAndWait(() -> {
+                try { r.run(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            });
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException) throw (RuntimeException) t;
+            if (t instanceof Error) throw (Error) t;
+            throw new RuntimeException(t);
+        }
+    }
+
+    static void assertNoThrow(ThrowingRunnable r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) { throw new AssertionError(msg + ": " + t, t); }
+        passed++;
+    }
+
     public static void main(String[] args) throws Exception {
+        runOnEDT(MetalPopupMenuSeparatorUITest::testWhiteBox);
+        runOnEDT(MetalPopupMenuSeparatorUITest::testBlackBox);
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.plaf.metal.MetalPopupMenuSeparatorUI");
         check(c != null, "loads");
         int mods = c.getModifiers();
@@ -24,6 +59,23 @@ public class MetalPopupMenuSeparatorUITest {
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.plaf.metal.MetalSeparatorUI"), "superclass");
         check(Modifier.isAbstract(mods) == false, "abstract modifier");
         check(c.getInterfaces().length == 0, "no interfaces");
-        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testBlackBox() throws Exception {
+        JSeparator sep = new JSeparator();
+        MetalPopupMenuSeparatorUI ui = new MetalPopupMenuSeparatorUI();
+        check(MetalPopupMenuSeparatorUI.createUI(sep) instanceof MetalPopupMenuSeparatorUI, "createUI type");
+
+        assertNoThrow(() -> ui.installUI(sep), "installUI");
+        Dimension pref = ui.getPreferredSize(sep);
+        check(pref != null && pref.width >= 0 && pref.height >= 0, "preferred size sane");
+
+        BufferedImage img = new BufferedImage(100, 100, BufferedImage.TYPE_INT_ARGB);
+        assertNoThrow(() -> {
+            Graphics g = img.createGraphics();
+            g.setClip(0, 0, 100, 100);
+            try { ui.paint(g, sep); } finally { g.dispose(); }
+        }, "paint");
+        assertNoThrow(() -> ui.uninstallUI(sep), "uninstallUI");
     }
 }
