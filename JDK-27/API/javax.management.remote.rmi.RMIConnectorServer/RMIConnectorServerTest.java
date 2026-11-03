@@ -1,35 +1,17 @@
 /*
  * @test
- * @summary javax.management.remote.rmi.RMIConnectorServer conformance: JMX API type verification.
+ * @summary javax.management.remote.rmi.RMIConnectorServer conformance: white-box structure + black-box behavior.
  * @run main RMIConnectorServerTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
+import java.lang.reflect.Method;
+import java.lang.management.ManagementFactory;
 import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+
+import javax.management.MBeanServer;
+import javax.management.remote.JMXConnectorServer;
+import javax.management.remote.JMXServiceURL;
+import javax.management.remote.rmi.RMIConnectorServer;
 
 public class RMIConnectorServerTest {
     static int passed;
@@ -37,14 +19,48 @@ public class RMIConnectorServerTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+    static boolean has(Method[] mm, String n) {
+        for (Method m : mm) if (m.getName().equals(n)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.remote.rmi.RMIConnectorServer");
+        check(JMXConnectorServer.class.isAssignableFrom(c), "extends JMXConnectorServer");
+        Method[] mm = c.getMethods();
+        check(has(mm, "start"), "start");
+        check(has(mm, "stop"), "stop");
+        check(has(mm, "isActive"), "isActive");
+        check(has(mm, "getAddress"), "getAddress");
+        check(has(mm, "getAttributes"), "getAttributes");
+        check(has(mm, "toJMXConnector"), "toJMXConnector");
+    }
+
+    // ---- Part 2: black-box (light behavior) ----
+    static void testBlackBox() throws Exception {
+        check(RMIConnectorServer.JNDI_REBIND_ATTRIBUTE.equals("jmx.remote.jndi.rebind"), "JNDI_REBIND_ATTRIBUTE");
+        check(RMIConnectorServer.RMI_CLIENT_SOCKET_FACTORY_ATTRIBUTE.equals("jmx.remote.rmi.client.socket.factory"), "RMI_CLIENT_SOCKET_FACTORY_ATTRIBUTE");
+        check(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE.equals("jmx.remote.rmi.server.socket.factory"), "RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE");
+        check(RMIConnectorServer.CREDENTIALS_FILTER_PATTERN.equals("jmx.remote.rmi.server.credentials.filter.pattern"), "CREDENTIALS_FILTER_PATTERN");
+        check(RMIConnectorServer.SERIAL_FILTER_PATTERN.equals("jmx.remote.rmi.server.serial.filter.pattern"), "SERIAL_FILTER_PATTERN");
+
+        JMXServiceURL url = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://localhost:9999/server");
+        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+        RMIConnectorServer server = new RMIConnectorServer(url, null, mbs);
+
+        check(server.getMBeanServer() == mbs, "mbean server preserved");
+        check(!server.isActive(), "not active");
+        check(server.getAddress() == null, "inactive server address is null");
+        check(server.getConnectionIds().length == 0, "no connections");
+        Map<String, ?> attrs = server.getAttributes();
+        check(attrs != null, "attributes non-null");
+        check(attrs.isEmpty(), "empty attributes with null env");
+    }
 
     public static void main(String[] args) throws Exception {
-        JMXServiceURL url = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://localhost:9999/server");
-        RMIConnectorServer cs = new RMIConnectorServer(url, null, ManagementFactory.getPlatformMBeanServer());
-        check(cs.getMBeanServer() != null, "mbean server");
-        check(!cs.isActive(), "not active");
-        check(cs.getAttributes() != null, "attributes");
-        check(cs.getConnectionIds().length == 0, "no connections");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

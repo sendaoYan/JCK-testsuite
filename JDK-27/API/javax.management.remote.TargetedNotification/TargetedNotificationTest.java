@@ -1,35 +1,14 @@
 /*
  * @test
- * @summary javax.management.remote.TargetedNotification conformance: JMX API type verification.
+ * @summary javax.management.remote.TargetedNotification conformance: white-box structure + black-box behavior.
  * @run main TargetedNotificationTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.io.Serializable;
+import java.lang.reflect.Constructor;
+
+import javax.management.Notification;
+import javax.management.remote.TargetedNotification;
 
 public class TargetedNotificationTest {
     static int passed;
@@ -38,10 +17,49 @@ public class TargetedNotificationTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.remote.TargetedNotification");
+        check(!c.isInterface(), "concrete class");
+        check(Serializable.class.isAssignableFrom(c), "implements Serializable");
+        Constructor<?> k = c.getConstructor(Notification.class, Integer.class);
+        check(k != null, "(Notification,Integer) ctor");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Notification notif = new Notification("my.type", "src", 123L);
+        TargetedNotification tn = new TargetedNotification(notif, 42);
+        check(tn.getNotification() == notif, "same notification instance");
+        check(tn.getNotification().getType().equals("my.type"), "notification type");
+        check(tn.getNotification().getSequenceNumber() == 123L, "notification seq");
+        check(tn.getListenerID().intValue() == 42, "listener id");
+
+        // toString combines notification toString and the id.
+        check(tn.toString().equals("{" + notif + ", 42}"), "toString: " + tn.toString());
+
+        // Constructor validation: null arguments throw IllegalArgumentException with stable message.
+        try {
+            new TargetedNotification(null, 5);
+            check(false, "expected IAE for null notification");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage().equals("Invalid notification: null"), "null notification message: " + e.getMessage());
+        }
+        try {
+            new TargetedNotification(new Notification("t", "s", 1L), null);
+            check(false, "expected IAE for null listener id");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage().equals("Invalid listener ID: null"), "null id message: " + e.getMessage());
+        }
+
+        // Two distinct instances with equal content are still independent objects.
+        TargetedNotification tn2 = new TargetedNotification(new Notification("my.type", "src", 123L), 42);
+        check(tn != tn2, "distinct instances");
+    }
+
     public static void main(String[] args) throws Exception {
-        TargetedNotification tn = new TargetedNotification(new Notification("t", "s", 1L), 5);
-        check(tn.getListenerID().intValue() == 5, "listener id");
-        check(tn.getNotification().getType().equals("t"), "notification");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

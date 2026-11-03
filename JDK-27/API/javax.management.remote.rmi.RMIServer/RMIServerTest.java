@@ -1,35 +1,14 @@
 /*
  * @test
- * @summary javax.management.remote.rmi.RMIServer conformance: JMX API type verification.
+ * @summary javax.management.remote.rmi.RMIServer conformance: white-box structure + black-box behavior.
  * @run main RMIServerTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.lang.reflect.Method;
+import java.rmi.Remote;
+
+import javax.management.remote.rmi.RMIConnection;
+import javax.management.remote.rmi.RMIServer;
 
 public class RMIServerTest {
     static int passed;
@@ -37,18 +16,35 @@ public class RMIServerTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
+    static boolean has(Method[] mm, String n) {
+        for (Method m : mm) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.remote.rmi.RMIServer");
         check(c.isInterface(), "is interface");
-        check(java.rmi.Remote.class.isAssignableFrom(c), "extends java.rmi.Remote");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "getVersion"), "has getVersion");
-        check(has(mm, "newClient"), "has newClient");
+        check(Remote.class.isAssignableFrom(c), "extends Remote");
+        Method[] mm = c.getMethods();
+        check(has(mm, "getVersion"), "getVersion");
+        check(has(mm, "newClient"), "newClient");
+    }
+
+    // ---- Part 2: black-box (light behavior) ----
+    static void testBlackBox() throws Exception {
+        final RMIConnection client = null;
+        RMIServer server = new RMIServer() {
+            public String getVersion() { return "1.0 test"; }
+            public RMIConnection newClient(Object credentials) { return client; }
+        };
+        check(server.getVersion().equals("1.0 test"), "anonymous getVersion callable");
+        check(server.newClient(null) == null, "anonymous newClient callable");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

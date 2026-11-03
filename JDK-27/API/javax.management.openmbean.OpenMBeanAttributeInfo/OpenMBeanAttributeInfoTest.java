@@ -1,55 +1,37 @@
 /*
  * @test
- * @summary javax.management.openmbean.OpenMBeanAttributeInfo conformance: JMX API type verification.
+ * @summary javax.management.openmbean.OpenMBeanAttributeInfo conformance: white-box structure.
  * @run main OpenMBeanAttributeInfoTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.lang.reflect.Modifier;
+import javax.management.openmbean.OpenMBeanAttributeInfo;
+import javax.management.openmbean.OpenMBeanParameterInfo;
 
 public class OpenMBeanAttributeInfoTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     static boolean has(java.lang.reflect.Method[] mm, String n) {
         for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.openmbean.OpenMBeanAttributeInfo");
         check(c.isInterface(), "is interface");
+        check(Modifier.isPublic(c.getModifiers()), "public");
         check(OpenMBeanParameterInfo.class.isAssignableFrom(c), "extends OpenMBeanParameterInfo");
         java.lang.reflect.Method[] mm = c.getMethods();
         check(has(mm, "isReadable"), "has isReadable");
         check(has(mm, "isWritable"), "has isWritable");
         check(has(mm, "isIs"), "has isIs");
+        check(has(mm, "equals"), "has equals");
+        check(has(mm, "hashCode"), "has hashCode");
+        check(has(mm, "toString"), "has toString");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

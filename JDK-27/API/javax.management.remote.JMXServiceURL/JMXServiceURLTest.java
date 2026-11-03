@@ -1,35 +1,15 @@
 /*
  * @test
- * @summary javax.management.remote.JMXServiceURL conformance: JMX API type verification.
+ * @summary javax.management.remote.JMXServiceURL conformance: white-box structure + black-box behavior.
  * @run main JMXServiceURLTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.io.Serializable;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.net.MalformedURLException;
+
+import javax.management.remote.JMXServiceURL;
 
 public class JMXServiceURLTest {
     static int passed;
@@ -37,16 +17,141 @@ public class JMXServiceURLTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
+    static boolean has(Method[] mm, String n) {
+        for (Method m : mm) if (m.getName().equals(n)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.remote.JMXServiceURL");
+        check(!c.isInterface(), "concrete class");
+        check(Serializable.class.isAssignableFrom(c), "implements Serializable");
+
+        Method[] mm = c.getMethods();
+        check(has(mm, "getProtocol"), "getProtocol");
+        check(has(mm, "getHost"), "getHost");
+        check(has(mm, "getPort"), "getPort");
+        check(has(mm, "getURLPath"), "getURLPath");
+        check(has(mm, "toString"), "toString");
+        check(has(mm, "equals"), "equals");
+        check(has(mm, "hashCode"), "hashCode");
+
+        Constructor<?>[] cs = c.getConstructors();
+        boolean hasStringCtor = false, has3Ctor = false, has4Ctor = false;
+        for (Constructor<?> k : cs) {
+            Class<?>[] p = k.getParameterTypes();
+            if (p.length == 1 && p[0] == String.class) hasStringCtor = true;
+            if (p.length == 3 && p[0] == String.class && p[1] == String.class && p[2] == int.class) has3Ctor = true;
+            if (p.length == 4 && p[0] == String.class && p[1] == String.class && p[2] == int.class && p[3] == String.class) has4Ctor = true;
+        }
+        check(hasStringCtor, "String ctor");
+        check(has3Ctor, "(String,String,int) ctor");
+        check(has4Ctor, "(String,String,int,String) ctor");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        // Full parse of a JRMP URL with empty host and a JNDI path.
+        JMXServiceURL rmi = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://localhost:9999/server");
+        check(rmi.getProtocol().equals("rmi"), "rmi protocol");
+        check(rmi.getHost().equals(""), "rmi empty host");
+        check(rmi.getPort() == 0, "rmi port 0");
+        check(rmi.getURLPath().equals("/jndi/rmi://localhost:9999/server"), "rmi url path");
+        check(rmi.toString().equals("service:jmx:rmi:///jndi/rmi://localhost:9999/server"), "rmi toString round-trip");
+
+        // Full parse of a jmxmp URL with host and port.
+        JMXServiceURL jmxmp = new JMXServiceURL("service:jmx:jmxmp://host:1234");
+        check(jmxmp.getProtocol().equals("jmxmp"), "jmxmp protocol");
+        check(jmxmp.getHost().equals("host"), "jmxmp host");
+        check(jmxmp.getPort() == 1234, "jmxmp port");
+        check(jmxmp.getURLPath().equals(""), "jmxmp empty path");
+        check(jmxmp.toString().equals("service:jmx:jmxmp://host:1234"), "jmxmp toString");
+
+        // Protocol is lower-cased on parse.
+        JMXServiceURL upper = new JMXServiceURL("service:jmx:RMI://LOCALHOST:9999/x");
+        check(upper.getProtocol().equals("rmi"), "protocol lower-cased");
+
+        // toString omits zero port.
+        JMXServiceURL noPort = new JMXServiceURL("service:jmx:rmi://localhost/x");
+        check(noPort.getPort() == 0, "noPort port 0");
+        check(noPort.toString().equals("service:jmx:rmi://localhost/x"), "noPort toString omits 0");
+
+        // equals: protocol and host are case-insensitive, port/path sensitive.
+        JMXServiceURL a = new JMXServiceURL("service:jmx:rmi://LOCALHOST:9999/x");
+        JMXServiceURL b = new JMXServiceURL("service:jmx:RMI://localhost:9999/x");
+        check(a.equals(b), "equals ignore case protocol+host");
+        // hashCode is toString().hashCode() and therefore uses the original host case.
+        JMXServiceURL a2 = new JMXServiceURL("service:jmx:rmi://LOCALHOST:9999/x");
+        check(a.hashCode() == a2.hashCode(), "hashCode stable for identical input");
+        check(!a.equals(new JMXServiceURL("service:jmx:rmi://localhost:9998/x")), "different port not equal");
+        check(!a.equals(new JMXServiceURL("service:jmx:rmi://localhost:9999/y")), "different path not equal");
+        check(!a.equals("service:jmx:rmi://LOCALHOST:9999/x"), "not equal to String");
+
+        // 4-arg constructor: explicit protocol/host/port/path; null urlPath defaults to empty.
+        JMXServiceURL four = new JMXServiceURL("rmi", "localhost", 9999, "/server");
+        check(four.getProtocol().equals("rmi"), "4-arg protocol");
+        check(four.getHost().equals("localhost"), "4-arg host");
+        check(four.getPort() == 9999, "4-arg port");
+        check(four.getURLPath().equals("/server"), "4-arg path");
+        JMXServiceURL fourDefault = new JMXServiceURL("jmxmp", "localhost", 0, null);
+        check(fourDefault.getURLPath().equals(""), "null urlPath defaults empty");
+        check(fourDefault.getPort() == 0, "4-arg port 0");
+
+        // Exact MalformedURLException messages for illegal URLs.
+        try {
+            new JMXServiceURL("not-a-url");
+            check(false, "expected MalformedURLException for bad prefix");
+        } catch (MalformedURLException e) {
+            check(e.getMessage().equals("Service URL must start with service:jmx:"), "prefix message: " + e.getMessage());
+        }
+        try {
+            new JMXServiceURL("service:jmx:rmi:foo");
+            check(false, "expected missing :// exception");
+        } catch (MalformedURLException e) {
+            check(e.getMessage().equals("Missing \"://\" after protocol name"), "missing :// message: " + e.getMessage());
+        }
+        try {
+            new JMXServiceURL("service:jmx:rmi://:9999");
+            check(false, "expected port-without-host exception");
+        } catch (MalformedURLException e) {
+            check(e.getMessage().equals("Cannot give port number without host name"), "port w/o host message: " + e.getMessage());
+        }
+        try {
+            new JMXServiceURL("rmi", "localhost", -1, "/x");
+            check(false, "expected negative port exception");
+        } catch (MalformedURLException e) {
+            check(e.getMessage().equals("Bad port: -1"), "negative port message: " + e.getMessage());
+        }
+        try {
+            new JMXServiceURL("rmi", "localhost", 9999, "noSlash");
+            check(false, "expected bad path exception");
+        } catch (MalformedURLException e) {
+            check(e.getMessage().equals("Bad URL path: noSlash"), "bad path message: " + e.getMessage());
+        }
+        try {
+            new JMXServiceURL("9bad", "localhost", 0, "/x");
+            check(false, "expected invalid protocol exception");
+        } catch (MalformedURLException e) {
+            check(e.getMessage().equals("Missing or invalid protocol name: \"9bad\""), "bad protocol message: " + e.getMessage());
+        }
+        try {
+            new JMXServiceURL("rmi", "bad_host", 0, "/x");
+            check(false, "expected bad host exception");
+        } catch (MalformedURLException e) {
+            check(e.getMessage().equals("Bad host: \"bad_host\""), "bad host message: " + e.getMessage());
+        }
+        try {
+            new JMXServiceURL("service:jmx:rmi://localhost:9999abc");
+            check(false, "expected bad url path exception (trailing junk)");
+        } catch (MalformedURLException e) {
+            check(e.getMessage().equals("Bad URL path: abc"), "trailing junk path message: " + e.getMessage());
+        }
+    }
 
     public static void main(String[] args) throws Exception {
-        JMXServiceURL u = new JMXServiceURL("service:jmx:rmi://localhost:9999/server");
-        check(u.getProtocol().equals("rmi"), "protocol");
-        check(u.getHost().equals("localhost"), "host");
-        check(u.getPort() == 9999, "port");
-        check(u.getURLPath().equals("/server"), "url path");
-        check(u.toString().equals("service:jmx:rmi://localhost:9999/server"), "toString");
-        check(u.equals(new JMXServiceURL("service:jmx:rmi://localhost:9999/server")), "equals");
-        check(u.hashCode() == new JMXServiceURL("service:jmx:rmi://localhost:9999/server").hashCode(), "hashCode");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

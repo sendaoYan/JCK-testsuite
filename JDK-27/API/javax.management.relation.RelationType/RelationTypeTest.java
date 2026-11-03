@@ -1,55 +1,38 @@
 /*
  * @test
- * @summary javax.management.relation.RelationType conformance: JMX API type verification.
+ * @summary javax.management.relation.RelationType conformance: white-box structure + light behavior.
  * @run main RelationTypeTest
  */
-
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.io.Serializable;
+import javax.management.relation.RelationType;
+import javax.management.relation.RelationTypeSupport;
+import javax.management.relation.RoleInfo;
 
 public class RelationTypeTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.relation.RelationType");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "RelationType must be public");
+        check(c.isInterface(), "RelationType must be an interface");
+        check(Serializable.class.isAssignableFrom(c), "RelationType must extend Serializable");
+        c.getMethod("getRelationTypeName");
+        c.getMethod("getRoleInfos");
+        c.getMethod("getRoleInfo", String.class);
+        check(c.getMethod("getRoleInfos").getReturnType() == java.util.List.class, "getRoleInfos returns List");
     }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
-        return false;
+
+    // ---- Part 2: light behavior (implementation linkage) ----
+    static void testBlackBox() throws Exception {
+        check(RelationType.class.isAssignableFrom(RelationTypeSupport.class),
+              "RelationTypeSupport implements RelationType");
     }
 
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("javax.management.relation.RelationType");
-        check(c.isInterface(), "is interface");
-        check(java.io.Serializable.class.isAssignableFrom(c), "extends java.io.Serializable");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "getRelationTypeName"), "has getRelationTypeName");
-        check(has(mm, "getRoleInfos"), "has getRoleInfos");
-        check(has(mm, "getRoleInfo"), "has getRoleInfo");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

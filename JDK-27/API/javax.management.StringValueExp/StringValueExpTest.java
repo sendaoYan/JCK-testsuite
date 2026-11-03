@@ -1,50 +1,58 @@
 /*
  * @test
- * @summary javax.management.StringValueExp conformance: JMX API type verification.
+ * @summary javax.management.StringValueExp conformance: white-box structure + black-box behavior.
  * @run main StringValueExpTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
+import java.util.*;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class StringValueExpTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.StringValueExp");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface(), "public concrete class");
+        check(ValueExp.class.isAssignableFrom(c), "implements ValueExp");
+        check(hasMethod(c, "getValue"), "has getValue");
+        check(hasMethod(c, "apply"), "has apply");
+        check(hasMethod(c, "toString"), "has toString");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        StringValueExp s = new StringValueExp("hello");
+        check("hello".equals(s.getValue()), "getValue");
+        check("'hello'".equals(s.toString()), "toString single-quoted");
+
+        StringValueExp empty = new StringValueExp("");
+        check("".equals(empty.getValue()), "empty value");
+        check("''".equals(empty.toString()), "empty toString");
+
+        StringValueExp def = new StringValueExp();
+        check(def.getValue() == null, "default constructor null value");
+
+        // single quote escaped by doubling in toString
+        StringValueExp quote = new StringValueExp("a'b");
+        check("'a''b'".equals(quote.toString()), "single quote escaped");
+
+        // apply() returns itself (identity), regardless of ObjectName
+        ValueExp applied = s.apply(new ObjectName("d:k=v"));
+        check(applied == s, "apply returns this");
+        check(((StringValueExp) applied).getValue().equals("hello"), "apply preserves value");
     }
 
     public static void main(String[] args) throws Exception {
-        StringValueExp s = new StringValueExp("hello");
-        check(s.getValue().equals("hello"), "value");
-        check(s.apply(new ObjectName("d:k=v")) == s, "apply returns self");
-        s.setMBeanServer(ManagementFactory.getPlatformMBeanServer());
-        StringValueExp s2 = new StringValueExp();
-        check(s2.getValue() == null, "null value");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

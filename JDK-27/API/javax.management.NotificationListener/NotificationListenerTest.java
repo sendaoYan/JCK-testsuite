@@ -1,53 +1,49 @@
 /*
  * @test
- * @summary javax.management.NotificationListener conformance: JMX API type verification.
+ * @summary javax.management.NotificationListener conformance: white-box structure + light behavior.
  * @run main NotificationListenerTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
+import java.util.*;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class NotificationListenerTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("javax.management.NotificationListener");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.NotificationListener");
         check(c.isInterface(), "is interface");
-        check(java.util.EventListener.class.isAssignableFrom(c), "extends java.util.EventListener");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "handleNotification"), "has handleNotification");
+        check(java.util.EventListener.class.isAssignableFrom(c), "extends EventListener");
+        check(hasMethod(c, "handleNotification"), "has handleNotification");
+    }
+
+    // ---- Part 2: black-box (light behavior) ----
+    static void testBlackBox() throws Exception {
+        final List<String> types = new ArrayList<String>();
+        final List<Object> handbacks = new ArrayList<Object>();
+        NotificationListener listener = new NotificationListener() {
+            public void handleNotification(Notification n, Object handback) {
+                types.add(n.getType());
+                handbacks.add(handback);
+            }
+        };
+        Notification n = new Notification("type", "src", 1L);
+        listener.handleNotification(n, "hb");
+        check(types.size() == 1 && "type".equals(types.get(0)), "handleNotification receives type");
+        check("hb".equals(handbacks.get(0)), "handleNotification receives handback");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

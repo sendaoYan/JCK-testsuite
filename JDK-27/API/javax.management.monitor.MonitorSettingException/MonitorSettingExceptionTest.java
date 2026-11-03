@@ -1,35 +1,11 @@
 /*
  * @test
- * @summary javax.management.monitor.MonitorSettingException conformance: JMX API type verification.
+ * @summary javax.management.monitor.MonitorSettingException conformance: white-box structure + black-box behavior.
  * @run main MonitorSettingExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import javax.management.JMRuntimeException;
+import javax.management.monitor.MonitorSettingException;
 
 public class MonitorSettingExceptionTest {
     static int passed;
@@ -38,12 +14,29 @@ public class MonitorSettingExceptionTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.monitor.MonitorSettingException");
+        check(RuntimeException.class.isAssignableFrom(c), "extends RuntimeException");
+        check(JMRuntimeException.class.isAssignableFrom(c), "extends JMRuntimeException");
+        check(c.getSuperclass() == JMRuntimeException.class, "direct superclass is JMRuntimeException");
+        check(c.getConstructors().length == 2, "no-arg and String constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        MonitorSettingException e1 = new MonitorSettingException("msg");
+        check("msg".equals(e1.getMessage()), "String message");
+        check(e1 instanceof JMRuntimeException, "instance of JMRuntimeException");
+        check(e1 instanceof RuntimeException, "instance of RuntimeException");
+
+        MonitorSettingException e2 = new MonitorSettingException();
+        check(e2.getMessage() == null, "no-arg null message");
+    }
+
     public static void main(String[] args) throws Exception {
-        RuntimeException e = new MonitorSettingException("msg");
-        check(e.getMessage().equals("msg"), "message");
-        check(e instanceof JMRuntimeException && e instanceof RuntimeException, "hierarchy");
-        RuntimeException e2 = new MonitorSettingException();
-        check(e2.getMessage() == null, "null message");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

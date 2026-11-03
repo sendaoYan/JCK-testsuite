@@ -1,49 +1,52 @@
 /*
  * @test
- * @summary javax.management.openmbean.KeyAlreadyExistsException conformance: JMX API type verification.
+ * @summary javax.management.openmbean.KeyAlreadyExistsException conformance: white-box structure + black-box behavior.
  * @run main KeyAlreadyExistsExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.lang.reflect.Modifier;
+import javax.management.openmbean.KeyAlreadyExistsException;
 
 public class KeyAlreadyExistsExceptionTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.openmbean.KeyAlreadyExistsException");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(IllegalArgumentException.class.isAssignableFrom(c), "extends IllegalArgumentException");
+        check(!Modifier.isAbstract(c.getModifiers()), "concrete");
+        check(c.getConstructor(String.class) != null, "String ctor");
+        check(c.getConstructor() != null, "no-arg ctor");
+    }
+
+    static void testBlackBox() {
+        IllegalArgumentException e = new KeyAlreadyExistsException("msg");
+        check(e.getMessage().equals("msg"), "message");
+        IllegalArgumentException e2 = new KeyAlreadyExistsException();
+        check(e2.getMessage() == null, "null message no-arg");
+
+        // behavioral: thrown by TabularDataSupport.put for a duplicate calculated index
+        try {
+            javax.management.openmbean.CompositeType row =
+                new javax.management.openmbean.CompositeType("Row", "d",
+                    new String[]{"name"}, new String[]{"nd"}, new javax.management.openmbean.OpenType[]{javax.management.openmbean.SimpleType.STRING});
+            javax.management.openmbean.TabularType tt =
+                new javax.management.openmbean.TabularType("T", "d", row, new String[]{"name"});
+            javax.management.openmbean.TabularDataSupport td = new javax.management.openmbean.TabularDataSupport(tt);
+            td.put(new javax.management.openmbean.CompositeDataSupport(row, new String[]{"name"}, new Object[]{"x"}));
+            td.put(new javax.management.openmbean.CompositeDataSupport(row, new String[]{"name"}, new Object[]{"x"}));
+            throw new AssertionError("expected KeyAlreadyExistsException");
+        } catch (KeyAlreadyExistsException ex) {
+            check(ex.getMessage().contains("already refers to a value"), "thrown message");
+        } catch (Exception ex) {
+            throw new AssertionError("wrong exception " + ex);
+        }
     }
 
     public static void main(String[] args) throws Exception {
-        RuntimeException e = new KeyAlreadyExistsException("msg");
-        check(e.getMessage().equals("msg"), "message");
-        check(e instanceof IllegalArgumentException && e instanceof RuntimeException, "hierarchy");
-        RuntimeException e2 = new KeyAlreadyExistsException();
-        check(e2.getMessage() == null, "null message");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

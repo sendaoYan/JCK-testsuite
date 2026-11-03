@@ -1,54 +1,73 @@
 /*
  * @test
- * @summary javax.management.MBeanServerDelegate conformance: JMX API type verification.
+ * @summary javax.management.MBeanServerDelegate conformance: white-box structure + black-box behavior.
  * @run main MBeanServerDelegateTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
+import java.util.*;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class MBeanServerDelegateTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.MBeanServerDelegate");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface(), "public concrete class");
+        check(MBeanServerDelegateMBean.class.isAssignableFrom(c), "implements MBeanServerDelegateMBean");
+        check(NotificationEmitter.class.isAssignableFrom(c), "implements NotificationEmitter");
+        check(hasMethod(c, "getMBeanServerId"), "has getMBeanServerId");
+        check(hasMethod(c, "getNotificationInfo"), "has getNotificationInfo");
+        check(hasMethod(c, "sendNotification"), "has sendNotification");
+        check(MBeanServerDelegate.DELEGATE_NAME.equals(new ObjectName("JMImplementation:type=MBeanServerDelegate")),
+                "DELEGATE_NAME constant");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        MBeanServerDelegate d = new MBeanServerDelegate();
+        check(d.getMBeanServerId() != null && d.getMBeanServerId().length() > 0, "getMBeanServerId non-empty");
+
+        check("Java Management Extensions".equals(d.getSpecificationName()), "getSpecificationName");
+        check("1.4".equals(d.getSpecificationVersion()), "getSpecificationVersion");
+        check("Oracle Corporation".equals(d.getSpecificationVendor()), "getSpecificationVendor");
+        check("JMX".equals(d.getImplementationName()), "getImplementationName");
+        check(d.getImplementationVersion() != null, "getImplementationVersion non-null");
+        check("Oracle Corporation".equals(d.getImplementationVendor()), "getImplementationVendor");
+
+        // notification info declares registered/unregistered types
+        MBeanNotificationInfo[] infos = d.getNotificationInfo();
+        check(infos.length == 1, "one notification info");
+        check(infos[0].getNotifTypes().length == 2, "two notification types");
+        List<String> types = Arrays.asList(infos[0].getNotifTypes());
+        check(types.contains(MBeanServerNotification.REGISTRATION_NOTIFICATION), "registration type present");
+        check(types.contains(MBeanServerNotification.UNREGISTRATION_NOTIFICATION), "unregistration type present");
+
+        // send/receive notifications
+        final List<Notification> received = new ArrayList<Notification>();
+        NotificationListener listener = new NotificationListener() {
+            public void handleNotification(Notification n, Object handback) { received.add(n); }
+        };
+        d.addNotificationListener(listener, null, null);
+        d.sendNotification(new Notification("custom.type", d, 1L));
+        check(received.size() == 1, "listener received sent notification");
+        check("custom.type".equals(received.get(0).getType()), "received type");
+
+        d.removeNotificationListener(listener);
+        d.sendNotification(new Notification("custom.type", d, 2L));
+        check(received.size() == 1, "removed listener no longer receives");
     }
 
     public static void main(String[] args) throws Exception {
-        MBeanServerDelegate d = new MBeanServerDelegate();
-        check(d.getMBeanServerId() != null, "mbeanServerId");
-        check(d.getSpecificationName() != null, "spec name");
-        check(d.getSpecificationVersion() != null, "spec version");
-        check(d.getSpecificationVendor() != null, "spec vendor");
-        check(d.getImplementationName() != null, "impl name");
-        check(d.getImplementationVersion() != null, "impl version");
-        check(d.getImplementationVendor() != null, "impl vendor");
-        check(d.getNotificationInfo().length >= 1, "notif info");
-        check(MBeanServerDelegate.DELEGATE_NAME != null, "delegate name");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

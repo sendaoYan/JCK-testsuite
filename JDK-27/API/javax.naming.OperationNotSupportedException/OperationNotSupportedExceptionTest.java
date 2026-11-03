@@ -1,27 +1,55 @@
 /*
  * @test
- * @summary javax.naming.OperationNotSupportedException conformance: API type verification.
+ * @summary javax.naming.OperationNotSupportedException conformance: white-box structure + black-box behavior.
  * @run main OperationNotSupportedExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Modifier;
+import javax.naming.CompositeName;
+import javax.naming.Name;
+import javax.naming.NamingException;
+import javax.naming.OperationNotSupportedException;
 
 public class OperationNotSupportedExceptionTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = javax.naming.OperationNotSupportedException.class;
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(c.getSuperclass() == javax.naming.NamingException.class, "extends NamingException");
+        check(java.io.Serializable.class.isAssignableFrom(c), "Serializable");
+        Constructor<?>[] cs = c.getDeclaredConstructors();
+        boolean noArg = false, strArg = false;
+        for (Constructor<?> k : cs) {
+            if (k.getParameterCount() == 0) noArg = true;
+            if (k.getParameterCount() == 1 && k.getParameterTypes()[0] == String.class) strArg = true;
+        }
+        check(noArg, "has no-arg ctor");
+        check(strArg, "has String ctor");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        OperationNotSupportedException withMsg = new OperationNotSupportedException("reason");
+        check(withMsg.getMessage().equals("reason"), "message preserved");
+        OperationNotSupportedException noMsg = new OperationNotSupportedException();
+        check(noMsg.getMessage() == null, "no-arg message null");
+        withMsg.setRemainingName(new CompositeName("a/b"));
+        check(withMsg.getRemainingName().toString().equals("a/b"), "remaining name round trip");
+        withMsg.setResolvedObj("obj");
+        check("obj".equals(withMsg.getResolvedObj()), "resolved obj");
+        String ts = withMsg.toString();
+        check(ts.contains("javax.naming.OperationNotSupportedException") && ts.contains("reason"), "toString naming");
+        javax.naming.OperationNotSupportedException onse = new javax.naming.OperationNotSupportedException("no referrals on this provider");
+        check(onse instanceof NamingException && onse.getMessage().contains("referrals"), "scenario");
     }
 
     public static void main(String[] args) throws Exception {
-        javax.naming.OperationNotSupportedException e = new javax.naming.OperationNotSupportedException("msg");
-check("msg".equals(e.getMessage()), "message");
-check(e instanceof javax.naming.NamingException, "extends javax.naming.NamingException");
-check(e instanceof Exception, "is Exception");
-javax.naming.OperationNotSupportedException e2 = new javax.naming.OperationNotSupportedException();
-check(e2.getMessage() == null, "null message");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,52 +1,68 @@
 /*
  * @test
- * @summary javax.management.NotificationFilterSupport conformance: JMX API type verification.
+ * @summary javax.management.NotificationFilterSupport conformance: white-box structure + black-box behavior.
  * @run main NotificationFilterSupportTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
+import java.util.*;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class NotificationFilterSupportTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.NotificationFilterSupport");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface(), "public concrete class");
+        check(NotificationFilter.class.isAssignableFrom(c), "implements NotificationFilter");
+        check(hasMethod(c, "enableType"), "has enableType");
+        check(hasMethod(c, "disableType"), "has disableType");
+        check(hasMethod(c, "disableAllTypes"), "has disableAllTypes");
+        check(hasMethod(c, "getEnabledTypes"), "has getEnabledTypes");
+        check(hasMethod(c, "isNotificationEnabled"), "has isNotificationEnabled");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        NotificationFilterSupport f = new NotificationFilterSupport();
+        check(f.getEnabledTypes().isEmpty(), "starts empty");
+
+        f.enableType("type.one");
+        check(f.getEnabledTypes().size() == 1 && f.getEnabledTypes().contains("type.one"), "enableType tracks");
+        check(f.isNotificationEnabled(new Notification("type.one", "s", 1L)), "matches enabled type");
+        check(!f.isNotificationEnabled(new Notification("type.two", "s", 1L)), "does not match other type");
+
+        f.enableType("type.two");
+        check(f.isNotificationEnabled(new Notification("type.one", "s", 1L))
+                && f.isNotificationEnabled(new Notification("type.two", "s", 1L)), "two types enabled");
+        check(!f.isNotificationEnabled(new Notification("type.three", "s", 1L)), "third type disabled");
+
+        // case-sensitive
+        check(!f.isNotificationEnabled(new Notification("TYPE.ONE", "s", 1L)), "case-sensitive");
+
+        f.disableType("type.one");
+        check(!f.isNotificationEnabled(new Notification("type.one", "s", 1L)), "disabled type no longer matches");
+        check(f.isNotificationEnabled(new Notification("type.two", "s", 1L)), "other type still enabled");
+
+        f.disableAllTypes();
+        check(f.getEnabledTypes().isEmpty(), "disableAllTypes clears");
+        check(!f.isNotificationEnabled(new Notification("type.two", "s", 1L)), "nothing matches after clear");
+
+        boolean threw = false;
+        try { f.enableType(null); } catch (IllegalArgumentException ex) { threw = true; }
+        check(threw, "enableType(null) throws IllegalArgumentException");
     }
 
     public static void main(String[] args) throws Exception {
-        NotificationFilterSupport f = new NotificationFilterSupport();
-        f.enableType("a.b.c");
-        check(f.getEnabledTypes().size() == 1, "enabled size");
-        check(f.isNotificationEnabled(new Notification("a.b.c", "src", 1L)), "enabled");
-        check(!f.isNotificationEnabled(new Notification("x.y.z", "src", 1L)), "not enabled");
-        f.disableType("a.b.c");
-        check(f.getEnabledTypes().size() == 0, "disabled");
-        f.disableAllTypes();
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,35 +1,14 @@
 /*
  * @test
- * @summary javax.management.remote.JMXPrincipal conformance: JMX API type verification.
+ * @summary javax.management.remote.JMXPrincipal conformance: white-box structure + black-box behavior.
  * @run main JMXPrincipalTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.io.Serializable;
+import java.lang.reflect.Constructor;
+import java.security.Principal;
+
+import javax.management.remote.JMXPrincipal;
 
 public class JMXPrincipalTest {
     static int passed;
@@ -38,12 +17,45 @@ public class JMXPrincipalTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.remote.JMXPrincipal");
+        check(!c.isInterface(), "concrete class");
+        check(Principal.class.isAssignableFrom(c), "implements Principal");
+        check(Serializable.class.isAssignableFrom(c), "implements Serializable");
+        Constructor<?> k = c.getConstructor(String.class);
+        check(k != null, "(String) ctor");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
         JMXPrincipal p = new JMXPrincipal("user");
         check(p.getName().equals("user"), "name");
-        check(p.equals(new JMXPrincipal("user")), "equals");
-        check(p.hashCode() == new JMXPrincipal("user").hashCode(), "hashCode");
-        check(p instanceof Principal, "is Principal");
+        check(p.toString().equals("JMXPrincipal:  user"), "toString: " + p.toString());
+
+        check(p.equals(new JMXPrincipal("user")), "equals same name");
+        check(p.hashCode() == new JMXPrincipal("user").hashCode(), "hashCode consistent");
+        check(!p.equals(new JMXPrincipal("other")), "different name not equal");
+        check(!p.equals(new JMXPrincipal("User")), "equals case-sensitive");
+        check(!p.equals("user"), "not equal to String");
+        check(!p.equals(null), "not equal to null");
+        check(p.equals(p), "reflexive");
+
+        JMXPrincipal empty = new JMXPrincipal("");
+        check(empty.getName().equals(""), "empty name allowed");
+        check(empty.hashCode() == "".hashCode(), "empty name hashCode");
+
+        try {
+            new JMXPrincipal(null);
+            check(false, "expected NPE for null name");
+        } catch (NullPointerException e) {
+            check(e.getMessage().equals("illegal null input"), "null name message: " + e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,54 +1,104 @@
 /*
  * @test
- * @summary javax.management.openmbean.SimpleType conformance: JMX API type verification.
+ * @summary javax.management.openmbean.SimpleType conformance: white-box structure + black-box behavior.
  * @run main SimpleTypeTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
+import java.lang.reflect.Modifier;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import javax.management.ObjectName;
+import javax.management.openmbean.OpenType;
+import javax.management.openmbean.SimpleType;
 
 public class SimpleTypeTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.openmbean.SimpleType");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(Modifier.isFinal(c.getModifiers()), "final");
+        check(OpenType.class.isAssignableFrom(c), "extends OpenType");
+        java.lang.reflect.Field[] fields = c.getDeclaredFields();
+        int constants = 0;
+        for (java.lang.reflect.Field f : fields) {
+            if (Modifier.isStatic(f.getModifiers()) && Modifier.isFinal(f.getModifiers())
+                    && f.getType() == SimpleType.class) constants++;
+        }
+        check(constants == 14, "14 public SimpleType constants");
+        java.lang.reflect.Constructor<?>[] ctors = c.getDeclaredConstructors();
+        check(ctors.length == 1 && Modifier.isPrivate(ctors[0].getModifiers()), "single private ctor");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        // className == typeName == description for every predefined constant
+        SimpleType<?>[] all = {
+            SimpleType.VOID, SimpleType.BOOLEAN, SimpleType.CHARACTER, SimpleType.BYTE,
+            SimpleType.SHORT, SimpleType.INTEGER, SimpleType.LONG, SimpleType.FLOAT,
+            SimpleType.DOUBLE, SimpleType.STRING, SimpleType.BIGDECIMAL, SimpleType.BIGINTEGER,
+            SimpleType.DATE, SimpleType.OBJECTNAME
+        };
+        String[] classNames = {
+            "java.lang.Void", "java.lang.Boolean", "java.lang.Character", "java.lang.Byte",
+            "java.lang.Short", "java.lang.Integer", "java.lang.Long", "java.lang.Float",
+            "java.lang.Double", "java.lang.String", "java.math.BigDecimal", "java.math.BigInteger",
+            "java.util.Date", "javax.management.ObjectName"
+        };
+        for (int i = 0; i < all.length; i++) {
+            SimpleType<?> t = all[i];
+            check(classNames[i].equals(t.getClassName()), "className " + classNames[i]);
+            check(t.getClassName().equals(t.getTypeName()), "typeName==className " + classNames[i]);
+            check(t.getClassName().equals(t.getDescription()), "description==className " + classNames[i]);
+            check(!t.isArray(), "not array " + classNames[i]);
+        }
+
+        // isValue is exact-class match, and null is never a value
+        check(SimpleType.INTEGER.isValue(5), "INTEGER isValue int");
+        check(SimpleType.INTEGER.isValue(Integer.valueOf(5)), "INTEGER isValue Integer");
+        check(!SimpleType.INTEGER.isValue(5L), "INTEGER rejects Long");
+        check(!SimpleType.INTEGER.isValue("5"), "INTEGER rejects String");
+        check(!SimpleType.INTEGER.isValue(null), "INTEGER rejects null");
+        check(SimpleType.STRING.isValue("hello"), "STRING isValue");
+        check(SimpleType.BOOLEAN.isValue(Boolean.TRUE), "BOOLEAN isValue");
+        check(SimpleType.CHARACTER.isValue('x'), "CHARACTER isValue");
+        check(SimpleType.BYTE.isValue((byte) 1), "BYTE isValue");
+        check(SimpleType.SHORT.isValue((short) 2), "SHORT isValue");
+        check(SimpleType.LONG.isValue(3L), "LONG isValue");
+        check(SimpleType.FLOAT.isValue(1.5f), "FLOAT isValue");
+        check(SimpleType.DOUBLE.isValue(2.5d), "DOUBLE isValue");
+        check(SimpleType.BIGDECIMAL.isValue(new BigDecimal("3.14")), "BIGDECIMAL isValue");
+        check(SimpleType.BIGINTEGER.isValue(new BigInteger("42")), "BIGINTEGER isValue");
+        check(SimpleType.DATE.isValue(new Date(0L)), "DATE isValue");
+        check(SimpleType.OBJECTNAME.isValue(new ObjectName("d:k=v")), "OBJECTNAME isValue");
+        check(!SimpleType.VOID.isValue(null), "VOID rejects null");
+
+        // equals: two SimpleType instances are equal iff same className
+        check(SimpleType.INTEGER.equals(SimpleType.INTEGER), "INTEGER equals self");
+        check(!SimpleType.INTEGER.equals(SimpleType.STRING), "INTEGER != STRING");
+        check(!SimpleType.INTEGER.equals(null), "equals null false");
+        check(!SimpleType.INTEGER.equals("java.lang.Integer"), "equals non-SimpleType false");
+        check(SimpleType.INTEGER.hashCode() == SimpleType.INTEGER.hashCode(), "hashCode stable");
+        check(SimpleType.INTEGER.hashCode() == "java.lang.Integer".hashCode(), "hashCode == className.hashCode");
+        check(SimpleType.INTEGER.hashCode() != SimpleType.STRING.hashCode(), "distinct hashCodes");
+
+        // toString format: javax.management.openmbean.SimpleType(name=<className>)
+        check(SimpleType.INTEGER.toString().equals(
+                "javax.management.openmbean.SimpleType(name=java.lang.Integer)"), "INTEGER toString");
+        check(SimpleType.STRING.toString().equals(
+                "javax.management.openmbean.SimpleType(name=java.lang.String)"), "STRING toString");
+        check(SimpleType.INTEGER.toString().equals(SimpleType.INTEGER.toString()), "toString stable");
+
+        // constants are canonical singletons under deserialization semantics: equals + hashCode pair
+        check(SimpleType.INTEGER.equals(SimpleType.INTEGER) && SimpleType.INTEGER == SimpleType.INTEGER, "singleton identity");
     }
 
     public static void main(String[] args) throws Exception {
-        check(SimpleType.INTEGER.isValue(5), "INTEGER isValue");
-        check(!SimpleType.INTEGER.isValue("x"), "INTEGER not string");
-        check(SimpleType.STRING.isValue("hello"), "STRING isValue");
-        check(SimpleType.BOOLEAN.isValue(true), "BOOLEAN isValue");
-        check(SimpleType.INTEGER.getClassName().equals("java.lang.Integer"), "className");
-        check(SimpleType.STRING.getTypeName().equals("java.lang.String"), "typeName");
-        check(!SimpleType.INTEGER.isArray(), "not array");
-        check(SimpleType.INTEGER.equals(SimpleType.INTEGER), "equals");
-        check(SimpleType.INTEGER.hashCode() == SimpleType.INTEGER.hashCode(), "hashCode");
-        check(SimpleType.VOID != null && SimpleType.BIGDECIMAL != null && SimpleType.BIGINTEGER != null && SimpleType.DATE != null && SimpleType.OBJECTNAME != null, "constants");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

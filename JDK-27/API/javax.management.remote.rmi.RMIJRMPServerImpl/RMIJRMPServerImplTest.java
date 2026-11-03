@@ -1,35 +1,18 @@
 /*
  * @test
- * @summary javax.management.remote.rmi.RMIJRMPServerImpl conformance: JMX API type verification.
+ * @summary javax.management.remote.rmi.RMIJRMPServerImpl conformance: white-box structure + black-box behavior.
  * @run main RMIJRMPServerImplTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.management.ManagementFactory;
 import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+
+import javax.management.MBeanServer;
+
+import javax.management.remote.rmi.RMIJRMPServerImpl;
+import javax.management.remote.rmi.RMIServerImpl;
 
 public class RMIJRMPServerImplTest {
     static int passed;
@@ -37,17 +20,54 @@ public class RMIJRMPServerImplTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
+    static boolean has(Method[] mm, String n) {
+        for (Method m : mm) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.remote.rmi.RMIJRMPServerImpl");
+        check(!Modifier.isAbstract(c.getModifiers()), "concrete class");
         check(RMIServerImpl.class.isAssignableFrom(c), "extends RMIServerImpl");
-        java.lang.reflect.Method[] mm = c.getDeclaredMethods();
-        check(has(mm, "toStub"), "toStub");
-        check(has(mm, "getProtocol"), "getProtocol");
+        Method[] dm = c.getDeclaredMethods();
+        check(has(dm, "toStub"), "toStub");
+        check(has(dm, "getProtocol"), "getProtocol");
+        check(has(dm, "export"), "export");
+    }
+
+    // ---- Part 2: black-box (light behavior) ----
+    static void testBlackBox() throws Exception {
+        // Port 0, no socket factories, and no export: constructing must not bind anything.
+        RMIJRMPServerImpl impl = new RMIJRMPServerImpl(0, null, null, null);
+        check(impl.getVersion().startsWith("1.0 "), "getVersion prefix");
+        check(impl.getMBeanServer() == null, "mbean server initially null");
+
+        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+        impl.setMBeanServer(mbs);
+        check(impl.getMBeanServer() == mbs, "set/getMBeanServer round-trip");
+
+        ClassLoader cl = RMIJRMPServerImplTest.class.getClassLoader();
+        impl.setDefaultClassLoader(cl);
+        check(impl.getDefaultClassLoader() == cl, "set/getDefaultClassLoader round-trip");
+
+        // Note: close() is intentionally not called here. For a JRMP server that
+        // was never exported, closeServer() attempts to unexport the object and
+        // throws NoSuchObjectException; no ports were bound and no threads were
+        // started, so there is nothing to clean up.
+
+        // Negative port is rejected with a stable IllegalArgumentException.
+        try {
+            new RMIJRMPServerImpl(-1, null, null, null);
+            check(false, "expected IAE for negative port");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage().equals("Negative port: -1"), "negative port message: " + e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,27 +1,68 @@
 /*
  * @test
- * @summary javax.naming.InvalidNameException conformance: API type verification.
+ * @summary javax.naming.InvalidNameException conformance: white-box structure + black-box behavior.
  * @run main InvalidNameExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Modifier;
+import javax.naming.CompositeName;
+import javax.naming.Name;
+import javax.naming.NamingException;
+import javax.naming.InvalidNameException;
 
 public class InvalidNameExceptionTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = javax.naming.InvalidNameException.class;
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(c.getSuperclass() == javax.naming.NamingException.class, "extends NamingException");
+        check(java.io.Serializable.class.isAssignableFrom(c), "Serializable");
+        Constructor<?>[] cs = c.getDeclaredConstructors();
+        boolean noArg = false, strArg = false;
+        for (Constructor<?> k : cs) {
+            if (k.getParameterCount() == 0) noArg = true;
+            if (k.getParameterCount() == 1 && k.getParameterTypes()[0] == String.class) strArg = true;
+        }
+        check(noArg, "has no-arg ctor");
+        check(strArg, "has String ctor");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        InvalidNameException withMsg = new InvalidNameException("reason");
+        check(withMsg.getMessage().equals("reason"), "message preserved");
+        check(withMsg.getExplanation().equals("reason"), "explanation == message");
+        InvalidNameException noMsg = new InvalidNameException();
+        check(noMsg.getMessage() == null, "no-arg message null");
+
+        // inherited NamingException plumbing used by every subclass
+        withMsg.setRemainingName(new CompositeName("a/b"));
+        check(withMsg.getRemainingName().toString().equals("a/b"), "remaining name round trip");
+        withMsg.setResolvedName(new CompositeName("r"));
+        check(withMsg.getResolvedName().size() == 1, "resolved name");
+        withMsg.setResolvedObj("obj");
+        check("obj".equals(withMsg.getResolvedObj()), "resolved obj");
+        String ts = withMsg.toString();
+        check(ts.contains("javax.naming.InvalidNameException") && ts.contains("reason"), "toString naming");
+        check(withMsg instanceof NamingException, "catchable as NamingException");
+        // real producer: CompositeName parsing rejects a trailing escape
+        try {
+            new CompositeName("a\\");
+            throw new AssertionError("expected InvalidNameException");
+        } catch (javax.naming.InvalidNameException e) {
+            check(e.getMessage().equals("a\\: unescaped \\ at end of component"), "exact producer message");
+            e.appendRemainingComponent("next");
+            check(e.getRemainingName().toString().equals("next"), "remaining name from producer");
+        }
     }
 
     public static void main(String[] args) throws Exception {
-        javax.naming.InvalidNameException e = new javax.naming.InvalidNameException("msg");
-check("msg".equals(e.getMessage()), "message");
-check(e instanceof javax.naming.NamingException, "extends javax.naming.NamingException");
-check(e instanceof Exception, "is Exception");
-javax.naming.InvalidNameException e2 = new javax.naming.InvalidNameException();
-check(e2.getMessage() == null, "null message");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

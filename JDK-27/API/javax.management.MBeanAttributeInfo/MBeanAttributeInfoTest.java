@@ -1,52 +1,87 @@
 /*
  * @test
- * @summary javax.management.MBeanAttributeInfo conformance: JMX API type verification.
+ * @summary javax.management.MBeanAttributeInfo conformance: white-box structure + black-box behavior.
  * @run main MBeanAttributeInfoTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
+import java.util.*;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class MBeanAttributeInfoTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.MBeanAttributeInfo");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface(), "public concrete class");
+        check(c.getSuperclass() == MBeanFeatureInfo.class, "extends MBeanFeatureInfo");
+        check(Cloneable.class.isAssignableFrom(c), "implements Cloneable");
+        check(hasMethod(c, "getType"), "has getType");
+        check(hasMethod(c, "isReadable"), "has isReadable");
+        check(hasMethod(c, "isWritable"), "has isWritable");
+        check(hasMethod(c, "isIs"), "has isIs");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        MBeanAttributeInfo a = new MBeanAttributeInfo("Count", "int", "desc", true, false, false);
+        check("Count".equals(a.getName()), "getName");
+        check("int".equals(a.getType()), "getType");
+        check("desc".equals(a.getDescription()), "getDescription");
+        check(a.isReadable(), "isReadable");
+        check(!a.isWritable(), "isWritable");
+        check(!a.isIs(), "isIs");
+
+        // isIs variant
+        MBeanAttributeInfo isAttr = new MBeanAttributeInfo("Ready", "boolean", "d", true, false, true);
+        check(isAttr.isIs(), "isIs true");
+        check(isAttr.isReadable() && !isAttr.isWritable(), "is/isReadable/isWritable combo");
+
+        // descriptor constructor
+        ImmutableDescriptor d = new ImmutableDescriptor("name=Count", "description=desc");
+        MBeanAttributeInfo ad = new MBeanAttributeInfo("Count", "int", "desc", true, true, false, d);
+        check(ad.getDescriptor() != null && "Count".equals(ad.getDescriptor().getFieldValue("name")),
+                "descriptor ctor");
+
+        // Method-based constructor (introspection)
+        MBeanAttributeInfo viaMethod = new MBeanAttributeInfo("V", "desc", getMethod("getV"), getMethod("setV"));
+        check("V".equals(viaMethod.getName()), "method ctor name");
+        check(viaMethod.isReadable() && viaMethod.isWritable(), "method ctor readable/writable");
+
+        // equals compares all attribute fields
+        check(a.equals(new MBeanAttributeInfo("Count", "int", "desc", true, false, false)), "equals identical");
+        check(!a.equals(new MBeanAttributeInfo("Count", "int", "desc", true, true, false)), "different writable not equal");
+        check(!a.equals(new MBeanAttributeInfo("Count", "long", "desc", true, false, false)), "different type not equal");
+        check(!a.equals(new MBeanAttributeInfo("Other", "int", "desc", true, false, false)), "different name not equal");
+        check(!a.equals(null), "not equal null");
+        check(a.hashCode() == new MBeanAttributeInfo("Count", "int", "desc", true, false, false).hashCode(), "equal hashCode");
+
+        // clone
+        MBeanAttributeInfo clone = (MBeanAttributeInfo) a.clone();
+        check(clone != a && clone.equals(a), "clone equals original");
+
+        check(a.toString() != null, "toString non-null");
+    }
+
+    static Method getMethod(String name) throws Exception {
+        for (Method m : Sample.class.getMethods()) if (m.getName().equals(name)) return m;
+        throw new NoSuchMethodException(name);
+    }
+    public static class Sample {
+        public int getV() { return 0; }
+        public void setV(int v) { }
     }
 
     public static void main(String[] args) throws Exception {
-        MBeanAttributeInfo ai = new MBeanAttributeInfo("Name", "java.lang.String", "desc", true, true, false);
-        check(ai.getName().equals("Name"), "name");
-        check(ai.getType().equals("java.lang.String"), "type");
-        check(ai.getDescription().equals("desc"), "description");
-        check(ai.isReadable() && ai.isWritable() && !ai.isIs(), "read/write/is");
-        MBeanAttributeInfo c = (MBeanAttributeInfo) ai.clone();
-        check(c.equals(ai), "clone equals");
-        check(ai.hashCode() == c.hashCode(), "hashCode");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

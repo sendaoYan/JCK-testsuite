@@ -1,35 +1,11 @@
 /*
  * @test
- * @summary javax.management.BadStringOperationException conformance: JMX API type verification.
+ * @summary javax.management.BadStringOperationException conformance: white-box structure + black-box behavior.
  * @run main BadStringOperationExceptionTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class BadStringOperationExceptionTest {
     static int passed;
@@ -38,10 +14,32 @@ public class BadStringOperationExceptionTest {
         passed++;
     }
 
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.BadStringOperationException");
+        check(!c.isInterface(), "concrete class, not interface");
+        check((c.getModifiers() & Modifier.PUBLIC) != 0, "public class");
+        check(!Modifier.isAbstract(c.getModifiers()), "not abstract");
+        check("java.lang.Exception".equals(c.getSuperclass().getName()), "extends Exception");
+        check(Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(java.io.Serializable.class.isAssignableFrom(c), "serializable");
+        check(c.getConstructor(String.class) != null, "String constructor");
+        c.getMethod("toString");
+    }
+
+    static void testBlackBox() throws Exception {
+        BadStringOperationException e = new BadStringOperationException("plus");
+        check("BadStringOperationException: plus".equals(e.toString()), "toString embeds op");
+        check(e.getMessage() == null, "no detail message");
+        check(e instanceof Exception, "instanceof Exception");
+
+        BadStringOperationException e2 = new BadStringOperationException((String) null);
+        check("BadStringOperationException: null".equals(e2.toString()), "null op toString");
+    }
+
     public static void main(String[] args) throws Exception {
-        BadStringOperationException e = new BadStringOperationException("op");
-        check(e instanceof Exception, "hierarchy");
-        check(e.toString().contains("op"), "toString contains op");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

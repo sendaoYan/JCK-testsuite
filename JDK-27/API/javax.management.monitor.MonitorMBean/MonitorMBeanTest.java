@@ -1,51 +1,31 @@
 /*
  * @test
- * @summary javax.management.monitor.MonitorMBean conformance: JMX API type verification.
+ * @summary javax.management.monitor.MonitorMBean conformance: white-box structure + black-box behavior.
  * @run main MonitorMBeanTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.lang.reflect.Method;
+import javax.management.ObjectName;
+import javax.management.monitor.CounterMonitor;
+import javax.management.monitor.MonitorMBean;
 
+@SuppressWarnings("deprecation")
 public class MonitorMBeanTest {
     static int passed;
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
+    static boolean has(Method[] mm, String n) {
+        for (Method m : mm) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.monitor.MonitorMBean");
         check(c.isInterface(), "is interface");
-        java.lang.reflect.Method[] mm = c.getMethods();
+        Method[] mm = c.getMethods();
         check(has(mm, "start"), "has start");
         check(has(mm, "stop"), "has stop");
         check(has(mm, "addObservedObject"), "has addObservedObject");
@@ -59,6 +39,25 @@ public class MonitorMBeanTest {
         check(has(mm, "getGranularityPeriod"), "has getGranularityPeriod");
         check(has(mm, "setGranularityPeriod"), "has setGranularityPeriod");
         check(has(mm, "isActive"), "has isActive");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        MonitorMBean m = new CounterMonitor();
+        ObjectName on = new ObjectName("test:type=monitormbean");
+        m.setObservedObject(on);
+        check(m.containsObservedObject(on), "interface containsObservedObject");
+        check(on.equals(m.getObservedObject()), "interface getObservedObject");
+        m.setObservedAttribute("Value");
+        check("Value".equals(m.getObservedAttribute()), "interface getObservedAttribute");
+        m.setGranularityPeriod(300L);
+        check(m.getGranularityPeriod() == 300L, "interface granularity period");
+        check(!m.isActive(), "interface isActive false before start");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

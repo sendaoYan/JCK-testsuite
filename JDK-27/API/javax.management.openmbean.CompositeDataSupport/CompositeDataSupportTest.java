@@ -1,57 +1,141 @@
 /*
  * @test
- * @summary javax.management.openmbean.CompositeDataSupport conformance: JMX API type verification.
+ * @summary javax.management.openmbean.CompositeDataSupport conformance: white-box structure + black-box behavior.
  * @run main CompositeDataSupportTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
+import java.io.Serializable;
+import java.lang.reflect.Modifier;
 import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.util.Map;
+import javax.management.openmbean.CompositeData;
+import javax.management.openmbean.CompositeDataSupport;
+import javax.management.openmbean.CompositeType;
+import javax.management.openmbean.InvalidKeyException;
+import javax.management.openmbean.OpenDataException;
+import javax.management.openmbean.OpenType;
+import javax.management.openmbean.SimpleType;
 
 public class CompositeDataSupportTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static void checkThrows(java.lang.Class<? extends Throwable> type, String exactMessage, Runnable r, String label) {
+        try {
+            r.run();
+            throw new AssertionError(label + ": expected " + type.getSimpleName());
+        } catch (Throwable e) {
+            if (e instanceof AssertionError) throw (AssertionError) e;
+            check(type.isInstance(e), label + ": type " + e.getClass().getName());
+            if (exactMessage != null) check(exactMessage.equals(e.getMessage()),
+                label + ": message <" + e.getMessage() + "> != <" + exactMessage + ">");
+        }
     }
 
-    public static void main(String[] args) throws Exception {
+    static CompositeType type() throws Exception {
+        return new CompositeType("MyType", "desc",
+            new String[]{"name", "value"},
+            new String[]{"name desc", "value desc"},
+            new OpenType[]{SimpleType.STRING, SimpleType.INTEGER});
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.openmbean.CompositeDataSupport");
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(CompositeData.class.isAssignableFrom(c), "implements CompositeData");
+        check(Serializable.class.isAssignableFrom(c), "implements Serializable");
+        check(c.getMethod("getCompositeType") != null, "has getCompositeType");
+        check(c.getMethod("get", String.class) != null, "has get");
+        check(c.getMethod("getAll", String[].class) != null, "has getAll");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        CompositeType ct = type();
         String[] names = {"name", "value"};
-        String[] descs = {"name desc", "value desc"};
-        OpenType<?>[] types = {SimpleType.STRING, SimpleType.INTEGER};
-        CompositeType ct = new CompositeType("MyType", "desc", names, descs, types);
         CompositeDataSupport cd = new CompositeDataSupport(ct, names, new Object[]{"n", 5});
-        check(cd.getCompositeType().equals(ct), "composite type");
+
+        check(cd.getCompositeType().equals(ct), "getCompositeType");
         check(cd.get("name").equals("n"), "get name");
         check(cd.get("value").equals(5), "get value");
-        check(cd.containsKey("name"), "containsKey");
-        check(cd.containsValue("n"), "containsValue");
-        check(cd.getAll(new String[]{"name", "value"}).length == 2, "getAll");
-        check(cd.values().size() == 2, "values");
-        check(cd.equals(new CompositeDataSupport(ct, names, new Object[]{"n", 5})), "equals");
+
+        // getAll returns values in the requested key order
+        Object[] all = cd.getAll(new String[]{"value", "name"});
+        check(all.length == 2, "getAll length");
+        check(all[0].equals(5) && all[1].equals("n"), "getAll order");
+        check(cd.getAll(new String[0]).length == 0, "getAll empty");
+        check(cd.getAll(null).length == 0, "getAll null");
+
+        check(cd.containsKey("name"), "containsKey name");
+        check(cd.containsKey("value"), "containsKey value");
+        check(!cd.containsKey("missing"), "containsKey missing");
+        check(!cd.containsKey(null), "containsKey null false");
+        check(!cd.containsKey(""), "containsKey empty false");
+
+        check(cd.containsValue("n"), "containsValue n");
+        check(cd.containsValue(5), "containsValue 5");
+        check(!cd.containsValue("x"), "containsValue x false");
+        check(!cd.containsValue(null), "containsValue null false");
+
+        // values() collection is unmodifiable and ascending by item name
+        java.util.Collection<?> values = cd.values();
+        check(values.size() == 2, "values size");
+        check(values.contains("n") && values.contains(5), "values contents");
+
+        // null item values are allowed when the type permits (non-null check only for type validity)
+        CompositeDataSupport withNull = new CompositeDataSupport(ct, names, new Object[]{null, null});
+        check(withNull.get("name") == null, "null value stored");
+        check(withNull.containsValue(null), "containsValue null true");
+
+        // Map constructor: same semantics
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", "n");
+        map.put("value", 5);
+        CompositeDataSupport cdMap = new CompositeDataSupport(ct, map);
+        check(cdMap.equals(cd), "map ctor equals array ctor");
+
+        // equals / hashCode
+        CompositeDataSupport cd2 = new CompositeDataSupport(ct, names, new Object[]{"n", 5});
+        check(cd.equals(cd2), "equals");
+        check(cd.hashCode() == cd2.hashCode(), "hashCode equal");
+        check(!cd.equals(null), "equals null false");
+        check(!cd.equals("x"), "equals non-CompositeData false");
+        CompositeDataSupport cdDiff = new CompositeDataSupport(ct, names, new Object[]{"n", 6});
+        check(!cd.equals(cdDiff), "different value not equal");
+        CompositeType otherCt = new CompositeType("Other", "d", names, names, new OpenType[]{SimpleType.STRING, SimpleType.INTEGER});
+        CompositeDataSupport cdOtherType = new CompositeDataSupport(otherCt, names, new Object[]{"n", 5});
+        check(!cd.equals(cdOtherType), "different type not equal");
+
+        // toString
+        check(cd.toString().startsWith("javax.management.openmbean.CompositeDataSupport("), "toString prefix");
+        check(cd.toString().contains("compositeType="), "toString compositeType");
+        check(cd.toString().contains("contents="), "toString contents");
+        check(cd.toString().contains("name=n"), "toString contains mapping");
+
+        // exceptions (exact messages verified against JDK-27)
+        checkThrows(InvalidKeyException.class, "Argument key=\"missing\" is not an existing item name for this CompositeData instance.",
+            () -> cd.get("missing"), "get missing key");
+        checkThrows(IllegalArgumentException.class, "Argument key cannot be a null or empty String.",
+            () -> cd.get(null), "get null key");
+        checkThrows(IllegalArgumentException.class, "Argument key cannot be a null or empty String.",
+            () -> cd.get("  "), "get empty key");
+        checkThrows(OpenDataException.class, "Argument value of wrong type for item value: value notint, type javax.management.openmbean.SimpleType(name=java.lang.Integer)",
+            () -> { try { new CompositeDataSupport(ct, names, new Object[]{"n", "notint"}); } catch (Exception e) { throw sneaky(e); } },
+            "wrong value type");
+        checkThrows(OpenDataException.class, "Item names do not match CompositeType: names in items but not in CompositeType: [extra]; names in CompositeType but not in items: [value]",
+            () -> { try { new CompositeDataSupport(ct, new String[]{"name", "extra"}, new Object[]{"n", 1}); } catch (Exception e) { throw sneaky(e); } },
+            "missing/extra item names");
+        checkThrows(IllegalArgumentException.class, "Argument compositeType cannot be null.",
+            () -> { try { new CompositeDataSupport((CompositeType) null, names, new Object[]{"n", 5}); } catch (Exception e) { throw sneaky(e); } },
+            "null compositeType");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <E extends Throwable> RuntimeException sneaky(Throwable t) throws E { throw (E) t; }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

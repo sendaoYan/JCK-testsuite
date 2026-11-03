@@ -1,52 +1,45 @@
 /*
  * @test
- * @summary javax.management.DescriptorRead conformance: JMX API type verification.
+ * @summary javax.management.DescriptorRead conformance: white-box structure + light behavior.
  * @run main DescriptorReadTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
+import java.util.*;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class DescriptorReadTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("javax.management.DescriptorRead");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.DescriptorRead");
         check(c.isInterface(), "is interface");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "getDescriptor"), "has getDescriptor");
+        check(hasMethod(c, "getDescriptor"), "has getDescriptor");
+    }
+
+    // ---- Part 2: black-box (light behavior) ----
+    static void testBlackBox() throws Exception {
+        final Descriptor d = new ImmutableDescriptor("name=n");
+        DescriptorRead read = new DescriptorRead() {
+            public Descriptor getDescriptor() { return d; }
+        };
+        check(read.getDescriptor() == d, "getDescriptor returns descriptor");
+
+        // MBeanFeatureInfo implements DescriptorRead
+        MBeanFeatureInfo fi = new MBeanFeatureInfo("n", "d");
+        check(fi.getDescriptor() != null, "MBeanFeatureInfo.getDescriptor non-null");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,55 +1,50 @@
 /*
  * @test
- * @summary javax.management.MBeanServerDelegateMBean conformance: JMX API type verification.
+ * @summary javax.management.MBeanServerDelegateMBean conformance: white-box structure + light behavior.
  * @run main MBeanServerDelegateMBeanTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
+import java.util.*;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class MBeanServerDelegateMBeanTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("javax.management.MBeanServerDelegateMBean");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.MBeanServerDelegateMBean");
         check(c.isInterface(), "is interface");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "getMBeanServerId"), "has getMBeanServerId");
-        check(has(mm, "getSpecificationName"), "has getSpecificationName");
-        check(has(mm, "getSpecificationVersion"), "has getSpecificationVersion");
-        check(has(mm, "getImplementationName"), "has getImplementationName");
+        check(hasMethod(c, "getMBeanServerId"), "has getMBeanServerId");
+        check(hasMethod(c, "getSpecificationName"), "has getSpecificationName");
+        check(hasMethod(c, "getSpecificationVersion"), "has getSpecificationVersion");
+        check(hasMethod(c, "getSpecificationVendor"), "has getSpecificationVendor");
+        check(hasMethod(c, "getImplementationName"), "has getImplementationName");
+        check(hasMethod(c, "getImplementationVersion"), "has getImplementationVersion");
+        check(hasMethod(c, "getImplementationVendor"), "has getImplementationVendor");
+    }
+
+    // ---- Part 2: black-box (light behavior) ----
+    static void testBlackBox() throws Exception {
+        MBeanServerDelegateMBean m = new MBeanServerDelegate();
+        check(m.getMBeanServerId() != null, "getMBeanServerId non-null");
+        check("Java Management Extensions".equals(m.getSpecificationName()), "getSpecificationName");
+        check("1.4".equals(m.getSpecificationVersion()), "getSpecificationVersion");
+        check("Oracle Corporation".equals(m.getSpecificationVendor()), "getSpecificationVendor");
+        check("JMX".equals(m.getImplementationName()), "getImplementationName");
+        check(m.getImplementationVersion() != null, "getImplementationVersion non-null");
+        check("Oracle Corporation".equals(m.getImplementationVendor()), "getImplementationVendor");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

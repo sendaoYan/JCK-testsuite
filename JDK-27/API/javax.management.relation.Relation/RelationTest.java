@@ -1,62 +1,51 @@
 /*
  * @test
- * @summary javax.management.relation.Relation conformance: JMX API type verification.
+ * @summary javax.management.relation.Relation conformance: white-box structure + light behavior.
  * @run main RelationTest
  */
-
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import javax.management.relation.Relation;
+import javax.management.relation.RelationSupport;
 
 public class RelationTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.relation.Relation");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "Relation must be public");
+        check(c.isInterface(), "Relation must be an interface");
+
+        c.getMethod("getRole", String.class);
+        c.getMethod("getRoles", String[].class);
+        c.getMethod("getRoleCardinality", String.class);
+        c.getMethod("getAllRoles");
+        c.getMethod("retrieveAllRoles");
+        c.getMethod("setRole", javax.management.relation.Role.class);
+        c.getMethod("setRoles", javax.management.relation.RoleList.class);
+        c.getMethod("handleMBeanUnregistration", javax.management.ObjectName.class, String.class);
+        c.getMethod("getReferencedMBeans");
+        c.getMethod("getRelationTypeName");
+        c.getMethod("getRelationServiceName");
+        c.getMethod("getRelationId");
+
+        check(c.getMethod("getRole", String.class).getReturnType() == java.util.List.class, "getRole returns List");
+        check(c.getMethod("getAllRoles").getReturnType() == javax.management.relation.RoleResult.class, "getAllRoles returns RoleResult");
+        check(c.getMethod("retrieveAllRoles").getReturnType() == javax.management.relation.RoleList.class, "retrieveAllRoles returns RoleList");
     }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
-        return false;
+
+    // ---- Part 2: light behavior (implementation linkage) ----
+    static void testBlackBox() throws Exception {
+        check(Relation.class.isAssignableFrom(RelationSupport.class),
+              "RelationSupport implements Relation");
+        // All methods are exercised indirectly through RelationSupport's own
+        // behavioral tests; here we verify the interface is implementable by
+        // its documented implementation class.
     }
 
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("javax.management.relation.Relation");
-        check(c.isInterface(), "is interface");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "getRole"), "has getRole");
-        check(has(mm, "getRoles"), "has getRoles");
-        check(has(mm, "getRoleCardinality"), "has getRoleCardinality");
-        check(has(mm, "getAllRoles"), "has getAllRoles");
-        check(has(mm, "retrieveAllRoles"), "has retrieveAllRoles");
-        check(has(mm, "setRole"), "has setRole");
-        check(has(mm, "setRoles"), "has setRoles");
-        check(has(mm, "getReferencedMBeans"), "has getReferencedMBeans");
-        check(has(mm, "getRelationTypeName"), "has getRelationTypeName");
-        check(has(mm, "getRelationServiceName"), "has getRelationServiceName");
-        check(has(mm, "getRelationId"), "has getRelationId");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,35 +1,10 @@
 /*
  * @test
- * @summary javax.management.modelmbean.InvalidTargetObjectTypeException conformance: JMX API type verification.
+ * @summary javax.management.modelmbean.InvalidTargetObjectTypeException conformance: white-box structure + black-box behavior.
  * @run main InvalidTargetObjectTypeExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import javax.management.modelmbean.InvalidTargetObjectTypeException;
 
 public class InvalidTargetObjectTypeExceptionTest {
     static int passed;
@@ -38,14 +13,35 @@ public class InvalidTargetObjectTypeExceptionTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
-        InvalidTargetObjectTypeException e = new InvalidTargetObjectTypeException("msg");
-        check(e.getMessage() != null, "message non-null");
-        check(e instanceof Exception, "hierarchy");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.modelmbean.InvalidTargetObjectTypeException");
+        check(Exception.class.isAssignableFrom(c), "extends Exception");
+        check(c.getSuperclass() == Exception.class, "direct superclass is Exception");
+        check(c.getConstructors().length >= 3, "has all three constructors");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        InvalidTargetObjectTypeException e1 = new InvalidTargetObjectTypeException("boom");
+        check("InvalidTargetObjectTypeException: boom".equals(e1.getMessage()), "String message");
+        check(e1 instanceof Exception, "instance of Exception");
+
         InvalidTargetObjectTypeException e2 = new InvalidTargetObjectTypeException();
-        check(e2.getMessage() != null, "no-arg message non-null");
-        InvalidTargetObjectTypeException e3 = new InvalidTargetObjectTypeException(new Exception("cause"), "msg2");
-        check(e3.getMessage() != null, "target message non-null");
+        check("InvalidTargetObjectTypeException: ".equals(e2.getMessage()), "no-arg message");
+
+        Exception cause = new Exception("cause");
+        InvalidTargetObjectTypeException e3 = new InvalidTargetObjectTypeException(cause, "msg2");
+        check(e3.getMessage().startsWith("InvalidTargetObjectTypeException: msg2"), "target message prefix");
+        check(e3.getMessage().contains("triggered by:"), "target message embeds cause");
+
+        InvalidTargetObjectTypeException e4 = new InvalidTargetObjectTypeException(null, "msg3");
+        check("InvalidTargetObjectTypeException: msg3".equals(e4.getMessage()), "null cause message");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

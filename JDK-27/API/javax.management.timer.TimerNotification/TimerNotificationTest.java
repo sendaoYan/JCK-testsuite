@@ -1,35 +1,11 @@
 /*
  * @test
- * @summary javax.management.timer.TimerNotification conformance: JMX API type verification.
+ * @summary javax.management.timer.TimerNotification conformance: white-box structure + black-box behavior.
  * @run main TimerNotificationTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import javax.management.Notification;
+import javax.management.timer.TimerNotification;
 
 public class TimerNotificationTest {
     static int passed;
@@ -38,11 +14,37 @@ public class TimerNotificationTest {
         passed++;
     }
 
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.timer.TimerNotification");
+        check(Notification.class.isAssignableFrom(c), "extends Notification");
+        check(c.getConstructors().length == 1, "single public constructor");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Object source = new Object();
+        TimerNotification n = new TimerNotification("type", source, 1L, 100L, "msg", Integer.valueOf(42));
+        check("type".equals(n.getType()), "getType inherited");
+        check(n.getSequenceNumber() == 1L, "getSequenceNumber inherited");
+        check(n.getTimeStamp() == 100L, "getTimeStamp inherited");
+        check("msg".equals(n.getMessage()), "getMessage inherited");
+        check(source == n.getSource(), "getSource inherited");
+        check(Integer.valueOf(42).equals(n.getNotificationID()), "getNotificationID");
+
+        // userData is inherited from Notification and settable.
+        n.setUserData("payload");
+        check("payload".equals(n.getUserData()), "setUserData/getUserData");
+
+        // A null id is representable.
+        TimerNotification n2 = new TimerNotification("t2", source, 2L, 200L, "m2", null);
+        check(n2.getNotificationID() == null, "null notification id preserved");
+        check("t2".equals(n2.getType()), "second type");
+    }
+
     public static void main(String[] args) throws Exception {
-        TimerNotification n = new TimerNotification("type", "src", 1L, 100L, "msg", 42);
-        check(n.getType().equals("type"), "type");
-        check(n.getNotificationID().intValue() == 42, "notification id");
-        check(n.getSequenceNumber() == 1L, "sequence");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

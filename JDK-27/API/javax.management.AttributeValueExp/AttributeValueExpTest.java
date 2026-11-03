@@ -1,50 +1,65 @@
 /*
  * @test
- * @summary javax.management.AttributeValueExp conformance: JMX API type verification.
+ * @summary javax.management.AttributeValueExp conformance: white-box structure + black-box behavior.
  * @run main AttributeValueExpTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
+import java.util.*;
 import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class AttributeValueExpTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.AttributeValueExp");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface(), "public concrete class");
+        check(ValueExp.class.isAssignableFrom(c), "implements ValueExp");
+        check(hasMethod(c, "getAttributeName"), "has getAttributeName");
+        check(hasMethod(c, "apply"), "has apply");
+        check(hasMethod(c, "setMBeanServer"), "has setMBeanServer");
+        check(hasMethod(c, "toString"), "has toString");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        AttributeValueExp exp = new AttributeValueExp("VmName");
+        check("VmName".equals(exp.getAttributeName()), "getAttributeName");
+        check("VmName".equals(exp.toString()), "toString returns attribute name");
+
+        // apply() resolves the attribute through the QueryEval thread-local MBeanServer.
+        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+        QueryEval qe = new QueryEval() { };
+        qe.setMBeanServer(mbs);
+        ValueExp result = exp.apply(new ObjectName("java.lang:type=Runtime"));
+        check(result instanceof StringValueExp, "apply returns StringValueExp for String attribute");
+        String v = ((StringValueExp) result).getValue();
+        check(v != null && v.length() > 0, "VmName attribute non-empty: " + v);
+
+        // A non-existent attribute makes getAttribute return null, so apply() throws
+        // BadAttributeValueExpException (the null result is not Number/String/Boolean).
+        boolean threwMissing = false;
+        try {
+            new AttributeValueExp("NoSuchAttribute999").apply(new ObjectName("java.lang:type=Runtime"));
+        } catch (BadAttributeValueExpException ex) { threwMissing = true; }
+        check(threwMissing, "missing attribute throws BadAttributeValueExpException");
+
+        // numeric attribute wraps into a NumericValueExp
+        ValueExp num = new AttributeValueExp("ThreadCount").apply(new ObjectName("java.lang:type=Threading"));
+        check(num != null, "numeric attribute applies without error");
     }
 
     public static void main(String[] args) throws Exception {
-        AttributeValueExp a = new AttributeValueExp("Count");
-        check(a.getAttributeName().equals("Count"), "attr name");
-        check(a.toString().equals("Count"), "toString");
-        a.setMBeanServer(ManagementFactory.getPlatformMBeanServer());
-        AttributeValueExp a2 = new AttributeValueExp();
-        check(a2.getAttributeName() == null, "null attr name");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

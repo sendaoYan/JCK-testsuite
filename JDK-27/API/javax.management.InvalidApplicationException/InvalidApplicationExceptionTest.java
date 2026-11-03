@@ -1,35 +1,11 @@
 /*
  * @test
- * @summary javax.management.InvalidApplicationException conformance: JMX API type verification.
+ * @summary javax.management.InvalidApplicationException conformance: white-box structure + black-box behavior.
  * @run main InvalidApplicationExceptionTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class InvalidApplicationExceptionTest {
     static int passed;
@@ -38,10 +14,32 @@ public class InvalidApplicationExceptionTest {
         passed++;
     }
 
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("javax.management.InvalidApplicationException");
+        check(!c.isInterface(), "concrete class, not interface");
+        check((c.getModifiers() & Modifier.PUBLIC) != 0, "public class");
+        check(!Modifier.isAbstract(c.getModifiers()), "not abstract");
+        check("java.lang.Exception".equals(c.getSuperclass().getName()), "extends Exception");
+        check(Throwable.class.isAssignableFrom(c), "is a Throwable");
+        check(java.io.Serializable.class.isAssignableFrom(c), "serializable");
+        check(c.getConstructor(Object.class) != null, "Object constructor");
+    }
+
+    static void testBlackBox() throws Exception {
+        Object val = new Object();
+        InvalidApplicationException e = new InvalidApplicationException(val);
+        check(e.getMessage() == null, "no detail message");
+        check("javax.management.InvalidApplicationException".equals(e.toString()), "toString is bare class name");
+        check(e instanceof Exception, "instanceof Exception");
+
+        InvalidApplicationException e2 = new InvalidApplicationException(null);
+        check(e2.getMessage() == null, "null value still no message");
+    }
+
     public static void main(String[] args) throws Exception {
-        Exception e = new InvalidApplicationException(new Object());
-        check(e.getMessage() == null, "null message");
-        check(e instanceof Exception, "hierarchy");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

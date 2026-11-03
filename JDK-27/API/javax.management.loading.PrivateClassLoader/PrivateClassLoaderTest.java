@@ -1,35 +1,10 @@
 /*
  * @test
- * @summary javax.management.loading.PrivateClassLoader conformance: JMX API type verification.
+ * @summary javax.management.loading.PrivateClassLoader conformance: white-box structure + black-box behavior.
  * @run main PrivateClassLoaderTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import javax.management.loading.PrivateClassLoader;
 
 public class PrivateClassLoaderTest {
     static int passed;
@@ -38,10 +13,28 @@ public class PrivateClassLoaderTest {
         passed++;
     }
 
-    public static void main(String[] args) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.loading.PrivateClassLoader");
         check(c.isInterface(), "is interface");
-        check(c.getDeclaredMethods().length == 0, "marker");
+        check(c.getDeclaredMethods().length == 0, "marker interface has no methods");
+        check(c.getDeclaredFields().length == 0, "marker interface has no fields");
+    }
+
+    // A ClassLoader implementing the marker interface satisfies both contracts.
+    static class PrivateLoader extends ClassLoader implements PrivateClassLoader {
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        ClassLoader loader = new PrivateLoader();
+        check(loader instanceof ClassLoader, "instance of ClassLoader");
+        check(loader instanceof PrivateClassLoader, "instance of PrivateClassLoader");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

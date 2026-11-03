@@ -1,52 +1,64 @@
 /*
  * @test
- * @summary javax.management.AttributeChangeNotification conformance: JMX API type verification.
+ * @summary javax.management.AttributeChangeNotification conformance: white-box structure + black-box behavior.
  * @run main AttributeChangeNotificationTest
  */
 
 import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
+import java.util.*;
 import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
 
 public class AttributeChangeNotificationTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.management.AttributeChangeNotification");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface(), "public concrete class");
+        check(c.getSuperclass() == Notification.class, "extends Notification");
+        check(hasMethod(c, "getAttributeName"), "has getAttributeName");
+        check(hasMethod(c, "getAttributeType"), "has getAttributeType");
+        check(hasMethod(c, "getOldValue"), "has getOldValue");
+        check(hasMethod(c, "getNewValue"), "has getNewValue");
+        check("jmx.attribute.change".equals(AttributeChangeNotification.ATTRIBUTE_CHANGE), "ATTRIBUTE_CHANGE constant");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        Object source = "source";
+        long seq = 42L;
+        long ts = 123456789L;
+        AttributeChangeNotification n = new AttributeChangeNotification(
+                source, seq, ts, "message", "attrName", "java.lang.Integer", 1, 2);
+
+        check(n.getSource() == source, "getSource");
+        check(n.getSequenceNumber() == seq, "getSequenceNumber");
+        check(n.getTimeStamp() == ts, "getTimeStamp");
+        check("message".equals(n.getMessage()), "getMessage");
+        check("attrName".equals(n.getAttributeName()), "getAttributeName");
+        check("java.lang.Integer".equals(n.getAttributeType()), "getAttributeType");
+        check(n.getOldValue().equals(1), "getOldValue");
+        check(n.getNewValue().equals(2), "getNewValue");
+        check(n.getType().equals(AttributeChangeNotification.ATTRIBUTE_CHANGE), "type is ATTRIBUTE_CHANGE");
+        check(AttributeChangeNotification.ATTRIBUTE_CHANGE.equals("jmx.attribute.change"), "constant value");
+
+        // null old/new values are preserved
+        AttributeChangeNotification n2 = new AttributeChangeNotification(
+                source, 1L, 2L, "m", "a", "t", null, null);
+        check(n2.getOldValue() == null, "null old value");
+        check(n2.getNewValue() == null, "null new value");
+        check(n2.getAttributeName().equals("a") && n2.getAttributeType().equals("t"), "null-value notification fields");
     }
 
     public static void main(String[] args) throws Exception {
-        Object old = "old";
-        Object nev = "new";
-        AttributeChangeNotification n = new AttributeChangeNotification("src", 1L, 100L, "msg", "AttrName", "java.lang.String", old, nev);
-        check(n.getAttributeName().equals("AttrName"), "attr name");
-        check(n.getAttributeType().equals("java.lang.String"), "attr type");
-        check(n.getOldValue() == old, "old value");
-        check(n.getNewValue() == nev, "new value");
-        check(n.getType().equals(AttributeChangeNotification.ATTRIBUTE_CHANGE), "type");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

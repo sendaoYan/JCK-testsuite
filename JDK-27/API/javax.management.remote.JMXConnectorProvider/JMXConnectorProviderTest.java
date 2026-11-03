@@ -1,35 +1,15 @@
 /*
  * @test
- * @summary javax.management.remote.JMXConnectorProvider conformance: JMX API type verification.
+ * @summary javax.management.remote.JMXConnectorProvider conformance: white-box structure + black-box behavior.
  * @run main JMXConnectorProviderTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
+import java.lang.reflect.Method;
 import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+
+import javax.management.remote.JMXConnector;
+import javax.management.remote.JMXConnectorProvider;
+import javax.management.remote.JMXServiceURL;
 
 public class JMXConnectorProviderTest {
     static int passed;
@@ -37,16 +17,33 @@ public class JMXConnectorProviderTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
+    static boolean has(Method[] mm, String n) {
+        for (Method m : mm) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.remote.JMXConnectorProvider");
         check(c.isInterface(), "is interface");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "newJMXConnector"), "has newJMXConnector");
+        Method m = c.getMethod("newJMXConnector", JMXServiceURL.class, Map.class);
+        check(m.getReturnType() == JMXConnector.class, "newJMXConnector returns JMXConnector");
+    }
+
+    // ---- Part 2: black-box (light behavior) ----
+    static void testBlackBox() throws Exception {
+        JMXConnectorProvider provider = new JMXConnectorProvider() {
+            public JMXConnector newJMXConnector(JMXServiceURL serviceURL, Map<String, ?> environment) {
+                return null;
+            }
+        };
+        JMXServiceURL url = new JMXServiceURL("service:jmx:rmi://localhost:1/x");
+        check(provider.newJMXConnector(url, null) == null, "anonymous newJMXConnector callable");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

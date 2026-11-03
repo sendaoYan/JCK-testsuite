@@ -1,50 +1,23 @@
 /*
  * @test
- * @summary javax.management.openmbean.OpenMBeanOperationInfo conformance: JMX API type verification.
+ * @summary javax.management.openmbean.OpenMBeanOperationInfo conformance: white-box structure.
  * @run main OpenMBeanOperationInfoTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+import java.lang.reflect.Modifier;
 
 public class OpenMBeanOperationInfoTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     static boolean has(java.lang.reflect.Method[] mm, String n) {
         for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.openmbean.OpenMBeanOperationInfo");
         check(c.isInterface(), "is interface");
+        check(Modifier.isPublic(c.getModifiers()), "public");
         java.lang.reflect.Method[] mm = c.getMethods();
         check(has(mm, "getDescription"), "has getDescription");
         check(has(mm, "getName"), "has getName");
@@ -52,6 +25,13 @@ public class OpenMBeanOperationInfoTest {
         check(has(mm, "getImpact"), "has getImpact");
         check(has(mm, "getReturnType"), "has getReturnType");
         check(has(mm, "getReturnOpenType"), "has getReturnOpenType");
+        check(has(mm, "equals"), "has equals");
+        check(has(mm, "hashCode"), "has hashCode");
+        check(has(mm, "toString"), "has toString");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

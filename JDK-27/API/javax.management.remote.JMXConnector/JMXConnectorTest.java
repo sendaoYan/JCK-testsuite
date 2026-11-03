@@ -1,35 +1,17 @@
 /*
  * @test
- * @summary javax.management.remote.JMXConnector conformance: JMX API type verification.
+ * @summary javax.management.remote.JMXConnector conformance: white-box structure + black-box behavior.
  * @run main JMXConnectorTest
  */
 
-import java.lang.reflect.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.Date;
-import java.util.Hashtable;
-import java.util.Set;
-import java.util.Collection;
+import java.io.Closeable;
+import java.lang.reflect.Method;
 import java.util.Map;
-import java.util.HashMap;
-import java.io.*;
-import java.lang.management.*;
-import java.net.*;
-import java.security.*;
-import java.rmi.*;
-import java.rmi.server.*;
-import javax.security.auth.Subject;
-import javax.management.*;
-import javax.management.loading.*;
-import javax.management.modelmbean.*;
-import javax.management.monitor.*;
-import javax.management.openmbean.*;
-import javax.management.relation.*;
-import javax.management.remote.*;
-import javax.management.remote.rmi.*;
-import javax.management.timer.*;
+
+import javax.management.MBeanServerConnection;
+import javax.management.NotificationFilter;
+import javax.management.NotificationListener;
+import javax.management.remote.JMXConnector;
 
 public class JMXConnectorTest {
     static int passed;
@@ -37,22 +19,50 @@ public class JMXConnectorTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean has(java.lang.reflect.Method[] mm, String n) {
-        for (java.lang.reflect.Method m : mm) if (m.getName().equals(n)) return true;
+    static boolean has(Method[] mm, String n) {
+        for (Method m : mm) if (m.getName().equals(n)) return true;
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.management.remote.JMXConnector");
         check(c.isInterface(), "is interface");
-        check(java.io.Closeable.class.isAssignableFrom(c), "extends java.io.Closeable");
-        java.lang.reflect.Method[] mm = c.getMethods();
-        check(has(mm, "connect"), "has connect");
-        check(has(mm, "getMBeanServerConnection"), "has getMBeanServerConnection");
-        check(has(mm, "close"), "has close");
-        check(has(mm, "addConnectionNotificationListener"), "has addConnectionNotificationListener");
-        check(has(mm, "removeConnectionNotificationListener"), "has removeConnectionNotificationListener");
-        check(has(mm, "getConnectionId"), "has getConnectionId");
+        check(Closeable.class.isAssignableFrom(c), "extends Closeable");
+        Method[] mm = c.getMethods();
+        check(has(mm, "connect"), "connect");
+        check(has(mm, "getMBeanServerConnection"), "getMBeanServerConnection");
+        check(has(mm, "close"), "close");
+        check(has(mm, "addConnectionNotificationListener"), "addConnectionNotificationListener");
+        check(has(mm, "removeConnectionNotificationListener"), "removeConnectionNotificationListener");
+        check(has(mm, "getConnectionId"), "getConnectionId");
+        check(JMXConnector.CREDENTIALS.equals("jmx.remote.credentials"), "CREDENTIALS constant");
+    }
+
+    // ---- Part 2: black-box (light behavior) ----
+    static void testBlackBox() throws Exception {
+        final boolean[] closed = new boolean[1];
+        JMXConnector connector = new JMXConnector() {
+            boolean connected;
+            public void connect() { connected = true; }
+            public void connect(Map<String, ?> env) { connected = true; }
+            public MBeanServerConnection getMBeanServerConnection() { return null; }
+            public void close() { closed[0] = true; }
+            public void addConnectionNotificationListener(NotificationListener l, NotificationFilter f, Object h) { }
+            public void removeConnectionNotificationListener(NotificationListener l) { }
+            public void removeConnectionNotificationListener(NotificationListener l, NotificationFilter f, Object h) { }
+            public String getConnectionId() { return "conn-1"; }
+        };
+        connector.connect();
+        check(connector.getConnectionId().equals("conn-1"), "anonymous getConnectionId");
+        check(connector.getMBeanServerConnection() == null, "anonymous getMBeanServerConnection");
+        connector.close();
+        check(closed[0], "close called");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
