@@ -1,28 +1,61 @@
 /*
  * @test
- * @summary java.time.temporal.UnsupportedTemporalTypeException conformance: message and hierarchy.
+ * @summary java.time.temporal.UnsupportedTemporalTypeException conformance: white-box structure + black-box behavior.
  * @run main UnsupportedTemporalTypeExceptionTest
  */
 
+import java.lang.reflect.Modifier;
 import java.time.DateTimeException;
+import java.time.LocalTime;
+import java.time.temporal.ChronoField;
 import java.time.temporal.UnsupportedTemporalTypeException;
 
 public class UnsupportedTemporalTypeExceptionTest {
     static int passed;
 
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void expectThrows(Class<? extends Throwable> t, Runnable r, String m) {
+        try { r.run(); } catch (Throwable e) {
+            if (t.isInstance(e)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + t.getSimpleName() + " got " + e.getClass().getSimpleName(), e);
+        }
+        throw new AssertionError(m + ": expected " + t.getSimpleName() + " but nothing thrown");
     }
 
-    static void testUnsupportedTemporalTypeException() {
-        UnsupportedTemporalTypeException e = new UnsupportedTemporalTypeException("msg");
-        check("msg".equals(e.getMessage()), "getMessage");
-        check(e instanceof DateTimeException, "is DateTimeException");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.time.temporal.UnsupportedTemporalTypeException");
+        check(!c.isInterface(), "is a class");
+        check(c.getSuperclass() == DateTimeException.class, "extends DateTimeException");
+        Class<?> dt = Class.forName("java.time.DateTimeException");
+        check(dt.getSuperclass() == RuntimeException.class, "DateTimeException extends RuntimeException");
+        check(c.getConstructor(String.class) != null, "constructor (String)");
+        check(c.getConstructor(String.class, Throwable.class) != null, "constructor (String,Throwable)");
     }
 
-    public static void main(String[] args) {
-        testUnsupportedTemporalTypeException();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        // constructors + getMessage
+        UnsupportedTemporalTypeException e1 = new UnsupportedTemporalTypeException("msg");
+        check("msg".equals(e1.getMessage()), "getMessage");
+        check(e1 instanceof DateTimeException, "is DateTimeException");
+        check(e1 instanceof RuntimeException, "is RuntimeException");
+
+        Throwable cause = new IllegalArgumentException("cause");
+        UnsupportedTemporalTypeException e2 = new UnsupportedTemporalTypeException("outer", cause);
+        check("outer".equals(e2.getMessage()), "ctor (String,Throwable) message");
+        check(e2.getCause() == cause, "ctor (String,Throwable) cause");
+
+        // produced naturally: query a date field on a time-only object
+        expectThrows(UnsupportedTemporalTypeException.class,
+                () -> LocalTime.of(10, 0).get(ChronoField.MONTH_OF_YEAR),
+                "LocalTime.get(MONTH_OF_YEAR) throws UnsupportedTemporalTypeException");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

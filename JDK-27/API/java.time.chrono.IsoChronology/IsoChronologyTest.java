@@ -1,13 +1,28 @@
 /*
  * @test
- * @summary java.time.chrono.IsoChronology conformance: id/calendar/leap/era.
+ * @summary java.time.chrono.IsoChronology conformance: white-box structure + black-box behavior.
  * @run main IsoChronologyTest
  */
 
+import java.io.Serializable;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Period;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.chrono.AbstractChronology;
 import java.time.chrono.IsoChronology;
 import java.time.chrono.IsoEra;
+import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoField;
+import java.time.temporal.TemporalField;
+import java.util.HashMap;
+import java.util.Map;
 
 public class IsoChronologyTest {
     static int passed;
@@ -17,24 +32,114 @@ public class IsoChronologyTest {
         passed++;
     }
 
-    static void testIsoChronology() {
+    static void expectThrows(Class<? extends Throwable> t, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable e) {
+            if (t.isInstance(e)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + t.getSimpleName() + " got " + e.getClass().getSimpleName(), e);
+        }
+        throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
+    }
+
+    static boolean hasMethod(Class<?> c, String name) {
+        for (Method m : c.getMethods()) {
+            if (m.getName().equals(name)) return true;
+        }
+        return false;
+    }
+
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.time.chrono.IsoChronology");
+        check(Modifier.isFinal(c.getModifiers()), "IsoChronology is final");
+        check(!c.isInterface(), "IsoChronology is a class");
+        check(!Modifier.isAbstract(c.getModifiers()), "IsoChronology is not abstract");
+        check(c.getSuperclass() == AbstractChronology.class, "extends AbstractChronology");
+        check(Serializable.class.isAssignableFrom(c), "implements Serializable");
+
+        Field inst = c.getField("INSTANCE");
+        check(Modifier.isPublic(inst.getModifiers()) && Modifier.isStatic(inst.getModifiers())
+              && Modifier.isFinal(inst.getModifiers()), "INSTANCE is public static final");
+        check(inst.get(null) == IsoChronology.INSTANCE, "INSTANCE field == INSTANCE");
+
+        for (String m : new String[]{"getId", "getCalendarType", "date", "dateYearDay", "dateEpochDay",
+                "epochSecond", "localDateTime", "zonedDateTime", "dateNow", "isLeapYear", "prolepticYear",
+                "eraOf", "eras", "resolveDate", "range", "period", "isIsoBased"}) {
+            check(hasMethod(c, m), "IsoChronology has method " + m);
+        }
+    }
+
+    static void testBlackBox() {
         IsoChronology iso = IsoChronology.INSTANCE;
+        check(iso == IsoChronology.INSTANCE, "INSTANCE singleton");
         check("ISO".equals(iso.getId()), "id");
         check("iso8601".equals(iso.getCalendarType()), "calendarType");
+
+        // Leap years (proleptic Gregorian rules).
         check(iso.isLeapYear(2020), "2020 leap");
         check(!iso.isLeapYear(2019), "2019 not leap");
+        check(!iso.isLeapYear(1900), "1900 not leap");
+        check(iso.isLeapYear(2000), "2000 leap");
+        check(iso.isLeapYear(0), "year 0 leap");
+
+        // Era conversion.
         check(iso.prolepticYear(IsoEra.CE, 2020) == 2020, "prolepticYear CE");
         check(iso.prolepticYear(IsoEra.BCE, 1) == 0, "prolepticYear BCE");
         check(iso.eraOf(1) == IsoEra.CE, "eraOf CE");
         check(iso.eraOf(0) == IsoEra.BCE, "eraOf BCE");
         check(iso.eras().size() == 2, "two eras");
+        check(iso.eras().contains(IsoEra.CE) && iso.eras().contains(IsoEra.BCE), "eras contain CE/BCE");
+
+        // Date factories.
         check(iso.date(2020, 1, 1).equals(LocalDate.of(2020, 1, 1)), "date");
-        check(iso.dateEpochDay(0).equals(LocalDate.of(1970, 1, 1)), "dateEpochDay");
+        check(iso.date(IsoEra.BCE, 1, 1, 1).equals(LocalDate.of(0, 1, 1)), "date BCE year 0");
+        check(iso.dateYearDay(2020, 60).equals(LocalDate.of(2020, 2, 29)), "dateYearDay leap day");
+        check(iso.dateYearDay(IsoEra.CE, 2020, 60).equals(LocalDate.of(2020, 2, 29)), "dateYearDay Era");
+        check(iso.dateEpochDay(0).equals(LocalDate.of(1970, 1, 1)), "dateEpochDay 0");
+        check(iso.dateEpochDay(18262).equals(LocalDate.of(2020, 1, 1)), "dateEpochDay 18262");
+        check(iso.date(LocalDate.of(2020, 1, 1)).equals(LocalDate.of(2020, 1, 1)), "date(TemporalAccessor)");
+
+        // period / epochSecond / isIsoBased / range.
         check(iso.period(1, 2, 3).equals(Period.of(1, 2, 3)), "period");
+        check(iso.epochSecond(1970, 1, 1, 0, 0, 0, ZoneOffset.UTC) == 0L, "epochSecond epoch");
+        check(iso.isIsoBased(), "isIsoBased");
+        check(iso.range(ChronoField.YEAR).getMinimum() == -999999999, "range YEAR min");
+        check(iso.range(ChronoField.YEAR).getMaximum() == 999999999, "range YEAR max");
+
+        // localDateTime / zonedDateTime conversion.
+        check(iso.localDateTime(LocalDateTime.of(2020, 1, 1, 12, 0))
+                .equals(LocalDateTime.of(2020, 1, 1, 12, 0)), "localDateTime round-trip");
+        ZonedDateTime zdt = ZonedDateTime.of(2020, 1, 1, 12, 0, 0, 0, ZoneId.of("UTC"));
+        check(iso.zonedDateTime(zdt).equals(zdt), "zonedDateTime round-trip");
+        check(iso.zonedDateTime(Instant.parse("2020-01-01T12:00:00Z"), ZoneId.of("UTC"))
+                .toInstant().equals(Instant.parse("2020-01-01T12:00:00Z")), "zonedDateTime Instant");
+
+        // resolveDate STRICT.
+        Map<TemporalField, Long> map = new HashMap<TemporalField, Long>();
+        map.put(ChronoField.YEAR, 2020L);
+        map.put(ChronoField.MONTH_OF_YEAR, 1L);
+        map.put(ChronoField.DAY_OF_MONTH, 1L);
+        check(iso.resolveDate(map, ResolverStyle.STRICT).equals(LocalDate.of(2020, 1, 1)),
+              "resolveDate STRICT");
+
+        // dateNow non-null (no exact value).
+        check(iso.dateNow() != null, "dateNow non-null");
+
+        // Exception paths.
+        expectThrows(java.time.DateTimeException.class,
+              () -> iso.eraOf(2), "eraOf 2 throws DateTimeException");
+        Map<TemporalField, Long> invalid = new HashMap<TemporalField, Long>();
+        invalid.put(ChronoField.YEAR, 2020L);
+        invalid.put(ChronoField.MONTH_OF_YEAR, 2L);
+        invalid.put(ChronoField.DAY_OF_MONTH, 30L);
+        expectThrows(java.time.DateTimeException.class,
+              () -> iso.resolveDate(invalid, ResolverStyle.STRICT),
+              "resolveDate invalid Feb 30 throws DateTimeException");
     }
 
-    public static void main(String[] args) {
-        testIsoChronology();
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
