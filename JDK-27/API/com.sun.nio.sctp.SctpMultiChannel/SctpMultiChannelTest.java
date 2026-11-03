@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary com.sun.nio.sctp.SctpMultiChannel conformance: abstract channel.
+ * @summary com.sun.nio.sctp.SctpMultiChannel conformance: white-box structure + black-box behavior.
  * @run main SctpMultiChannelTest
  */
 
 import java.lang.reflect.*;
+import java.io.*;
+import java.nio.channels.*;
 import java.util.*;
 
 public class SctpMultiChannelTest {
@@ -27,13 +29,58 @@ public class SctpMultiChannelTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = load("com.sun.nio.sctp.SctpMultiChannel");
         check(Modifier.isAbstract(c.getModifiers()), "abstract");
-        check(c.getSuperclass().getName().equals("java.nio.channels.spi.AbstractSelectableChannel"), "extends AbstractSelectableChannel");
+        check(c.getSuperclass().getName().equals("java.nio.channels.spi.AbstractSelectableChannel"),
+              "extends AbstractSelectableChannel");
         Set<String> m = methodNames(c);
-        String[] names = {"open","associations","bind","bindAddress","unbindAddress","getAllLocalAddresses","getRemoteAddresses","shutdown","getOption","setOption","supportedOptions","validOps","receive","send","branch"};
+        String[] names = {"open","associations","bind","bindAddress","unbindAddress","getAllLocalAddresses",
+                          "getRemoteAddresses","shutdown","getOption","setOption","supportedOptions",
+                          "validOps","receive","send","branch"};
         for (String n : names) check(m.contains(n), n);
+
+        Method validOps = c.getDeclaredMethod("validOps");
+        check(Modifier.isFinal(validOps.getModifiers()), "validOps is final");
+        Method open = c.getDeclaredMethod("open");
+        check(Modifier.isStatic(open.getModifiers()), "open() is static");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        boolean opened = false;
+        try {
+            com.sun.nio.sctp.SctpMultiChannel ch = com.sun.nio.sctp.SctpMultiChannel.open();
+            check(ch != null, "open() returns non-null");
+            check(ch.isOpen(), "open channel isOpen");
+            check(ch.isBlocking(), "default blocking mode");
+            check(ch.validOps() == (SelectionKey.OP_READ | SelectionKey.OP_WRITE),
+                  "validOps OP_READ|OP_WRITE");
+            check(ch.supportedOptions() != null, "supportedOptions non-null");
+            ch.close();
+            check(!ch.isOpen(), "channel closed");
+            opened = true;
+        } catch (UnsupportedOperationException degrade) {
+            check(true, "SCTP not supported: open() throws UnsupportedOperationException");
+        } catch (IOException ioe) {
+            throw new AssertionError("unexpected IOException from open()", ioe);
+        }
+
+        try {
+            com.sun.nio.sctp.SctpMultiChannel ch = com.sun.nio.sctp.SctpMultiChannel.open();
+            ch.close();
+            check(opened, "repeat open consistent (success)");
+        } catch (UnsupportedOperationException degrade) {
+            check(!opened, "repeat open consistent (unsupported)");
+        } catch (IOException ioe) {
+            throw new AssertionError("unexpected IOException from repeat open()", ioe);
+        }
+    }
+
+    public static void main(String[] a) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

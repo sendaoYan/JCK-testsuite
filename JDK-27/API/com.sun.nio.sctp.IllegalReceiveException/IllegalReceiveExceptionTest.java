@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.nio.sctp.IllegalReceiveException conformance: exception.
+ * @summary com.sun.nio.sctp.IllegalReceiveException conformance: white-box structure + black-box behavior.
  * @run main IllegalReceiveExceptionTest
  */
 
@@ -27,11 +27,45 @@ public class IllegalReceiveExceptionTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("com.sun.nio.sctp.IllegalReceiveException");
+        check(!c.isInterface(), "not an interface");
+        check(c.getSuperclass().getName().equals("java.lang.IllegalStateException"), "extends IllegalStateException");
+        c.getDeclaredConstructor();
+        c.getDeclaredConstructor(String.class);
+        check(true, "no-arg and String constructors present");
+        Set<String> f = fieldNames(c);
+        check(f.contains("serialVersionUID"), "serialVersionUID field");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
         com.sun.nio.sctp.IllegalReceiveException e = new com.sun.nio.sctp.IllegalReceiveException("msg");
-        check(e.getMessage().equals("msg"), "message");
-        check(e instanceof java.lang.IllegalStateException, "extends IllegalStateException");
-        new com.sun.nio.sctp.IllegalReceiveException();
+        check(e.getMessage().equals("msg"), "message round-trip");
+        check(e instanceof java.lang.IllegalStateException, "instanceof IllegalStateException");
+        check(e instanceof RuntimeException, "instanceof RuntimeException");
+        check(e.getCause() == null, "getCause null");
+
+        com.sun.nio.sctp.IllegalReceiveException e2 = new com.sun.nio.sctp.IllegalReceiveException();
+        check(e2.getMessage() == null, "no-arg message null");
+        check(e2.getCause() == null, "no-arg getCause null");
+
+        // distinct instances carry independent messages
+        check(!e.equals(e2), "distinct instances");
+        check(e.getMessage().equals("msg") && e2.getMessage() == null, "messages independent");
+
+        // can be caught as its superclass
+        try {
+            throw new com.sun.nio.sctp.IllegalReceiveException("boom");
+        } catch (java.lang.IllegalStateException caught) {
+            check(caught.getMessage().equals("boom"), "catch as IllegalStateException");
+        }
+    }
+
+    public static void main(String[] a) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.security.auth.module.NTSystem conformance: native accessor shape (reflection).
+ * @summary com.sun.security.auth.module.NTSystem conformance: white-box structure + black-box behavior.
  * @run main NTSystemTest
  */
 
@@ -15,24 +15,48 @@ public class NTSystemTest {
         for (Method m : c.getDeclaredMethods()) s.add(m.getName());
         return s;
     }
-    static Set<String> fieldNames(Class<?> c) {
-        Set<String> s = new HashSet<>();
-        for (Field f : c.getDeclaredFields()) s.add(f.getName());
-        return s;
-    }
-    static Set<String> interfaces(Class<?> c) {
-        Set<String> s = new HashSet<>();
-        for (Class<?> i : c.getInterfaces()) s.add(i.getName());
-        return s;
-    }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = load("com.sun.security.auth.module.NTSystem");
         check(!c.isInterface(), "not an interface");
         Set<String> m = methodNames(c);
-        String[] names = {"getName","getDomain","getDomainSID","getUserSID","getPrimaryGroupID","getGroupIDs","getImpersonationToken"};
+        String[] names = {"getName","getDomain","getDomainSID","getUserSID",
+                          "getPrimaryGroupID","getGroupIDs","getImpersonationToken"};
         for (String n : names) check(m.contains(n), n);
+    }
+
+    static void testBlackBox() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (os.contains("win")) {
+            // Windows: the native implementation is available.
+            com.sun.security.auth.module.NTSystem n = new com.sun.security.auth.module.NTSystem();
+            check(n != null, "constructed on Windows");
+            // Accessors are callable; values may be null when not domain-joined.
+            n.getName();
+            n.getDomain();
+            n.getDomainSID();
+            n.getUserSID();
+            n.getPrimaryGroupID();
+            n.getGroupIDs();
+            n.getImpersonationToken();
+            check(true, "Windows accessors callable without exception");
+        } else {
+            // Non-Windows: JDK-27 ships the native "jaas" library only for
+            // Windows (nt.c), so constructing NTSystem throws UnsatisfiedLinkError.
+            boolean threw = false;
+            try {
+                new com.sun.security.auth.module.NTSystem();
+            } catch (UnsatisfiedLinkError e) {
+                threw = true;
+            }
+            check(threw, "non-Windows NTSystem construction throws UnsatisfiedLinkError");
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

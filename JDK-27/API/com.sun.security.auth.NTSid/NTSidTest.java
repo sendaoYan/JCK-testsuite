@@ -1,11 +1,13 @@
 /*
  * @test
- * @summary com.sun.security.auth.NTSid conformance: principal accessors.
+ * @summary com.sun.security.auth.NTSid conformance: white-box structure + black-box behavior.
  * @run main NTSidTest
  */
 
 import java.lang.reflect.*;
+import java.security.Principal;
 import java.util.*;
+import javax.security.auth.Subject;
 
 public class NTSidTest {
     static int passed;
@@ -15,24 +17,45 @@ public class NTSidTest {
         for (Method m : c.getDeclaredMethods()) s.add(m.getName());
         return s;
     }
-    static Set<String> fieldNames(Class<?> c) {
-        Set<String> s = new HashSet<>();
-        for (Field f : c.getDeclaredFields()) s.add(f.getName());
-        return s;
-    }
     static Set<String> interfaces(Class<?> c) {
         Set<String> s = new HashSet<>();
         for (Class<?> i : c.getInterfaces()) s.add(i.getName());
         return s;
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
-
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("com.sun.security.auth.NTSid");
+        check(!c.isInterface(), "not an interface");
+        check(interfaces(c).contains("java.security.Principal"), "implements Principal");
+        check(interfaces(c).contains("java.io.Serializable"), "implements Serializable");
+        Set<String> m = methodNames(c);
+        for (String n : new String[]{"getName","toString","equals","hashCode"}) check(m.contains(n), n);
+    }
+    static void testBlackBox() {
         com.sun.security.auth.NTSid p = new com.sun.security.auth.NTSid("S-1-5-21-1-2-3-500");
-        check(p.getName().equals("S-1-5-21-1-2-3-500"), "name");
-        check(p.toString() != null, "toString");
-        check(p.equals(new com.sun.security.auth.NTSid("S-1-5-21-1-2-3-500")), "equals");
-        check(p.hashCode() == new com.sun.security.auth.NTSid("S-1-5-21-1-2-3-500").hashCode(), "hashCode");
+        check(p.getName().equals("S-1-5-21-1-2-3-500"), "getName");
+        check(p.toString() != null, "toString non-null");
+        check(p.toString().contains("S-1-5-21-1-2-3-500"), "toString contains sid");
+        check(p.equals(p), "equals reflexive");
+        com.sun.security.auth.NTSid p2 = new com.sun.security.auth.NTSid("S-1-5-21-1-2-3-500");
+        check(p.equals(p2), "equals same sid");
+        check(p2.equals(p), "equals symmetric");
+        check(p.hashCode() == p2.hashCode(), "hashCode consistent");
+        check(!p.equals(new com.sun.security.auth.NTSid("S-1-5-21-9-9-9-999")), "equals different sid");
+        check(!p.equals(null), "equals null");
+        check(!p.equals("S-1-5-21-1-2-3-500"), "equals other type");
+        boolean npe = false; try { new com.sun.security.auth.NTSid(null); } catch (NullPointerException e) { npe = true; }
+        check(npe, "null sid throws NPE");
+        boolean iae = false; try { new com.sun.security.auth.NTSid(""); } catch (IllegalArgumentException e) { iae = true; }
+        check(iae, "empty sid throws IAE");
+        Subject s = new Subject();
+        s.getPrincipals().add(p);
+        check(s.getPrincipals().contains(p), "subject contains principal");
+        check(s.getPrincipals(com.sun.security.auth.NTSid.class).contains(p), "subject typed principals");
+    }
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,11 +1,12 @@
 /*
  * @test
- * @summary com.sun.security.auth.module.UnixLoginModule conformance: LoginModule lifecycle.
+ * @summary com.sun.security.auth.module.UnixLoginModule conformance: white-box structure + black-box behavior.
  * @run main UnixLoginModuleTest
  */
 
 import java.lang.reflect.*;
 import java.util.*;
+import javax.security.auth.Subject;
 
 public class UnixLoginModuleTest {
     static int passed;
@@ -15,11 +16,6 @@ public class UnixLoginModuleTest {
         for (Method m : c.getDeclaredMethods()) s.add(m.getName());
         return s;
     }
-    static Set<String> fieldNames(Class<?> c) {
-        Set<String> s = new HashSet<>();
-        for (Field f : c.getDeclaredFields()) s.add(f.getName());
-        return s;
-    }
     static Set<String> interfaces(Class<?> c) {
         Set<String> s = new HashSet<>();
         for (Class<?> i : c.getInterfaces()) s.add(i.getName());
@@ -27,20 +23,33 @@ public class UnixLoginModuleTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = load("com.sun.security.auth.module.UnixLoginModule");
         check(!c.isInterface(), "not an interface");
-        check(interfaces(c).contains("javax.security.auth.spi.LoginModule"), "LoginModule");
+        check(interfaces(c).contains("javax.security.auth.spi.LoginModule"), "implements LoginModule");
         Set<String> m = methodNames(c);
-        check(m.contains("initialize"), "initialize");
-        check(m.contains("login"), "login");
-        check(m.contains("commit"), "commit");
-        check(m.contains("abort"), "abort");
-        check(m.contains("logout"), "logout");
+        for (String n : new String[]{"initialize","login","commit","abort","logout"}) check(m.contains(n), n);
+    }
+
+    static void testBlackBox() {
+        // Construct and initialize only. A real login()/commit() would contact a
+        // KDC / LDAP server / keystore / native system account and cannot run here.
         com.sun.security.auth.module.UnixLoginModule mod = new com.sun.security.auth.module.UnixLoginModule();
-        java.util.Map<String,Object> opts = new java.util.HashMap<>();
-        javax.security.auth.Subject subject = new javax.security.auth.Subject();
-        mod.initialize(subject, null, opts, opts);
+        check(mod != null, "constructed");
+        Subject s1 = new Subject();
+        Map<String,Object> shared = new HashMap<>();
+        Map<String,Object> opts = new HashMap<>();
+        mod.initialize(s1, null, shared, opts);
+        check(shared.isEmpty(), "initialize does not mutate sharedState");
+        check(opts.isEmpty(), "initialize does not mutate options");
+        Subject s2 = new Subject();
+        mod.initialize(s2, null, shared, opts);
+        check(true, "re-initialize with a different Subject does not throw");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

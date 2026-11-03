@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary com.sun.security.jgss.GSSUtil conformance: subject factory.
+ * @summary com.sun.security.jgss.GSSUtil conformance: white-box structure + black-box behavior.
  * @run main GSSUtilTest
  */
 
@@ -27,11 +27,33 @@ public class GSSUtilTest {
     }
     static Class<?> load(String fqcn) throws Exception { return Class.forName(fqcn); }
 
-    public static void main(String[] a) throws Exception {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = load("com.sun.security.jgss.GSSUtil");
-        check(!c.isInterface(), "not an interface");
+        check(!c.isInterface(), "concrete class");
+        check(methodNames(c).contains("createSubject"), "createSubject method");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
         javax.security.auth.Subject s = com.sun.security.jgss.GSSUtil.createSubject(null, null);
-        check(s != null, "createSubject non-null");
+        check(s != null, "createSubject(null, null) non-null");
+        check(!s.isReadOnly(), "returned Subject is not read-only");
+        check(s.getPrincipals() != null, "getPrincipals() non-null");
+        check(s.getPublicCredentials() != null, "getPublicCredentials() non-null");
+        check(s.getPrivateCredentials() != null, "getPrivateCredentials() non-null");
+        check(s.getPrincipals().isEmpty(), "principals empty for null GSSName");
+        check(s.getPublicCredentials().isEmpty(), "public credentials empty");
+        check(s.getPrivateCredentials().isEmpty(), "private credentials empty for null GSSCredential");
+
+        javax.security.auth.Subject s2 = com.sun.security.jgss.GSSUtil.createSubject(null, null);
+        check(s2 != null && s2 != s, "two calls return independent Subjects");
+        check(s2.getPrincipals().isEmpty() && s2.getPrivateCredentials().isEmpty(), "second Subject also empty");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
