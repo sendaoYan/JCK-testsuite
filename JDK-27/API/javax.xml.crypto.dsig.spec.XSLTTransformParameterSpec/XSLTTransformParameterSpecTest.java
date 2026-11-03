@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec conformance: white-box structure + black-box behavior.
  * @run main XSLTTransformParameterSpecTest
  */
 
@@ -34,7 +34,9 @@ public class XSLTTransformParameterSpecTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
@@ -46,6 +48,24 @@ public class XSLTTransformParameterSpecTest {
         javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec s =
             new javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec(new javax.xml.crypto.dom.DOMStructure(n));
         check(s.getStylesheet() != null, "getStylesheet");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.w3c.dom.Document doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder().newDocument();
+        org.w3c.dom.Element el = doc.createElement("xsl:stylesheet");
+        javax.xml.crypto.dom.DOMStructure st = new javax.xml.crypto.dom.DOMStructure(el);
+        javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec p = new javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec(st);
+        check(p.getStylesheet() == st, "getStylesheet round-trip");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

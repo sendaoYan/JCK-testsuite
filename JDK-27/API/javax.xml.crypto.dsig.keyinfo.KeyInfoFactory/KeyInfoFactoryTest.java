@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.keyinfo.KeyInfoFactory conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.keyinfo.KeyInfoFactory conformance: white-box structure + black-box behavior.
  * @run main KeyInfoFactoryTest
  */
 
@@ -34,7 +34,9 @@ public class KeyInfoFactoryTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.keyinfo.KeyInfoFactory");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -57,6 +59,38 @@ public class KeyInfoFactoryTest {
         check("DOM".equals(kf.getMechanismType()), "mechanism");
         check(kf.getProvider() != null, "provider");
         check("x".equals(kf.newKeyName("x").getName()), "newKeyName");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.crypto.dsig.keyinfo.KeyInfoFactory kf = javax.xml.crypto.dsig.keyinfo.KeyInfoFactory.getInstance();
+        check(kf != null, "getInstance");
+        check("DOM".equals(kf.getMechanismType()), "mechanismType DOM");
+        check(kf.getProvider() != null, "provider non-null");
+        javax.xml.crypto.dsig.keyinfo.KeyName kn = kf.newKeyName("kn");
+        check("kn".equals(kn.getName()), "newKeyName");
+        java.security.KeyPair kp = java.security.KeyPairGenerator.getInstance("RSA").generateKeyPair();
+        javax.xml.crypto.dsig.keyinfo.KeyValue kv = kf.newKeyValue(kp.getPublic());
+        check(kv.getPublicKey() == kp.getPublic(), "newKeyValue round-trip");
+        javax.xml.crypto.dsig.keyinfo.X509IssuerSerial xis = kf.newX509IssuerSerial("CN=Test", new java.math.BigInteger("42"));
+        check("CN=Test".equals(xis.getIssuerName()), "X509IssuerSerial issuer");
+        check(new java.math.BigInteger("42").equals(xis.getSerialNumber()), "X509IssuerSerial serial");
+        javax.xml.crypto.dsig.keyinfo.RetrievalMethod rm = kf.newRetrievalMethod("#rm");
+        check("#rm".equals(rm.getURI()), "newRetrievalMethod uri");
+        javax.xml.crypto.dsig.keyinfo.X509Data xd = kf.newX509Data(java.util.Arrays.asList("CN=Test"));
+        check(xd.getContent().size() == 1 && "CN=Test".equals(xd.getContent().get(0)), "newX509Data");
+        javax.xml.crypto.dsig.keyinfo.KeyInfo ki = kf.newKeyInfo(java.util.Collections.singletonList((javax.xml.crypto.XMLStructure) kn));
+        check(ki.getContent().size() == 1, "newKeyInfo content");
+        check(!kf.isFeatureSupported("x"), "isFeatureSupported false");
+        check(kf.getURIDereferencer() != null, "default URIDereferencer non-null");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

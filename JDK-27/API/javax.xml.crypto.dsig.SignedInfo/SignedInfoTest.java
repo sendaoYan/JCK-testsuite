@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.SignedInfo conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.SignedInfo conformance: white-box structure + black-box behavior.
  * @run main SignedInfoTest
  */
 
@@ -34,7 +34,9 @@ public class SignedInfoTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.SignedInfo");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -45,6 +47,31 @@ public class SignedInfoTest {
         check(hasMethod(c, "getId"), "method getId");
         check(hasMethod(c, "getReferences"), "method getReferences");
         check(hasMethod(c, "getSignatureMethod"), "method getSignatureMethod");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.crypto.dsig.SignedInfo a = new javax.xml.crypto.dsig.SignedInfo(){
+            public javax.xml.crypto.dsig.CanonicalizationMethod getCanonicalizationMethod() { return null; }
+            public javax.xml.crypto.dsig.SignatureMethod getSignatureMethod() { return null; }
+            public java.util.List<javax.xml.crypto.dsig.Reference> getReferences() { return null; }
+            public java.lang.String getId() { return "s"; }
+            public java.io.InputStream getCanonicalizedData() { return null; }
+            public boolean isFeatureSupported(java.lang.String p0) { return true; }
+        };
+        check(a != null, "anon impl of SignedInfo");
+        check(a.getCanonicalizationMethod() == null, "getCanonicalizationMethod() returns fixed default");
+        check(a.getSignatureMethod() == null, "getSignatureMethod() returns fixed default");
+        check(a.getReferences() == null, "getReferences() returns fixed default");
+        check("s".equals(a.getId()), "getId() returns fixed default");
+        check(a.getCanonicalizedData() == null, "getCanonicalizedData() returns fixed default");
+        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.RSAPSSParameterSpec conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.spec.RSAPSSParameterSpec conformance: white-box structure + black-box behavior.
  * @run main RSAPSSParameterSpecTest
  */
 
@@ -34,7 +34,9 @@ public class RSAPSSParameterSpecTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.RSAPSSParameterSpec");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
@@ -46,6 +48,23 @@ public class RSAPSSParameterSpecTest {
             new java.security.spec.MGF1ParameterSpec("SHA-256"), 32, 1);
         javax.xml.crypto.dsig.spec.RSAPSSParameterSpec s = new javax.xml.crypto.dsig.spec.RSAPSSParameterSpec(pss);
         check(s.getPSSParameterSpec() == pss, "getPSSParameterSpec");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        java.security.spec.PSSParameterSpec inner = new java.security.spec.PSSParameterSpec("SHA-256", "MGF1",
+            new java.security.spec.MGF1ParameterSpec("SHA-256"), 32, 1);
+        javax.xml.crypto.dsig.spec.RSAPSSParameterSpec p = new javax.xml.crypto.dsig.spec.RSAPSSParameterSpec(inner);
+        check(p.getPSSParameterSpec() == inner, "getPSSParameterSpec round-trip");
+        check("SHA-256".equals(p.getPSSParameterSpec().getDigestAlgorithm()), "inner digest alg");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

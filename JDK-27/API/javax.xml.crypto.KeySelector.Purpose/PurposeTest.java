@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.KeySelector.Purpose conformance: API type verification.
+ * @summary javax.xml.crypto.KeySelector.Purpose conformance: white-box structure + black-box behavior.
  * @run main PurposeTest
  */
 
@@ -34,7 +34,9 @@ public class PurposeTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.KeySelector$Purpose");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -47,6 +49,22 @@ public class PurposeTest {
 
         check(javax.xml.crypto.KeySelector.Purpose.SIGN != javax.xml.crypto.KeySelector.Purpose.VERIFY, "distinct");
         check(javax.xml.crypto.KeySelector.Purpose.ENCRYPT.toString() != null, "toString");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check("sign".equals(javax.xml.crypto.KeySelector.Purpose.SIGN.toString()), "SIGN");
+        check("verify".equals(javax.xml.crypto.KeySelector.Purpose.VERIFY.toString()), "VERIFY");
+        check("encrypt".equals(javax.xml.crypto.KeySelector.Purpose.ENCRYPT.toString()), "ENCRYPT");
+        check("decrypt".equals(javax.xml.crypto.KeySelector.Purpose.DECRYPT.toString()), "DECRYPT");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

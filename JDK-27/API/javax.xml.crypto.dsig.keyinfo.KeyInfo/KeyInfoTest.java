@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.keyinfo.KeyInfo conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.keyinfo.KeyInfo conformance: white-box structure + black-box behavior.
  * @run main KeyInfoTest
  */
 
@@ -34,7 +34,9 @@ public class KeyInfoTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.keyinfo.KeyInfo");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -43,6 +45,27 @@ public class KeyInfoTest {
         check(hasMethod(c, "getContent"), "method getContent");
         check(hasMethod(c, "getId"), "method getId");
         check(hasMethod(c, "marshal"), "method marshal");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.crypto.dsig.keyinfo.KeyInfo a = new javax.xml.crypto.dsig.keyinfo.KeyInfo(){
+            public java.util.List<javax.xml.crypto.XMLStructure> getContent() { return null; }
+            public java.lang.String getId() { return "s"; }
+            public void marshal(javax.xml.crypto.XMLStructure p0, javax.xml.crypto.XMLCryptoContext p1) { }
+            public boolean isFeatureSupported(java.lang.String p0) { return true; }
+        };
+        check(a != null, "anon impl of KeyInfo");
+        check(a.getContent() == null, "getContent() returns fixed default");
+        check("s".equals(a.getId()), "getId() returns fixed default");
+        a.marshal((javax.xml.crypto.XMLStructure) null, (javax.xml.crypto.XMLCryptoContext) null);
+        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

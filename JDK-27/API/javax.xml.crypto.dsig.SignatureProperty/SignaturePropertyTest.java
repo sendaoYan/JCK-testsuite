@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.SignatureProperty conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.SignatureProperty conformance: white-box structure + black-box behavior.
  * @run main SignaturePropertyTest
  */
 
@@ -34,7 +34,9 @@ public class SignaturePropertyTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.SignatureProperty");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -43,6 +45,27 @@ public class SignaturePropertyTest {
         check(hasMethod(c, "getContent"), "method getContent");
         check(hasMethod(c, "getId"), "method getId");
         check(hasMethod(c, "getTarget"), "method getTarget");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.crypto.dsig.SignatureProperty a = new javax.xml.crypto.dsig.SignatureProperty(){
+            public java.lang.String getTarget() { return "s"; }
+            public java.lang.String getId() { return "s"; }
+            public java.util.List<javax.xml.crypto.XMLStructure> getContent() { return null; }
+            public boolean isFeatureSupported(java.lang.String p0) { return true; }
+        };
+        check(a != null, "anon impl of SignatureProperty");
+        check("s".equals(a.getTarget()), "getTarget() returns fixed default");
+        check("s".equals(a.getId()), "getId() returns fixed default");
+        check(a.getContent() == null, "getContent() returns fixed default");
+        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

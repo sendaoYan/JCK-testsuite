@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dom.DOMStructure conformance: API type verification.
+ * @summary javax.xml.crypto.dom.DOMStructure conformance: white-box structure + black-box behavior.
  * @run main DOMStructureTest
  */
 
@@ -34,7 +34,9 @@ public class DOMStructureTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dom.DOMStructure");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -47,6 +49,24 @@ public class DOMStructureTest {
         javax.xml.crypto.dom.DOMStructure s = new javax.xml.crypto.dom.DOMStructure(n);
         check(s.getNode() == n, "getNode");
         check(!s.isFeatureSupported("nonexistent"), "isFeatureSupported");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        org.w3c.dom.Document doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder().newDocument();
+        org.w3c.dom.Element el = doc.createElement("a");
+        javax.xml.crypto.dom.DOMStructure ds = new javax.xml.crypto.dom.DOMStructure(el);
+        check(ds.getNode() == el, "getNode returns ctor node");
+        check(!ds.isFeatureSupported("x"), "isFeatureSupported unknown -> false");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

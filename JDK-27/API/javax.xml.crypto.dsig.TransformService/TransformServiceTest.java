@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.TransformService conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.TransformService conformance: white-box structure + black-box behavior.
  * @run main TransformServiceTest
  */
 
@@ -34,7 +34,9 @@ public class TransformServiceTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.TransformService");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
@@ -51,6 +53,45 @@ public class TransformServiceTest {
         check("DOM".equals(ts.getMechanismType()), "mechanism");
         check(javax.xml.crypto.dsig.Transform.BASE64.equals(ts.getAlgorithm()), "algorithm");
         check(ts.getProvider() != null, "provider");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.crypto.dsig.TransformService c14n = javax.xml.crypto.dsig.TransformService.getInstance(
+            javax.xml.crypto.dsig.CanonicalizationMethod.INCLUSIVE, "DOM");
+        check(javax.xml.crypto.dsig.CanonicalizationMethod.INCLUSIVE.equals(c14n.getAlgorithm()), "getInstance alg");
+        check("DOM".equals(c14n.getMechanismType()), "mechanismType");
+        check(c14n.getProvider() != null, "provider");
+        c14n.init((javax.xml.crypto.dsig.spec.TransformParameterSpec) null);
+        check(true, "c14n init(null)");
+        javax.xml.crypto.dsig.TransformService b64 = javax.xml.crypto.dsig.TransformService.getInstance(
+            javax.xml.crypto.dsig.Transform.BASE64, "DOM");
+        check(javax.xml.crypto.dsig.Transform.BASE64.equals(b64.getAlgorithm()), "base64 alg");
+        javax.xml.crypto.dsig.TransformService env = javax.xml.crypto.dsig.TransformService.getInstance(
+            javax.xml.crypto.dsig.Transform.ENVELOPED, "DOM");
+        check(javax.xml.crypto.dsig.Transform.ENVELOPED.equals(env.getAlgorithm()), "enveloped alg");
+        javax.xml.crypto.dsig.TransformService xpath = javax.xml.crypto.dsig.TransformService.getInstance(
+            javax.xml.crypto.dsig.Transform.XPATH, "DOM");
+        xpath.init(new javax.xml.crypto.dsig.spec.XPathFilterParameterSpec("//a"));
+        check(true, "xpath init");
+        javax.xml.crypto.dsig.TransformService c14n2 = javax.xml.crypto.dsig.TransformService.getInstance(
+            javax.xml.crypto.dsig.CanonicalizationMethod.INCLUSIVE, "DOM", "XMLDSig");
+        check(javax.xml.crypto.dsig.CanonicalizationMethod.INCLUSIVE.equals(c14n2.getAlgorithm()), "provider-name getInstance");
+        java.security.KeyPair kp = java.security.KeyPairGenerator.getInstance("RSA").generateKeyPair();
+        org.w3c.dom.Document doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder().newDocument();
+        org.w3c.dom.Element el = doc.createElement("a");
+        c14n.marshalParams(new javax.xml.crypto.dom.DOMStructure(el),
+            new javax.xml.crypto.dsig.dom.DOMSignContext(kp.getPrivate(), el));
+        check(true, "marshalParams no-throw");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

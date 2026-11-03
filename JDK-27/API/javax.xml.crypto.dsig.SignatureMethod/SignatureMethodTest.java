@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.SignatureMethod conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.SignatureMethod conformance: white-box structure + black-box behavior.
  * @run main SignatureMethodTest
  */
 
@@ -34,7 +34,9 @@ public class SignatureMethodTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.SignatureMethod");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -75,6 +77,58 @@ public class SignatureMethodTest {
         check(hasField(c, "SHA3_384_RSA_MGF1"), "field SHA3_384_RSA_MGF1");
         check(hasField(c, "SHA3_512_RSA_MGF1"), "field SHA3_512_RSA_MGF1");
         check(hasField(c, "SHA512_RSA_MGF1"), "field SHA512_RSA_MGF1");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(javax.xml.crypto.dsig.SignatureMethod.DSA_SHA1.equals("http://www.w3.org/2000/09/xmldsig#dsa-sha1"), "DSA_SHA1");
+        check(javax.xml.crypto.dsig.SignatureMethod.DSA_SHA256.equals("http://www.w3.org/2009/xmldsig11#dsa-sha256"), "DSA_SHA256");
+        check(javax.xml.crypto.dsig.SignatureMethod.RSA_SHA1.equals("http://www.w3.org/2000/09/xmldsig#rsa-sha1"), "RSA_SHA1");
+        check(javax.xml.crypto.dsig.SignatureMethod.RSA_SHA224.equals("http://www.w3.org/2001/04/xmldsig-more#rsa-sha224"), "RSA_SHA224");
+        check(javax.xml.crypto.dsig.SignatureMethod.RSA_SHA256.equals("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"), "RSA_SHA256");
+        check(javax.xml.crypto.dsig.SignatureMethod.RSA_SHA384.equals("http://www.w3.org/2001/04/xmldsig-more#rsa-sha384"), "RSA_SHA384");
+        check(javax.xml.crypto.dsig.SignatureMethod.RSA_SHA512.equals("http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"), "RSA_SHA512");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA1_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha1-rsa-MGF1"), "SHA1_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA224_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha224-rsa-MGF1"), "SHA224_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA256_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha256-rsa-MGF1"), "SHA256_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA384_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha384-rsa-MGF1"), "SHA384_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA512_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha512-rsa-MGF1"), "SHA512_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA1.equals("http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha1"), "ECDSA_SHA1");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA224.equals("http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha224"), "ECDSA_SHA224");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA256.equals("http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"), "ECDSA_SHA256");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA384.equals("http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha384"), "ECDSA_SHA384");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA512.equals("http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha512"), "ECDSA_SHA512");
+        check(javax.xml.crypto.dsig.SignatureMethod.HMAC_SHA1.equals("http://www.w3.org/2000/09/xmldsig#hmac-sha1"), "HMAC_SHA1");
+        check(javax.xml.crypto.dsig.SignatureMethod.HMAC_SHA224.equals("http://www.w3.org/2001/04/xmldsig-more#hmac-sha224"), "HMAC_SHA224");
+        check(javax.xml.crypto.dsig.SignatureMethod.HMAC_SHA256.equals("http://www.w3.org/2001/04/xmldsig-more#hmac-sha256"), "HMAC_SHA256");
+        check(javax.xml.crypto.dsig.SignatureMethod.HMAC_SHA384.equals("http://www.w3.org/2001/04/xmldsig-more#hmac-sha384"), "HMAC_SHA384");
+        check(javax.xml.crypto.dsig.SignatureMethod.HMAC_SHA512.equals("http://www.w3.org/2001/04/xmldsig-more#hmac-sha512"), "HMAC_SHA512");
+        check(javax.xml.crypto.dsig.SignatureMethod.RSA_PSS.equals("http://www.w3.org/2007/05/xmldsig-more#rsa-pss"), "RSA_PSS");
+        check(javax.xml.crypto.dsig.SignatureMethod.ED25519.equals("http://www.w3.org/2021/04/xmldsig-more#eddsa-ed25519"), "ED25519");
+        check(javax.xml.crypto.dsig.SignatureMethod.ED448.equals("http://www.w3.org/2021/04/xmldsig-more#eddsa-ed448"), "ED448");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA3_224_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha3-224-rsa-MGF1"), "SHA3_224_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA3_256_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha3-256-rsa-MGF1"), "SHA3_256_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA3_384_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha3-384-rsa-MGF1"), "SHA3_384_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.SHA3_512_RSA_MGF1.equals("http://www.w3.org/2007/05/xmldsig-more#sha3-512-rsa-MGF1"), "SHA3_512_RSA_MGF1");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA3_224.equals("http://www.w3.org/2021/04/xmldsig-more#ecdsa-sha3-224"), "ECDSA_SHA3_224");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA3_256.equals("http://www.w3.org/2021/04/xmldsig-more#ecdsa-sha3-256"), "ECDSA_SHA3_256");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA3_384.equals("http://www.w3.org/2021/04/xmldsig-more#ecdsa-sha3-384"), "ECDSA_SHA3_384");
+        check(javax.xml.crypto.dsig.SignatureMethod.ECDSA_SHA3_512.equals("http://www.w3.org/2021/04/xmldsig-more#ecdsa-sha3-512"), "ECDSA_SHA3_512");
+        javax.xml.crypto.dsig.SignatureMethod a = new javax.xml.crypto.dsig.SignatureMethod(){
+            public java.security.spec.AlgorithmParameterSpec getParameterSpec() { return null; }
+            public boolean isFeatureSupported(java.lang.String p0) { return true; }
+            public java.lang.String getAlgorithm() { return "s"; }
+        };
+        check(a != null, "anon impl of SignatureMethod");
+        check(a.getParameterSpec() == null, "getParameterSpec() returns fixed default");
+        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+        check("s".equals(a.getAlgorithm()), "getAlgorithm() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

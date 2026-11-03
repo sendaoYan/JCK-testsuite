@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.Manifest conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.Manifest conformance: white-box structure + black-box behavior.
  * @run main ManifestTest
  */
 
@@ -34,7 +34,9 @@ public class ManifestTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.Manifest");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -43,6 +45,26 @@ public class ManifestTest {
         check(hasMethod(c, "getId"), "method getId");
         check(hasMethod(c, "getReferences"), "method getReferences");
         check(hasField(c, "TYPE"), "field TYPE");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(javax.xml.crypto.dsig.Manifest.TYPE.equals("http://www.w3.org/2000/09/xmldsig#Manifest"), "TYPE");
+        javax.xml.crypto.dsig.Manifest a = new javax.xml.crypto.dsig.Manifest(){
+            public java.lang.String getId() { return "s"; }
+            public java.util.List<javax.xml.crypto.dsig.Reference> getReferences() { return null; }
+            public boolean isFeatureSupported(java.lang.String p0) { return true; }
+        };
+        check(a != null, "anon impl of Manifest");
+        check("s".equals(a.getId()), "getId() returns fixed default");
+        check(a.getReferences() == null, "getReferences() returns fixed default");
+        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

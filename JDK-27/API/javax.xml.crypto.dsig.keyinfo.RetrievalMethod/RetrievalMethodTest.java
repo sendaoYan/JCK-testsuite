@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.keyinfo.RetrievalMethod conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.keyinfo.RetrievalMethod conformance: white-box structure + black-box behavior.
  * @run main RetrievalMethodTest
  */
 
@@ -34,7 +34,9 @@ public class RetrievalMethodTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.keyinfo.RetrievalMethod");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -44,6 +46,29 @@ public class RetrievalMethodTest {
         check(hasMethod(c, "dereference"), "method dereference");
         check(hasMethod(c, "getTransforms"), "method getTransforms");
         check(hasMethod(c, "getURI"), "method getURI");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.crypto.dsig.keyinfo.RetrievalMethod a = new javax.xml.crypto.dsig.keyinfo.RetrievalMethod(){
+            public java.util.List<javax.xml.crypto.dsig.Transform> getTransforms() { return null; }
+            public java.lang.String getURI() { return "s"; }
+            public javax.xml.crypto.Data dereference(javax.xml.crypto.XMLCryptoContext p0) { return null; }
+            public java.lang.String getType() { return "s"; }
+            public boolean isFeatureSupported(java.lang.String p0) { return true; }
+        };
+        check(a != null, "anon impl of RetrievalMethod");
+        check(a.getTransforms() == null, "getTransforms() returns fixed default");
+        check("s".equals(a.getURI()), "getURI() returns fixed default");
+        check(a.dereference((javax.xml.crypto.XMLCryptoContext) null) == null, "dereference() returns fixed default");
+        check("s".equals(a.getType()), "getType() returns fixed default");
+        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

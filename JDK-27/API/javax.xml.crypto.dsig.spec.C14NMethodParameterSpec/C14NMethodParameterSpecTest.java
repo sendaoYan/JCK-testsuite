@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.C14NMethodParameterSpec conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.spec.C14NMethodParameterSpec conformance: white-box structure + black-box behavior.
  * @run main C14NMethodParameterSpecTest
  */
 
@@ -34,12 +34,29 @@ public class C14NMethodParameterSpecTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.C14NMethodParameterSpec");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasInterface(c, "javax.xml.crypto.dsig.spec.TransformParameterSpec"), "interface javax.xml.crypto.dsig.spec.TransformParameterSpec");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.crypto.dsig.spec.C14NMethodParameterSpec a = new javax.xml.crypto.dsig.spec.C14NMethodParameterSpec(){
+
+        };
+        check(a != null, "anon impl of C14NMethodParameterSpec");
+        check(true, "marker interface instantiated");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

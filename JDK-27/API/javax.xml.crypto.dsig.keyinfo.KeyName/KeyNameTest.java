@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.keyinfo.KeyName conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.keyinfo.KeyName conformance: white-box structure + black-box behavior.
  * @run main KeyNameTest
  */
 
@@ -34,13 +34,32 @@ public class KeyNameTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.keyinfo.KeyName");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         check(hasInterface(c, "javax.xml.crypto.XMLStructure"), "interface javax.xml.crypto.XMLStructure");
         check(hasMethod(c, "getName"), "method getName");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.crypto.dsig.keyinfo.KeyName a = new javax.xml.crypto.dsig.keyinfo.KeyName(){
+            public java.lang.String getName() { return "s"; }
+            public boolean isFeatureSupported(java.lang.String p0) { return true; }
+        };
+        check(a != null, "anon impl of KeyName");
+        check("s".equals(a.getName()), "getName() returns fixed default");
+        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

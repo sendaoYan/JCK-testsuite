@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.OctetStreamData conformance: API type verification.
+ * @summary javax.xml.crypto.OctetStreamData conformance: white-box structure + black-box behavior.
  * @run main OctetStreamDataTest
  */
 
@@ -34,7 +34,9 @@ public class OctetStreamDataTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.OctetStreamData");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -49,6 +51,30 @@ public class OctetStreamDataTest {
         check("urn:u".equals(d.getURI()), "uri");
         check("application/octet-stream".equals(d.getMimeType()), "mime");
         check(d.getOctetStream() != null, "stream");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.crypto.OctetStreamData d = new javax.xml.crypto.OctetStreamData(
+            new java.io.ByteArrayInputStream(new byte[]{1,2,3}));
+        check(d.getURI() == null, "default URI null");
+        check(d.getMimeType() == null, "default mimeType null");
+        check(d.getOctetStream() != null, "octet stream non-null");
+        javax.xml.crypto.OctetStreamData d2 = new javax.xml.crypto.OctetStreamData(
+            new java.io.ByteArrayInputStream(new byte[]{7,8}), "urn:u", "application/octet-stream");
+        check("urn:u".equals(d2.getURI()), "URI");
+        check("application/octet-stream".equals(d2.getMimeType()), "mimeType");
+        java.io.InputStream in = d2.getOctetStream();
+        check(in != null && in.read() == 7 && in.read() == 8, "stream bytes readable");
+        check(d2.getOctetStream() == in, "getOctetStream stable");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

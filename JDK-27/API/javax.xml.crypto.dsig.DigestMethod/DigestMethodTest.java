@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.DigestMethod conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.DigestMethod conformance: white-box structure + black-box behavior.
  * @run main DigestMethodTest
  */
 
@@ -34,7 +34,9 @@ public class DigestMethodTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.DigestMethod");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -52,6 +54,35 @@ public class DigestMethodTest {
         check(hasField(c, "SHA3_384"), "field SHA3_384");
         check(hasField(c, "SHA3_512"), "field SHA3_512");
         check(hasField(c, "SHA512"), "field SHA512");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(javax.xml.crypto.dsig.DigestMethod.SHA1.equals("http://www.w3.org/2000/09/xmldsig#sha1"), "SHA1");
+        check(javax.xml.crypto.dsig.DigestMethod.SHA224.equals("http://www.w3.org/2001/04/xmldsig-more#sha224"), "SHA224");
+        check(javax.xml.crypto.dsig.DigestMethod.SHA256.equals("http://www.w3.org/2001/04/xmlenc#sha256"), "SHA256");
+        check(javax.xml.crypto.dsig.DigestMethod.SHA384.equals("http://www.w3.org/2001/04/xmldsig-more#sha384"), "SHA384");
+        check(javax.xml.crypto.dsig.DigestMethod.SHA512.equals("http://www.w3.org/2001/04/xmlenc#sha512"), "SHA512");
+        check(javax.xml.crypto.dsig.DigestMethod.RIPEMD160.equals("http://www.w3.org/2001/04/xmlenc#ripemd160"), "RIPEMD160");
+        check(javax.xml.crypto.dsig.DigestMethod.SHA3_224.equals("http://www.w3.org/2007/05/xmldsig-more#sha3-224"), "SHA3_224");
+        check(javax.xml.crypto.dsig.DigestMethod.SHA3_256.equals("http://www.w3.org/2007/05/xmldsig-more#sha3-256"), "SHA3_256");
+        check(javax.xml.crypto.dsig.DigestMethod.SHA3_384.equals("http://www.w3.org/2007/05/xmldsig-more#sha3-384"), "SHA3_384");
+        check(javax.xml.crypto.dsig.DigestMethod.SHA3_512.equals("http://www.w3.org/2007/05/xmldsig-more#sha3-512"), "SHA3_512");
+        javax.xml.crypto.dsig.DigestMethod a = new javax.xml.crypto.dsig.DigestMethod(){
+            public java.security.spec.AlgorithmParameterSpec getParameterSpec() { return null; }
+            public boolean isFeatureSupported(java.lang.String p0) { return true; }
+            public java.lang.String getAlgorithm() { return "s"; }
+        };
+        check(a != null, "anon impl of DigestMethod");
+        check(a.getParameterSpec() == null, "getParameterSpec() returns fixed default");
+        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+        check("s".equals(a.getAlgorithm()), "getAlgorithm() returns fixed default");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

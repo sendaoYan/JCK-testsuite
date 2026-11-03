@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dom.DOMCryptoContext conformance: API type verification.
+ * @summary javax.xml.crypto.dom.DOMCryptoContext conformance: white-box structure + black-box behavior.
  * @run main DOMCryptoContextTest
  */
 
@@ -34,7 +34,9 @@ public class DOMCryptoContextTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dom.DOMCryptoContext");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -64,6 +66,45 @@ public class DOMCryptoContextTest {
         check("urn:base".equals(ctx.getBaseURI()), "setBaseURI/getBaseURI");
         ctx.setDefaultNamespacePrefix("d");
         check("d".equals(ctx.getDefaultNamespacePrefix()), "defaultNamespacePrefix");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        java.security.KeyPair kp = java.security.KeyPairGenerator.getInstance("RSA").generateKeyPair();
+        org.w3c.dom.Document doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder().newDocument();
+        org.w3c.dom.Element el = doc.createElement("a");
+        javax.xml.crypto.dom.DOMCryptoContext ctx = new javax.xml.crypto.dsig.dom.DOMSignContext(kp.getPrivate(), el);
+        check(ctx.getBaseURI() == null, "baseURI default null");
+        ctx.setBaseURI("urn:b");
+        check("urn:b".equals(ctx.getBaseURI()), "setBaseURI/getBaseURI");
+        check(ctx.getDefaultNamespacePrefix() == null, "default ns prefix default null");
+        ctx.setDefaultNamespacePrefix("d");
+        check("d".equals(ctx.getDefaultNamespacePrefix()), "default ns prefix");
+        check(ctx.putNamespacePrefix("p", "urn:p") == null, "putNamespacePrefix first null");
+        check("urn:p".equals(ctx.getNamespacePrefix("p", "fallback")), "getNamespacePrefix");
+        check("fallback".equals(ctx.getNamespacePrefix("unknown", "fallback")), "getNamespacePrefix fallback");
+        check(ctx.getProperty("k") == null, "property default null");
+        check(ctx.setProperty("k", "v") == null, "setProperty returns old");
+        check("v".equals(ctx.getProperty("k")), "property get");
+        check(ctx.get("gk") == null && ctx.put("gk", "gv") == null, "map put/get");
+        check("gv".equals(ctx.get("gk")), "map get");
+        el.setAttributeNS("urn:u", "local", "idval");
+        ctx.setIdAttributeNS(el, "urn:u", "local");
+        check(ctx.getElementById("idval") == el, "getElementById");
+        check(ctx.getElementById("other") == null, "getElementById unknown null");
+        java.util.Iterator<java.util.Map.Entry<java.lang.String, org.w3c.dom.Element>> it = ctx.iterator();
+        int n = 0;
+        while (it.hasNext()) { it.next(); n++; }
+        check(n == 1, "iterator count of id attributes");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

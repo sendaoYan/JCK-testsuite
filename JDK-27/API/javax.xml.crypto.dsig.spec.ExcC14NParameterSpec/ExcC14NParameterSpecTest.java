@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.ExcC14NParameterSpec conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.spec.ExcC14NParameterSpec conformance: white-box structure + black-box behavior.
  * @run main ExcC14NParameterSpecTest
  */
 
@@ -34,7 +34,9 @@ public class ExcC14NParameterSpecTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.ExcC14NParameterSpec");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
@@ -47,6 +49,24 @@ public class ExcC14NParameterSpecTest {
         check(s.getPrefixList() != null, "getPrefixList default");
         javax.xml.crypto.dsig.spec.ExcC14NParameterSpec s2 = new javax.xml.crypto.dsig.spec.ExcC14NParameterSpec(java.util.Arrays.asList("a","b"));
         check(s2.getPrefixList().size() == 2, "prefix list size");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check("#default".equals(javax.xml.crypto.dsig.spec.ExcC14NParameterSpec.DEFAULT), "DEFAULT constant");
+        javax.xml.crypto.dsig.spec.ExcC14NParameterSpec p = new javax.xml.crypto.dsig.spec.ExcC14NParameterSpec();
+        check(p.getPrefixList() != null && p.getPrefixList().isEmpty(), "no-arg ctor empty prefix list");
+        javax.xml.crypto.dsig.spec.ExcC14NParameterSpec p2 = new javax.xml.crypto.dsig.spec.ExcC14NParameterSpec(
+            java.util.Arrays.asList("foo", "bar"));
+        check(java.util.Arrays.asList("foo", "bar").equals(p2.getPrefixList()), "list ctor round-trip");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

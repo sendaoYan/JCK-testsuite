@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.XPathFilterParameterSpec conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.spec.XPathFilterParameterSpec conformance: white-box structure + black-box behavior.
  * @run main XPathFilterParameterSpecTest
  */
 
@@ -34,7 +34,9 @@ public class XPathFilterParameterSpecTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.XPathFilterParameterSpec");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
@@ -46,6 +48,26 @@ public class XPathFilterParameterSpecTest {
         javax.xml.crypto.dsig.spec.XPathFilterParameterSpec s = new javax.xml.crypto.dsig.spec.XPathFilterParameterSpec("//x");
         check("//x".equals(s.getXPath()), "getXPath");
         check(s.getNamespaceMap() != null, "getNamespaceMap");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.crypto.dsig.spec.XPathFilterParameterSpec p = new javax.xml.crypto.dsig.spec.XPathFilterParameterSpec("//a");
+        check("//a".equals(p.getXPath()), "xpath");
+        check(p.getNamespaceMap() != null && p.getNamespaceMap().isEmpty(), "default namespace map empty");
+        java.util.Map<java.lang.String, java.lang.String> ns = new java.util.HashMap<>();
+        ns.put("x", "urn:x");
+        javax.xml.crypto.dsig.spec.XPathFilterParameterSpec p2 = new javax.xml.crypto.dsig.spec.XPathFilterParameterSpec("//x:a", ns);
+        check("//x:a".equals(p2.getXPath()), "xpath 2");
+        check("urn:x".equals(p2.getNamespaceMap().get("x")), "namespace map");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

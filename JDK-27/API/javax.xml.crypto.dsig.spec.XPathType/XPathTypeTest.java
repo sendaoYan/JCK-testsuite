@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.XPathType conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.spec.XPathType conformance: white-box structure + black-box behavior.
  * @run main XPathTypeTest
  */
 
@@ -34,7 +34,9 @@ public class XPathTypeTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.XPathType");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
@@ -47,6 +49,29 @@ public class XPathTypeTest {
         check("//x".equals(t.getExpression()), "expression");
         check(t.getFilter() == javax.xml.crypto.dsig.spec.XPathType.Filter.INTERSECT, "filter");
         check(t.getNamespaceMap() != null, "namespaceMap");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.crypto.dsig.spec.XPathType xt = new javax.xml.crypto.dsig.spec.XPathType(
+            "//a", javax.xml.crypto.dsig.spec.XPathType.Filter.INTERSECT);
+        check("//a".equals(xt.getExpression()), "expression");
+        check(xt.getFilter() == javax.xml.crypto.dsig.spec.XPathType.Filter.INTERSECT, "filter");
+        check(xt.getNamespaceMap() != null && xt.getNamespaceMap().isEmpty(), "default namespace map empty");
+        java.util.Map<java.lang.String, java.lang.String> ns = new java.util.HashMap<>();
+        ns.put("x", "urn:x");
+        javax.xml.crypto.dsig.spec.XPathType xt2 = new javax.xml.crypto.dsig.spec.XPathType(
+            "//x:a", javax.xml.crypto.dsig.spec.XPathType.Filter.UNION, ns);
+        check("//x:a".equals(xt2.getExpression()) && xt2.getFilter() == javax.xml.crypto.dsig.spec.XPathType.Filter.UNION, "3-arg ctor");
+        check("urn:x".equals(xt2.getNamespaceMap().get("x")), "namespace map");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

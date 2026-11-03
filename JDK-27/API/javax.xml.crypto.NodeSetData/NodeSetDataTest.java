@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.NodeSetData conformance: API type verification.
+ * @summary javax.xml.crypto.NodeSetData conformance: white-box structure + black-box behavior.
  * @run main NodeSetDataTest
  */
 
@@ -34,7 +34,9 @@ public class NodeSetDataTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.NodeSetData");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
@@ -42,6 +44,25 @@ public class NodeSetDataTest {
         check(hasInterface(c, "javax.xml.crypto.Data"), "interface javax.xml.crypto.Data");
         check(hasInterface(c, "java.lang.Iterable"), "interface java.lang.Iterable");
         check(hasMethod(c, "iterator"), "method iterator");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.xml.crypto.NodeSetData<java.lang.String> a = new javax.xml.crypto.NodeSetData<java.lang.String>() {
+            public java.util.Iterator<java.lang.String> iterator() {
+                return java.util.Arrays.asList("s").iterator();
+            }
+        };
+        check(a != null, "anon impl of NodeSetData");
+        java.util.Iterator<java.lang.String> it = a.iterator();
+        check(it != null && it.hasNext(), "iterator hasNext");
+        check("s".equals(it.next()) && !it.hasNext(), "iterator next exhausts");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

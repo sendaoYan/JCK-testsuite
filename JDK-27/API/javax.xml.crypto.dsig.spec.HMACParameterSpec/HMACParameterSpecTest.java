@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.HMACParameterSpec conformance: API type verification.
+ * @summary javax.xml.crypto.dsig.spec.HMACParameterSpec conformance: white-box structure + black-box behavior.
  * @run main HMACParameterSpecTest
  */
 
@@ -34,7 +34,9 @@ public class HMACParameterSpecTest {
     }
 
 
-    public static void main(String[] args) throws Exception {
+        // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.HMACParameterSpec");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
@@ -44,6 +46,22 @@ public class HMACParameterSpecTest {
 
         javax.xml.crypto.dsig.spec.HMACParameterSpec s = new javax.xml.crypto.dsig.spec.HMACParameterSpec(256);
         check(s.getOutputLength() == 256, "outputLength");
+    
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        javax.xml.crypto.dsig.spec.HMACParameterSpec p = new javax.xml.crypto.dsig.spec.HMACParameterSpec(128);
+        check(p.getOutputLength() == 128, "outputLength");
+        javax.xml.crypto.dsig.spec.HMACParameterSpec p2 = new javax.xml.crypto.dsig.spec.HMACParameterSpec(256);
+        check(p2.getOutputLength() == 256, "outputLength 256");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
