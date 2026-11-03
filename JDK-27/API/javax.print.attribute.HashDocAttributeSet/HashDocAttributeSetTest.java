@@ -1,25 +1,64 @@
 /*
  * @test
- * @summary javax.print.attribute.HashDocAttributeSet conformance: attribute set implementation.
+ * @summary javax.print.attribute.HashDocAttributeSet conformance: white-box structure + black-box behavior.
  * @run main HashDocAttributeSetTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
 import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class HashDocAttributeSetTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
 
-    public static void main(String[] a) throws Exception {
-        HashDocAttributeSet set = new HashDocAttributeSet();
-        check(set.isEmpty(), "initially empty");
-        HashDocAttributeSet set2 = new HashDocAttributeSet(new DocumentName("x", java.util.Locale.US));
-        check(!set2.isEmpty(), "single-arg ctor");
-        HashDocAttributeSet set3 = new HashDocAttributeSet(set2);
-        check(set3.equals(set2), "copy ctor");
-        check(set instanceof javax.print.attribute.DocAttributeSet, "implements DocAttributeSet");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.HashDocAttributeSet");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface(), "public class");
+        check(HashAttributeSet.class.isAssignableFrom(c), "extends HashAttributeSet");
+        check(DocAttributeSet.class.isAssignableFrom(c), "implements DocAttributeSet");
+    }
+
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        HashDocAttributeSet s = new HashDocAttributeSet();
+        check(s.isEmpty() && s.size() == 0, "empty");
+        check(s.add(new DocumentName("n", Locale.ROOT)), "add returns changed");
+        check(!s.add(new DocumentName("n", Locale.ROOT)), "re-add same returns false");
+        check(s.size() == 1 && s.containsKey(DocumentName.class) && s.containsValue(new DocumentName("n", Locale.ROOT)), "contains");
+        check(new DocumentName("n", Locale.ROOT).equals(s.get(DocumentName.class)), "get");
+        s.add(new MediaPrintableArea(1, 1, 2, 2, MediaPrintableArea.INCH));
+        check(s.size() == 2, "two attributes");
+        Attribute[] arr = s.toArray();
+        check(arr.length == 2, "toArray");
+        s.remove(DocumentName.class);
+        check(s.size() == 1 && !s.containsKey(DocumentName.class), "remove(Class)");
+        s.clear();
+        check(s.isEmpty(), "clear");
+        HashDocAttributeSet other = new HashDocAttributeSet(new DocumentName("n", Locale.ROOT));
+        check(!s.equals(other) && !s.equals(null) && !s.equals("x"), "equals");
+        check(s.hashCode() == s.hashCode(), "hashCode");
+        boolean threw = false; try { s.add(new Copies(2)); } catch (ClassCastException e) { threw = true; }
+        check(threw, "wrong category throws ClassCastException");
+        check(new HashDocAttributeSet(new DocumentName[]{ new DocumentName("n", Locale.ROOT) }).size() == 1, "array ctor");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,30 +1,116 @@
 /*
  * @test
- * @summary javax.print.attribute.standard.PrinterStateReason conformance: enum attribute.
+ * @summary javax.print.attribute.standard.PrinterStateReason conformance: white-box structure + black-box behavior.
  * @run main PrinterStateReasonTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
+import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class PrinterStateReasonTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.standard.PrinterStateReason");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface() && !Modifier.isFinal(c.getModifiers()), "public class");
+        check(EnumSyntax.class.isAssignableFrom(c), "extends EnumSyntax");
+        check(Attribute.class.isAssignableFrom(c), "implements Attribute");
+    }
 
-    public static void main(String[] a) throws Exception {
-        PrinterStateReason v1 = PrinterStateReason.OTHER;
-        check(v1 instanceof PrinterStateReason, "OTHER instanceof PrinterStateReason");
-        check(v1.getCategory() == PrinterStateReason.class, "getCategory");
-        check(v1.getName() != null && v1.getName().length() > 0, "getName non-empty");
-        check(v1.toString() != null && v1.toString().length() > 0, "toString non-empty");
-        check(v1.getValue() >= 0, "getValue >= 0");
-        PrinterStateReason v2 = PrinterStateReason.MEDIA_NEEDED;
-        check(v1.getValue() != v2.getValue(), "distinct getValue");
-        check(!v1.toString().equals(v2.toString()), "distinct toString");
-        check(v1.equals(PrinterStateReason.OTHER), "equals same constant");
-        check(!v1.equals(v2), "not equals other");
-        check(v1.hashCode() == PrinterStateReason.OTHER.hashCode(), "hashCode");
-        check(v1.clone() != null, "clone");
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(PrinterStateReason.OTHER.getCategory() == PrinterStateReason.class, "getCategory");
+        check("printer-state-reason".equals(PrinterStateReason.OTHER.getName()), "getName");
+        check(PrinterStateReason.OTHER.getValue() == 0, "OTHER value == 0");
+        check("other".equals(PrinterStateReason.OTHER.toString()), "OTHER toString");
+        check(PrinterStateReason.MEDIA_NEEDED.getValue() == 1, "MEDIA_NEEDED value == 1");
+        check("media-needed".equals(PrinterStateReason.MEDIA_NEEDED.toString()), "MEDIA_NEEDED toString");
+        check(PrinterStateReason.MEDIA_JAM.getValue() == 2, "MEDIA_JAM value == 2");
+        check("media-jam".equals(PrinterStateReason.MEDIA_JAM.toString()), "MEDIA_JAM toString");
+        check(PrinterStateReason.MOVING_TO_PAUSED.getValue() == 3, "MOVING_TO_PAUSED value == 3");
+        check("moving-to-paused".equals(PrinterStateReason.MOVING_TO_PAUSED.toString()), "MOVING_TO_PAUSED toString");
+        check(PrinterStateReason.PAUSED.getValue() == 4, "PAUSED value == 4");
+        check("paused".equals(PrinterStateReason.PAUSED.toString()), "PAUSED toString");
+        check(PrinterStateReason.SHUTDOWN.getValue() == 5, "SHUTDOWN value == 5");
+        check("shutdown".equals(PrinterStateReason.SHUTDOWN.toString()), "SHUTDOWN toString");
+        check(PrinterStateReason.CONNECTING_TO_DEVICE.getValue() == 6, "CONNECTING_TO_DEVICE value == 6");
+        check("connecting-to-device".equals(PrinterStateReason.CONNECTING_TO_DEVICE.toString()), "CONNECTING_TO_DEVICE toString");
+        check(PrinterStateReason.TIMED_OUT.getValue() == 7, "TIMED_OUT value == 7");
+        check("timed-out".equals(PrinterStateReason.TIMED_OUT.toString()), "TIMED_OUT toString");
+        check(PrinterStateReason.STOPPING.getValue() == 8, "STOPPING value == 8");
+        check("stopping".equals(PrinterStateReason.STOPPING.toString()), "STOPPING toString");
+        check(PrinterStateReason.STOPPED_PARTLY.getValue() == 9, "STOPPED_PARTLY value == 9");
+        check("stopped-partly".equals(PrinterStateReason.STOPPED_PARTLY.toString()), "STOPPED_PARTLY toString");
+        check(PrinterStateReason.TONER_LOW.getValue() == 10, "TONER_LOW value == 10");
+        check("toner-low".equals(PrinterStateReason.TONER_LOW.toString()), "TONER_LOW toString");
+        check(PrinterStateReason.TONER_EMPTY.getValue() == 11, "TONER_EMPTY value == 11");
+        check("toner-empty".equals(PrinterStateReason.TONER_EMPTY.toString()), "TONER_EMPTY toString");
+        check(PrinterStateReason.SPOOL_AREA_FULL.getValue() == 12, "SPOOL_AREA_FULL value == 12");
+        check("spool-area-full".equals(PrinterStateReason.SPOOL_AREA_FULL.toString()), "SPOOL_AREA_FULL toString");
+        check(PrinterStateReason.COVER_OPEN.getValue() == 13, "COVER_OPEN value == 13");
+        check("cover-open".equals(PrinterStateReason.COVER_OPEN.toString()), "COVER_OPEN toString");
+        check(PrinterStateReason.INTERLOCK_OPEN.getValue() == 14, "INTERLOCK_OPEN value == 14");
+        check("interlock-open".equals(PrinterStateReason.INTERLOCK_OPEN.toString()), "INTERLOCK_OPEN toString");
+        check(PrinterStateReason.DOOR_OPEN.getValue() == 15, "DOOR_OPEN value == 15");
+        check("door-open".equals(PrinterStateReason.DOOR_OPEN.toString()), "DOOR_OPEN toString");
+        check(PrinterStateReason.INPUT_TRAY_MISSING.getValue() == 16, "INPUT_TRAY_MISSING value == 16");
+        check("input-tray-missing".equals(PrinterStateReason.INPUT_TRAY_MISSING.toString()), "INPUT_TRAY_MISSING toString");
+        check(PrinterStateReason.MEDIA_LOW.getValue() == 17, "MEDIA_LOW value == 17");
+        check("media-low".equals(PrinterStateReason.MEDIA_LOW.toString()), "MEDIA_LOW toString");
+        check(PrinterStateReason.MEDIA_EMPTY.getValue() == 18, "MEDIA_EMPTY value == 18");
+        check("media-empty".equals(PrinterStateReason.MEDIA_EMPTY.toString()), "MEDIA_EMPTY toString");
+        check(PrinterStateReason.OUTPUT_TRAY_MISSING.getValue() == 19, "OUTPUT_TRAY_MISSING value == 19");
+        check("output-tray-missing".equals(PrinterStateReason.OUTPUT_TRAY_MISSING.toString()), "OUTPUT_TRAY_MISSING toString");
+        check(PrinterStateReason.OUTPUT_AREA_ALMOST_FULL.getValue() == 20, "OUTPUT_AREA_ALMOST_FULL value == 20");
+        check("output-area-almost-full".equals(PrinterStateReason.OUTPUT_AREA_ALMOST_FULL.toString()), "OUTPUT_AREA_ALMOST_FULL toString");
+        check(PrinterStateReason.OUTPUT_AREA_FULL.getValue() == 21, "OUTPUT_AREA_FULL value == 21");
+        check("output-area-full".equals(PrinterStateReason.OUTPUT_AREA_FULL.toString()), "OUTPUT_AREA_FULL toString");
+        check(PrinterStateReason.MARKER_SUPPLY_LOW.getValue() == 22, "MARKER_SUPPLY_LOW value == 22");
+        check("marker-supply-low".equals(PrinterStateReason.MARKER_SUPPLY_LOW.toString()), "MARKER_SUPPLY_LOW toString");
+        check(PrinterStateReason.MARKER_SUPPLY_EMPTY.getValue() == 23, "MARKER_SUPPLY_EMPTY value == 23");
+        check("marker-supply-empty".equals(PrinterStateReason.MARKER_SUPPLY_EMPTY.toString()), "MARKER_SUPPLY_EMPTY toString");
+        check(PrinterStateReason.MARKER_WASTE_ALMOST_FULL.getValue() == 24, "MARKER_WASTE_ALMOST_FULL value == 24");
+        check("marker-waste-almost-full".equals(PrinterStateReason.MARKER_WASTE_ALMOST_FULL.toString()), "MARKER_WASTE_ALMOST_FULL toString");
+        check(PrinterStateReason.MARKER_WASTE_FULL.getValue() == 25, "MARKER_WASTE_FULL value == 25");
+        check("marker-waste-full".equals(PrinterStateReason.MARKER_WASTE_FULL.toString()), "MARKER_WASTE_FULL toString");
+        check(PrinterStateReason.FUSER_OVER_TEMP.getValue() == 26, "FUSER_OVER_TEMP value == 26");
+        check("fuser-over-temp".equals(PrinterStateReason.FUSER_OVER_TEMP.toString()), "FUSER_OVER_TEMP toString");
+        check(PrinterStateReason.FUSER_UNDER_TEMP.getValue() == 27, "FUSER_UNDER_TEMP value == 27");
+        check("fuser-under-temp".equals(PrinterStateReason.FUSER_UNDER_TEMP.toString()), "FUSER_UNDER_TEMP toString");
+        check(PrinterStateReason.OPC_NEAR_EOL.getValue() == 28, "OPC_NEAR_EOL value == 28");
+        check("opc-near-eol".equals(PrinterStateReason.OPC_NEAR_EOL.toString()), "OPC_NEAR_EOL toString");
+        check(PrinterStateReason.OPC_LIFE_OVER.getValue() == 29, "OPC_LIFE_OVER value == 29");
+        check("opc-life-over".equals(PrinterStateReason.OPC_LIFE_OVER.toString()), "OPC_LIFE_OVER toString");
+        check(PrinterStateReason.DEVELOPER_LOW.getValue() == 30, "DEVELOPER_LOW value == 30");
+        check("developer-low".equals(PrinterStateReason.DEVELOPER_LOW.toString()), "DEVELOPER_LOW toString");
+        check(PrinterStateReason.DEVELOPER_EMPTY.getValue() == 31, "DEVELOPER_EMPTY value == 31");
+        check("developer-empty".equals(PrinterStateReason.DEVELOPER_EMPTY.toString()), "DEVELOPER_EMPTY toString");
+        check(PrinterStateReason.INTERPRETER_RESOURCE_UNAVAILABLE.getValue() == 32, "INTERPRETER_RESOURCE_UNAVAILABLE value == 32");
+        check("interpreter-resource-unavailable".equals(PrinterStateReason.INTERPRETER_RESOURCE_UNAVAILABLE.toString()), "INTERPRETER_RESOURCE_UNAVAILABLE toString");
+        check(PrinterStateReason.OTHER.clone() == PrinterStateReason.OTHER, "clone returns singleton");
+        check(PrinterStateReason.OTHER.hashCode() == 0, "hashCode == value");
+        check(PrinterStateReason.OTHER.equals(PrinterStateReason.OTHER), "equals self");
+        check(!PrinterStateReason.OTHER.equals(PrinterStateReason.MEDIA_NEEDED), "distinct constants unequal");
+        check(!PrinterStateReason.OTHER.equals(null) && !PrinterStateReason.OTHER.equals("x"), "not equals null/foreign");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

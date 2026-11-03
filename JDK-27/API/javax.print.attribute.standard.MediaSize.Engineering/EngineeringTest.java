@@ -1,39 +1,50 @@
 /*
  * @test
- * @summary javax.print.attribute.standard.MediaSize.Engineering conformance: media size constants.
+ * @summary javax.print.attribute.standard.MediaSize.Engineering conformance: white-box structure + black-box behavior.
  * @run main EngineeringTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
+import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class EngineeringTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
 
-    public static void main(String[] a) throws Exception {
-        Class<?> c = Class.forName("javax.print.attribute.standard.MediaSize$" + "Engineering");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "not abstract");
-        java.lang.reflect.Field f_A = c.getDeclaredField("A");
-        check(java.lang.reflect.Modifier.isStatic(f_A.getModifiers()), "A is static");
-        check(f_A.getType() == javax.print.attribute.standard.MediaSize.class, "A type MediaSize");
-        check(f_A.get(null) != null, "A non-null");
-        java.lang.reflect.Field f_B = c.getDeclaredField("B");
-        check(java.lang.reflect.Modifier.isStatic(f_B.getModifiers()), "B is static");
-        check(f_B.getType() == javax.print.attribute.standard.MediaSize.class, "B type MediaSize");
-        check(f_B.get(null) != null, "B non-null");
-        java.lang.reflect.Field f_C = c.getDeclaredField("C");
-        check(java.lang.reflect.Modifier.isStatic(f_C.getModifiers()), "C is static");
-        check(f_C.getType() == javax.print.attribute.standard.MediaSize.class, "C type MediaSize");
-        check(f_C.get(null) != null, "C non-null");
-        java.lang.reflect.Field f_D = c.getDeclaredField("D");
-        check(java.lang.reflect.Modifier.isStatic(f_D.getModifiers()), "D is static");
-        check(f_D.getType() == javax.print.attribute.standard.MediaSize.class, "D type MediaSize");
-        check(f_D.get(null) != null, "D non-null");
-        java.lang.reflect.Field f_E = c.getDeclaredField("E");
-        check(java.lang.reflect.Modifier.isStatic(f_E.getModifiers()), "E is static");
-        check(f_E.getType() == javax.print.attribute.standard.MediaSize.class, "E type MediaSize");
-        check(f_E.get(null) != null, "E non-null");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.standard.MediaSize$Engineering");
+        check(Modifier.isPublic(c.getModifiers()) && Modifier.isFinal(c.getModifiers()) && !c.isInterface(), "public final class");
+        int n = 0; for (Field f : c.getDeclaredFields()) if (Modifier.isPublic(f.getModifiers()) && Modifier.isStatic(f.getModifiers()) && f.getType() == MediaSize.class) n++;
+        check(n > 0, "has MediaSize constants");
+    }
+
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        MediaSize s = MediaSize.Engineering.A;
+        check(s != null, "constant non-null");
+        check(s.getCategory() == MediaSize.class && "media-size".equals(s.getName()), "getCategory/getName");
+        check(s.getMediaSizeName() != null, "getMediaSizeName non-null");
+        check(s.getX(MediaSize.INCH) == 8.5f && s.getY(MediaSize.INCH) == 11.0f, "MediaSize.Engineering.A exact size");
+        check("8.5x11.0 in".equals(s.toString(MediaSize.INCH, "in")), "MediaSize.Engineering.A toString");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

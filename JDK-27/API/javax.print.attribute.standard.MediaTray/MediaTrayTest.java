@@ -1,30 +1,66 @@
 /*
  * @test
- * @summary javax.print.attribute.standard.MediaTray conformance: media enum attribute.
+ * @summary javax.print.attribute.standard.MediaTray conformance: white-box structure + black-box behavior.
  * @run main MediaTrayTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
+import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class MediaTrayTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.standard.MediaTray");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface() && !Modifier.isFinal(c.getModifiers()), "public class");
+        check(Media.class.isAssignableFrom(c), "extends Media");
+        check(Attribute.class.isAssignableFrom(c), "implements Attribute");
+    }
 
-    public static void main(String[] a) throws Exception {
-        MediaTray v1 = MediaTray.TOP;
-        check(v1 instanceof MediaTray, "TOP instanceof MediaTray");
-        check(v1.getCategory() == Media.class, "getCategory");
-        check(v1.getName() != null && v1.getName().length() > 0, "getName non-empty");
-        check(v1.toString() != null && v1.toString().length() > 0, "toString non-empty");
-        check(v1.getValue() >= 0, "getValue >= 0");
-        MediaTray v2 = MediaTray.MAIN;
-        check(v1.getValue() != v2.getValue(), "distinct getValue");
-        check(!v1.toString().equals(v2.toString()), "distinct toString");
-        check(v1.equals(MediaTray.TOP), "equals same constant");
-        check(!v1.equals(v2), "not equals other");
-        check(v1.hashCode() == MediaTray.TOP.hashCode(), "hashCode");
-        check(v1.clone() != null, "clone");
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(MediaTray.TOP.getCategory() == Media.class, "getCategory");
+        check("media".equals(MediaTray.TOP.getName()), "getName");
+        check(MediaTray.TOP.getValue() == 0, "TOP value == 0");
+        check("top".equals(MediaTray.TOP.toString()), "TOP toString");
+        check(MediaTray.MIDDLE.getValue() == 1, "MIDDLE value == 1");
+        check("middle".equals(MediaTray.MIDDLE.toString()), "MIDDLE toString");
+        check(MediaTray.BOTTOM.getValue() == 2, "BOTTOM value == 2");
+        check("bottom".equals(MediaTray.BOTTOM.toString()), "BOTTOM toString");
+        check(MediaTray.ENVELOPE.getValue() == 3, "ENVELOPE value == 3");
+        check("envelope".equals(MediaTray.ENVELOPE.toString()), "ENVELOPE toString");
+        check(MediaTray.MANUAL.getValue() == 4, "MANUAL value == 4");
+        check("manual".equals(MediaTray.MANUAL.toString()), "MANUAL toString");
+        check(MediaTray.LARGE_CAPACITY.getValue() == 5, "LARGE_CAPACITY value == 5");
+        check("large-capacity".equals(MediaTray.LARGE_CAPACITY.toString()), "LARGE_CAPACITY toString");
+        check(MediaTray.MAIN.getValue() == 6, "MAIN value == 6");
+        check("main".equals(MediaTray.MAIN.toString()), "MAIN toString");
+        check(MediaTray.SIDE.getValue() == 7, "SIDE value == 7");
+        check("side".equals(MediaTray.SIDE.toString()), "SIDE toString");
+        check(MediaTray.TOP.clone() == MediaTray.TOP, "clone returns singleton");
+        check(MediaTray.TOP.hashCode() == 0, "hashCode == value");
+        check(MediaTray.TOP.equals(MediaTray.TOP), "equals self");
+        check(!MediaTray.TOP.equals(MediaTray.MIDDLE), "distinct constants unequal");
+        check(!MediaTray.TOP.equals(null) && !MediaTray.TOP.equals("x"), "not equals null/foreign");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,30 +1,58 @@
 /*
  * @test
- * @summary javax.print.attribute.standard.PrinterState conformance: enum attribute.
+ * @summary javax.print.attribute.standard.PrinterState conformance: white-box structure + black-box behavior.
  * @run main PrinterStateTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
+import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class PrinterStateTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.standard.PrinterState");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface() && Modifier.isFinal(c.getModifiers()), "public class");
+        check(EnumSyntax.class.isAssignableFrom(c), "extends EnumSyntax");
+        check(PrintServiceAttribute.class.isAssignableFrom(c), "implements PrintServiceAttribute");
+    }
 
-    public static void main(String[] a) throws Exception {
-        PrinterState v1 = PrinterState.UNKNOWN;
-        check(v1 instanceof PrinterState, "UNKNOWN instanceof PrinterState");
-        check(v1.getCategory() == PrinterState.class, "getCategory");
-        check(v1.getName() != null && v1.getName().length() > 0, "getName non-empty");
-        check(v1.toString() != null && v1.toString().length() > 0, "toString non-empty");
-        check(v1.getValue() >= 0, "getValue >= 0");
-        PrinterState v2 = PrinterState.IDLE;
-        check(v1.getValue() != v2.getValue(), "distinct getValue");
-        check(!v1.toString().equals(v2.toString()), "distinct toString");
-        check(v1.equals(PrinterState.UNKNOWN), "equals same constant");
-        check(!v1.equals(v2), "not equals other");
-        check(v1.hashCode() == PrinterState.UNKNOWN.hashCode(), "hashCode");
-        check(v1.clone() != null, "clone");
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(PrinterState.UNKNOWN.getCategory() == PrinterState.class, "getCategory");
+        check("printer-state".equals(PrinterState.UNKNOWN.getName()), "getName");
+        check(PrinterState.UNKNOWN.getValue() == 0, "UNKNOWN value == 0");
+        check("unknown".equals(PrinterState.UNKNOWN.toString()), "UNKNOWN toString");
+        check(PrinterState.IDLE.getValue() == 3, "IDLE value == 3");
+        check("idle".equals(PrinterState.IDLE.toString()), "IDLE toString");
+        check(PrinterState.PROCESSING.getValue() == 4, "PROCESSING value == 4");
+        check("processing".equals(PrinterState.PROCESSING.toString()), "PROCESSING toString");
+        check(PrinterState.STOPPED.getValue() == 5, "STOPPED value == 5");
+        check("stopped".equals(PrinterState.STOPPED.toString()), "STOPPED toString");
+        check(PrinterState.UNKNOWN.clone() == PrinterState.UNKNOWN, "clone returns singleton");
+        check(PrinterState.UNKNOWN.hashCode() == 0, "hashCode == value");
+        check(PrinterState.UNKNOWN.equals(PrinterState.UNKNOWN), "equals self");
+        check(!PrinterState.UNKNOWN.equals(PrinterState.IDLE), "distinct constants unequal");
+        check(!PrinterState.UNKNOWN.equals(null) && !PrinterState.UNKNOWN.equals("x"), "not equals null/foreign");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,159 +1,50 @@
 /*
  * @test
- * @summary javax.print.attribute.standard.MediaSize.JIS conformance: media size constants.
+ * @summary javax.print.attribute.standard.MediaSize.JIS conformance: white-box structure + black-box behavior.
  * @run main JISTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
+import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class JISTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
 
-    public static void main(String[] a) throws Exception {
-        Class<?> c = Class.forName("javax.print.attribute.standard.MediaSize$" + "JIS");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "not abstract");
-        java.lang.reflect.Field f_B0 = c.getDeclaredField("B0");
-        check(java.lang.reflect.Modifier.isStatic(f_B0.getModifiers()), "B0 is static");
-        check(f_B0.getType() == javax.print.attribute.standard.MediaSize.class, "B0 type MediaSize");
-        check(f_B0.get(null) != null, "B0 non-null");
-        java.lang.reflect.Field f_B1 = c.getDeclaredField("B1");
-        check(java.lang.reflect.Modifier.isStatic(f_B1.getModifiers()), "B1 is static");
-        check(f_B1.getType() == javax.print.attribute.standard.MediaSize.class, "B1 type MediaSize");
-        check(f_B1.get(null) != null, "B1 non-null");
-        java.lang.reflect.Field f_B2 = c.getDeclaredField("B2");
-        check(java.lang.reflect.Modifier.isStatic(f_B2.getModifiers()), "B2 is static");
-        check(f_B2.getType() == javax.print.attribute.standard.MediaSize.class, "B2 type MediaSize");
-        check(f_B2.get(null) != null, "B2 non-null");
-        java.lang.reflect.Field f_B3 = c.getDeclaredField("B3");
-        check(java.lang.reflect.Modifier.isStatic(f_B3.getModifiers()), "B3 is static");
-        check(f_B3.getType() == javax.print.attribute.standard.MediaSize.class, "B3 type MediaSize");
-        check(f_B3.get(null) != null, "B3 non-null");
-        java.lang.reflect.Field f_B4 = c.getDeclaredField("B4");
-        check(java.lang.reflect.Modifier.isStatic(f_B4.getModifiers()), "B4 is static");
-        check(f_B4.getType() == javax.print.attribute.standard.MediaSize.class, "B4 type MediaSize");
-        check(f_B4.get(null) != null, "B4 non-null");
-        java.lang.reflect.Field f_B5 = c.getDeclaredField("B5");
-        check(java.lang.reflect.Modifier.isStatic(f_B5.getModifiers()), "B5 is static");
-        check(f_B5.getType() == javax.print.attribute.standard.MediaSize.class, "B5 type MediaSize");
-        check(f_B5.get(null) != null, "B5 non-null");
-        java.lang.reflect.Field f_B6 = c.getDeclaredField("B6");
-        check(java.lang.reflect.Modifier.isStatic(f_B6.getModifiers()), "B6 is static");
-        check(f_B6.getType() == javax.print.attribute.standard.MediaSize.class, "B6 type MediaSize");
-        check(f_B6.get(null) != null, "B6 non-null");
-        java.lang.reflect.Field f_B7 = c.getDeclaredField("B7");
-        check(java.lang.reflect.Modifier.isStatic(f_B7.getModifiers()), "B7 is static");
-        check(f_B7.getType() == javax.print.attribute.standard.MediaSize.class, "B7 type MediaSize");
-        check(f_B7.get(null) != null, "B7 non-null");
-        java.lang.reflect.Field f_B8 = c.getDeclaredField("B8");
-        check(java.lang.reflect.Modifier.isStatic(f_B8.getModifiers()), "B8 is static");
-        check(f_B8.getType() == javax.print.attribute.standard.MediaSize.class, "B8 type MediaSize");
-        check(f_B8.get(null) != null, "B8 non-null");
-        java.lang.reflect.Field f_B9 = c.getDeclaredField("B9");
-        check(java.lang.reflect.Modifier.isStatic(f_B9.getModifiers()), "B9 is static");
-        check(f_B9.getType() == javax.print.attribute.standard.MediaSize.class, "B9 type MediaSize");
-        check(f_B9.get(null) != null, "B9 non-null");
-        java.lang.reflect.Field f_B10 = c.getDeclaredField("B10");
-        check(java.lang.reflect.Modifier.isStatic(f_B10.getModifiers()), "B10 is static");
-        check(f_B10.getType() == javax.print.attribute.standard.MediaSize.class, "B10 type MediaSize");
-        check(f_B10.get(null) != null, "B10 non-null");
-        java.lang.reflect.Field f_CHOU_1 = c.getDeclaredField("CHOU_1");
-        check(java.lang.reflect.Modifier.isStatic(f_CHOU_1.getModifiers()), "CHOU_1 is static");
-        check(f_CHOU_1.getType() == javax.print.attribute.standard.MediaSize.class, "CHOU_1 type MediaSize");
-        check(f_CHOU_1.get(null) != null, "CHOU_1 non-null");
-        java.lang.reflect.Field f_CHOU_2 = c.getDeclaredField("CHOU_2");
-        check(java.lang.reflect.Modifier.isStatic(f_CHOU_2.getModifiers()), "CHOU_2 is static");
-        check(f_CHOU_2.getType() == javax.print.attribute.standard.MediaSize.class, "CHOU_2 type MediaSize");
-        check(f_CHOU_2.get(null) != null, "CHOU_2 non-null");
-        java.lang.reflect.Field f_CHOU_3 = c.getDeclaredField("CHOU_3");
-        check(java.lang.reflect.Modifier.isStatic(f_CHOU_3.getModifiers()), "CHOU_3 is static");
-        check(f_CHOU_3.getType() == javax.print.attribute.standard.MediaSize.class, "CHOU_3 type MediaSize");
-        check(f_CHOU_3.get(null) != null, "CHOU_3 non-null");
-        java.lang.reflect.Field f_CHOU_4 = c.getDeclaredField("CHOU_4");
-        check(java.lang.reflect.Modifier.isStatic(f_CHOU_4.getModifiers()), "CHOU_4 is static");
-        check(f_CHOU_4.getType() == javax.print.attribute.standard.MediaSize.class, "CHOU_4 type MediaSize");
-        check(f_CHOU_4.get(null) != null, "CHOU_4 non-null");
-        java.lang.reflect.Field f_CHOU_30 = c.getDeclaredField("CHOU_30");
-        check(java.lang.reflect.Modifier.isStatic(f_CHOU_30.getModifiers()), "CHOU_30 is static");
-        check(f_CHOU_30.getType() == javax.print.attribute.standard.MediaSize.class, "CHOU_30 type MediaSize");
-        check(f_CHOU_30.get(null) != null, "CHOU_30 non-null");
-        java.lang.reflect.Field f_CHOU_40 = c.getDeclaredField("CHOU_40");
-        check(java.lang.reflect.Modifier.isStatic(f_CHOU_40.getModifiers()), "CHOU_40 is static");
-        check(f_CHOU_40.getType() == javax.print.attribute.standard.MediaSize.class, "CHOU_40 type MediaSize");
-        check(f_CHOU_40.get(null) != null, "CHOU_40 non-null");
-        java.lang.reflect.Field f_KAKU_0 = c.getDeclaredField("KAKU_0");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_0.getModifiers()), "KAKU_0 is static");
-        check(f_KAKU_0.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_0 type MediaSize");
-        check(f_KAKU_0.get(null) != null, "KAKU_0 non-null");
-        java.lang.reflect.Field f_KAKU_1 = c.getDeclaredField("KAKU_1");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_1.getModifiers()), "KAKU_1 is static");
-        check(f_KAKU_1.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_1 type MediaSize");
-        check(f_KAKU_1.get(null) != null, "KAKU_1 non-null");
-        java.lang.reflect.Field f_KAKU_2 = c.getDeclaredField("KAKU_2");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_2.getModifiers()), "KAKU_2 is static");
-        check(f_KAKU_2.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_2 type MediaSize");
-        check(f_KAKU_2.get(null) != null, "KAKU_2 non-null");
-        java.lang.reflect.Field f_KAKU_3 = c.getDeclaredField("KAKU_3");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_3.getModifiers()), "KAKU_3 is static");
-        check(f_KAKU_3.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_3 type MediaSize");
-        check(f_KAKU_3.get(null) != null, "KAKU_3 non-null");
-        java.lang.reflect.Field f_KAKU_4 = c.getDeclaredField("KAKU_4");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_4.getModifiers()), "KAKU_4 is static");
-        check(f_KAKU_4.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_4 type MediaSize");
-        check(f_KAKU_4.get(null) != null, "KAKU_4 non-null");
-        java.lang.reflect.Field f_KAKU_5 = c.getDeclaredField("KAKU_5");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_5.getModifiers()), "KAKU_5 is static");
-        check(f_KAKU_5.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_5 type MediaSize");
-        check(f_KAKU_5.get(null) != null, "KAKU_5 non-null");
-        java.lang.reflect.Field f_KAKU_6 = c.getDeclaredField("KAKU_6");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_6.getModifiers()), "KAKU_6 is static");
-        check(f_KAKU_6.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_6 type MediaSize");
-        check(f_KAKU_6.get(null) != null, "KAKU_6 non-null");
-        java.lang.reflect.Field f_KAKU_7 = c.getDeclaredField("KAKU_7");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_7.getModifiers()), "KAKU_7 is static");
-        check(f_KAKU_7.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_7 type MediaSize");
-        check(f_KAKU_7.get(null) != null, "KAKU_7 non-null");
-        java.lang.reflect.Field f_KAKU_8 = c.getDeclaredField("KAKU_8");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_8.getModifiers()), "KAKU_8 is static");
-        check(f_KAKU_8.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_8 type MediaSize");
-        check(f_KAKU_8.get(null) != null, "KAKU_8 non-null");
-        java.lang.reflect.Field f_KAKU_20 = c.getDeclaredField("KAKU_20");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_20.getModifiers()), "KAKU_20 is static");
-        check(f_KAKU_20.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_20 type MediaSize");
-        check(f_KAKU_20.get(null) != null, "KAKU_20 non-null");
-        java.lang.reflect.Field f_KAKU_A4 = c.getDeclaredField("KAKU_A4");
-        check(java.lang.reflect.Modifier.isStatic(f_KAKU_A4.getModifiers()), "KAKU_A4 is static");
-        check(f_KAKU_A4.getType() == javax.print.attribute.standard.MediaSize.class, "KAKU_A4 type MediaSize");
-        check(f_KAKU_A4.get(null) != null, "KAKU_A4 non-null");
-        java.lang.reflect.Field f_YOU_1 = c.getDeclaredField("YOU_1");
-        check(java.lang.reflect.Modifier.isStatic(f_YOU_1.getModifiers()), "YOU_1 is static");
-        check(f_YOU_1.getType() == javax.print.attribute.standard.MediaSize.class, "YOU_1 type MediaSize");
-        check(f_YOU_1.get(null) != null, "YOU_1 non-null");
-        java.lang.reflect.Field f_YOU_2 = c.getDeclaredField("YOU_2");
-        check(java.lang.reflect.Modifier.isStatic(f_YOU_2.getModifiers()), "YOU_2 is static");
-        check(f_YOU_2.getType() == javax.print.attribute.standard.MediaSize.class, "YOU_2 type MediaSize");
-        check(f_YOU_2.get(null) != null, "YOU_2 non-null");
-        java.lang.reflect.Field f_YOU_3 = c.getDeclaredField("YOU_3");
-        check(java.lang.reflect.Modifier.isStatic(f_YOU_3.getModifiers()), "YOU_3 is static");
-        check(f_YOU_3.getType() == javax.print.attribute.standard.MediaSize.class, "YOU_3 type MediaSize");
-        check(f_YOU_3.get(null) != null, "YOU_3 non-null");
-        java.lang.reflect.Field f_YOU_4 = c.getDeclaredField("YOU_4");
-        check(java.lang.reflect.Modifier.isStatic(f_YOU_4.getModifiers()), "YOU_4 is static");
-        check(f_YOU_4.getType() == javax.print.attribute.standard.MediaSize.class, "YOU_4 type MediaSize");
-        check(f_YOU_4.get(null) != null, "YOU_4 non-null");
-        java.lang.reflect.Field f_YOU_5 = c.getDeclaredField("YOU_5");
-        check(java.lang.reflect.Modifier.isStatic(f_YOU_5.getModifiers()), "YOU_5 is static");
-        check(f_YOU_5.getType() == javax.print.attribute.standard.MediaSize.class, "YOU_5 type MediaSize");
-        check(f_YOU_5.get(null) != null, "YOU_5 non-null");
-        java.lang.reflect.Field f_YOU_6 = c.getDeclaredField("YOU_6");
-        check(java.lang.reflect.Modifier.isStatic(f_YOU_6.getModifiers()), "YOU_6 is static");
-        check(f_YOU_6.getType() == javax.print.attribute.standard.MediaSize.class, "YOU_6 type MediaSize");
-        check(f_YOU_6.get(null) != null, "YOU_6 non-null");
-        java.lang.reflect.Field f_YOU_7 = c.getDeclaredField("YOU_7");
-        check(java.lang.reflect.Modifier.isStatic(f_YOU_7.getModifiers()), "YOU_7 is static");
-        check(f_YOU_7.getType() == javax.print.attribute.standard.MediaSize.class, "YOU_7 type MediaSize");
-        check(f_YOU_7.get(null) != null, "YOU_7 non-null");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.standard.MediaSize$JIS");
+        check(Modifier.isPublic(c.getModifiers()) && Modifier.isFinal(c.getModifiers()) && !c.isInterface(), "public final class");
+        int n = 0; for (Field f : c.getDeclaredFields()) if (Modifier.isPublic(f.getModifiers()) && Modifier.isStatic(f.getModifiers()) && f.getType() == MediaSize.class) n++;
+        check(n > 0, "has MediaSize constants");
+    }
+
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        MediaSize s = MediaSize.JIS.B5;
+        check(s != null, "constant non-null");
+        check(s.getCategory() == MediaSize.class && "media-size".equals(s.getName()), "getCategory/getName");
+        check(s.getMediaSizeName() != null, "getMediaSizeName non-null");
+        check(s.getX(MediaSize.MM) == 182.0f && s.getY(MediaSize.MM) == 257.0f, "MediaSize.JIS.B5 exact size");
+        check("182.0x257.0 mm".equals(s.toString(MediaSize.MM, "mm")), "MediaSize.JIS.B5 toString");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

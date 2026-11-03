@@ -1,29 +1,61 @@
 /*
  * @test
- * @summary javax.print.attribute.standard.NumberUpSupported conformance: set-of-integer attribute.
+ * @summary javax.print.attribute.standard.NumberUpSupported conformance: white-box structure + black-box behavior.
  * @run main NumberUpSupportedTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
+import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class NumberUpSupportedTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.standard.NumberUpSupported");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface() && Modifier.isFinal(c.getModifiers()), "public class");
+        check(SetOfIntegerSyntax.class.isAssignableFrom(c), "extends SetOfIntegerSyntax");
+        check(SupportedValuesAttribute.class.isAssignableFrom(c), "implements SupportedValuesAttribute");
+    }
 
-    public static void main(String[] a) throws Exception {
-        NumberUpSupported v = new NumberUpSupported(new int[][] {{1,1},{3,3}});
-        check(v.getCategory() == NumberUpSupported.class, "getCategory");
-        check(v.getName() != null && v.getName().length() > 0, "getName non-empty");
-        check(v.contains(1), "contains 1");
-        check(v.contains(3), "contains 3");
-        check(!v.contains(2), "not contains 2");
-        check(v.getMembers() != null && v.getMembers().length == 2, "getMembers");
-        check(v.equals(new NumberUpSupported(new int[][] {{1,1},{3,3}})), "equals");
-        check(v.hashCode() == new NumberUpSupported(new int[][] {{1,1},{3,3}}).hashCode(), "hashCode");
-        check(v.toString() != null, "toString");
-        NumberUpSupported s = new NumberUpSupported(2);
-        check(s.contains(2), "single 2");
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        NumberUpSupported p = new NumberUpSupported(1, 3);
+        check("number-up-supported".equals(p.getName()), "getName");
+        check(p.getCategory() == NumberUpSupported.class, "getCategory");
+        int[][] m = p.getMembers();
+        check(m.length == 1 && m[0][0] == 1 && m[0][1] == 3, "getMembers");
+        check("1-3".equals(p.toString()), "toString");
+        check(p.contains(1) && p.contains(2) && p.contains(3), "contains in range");
+        check(!p.contains(0) && !p.contains(4), "contains out of range");
+        check(p.contains(new Copies(2)), "contains(IntegerSyntax)");
+        check(p.next(-1) == 1 && p.next(1) == 2 && p.next(3) == -1, "next");
+        check(p.equals(new NumberUpSupported(1, 3)), "equals same");
+        check(!p.equals(new NumberUpSupported(1, 4)), "different unequal");
+        check(!p.equals(null) && !p.equals("x"), "not equals null/foreign");
+        check(p.hashCode() == new NumberUpSupported(1, 3).hashCode(), "hashCode consistent");
+        NumberUpSupported psingle = new NumberUpSupported(4);
+        check(psingle.getMembers().length == 1 && psingle.contains(4) && !psingle.contains(5), "int ctor single");
+        NumberUpSupported parr = new NumberUpSupported(new int[][]{{1,2},{4}});
+        check(parr.getMembers().length == 2, "int[][] ctor");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,32 +1,67 @@
 /*
  * @test
- * @summary javax.print.attribute.standard.PageRanges conformance: set-of-integer attribute.
+ * @summary javax.print.attribute.standard.PageRanges conformance: white-box structure + black-box behavior.
  * @run main PageRangesTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
+import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class PageRangesTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.standard.PageRanges");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface() && Modifier.isFinal(c.getModifiers()), "public class");
+        check(SetOfIntegerSyntax.class.isAssignableFrom(c), "extends SetOfIntegerSyntax");
+        check(DocAttribute.class.isAssignableFrom(c), "implements DocAttribute");
+        check(PrintRequestAttribute.class.isAssignableFrom(c), "implements PrintRequestAttribute");
+        check(PrintJobAttribute.class.isAssignableFrom(c), "implements PrintJobAttribute");
+    }
 
-    public static void main(String[] a) throws Exception {
-        PageRanges v = new PageRanges(1, 5);
-        check(v.getCategory() == PageRanges.class, "getCategory");
-        check(v.getName() != null && v.getName().length() > 0, "getName non-empty");
-        check(v.contains(1) && v.contains(3) && v.contains(5), "contains range");
-        check(!v.contains(0) && !v.contains(6), "not contains outside");
-        check(v.getMembers() != null, "getMembers");
-        check(v.equals(new PageRanges(1, 5)), "equals int,int");
-        check(v.hashCode() == new PageRanges(1, 5).hashCode(), "hashCode");
-        check(v.toString() != null, "toString");
-        PageRanges str = new PageRanges("1-3");
-        check(str.contains(1) && str.contains(2) && str.contains(3), "string ctor");
-        PageRanges single = new PageRanges(2);
-        check(single.contains(2), "single int ctor");
-        PageRanges arr = new PageRanges(new int[][] {{1,2},{4,4}});
-        check(arr.contains(1) && arr.contains(2) && arr.contains(4), "array ctor");
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        PageRanges p = new PageRanges(1, 3);
+        check("page-ranges".equals(p.getName()), "getName");
+        check(p.getCategory() == PageRanges.class, "getCategory");
+        int[][] m = p.getMembers();
+        check(m.length == 1 && m[0][0] == 1 && m[0][1] == 3, "getMembers");
+        check("1-3".equals(p.toString()), "toString");
+        check(p.contains(1) && p.contains(2) && p.contains(3), "contains in range");
+        check(!p.contains(0) && !p.contains(4), "contains out of range");
+        check(p.contains(new Copies(2)), "contains(IntegerSyntax)");
+        check(p.next(-1) == 1 && p.next(1) == 2 && p.next(3) == -1, "next");
+        check(p.equals(new PageRanges(1, 3)), "equals same");
+        check(!p.equals(new PageRanges(1, 4)), "different unequal");
+        check(!p.equals(null) && !p.equals("x"), "not equals null/foreign");
+        check(p.hashCode() == new PageRanges(1, 3).hashCode(), "hashCode consistent");
+        PageRanges ps = new PageRanges("1-3,5,7-9");
+        check(ps.getMembers().length == 3 && "1-3,5,7-9".equals(ps.toString()), "string ctor multi-range");
+        boolean threw = false; try { new PageRanges("abc"); } catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "invalid string throws IllegalArgumentException");
+        PageRanges psingle = new PageRanges(4);
+        check(psingle.getMembers().length == 1 && psingle.contains(4) && !psingle.contains(5), "int ctor single");
+        PageRanges parr = new PageRanges(new int[][]{{1,2},{4}});
+        check(parr.getMembers().length == 2, "int[][] ctor");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

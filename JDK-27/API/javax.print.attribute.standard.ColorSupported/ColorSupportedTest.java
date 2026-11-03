@@ -1,30 +1,54 @@
 /*
  * @test
- * @summary javax.print.attribute.standard.ColorSupported conformance: enum attribute.
+ * @summary javax.print.attribute.standard.ColorSupported conformance: white-box structure + black-box behavior.
  * @run main ColorSupportedTest
  */
 
 import java.lang.reflect.*;
+import java.util.*;
+import java.net.*;
+import java.io.*;
+import javax.print.*;
+import javax.print.attribute.*;
 import javax.print.attribute.standard.*;
+import javax.print.event.*;
 
 public class ColorSupportedTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    static Class<?> load(String n) throws Exception { return Class.forName(n); }
+    static boolean hasMethod(Class<?> k, String n) {
+        for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
+        return false;
+    }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = load("javax.print.attribute.standard.ColorSupported");
+        check(Modifier.isPublic(c.getModifiers()) && !c.isInterface() && Modifier.isFinal(c.getModifiers()), "public class");
+        check(EnumSyntax.class.isAssignableFrom(c), "extends EnumSyntax");
+        check(PrintServiceAttribute.class.isAssignableFrom(c), "implements PrintServiceAttribute");
+    }
 
-    public static void main(String[] a) throws Exception {
-        ColorSupported v1 = ColorSupported.NOT_SUPPORTED;
-        check(v1 instanceof ColorSupported, "NOT_SUPPORTED instanceof ColorSupported");
-        check(v1.getCategory() == ColorSupported.class, "getCategory");
-        check(v1.getName() != null && v1.getName().length() > 0, "getName non-empty");
-        check(v1.toString() != null && v1.toString().length() > 0, "toString non-empty");
-        check(v1.getValue() >= 0, "getValue >= 0");
-        ColorSupported v2 = ColorSupported.SUPPORTED;
-        check(v1.getValue() != v2.getValue(), "distinct getValue");
-        check(!v1.toString().equals(v2.toString()), "distinct toString");
-        check(v1.equals(ColorSupported.NOT_SUPPORTED), "equals same constant");
-        check(!v1.equals(v2), "not equals other");
-        check(v1.hashCode() == ColorSupported.NOT_SUPPORTED.hashCode(), "hashCode");
-        check(v1.clone() != null, "clone");
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        check(ColorSupported.NOT_SUPPORTED.getCategory() == ColorSupported.class, "getCategory");
+        check("color-supported".equals(ColorSupported.NOT_SUPPORTED.getName()), "getName");
+        check(ColorSupported.NOT_SUPPORTED.getValue() == 0, "NOT_SUPPORTED value == 0");
+        check("not-supported".equals(ColorSupported.NOT_SUPPORTED.toString()), "NOT_SUPPORTED toString");
+        check(ColorSupported.SUPPORTED.getValue() == 1, "SUPPORTED value == 1");
+        check("supported".equals(ColorSupported.SUPPORTED.toString()), "SUPPORTED toString");
+        check(ColorSupported.NOT_SUPPORTED.clone() == ColorSupported.NOT_SUPPORTED, "clone returns singleton");
+        check(ColorSupported.NOT_SUPPORTED.hashCode() == 0, "hashCode == value");
+        check(ColorSupported.NOT_SUPPORTED.equals(ColorSupported.NOT_SUPPORTED), "equals self");
+        check(!ColorSupported.NOT_SUPPORTED.equals(ColorSupported.SUPPORTED), "distinct constants unequal");
+        check(!ColorSupported.NOT_SUPPORTED.equals(null) && !ColorSupported.NOT_SUPPORTED.equals("x"), "not equals null/foreign");
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
