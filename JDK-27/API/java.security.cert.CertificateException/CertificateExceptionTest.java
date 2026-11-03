@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary java.security.cert.CertificateException conformance: type shape and members.
+ * @summary java.security.cert.CertificateException conformance: white-box structure + black-box behavior.
  * @run main CertificateExceptionTest
  */
 
 import java.lang.reflect.*;
+
+import java.io.*;
+import java.security.cert.*;
+
 
 public class CertificateExceptionTest {
     static int passed;
@@ -12,11 +16,35 @@ public class CertificateExceptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.cert.CertificateException");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
         check(c.getSuperclass().getName().equals("java.security.GeneralSecurityException"), "superclass");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check(new CertificateException().getMessage() == null, "no-arg null message");
+        check(new CertificateException("m").getMessage().equals("m"), "message exact");
+        Throwable cause = new RuntimeException("root");
+        CertificateException we = new CertificateException("m", cause);
+        check(we.getCause() == cause, "cause retained");
+        check(new CertificateException(cause).getMessage().equals("java.lang.RuntimeException: root"), "cause message mirrors");
+        // real raise path: decoding garbage bytes
+        try {
+            CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(new byte[]{1, 2, 3}));
+            check(false, "garbage DER throws");
+        } catch (CertificateException ce) {
+            check(true, "garbage DER CertificateException");
+        }
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

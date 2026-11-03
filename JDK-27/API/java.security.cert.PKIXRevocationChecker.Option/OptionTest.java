@@ -1,10 +1,15 @@
 /*
  * @test
- * @summary java.security.cert.PKIXRevocationChecker.Option conformance: type shape and members.
+ * @summary java.security.cert.PKIXRevocationChecker.Option conformance: white-box structure + black-box behavior.
  * @run main OptionTest
  */
 
 import java.lang.reflect.*;
+import java.io.*;
+import java.security.cert.*;
+import java.util.*;
+import java.util.Base64;
+
 
 public class OptionTest {
     static int passed;
@@ -12,13 +17,35 @@ public class OptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.cert.PKIXRevocationChecker$Option");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isEnum(), "is enum");
         check(c.getSuperclass() == Enum.class, "extends Enum");
         checkEnumConstants(c, new String[]{"ONLY_END_ENTITY", "PREFER_CRLS", "NO_FALLBACK", "SOFT_FAIL"});
         checkMethods(c, new String[]{"valueOf", "values"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        List<String> names = new ArrayList<>();
+        for (PKIXRevocationChecker.Option o : PKIXRevocationChecker.Option.values()) names.add(o.name());
+        Collections.sort(names);
+        check(names.equals(List.of("NO_FALLBACK", "ONLY_END_ENTITY", "PREFER_CRLS", "SOFT_FAIL")), "4 options");
+        check(PKIXRevocationChecker.Option.valueOf("SOFT_FAIL") == PKIXRevocationChecker.Option.SOFT_FAIL, "valueOf");
+        // options apply to a checker
+        PKIXRevocationChecker rev = (PKIXRevocationChecker) CertPathValidator.getInstance("PKIX").getRevocationChecker();
+        rev.setOptions(java.util.EnumSet.allOf(PKIXRevocationChecker.Option.class));
+        check(rev.getOptions().size() == 4, "all options set");
+        rev.setOptions(java.util.EnumSet.of(PKIXRevocationChecker.Option.PREFER_CRLS));
+        check(rev.getOptions().equals(java.util.EnumSet.of(PKIXRevocationChecker.Option.PREFER_CRLS)), "single option");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

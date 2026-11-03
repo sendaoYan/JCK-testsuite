@@ -1,10 +1,18 @@
 /*
  * @test
- * @summary java.security.interfaces.EdECPrivateKey conformance: type shape and members.
+ * @summary java.security.interfaces.EdECPrivateKey conformance: white-box structure + black-box behavior.
  * @run main EdECPrivateKeyTest
  */
 
 import java.lang.reflect.*;
+import java.io.*;
+import java.math.BigInteger;
+import java.security.*;
+import java.security.interfaces.*;
+import java.security.spec.*;
+import java.util.*;
+import javax.crypto.KeyAgreement;
+
 
 public class EdECPrivateKeyTest {
     static int passed;
@@ -12,13 +20,52 @@ public class EdECPrivateKeyTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.interfaces.EdECPrivateKey");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         checkInterfaces(c, new String[]{"java.security.interfaces.EdECKey", "java.security.PrivateKey"});
         checkMethods(c, new String[]{"getBytes", "getParams"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("Ed25519");
+        KeyPair kp = kpg.generateKeyPair();
+        EdECPrivateKey priv = (EdECPrivateKey) kp.getPrivate();
+        check(priv instanceof PrivateKey && priv instanceof EdECKey, "supertypes");
+        check(priv.getParams().getName().equals("Ed25519"), "params name");
+        check(priv.getFormat().equals("PKCS#8"), "PKCS#8 format");
+        // raw secret bytes are exposed via the Optional, 32 bytes for Ed25519
+        java.util.Optional<byte[]> bytes = priv.getBytes();
+        check(bytes.isPresent(), "bytes present");
+        check(bytes.get().length == 32, "32 raw bytes");
+        // Ed448 uses 57 bytes
+        EdECPrivateKey p448 = (EdECPrivateKey) KeyPairGenerator.getInstance("Ed448").generateKeyPair().getPrivate();
+        check(p448.getBytes().isPresent() && p448.getBytes().get().length == 57, "57 bytes for Ed448");
+        // sign/verify round trip driven purely by the interface view
+        Signature sig = Signature.getInstance("Ed25519");
+        sig.initSign(priv);
+        byte[] msg = "jck-ed".getBytes("UTF-8");
+        sig.update(msg);
+        byte[] s = sig.sign();
+        sig.initVerify(kp.getPublic());
+        sig.update(msg);
+        check(sig.verify(s), "signature verifies");
+        check(s.length == 64, "64-byte Ed25519 signature");
+        // KeyFactory round trip through PKCS#8 keeps the byte view
+        KeyFactory kf = KeyFactory.getInstance("EdDSA");
+        EdECPrivateKey back = (EdECPrivateKey) kf.generatePrivate(new PKCS8EncodedKeySpec(priv.getEncoded()));
+        check(back.getBytes().isPresent() && java.util.Arrays.equals(back.getBytes().get(), bytes.get()),
+            "PKCS#8 round trip bytes");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

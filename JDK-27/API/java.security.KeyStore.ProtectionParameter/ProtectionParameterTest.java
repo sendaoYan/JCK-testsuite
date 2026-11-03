@@ -1,10 +1,13 @@
 /*
  * @test
- * @summary java.security.KeyStore.ProtectionParameter conformance: type shape and members.
+ * @summary java.security.KeyStore.ProtectionParameter conformance: white-box structure + black-box behavior.
  * @run main ProtectionParameterTest
  */
 
 import java.lang.reflect.*;
+import java.security.KeyStore;
+
+
 
 public class ProtectionParameterTest {
     static int passed;
@@ -12,11 +15,35 @@ public class ProtectionParameterTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.KeyStore$ProtectionParameter");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        // marker interface; both JDK implementations satisfy it
+        KeyStore.ProtectionParameter pw = new KeyStore.PasswordProtection("x".toCharArray());
+        KeyStore.ProtectionParameter cb = new KeyStore.CallbackHandlerProtection(callbacks -> { });
+        check(pw instanceof KeyStore.ProtectionParameter, "PasswordProtection implements");
+        check(cb instanceof KeyStore.ProtectionParameter, "CallbackHandlerProtection implements");
+        // custom minimal implementation
+        KeyStore.ProtectionParameter custom = new KeyStore.ProtectionParameter() { };
+        check(custom != null, "anonymous implementation");
+        // password-less load path accepts the interface end-to-end
+        KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        check(ks.size() == 0, "default type empty load");
+        check(KeyStore.getDefaultType() != null, "default type non-null");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

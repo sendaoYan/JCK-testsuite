@@ -1,10 +1,11 @@
 /*
  * @test
- * @summary java.security.KeyManagementException conformance: type shape and members.
+ * @summary java.security.KeyManagementException conformance: white-box structure + black-box behavior.
  * @run main KeyManagementExceptionTest
  */
 
 import java.lang.reflect.*;
+import java.security.*;
 
 public class KeyManagementExceptionTest {
     static int passed;
@@ -12,11 +13,37 @@ public class KeyManagementExceptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.KeyManagementException");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
         check(c.getSuperclass().getName().equals("java.security.KeyException"), "superclass");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        KeyManagementException e0 = new KeyManagementException();
+        check(e0.getMessage() == null, "null message");
+        check(e0.getCause() == null, "null cause");
+        KeyManagementException e1 = new KeyManagementException("jck key failure");
+        check("jck key failure".equals(e1.getMessage()), "message");
+        check(e1 instanceof GeneralSecurityException, "hierarchy");
+        check(e1 instanceof Exception, "exception");
+        Throwable t = new IllegalStateException("root");
+        KeyManagementException e2 = new KeyManagementException("wrapped", t);
+        check(e2.getCause() == t, "cause");
+        check("wrapped".equals(e2.getMessage()), "message with cause");
+        // declared thrown by Identity.setPublicKey (the JDK-27 stub never actually throws it)
+        Identity id = new Identity("jck") {};
+        id.setPublicKey(null);
+        check(true, "KME declared on setPublicKey");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

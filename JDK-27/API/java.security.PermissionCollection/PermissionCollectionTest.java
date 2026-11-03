@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.security.PermissionCollection conformance: type shape and members.
+ * @summary java.security.PermissionCollection conformance: white-box structure + black-box behavior.
  * @run main PermissionCollectionTest
  */
 
 import java.lang.reflect.*;
+import java.security.*;
+import java.util.*;
 
 public class PermissionCollectionTest {
     static int passed;
@@ -12,13 +14,57 @@ public class PermissionCollectionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.PermissionCollection");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && Modifier.isAbstract(c.getModifiers()), "abstract class");
         check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
         checkInterfaces(c, new String[]{"java.io.Serializable"});
         checkMethods(c, new String[]{"add", "elements", "elementsAsStream", "implies", "isReadOnly", "setReadOnly", "toString"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        // Minimal concrete collection drives the abstract contract.
+        class VecCollection extends PermissionCollection {
+            final Vector<Permission> v = new Vector<>();
+            public void add(Permission p) {
+                if (isReadOnly()) throw new SecurityException("collection is read-only");
+                v.add(p);
+            }
+            public boolean implies(Permission p) {
+                for (Permission q : v) if (q.implies(p)) return true;
+                return false;
+            }
+            public Enumeration<Permission> elements() { return v.elements(); }
+        }
+        VecCollection pc = new VecCollection();
+        pc.add(new SecurityPermission("a.b"));
+        pc.add(new AllPermission());
+        check(pc.implies(new SecurityPermission("a.b")), "implies member");
+        check(pc.implies(new RuntimePermission("anything")), "implies AllPermission");
+        Enumeration<Permission> e = pc.elements();
+        int n = 0;
+        while (e.hasMoreElements()) { Permission p = e.nextElement(); check(p != null, "element " + n); n++; }
+        check(n == 2, "elements count");
+        check(!pc.isReadOnly(), "initially writable");
+        pc.setReadOnly();
+        check(pc.isReadOnly(), "readOnly set");
+        try {
+            pc.add(new SecurityPermission("c"));
+            check(false, "add on read-only should throw");
+        } catch (SecurityException se) {
+            check(true, "add on read-only throws SecurityException");
+        }
+        // toString of a PermissionCollection is never null
+        check(pc.toString() != null && !pc.toString().isEmpty(), "toString non-empty");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

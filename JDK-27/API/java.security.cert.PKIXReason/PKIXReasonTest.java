@@ -1,10 +1,15 @@
 /*
  * @test
- * @summary java.security.cert.PKIXReason conformance: type shape and members.
+ * @summary java.security.cert.PKIXReason conformance: white-box structure + black-box behavior.
  * @run main PKIXReasonTest
  */
 
 import java.lang.reflect.*;
+import java.io.*;
+import java.security.cert.*;
+import java.util.*;
+import java.util.Base64;
+
 
 public class PKIXReasonTest {
     static int passed;
@@ -12,7 +17,7 @@ public class PKIXReasonTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.cert.PKIXReason");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isEnum(), "is enum");
@@ -20,6 +25,27 @@ public class PKIXReasonTest {
         checkInterfaces(c, new String[]{"java.security.cert.CertPathValidatorException$Reason"});
         checkEnumConstants(c, new String[]{"NAME_CHAINING", "INVALID_KEY_USAGE", "INVALID_POLICY", "NO_TRUST_ANCHOR", "UNRECOGNIZED_CRIT_EXT", "NOT_CA_CERT", "PATH_TOO_LONG", "INVALID_NAME"});
         checkMethods(c, new String[]{"valueOf", "values"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        List<String> names = new ArrayList<>();
+        for (PKIXReason r : PKIXReason.values()) names.add(r.name());
+        Collections.sort(names);
+        check(names.equals(List.of("INVALID_KEY_USAGE", "INVALID_NAME", "INVALID_POLICY", "NAME_CHAINING",
+            "NOT_CA_CERT", "NO_TRUST_ANCHOR", "PATH_TOO_LONG", "UNRECOGNIZED_CRIT_EXT")), "8 reasons");
+        check(PKIXReason.valueOf("NO_TRUST_ANCHOR") == PKIXReason.NO_TRUST_ANCHOR, "valueOf");
+        // usable as a validation Reason
+        CertPathValidatorException e = new CertPathValidatorException("m", null, null, -1, PKIXReason.PATH_TOO_LONG);
+        check(e.getReason() == PKIXReason.PATH_TOO_LONG, "reason retained");
+        check(PKIXReason.NO_TRUST_ANCHOR instanceof CertPathValidatorException.Reason, "implements Reason");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

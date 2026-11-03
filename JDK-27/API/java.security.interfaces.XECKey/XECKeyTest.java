@@ -1,10 +1,18 @@
 /*
  * @test
- * @summary java.security.interfaces.XECKey conformance: type shape and members.
+ * @summary java.security.interfaces.XECKey conformance: white-box structure + black-box behavior.
  * @run main XECKeyTest
  */
 
 import java.lang.reflect.*;
+import java.io.*;
+import java.math.BigInteger;
+import java.security.*;
+import java.security.interfaces.*;
+import java.security.spec.*;
+import java.util.*;
+import javax.crypto.KeyAgreement;
+
 
 public class XECKeyTest {
     static int passed;
@@ -12,12 +20,44 @@ public class XECKeyTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.interfaces.XECKey");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         checkMethods(c, new String[]{"getParams"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        // X25519 and X448 report their named parameters
+        KeyPairGenerator x25519 = KeyPairGenerator.getInstance("XDH");
+        x25519.initialize(NamedParameterSpec.X25519);
+        KeyPair p1 = x25519.generateKeyPair();
+        XECKey pub1 = (XECKey) p1.getPublic();
+        XECKey priv1 = (XECKey) p1.getPrivate();
+        check(pub1.getParams() instanceof NamedParameterSpec, "named params");
+        check(((NamedParameterSpec) pub1.getParams()).getName().equals("X25519"), "X25519 name");
+        check(((NamedParameterSpec) priv1.getParams()).getName().equals("X25519"), "private side name");
+        KeyPairGenerator x448 = KeyPairGenerator.getInstance("XDH");
+        x448.initialize(NamedParameterSpec.X448);
+        KeyPair p2 = x448.generateKeyPair();
+        check(((NamedParameterSpec) ((XECKey) p2.getPublic()).getParams()).getName().equals("X448"), "X448 name");
+        check(!((NamedParameterSpec) pub1.getParams()).getName()
+            .equals(((NamedParameterSpec) ((XECKey) p2.getPublic()).getParams()).getName()),
+            "distinct parameter sets");
+        // encoding sizes reflect the curve
+        check(p1.getPublic().getEncoded().length < p2.getPublic().getEncoded().length, "X448 encodes larger");
+        // both halves share the same parameter object semantics
+        check(((NamedParameterSpec) pub1.getParams()).getName()
+            .equals(((NamedParameterSpec) priv1.getParams()).getName()), "same params both halves");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

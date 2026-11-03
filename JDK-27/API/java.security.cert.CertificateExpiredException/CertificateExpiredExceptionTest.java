@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary java.security.cert.CertificateExpiredException conformance: type shape and members.
+ * @summary java.security.cert.CertificateExpiredException conformance: white-box structure + black-box behavior.
  * @run main CertificateExpiredExceptionTest
  */
 
 import java.lang.reflect.*;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateException;
+
+
 
 public class CertificateExpiredExceptionTest {
     static int passed;
@@ -12,11 +16,25 @@ public class CertificateExpiredExceptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.cert.CertificateExpiredException");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
         check(c.getSuperclass().getName().equals("java.security.cert.CertificateException"), "superclass");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check(new CertificateExpiredException().getMessage() == null, "no-arg null message");
+        check(new CertificateExpiredException("expired on 2020-01-01").getMessage().equals("expired on 2020-01-01"), "message exact");
+        check(new CertificateExpiredException() instanceof CertificateException, "extends CertificateException");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

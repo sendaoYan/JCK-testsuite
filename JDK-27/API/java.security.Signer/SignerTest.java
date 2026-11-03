@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.security.Signer conformance: type shape and members.
+ * @summary java.security.Signer conformance: white-box structure + black-box behavior.
  * @run main SignerTest
  */
 
 import java.lang.reflect.*;
+import java.security.*;
+import java.util.*;
 
 public class SignerTest {
     static int passed;
@@ -12,12 +14,50 @@ public class SignerTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.Signer");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && Modifier.isAbstract(c.getModifiers()), "abstract class");
         check(c.getSuperclass().getName().equals("java.security.Identity"), "superclass");
         checkMethods(c, new String[]{"getPrivateKey", "setKeyPair", "toString"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        // Signer is an abstract subclass of Identity carrying a private key
+        Signer s = new Signer("jck-signer") {};
+        check(s.getName().equals("jck-signer"), "name");
+        check(s.getPrivateKey() == null, "null key");
+        check(s instanceof Identity && s instanceof Principal, "hierarchy");
+        // setKeyPair installs both halves
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+        s.setKeyPair(kp);
+        check(s.getPrivateKey() == kp.getPrivate(), "private key");
+        check(s.getPublicKey().equals(kp.getPublic()), "public key");
+        // resetting with the same pair succeeds; JDK-27 replaces silently even with a different pair
+        s.setKeyPair(new KeyPair(kp.getPublic(), kp.getPrivate()));
+        check(s.getPrivateKey() != null, "same pair ok");
+        KeyPair other = kpg.generateKeyPair();
+        s.setKeyPair(other);
+        check(s.getPrivateKey() == other.getPrivate() && s.getPublicKey().equals(other.getPublic()), "different pair replaces");
+        // toString mentions the signer identity
+        check(s.toString().contains("jck-signer"), "toString");
+        // null key pair rejected
+        try {
+            s.setKeyPair(null);
+            check(false, "null pair");
+        } catch (NullPointerException | InvalidParameterException e) {
+            check(true, "null pair rejected");
+        }
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

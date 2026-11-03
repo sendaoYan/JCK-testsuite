@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary java.security.cert.CertificateEncodingException conformance: type shape and members.
+ * @summary java.security.cert.CertificateEncodingException conformance: white-box structure + black-box behavior.
  * @run main CertificateEncodingExceptionTest
  */
 
 import java.lang.reflect.*;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
+
+
 
 public class CertificateEncodingExceptionTest {
     static int passed;
@@ -12,11 +16,31 @@ public class CertificateEncodingExceptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.cert.CertificateEncodingException");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
         check(c.getSuperclass().getName().equals("java.security.cert.CertificateException"), "superclass");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        check(new CertificateEncodingException().getMessage() == null, "no-arg null message");
+        CertificateEncodingException e = new CertificateEncodingException("encode failed");
+        check(e.getMessage().equals("encode failed"), "message exact");
+        Throwable cause = new IllegalStateException("boom");
+        CertificateEncodingException e2 = new CertificateEncodingException("wrap", cause);
+        check(e2.getCause() == cause && e2.getMessage().equals("wrap"), "message+cause");
+        CertificateEncodingException e3 = new CertificateEncodingException(cause);
+        check(e3.getCause() == cause, "cause-only ctor");
+        check(e instanceof CertificateException, "extends CertificateException");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary java.security.KeyStore.LoadStoreParameter conformance: type shape and members.
+ * @summary java.security.KeyStore.LoadStoreParameter conformance: white-box structure + black-box behavior.
  * @run main LoadStoreParameterTest
  */
 
 import java.lang.reflect.*;
+
+import java.util.*;
+import java.security.KeyStore;
+
 
 public class LoadStoreParameterTest {
     static int passed;
@@ -12,12 +16,52 @@ public class LoadStoreParameterTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.KeyStore$LoadStoreParameter");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         checkMethods(c, new String[]{"getProtectionParameter"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        // Implemented by DomainLoadStoreParameter; getProtectionParameter contract
+        java.net.URI cfg = java.net.URI.create("file:/tmp/jck-domain.cfg");
+        java.util.Map<String, KeyStore.ProtectionParameter> map = new LinkedHashMap<>();
+        map.put("keystore", new KeyStore.PasswordProtection("pw".toCharArray()));
+        KeyStore.LoadStoreParameter lsp = new java.security.DomainLoadStoreParameter(cfg, map);
+        check(lsp instanceof KeyStore.LoadStoreParameter, "implements LSP");
+        check(lsp.getProtectionParameter() == null, "null protection for the keystore entry");
+        // anonymous implementation returns its own parameter
+        KeyStore.ProtectionParameter mine = new KeyStore.ProtectionParameter() { };
+        class SimpleLSP implements KeyStore.LoadStoreParameter {
+            public KeyStore.ProtectionParameter getProtectionParameter() { return mine; }
+        }
+        check(new SimpleLSP().getProtectionParameter() == mine, "custom LSP parameter");
+        // load via LoadStoreParameter (null password) initializes an empty store
+        class NullPwLSP implements KeyStore.LoadStoreParameter {
+            public KeyStore.ProtectionParameter getProtectionParameter() {
+                return new KeyStore.PasswordProtection(null);
+            }
+        }
+        KeyStore fresh = KeyStore.getInstance("PKCS12");
+        fresh.load(new NullPwLSP());
+        check(fresh.size() == 0, "load via LoadStoreParameter");
+        // PKCS12 does not support store(LoadStoreParameter) - default engineStore throws
+        try {
+            fresh.store(new NullPwLSP());
+            check(false, "store via LSP throws");
+        } catch (UnsupportedOperationException uoe) {
+            check(true, "store via LSP UnsupportedOperationException");
+        }
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

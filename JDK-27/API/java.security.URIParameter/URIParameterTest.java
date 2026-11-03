@@ -1,11 +1,13 @@
 /*
  * @test
- * @summary java.security.URIParameter conformance: constructor and accessor.
+ * @summary java.security.URIParameter conformance: white-box structure + black-box behavior.
  * @run main URIParameterTest
  */
 
 import java.security.URIParameter;
 import java.net.URI;
+import java.security.*;
+import java.util.*;
 
 public class URIParameterTest {
     static int passed;
@@ -13,10 +15,41 @@ public class URIParameterTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         URI uri = new URI("file:///tmp/policy");
         URIParameter p = new URIParameter(uri);
         check(uri.equals(p.getURI()), "getURI");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        java.net.URI uri = java.net.URI.create("file:/etc/jck/java.policy");
+        URIParameter p = new URIParameter(uri);
+        check(p.getURI().equals(uri), "uri round trip");
+        check(p.getURI() == uri, "same instance");
+        // different URI, different parameter object content
+        URIParameter q = new URIParameter(java.net.URI.create("file:/other.policy"));
+        check(!p.getURI().equals(q.getURI()), "different uris");
+        check(!p.equals(q), "not equal");
+        // hierarchical and opaque URIs both accepted
+        check(new URIParameter(java.net.URI.create("http://jck.example/policy#frag")).getURI().getFragment().equals("frag"), "fragment");
+        // null URI rejected
+        try {
+            new URIParameter(null);
+            check(false, "null URI NPE");
+        } catch (NullPointerException npe) {
+            check(true, "null URI NPE");
+        }
+        // implements both Policy.Parameters and login Configuration.Parameters
+        check(p instanceof Policy.Parameters, "Policy.Parameters");
+        check(p instanceof javax.security.auth.login.Configuration.Parameters, "Configuration.Parameters");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

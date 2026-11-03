@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary java.security.cert.CertPathValidatorException.Reason conformance: type shape and members.
+ * @summary java.security.cert.CertPathValidatorException.Reason conformance: white-box structure + black-box behavior.
  * @run main ReasonTest
  */
 
 import java.lang.reflect.*;
+import java.io.*;
+import java.security.cert.*;
+import java.util.*;
+
 
 public class ReasonTest {
     static int passed;
@@ -12,12 +16,35 @@ public class ReasonTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.cert.CertPathValidatorException$Reason");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         checkInterfaces(c, new String[]{"java.io.Serializable"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        // Marker interface for validation failure causes; implemented by BasicReason and PKIXReason
+        check(CertPathValidatorException.BasicReason.EXPIRED instanceof CertPathValidatorException.Reason, "BasicReason implements");
+        check(PKIXReason.NO_TRUST_ANCHOR instanceof CertPathValidatorException.Reason, "PKIXReason implements");
+        // custom implementation is accepted by the 5-arg constructor
+        CertPathValidatorException.Reason custom = new CertPathValidatorException.Reason() {
+            public String toString() { return "JCK_CUSTOM"; }
+        };
+        CertPathValidatorException e = new CertPathValidatorException("m", null, null, -1, custom);
+        check(e.getReason() == custom, "custom reason retained");
+        // default reason when not supplied
+        CertPathValidatorException dflt = new CertPathValidatorException();
+        check(dflt.getReason() == CertPathValidatorException.BasicReason.UNSPECIFIED, "default UNSPECIFIED");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

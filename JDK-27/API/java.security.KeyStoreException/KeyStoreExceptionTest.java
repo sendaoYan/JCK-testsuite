@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.security.KeyStoreException conformance: type shape and members.
+ * @summary java.security.KeyStoreException conformance: white-box structure + black-box behavior.
  * @run main KeyStoreExceptionTest
  */
 
 import java.lang.reflect.*;
+import java.security.*;
+import java.util.*;
 
 public class KeyStoreExceptionTest {
     static int passed;
@@ -12,11 +14,62 @@ public class KeyStoreExceptionTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.KeyStoreException");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
         check(c.getSuperclass().getName().equals("java.security.GeneralSecurityException"), "superclass");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        KeyStoreException e0 = new KeyStoreException();
+        check(e0.getMessage() == null, "null message");
+        KeyStoreException e1 = new KeyStoreException("jck keystore failure");
+        check("jck keystore failure".equals(e1.getMessage()), "message");
+        Throwable t = new java.io.IOException("io root");
+        KeyStoreException e2 = new KeyStoreException("wrapped", t);
+        check(e2.getCause() == t, "cause");
+        check(e2 instanceof GeneralSecurityException, "hierarchy");
+        // real API: operations on an uninitialized KeyStore throw KeyStoreException
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        try {
+            ks.size();
+            check(false, "size before load");
+        } catch (KeyStoreException kse) {
+            check(kse.getMessage() != null, "uninitialized size throws");
+        }
+        try {
+            ks.aliases();
+            check(false, "aliases before load");
+        } catch (KeyStoreException kse) {
+            check(true, "uninitialized aliases throws");
+        }
+        try {
+            ks.containsAlias("x");
+            check(false, "containsAlias before load");
+        } catch (KeyStoreException kse) {
+            check(true, "uninitialized containsAlias throws");
+        }
+        // unknown store type
+        try {
+            KeyStore.getInstance("JCK-NOT-A-TYPE");
+            check(false, "unknown type");
+        } catch (KeyStoreException kse) {
+            check(true, "unknown type KeyStoreException");
+        }
+        // deleteEntry of a missing alias after init is a no-op success
+        KeyStore init = KeyStore.getInstance("PKCS12");
+        init.load(null, null);
+        init.deleteEntry("no-such-alias");
+        check(init.size() == 0, "delete no-op");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

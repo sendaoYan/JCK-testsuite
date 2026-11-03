@@ -1,10 +1,18 @@
 /*
  * @test
- * @summary java.security.interfaces.DSAKeyPairGenerator conformance: type shape and members.
+ * @summary java.security.interfaces.DSAKeyPairGenerator conformance: white-box structure + black-box behavior.
  * @run main DSAKeyPairGeneratorTest
  */
 
 import java.lang.reflect.*;
+import java.io.*;
+import java.math.BigInteger;
+import java.security.*;
+import java.security.interfaces.*;
+import java.security.spec.*;
+import java.util.*;
+import javax.crypto.KeyAgreement;
+
 
 public class DSAKeyPairGeneratorTest {
     static int passed;
@@ -12,12 +20,59 @@ public class DSAKeyPairGeneratorTest {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.security.interfaces.DSAKeyPairGenerator");
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
         checkMethods(c, new String[]{"initialize"});
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+
+        // The interface predates provider SPI refactoring: an implementation supplies the two
+        // DSA-specific initialize methods; the JDK's returned KeyPairGenerator does NOT implement it
+        class Impl implements DSAKeyPairGenerator {
+            DSAParams recordedParams; SecureRandom recordedRandom;
+            int recordedModulus; boolean recordedForce;
+            public void initialize(DSAParams params, SecureRandom random) {
+                recordedParams = params; recordedRandom = random;
+            }
+            public void initialize(int modlen, boolean genParams, SecureRandom random) {
+                recordedModulus = modlen; recordedForce = genParams; recordedRandom = random;
+            }
+        }
+        Impl impl = new Impl();
+        SecureRandom sr = new SecureRandom();
+        // params + random form
+        DSAParams params = KeyPairGenerator.getInstance("DSA").generateKeyPair() instanceof Object ? null : null;
+        KeyPairGenerator probe = KeyPairGenerator.getInstance("DSA");
+        probe.initialize(2048);
+        params = ((DSAKey) probe.generateKeyPair().getPublic()).getParams();
+        impl.initialize(params, sr);
+        check(impl.recordedParams == params, "params recorded");
+        check(impl.recordedRandom == sr, "random recorded");
+        // modulus + forceNewParams + random form
+        impl.initialize(1024, true, sr);
+        check(impl.recordedModulus == 1024, "modulus recorded");
+        check(impl.recordedForce, "genParams recorded");
+        // default state before any call
+        Impl fresh = new Impl();
+        check(fresh.recordedParams == null && fresh.recordedRandom == null, "no recorded state initially");
+        // modern JDK: the generator itself is a delegation wrapper, not a DSAKeyPairGenerator
+        KeyPairGenerator modern = KeyPairGenerator.getInstance("DSA");
+        check(!(modern instanceof DSAKeyPairGenerator), "modern generator does not implement it");
+        // the modern equivalent path: initialize(AlgorithmParameterSpec)
+        modern.initialize(new DSAParameterSpec(params.getP(), params.getQ(), params.getG()));
+        KeyPair kp = modern.generateKeyPair();
+        check(kp.getPublic() instanceof DSAPublicKey, "spec-based init yields DSA keys");
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {
