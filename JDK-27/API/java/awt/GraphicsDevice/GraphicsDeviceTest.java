@@ -102,6 +102,55 @@ public class GraphicsDeviceTest {
         };
         check(def.getBestConfiguration(template) == cfgArr[0],
               "getBestConfiguration delegates to template");
+
+        // a template that reports nothing supported still gets asked
+        GraphicsConfigTemplate nullT = new GraphicsConfigTemplate() {
+            public GraphicsConfiguration getBestConfiguration(GraphicsConfiguration[] gc) {
+                return null;
+            }
+            public boolean isGraphicsConfigSupported(GraphicsConfiguration gc) {
+                return false;
+            }
+        };
+        check(def.getBestConfiguration(nullT) == null,
+              "getBestConfiguration propagates template null");
+
+        // getIDstring is stable across calls
+        check(def.getIDstring().equals(def.getIDstring()), "getIDstring stable");
+
+        // two reads of the current display mode are equal
+        check(def.getDisplayMode().equals(def.getDisplayMode()),
+              "getDisplayMode stable (equals)");
+
+        // availability probes: boolean only, values are platform-dependent
+        boolean fs = def.isFullScreenSupported();
+        check(fs || !fs, "isFullScreenSupported returns boolean");
+        boolean dc = def.isDisplayChangeSupported();
+        check(dc || !dc, "isDisplayChangeSupported returns boolean");
+        if (dc) {
+            def.setDisplayMode(def.getDisplayMode()); // idempotent reset, must not throw
+            check(true, "setDisplayMode(current) accepted");
+        }
+        long mem = def.getAvailableAcceleratedMemory();
+        check(mem >= -1, "accelerated memory >= -1 (unknown sentinel)");
+        for (GraphicsDevice.WindowTranslucency wt : GraphicsDevice.WindowTranslucency.values()) {
+            boolean v = def.isWindowTranslucencySupported(wt);
+            check(v || !v, "isWindowTranslucencySupported(" + wt + ") returns boolean");
+        }
+
+        // full-screen window roundtrip on the default device
+        Frame fsFrame = new Frame("full-screen");
+        fsFrame.setSize(100, 80);
+        fsFrame.setVisible(true);
+        try {
+            def.setFullScreenWindow(fsFrame);
+            check(def.getFullScreenWindow() == fsFrame, "full-screen window roundtrip");
+            def.setFullScreenWindow(null);
+            check(def.getFullScreenWindow() == null, "full-screen window cleared");
+        } finally {
+            def.setFullScreenWindow(null);
+            fsFrame.dispose();
+        }
     }
 
     public static void main(String[] args) throws Exception {

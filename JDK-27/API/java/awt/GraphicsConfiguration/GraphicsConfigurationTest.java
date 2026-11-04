@@ -100,11 +100,39 @@ public class GraphicsConfigurationTest {
         checkIAE(() -> gc.createCompatibleImage(-1, 8), "negative width");
         checkIAE(() -> gc.createCompatibleImage(8, -1), "negative height");
         checkIAE(() -> gc.createCompatibleImage(0, 8), "zero width");
+        checkIAE(() -> gc.createCompatibleImage(0, 0), "zero dims");
 
         if (gc.getColorModel(Transparency.TRANSLUCENT) != null) {
             BufferedImage tl = gc.createCompatibleImage(8, 8, Transparency.TRANSLUCENT);
             check(tl != null, "createCompatibleImage(TRANSLUCENT) non-null when supported");
         }
+
+        // every configuration in the device satisfies the same invariants
+        // (bounded to the first 10: X11 devices may expose hundreds of visuals)
+        GraphicsConfiguration[] allCfg = device.getConfigurations();
+        int limit = Math.min(10, allCfg.length);
+        for (int i = 0; i < limit; i++) {
+            GraphicsConfiguration cfg = allCfg[i];
+            check(cfg.getDevice() == device, "config device matches");
+            Rectangle cb = cfg.getBounds();
+            check(cb != null && cb.width > 0 && cb.height > 0, "config bounds positive size");
+            check(cfg.getColorModel() != null, "config color model non-null");
+            check(cfg.getDefaultTransform() != null, "config default transform non-null");
+            check(cfg.getNormalizingTransform() != null, "config normalizing transform non-null");
+        }
+
+        // volatile image factory: dims exact, invalid dims rejected
+        VolatileImage vi = gc.createCompatibleVolatileImage(8, 8);
+        check(vi != null && vi.getWidth() == 8 && vi.getHeight() == 8,
+              "createCompatibleVolatileImage(8,8) dims");
+        VolatileImage vit = gc.createCompatibleVolatileImage(8, 8, Transparency.TRANSLUCENT);
+        check(vit != null && vit.getWidth() == 8, "createCompatibleVolatileImage translucency overload");
+        checkIAE(() -> gc.createCompatibleVolatileImage(-1, 8), "volatile negative width");
+        checkIAE(() -> gc.createCompatibleVolatileImage(8, 0), "volatile zero height");
+
+        // isTranslucencyCapable returns a stable boolean (value is platform-dependent)
+        boolean t1 = gc.isTranslucencyCapable();
+        check(t1 == gc.isTranslucencyCapable(), "isTranslucencyCapable stable");
     }
 
     public static void main(String[] args) throws Exception {
