@@ -113,6 +113,17 @@ public class GeneralPathTest {
         // reset
         trim.reset();
         check(trim.getCurrentPoint() == null, "reset clears current point");
+
+        // serialization round-trip preserves geometry (legacy GeneralPath form)
+        GeneralPath ser = new GeneralPath(Path2D.WIND_EVEN_ODD);
+        ser.moveTo(1, 2); ser.lineTo(3, 4); ser.closePath();
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(ser);
+        Object back = new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(back instanceof GeneralPath, "GeneralPath round-trip is a GeneralPath");
+        check(((GeneralPath) back).getWindingRule() == Path2D.WIND_EVEN_ODD, "round-trip winding rule preserved");
+        check(((GeneralPath) back).getBounds2D().equals(new Rectangle2D.Double(1, 2, 2, 2)),
+              "round-trip geometry preserved");
     }
 
     public static void main(String[] args) throws Exception {

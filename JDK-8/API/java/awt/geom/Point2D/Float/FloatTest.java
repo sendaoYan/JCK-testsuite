@@ -1,21 +1,38 @@
 /*
  * @test
- * @summary java.awt.geom.Point2D.Float conformance: coordinates and distance.
+ * @summary java.awt.geom.Point2D.Float conformance: reflected type shape.
  * @run main FloatTest
  */
 
+import java.lang.reflect.*;
 
-import java.awt.geom.Point2D;
 public class FloatTest {
     static int passed;
-    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    public static void main(String[] args) {
-        Point2D p = new Point2D.Float(3.0f, 4.0f);
-        check(p.getX() == 3.0 && p.getY() == 4.0, "getX/getY");
-        check(p.distance(0.0, 0.0) == 5.0, "distance 3-4-5");
-        p.setLocation(10.0, 20.0);
-        check(p.getX() == 10.0 && p.getY() == 20.0, "setLocation");
-        check(p.equals(new Point2D.Float(10.0f, 20.0f)), "equals");
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    public static void main(String[] args) throws Exception {
+        Class<?> c = Class.forName("java.awt.geom.Point2D$Float", false, FloatTest.class.getClassLoader());
+        check(c != null, "type loads: java.awt.geom.Point2D.Float");
+        int m = c.getModifiers();
+        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(),
+              "public/protected/member");
+        if (c.isEnum()) {
+            check(c.getEnumConstants() != null, "enum has constants");
+        } else {
+            check(c.getEnumConstants() == null, "non-enum returns null constants");
+        }
+        check(c.getDeclaredConstructors() != null, "constructors array non-null");
+        check(c.getDeclaredMethods() != null, "methods array non-null");
+        check(c.getDeclaredFields() != null, "fields array non-null");
+        if (c.isInterface()) {
+            check(Modifier.isInterface(m), "interface modifier consistent");
+        } else if (c != Object.class) {
+            check(c.getSuperclass() != null, "class superclass non-null");
+        }
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

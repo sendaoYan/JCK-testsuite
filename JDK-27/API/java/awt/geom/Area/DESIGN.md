@@ -35,4 +35,7 @@ boolean empty = d.isEmpty();
 6. getBounds2D/getBounds（整型）。
 7. contains/intersects。
 8. transform、createTransformedArea、clone 独立性、equals(Area)、iterator 段数。
+9. 空 Area 代数：add/subtract 以空 Area 为单位元（bounds 不变），intersect 以空 Area 为零元（结果 empty）。
+10. 两个相离矩形的并：isSingular=false、isRectangular=false、bounds 跨两者、缝隙不含、两块均含。
+11. 矩形挖洞：isSingular=false 仍 isPolygonal、洞不含、环体含。
 白盒：implements Shape/Cloneable、布尔/分类/变换方法存在。

@@ -30,4 +30,5 @@ PathIterator flat = p.getPathIterator(null, 1.0);  // 扁平化三次曲线
 4. Shape/Shape+AT 构造器。
 5. getPathIterator(AT) 变换、扁平化曲线细分。
 6. append(PathIterator)、clone 独立性、trimToSize、getCurrentPoint+closePath。
+7. 序列化 round-trip：恢复 Path2D.Double 类、winding rule、几何 bounds 与 closePath 后的 currentPoint。
 白盒：类形态、superclass=Path2D、implements Serializable、5 个 public 构造器。

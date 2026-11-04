@@ -19,4 +19,9 @@
 2. getData 非空、getData(icSigHead) 128 字节；byte[] round-trip 得到等价 profile。
 3. write(OutputStream) 与 getData 同长；gray profile 1 分量 GRAY 类型。
 4. getInstance(非法 colorspace) 抛 IllegalArgumentException。
+5. getInstance(CS_sRGB/CS_GRAY) 幂等（== 同一缓存实例）。
+6. CLASS_* 常量精确值（INPUT=0 DISPLAY=1 OUTPUT=2 DEVICELINK=3 COLORSPACECONVERSION=4 ABSTRACT=5 NAMEDCOLOR=6）；gray profile 类为 CLASS_DISPLAY；CS_CIEXYZ profile colorSpaceType/PCSType 均 XYZ。
+7. getData(未知 tag 签名) 返回 null（tag 缺失语义）。
+8. getInstance(垃圾字节) 抛 IllegalArgumentException；getInstance((String)null) 抛 NullPointerException。
+9. byte[] 派生 profile 是独立实例且可写：setData(icSigHead) 读回一致、getMajorVersion 反映原始头字节。内置 profile 共享缓存，setData 直接抛 IllegalArgumentException("Can't modify built-in profile")（JDK-9+ 防护；JDK-8 无此防护且写内置会污染同 VM 后续使用——JDK-8 侧只对派生 profile 做同字节写断言，绝不改内置）。
 白盒（`testWhiteBox()`）：public class、implements Serializable、关键常量、四个 getInstance 工厂与 getData/setData/write 签名。

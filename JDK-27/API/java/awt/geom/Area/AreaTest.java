@@ -130,6 +130,33 @@ public class AreaTest {
         int segs = 0;
         while (!it.isDone()) { it.currentSegment(c); segs++; it.next(); }
         check(segs >= 5, "Area path iterator yields segments");
+
+        // empty-area algebra: empty is the identity of add/subtract and the annihilator of intersect
+        Area empty2 = new Area();
+        Area base = new Area(new Rectangle2D.Double(0, 0, 10, 10));
+        Area addE = new Area(base); addE.add(empty2);
+        check(addE.getBounds2D().equals(base.getBounds2D()), "rect.add(empty) is no-op");
+        Area subE = new Area(base); subE.subtract(empty2);
+        check(subE.getBounds2D().equals(base.getBounds2D()), "rect.subtract(empty) is no-op");
+        Area intE = new Area(base); intE.intersect(empty2);
+        check(intE.isEmpty(), "rect.intersect(empty) is empty");
+
+        // two disjoint rectangles: plural (not singular), not rectangular, bounds span both
+        Area two = new Area(new Rectangle2D.Double(0, 0, 10, 10));
+        two.add(new Area(new Rectangle2D.Double(20, 0, 10, 10)));
+        check(!two.isSingular(), "two disjoint areas are not singular");
+        check(!two.isRectangular(), "two disjoint areas are not rectangular");
+        check(two.getBounds2D().equals(new Rectangle2D.Double(0, 0, 30, 10)), "disjoint union bounds span both");
+        check(!two.contains(15, 5), "gap between disjoint sub-areas not contained");
+        check(two.contains(5, 5) && two.contains(25, 5), "both sub-areas contained");
+
+        // subtracting a hole makes the area non-singular but still polygonal
+        Area ring = new Area(new Rectangle2D.Double(0, 0, 10, 10));
+        ring.subtract(new Area(new Rectangle2D.Double(4, 4, 2, 2)));
+        check(!ring.isSingular(), "rectangle with hole is not singular");
+        check(ring.isPolygonal(), "rectangle with hole is polygonal");
+        check(!ring.contains(5, 5), "hole is not contained");
+        check(ring.contains(1, 1), "ring body is contained");
     }
 
     public static void main(String[] args) throws Exception {

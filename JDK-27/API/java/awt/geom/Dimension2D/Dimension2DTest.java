@@ -53,6 +53,22 @@ public class Dimension2DTest {
 
         Dimension2D cl = (Dimension2D) d.clone();
         check(cl != d && cl.getWidth() == 5.0 && cl.getHeight() == 6.0, "clone independent but equal");
+
+        // negative sizes are legal in Dimension2D (no normalization at this abstraction level)
+        Dim neg = new Dim(-3, -4);
+        check(neg.getWidth() == -3.0 && neg.getHeight() == -4.0, "negative size preserved");
+
+        // cross-implementation semantics with java.awt.Dimension:
+        // java.awt.Dimension.equals only accepts java.awt.Dimension, not arbitrary Dimension2D
+        java.awt.Dimension awtD = new java.awt.Dimension(3, 4);
+        check(awtD.equals(new Dim(3, 4)) == false, "java.awt.Dimension.equals(Dimension2D) is false (type-checked)");
+        check(awtD.equals(new java.awt.Dimension(3, 4)), "java.awt.Dimension.equals(Dimension) value-based");
+        check(awtD.hashCode() == new java.awt.Dimension(3, 4).hashCode(), "equal Dimensions share hashCode");
+
+        // java.awt.Dimension.setSize(double,double) rounds by ceiling to int fields
+        java.awt.Dimension frac = new java.awt.Dimension();
+        frac.setSize(2.6, 3.2);
+        check(frac.width == 3 && frac.height == 4, "java.awt.Dimension.setSize(double) ceils to int");
     }
 
     public static void main(String[] args) throws Exception {

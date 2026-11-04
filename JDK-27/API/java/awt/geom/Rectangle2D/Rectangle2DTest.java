@@ -104,6 +104,71 @@ public class Rectangle2DTest {
         check(!new Rectangle2D.Double(0, 0, 10, 20).equals(new Rectangle2D.Double(0, 0, 9, 20)), "different rects");
         check(new Rectangle2D.Double(0, 0, 10, 20).hashCode()
               == new Rectangle2D.Double(0, 0, 10, 20).hashCode(), "equal rects same hashCode");
+
+        // cross-implementation equality with java.awt.Rectangle (same doubles, different class)
+        java.awt.Rectangle awtR = new java.awt.Rectangle(1, 2, 3, 4);
+        Rectangle2D.Double rd = new Rectangle2D.Double(1, 2, 3, 4);
+        check(awtR.equals(rd), "java.awt.Rectangle.equals(Rectangle2D.Double) is value-based");
+        check(rd.equals(awtR), "Rectangle2D.Double.equals(java.awt.Rectangle) is value-based");
+        check(awtR.hashCode() == rd.hashCode(), "cross-impl equal rects share hashCode");
+        check(!new java.awt.Rectangle(1, 2, 3, 5).equals(rd), "cross-impl different size not equal");
+
+        // negative extent: empty, contains nothing, intersects nothing (Rectangle2D does NOT normalize)
+        Rectangle2D.Double neg = new Rectangle2D.Double(0, 0, -10, 20);
+        check(neg.isEmpty(), "negative width isEmpty");
+        check(!neg.contains(-1, 5), "negative width contains nothing");
+        check(!neg.intersects(0, 0, 5, 5), "negative width intersects nothing");
+        check(neg.getBounds2D().getWidth() == -10.0, "negative width preserved (no normalization)");
+
+        // degenerate shapes: zero-height line and zero-size point never contain their own points
+        Rectangle2D.Double line = new Rectangle2D.Double(0, 0, 10, 0);
+        check(line.isEmpty(), "zero-height line isEmpty");
+        check(!line.contains(5, 0), "line does not contain its own points");
+        Rectangle2D.Double point = new Rectangle2D.Double(5, 5, 0, 0);
+        check(point.isEmpty(), "zero-size point isEmpty");
+        check(!point.contains(5, 5), "point does not contain itself");
+
+        // boundary intersections: tangent (shared edge) degenerates to zero width -> empty
+        Rectangle2D.Double dst2 = new Rectangle2D.Double();
+        Rectangle2D.intersect(new Rectangle2D.Double(0, 0, 10, 10), new Rectangle2D.Double(10, 0, 5, 5), dst2);
+        check(close(dst2.getX(), 10) && close(dst2.getWidth(), 0) && dst2.isEmpty(),
+              "tangent intersection is zero-width empty");
+        // disjoint intersection yields negative extent (documented: result only meaningful if !isEmpty)
+        Rectangle2D.intersect(new Rectangle2D.Double(0, 0, 10, 10), new Rectangle2D.Double(20, 20, 5, 5), dst2);
+        check(dst2.isEmpty() && dst2.getWidth() < 0, "disjoint intersection empty with negative extent");
+        // union with an empty rect is the original
+        Rectangle2D.union(new Rectangle2D.Double(0, 0, 10, 10), new Rectangle2D.Double(0, 0, 0, 0), dst2);
+        check(close(dst2.getWidth(), 10) && close(dst2.getHeight(), 10), "union with empty rect keeps original");
+        // containment case: intersection equals the inner rectangle
+        Rectangle2D inner = new Rectangle2D.Double(2, 3, 4, 5).createIntersection(new Rectangle2D.Double(0, 0, 10, 10));
+        check(close(inner.getX(), 2) && close(inner.getY(), 3) && close(inner.getWidth(), 4) && close(inner.getHeight(), 5),
+              "createIntersection containment returns inner rect");
+        // createIntersection with a negative rect keeps negative extent (no normalization)
+        Rectangle2D negInter = new Rectangle2D.Double(0, 0, 10, 10).createIntersection(new Rectangle2D.Double(0, 0, -5, 5));
+        check(negInter.getWidth() == -5.0, "createIntersection preserves negative extent");
+
+        // outcode corner combinations: left|top, right|bottom, and the excluded right/bottom edges
+        Rectangle2D.Double oc = new Rectangle2D.Double(0, 0, 10, 10);
+        check(oc.outcode(-1, -1) == (Rectangle2D.OUT_LEFT | Rectangle2D.OUT_TOP), "outcode corner left|top");
+        check(oc.outcode(11, 21) == (Rectangle2D.OUT_RIGHT | Rectangle2D.OUT_BOTTOM), "outcode corner right|bottom");
+        check(oc.outcode(10, 20) == Rectangle2D.OUT_BOTTOM, "right/bottom edges count as out, left/top do not");
+        check(oc.outcode(0, 0) == 0, "top-left corner is inside");
+
+        // serialization round-trip preserves concrete class and doubles
+        Rectangle2D.Double sd = roundTrip(new Rectangle2D.Double(1.5, 2.5, 3.5, 4.5));
+        check(sd instanceof Rectangle2D.Double, "Rectangle2D.Double round-trip class");
+        check(close(sd.getX(), 1.5) && close(sd.getY(), 2.5) && close(sd.getWidth(), 3.5) && close(sd.getHeight(), 4.5),
+              "Rectangle2D.Double round-trip fields");
+        Rectangle2D.Float sf = roundTrip(new Rectangle2D.Float(1.5f, 2.5f, 3.5f, 4.5f));
+        check(sf instanceof Rectangle2D.Float, "Rectangle2D.Float round-trip class");
+        check(close(sf.getX(), 1.5) && close(sf.getWidth(), 3.5), "Rectangle2D.Float round-trip fields");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(obj);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
     }
 
     public static void main(String[] args) throws Exception {

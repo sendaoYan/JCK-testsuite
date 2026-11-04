@@ -69,6 +69,37 @@ public class Point2DTest {
               "equal points same hashCode");
         // cross float/double equality: Point2D.Double.equals(Point2D.Float) by value
         check(new Point2D.Double(3, 4).equals(new Point2D.Float(3, 4)), "Double equals Float by value");
+
+        // cross-implementation equality with java.awt.Point (same value, different concrete class)
+        java.awt.Point awtP = new java.awt.Point(1, 2);
+        Point2D.Double pd = new Point2D.Double(1, 2);
+        check(awtP.equals(pd), "java.awt.Point.equals(Point2D.Double) is value-based");
+        check(pd.equals(awtP), "Point2D.Double.equals(java.awt.Point) is value-based");
+        check(awtP.hashCode() == pd.hashCode(), "cross-impl equal points share hashCode");
+        check(awtP.equals(new Point2D.Float(1f, 2f)), "java.awt.Point.equals(Point2D.Float) is value-based");
+
+        // degenerate distance: to self is exactly 0
+        checkClose(new Point2D.Double(3, 4).distance(3, 4), 0.0, "distance to self == 0");
+        checkClose(Point2D.distance(3, 4, 3, 4), 0.0, "static distance to same point == 0");
+
+        // serialization round-trip preserves class and coordinates
+        Point2D.Double sd = roundTrip(new Point2D.Double(3.5, 4.5));
+        check(sd instanceof Point2D.Double, "Point2D.Double round-trip class");
+        checkClose(sd.getX(), 3.5, "Point2D.Double round-trip x");
+        checkClose(sd.getY(), 4.5, "Point2D.Double round-trip y");
+        Point2D.Float sf = roundTrip(new Point2D.Float(3.5f, 4.5f));
+        check(sf instanceof Point2D.Float, "Point2D.Float round-trip class");
+        checkClose(sf.getX(), 3.5, "Point2D.Float round-trip x");
+        checkClose(sf.getY(), 4.5, "Point2D.Float round-trip y");
+        check(roundTrip(new Point2D.Double(1, 2)).equals(new Point2D.Double(1, 2)),
+              "Point2D round-trip equals original");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(obj);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
     }
 
     static void checkClose(double a, double b, String m) {

@@ -73,6 +73,38 @@ public class FlatteningPathIteratorTest {
             it3.next();
         }
         check(move == 1 && closeSeg == 1 && line == 4, "rectangle: 1 moveTo, 4 lineTo, 1 close");
+
+        // negative flatness is rejected
+        boolean negThrew = false;
+        try { new FlatteningPathIterator(p.getPathIterator(null), -1.0); }
+        catch (IllegalArgumentException e) { negThrew = true; }
+        check(negThrew, "negative flatness throws IllegalArgumentException");
+
+        // zero flatness subdivides to the recursion limit: 2^10 = 1024 line segments + final point = 1025
+        Path2D.Double q2 = new Path2D.Double();
+        q2.moveTo(0, 0); q2.quadTo(5, 10, 10, 0);
+        FlatteningPathIterator zero = new FlatteningPathIterator(q2.getPathIterator(null), 0);
+        int zeroSegs = 0;
+        while (!zero.isDone()) { zero.currentSegment(coords); zeroSegs++; zero.next(); }
+        check(zeroSegs == 1025, "zero flatness subdivides to recursion limit (1025 segments)");
+
+        // the flattening iterator reports the winding rule of the wrapped iterator
+        Path2D.Double eo = new Path2D.Double(PathIterator.WIND_EVEN_ODD);
+        eo.moveTo(0, 0); eo.lineTo(1, 0);
+        FlatteningPathIterator eoIt = new FlatteningPathIterator(eo.getPathIterator(null), 1.0);
+        check(eoIt.getWindingRule() == PathIterator.WIND_EVEN_ODD, "winding rule forwarded from wrapped path");
+
+        // getFlatness during iteration reflects the subdivided chord, bounded by the requested flatness
+        Path2D.Double big = new Path2D.Double();
+        big.moveTo(0, 0); big.quadTo(0, 100, 100, 100);
+        FlatteningPathIterator fit = new FlatteningPathIterator(big.getPathIterator(null), 2.0);
+        double maxFlat = 0;
+        while (!fit.isDone()) {
+            fit.currentSegment(coords);
+            maxFlat = Math.max(maxFlat, fit.getFlatness());
+            fit.next();
+        }
+        check(maxFlat > 0 && maxFlat <= 2.0 + 1e-9, "getFlatness bounded by requested flatness");
     }
 
     public static void main(String[] args) throws Exception {

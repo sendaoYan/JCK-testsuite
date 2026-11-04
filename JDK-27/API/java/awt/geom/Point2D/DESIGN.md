@@ -20,4 +20,7 @@
 2. setLocation(double,double) 与 setLocation(Point2D)。
 3. clone 独立且相等。
 4. equals/hashCode 契约（同值等、异值不等、null/非点 false），以及 Double 与 Float 按值跨类相等。
+5. 跨实现 equals：`new java.awt.Point(1,2)` 与 `Point2D.Double/Float(1,2)` 双向按值相等且 hashCode 相同（Point 未覆写 hashCode，继承 Point2D 的 double 位混合公式）。
+6. 退化 distance：到自身恒为 0。
+7. 序列化 round-trip：Point2D.Double(3.5,4.5)/Point2D.Float(3.5,4.5) 恢复同具体类与坐标，equals 原对象。
 白盒（`testWhiteBox()`）：abstract public class、implements Cloneable、静态与实例 distance/distanceSq、setLocation 重载、clone 签名。

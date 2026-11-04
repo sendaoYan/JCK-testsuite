@@ -28,4 +28,5 @@ if (gp.contains(5, 5)) { ... }
 4. contains/intersects 方形。
 5. getBounds2D、getCurrentPoint 生命周期。
 6. append(Shape)、transform、clone 独立性、trimToSize、reset。
+7. 序列化 round-trip：恢复 GeneralPath 类型、winding rule 与几何 bounds（legacy 序列化形态兼容）。
 白盒：final 类、extends Path2D.Float、is-a Path2D、implements Serializable、4 个 public 构造器。

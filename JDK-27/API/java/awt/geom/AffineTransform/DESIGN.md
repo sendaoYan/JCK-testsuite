@@ -28,4 +28,6 @@
 6. 求逆：createInverse 乘积回恒等、invert() 原地、奇异阵（scale(0,1)）两者均抛 NoninvertibleTransformException；getDeterminant（translate=1、scale(2,3)=6、奇异=0、rotate(π/3)≈1 容差 1e-9）。
 7. 变换 API：Point2D(null 自动分配/复用)、Point2D[] 批量、float[]→double[]/double[]→float[]/in-place、inverseTransform(Point2D/double[])（translate(5,7) 下 (1,2)→(-4,-5)）、deltaTransform 忽略平移但应用缩放。
 8. createTransformedShape 边界精确；clone 独立；equals/hashCode 契约（同阵等+同 hash、异阵不等、非 AT 类型 false）；toString 精确格式；序列化 round-trip equals。
+9. 数值边界：NaN 分量阵 getType==FLIP|GENERAL_SCALE(68) 而非 GENERAL_TRANSFORM；transform 对 NaN 输入传播 NaN；determinant 为 NaN 时 createInverse 不抛异常（返回 NaN 分量阵）；+Inf 平移仍 TYPE_TRANSLATION；JDK-9+ equals 按位比较故两个 NaN 阵相等（JDK-8 用 == 比较为不等——版本差异，两侧各自断言）。
+10. 其余向量旋转重载：getRotateInstance(vec,px,py) 保持枢轴、getRotateInstance(0,1) 把 (1,0) 映到 (0,1)、setToRotation(vec) getType==QUADRANT_ROTATION、getRotateInstance(3,4) 行列式=1、getQuadrantRotateInstance(k,px,py) 保持枢轴。
 白盒（`testWhiteBox()`）：Class.forName 形态、implements Cloneable/Serializable、公共静态 TYPE_* 常量集、关键方法签名存在。

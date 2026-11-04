@@ -115,6 +115,18 @@ public class DoubleTest {
         check(cp.getCurrentPoint().equals(new Point2D.Double(3, 4)), "getCurrentPoint");
         cp.closePath();
         check(cp.getCurrentPoint().equals(new Point2D.Double(3, 4)), "getCurrentPoint after closePath");
+
+        // serialization round-trip preserves geometry and winding rule
+        Path2D.Double ser = new Path2D.Double(Path2D.WIND_EVEN_ODD);
+        ser.moveTo(1, 2); ser.lineTo(3, 4); ser.closePath();
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(ser);
+        Path2D back = (Path2D) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(back instanceof Path2D.Double, "Path2D.Double round-trip class");
+        check(back.getWindingRule() == Path2D.WIND_EVEN_ODD, "round-trip winding rule preserved");
+        check(back.getBounds2D().equals(new Rectangle2D.Double(1, 2, 2, 2)), "round-trip geometry preserved");
+        check(back.getCurrentPoint() != null && back.getCurrentPoint().equals(new Point2D.Double(1, 2)),
+              "round-trip current point restored");
     }
 
     public static void main(String[] args) throws Exception {

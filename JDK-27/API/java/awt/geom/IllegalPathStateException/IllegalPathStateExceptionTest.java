@@ -4,6 +4,7 @@
  * @run main IllegalPathStateExceptionTest
  */
 
+import java.awt.geom.GeneralPath;
 import java.awt.geom.IllegalPathStateException;
 import java.awt.geom.Path2D;
 import java.lang.reflect.*;
@@ -43,6 +44,39 @@ public class IllegalPathStateExceptionTest {
                   "real throw carries 'moveto' message");
         }
         check(threw, "Path2D.lineTo before moveTo throws IllegalPathStateException");
+
+        // every segment-adding operation requires a preceding moveTo
+        boolean quadThrew = false;
+        try { new Path2D.Double().quadTo(1, 2, 3, 4); }
+        catch (IllegalPathStateException ex) { quadThrew = true; }
+        check(quadThrew, "Path2D.quadTo before moveTo throws IllegalPathStateException");
+
+        boolean curveThrew = false;
+        try { new Path2D.Double().curveTo(1, 2, 3, 4, 5, 6); }
+        catch (IllegalPathStateException ex) { curveThrew = true; }
+        check(curveThrew, "Path2D.curveTo before moveTo throws IllegalPathStateException");
+
+        boolean gpThrew = false;
+        try { new GeneralPath().lineTo(1, 2); }
+        catch (IllegalPathStateException ex) { gpThrew = true; }
+        check(gpThrew, "GeneralPath.lineTo before moveTo throws IllegalPathStateException");
+
+        // after reset the state is "no moveTo" again
+        GeneralPath gp = new GeneralPath();
+        gp.moveTo(0, 0);
+        gp.reset();
+        boolean afterResetThrew = false;
+        try { gp.lineTo(1, 1); }
+        catch (IllegalPathStateException ex) { afterResetThrew = true; }
+        check(afterResetThrew, "lineTo after reset throws IllegalPathStateException");
+
+        // once moveTo is supplied the same sequence succeeds
+        GeneralPath ok = new GeneralPath();
+        ok.moveTo(0, 0);
+        ok.lineTo(1, 2);
+        ok.quadTo(1, 2, 3, 4);
+        ok.curveTo(1, 2, 3, 4, 5, 6);
+        check(ok.getBounds2D().getWidth() >= 0, "same sequence after moveTo succeeds");
     }
 
     public static void main(String[] args) throws Exception {

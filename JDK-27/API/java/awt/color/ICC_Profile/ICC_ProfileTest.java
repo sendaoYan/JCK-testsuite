@@ -75,6 +75,51 @@ public class ICC_ProfileTest {
         try { ICC_Profile.getInstance(12345); }
         catch (IllegalArgumentException e) { threw = true; }
         check(threw, "getInstance(unknown) throws IllegalArgumentException");
+
+        // getInstance on the predefined ids is idempotent (same cached instance)
+        check(ICC_Profile.getInstance(ColorSpace.CS_sRGB) == ICC_Profile.getInstance(ColorSpace.CS_sRGB),
+              "getInstance(CS_sRGB) idempotent (==)");
+        check(ICC_Profile.getInstance(ColorSpace.CS_GRAY) == ICC_Profile.getInstance(ColorSpace.CS_GRAY),
+              "getInstance(CS_GRAY) idempotent (==)");
+
+        // profile class constants and per-space classes
+        check(ICC_Profile.CLASS_INPUT == 0 && ICC_Profile.CLASS_DISPLAY == 1 && ICC_Profile.CLASS_OUTPUT == 2
+              && ICC_Profile.CLASS_DEVICELINK == 3 && ICC_Profile.CLASS_COLORSPACECONVERSION == 4
+              && ICC_Profile.CLASS_ABSTRACT == 5 && ICC_Profile.CLASS_NAMEDCOLOR == 6,
+              "CLASS_* constant values");
+        check(ICC_Profile.getInstance(ColorSpace.CS_GRAY).getProfileClass() == ICC_Profile.CLASS_DISPLAY,
+              "gray profile class CLASS_DISPLAY");
+        ICC_Profile ciexyzP = ICC_Profile.getInstance(ColorSpace.CS_CIEXYZ);
+        check(ciexyzP.getColorSpaceType() == ColorSpace.TYPE_XYZ && ciexyzP.getPCSType() == ColorSpace.TYPE_XYZ,
+              "CS_CIEXYZ profile colorSpaceType/PCSType");
+
+        // getData for an unknown tag signature returns null (absent tag)
+        check(srgb.getData(0x7FFFFFFF) == null, "getData(unknown tag) returns null");
+
+        // malformed profile bytes and null file name
+        boolean garbageThrew = false;
+        try { ICC_Profile.getInstance(new byte[]{1, 2, 3}); }
+        catch (IllegalArgumentException e) { garbageThrew = true; }
+        check(garbageThrew, "getInstance(garbage bytes) throws IllegalArgumentException");
+        boolean nullNameThrew = false;
+        try { ICC_Profile.getInstance((String) null); }
+        catch (NullPointerException e) { nullNameThrew = true; }
+        check(nullNameThrew, "getInstance((String) null) throws NullPointerException");
+
+        // byte-derived (non built-in) profiles are distinct objects and writable
+        ICC_Profile copy = ICC_Profile.getInstance(all);
+        check(copy != srgb, "byte-derived profile is a distinct instance");
+        byte[] copyHead = copy.getData(ICC_Profile.icSigHead);
+        copyHead[8] = 0x21;
+        copy.setData(ICC_Profile.icSigHead, copyHead);
+        check(copy.getData(ICC_Profile.icSigHead)[8] == 0x21, "setData(header) read-back on byte-derived profile");
+        check(copy.getMajorVersion() == 0x21, "getMajorVersion reflects raw header byte after setData");
+
+        // built-in profiles are shared: mutating them is forbidden (JDK 9+ protection of the shared cache)
+        boolean builtinThrew = false;
+        try { srgb.setData(ICC_Profile.icSigHead, srgb.getData(ICC_Profile.icSigHead)); }
+        catch (IllegalArgumentException e) { builtinThrew = true; }
+        check(builtinThrew, "setData on built-in profile throws IllegalArgumentException");
     }
 
     public static void main(String[] args) throws Exception {

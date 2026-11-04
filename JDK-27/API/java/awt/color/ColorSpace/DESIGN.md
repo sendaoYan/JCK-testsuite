@@ -19,4 +19,9 @@
 1. TYPE_* 常量精确值；getInstance(CS_sRGB/CS_GRAY) 的 type/numComponents/isCS_sRGB/name/min-max。
 2. sRGB toRGB 白色保持；gray toRGB 返回 3 分量。
 3. sRGB toRGB/fromRGB round-trip；自定义匿名子类 identity round-trip 与 type/components。
+4. 全量 TYPE_*/CS_* 常量精确值（Lab=1 Luv=2 YCbCr=3 Yxy=4 HLS=8 CMY=11 2CLR=12 3CLR=13 FCLR=25；CS_sRGB=1000 CIEXYZ=1001 PYCC=1002 GRAY=1003 LINEAR=1004）。
+5. getInstance 对 CS_sRGB/CS_GRAY 幂等（== 同一缓存实例）。
+6. CS_CIEXYZ type=XYZ/3 分量、CS_PYCC type=3CLR/3 分量、CS_LINEAR_RGB type=RGB/3 分量且 !isCS_sRGB。
+7. sRGB 分量名 Red/Green/Blue；getInstance(0) 与 getName(越界) 均抛 IllegalArgumentException。
+8. sRGB toCIEXYZ/fromCIEXYZ round-trip（容差 1e-4）；gray toCIEXYZ(1.0) ≈ D50 白点 (0.9642,1.0,0.8249)；gray toRGB/fromRGB round-trip。
 白盒（`testWhiteBox()`）：abstract public class、implements Serializable、TYPE_*/CS_* 常量、getInstance 与四个抽象转换方法签名。

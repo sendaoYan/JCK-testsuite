@@ -31,4 +31,5 @@ PathIterator it = p.getPathIterator(null, 0.5);
 4. Shape/Shape+AT 构造器复制与变换。
 5. getPathIterator(AT) 平移坐标；getPathIterator(AT, flatness) 细分曲线。
 6. append(PathIterator)、clone 独立性、trimToSize、getCurrentPoint。
+7. 序列化 round-trip：恢复 Path2D.Float 类、winding rule、几何 bounds 与 closePath 后的 currentPoint。
 白盒：类形态、superclass=Path2D、implements Serializable、5 个 public 构造器。

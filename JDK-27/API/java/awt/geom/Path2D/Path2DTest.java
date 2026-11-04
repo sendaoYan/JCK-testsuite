@@ -123,6 +123,43 @@ public class Path2DTest {
         ap.append(new Rectangle2D.Double(0, 0, 10, 10), false);
         check(ap.getBounds2D().equals(new Rectangle2D.Double(0, 0, 10, 10)), "append rectangle geometry");
         check(segCount(ap.getPathIterator(null)) >= 5, "append yields iterable segments");
+
+        // append(PathIterator, connect=true) emits a connecting LINETO from current point to sub-path start
+        Path2D.Double line1 = new Path2D.Double();
+        line1.moveTo(0, 0); line1.lineTo(5, 0);
+        Path2D.Double line2 = new Path2D.Double();
+        line2.moveTo(5, 5); line2.lineTo(10, 5);
+        Path2D.Double connected = new Path2D.Double();
+        connected.append(line1.getPathIterator(null), false);
+        connected.append(line2.getPathIterator(null), true);
+        int moves = 0, lines = 0;
+        PathIterator cit = connected.getPathIterator(null);
+        double[] cc = new double[6];
+        while (!cit.isDone()) {
+            int t = cit.currentSegment(cc);
+            if (t == PathIterator.SEG_MOVETO) moves++;
+            else if (t == PathIterator.SEG_LINETO) lines++;
+            cit.next();
+        }
+        check(moves == 1, "connect=true keeps a single MOVETO (no new sub-path)");
+        check(lines == 3, "connect=true adds one joining LINETO (3 total)");
+
+        // append(..., false) starts an independent sub-path instead
+        Path2D.Double separate = new Path2D.Double();
+        separate.append(line1.getPathIterator(null), false);
+        separate.append(line2.getPathIterator(null), false);
+        int moves2 = 0;
+        PathIterator sit = separate.getPathIterator(null);
+        while (!sit.isDone()) {
+            if (sit.currentSegment(cc) == PathIterator.SEG_MOVETO) moves2++;
+            sit.next();
+        }
+        check(moves2 == 2, "connect=false starts a second sub-path (2 MOVETOs)");
+
+        // contains honours the winding rule across implementations
+        Path2D.Float fnz = new Path2D.Float(Path2D.WIND_NON_ZERO);
+        fnz.moveTo(0, 0); fnz.lineTo(10, 0); fnz.lineTo(10, 10); fnz.lineTo(0, 10); fnz.closePath();
+        check(fnz.contains(5, 5), "Path2D.Float NON_ZERO square contains center");
     }
 
     public static void main(String[] args) throws Exception {

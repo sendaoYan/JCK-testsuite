@@ -122,6 +122,18 @@ public class FloatTest {
         Path2D.Float cp = new Path2D.Float();
         cp.moveTo(3, 4);
         check(cp.getCurrentPoint().equals(new Point2D.Double(3, 4)), "getCurrentPoint");
+
+        // serialization round-trip preserves geometry and winding rule
+        Path2D.Float ser = new Path2D.Float(Path2D.WIND_EVEN_ODD);
+        ser.moveTo(1, 2); ser.lineTo(3, 4); ser.closePath();
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(ser);
+        Path2D back = (Path2D) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(back instanceof Path2D.Float, "Path2D.Float round-trip class");
+        check(back.getWindingRule() == Path2D.WIND_EVEN_ODD, "round-trip winding rule preserved");
+        check(back.getBounds2D().equals(new Rectangle2D.Double(1, 2, 2, 2)), "round-trip geometry preserved");
+        check(back.getCurrentPoint() != null && back.getCurrentPoint().equals(new Point2D.Double(1, 2)),
+              "round-trip current point restored");
     }
 
     public static void main(String[] args) throws Exception {

@@ -19,4 +19,6 @@
 2. `setSize(double,double)` 更新两维。
 3. `setSize(Dimension2D)` 按值拷贝（改源不影响目标），验证拷贝语义而非引用。
 4. `clone()` 独立且相等。
+5. 负尺寸在 Dimension2D 抽象层合法保存（无归一化）。
+6. 跨实现语义：`java.awt.Dimension.equals(任意 Dimension2D)` 为 false（类型检查只认 Dimension）、`Dimension.equals(Dimension)` 按值且 hashCode 一致；`Dimension.setSize(double,double)` 对 (2.6,3.2) 向上取整到 int 字段 (3,4)。
 白盒（`testWhiteBox()`）：abstract public class、implements Cloneable、抽象方法 `getWidth/getHeight/setSize(double,double)` 与便捷方法 `setSize(Dimension2D)`/`clone` 存在。

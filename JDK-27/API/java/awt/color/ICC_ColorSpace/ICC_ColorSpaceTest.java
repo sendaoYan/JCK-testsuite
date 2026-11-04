@@ -64,6 +64,31 @@ public class ICC_ColorSpaceTest {
               "gray ICC_ColorSpace type/components");
         float[] g = grayCs.toRGB(new float[]{1.0f});
         check(g.length == 3, "gray toRGB 3 comps");
+
+        // component names for RGB and gray wrapped profiles
+        check("Green".equals(cs.getName(1)) && "Blue".equals(cs.getName(2)), "RGB component names 1/2");
+        check("Gray".equals(grayCs.getName(0)), "gray component name");
+
+        // PYCC wrapped profile keeps its 3-channel color type
+        ICC_ColorSpace pyccCs = new ICC_ColorSpace(ICC_Profile.getInstance(ColorSpace.CS_PYCC));
+        check(pyccCs.getType() == ColorSpace.TYPE_3CLR && pyccCs.getNumComponents() == 3, "PYCC type/components");
+
+        // null profile is rejected
+        boolean npe = false;
+        try { new ICC_ColorSpace(null); } catch (NullPointerException e) { npe = true; }
+        check(npe, "new ICC_ColorSpace(null) throws NullPointerException");
+
+        // wrong-length component arrays
+        boolean shortThrew = false;
+        try { cs.toRGB(new float[]{1.0f}); } catch (ArrayIndexOutOfBoundsException e) { shortThrew = true; }
+        check(shortThrew, "toRGB(short array) throws ArrayIndexOutOfBoundsException");
+        boolean nullThrew = false;
+        try { cs.toRGB(null); } catch (NullPointerException e) { nullThrew = true; }
+        check(nullThrew, "toRGB(null) throws NullPointerException");
+
+        // getProfile returns exactly the profile handed to the constructor
+        ICC_Profile grayProfile = ICC_Profile.getInstance(ColorSpace.CS_GRAY);
+        check(new ICC_ColorSpace(grayProfile).getProfile() == grayProfile, "getProfile identity for gray");
     }
 
     public static void main(String[] args) throws Exception {

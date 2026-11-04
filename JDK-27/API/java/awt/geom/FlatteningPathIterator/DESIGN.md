@@ -19,4 +19,7 @@
 2. 遍历输出只含直线类 segment、绝无 QUAD/CUBIC，且段数 >= 5。
 3. 显式 limit 构造器：flatness=0.5、limit=3 读回正确。
 4. 已平直的矩形路径透传为 1 moveTo + 3 lineTo + 1 close。
+5. 负 flatness 构造抛 IllegalArgumentException（flatness must be >= 0）。
+6. flatness=0 时细分到递归上限：默认 limit=10 恰好 2^10+1=1025 段。
+7. winding rule 从被包装迭代器透传；迭代中 getFlatness 不超过请求的 flatness（实测 max==请求值）。
 白盒（`testWhiteBox()`）：public class、implements PathIterator、构造与 5 个实例方法签名存在。

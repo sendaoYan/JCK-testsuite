@@ -16,4 +16,5 @@
 1. 无参构造 message/cause 为 null；String 构造 message 精确保留。
 2. 异常 instanceof RuntimeException（非受检）。
 3. 真实触发：`new Path2D.Double().lineTo(1,2)` 在无 moveTo 时抛该异常，消息含 "moveto"。
+4. 同一前置条件覆盖 quadTo/curveTo/GeneralPath.lineTo；reset() 后回到无 moveTo 状态再次触发；补 moveTo 后同一序列 lineTo→quadTo→curveTo 全部成功。
 白盒（`testWhiteBox()`）：public class、extends RuntimeException、无参 + String 构造存在。

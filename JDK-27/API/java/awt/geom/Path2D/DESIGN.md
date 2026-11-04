@@ -35,4 +35,6 @@ PathIterator it = p.getPathIterator(null, 0.5);   // flatten 曲线
 6. contains/intersects 点与矩形 + 静态 `contains(PathIterator,x,y)`。
 7. createTransformedShape 平移。
 8. append(Shape) 附加几何并产生可迭代段。
+9. append(PathIterator, connect) 语义：connect=true 用一条 LINETO 连接当前点到新子路径起点（全程 1 个 MOVETO、3 条 LINETO）；connect=false 开独立子路径（2 个 MOVETO）。
+10. Path2D.Float 同一 NON_ZERO 方形 contains 中心（跨实现一致性）。
 白盒：抽象修饰符、implements Shape/Cloneable、抽象方法集、final closePath、常量。

@@ -84,6 +84,56 @@ public class ColorSpaceTest {
         float[] round = custom.fromRGB(custom.toRGB(c));
         check(close(round[0], 0.25f) && close(round[1], 0.5f) && close(round[2], 0.75f),
               "custom identity round-trip");
+
+        // full TYPE_* / CS_* constant contract
+        check(ColorSpace.TYPE_Lab == 1 && ColorSpace.TYPE_Luv == 2 && ColorSpace.TYPE_YCbCr == 3
+              && ColorSpace.TYPE_Yxy == 4 && ColorSpace.TYPE_HLS == 8 && ColorSpace.TYPE_CMY == 11,
+              "remaining TYPE_* constant values");
+        check(ColorSpace.TYPE_2CLR == 12 && ColorSpace.TYPE_3CLR == 13 && ColorSpace.TYPE_FCLR == 25,
+              "n-component TYPE_* constant values");
+        check(ColorSpace.CS_sRGB == 1000 && ColorSpace.CS_CIEXYZ == 1001 && ColorSpace.CS_PYCC == 1002
+              && ColorSpace.CS_GRAY == 1003 && ColorSpace.CS_LINEAR_RGB == 1004, "CS_* constant values");
+
+        // getInstance is idempotent for the predefined color spaces (same cached instance)
+        check(ColorSpace.getInstance(ColorSpace.CS_sRGB) == ColorSpace.getInstance(ColorSpace.CS_sRGB),
+              "getInstance(CS_sRGB) idempotent (==)");
+        check(ColorSpace.getInstance(ColorSpace.CS_GRAY) == ColorSpace.getInstance(ColorSpace.CS_GRAY),
+              "getInstance(CS_GRAY) idempotent (==)");
+
+        // remaining predefined spaces: type and component count
+        ColorSpace ciexyz = ColorSpace.getInstance(ColorSpace.CS_CIEXYZ);
+        check(ciexyz.getType() == ColorSpace.TYPE_XYZ && ciexyz.getNumComponents() == 3
+              && !ciexyz.isCS_sRGB(), "CS_CIEXYZ type/components");
+        ColorSpace pycc = ColorSpace.getInstance(ColorSpace.CS_PYCC);
+        check(pycc.getType() == ColorSpace.TYPE_3CLR && pycc.getNumComponents() == 3, "CS_PYCC type/components");
+        ColorSpace linear = ColorSpace.getInstance(ColorSpace.CS_LINEAR_RGB);
+        check(linear.getType() == ColorSpace.TYPE_RGB && linear.getNumComponents() == 3
+              && !linear.isCS_sRGB(), "CS_LINEAR_RGB type/components, not sRGB");
+
+        // component names on sRGB
+        check("Red".equals(srgb.getName(0)) && "Green".equals(srgb.getName(1)) && "Blue".equals(srgb.getName(2)),
+              "sRGB component names");
+
+        // exceptions: invalid colorspace id and out-of-range component index
+        boolean badCs = false;
+        try { ColorSpace.getInstance(0); } catch (IllegalArgumentException e) { badCs = true; }
+        check(badCs, "getInstance(0) throws IllegalArgumentException");
+        boolean badIdx = false;
+        try { srgb.getName(5); } catch (IllegalArgumentException e) { badIdx = true; }
+        check(badIdx, "getName(out of range) throws IllegalArgumentException");
+
+        // CIEXYZ round-trip on sRGB
+        float[] xyz = srgb.toCIEXYZ(new float[]{0.5f, 0.5f, 0.5f});
+        float[] backXyz = srgb.fromCIEXYZ(xyz);
+        check(close(backXyz[0], 0.5f) && close(backXyz[1], 0.5f) && close(backXyz[2], 0.5f),
+              "sRGB toCIEXYZ/fromCIEXYZ round-trip");
+
+        // gray -> CIEXYZ of full white is the D50 white point
+        float[] gxyz = gray.toCIEXYZ(new float[]{1.0f});
+        check(close(gxyz[0], 0.9642f) && close(gxyz[1], 1.0f) && close(gxyz[2], 0.8249f),
+              "gray toCIEXYZ(1.0) is D50 white");
+        float[] gback = gray.fromRGB(gray.toRGB(new float[]{0.4f}));
+        check(gback.length == 1 && close(gback[0], 0.4f), "gray toRGB/fromRGB round-trip");
     }
 
     static boolean close(double a, double b) { return Math.abs(a - b) < 1e-4; }

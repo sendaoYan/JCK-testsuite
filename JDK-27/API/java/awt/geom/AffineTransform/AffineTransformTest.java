@@ -295,6 +295,41 @@ public class AffineTransformTest {
         AffineTransform deser = (AffineTransform) new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
         check(deser.equals(tr), "serialization round-trip equals");
         check(deser.getTranslateX() == 10.0 && deser.getTranslateY() == 20.0, "serialization round-trip components");
+
+        // 9. numeric boundaries: NaN / infinity
+        AffineTransform nanT = AffineTransform.getScaleInstance(Double.NaN, 1.0);
+        check(nanT.getType() == (AffineTransform.TYPE_FLIP | AffineTransform.TYPE_GENERAL_SCALE),
+              "NaN matrix getType == FLIP|GENERAL_SCALE (68), not GENERAL_TRANSFORM");
+        Point2D pnan = nanT.transform(px(1, 1), null);
+        check(Double.isNaN(pnan.getX()) && pnan.getY() == 1.0, "NaN component propagates NaN through transform");
+        // determinant NaN is still "invertible" for this implementation (no exception thrown)
+        AffineTransform nanInv = nanT.createInverse();
+        check(Double.isNaN(nanInv.getScaleX()), "createInverse on NaN matrix succeeds with NaN entries");
+        AffineTransform infT = AffineTransform.getTranslateInstance(Double.POSITIVE_INFINITY, 0.0);
+        check(infT.getType() == AffineTransform.TYPE_TRANSLATION, "infinite translation still TYPE_TRANSLATION");
+        check(!infT.isIdentity(), "infinite translation not identity");
+        // JDK-9+ compares matrix entries bitwise, so two NaN matrices are equal
+        check(nanT.equals(AffineTransform.getScaleInstance(Double.NaN, 1.0)),
+              "equals on identical NaN matrices is true (bitwise comparison since JDK 9)");
+
+        // 10. remaining vector-rotation overloads
+        AffineTransform rvP = AffineTransform.getRotateInstance(1, 0, 5, 5); // unit vector, pivot
+        Point2D prvp = rvP.transform(px(5, 5), null);
+        checkClose(prvp.getX(), 5.0, "getRotateInstance(vec,px,py) keeps pivot x");
+        checkClose(prvp.getY(), 5.0, "getRotateInstance(vec,px,py) keeps pivot y");
+        AffineTransform r90v = AffineTransform.getRotateInstance(0, 1); // rotate (1,0)->(0,1)
+        Point2D pr90v = r90v.transform(px(1, 0), null);
+        checkClose(pr90v.getX(), 0.0, "getRotateInstance(0,1) maps (1,0) x to 0");
+        checkClose(pr90v.getY(), 1.0, "getRotateInstance(0,1) maps (1,0) y to 1");
+        AffineTransform sr = new AffineTransform();
+        sr.setToRotation(0, 1);
+        check(sr.getType() == AffineTransform.TYPE_QUADRANT_ROTATION, "setToRotation(vec) quadrant type");
+        checkClose(AffineTransform.getRotateInstance(3, 4).getDeterminant(), 1.0,
+                   "getRotateInstance(vec 3,4) unit-scale determinant 1");
+        AffineTransform qrP = AffineTransform.getQuadrantRotateInstance(1, 2, 3);
+        Point2D pqrP = qrP.transform(px(2, 3), null);
+        checkClose(pqrP.getX(), 2.0, "getQuadrantRotateInstance(k,px,py) keeps pivot x");
+        checkClose(pqrP.getY(), 3.0, "getQuadrantRotateInstance(k,px,py) keeps pivot y");
     }
 
     public static void main(String[] args) throws Exception {

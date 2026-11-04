@@ -22,4 +22,10 @@
 3. 静态 intersect/union 与实例 createIntersection/createUnion；disjoint 交集为空。
 4. add 家族（double,double / Point2D / Rectangle2D）扩展最小外接框。
 5. setRect(Rectangle2D)、setFrame、equals/hashCode。
+6. 跨实现 equals：`java.awt.Rectangle(1,2,3,4)` 与 `Rectangle2D.Double(1,2,3,4)` 双向按值相等、hashCode 相同（Rectangle.equals 非 Rectangle 参数时落回 Rectangle2D.equals）。
+7. 负宽/负高：isEmpty=true、contains/intersects 恒 false、宽度保持负值不做归一化（与 java.awt.Rectangle 的内部归一化对照）。
+8. 退化形状：零高线与零尺寸点 isEmpty 且不包含自身坐标点（右/下边界排除语义的极限）。
+9. 相切交集（共享边）退化为零宽 empty；相离 static intersect 得负宽高 empty；与空矩形 union 不变；包含情形交集等于内矩形；createIntersection 对负矩形保留负宽度。
+10. outcode 角点组合：(-1,-1)=LEFT|TOP、(11,21)=RIGHT|BOTTOM、(10,20)=BOTTOM（右/下边算外、左/上边算内）、(0,0)=0。
+11. 序列化 round-trip：Rectangle2D.Double/Float 恢复同具体类与四个 double/float 字段。
 白盒（`testWhiteBox()`）：abstract extends RectangularShape、抽象 setRect/outcode/createIntersection/createUnion、静态 intersect/union 签名。

@@ -17,4 +17,7 @@
 1. getProfile 返回原 profile；type/numComponents/isCS_sRGB/name/min-max。
 2. sRGB toRGB/fromRGB 与 toCIEXYZ/fromCIEXYZ 两组 round-trip（容差因色彩转换量化）。
 3. gray ICC_ColorSpace type=GRAY、1 分量、toRGB 输出 3 分量。
+4. 分量名 Green/Blue/Gray；PYCC 包装后 type=3CLR/3 分量。
+5. new ICC_ColorSpace(null) 与 toRGB(null) 抛 NullPointerException；toRGB(短数组) 抛 ArrayIndexOutOfBoundsException。
+6. getProfile 对 gray profile 同一性（== 构造入参）。
 白盒（`testWhiteBox()`）：public class、extends ColorSpace、ICC_Profile 构造、getProfile 与四个转换方法签名。
