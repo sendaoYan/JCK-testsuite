@@ -17,3 +17,16 @@
 4. `getDisabledIcon` 返回非原图标的派生图标。
 5. `register` 自定义 Region 完成；`getStyle(JButton, Region.BUTTON)` 返回 `NimbusStyle`。
 6. finally `uninitialize` 并恢复原 style factory。
+
+---
+
+## 契约深化（本轮追加，`NimbusLookAndFeelTest` 黑盒部分 50 断言，新增 ~33）
+
+- **元数据精确**：getName/getID "Nimbus"、getDescription "Nimbus Look and Feel"、supported true、native false、**getSupportsWindowDecorations false**（与 Metal true 相反）、instanceof SynthLookAndFeel、shouldUpdateStyleOnAncestorChanged true。
+- **getDerivedColor**：非 null、alpha 合法、同参返回同一实例（缓存）、uiResource=false 变体为不同实例。
+- **register(Region, prefix)**：register(BUTTON, "Button[Disabled]") 接受不抛。
+- **getDisabledIcon**：headless 下容忍。
+- **安装态**（headless 可装）：按钮委托 SynthButtonUI（instanceof SynthUI）、opaque false、defaults >100 且含 ButtonUI；静态 `NimbusLookAndFeel.getStyle(comp, region)` 仅在安装态可用（未安装时 NPE，读当前 LaF 的 SynthStyleFactory）——安装后对 BUTTON/LABEL 返回 NimbusStyle 非 null；结束恢复 Metal+Ocean。
+
+### 版本备注
+nimbus 包双侧类型面一致（javap 确认均有 NimbusLookAndFeel 及配套类型）；元数据与派生色语义双侧一致。

@@ -15,3 +15,16 @@
 1. `new MetalIconFactory()` 为 `Serializable`；`DARK != LIGHT`。
 2. 19 个静态图标访问器均返回非空且宽高非负。
 3. 组件无关的图标（文件选择器/树/文件夹/叶/树控件）画到 `BufferedImage`（传入不可显示的 `JLabel`）无异常；需要特定组件类型（单选/复选/按钮/菜单/滑杆/内部框架）的图标由各自独立测试覆盖绘制。
+
+---
+
+## 契约深化（本轮追加，`MetalIconFactoryContractTest`，111 断言）
+
+- **常量**：DARK==false、LIGHT==true。
+- **17 个零参工厂精确尺寸**（Ocean）：getCheckBoxIcon/getRadioButtonIcon 13x13、getTreeFolderIcon 16x18、getTreeLeafIcon 16x20、getTreeComputerIcon/getTreeHardDriveIcon/getTreeFloppyDriveIcon 16x16、getFileChooserHomeIcon/NewFolderIcon/UpFolderIcon 18x18、getMenuArrowIcon/getMenuItemArrowIcon 4x8、getCheckBoxMenuItemIcon/getRadioButtonMenuItemIcon 10x10。
+- **参数化尺寸**：getInternalFrame{Close,Maximize,Minimize,AltMaximize}Icon(12/16/20) 尺寸随参数；getTreeControlIcon(false/true) 18x18。
+- **主题相关**：Ocean 滑块 thumb 15x16/16x15；切 Steel 后仍 15x16/16x15 但实例不同（主题驱动重建）。
+- **无字体几何绘制**：CheckBoxIcon 13x13 全 169 px（组件传 JCheckBox，Ocean 实现强转）；InternalFrameCloseIcon(16) >0（组件传 JButton，实现强转）；TreeLeafIcon >0。
+
+### 版本备注
+图标尺寸表双侧一致；滑块 thumb 图标类名随主题换，只断言尺寸稳定 + 实例更换。

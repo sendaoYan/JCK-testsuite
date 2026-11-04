@@ -17,3 +17,15 @@
 3. `getName() == toString()`。
 4. `isSubregion()`：主区域为 false，子区域（SCROLL_BAR_THUMB/TRACK、SLIDER_THUMB、TREE_CELL、TABBED_PANE_TAB、TOOL_BAR_CONTENT、MENU_ITEM_ACCELERATOR）为 true。
 5. 自定义子类 `new Region("MyRegion", "MyRegionUI", false) {}`：`getName()`/`toString()`/`isSubregion()`。
+
+---
+
+## 契约深化（本轮追加，`RegionTest` 常量表部分，310 断言，新增 ~295）
+
+- **完整 57 项常量表**：字段非 null；两次读取 == 单例；getName() 精确串；isSubregion() 与文档表一致；toString()==getName()；HashSet 全互异。
+- **反射核对**：公共静态 Region 字段数 == 表长（无文档外常量）。
+- **子区域语义**：11 个子区域逐一 true（MENU_ITEM_ACCELERATOR、SCROLL_BAR_TRACK/THUMB、SLIDER_TRACK/THUMB、SPLIT_PANE_DIVIDER、TABBED_PANE_TAB/TAB_AREA/CONTENT、TOOL_BAR_CONTENT、TREE_CELL）；表内恰 11 个 true。
+- 保留原 testBlackBox 结构断言不动。
+
+### 版本备注
+Region 常量表双侧（JDK-8/JDK-27）完全一致（57 常量、11 子区域）。
