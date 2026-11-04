@@ -13,7 +13,13 @@
  * 5. 边界/异常：of 非法日期抛 DateTimeException；parse 非法抛 DateTimeParseException。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Modifier;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,6 +30,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.DateTimeException;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 
 public class ZonedDateTimeTest {
     static int passed;
@@ -44,6 +51,13 @@ public class ZonedDateTimeTest {
         throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
     }
 
+    static ZonedDateTime roundTrip(ZonedDateTime v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (ZonedDateTime) ois.readObject();
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.time.ZonedDateTime");
         check(Modifier.isFinal(c.getModifiers()), "final");
@@ -55,7 +69,7 @@ public class ZonedDateTimeTest {
         check(java.time.chrono.ChronoZonedDateTime.class.isAssignableFrom(c), "ChronoZonedDateTime");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testFactories();
         testZoneConversions();
         testArithmeticImmutability();
@@ -94,6 +108,9 @@ public class ZonedDateTimeTest {
         // 非法日 0 等价类
         expectThrows(DateTimeException.class,
                 () -> ZonedDateTime.of(2024, 1, 0, 0, 0, 0, 0, ZoneOffset.UTC), "of day 0");
+
+        testSerialization();
+        testNullSemantics();
     }
 
     static void testFactories() {
@@ -174,6 +191,34 @@ public class ZonedDateTimeTest {
         expectThrows(DateTimeParseException.class, () -> ZonedDateTime.parse("2024-03-01T12:00"),
                 "parse missing zone");
         expectThrows(DateTimeParseException.class, () -> ZonedDateTime.parse("garbage"), "parse garbage");
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(ZonedDateTime.class).getSerialVersionUID() == -6260982410461394882L,
+                "serialVersionUID");
+        ZonedDateTime[] vals = { ZonedDateTime.of(2024, 2, 29, 13, 45, 20, 123456789, ZoneOffset.UTC),
+                ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneId.of("UTC")),
+                ZonedDateTime.of(2024, 1, 1, 12, 0, 0, 0, ZoneOffset.ofHours(5)) };
+        for (ZonedDateTime v : vals) {
+            check(roundTrip(v).equals(v), "serialization round-trip " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> ZonedDateTime.of((LocalDateTime) null, ZoneOffset.UTC),
+                "of LDT null");
+        expectThrows(NullPointerException.class,
+                () -> ZonedDateTime.of(LocalDateTime.of(2024, 1, 1, 0, 0), (ZoneId) null), "of zone null");
+        expectThrows(NullPointerException.class, () -> ZonedDateTime.parse(null), "parse null");
+        expectThrows(NullPointerException.class, () -> ZonedDateTime.from(null), "from null");
+        expectThrows(NullPointerException.class, () -> ZonedDateTime.now((Clock) null), "now null");
+        ZonedDateTime z = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        expectThrows(NullPointerException.class, () -> z.withZoneSameInstant(null), "withZoneSameInstant null");
+        expectThrows(NullPointerException.class, () -> z.withZoneSameLocal(null), "withZoneSameLocal null");
+        expectThrows(NullPointerException.class, () -> z.plus(null), "plus null");
+        expectThrows(NullPointerException.class, () -> z.minus(null), "minus null");
+        expectThrows(NullPointerException.class, () -> z.until(null, ChronoUnit.DAYS), "until null");
+        expectThrows(NullPointerException.class, () -> z.format(null), "format null");
     }
 
     public static void main(String[] args) throws Exception {

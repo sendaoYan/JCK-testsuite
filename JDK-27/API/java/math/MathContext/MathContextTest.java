@@ -7,6 +7,11 @@
  * @run main MathContextTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -21,6 +26,13 @@ public class MathContextTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static MathContext roundTrip(MathContext v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (MathContext) ois.readObject();
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -61,12 +73,13 @@ public class MathContextTest {
     }
 
     // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         constants();
         constructors();
         getters();
         equalityAndString();
         exceptions();
+        testSerialization();
     }
 
     static void constants() {
@@ -162,6 +175,17 @@ public class MathContextTest {
             throw new AssertionError("expected NullPointerException: " + msg);
         } catch (NullPointerException expected) {
             passed++;
+        }
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(MathContext.class).getSerialVersionUID() == 5579720004786848255L,
+              "serialVersionUID");
+        MathContext[] vals = { MathContext.UNLIMITED, MathContext.DECIMAL32,
+                new MathContext(17, RoundingMode.DOWN) };
+        for (MathContext v : vals) {
+            MathContext r = roundTrip(v);
+            check(r.equals(v), "serialization round-trip " + v);
         }
     }
 

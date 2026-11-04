@@ -12,13 +12,19 @@
  * 5. 边界/异常：ofEpochSecond(0,-1) 归一化为 -1s+999999999ns；plus 溢出抛 ArithmeticException；plusSaturating 饱和到 MAX/MIN。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Modifier;
+import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.time.DateTimeException;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 
@@ -41,6 +47,13 @@ public class InstantTest {
         throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
     }
 
+    static Instant roundTrip(Instant v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (Instant) ois.readObject();
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.time.Instant");
         check(Modifier.isFinal(c.getModifiers()), "final");
@@ -52,7 +65,7 @@ public class InstantTest {
         check(java.lang.Comparable.class.isAssignableFrom(c), "Comparable");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testFactories();
         testNanoNormalization();
         testArithmeticImmutability();
@@ -61,6 +74,8 @@ public class InstantTest {
         testConversions();
         testBoundaries();
         testErrors();
+        testSerialization();
+        testNullSemantics();
     }
 
     static void testFactories() {
@@ -162,6 +177,31 @@ public class InstantTest {
         expectThrows(DateTimeParseException.class, () -> Instant.parse("2024-03-01T12:00:00"),
                 "parse without zone");
         expectThrows(DateTimeParseException.class, () -> Instant.parse("garbage"), "parse garbage");
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(Instant.class).getSerialVersionUID() == -665713676816604388L,
+                "serialVersionUID");
+        Instant[] vals = { Instant.MIN, Instant.MAX, Instant.EPOCH, Instant.ofEpochSecond(-1, 999999999),
+                Instant.ofEpochSecond(1234567890L, 123456789) };
+        for (Instant v : vals) {
+            check(roundTrip(v).equals(v), "serialization round-trip " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> Instant.parse(null), "parse null");
+        expectThrows(NullPointerException.class, () -> Instant.from(null), "from null");
+        expectThrows(NullPointerException.class, () -> Instant.now((Clock) null), "now null");
+        Instant i = Instant.EPOCH;
+        expectThrows(NullPointerException.class, () -> i.plus((Duration) null), "plus Duration null");
+        expectThrows(NullPointerException.class, () -> i.plus(1, null), "plus unit null");
+        expectThrows(NullPointerException.class, () -> i.minus((Duration) null), "minus Duration null");
+        expectThrows(NullPointerException.class, () -> i.with((java.time.temporal.TemporalField) null, 1),
+                "with field null");
+        expectThrows(NullPointerException.class, () -> i.until(null, ChronoUnit.SECONDS), "until null");
+        expectThrows(NullPointerException.class, () -> i.atOffset(null), "atOffset null");
+        expectThrows(NullPointerException.class, () -> i.atZone(null), "atZone null");
     }
 
     public static void main(String[] args) throws Exception {

@@ -27,4 +27,6 @@ Clock.tick(Clock.fixed(zdt.toInstant(), PARIS), Duration.ofMillis(250));
 ## 4. 测试用例设计 + 自动化实现
 对应 `DurationTest.java` 的 `testBlackBox()`：
 - 工厂（ofSeconds/ofMillis/ofNanos 负值归一化）、between、查询（toXxx/toXxxPart）、plus/minus/multipliedBy/dividedBy/negated/abs、比较、parse（ISO-8601）与非法、越界（ofNanos 溢出抛 ArithmeticException）。
+- 序列化：`serialVersionUID == 3078945930695997490L`；ZERO/正负值/天数值 round-trip。
+- null 语义：`parse/from/of(unit)/between/plus/minus/addTo/subtractFrom` → NPE。
 - 确定性：固定 Duration/Instant；headless-safe。

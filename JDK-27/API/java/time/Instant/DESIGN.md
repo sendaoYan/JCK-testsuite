@@ -29,4 +29,6 @@ Instant inst = Instant.ofEpochSecond(secs, nanos);
 对应 `InstantTest.java` 的 `testBlackBox()`：
 - 工厂/查询、纳秒归一化（`ofEpochSecond(0,-1)` → -1s+999999999ns）、plus/minus 进位、until→Duration、atZone/atOffset、plusSaturating 饱和、比较。
 - 异常：`ofEpochSecond(Long.MAX_VALUE,1e9)` 抛 ArithmeticException；`MAX.plusSeconds(1)` 抛 DateTimeException。
+- 序列化：`serialVersionUID == -665713676816604388L`；MIN/MAX/EPOCH/负纳秒/普通值 round-trip（EPOCH/MIN/MAX 为缓存单例，仅断言 equals）。
+- null 语义：`parse/from/now/plus/minus/with/until/atOffset/atZone` → NPE。
 - 确定性：固定 Instant；headless-safe。

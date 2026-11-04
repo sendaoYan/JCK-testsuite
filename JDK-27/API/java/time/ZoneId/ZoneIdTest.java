@@ -12,10 +12,16 @@
  * 5. 边界/异常：of 未知时区抛 ZoneRulesException；of(null) 抛 NullPointerException。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.TextStyle;
 import java.time.zone.ZoneRulesException;
 import java.util.Map;
 import java.util.Set;
@@ -39,6 +45,13 @@ public class ZoneIdTest {
         throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
     }
 
+    static ZoneId roundTrip(ZoneId v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (ZoneId) ois.readObject();
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.time.ZoneId");
         check(Modifier.isAbstract(c.getModifiers()), "abstract");
@@ -48,12 +61,14 @@ public class ZoneIdTest {
         check(java.io.Serializable.class.isAssignableFrom(c), "Serializable");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testFactoriesAndEquality();
         testRules();
         testSystemZones();
         testOfOffset();
         testErrors();
+        testSerialization();
+        testNullSemantics();
     }
 
     static void testFactoriesAndEquality() {
@@ -105,6 +120,21 @@ public class ZoneIdTest {
     static void testErrors() {
         expectThrows(ZoneRulesException.class, () -> ZoneId.of("Not/AZone"), "of unknown zone");
         expectThrows(NullPointerException.class, () -> ZoneId.of(null), "of null");
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(ZoneId.class).getSerialVersionUID() == 8352817235686L,
+                "serialVersionUID");
+        ZoneId[] vals = { ZoneId.of("UTC"), ZoneOffset.UTC, ZoneId.of("America/New_York"),
+                ZoneOffset.ofHours(5) };
+        for (ZoneId v : vals) {
+            check(roundTrip(v).equals(v), "serialization round-trip " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> ZoneId.of("UTC").getDisplayName(TextStyle.FULL, null),
+                "getDisplayName null locale");
     }
 
     public static void main(String[] args) throws Exception {

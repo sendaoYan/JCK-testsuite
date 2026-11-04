@@ -7,6 +7,11 @@
  * @run main BigDecimalTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -22,6 +27,29 @@ public class BigDecimalTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static void expectThrows(Class<? extends Throwable> t, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable e) {
+            if (t.isInstance(e)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + t.getSimpleName()
+                    + " but got " + e.getClass().getSimpleName(), e);
+        }
+        throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
+    }
+
+    static BigDecimal roundTrip(BigDecimal v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (BigDecimal) ois.readObject();
+    }
+
+    static void checkUID(Class<?> c, long expected) {
+        check(ObjectStreamClass.lookup(c).getSerialVersionUID() == expected,
+              c.getSimpleName() + " serialVersionUID");
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -114,7 +142,7 @@ public class BigDecimalTest {
     }
 
     // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         construction();
         arithmetic();
         scalePrecision();
@@ -124,6 +152,8 @@ public class BigDecimalTest {
         boundariesAndExceptions();
         roundingModeEnumeration();
         boundaryConversions();
+        testSerialization();
+        testNullSemantics();
     }
 
     static void construction() {
@@ -396,6 +426,49 @@ public class BigDecimalTest {
         check(new BigDecimal("5").pow(1).equals(new BigDecimal("5")), "pow(1) == self");
         check(BigDecimal.ZERO.ulp().equals(BigDecimal.ONE), "ZERO ulp == 1");
         check(new BigDecimal("-1.0").ulp().equals(new BigDecimal("0.1")), "ulp of -1.0 == 0.1");
+    }
+
+    static void testSerialization() throws Exception {
+        checkUID(BigDecimal.class, 6108874887143696463L);
+        BigDecimal[] vals = { BigDecimal.ZERO, BigDecimal.ONE, new BigDecimal("-1.50"),
+                new BigDecimal("123456789.12345678901234567890") };
+        for (BigDecimal v : vals) {
+            BigDecimal r = roundTrip(v);
+            check(r.equals(v), "serialization round-trip " + v);
+            check(r.scale() == v.scale(), "serialization preserves scale " + v);
+            check(r != v, "serialization new instance " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> new BigDecimal((String) null), "String null");
+        expectThrows(NullPointerException.class, () -> new BigDecimal((BigInteger) null), "BigInteger null");
+        expectThrows(NullPointerException.class, () -> new BigDecimal((char[]) null), "char[] null");
+        expectThrows(NullPointerException.class, () -> new BigDecimal((char[]) null, 0, 1), "char[] off null");
+        expectThrows(NullPointerException.class, () -> new BigDecimal("1", (MathContext) null), "String MC null");
+        expectThrows(NullPointerException.class, () -> new BigDecimal(BigInteger.ONE, (MathContext) null), "BigInteger MC null");
+        expectThrows(NullPointerException.class, () -> new BigDecimal(1, (MathContext) null), "int MC null");
+        expectThrows(NullPointerException.class, () -> new BigDecimal(1L, (MathContext) null), "long MC null");
+        expectThrows(NullPointerException.class, () -> new BigDecimal(1.0, (MathContext) null), "double MC null");
+        BigDecimal one = BigDecimal.ONE;
+        expectThrows(NullPointerException.class, () -> one.add(null), "add null");
+        expectThrows(NullPointerException.class, () -> one.add(BigDecimal.ONE, (MathContext) null), "add MC null");
+        expectThrows(NullPointerException.class, () -> one.subtract(null), "subtract null");
+        expectThrows(NullPointerException.class, () -> one.multiply(null), "multiply null");
+        expectThrows(NullPointerException.class, () -> one.divide(null), "divide null");
+        expectThrows(NullPointerException.class, () -> one.divide(null, 2, RoundingMode.HALF_UP), "divide scale null divisor");
+        expectThrows(NullPointerException.class, () -> one.divide(BigDecimal.ONE, (RoundingMode) null), "divide RoundingMode null");
+        expectThrows(NullPointerException.class, () -> one.remainder(null), "remainder null");
+        expectThrows(NullPointerException.class, () -> one.divideAndRemainder(null), "divideAndRemainder null");
+        expectThrows(NullPointerException.class, () -> one.pow(2, (MathContext) null), "pow MC null");
+        expectThrows(NullPointerException.class, () -> one.setScale(0, (RoundingMode) null), "setScale mode null");
+        expectThrows(NullPointerException.class, () -> one.round((MathContext) null), "round null");
+        expectThrows(NullPointerException.class, () -> one.abs((MathContext) null), "abs MC null");
+        expectThrows(NullPointerException.class, () -> one.negate((MathContext) null), "negate MC null");
+        expectThrows(NullPointerException.class, () -> one.plus((MathContext) null), "plus MC null");
+        expectThrows(NullPointerException.class, () -> one.compareTo(null), "compareTo null");
+        expectThrows(NullPointerException.class, () -> one.min(null), "min null");
+        expectThrows(NullPointerException.class, () -> one.max(null), "max null");
     }
 
     public static void main(String[] args) throws Exception {

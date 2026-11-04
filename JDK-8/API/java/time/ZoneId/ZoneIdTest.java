@@ -1,12 +1,28 @@
 /*
  * @test
- * @summary java.time.ZoneId API conformance: of/getId, systemDefault, equality with
- *          ZoneOffset.UTC, and getRules.
+ * @summary java.time.ZoneId API conformance: full contract coverage.
+ *          factories (of(String), of(String,Map), ofOffset, from, systemDefault,
+ *          getAvailableZoneIds, SHORT_IDS) + exact exception matrix, null
+ *          semantics, getId/getDisplayName/getRules/normalized, equality across
+ *          offset and region subtypes, toString, and serialization round-trip +
+ *          serialVersionUID.
  * @run main ZoneIdTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
+import java.time.DateTimeException;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.TextStyle;
+import java.time.zone.ZoneRulesException;
+import java.util.Locale;
+import java.util.Set;
 
 public class ZoneIdTest {
     static int passed;
@@ -16,18 +32,110 @@ public class ZoneIdTest {
         passed++;
     }
 
-    static void testZoneId() {
-        ZoneId utc = ZoneId.of("UTC");
-        check("UTC".equals(utc.getId()), "of/getId");
-        check(ZoneId.systemDefault() != null, "systemDefault non-null");
-        check(ZoneId.of("UTC").normalized().equals(ZoneOffset.UTC),
-              "ZoneId.of UTC normalizes to ZoneOffset.UTC");
-        check(ZoneId.of("Z").equals(ZoneOffset.UTC), "ZoneId.of Z equals ZoneOffset.UTC");
-        check(utc.getRules() != null, "getRules non-null");
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    public static void main(String[] args) {
-        testZoneId();
+    static ZoneId roundTrip(ZoneId v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (ZoneId) ois.readObject();
+    }
+
+    static void testFactories() {
+        check(ZoneId.of("UTC").getId().equals("UTC"), "of UTC");
+        check(ZoneId.of("Z").equals(ZoneOffset.UTC), "of Z == ZoneOffset.UTC");
+        check(ZoneId.of("+05:00").equals(ZoneOffset.ofHours(5)), "of offset");
+        check(ZoneId.of("-05:00").equals(ZoneOffset.ofHours(-5)), "of negative offset");
+        check(ZoneId.of("America/New_York").getId().equals("America/New_York"), "of region");
+        check(ZoneId.of("PST", ZoneId.SHORT_IDS).getId().equals("America/Los_Angeles"), "of short id map");
+        check(ZoneId.ofOffset("UTC", ZoneOffset.ofHours(2)).getId().equals("UTC+02:00"), "ofOffset prefixed");
+        check(ZoneId.ofOffset("", ZoneOffset.UTC).equals(ZoneOffset.UTC), "ofOffset empty prefix");
+        check(ZoneId.ofOffset("", ZoneOffset.ofHours(3)).getId().equals("+03:00"), "ofOffset empty prefix offset");
+        check(ZoneId.from(ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneId.of("UTC"))).getId().equals("UTC"),
+                "from ZonedDateTime");
+        check(ZoneId.from(java.time.OffsetDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.ofHours(5)))
+                .equals(ZoneOffset.ofHours(5)), "from OffsetDateTime");
+        Set<String> ids = ZoneId.getAvailableZoneIds();
+        check(ids.contains("UTC") && ids.contains("America/New_York"), "getAvailableZoneIds");
+        check(ZoneId.systemDefault() != null && ZoneId.systemDefault().getId() != null, "systemDefault");
+        check(ZoneId.SHORT_IDS != null && !ZoneId.SHORT_IDS.isEmpty(), "SHORT_IDS non-empty");
+    }
+
+    static void testGetDisplayName() {
+        check(ZoneOffset.ofHours(5).getDisplayName(TextStyle.FULL, Locale.US).equals("+05:00"),
+                "displayName fixed offset");
+        check(ZoneOffset.ofHours(-5).getDisplayName(TextStyle.SHORT, Locale.US).equals("-05:00"),
+                "displayName negative offset");
+        check(ZoneId.of("UTC").getRules() != null, "getRules non-null");
+        check(ZoneId.of("UTC").getRules().isFixedOffset(), "UTC fixed offset");
+        check(!ZoneId.of("America/New_York").getRules().isFixedOffset(), "region not fixed");
+    }
+
+    static void testNormalized() {
+        check(ZoneId.of("UTC").normalized().equals(ZoneOffset.UTC), "UTC normalized to UTC offset");
+        check(ZoneOffset.ofHours(5).normalized().equals(ZoneOffset.ofHours(5)), "offset normalized self");
+        check(ZoneId.of("America/New_York").normalized().equals(ZoneId.of("America/New_York")),
+                "region normalized self");
+    }
+
+    static void testEquality() {
+        check(ZoneId.of("UTC").equals(ZoneId.of("UTC")), "equals same region");
+        check(ZoneId.of("UTC").hashCode() == ZoneId.of("UTC").hashCode(), "hashCode");
+        check(ZoneOffset.UTC.equals(ZoneId.of("Z")), "ZoneOffset.UTC equals of(Z)");
+        check(!ZoneId.of("UTC").equals(ZoneId.of("America/New_York")), "equals different");
+        check(ZoneId.of("UTC").equals(null) == false, "equals null");
+        check(ZoneId.of("UTC").equals("UTC") == false, "equals other type");
+        check(ZoneId.of("UTC").toString().equals("UTC"), "toString UTC");
+        check(ZoneOffset.UTC.toString().equals("Z"), "toString Z");
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(ZoneId.class).getSerialVersionUID() == 8352817235686L,
+                "serialVersionUID");
+        ZoneId[] vals = { ZoneId.of("UTC"), ZoneOffset.UTC, ZoneId.of("America/New_York"),
+                ZoneOffset.ofHours(5) };
+        for (ZoneId v : vals) {
+            check(roundTrip(v).equals(v), "serialization round-trip " + v);
+        }
+    }
+
+    static void testErrors() {
+        checkThrows(DateTimeException.class, () -> ZoneId.of("Invalid/Zone"), "of invalid");
+        checkThrows(DateTimeException.class, () -> ZoneId.from(LocalDateTime.of(2024, 1, 1, 0, 0)),
+                "from LocalDateTime no zone");
+        checkThrows(NullPointerException.class, () -> ZoneId.of(null), "of null");
+        checkThrows(NullPointerException.class, () -> ZoneId.of("UTC", null), "of null map");
+        checkThrows(NullPointerException.class, () -> ZoneId.ofOffset(null, ZoneOffset.UTC), "ofOffset null prefix");
+        checkThrows(NullPointerException.class, () -> ZoneId.ofOffset("UTC", null), "ofOffset null offset");
+        checkThrows(NullPointerException.class, () -> ZoneId.from(null), "from null");
+    }
+
+    static void testNullSemantics() {
+        checkThrows(NullPointerException.class, () -> ZoneId.of("UTC").getDisplayName(TextStyle.FULL, null),
+                "getDisplayName null locale");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testFactories();
+        testGetDisplayName();
+        testNormalized();
+        testEquality();
+        testSerialization();
+        testErrors();
+        testNullSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

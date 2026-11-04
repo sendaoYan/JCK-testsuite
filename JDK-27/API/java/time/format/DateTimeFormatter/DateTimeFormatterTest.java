@@ -20,6 +20,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.UnsupportedTemporalTypeException;
+import java.text.ParsePosition;
 import java.util.Locale;
 
 public class DateTimeFormatterTest {
@@ -55,6 +56,8 @@ public class DateTimeFormatterTest {
         testLocaleAndZone();
         testFormatTo();
         testErrors();
+        testNullSemantics();
+        testParsePosition();
     }
 
     static void testOfPattern() {
@@ -112,6 +115,29 @@ public class DateTimeFormatterTest {
         expectThrows(UnsupportedTemporalTypeException.class,
                 () -> DateTimeFormatter.ofPattern("HH:mm").format(LocalDate.of(2024, 3, 1)),
                 "format LocalDate with time pattern");
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> DateTimeFormatter.ofPattern(null), "ofPattern null");
+        expectThrows(NullPointerException.class, () -> DateTimeFormatter.ofPattern("yyyy", null),
+                "ofPattern null locale");
+        expectThrows(NullPointerException.class, () -> DateTimeFormatter.ISO_LOCAL_DATE.format(null),
+                "format null");
+        expectThrows(NullPointerException.class, () -> DateTimeFormatter.ISO_LOCAL_DATE.parse(null),
+                "parse null");
+        expectThrows(NullPointerException.class, () -> DateTimeFormatter.ISO_LOCAL_DATE.withLocale(null),
+                "withLocale null");
+        check(DateTimeFormatter.ISO_LOCAL_DATE.withZone(null) != null, "withZone null returns formatter");
+    }
+
+    static void testParsePosition() {
+        DateTimeFormatter f = DateTimeFormatter.ISO_LOCAL_DATE;
+        ParsePosition pos = new ParsePosition(0);
+        f.parse("2024-03-01junk", pos);
+        check(pos.getIndex() == 10, "parse ParsePosition index");
+        check(pos.getErrorIndex() == -1, "parse ParsePosition no error");
+        expectThrows(DateTimeParseException.class, () -> f.parse("bad", new ParsePosition(0)),
+                "parse ParsePosition bad input");
     }
 
     public static void main(String[] args) throws Exception {

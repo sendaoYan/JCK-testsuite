@@ -12,7 +12,13 @@
  * 5. 边界/异常：of(24,0) 等越界抛 DateTimeException；parse 非法抛 DateTimeParseException。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Modifier;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -20,7 +26,11 @@ import java.time.OffsetTime;
 import java.time.ZoneOffset;
 import java.time.DateTimeException;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalQueries;
+import java.time.temporal.UnsupportedTemporalTypeException;
+import java.time.temporal.ValueRange;
 
 public class LocalTimeTest {
     static int passed;
@@ -41,6 +51,13 @@ public class LocalTimeTest {
         throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
     }
 
+    static LocalTime roundTrip(LocalTime v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (LocalTime) ois.readObject();
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.time.LocalTime");
         check(Modifier.isFinal(c.getModifiers()), "final");
@@ -52,7 +69,7 @@ public class LocalTimeTest {
         check(java.lang.Comparable.class.isAssignableFrom(c), "Comparable");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testFactories();
         testArithmeticImmutability();
         testComparison();
@@ -84,6 +101,10 @@ public class LocalTimeTest {
         // withNano 越界
         expectThrows(DateTimeException.class, () -> LocalTime.MIDNIGHT.withNano(1_000_000_000),
                 "withNano 1e9 out of range");
+
+        testSerialization();
+        testNullSemantics();
+        testTemporalAccessors();
     }
 
     static void testFactories() {
@@ -154,6 +175,52 @@ public class LocalTimeTest {
                 "ofNanoOfDay overflow");
         expectThrows(DateTimeParseException.class, () -> LocalTime.parse("25:00"), "parse hour 25");
         expectThrows(DateTimeParseException.class, () -> LocalTime.parse("garbage"), "parse garbage");
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(LocalTime.class).getSerialVersionUID() == 6414437269572265201L,
+                "serialVersionUID");
+        LocalTime[] vals = { LocalTime.MIDNIGHT, LocalTime.NOON, LocalTime.MAX,
+                LocalTime.of(13, 45, 20, 123456789) };
+        for (LocalTime v : vals) {
+            check(roundTrip(v).equals(v), "serialization round-trip " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> LocalTime.parse(null), "parse null");
+        expectThrows(NullPointerException.class, () -> LocalTime.from(null), "from null");
+        expectThrows(NullPointerException.class, () -> LocalTime.now((Clock) null), "now null");
+        LocalTime t = LocalTime.NOON;
+        expectThrows(NullPointerException.class, () -> t.plus(null), "plus null");
+        expectThrows(NullPointerException.class, () -> t.plus(1, null), "plus unit null");
+        expectThrows(NullPointerException.class, () -> t.minus(null), "minus null");
+        expectThrows(NullPointerException.class, () -> t.with((java.time.temporal.TemporalField) null, 1),
+                "with field null");
+        expectThrows(NullPointerException.class, () -> t.until(null, ChronoUnit.HOURS), "until null");
+        expectThrows(NullPointerException.class, () -> t.atDate(null), "atDate null");
+        expectThrows(NullPointerException.class, () -> t.atOffset(null), "atOffset null");
+        expectThrows(NullPointerException.class, () -> t.isBefore(null), "isBefore null");
+        expectThrows(NullPointerException.class, () -> t.format(null), "format null");
+    }
+
+    static void testTemporalAccessors() {
+        LocalTime t = LocalTime.of(13, 45, 20);
+        check(t.isSupported(ChronoField.HOUR_OF_DAY) && t.isSupported(ChronoField.MINUTE_OF_HOUR)
+                && t.isSupported(ChronoUnit.HOURS), "isSupported");
+        check(!t.isSupported(ChronoField.DAY_OF_MONTH), "isSupported DAY_OF_MONTH false");
+        check(t.get(ChronoField.HOUR_OF_DAY) == 13, "get HOUR_OF_DAY");
+        check(t.get(ChronoField.MINUTE_OF_HOUR) == 45, "get MINUTE_OF_HOUR");
+        check(t.getLong(ChronoField.NANO_OF_DAY) == 49520000000000L, "getLong NANO_OF_DAY");
+        check(t.getLong(ChronoField.SECOND_OF_DAY) == 49520, "getLong SECOND_OF_DAY");
+        ValueRange r = t.range(ChronoField.HOUR_OF_DAY);
+        check(r.getMinimum() == 0 && r.getMaximum() == 23, "range HOUR_OF_DAY");
+        check(t.query(TemporalQueries.localTime()) == t, "query localTime");
+        check(t.query(TemporalQueries.precision()) == ChronoUnit.NANOS, "query precision");
+        expectThrows(UnsupportedTemporalTypeException.class, () -> t.get(ChronoField.DAY_OF_MONTH),
+                "get DAY_OF_MONTH");
+        expectThrows(UnsupportedTemporalTypeException.class, () -> t.range(ChronoField.DAY_OF_MONTH),
+                "range DAY_OF_MONTH");
     }
 
     public static void main(String[] args) throws Exception {

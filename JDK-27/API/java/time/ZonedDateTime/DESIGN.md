@@ -28,4 +28,6 @@ ZonedDateTime zdt = ZonedDateTime.of(ldt, ZoneId.systemDefault());
 ## 4. 测试用例设计 + 自动化实现
 对应 `ZonedDateTimeTest.java` 的 `testBlackBox()`：
 - 工厂/查询、toInstant/toOffsetDateTime/toLocal*、withZoneSameInstant/SameLocal、plus 跨区（含 UTC 与 Asia/Shanghai 固定偏移差）、比较（时刻 vs 本地时间语义）、parse（含纳秒 + 偏移）、越界与 parse 非法、不可变性。
+- 序列化：`serialVersionUID == -6260982410461394882L` + UTC/region/非零偏移三种值 round-trip。
+- 空语义（NPE）：`of(LocalDateTime,ZoneId)`/`parse`/`from`/`now(Clock)`/`withZoneSameInstant`/`withZoneSameLocal`/`plus`/`minus`/`until`/`format` 传 null。
 - 确定性：固定 ZoneId（"UTC"/"Asia/Shanghai"）+ 固定时刻；headless-safe。

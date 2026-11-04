@@ -28,4 +28,7 @@ LocalDateTime ldt = LocalDateTime.ofEpochSecond(secs, nanos, ZoneOffset.UTC);
 ## 4. 测试用例设计 + 自动化实现
 对应 `LocalDateTimeTest.java` 的 `testBlackBox()`：
 - 工厂/查询、跨日/月/年进位、月末钳制、toLocalDate/toLocalTime/atZone/atOffset（含 -03 偏移换算）、比较、越界与 parse 非法、不可变性。
+- 序列化：`serialVersionUID == 6207766400415563566L` + MIN/MAX/闰日纳秒值 round-trip。
+- 空语义（NPE）：`of(LocalDate,LocalTime)`/`parse`/`from`/`now(Clock)`/`plus`/`plus(unit)`/`minus`/`with(field)`/`until`/`atOffset`/`atZone`/`format` 传 null。
+- 时间访问器：`isSupported`/`get`/`getLong`/`range`/`query(localDate,localTime,precision)` 及不支持字段抛 `UnsupportedTemporalTypeException`。
 - 确定性：固定日期时间 + `ZoneId.of("UTC")`/`ZoneOffset`；headless-safe。

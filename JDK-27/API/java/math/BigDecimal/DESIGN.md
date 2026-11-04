@@ -32,3 +32,5 @@
 - compareTo vs equals 的 scale 语义、min/max/hashCode 契约。
 - 转换（toPlainString/toEngineeringString/toBigIntegerExact/*ValueExact）。
 - 异常（非终止精确除、除零、负 sqrt/rootn、pow(int) 负指数、UNNECESSARY 不精确、小数转整数 exact）。
+- 序列化：`serialVersionUID == 6108874887143696463L` 校验 + 多值（ZERO/ONE/-1.50/长小数）round-trip 保持 equals/scale/新实例。
+- null 语义：构造器（String/BigInteger/char[]/各 MathContext 重载）与算术/舍入/比较（add/subtract/multiply/divide/remainder/pow/setScale/round/abs/negate/plus/compareTo/min/max）传 null 均抛 NPE。

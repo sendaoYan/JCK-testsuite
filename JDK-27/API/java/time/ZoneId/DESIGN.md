@@ -24,3 +24,5 @@ String name = z.getDisplayName(TextStyle.SHORT, Locale.US);
 对应 `ZoneIdTest.java` 的 `testBlackBox()`：
 - of/getId/equals/hashCode、normalized（"UTC" 归一化到 ZoneOffset.UTC，但 `ZoneId.of("UTC")` 本身是 ZoneRegion）、SHORT_IDS（CST→America/Chicago）、getAvailableZoneIds 排序后稳定断言、systemDefault 类型、无效 id 抛 ZoneRulesException。
 - 确定性：固定 id；headless-safe（`systemDefault` 只断言不依赖具体值）。
+- 补充序列化：`serialVersionUID` 精确断言为 `8352817235686L`；`roundTrip` 往返 `ZoneId.of("UTC")`/`ZoneOffset.UTC`/`ZoneId.of("America/New_York")`/`ZoneOffset.ofHours(5)` 后 `.equals` 一致。
+- 补充 null 语义：`getDisplayName(TextStyle.FULL, null)` 抛 NullPointerException。

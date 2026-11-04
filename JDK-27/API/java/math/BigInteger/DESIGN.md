@@ -33,3 +33,5 @@
 - 比较/哈希契约（equal 值 equal 哈希，非 BigInteger 与 null 的 equals）。
 - 转换（radix 正/负/零、toByteArray 往返、`*ValueExact` 越界）。
 - 异常（除零、mod 非正模、非互素逆元、负 sqrt、溢出 exact、非法 radix/空串/signum 不匹配）。
+- 序列化：`serialVersionUID == -8287574255936472291L` 校验 + 多值（ZERO/ONE/-1/超长）round-trip 保持 equals/新实例。
+- null 语义：构造器（String/byte[]/signum+byte[]）与算术/数论/位运算/比较（add/subtract/multiply/divide/remainder/gcd/mod/modPow/modInverse/and/or/xor/andNot/compareTo/min/max）传 null 均抛 NPE。

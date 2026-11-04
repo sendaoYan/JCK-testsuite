@@ -35,4 +35,7 @@ LocalDateTime ldt = LocalDateTime.ofEpochSecond(secs, nanos, ZoneOffset.UTC);
 - 边界：闰年（1900/2000/2024）、月末钳制（1/31+1月）、ofEpochDay=0。
 - 异常：of(2,30)/of(13,1)/parse 非法/plusYears 溢出。
 - 不可变性：每次运算返回新实例、原实例不变。
+- 序列化：`serialVersionUID == 2942565459149668126L`；MIN/MAX/负年份/普通日期 round-trip 且反序列化为新实例。
+- null 语义：`parse/from/now(Clock|ZoneId)/plus/minus/with/until/isAfter/isBefore/isEqual/atTime/atStartOfDay/format/query/compareTo` 全部 NPE。
+- temporal 访问器：`isSupported/range/get/getLong/query`，`get(SECOND_OF_DAY)` → UnsupportedTemporalTypeException。
 - 确定性：固定日期、`ZoneOffset.UTC`、无墙钟、无随机、无集合迭代顺序依赖；headless-safe（无 `@key`）。

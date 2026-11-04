@@ -6,6 +6,11 @@
  * @run main BigIntegerTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -19,6 +24,29 @@ public class BigIntegerTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static void expectThrows(Class<? extends Throwable> t, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable e) {
+            if (t.isInstance(e)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + t.getSimpleName()
+                    + " but got " + e.getClass().getSimpleName(), e);
+        }
+        throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
+    }
+
+    static BigInteger roundTrip(BigInteger v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (BigInteger) ois.readObject();
+    }
+
+    static void checkUID(Class<?> c, long expected) {
+        check(ObjectStreamClass.lookup(c).getSerialVersionUID() == expected,
+              c.getSimpleName() + " serialVersionUID");
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -100,7 +128,7 @@ public class BigIntegerTest {
     }
 
     // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         construction();
         arithmetic();
         bitwise();
@@ -109,6 +137,8 @@ public class BigIntegerTest {
         conversions();
         boundariesAndExceptions();
         boundariesExtra();
+        testSerialization();
+        testNullSemantics();
     }
 
     static void construction() {
@@ -361,6 +391,41 @@ public class BigIntegerTest {
         check(new BigInteger("-2147483648").intValueExact() == Integer.MIN_VALUE, "intValueExact MIN");
         check(new BigInteger("9223372036854775807").longValueExact() == Long.MAX_VALUE, "longValueExact MAX");
         check(new BigInteger("-9223372036854775808").longValueExact() == Long.MIN_VALUE, "longValueExact MIN");
+    }
+
+    static void testSerialization() throws Exception {
+        checkUID(BigInteger.class, -8287574255936472291L);
+        BigInteger[] vals = { BigInteger.ZERO, BigInteger.ONE, new BigInteger("-1"),
+                new BigInteger("12345678901234567890123456789012345678901234567890") };
+        for (BigInteger v : vals) {
+            BigInteger r = roundTrip(v);
+            check(r.equals(v), "serialization round-trip " + v);
+            check(r != v, "serialization new instance " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> new BigInteger((String) null), "String null");
+        expectThrows(NullPointerException.class, () -> new BigInteger((byte[]) null), "byte[] null");
+        expectThrows(NullPointerException.class, () -> new BigInteger(1, (byte[]) null), "signum byte[] null");
+        BigInteger one = BigInteger.ONE;
+        expectThrows(NullPointerException.class, () -> one.add(null), "add null");
+        expectThrows(NullPointerException.class, () -> one.subtract(null), "subtract null");
+        expectThrows(NullPointerException.class, () -> one.multiply(null), "multiply null");
+        expectThrows(NullPointerException.class, () -> one.divide(null), "divide null");
+        expectThrows(NullPointerException.class, () -> one.remainder(null), "remainder null");
+        expectThrows(NullPointerException.class, () -> one.gcd(null), "gcd null");
+        expectThrows(NullPointerException.class, () -> one.mod(null), "mod null");
+        expectThrows(NullPointerException.class, () -> one.modPow(BigInteger.TEN, null), "modPow null modulus");
+        expectThrows(NullPointerException.class, () -> one.modInverse(null), "modInverse null");
+        expectThrows(NullPointerException.class, () -> one.and(null), "and null");
+        expectThrows(NullPointerException.class, () -> one.or(null), "or null");
+        expectThrows(NullPointerException.class, () -> one.xor(null), "xor null");
+        expectThrows(NullPointerException.class, () -> one.andNot(null), "andNot null");
+        expectThrows(NullPointerException.class, () -> one.divideAndRemainder(null), "divideAndRemainder null");
+        expectThrows(NullPointerException.class, () -> one.compareTo(null), "compareTo null");
+        expectThrows(NullPointerException.class, () -> one.min(null), "min null");
+        expectThrows(NullPointerException.class, () -> one.max(null), "max null");
     }
 
     public static void main(String[] args) throws Exception {

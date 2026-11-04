@@ -13,6 +13,11 @@
  * 5. 边界/异常：plus 溢出抛 ArithmeticException；parse 非法抛 DateTimeParseException。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Modifier;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,6 +44,13 @@ public class DurationTest {
         throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
     }
 
+    static Duration roundTrip(Duration v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (Duration) ois.readObject();
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.time.Duration");
         check(Modifier.isFinal(c.getModifiers()), "final");
@@ -50,13 +62,15 @@ public class DurationTest {
         check(java.lang.Comparable.class.isAssignableFrom(c), "Comparable");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testFactories();
         testGettersAndParts();
         testArithmeticImmutability();
         testComparison();
         testBoundaries();
         testErrors();
+        testSerialization();
+        testNullSemantics();
     }
 
     static void testFactories() {
@@ -165,6 +179,29 @@ public class DurationTest {
                 "multipliedBy overflow");
         expectThrows(DateTimeParseException.class, () -> Duration.parse("1H"), "parse missing P/T");
         expectThrows(DateTimeParseException.class, () -> Duration.parse("garbage"), "parse garbage");
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(Duration.class).getSerialVersionUID() == 3078945930695997490L,
+                "serialVersionUID");
+        Duration[] vals = { Duration.ZERO, Duration.ofSeconds(1, 999999999),
+                Duration.ofSeconds(-65), Duration.ofDays(2) };
+        for (Duration v : vals) {
+            check(roundTrip(v).equals(v), "serialization round-trip " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> Duration.parse(null), "parse null");
+        expectThrows(NullPointerException.class, () -> Duration.from(null), "from null");
+        expectThrows(NullPointerException.class, () -> Duration.of(1, null), "of unit null");
+        expectThrows(NullPointerException.class, () -> Duration.between(null, Instant.EPOCH), "between null");
+        Duration d = Duration.ofSeconds(1);
+        expectThrows(NullPointerException.class, () -> d.plus(null), "plus null");
+        expectThrows(NullPointerException.class, () -> d.plus(1, null), "plus unit null");
+        expectThrows(NullPointerException.class, () -> d.minus(null), "minus null");
+        expectThrows(NullPointerException.class, () -> d.addTo(null), "addTo null");
+        expectThrows(NullPointerException.class, () -> d.subtractFrom(null), "subtractFrom null");
     }
 
     public static void main(String[] args) throws Exception {

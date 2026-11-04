@@ -12,7 +12,13 @@
  * 5. 边界/异常：of(2,30) 等非法抛 DateTimeException；parse 非法抛 DateTimeParseException；月份末加月做钳制。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Modifier;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,7 +30,11 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.DateTimeException;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalQueries;
+import java.time.temporal.UnsupportedTemporalTypeException;
+import java.time.temporal.ValueRange;
 
 public class LocalDateTimeTest {
     static int passed;
@@ -45,6 +55,13 @@ public class LocalDateTimeTest {
         throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
     }
 
+    static LocalDateTime roundTrip(LocalDateTime v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (LocalDateTime) ois.readObject();
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.time.LocalDateTime");
         check(Modifier.isFinal(c.getModifiers()), "final");
@@ -57,7 +74,7 @@ public class LocalDateTimeTest {
         check(java.time.chrono.ChronoLocalDateTime.class.isAssignableFrom(c), "ChronoLocalDateTime");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testFactories();
         testArithmeticImmutability();
         testComparison();
@@ -97,6 +114,10 @@ public class LocalDateTimeTest {
         // 非法月 0 等价类
         expectThrows(DateTimeException.class, () -> LocalDateTime.of(2024, 0, 1, 0, 0),
                 "of month 0");
+
+        testSerialization();
+        testNullSemantics();
+        testTemporalAccessors();
     }
 
     static void testFactories() {
@@ -170,6 +191,55 @@ public class LocalDateTimeTest {
                 "parse Feb 30");
         expectThrows(DateTimeParseException.class, () -> LocalDateTime.parse("not-a-datetime"),
                 "parse garbage");
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(LocalDateTime.class).getSerialVersionUID() == 6207766400415563566L,
+                "serialVersionUID");
+        LocalDateTime[] vals = { LocalDateTime.MIN, LocalDateTime.MAX,
+                LocalDateTime.of(2024, 2, 29, 13, 45, 20, 123456789) };
+        for (LocalDateTime v : vals) {
+            check(roundTrip(v).equals(v), "serialization round-trip " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> LocalDateTime.of((LocalDate) null, LocalTime.NOON),
+                "of LocalDate null");
+        expectThrows(NullPointerException.class,
+                () -> LocalDateTime.of(LocalDate.of(2024, 2, 29), (LocalTime) null),
+                "of LocalTime null");
+        expectThrows(NullPointerException.class, () -> LocalDateTime.parse(null), "parse null");
+        expectThrows(NullPointerException.class, () -> LocalDateTime.from(null), "from null");
+        expectThrows(NullPointerException.class, () -> LocalDateTime.now((Clock) null), "now null");
+        LocalDateTime d = LocalDateTime.of(2024, 1, 1, 0, 0);
+        expectThrows(NullPointerException.class, () -> d.plus(null), "plus null");
+        expectThrows(NullPointerException.class, () -> d.plus(1, null), "plus unit null");
+        expectThrows(NullPointerException.class, () -> d.minus(null), "minus null");
+        expectThrows(NullPointerException.class, () -> d.with((java.time.temporal.TemporalField) null, 1),
+                "with field null");
+        expectThrows(NullPointerException.class, () -> d.until(null, ChronoUnit.DAYS), "until null");
+        expectThrows(NullPointerException.class, () -> d.atOffset(null), "atOffset null");
+        expectThrows(NullPointerException.class, () -> d.atZone(null), "atZone null");
+        expectThrows(NullPointerException.class, () -> d.format(null), "format null");
+    }
+
+    static void testTemporalAccessors() {
+        LocalDateTime d = LocalDateTime.of(2024, 2, 29, 13, 45, 20);
+        check(d.isSupported(ChronoField.DAY_OF_MONTH) && d.isSupported(ChronoField.HOUR_OF_DAY)
+                && d.isSupported(ChronoUnit.DAYS), "isSupported");
+        check(!d.isSupported(ChronoField.OFFSET_SECONDS), "isSupported OFFSET false");
+        check(d.get(ChronoField.HOUR_OF_DAY) == 13, "get HOUR_OF_DAY");
+        check(d.getLong(ChronoField.EPOCH_DAY) == LocalDate.of(2024, 2, 29).toEpochDay(),
+                "getLong EPOCH_DAY");
+        check(d.getLong(ChronoField.NANO_OF_DAY) == 49520000000000L, "getLong NANO_OF_DAY");
+        ValueRange r = d.range(ChronoField.DAY_OF_MONTH);
+        check(r.getMaximum() == 29, "range DAY_OF_MONTH");
+        check(d.query(TemporalQueries.localDate()).equals(LocalDate.of(2024, 2, 29)), "query localDate");
+        check(d.query(TemporalQueries.localTime()).equals(LocalTime.of(13, 45, 20)), "query localTime");
+        check(d.query(TemporalQueries.precision()) == ChronoUnit.NANOS, "query precision");
+        expectThrows(UnsupportedTemporalTypeException.class, () -> d.get(ChronoField.OFFSET_SECONDS),
+                "get OFFSET_SECONDS");
     }
 
     public static void main(String[] args) throws Exception {

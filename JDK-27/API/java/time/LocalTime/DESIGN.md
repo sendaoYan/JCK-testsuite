@@ -25,4 +25,7 @@ int secs = t.toSecondOfDay();
 ## 4. 测试用例设计 + 自动化实现
 对应 `LocalTimeTest.java` 的 `testBlackBox()`：
 - 工厂/查询、跨午夜 plus/minus 回绕、with/truncatedTo、toSecondOfDay/toNanoOfDay、atDate/atOffset、比较、越界（of(24,0) 等）与 parse 非法。
+- 序列化：`serialVersionUID == 6414437269572265201L` + MIDNIGHT/NOON/MAX/纳秒值 round-trip。
+- 空语义（NPE）：`parse`/`from`/`now(Clock)`/`plus`/`plus(unit)`/`minus`/`with(field)`/`until`/`atDate`/`atOffset`/`isBefore`/`format` 传 null。
+- 时间访问器：`isSupported`/`get`/`getLong`/`range`/`query(localTime,precision)` 及不支持字段抛 `UnsupportedTemporalTypeException`。
 - 确定性：固定时间、无墙钟；headless-safe。

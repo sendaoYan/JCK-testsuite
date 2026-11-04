@@ -22,4 +22,6 @@ Period neg = p.negated();
 ## 4. 测试用例设计 + 自动化实现
 对应 `PeriodTest.java` 的 `testBlackBox()`：
 - 工厂/查询、between、plus/minus/multipliedBy/negated/normalized、addTo/subtractFrom、parse（P2Y3M14D / P10D）、非法 parse 与越界、不可变性。
+- 序列化：`serialVersionUID == -3587258372562876L` + ZERO/正/负/ofWeeks 四种值 round-trip。
+- 空语义（NPE）：`parse`/`from`/`between`/`plus`/`minus`/`addTo`/`subtractFrom` 传 null。
 - 确定性：固定日期；headless-safe。

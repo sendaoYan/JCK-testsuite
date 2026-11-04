@@ -22,3 +22,5 @@ String iso = LocalDateTime.now(Clock.fixed(..., ZoneOffset.UTC)).format(DateTime
 对应 `DateTimeFormatterTest.java` 的 `testBlackBox()`：
 - ofPattern 自定义格式、ISO_* 常量格式/解析往返、parse 得到 TemporalAccessor 再 LocalDate.from、withLocale/withZone、ofLocalizedDate(Locale.US)、非法 pattern 抛 IllegalArgumentException、非法输入抛 DateTimeParseException。
 - 确定性：固定 Locale.US/ROOT + 固定 ZoneId（UTC）+ 固定时刻；注意 `ofPattern(String)` 依赖 `Locale.Category.FORMAT` 默认值，断言据此调整；headless-safe。
+- 补充 null 语义矩阵：`ofPattern(null)`/`ofPattern("yyyy", null)`/`format(null)`/`parse(null)`/`withLocale(null)` 均抛 NullPointerException；`withZone(null)` 不抛且返回非 null formatter。
+- 补充 ParsePosition 前缀解析：`parse("2024-03-01junk", pos)` 后 `pos.getIndex()==10`、`errorIndex==-1`；坏输入 `parse("bad", pos)` 抛 DateTimeParseException（JDK-27 实测与 JDK-8 一致）。

@@ -22,3 +22,4 @@
 - `toString` 格式与 `toString`→`MathContext(String)` 往返。
 - `equals`（相同/不同 precision/不同 rounding/非 MathContext/null）与 `hashCode` 契约。
 - 异常：负精度、null 舍入模式、null 字符串、坏格式、负精度字符串、非数字 precision、未知 roundingMode。
+- 序列化：`serialVersionUID == 5579720004786848255L` 校验 + UNLIMITED/DECIMAL32/自定义 context 的 round-trip 保持 equals。

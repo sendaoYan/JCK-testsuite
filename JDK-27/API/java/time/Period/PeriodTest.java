@@ -13,6 +13,11 @@
  * 5. 边界/异常：parse 非法抛 DateTimeParseException。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.lang.reflect.Modifier;
 import java.time.LocalDate;
 import java.time.Period;
@@ -39,6 +44,13 @@ public class PeriodTest {
         throw new AssertionError(msg + ": expected " + t.getSimpleName() + " but nothing thrown");
     }
 
+    static Period roundTrip(Period v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(v);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (Period) ois.readObject();
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.time.Period");
         check(Modifier.isFinal(c.getModifiers()), "final");
@@ -49,7 +61,7 @@ public class PeriodTest {
         check(java.time.chrono.ChronoPeriod.class.isAssignableFrom(c), "ChronoPeriod");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testFactories();
         testArithmeticImmutability();
         testNormalization();
@@ -57,6 +69,8 @@ public class PeriodTest {
         testComparisonAndUnits();
         testBoundaries();
         testErrors();
+        testSerialization();
+        testNullSemantics();
     }
 
     static void testFactories() {
@@ -148,6 +162,27 @@ public class PeriodTest {
     static void testErrors() {
         expectThrows(DateTimeParseException.class, () -> Period.parse("1Y"), "parse missing P");
         expectThrows(DateTimeParseException.class, () -> Period.parse("garbage"), "parse garbage");
+    }
+
+    static void testSerialization() throws Exception {
+        check(ObjectStreamClass.lookup(Period.class).getSerialVersionUID() == -3587258372562876L,
+                "serialVersionUID");
+        Period[] vals = { Period.ZERO, Period.of(1, 2, 3), Period.of(-1, -2, -3), Period.ofWeeks(3) };
+        for (Period v : vals) {
+            check(roundTrip(v).equals(v), "serialization round-trip " + v);
+        }
+    }
+
+    static void testNullSemantics() {
+        expectThrows(NullPointerException.class, () -> Period.parse(null), "parse null");
+        expectThrows(NullPointerException.class, () -> Period.from(null), "from null");
+        expectThrows(NullPointerException.class, () -> Period.between(null, LocalDate.of(2024, 1, 1)),
+                "between null");
+        Period p = Period.of(1, 2, 3);
+        expectThrows(NullPointerException.class, () -> p.plus(null), "plus null");
+        expectThrows(NullPointerException.class, () -> p.minus(null), "minus null");
+        expectThrows(NullPointerException.class, () -> p.addTo(null), "addTo null");
+        expectThrows(NullPointerException.class, () -> p.subtractFrom(null), "subtractFrom null");
     }
 
     public static void main(String[] args) throws Exception {
