@@ -39,6 +39,49 @@ public class SimpleTimeZoneTest {
         testRawOffset();
         testDstRules();
         testCloneEquals();
+        testConstructorAndRuleOverloads();
+    }
+
+    static void testConstructorAndRuleOverloads() {
+        SimpleTimeZone tz = new SimpleTimeZone(
+            0, "GMT", Calendar.MARCH, 1, Calendar.SUNDAY, 3600000,
+            Calendar.OCTOBER, 1, Calendar.SUNDAY, 3600000);
+        check(tz.useDaylightTime(), "DST-rule constructor useDaylightTime");
+
+        SimpleTimeZone tz2 = new SimpleTimeZone(
+            0, "GMT", Calendar.MARCH, 1, Calendar.SUNDAY, 3600000,
+            Calendar.OCTOBER, 1, Calendar.SUNDAY, 3600000, 3600000);
+        check(tz2.getDSTSavings() == 3600000, "DST-rule constructor with savings");
+
+        SimpleTimeZone tz3 = new SimpleTimeZone(
+            0, "GMT", Calendar.MARCH, 1, Calendar.SUNDAY, 3600000, SimpleTimeZone.WALL_TIME,
+            Calendar.OCTOBER, 1, Calendar.SUNDAY, 3600000, SimpleTimeZone.WALL_TIME, 3600000);
+        check(tz3.useDaylightTime(), "DST-rule constructor with time modes");
+
+        SimpleTimeZone tz4 = new SimpleTimeZone(0, "GMT");
+        tz4.setStartYear(2020);
+        tz4.setStartRule(Calendar.MARCH, 1, 3600000);
+        tz4.setEndRule(Calendar.OCTOBER, 1, 3600000);
+        check(tz4.useDaylightTime(), "setStartRule(month,day,time)");
+
+        SimpleTimeZone tz5 = new SimpleTimeZone(0, "GMT");
+        tz5.setStartRule(Calendar.MARCH, 1, Calendar.SUNDAY, 3600000, true);
+        tz5.setEndRule(Calendar.OCTOBER, -1, Calendar.SUNDAY, 3600000, true);
+        check(tz5.useDaylightTime(), "setStartRule(...,after)/setEndRule(last)");
+
+        SimpleTimeZone dst = new SimpleTimeZone(0, "GMT");
+        dst.setStartRule(Calendar.MARCH, 1, Calendar.SUNDAY, 3600000);
+        dst.setEndRule(Calendar.OCTOBER, 1, Calendar.SUNDAY, 3600000);
+        dst.setDSTSavings(3600000);
+        // fixed instants: July 2020 DST, Jan 2020 standard.
+        java.util.Calendar cal = java.util.Calendar.getInstance(
+            java.util.TimeZone.getTimeZone("UTC"), java.util.Locale.US);
+        cal.clear(); cal.set(2020, Calendar.JULY, 1, 0, 0, 0);
+        check(dst.inDaylightTime(new java.util.Date(cal.getTimeInMillis())),
+              "inDaylightTime true during DST");
+        cal.clear(); cal.set(2020, Calendar.JANUARY, 1, 0, 0, 0);
+        check(!dst.inDaylightTime(new java.util.Date(cal.getTimeInMillis())),
+              "inDaylightTime false during standard");
     }
 
     static void testRawOffset() {

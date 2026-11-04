@@ -42,6 +42,38 @@ public class TimeZoneTest {
         testFixedOffsets();
         testAvailableIds();
         testZoneIdRoundTrip();
+        testNullUnknownAndId();
+    }
+
+    static void expectThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
+    static void testNullUnknownAndId() {
+        expectThrows(NullPointerException.class, () -> TimeZone.getTimeZone((String) null),
+                "getTimeZone(null String) NPE");
+        expectThrows(NullPointerException.class, () -> TimeZone.getTimeZone((ZoneId) null),
+                "getTimeZone(null ZoneId) NPE");
+        check("GMT".equals(TimeZone.getTimeZone("Not/AZone").getID()),
+              "unknown id falls back to GMT");
+
+        TimeZone utc = TimeZone.getTimeZone("UTC");
+        utc.setID("Custom/ID");
+        check("Custom/ID".equals(utc.getID()), "setID/getID");
+        expectThrows(NullPointerException.class, () -> utc.setID(null), "setID(null) NPE");
+
+        check(utc.getDisplayName().length() > 0, "getDisplayName() non-empty");
+        check(utc.getDisplayName(false, TimeZone.LONG, Locale.US).length() > 0,
+              "getDisplayName(daylight, style, locale) non-empty");
+        check(!TimeZone.getTimeZone("UTC").inDaylightTime(new java.util.Date(0L)),
+              "UTC inDaylightTime(epoch) false");
     }
 
     static void testUtcGmt() {
