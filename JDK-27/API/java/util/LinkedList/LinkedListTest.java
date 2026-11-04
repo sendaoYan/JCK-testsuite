@@ -22,10 +22,17 @@
  *    结构修改后 iterator/listIterator/descendingIterator 抛 ConcurrentModificationException。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 
@@ -247,6 +254,110 @@ public class LinkedListTest {
         check(single.removeFirst().equals("only") && single.isEmpty(), "drain single element");
     }
 
+    // ---- contract deep-dive (constructor matrix / listIterator contract /
+    //      listIterator fail-fast / subList view / cross-impl equals /
+    //      serialization / state invariants) ----------------------------------
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <E> LinkedList<E> roundTrip(LinkedList<E> list) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(list); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (LinkedList<E>) ois.readObject();
+        }
+    }
+
+    static void testConstructorMatrix() {
+        checkThrows(NullPointerException.class, () -> new LinkedList<String>((Collection<String>) null),
+                    "LinkedList(null Collection) NPE");
+        LinkedList<String> copy = new LinkedList<>(Arrays.asList("a", "b"));
+        check(copy.equals(Arrays.asList("a", "b")), "LinkedList(Collection) copies");
+        check(new LinkedList<>().isEmpty(), "LinkedList() empty");
+    }
+
+    static void testListIteratorContract() {
+        LinkedList<String> list = new LinkedList<>(Arrays.asList("a", "b", "c"));
+        ListIterator<String> li = list.listIterator(1);
+        check(li.hasPrevious() && li.previous().equals("a"), "listIterator previous");
+        check(li.nextIndex() == 0, "nextIndex after previous");
+        check(li.next().equals("a") && li.next().equals("b"), "listIterator forward");
+        check(li.previousIndex() == 1, "previousIndex");
+        checkThrows(IllegalStateException.class, () -> { ListIterator<String> li2 = new LinkedList<>(Arrays.asList("x")).listIterator(); li2.set("y"); },
+                    "set before next ISE");
+        checkThrows(IllegalStateException.class, () -> { ListIterator<String> li2 = new LinkedList<>(Arrays.asList("x")).listIterator(); li2.remove(); },
+                    "remove before next ISE");
+    }
+
+    static void testListIteratorFailFast() {
+        LinkedList<String> list = new LinkedList<>(Arrays.asList("a", "b", "c"));
+        ListIterator<String> li = list.listIterator();
+        li.next();
+        list.remove(0);
+        checkThrows(ConcurrentModificationException.class, li::next, "listIterator CME after remove");
+    }
+
+    static void testSubListView() {
+        LinkedList<Integer> list = new LinkedList<>(Arrays.asList(1, 2, 3, 4, 5));
+        List<Integer> sub = list.subList(1, 4);
+        check(sub.equals(Arrays.asList(2, 3, 4)), "subList view content");
+        sub.set(0, 20);
+        check(list.get(1) == 20, "subList set reflected in backing list");
+        list.set(2, 30);
+        check(sub.get(1) == 30, "backing list change reflected in subList");
+        sub.clear();
+        check(list.equals(Arrays.asList(1, 5)), "subList.clear removes range");
+        checkThrows(IndexOutOfBoundsException.class, () -> list.subList(-1, 2), "subList(-1,2) IOOBE");
+        checkThrows(IndexOutOfBoundsException.class, () -> list.subList(1, 3), "subList beyond size IOOBE");
+    }
+
+    static void testCrossImplEquals() {
+        LinkedList<Integer> ll = new LinkedList<>(Arrays.asList(1, 2, 3));
+        ArrayList<Integer> al = new ArrayList<>(Arrays.asList(1, 2, 3));
+        check(ll.equals(al) && al.equals(ll), "LinkedList equals ArrayList symmetric");
+        check(ll.hashCode() == al.hashCode(), "equal lists equal hashCode");
+        al.add(4);
+        check(!ll.equals(al), "unequal after adding element");
+    }
+
+    static void testSerialization() throws Exception {
+        LinkedList<String> list = new LinkedList<>(Arrays.asList("a", null, "b"));
+        LinkedList<String> r = roundTrip(list);
+        check(r != list, "round-trip distinct object");
+        check(r.equals(list), "round-trip content equal");
+        check(r.get(1) == null, "round-trip preserves null element");
+        r.add("c");
+        check(r.size() == 4 && list.size() == 3, "round-trip result usable and independent");
+
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(LinkedList.class);
+        check(osc.getSerialVersionUID() == 876323262645176354L, "LinkedList serialVersionUID stable");
+    }
+
+    static void testStateInvariants() {
+        LinkedList<Integer> list = new LinkedList<>(Arrays.asList(1, 2, 3, 4, 5));
+        list.remove(2);
+        check(list.equals(Arrays.asList(1, 2, 4, 5)), "remove(int) shifts and updates");
+        checkThrows(IndexOutOfBoundsException.class, () -> list.get(99), "failed get leaves state intact");
+        check(list.size() == 4 && list.getFirst() == 1 && list.getLast() == 5, "state intact after failed op");
+        list.clear();
+        check(list.isEmpty() && list.size() == 0, "clear empties");
+        for (int i = 1; i <= 5; i++) check(!list.contains(i), "clear removed " + i);
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testContractChain();
@@ -257,6 +368,13 @@ public class LinkedListTest {
         testStackPushPop();
         testDescendingListIteratorFailFast();
         testBlackBox();
+        testConstructorMatrix();
+        testListIteratorContract();
+        testListIteratorFailFast();
+        testSubListView();
+        testCrossImplEquals();
+        testSerialization();
+        testStateInvariants();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

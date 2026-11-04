@@ -1,56 +1,44 @@
-# java.util.LinkedList 测试方案
+# java.util.LinkedList 测试设计案（JDK-27）
 
-对应测试：`LinkedListTest.java`（`testWhiteBox()` 结构断言 + 后续 `test*` 黑盒行为断言）。
+> 覆盖目标：**完整契约**，白盒（反射结构）+ 黑盒（行为契约）。构造器矩阵、listIterator 契约 +
+> ISE、listIterator fail-fast、subList 活视图、跨实现 equals、序列化 round-trip、状态不变量补齐；
+> 白盒/黑盒既有内容已覆盖 Queue/Deque 语义、null 容忍、removeFirst/LastOccurrence、
+> descendingIterator、JDK 21+ `reversed()` 视图与 spliterator/clone。
 
-## 1. API 功能（按方法分组）
+## 1. API 提供了哪些功能
 
-- 构造器：`LinkedList()`、`LinkedList(Collection<? extends E>)`
-- List 操作：`add(E)` / `add(int, E)` / `addAll`、`get(int)` / `set(int, E)` / `remove(int)` /
-  `remove(Object)`、`indexOf` / `lastIndexOf` / `contains` / `size` / `clear`
-- Queue 操作：`offer(E)` / `poll()` / `peek()`、`add(E)` / `remove()` / `element()`
-- Deque 双端：`addFirst/addLast`、`offerFirst/offerLast`、`removeFirst/removeLast`、
-  `pollFirst/pollLast`、`getFirst/getLast`、`peekFirst/peekLast`
-- 定向删除：`removeFirstOccurrence(Object)` / `removeLastOccurrence(Object)`
-- 栈：`push(E)` / `pop()`
-- 迭代：`iterator()`、`listIterator(int)`、`descendingIterator()`、`spliterator()`
+- **构造器（2）**：`LinkedList()`、`LinkedList(Collection)`。
+- **List/Queue/Deque 操作**：同 JDK-8。
+- **JDK 21+ SequencedCollection**：`reversed()` 倒序活视图、`addFirst/addLast/getFirst/getLast`、
+  `removeFirst/removeLast`。
+- **契约继承**：`Cloneable`、`Serializable`（`serialVersionUID == 876323262645176354L`）。
 
 ## 2. Java 用户如何使用
 
-```java
-LinkedList<String> q = new LinkedList<>();      // 当队列
-q.offer("a"); q.poll(); q.peek();               // FIFO
+- 与 JDK-8 一致；JDK 21+ 可用 `reversed()` 获取倒序视图。
 
-LinkedList<String> stack = new LinkedList<>();  // 当栈
-stack.push("a"); stack.pop();                   // LIFO
+## 3. 参考来源（不凭记忆编造）
 
-LinkedList<String> d = new LinkedList<>();      // 当双端队列
-d.addFirst("a"); d.addLast("z"); d.pollFirst(); d.pollLast();
+- **Oracle javadoc** `java/util/LinkedList.html`（JDK-8 与 JDK-27）。
+- **OpenJDK 回归** `~/git/jdk8u-dev/jdk/test/java/util/LinkedList` + `~/git/jdk/test/jdk/java/util/LinkedList`。
+- **JCK runtime-8b** `~/JDK/testsuite/jck8b/JCK-runtime-8b/tests/api/java_util/LinkedList`。
 
-for (String s : d) { ... }                      // 顺序迭代
-Iterator<String> di = d.descendingIterator();   // 反向迭代
-```
+## 4. 测试用例设计（映射到 LinkedListTest.java 方法）
 
-## 3. 开源代码实际用法调研
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 白盒结构：继承 AbstractSequentialList、实现 List/Deque/Cloneable/Serializable | testWhiteBox |
+| P0 | 既有黑盒：List 契约链、Queue/Deque 语义、removeOccurrences、null 容忍、push/pop、descending/listIterator fail-fast | testContractChain、testQueueSemantics、testDeque、testRemoveOccurrences、testNullTolerance、testStackPushPop、testDescendingListIteratorFailFast |
+| P0 | 构造器矩阵 + listIterator 契约/ISE + listIterator fail-fast | testConstructorMatrix、testListIteratorContract、testListIteratorFailFast |
+| P0 | subList 活视图 + 跨实现 equals | testSubListView、testCrossImplEquals |
+| P1 | 序列化 round-trip + serialVersionUID + 状态不变量 | testSerialization、testStateInvariants |
+| P1 | JDK 21+ reversed() 倒序活视图 | testBlackBox（已含） |
 
-来源：`~/git/jdk25u-dev`（JDK 源码）；网络检索未执行，以下为 JDK 自用、逐条标注。
+## 关键规范细节（易错，已锁入断言）
 
-- `java/security/Security.java:709` — `new LinkedList<>(Arrays.asList(allProviders))`（从数组集合构造）
-- `jdk/internal/foreign/abi/BindingInterpreter.java:36` — `Deque<Object> stack = new LinkedList<>();`（作 null 友好的 Deque 栈）
-- `javax/security/auth/Subject.java:948` — `LinkedList<E> output = new LinkedList<>();`（结果收集）
-- `sun/net/www/protocol/http/AuthCacheImpl.java:59` — `list = new LinkedList<AuthCacheValue>();`（链表存储）
-- `java/util/LinkedList.java:59`（javadoc）— 官方示例 `Collections.synchronizedList(new LinkedList(...))`
+- listIterator `set/remove` 前未 `next/previous` 抛 ISE；listIterator 结构修改后 next 抛 CME。
+- `reversed()`（JDK 21+）返回倒序活视图，写入联动到原表。
 
-结论：LinkedList 常作“队列 / 栈 / 双向链表”，其允许 null 的特性被 `BindingInterpreter` 明确利用。
+## 注意事项
 
-## 4. 测试用例设计 + 自动化实现
-
-- 正常：List 增删查改、`indexOf/lastIndexOf/contains`；Deque 双端 add/offer/peek/poll/get/remove。
-- 组合链路：`addAll → get/set/remove → indexOf/lastIndexOf → removeAll/retainAll`；
-  `offer/poll/peek` 队列消费；`push/pop` LIFO；`descendingIterator` 反向；`listIterator` add/set/remove；
-  `removeFirstOccurrence/removeLastOccurrence`。
-- 边界/异常：空队列 `poll/peek` 返回 null、`remove/element` → `NoSuchElementException`；
-  空表 `getFirst/getLast/removeFirst/removeLast/pop` → `NoSuchElementException`；
-  结构修改后 `iterator/listIterator/descendingIterator` → `ConcurrentModificationException`；
-  允许 null 元素。
-
-健壮性：固定输入、无墙钟/随机；断言顺序结构（LinkedList 顺序确定）；无全局副作用；headless，无 `@key`。
+- 白盒反射只断言公开结构；serialVersionUID 与 JDK-8 相同。
