@@ -30,3 +30,10 @@ SGML DTD 中元素属性（ATTLIST 构造）的描述，本质是属性链表的
 2. 简单构造器：name 往返、type/modifier/value/values/next 默认值、toString==name。
 3. 全参构造器 + `next` 链表：字段往返、`getValues()` 枚举顺序、链表 tail。
 4. 从真实 html32 DTD 取 `p.align`：name/type=NMTOKEN/modifier=IMPLIED/value=null/枚举值 left|center|right、单属性链表。
+
+## 5. 深化批（契约覆盖增量）
+1. `name2type` 全矩阵：大写内容类型名 CDATA..NUTOKENS -> 1..15；小写修饰词 fixed/required/current/conref/implied -> FIXED/REQUIRED/CURRENT/CONREF/IMPLIED；RCDATA/EMPTY/MODEL/ANY/大小写不符/空串/未知 -> CDATA(1) 默认；null -> NPE（实测，Hashtable.get(null)）。
+2. `type2name` 0..19 精确表（0 与 16..19 -> null，-1/20 -> null），1..15 与 name2type 双向往返。
+3. 公有字段 name/type/modifier/value/values/next 与 getter 一致；`values` 不做防御性拷贝（活引用）；full 构造器 `toString()` 只返回 name；空 Vector -> 非空无元素 Enumeration；null Vector -> null Enumeration；null name 构造合法。
+4. html32 `input.type` 默认值 TEXT。
+5. 序列化：serialVersionUID=-1361214058742015233（两版一致）+ round-trip（含 values、next 链）。

@@ -69,9 +69,73 @@ public class TagElementTest {
         check("foobar".equals(tUnknown.getElement().getName()), "unknown tag element name");
     }
 
+    // ---- Part 3: deep contract coverage ----
+
+    static void expectNPE(String label, Runnable r) {
+        try { r.run(); throw new AssertionError(label + ": expected NullPointerException"); }
+        catch (NullPointerException expected) { passed++; }
+    }
+
+    static void testDeepNulls() {
+        expectNPE("new TagElement(null)", new Runnable() { public void run() { new TagElement(null); } });
+        expectNPE("new TagElement(null,true)", new Runnable() { public void run() { new TagElement(null, true); } });
+    }
+
+    static void testDeepFlagMatrix() throws Exception {
+        new ParserDelegator();
+        DTD dtd = DTD.getDTD("html32");
+        // whitespace semantics of the html32 tag set: name -> {breaksFlow, isPreformatted}
+        String[][] table = {
+            {"p", "T", "F"}, {"br", "T", "F"}, {"head", "T", "F"}, {"li", "T", "F"},
+            {"dl", "T", "F"}, {"pre", "T", "T"}, {"b", "F", "F"}, {"img", "F", "F"},
+            {"td", "T", "F"}, {"tr", "F", "F"}, {"area", "F", "F"}, {"basefont", "F", "F"},
+            {"blockquote", "T", "F"}, {"hr", "T", "F"}, {"table", "F", "F"}, {"dd", "T", "F"},
+            {"dt", "T", "F"}, {"ul", "T", "F"}, {"ol", "T", "F"}, {"option", "F", "F"},
+            {"address", "F", "F"}, {"h1", "T", "F"}, {"center", "T", "F"},
+        };
+        for (String[] row : table) {
+            TagElement t = new TagElement(dtd.getElement(row[0]));
+            check(t.breaksFlow() == row[1].equals("T"), row[0] + " breaksFlow " + row[1]);
+            check(t.isPreformatted() == row[2].equals("T"), row[0] + " isPreformatted " + row[2]);
+        }
+        // both constructors expose the same element; the flag only sets fictional()
+        Element body = dtd.getElement("body");
+        TagElement plain = new TagElement(body);
+        TagElement fict = new TagElement(body, true);
+        check(plain.getElement() == body && fict.getElement() == body, "both ctors keep element");
+        check(!plain.fictional() && fict.fictional(), "fictional flag only from second ctor");
+        check(plain.breaksFlow() == fict.breaksFlow(), "fictional does not change breaksFlow");
+    }
+
+    static void testDeepHTMLTagMapping() throws Exception {
+        new ParserDelegator();
+        DTD dtd = DTD.getDTD("html32");
+        // getHTMLTag returns the canonical HTML.Tag singletons (identity, not equals)
+        check(new TagElement(dtd.getElement("body")).getHTMLTag() == HTML.Tag.BODY, "body -> Tag.BODY");
+        check(new TagElement(dtd.getElement("pre")).getHTMLTag() == HTML.Tag.PRE, "pre -> Tag.PRE");
+        check(new TagElement(dtd.getElement("p")).getHTMLTag() == HTML.Tag.P, "p -> Tag.P");
+        check(new TagElement(dtd.getElement("br")).getHTMLTag() == HTML.Tag.BR, "br -> Tag.BR");
+        check(new TagElement(dtd.getElement("html")).getHTMLTag() == HTML.Tag.HTML, "html -> Tag.HTML");
+        // stable across calls on the same instance
+        TagElement t = new TagElement(dtd.getElement("body"));
+        check(t.getHTMLTag() == t.getHTMLTag(), "getHTMLTag stable");
+        check(t.getElement() == t.getElement(), "getElement stable");
+        // unknown elements map to a fresh HTML.UnknownTag that stringifies to the name
+        TagElement u = new TagElement(dtd.getElement("probe-unknown-tag"));
+        check(u.getHTMLTag() instanceof HTML.UnknownTag, "unknown -> UnknownTag instance");
+        check("probe-unknown-tag".equals(u.getHTMLTag().toString()), "UnknownTag toString is the name");
+        check(!u.getHTMLTag().breaksFlow() && !u.getHTMLTag().isPreformatted(),
+              "UnknownTag neither breaks flow nor preformatted");
+        // TagElement is not Serializable
+        check(!java.io.Serializable.class.isAssignableFrom(TagElement.class), "TagElement not Serializable");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepNulls();
+        testDeepFlagMatrix();
+        testDeepHTMLTagMapping();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

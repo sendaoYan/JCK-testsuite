@@ -23,3 +23,9 @@
 2. 元素构造器：content==element、first()==element、first(b)==true、first(i)==false、toString==name。
 3. `'*' '?' '+'`：empty/first 语义（`*`/`?` 空、`+` 非空且 first==b）。
 4. `','` 链表组合：`(b , i)` 的 empty()、first()==b、first(b)/first(i)、getElements 顺序、toString。
+
+## 5. 深化批（契约覆盖增量）
+1. 六种运算符语义矩阵：`*`/`?` empty()==true、first()==null；`+`/`,`/`|`/`&` empty()==false；`|`/`&` first()==null（歧义）而 first(member)==true；toString 精确表 `b*`/`b?`/`b+`/`(b , i)`/`(b | i)`/`(b & i)`/单成员 `(b)`；三元素链 `(b , i , u)`。
+2. type=0 + Element 内容：toString==元素名、first()==元素、getElements 收集；type=0 + String 内容：toString 正常、first() 抛 CCE（实测）。
+3. html32 真实内容模型精确串：html=`(head , body , plaintext?)`、head=`(title? & isindex? & base? & nextid?)`、table=`(tr | caption)*`；br(EMPTY) content==null。
+4. 序列化：serialVersionUID=-1130825523866321257（两版一致）+ round-trip。

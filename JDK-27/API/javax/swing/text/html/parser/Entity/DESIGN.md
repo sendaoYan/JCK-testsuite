@@ -27,3 +27,9 @@ DTD 中实体（ENTITY 构造）的描述（`implements DTDConstants`）。公�
 2. html32 实体：`amp`->"&"、`gt`->">"、`lt`->"<"，type=CDATA、isGeneral、!isParameter、getData 长度；未知实体 null。
 3. 构造器：GENERAL|CDATA 实体的 getType 掩码、isGeneral/isParameter、getString/getData 引用。
 4. 参数实体：PARAMETER|CDATA 的 isParameter=true、isGeneral=false。
+
+## 5. 深化批（契约覆盖增量）
+1. `getType()` 掩码语义：仅保留低 16 位（GENERAL/PARAMETER/DEFAULT 限定位被剥掉），GENERAL|SDATA->SDATA、PARAMETER|PI->PI、GENERAL|NUMBER->NUMBER、GENERAL|PARAMETER->0；isGeneral/isParameter 独立按位判断、可同时置位；公有字段 type 保留完整字。
+2. 构造器边界：null data 合法（getData()==null、getString() NPE）；null name 合法；data 数组不拷贝（改共享数组后 getString 反映）。
+3. `name2type` 矩阵：PUBLIC/CDATA/SDATA/PI/STARTTAG/ENDTAG/MS/MD/SYSTEM 大写命中；小写/空串/未知/GENERAL -> CDATA(1)；null -> NPE。
+4. html32 字符实体：`"`->quot、nbsp 为单字符 U+00A0 且可按字符键取回；Entity **不实现 Serializable**。

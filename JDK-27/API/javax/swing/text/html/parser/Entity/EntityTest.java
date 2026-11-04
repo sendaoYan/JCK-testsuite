@@ -79,9 +79,98 @@ public class EntityTest {
         check("%".equals(par.getString()), "parameter entity string");
     }
 
+    // ---- Part 3: deep contract coverage ----
+
+    static void expectNPE(String label, Runnable r) {
+        try { r.run(); throw new AssertionError(label + ": expected NullPointerException"); }
+        catch (NullPointerException expected) { passed++; }
+    }
+
+    static void testDeepTypeMasking() {
+        // getType() keeps only the low 16 bits: the GENERAL/PARAMETER/DEFAULT
+        // qualifier bits are stripped, the entity-type value survives
+        check(new Entity("a", DTDConstants.GENERAL | DTDConstants.CDATA, null).getType() == DTDConstants.CDATA,
+              "GENERAL|CDATA -> CDATA");
+        check(new Entity("b", DTDConstants.GENERAL | DTDConstants.SDATA, null).getType() == DTDConstants.SDATA,
+              "GENERAL|SDATA -> SDATA");
+        check(new Entity("c", DTDConstants.GENERAL | DTDConstants.PI, null).getType() == DTDConstants.PI,
+              "GENERAL|PI -> PI");
+        check(new Entity("d", DTDConstants.PARAMETER | DTDConstants.PI, null).getType() == DTDConstants.PI,
+              "PARAMETER|PI -> PI");
+        check(new Entity("e", DTDConstants.GENERAL | DTDConstants.NUMBER, null).getType() == DTDConstants.NUMBER,
+              "GENERAL|NUMBER -> NUMBER");
+        check(new Entity("f", DTDConstants.GENERAL | DTDConstants.PARAMETER, null).getType() == 0,
+              "GENERAL|PARAMETER -> 0 (no type bits)");
+        check(new Entity("g", 0, null).getType() == 0, "type 0 -> 0");
+        // qualifier flags survive in isGeneral/isParameter independently of getType()
+        Entity both = new Entity("h", DTDConstants.GENERAL | DTDConstants.PARAMETER | DTDConstants.SDATA, null);
+        check(both.isGeneral() && both.isParameter(), "both qualifier flags settable");
+        check(both.getType() == DTDConstants.SDATA, "both flags still mask to SDATA");
+        Entity neither = new Entity("i", DTDConstants.CDATA, null);
+        check(!neither.isGeneral() && !neither.isParameter(), "no qualifier flags by default");
+        // public fields mirror the getters
+        Entity amp = new Entity("amp", DTDConstants.GENERAL | DTDConstants.CDATA, new char[]{'&'});
+        check("amp".equals(amp.name) && amp.name.equals(amp.getName()), "name field == getName");
+        check(amp.type == (DTDConstants.GENERAL | DTDConstants.CDATA), "type field keeps full word");
+        check(amp.getData() == amp.data, "getData == data field");
+    }
+
+    static void testDeepDataSemantics() {
+        // null data accepted by the constructor; getData() null, getString() NPE
+        Entity nullData = new Entity("nd", DTDConstants.GENERAL | DTDConstants.CDATA, null);
+        check(nullData.getData() == null, "null data getData null");
+        expectNPE("null data getString", new Runnable() { public void run() { nullData.getString(); } });
+        // null name accepted
+        Entity nullName = new Entity(null, DTDConstants.CDATA, new char[]{'x'});
+        check(nullName.getName() == null, "null name getName null");
+        check("x".equals(nullName.getString()), "null name data still readable");
+        // the data array is live, not copied
+        char[] shared = new char[]{'a'};
+        Entity live = new Entity("lv", DTDConstants.GENERAL | DTDConstants.CDATA, shared);
+        shared[0] = 'z';
+        check("z".equals(live.getString()), "data array not defensively copied");
+        check(live.getData().length == 1, "single char data");
+        // Entity is NOT Serializable
+        check(!java.io.Serializable.class.isAssignableFrom(Entity.class), "Entity not Serializable");
+    }
+
+    static void testDeepName2TypeMatrix() {
+        check(Entity.name2type("PUBLIC") == DTDConstants.PUBLIC, "name2type PUBLIC");
+        check(Entity.name2type("CDATA") == DTDConstants.CDATA, "name2type CDATA");
+        check(Entity.name2type("SDATA") == DTDConstants.SDATA, "name2type SDATA");
+        check(Entity.name2type("PI") == DTDConstants.PI, "name2type PI");
+        check(Entity.name2type("STARTTAG") == DTDConstants.STARTTAG, "name2type STARTTAG");
+        check(Entity.name2type("ENDTAG") == DTDConstants.ENDTAG, "name2type ENDTAG");
+        check(Entity.name2type("MS") == DTDConstants.MS, "name2type MS");
+        check(Entity.name2type("MD") == DTDConstants.MD, "name2type MD");
+        check(Entity.name2type("SYSTEM") == DTDConstants.SYSTEM, "name2type SYSTEM");
+        // case sensitive lookup; anything unrecognized defaults to CDATA
+        check(Entity.name2type("public") == DTDConstants.CDATA, "name2type lowercase -> CDATA");
+        check(Entity.name2type("GENERAL") == DTDConstants.CDATA, "name2type GENERAL -> CDATA (not an entity type)");
+        check(Entity.name2type("") == DTDConstants.CDATA, "name2type(\"\") -> CDATA");
+        check(Entity.name2type("zzz") == DTDConstants.CDATA, "name2type unknown -> CDATA");
+        expectNPE("name2type(null)", new Runnable() { public void run() { Entity.name2type(null); } });
+    }
+
+    static void testDeepHtml32Entities() throws Exception {
+        new ParserDelegator();
+        DTD dtd = DTD.getDTD("html32");
+        // named lookups decode to their replacement text
+        check("quot".equals(dtd.getEntity((int) '"').getName()), "char \" -> quot");
+        check("\"".equals(dtd.getEntity("quot").getString()), "quot string");
+        check(dtd.getEntity("nbsp").getString().length() == 1
+              && dtd.getEntity("nbsp").getString().charAt(0) == '\u00A0', "nbsp is U+00A0");
+        check(dtd.getEntity("nbsp") == dtd.getEntity(0x00A0), "nbsp reachable by char key");
+        check(dtd.getEntity("zzz-unknown") == null, "unknown named entity null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepTypeMasking();
+        testDeepDataSemantics();
+        testDeepName2TypeMatrix();
+        testDeepHtml32Entities();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

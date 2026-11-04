@@ -105,9 +105,98 @@ public class ElementTest {
         check(Element.name2type("unknown") == 0, "name2type unknown -> 0");
     }
 
+    // ---- Part 3: deep contract coverage ----
+
+    static void expectNPE(String label, Runnable r) {
+        try { r.run(); throw new AssertionError(label + ": expected NullPointerException"); }
+        catch (NullPointerException expected) { passed++; }
+    }
+
+    static void testDeepName2TypeMatrix() {
+        check(Element.name2type("CDATA") == 1, "name2type CDATA 1");
+        check(Element.name2type("RCDATA") == 16, "name2type RCDATA 16");
+        check(Element.name2type("EMPTY") == 17, "name2type EMPTY 17");
+        check(Element.name2type("ANY") == 19, "name2type ANY 19");
+        // element type table knows no other names (case sensitive)
+        check(Element.name2type("MODEL") == 0, "name2type MODEL 0");
+        check(Element.name2type("cdata") == 0, "name2type lowercase 0");
+        check(Element.name2type("empty") == 0, "name2type empty 0");
+        check(Element.name2type("") == 0, "name2type empty string 0");
+        check(Element.name2type("zzz") == 0, "name2type unknown 0");
+        expectNPE("name2type(null)", new Runnable() { public void run() { Element.name2type(null); } });
+    }
+
+    static void testDeepFieldGetterCoherence() throws Exception {
+        new ParserDelegator();
+        DTD dtd = DTD.getDTD("html32");
+        Element p = dtd.getElement("p");
+        check(p.name.equals(p.getName()), "name field == getName");
+        check(p.type == p.getType(), "type field == getType");
+        check(p.oStart == p.omitStart(), "oStart field == omitStart");
+        check(p.oEnd == p.omitEnd(), "oEnd field == omitEnd");
+        check(p.content == p.getContent(), "content field == getContent");
+        check(p.atts == p.getAttributes(), "atts field == getAttributes");
+        check(p.index == p.getIndex(), "index field == getIndex");
+        check("p".equals(p.toString()), "toString == name");
+        // isEmpty mirrors EMPTY typing
+        Element br = dtd.getElement("br");
+        check(br.isEmpty() && br.type == DTDConstants.EMPTY, "br EMPTY and isEmpty");
+        check(!p.isEmpty() && p.type != DTDConstants.EMPTY, "p not EMPTY and not isEmpty");
+        // null lookups are answered with null, not an exception
+        check(p.getAttribute(null) == null, "getAttribute(null) null");
+        check(p.getAttributeByValue(null) == null, "getAttributeByValue(null) null");
+        // the public data field is a plain user slot
+        Object marker = new Object();
+        p.data = marker;
+        check(p.data == marker, "data field stores arbitrary object");
+        p.data = null;
+        // inclusions/exclusions are plain BitSets when defined (applet excludes nothing here)
+        check(p.inclusions == null && p.exclusions == null, "p has no inclusions/exclusions");
+    }
+
+    static void testDeepSerialization() throws Exception {
+        new ParserDelegator();
+        DTD dtd = DTD.getDTD("html32");
+        Element p = dtd.getElement("p");
+        // serialVersionUID of this Element class (JDK-9+ layout)
+        check(java.io.ObjectStreamClass.lookup(Element.class).getSerialVersionUID()
+              == 272607703323205264L, "serialVersionUID");
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(p);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+            new java.io.ByteArrayInputStream(bos.toByteArray()));
+        Element back = (Element) ois.readObject();
+        ois.close();
+        check(back != p, "roundtrip is a distinct instance (no readResolve)");
+        check("p".equals(back.getName()), "roundtrip name");
+        check(back.getIndex() == p.getIndex(), "roundtrip index");
+        check(back.getType() == p.getType(), "roundtrip type MODEL");
+        check(back.omitStart() == p.omitStart() && back.omitEnd() == p.omitEnd(), "roundtrip omit flags");
+        check(back.getContent() != null, "roundtrip content model carried");
+        check(back.getAttribute("align") != null, "roundtrip align attribute carried");
+        check("left|center|right|".equals(join(back.getAttribute("align").getValues())),
+              "roundtrip align values");
+    }
+
+    static void testDeepVersionShape() throws Exception {
+        // Only cross-version internal difference: JDK-8 declares the static type
+        // table as a package-private Hashtable, this JDK keeps it private (Map).
+        // Both are invisible to non-reflective code; the observable difference is
+        // the serialVersionUID, asserted above per version.
+        java.lang.reflect.Field f = Class.forName("javax.swing.text.html.parser.Element").getDeclaredField("contentTypes");
+        check(!java.lang.reflect.Modifier.isPublic(f.getModifiers())
+              && !java.lang.reflect.Modifier.isProtected(f.getModifiers()),
+              "contentTypes table not exported");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepName2TypeMatrix();
+        testDeepFieldGetterCoherence();
+        testDeepSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

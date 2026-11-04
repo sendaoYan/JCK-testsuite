@@ -23,3 +23,13 @@ HTML 文档解析器（`extends Parser`）。把 HTML 流解析后按 HTMLEditor
 2. `<br>foo`：simple 标签 br、文本 foo。
 3. `<!-- note -->`：注释回调含 note。
 4. `ignoreCharSet=true`：仍正常产出 p 与文本、EOL 不变。
+
+## 5. 深化批（契约覆盖增量）——解析器回调契约（本包核心）
+1. **整表回调序列断言**：`SeqCB` 把每个回调记成 `S:tag@pos[attr=..]/E:/P:/T:/C:/!:$:` 字符串，与期望 List 整表 equals。锚表覆盖 注释/隐含骨架/实体解码/属性/简单标签/嵌套/位置/eol，含 `!:invalid.tagatt class p ?` 精确错误串与 `S:p@55[align=center][class=x&y]` 属性表。
+2. 骨架与错误恢复矩阵：`<p>x<p>y` 隐含 html/head/body + 隐式 `</p>`；stray `</p>` 只报 `end.extra.tag`；`<b><i>x</b></i>` 报 `end.missing`+`unmatched.endtag` 后补齐；未知标签 `<foobar>` 报 `tag.unrecognized` 且闭合端以 `P:foobar[endtag=true]` 送达；`<!DOCTYPE html>` 静默跳过但骨架仍生成。
+3. 属性契约：名字一律小写；**枚举值属性（align、input.type）值转小写，非枚举值保大小写**（href=AbC.DEF 保留）；布尔属性 `CHECKED` -> `checked=checked`；属性值内实体解码（class="x&amp;y" -> x&y）；非法枚举值追加 `invalid.tagattval` 错误；回调收到的 AttributeSet 可变（addAttribute 生效）。
+4. 文本/实体：`&amp;&lt;&gt;&#65;` 解码；`&unknown;` 按字面保留；`&nbsp;` -> U+00A0；标签间空白折叠成单个空格文本；`
+`/`` 在正文中折叠、eol 报第一个；`<pre>` 保留空白换行；`<script>` 内容走 handleComment 而非 handleText；title 文本经 handleText 送达，第二个 title 触发 `tag.unexpected`。
+5. charset：`<head><meta http-equiv="charset" content="utf-8">` 且 ignoreCharSet=false -> parse 抛 `ChangedCharSetException`（getCharSetSpec()=="utf-8"）；ignoreCharSet=true 正常解析；`Content-Type: text/html` 不抛。
+6. 异常语义（全部实测）：null reader **不向调用者传播**（内部 NPE 被 `Parser.parse` 的 `catch(Exception)` 吃掉、以 `handleError("exception java.lang.NullPointerException ..")` 报告，仍送达 eol 事件）；null callback NPE 传播；回调 RuntimeException 同样被吞并报告；Reader 的 IOException 原样传播。
+7. 复用语义：同一 DocumentParser 连续 parse 状态复位（文本/结构正常），但**位置计数器不归零**（第二次解析 offset 接着增长）——断言 min(第二次) > max(第一次)。

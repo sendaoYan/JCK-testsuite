@@ -18,3 +18,9 @@
 1. 子类捕获 `<p>Hello</p>`：start 序列 html/head/body/p、fictional 标志、文本 Hello、end 标签集合、`getCurrentLine()==1`。
 2. `<br>foo`：handleEmptyTag 捕获 br、文本 foo。
 3. `<!-- note -->`：handleComment 含 note、`getCurrentPos()>=0`。
+
+## 5. 深化批（契约覆盖增量）
+1. Parser 级整表事件序列（Seq 子类 `S:name*/E:/P:/T:/C:/!:`，* 表 fictional）：`<!--c--><p>Hi <b>there</b><br></p>` 的 14 事件精确表；实体在 handleText 前解码；同一 Parser 实例可二次 parse（状态复位）。
+2. 行/位置计数：新实例 getCurrentLine()==0/getCurrentPos()==0；单行解析后 ==1；两处换行后 ==3；解析结束后计数器保持末值。
+3. protected 面：`dtd` 字段即构造器实参；`strict` 默认 false；`makeTag(elem)` 非 fictional、`makeTag(elem,true)` fictional、**不缓存**（两次调用不同实例）、getHTMLTag 映射到 HTML.Tag 单例；`getAttributes()/flushAttributes()` 在回调内可用、flush 后属性数归零。
+4. 异常语义（实测）：`parse(null)` **不抛**——内部 NPE 被 `catch(Exception)` 吃掉、以 handleError("exception java.lang.NullPointerException …") 报告；`parseDTDMarkup()` 未设 reader -> NPE。

@@ -17,3 +17,8 @@
 
 ## 4. 测试用例设计（黑盒部分，`DTDConstantsTest.testBlackBox`）
 逐条断言全部 35 个常量精确值（内容类型 19 个、修饰 5 个、实体类型 9 个、标志位 3 个），确保 ABI 常量与公开文档一致。
+
+## 5. 深化批（契约覆盖增量）
+1. 反射全量形状：恰好 35 个常量字段，全部 public static final int。
+2. 分组性质：内容类型 1..19 连续且互异；修饰词 FIXED<REQUIRED<CURRENT<CONREF<IMPLIED 严格递增；实体类型 10..17 互异；GENERAL/DEFAULT/PARAMETER 均为 2 的幂且位于 16 位类型区之上（可与类型位或组合不碰撞）。
+3. 实现者关系：AttributeList/Element/Entity/DTD/Parser 均 instanceof DTDConstants。

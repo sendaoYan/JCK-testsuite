@@ -28,3 +28,9 @@
 3. `<!-- note -->`：注释含 note。
 4. `ignoreCharSet=true`：仍解析 p 与文本。
 5. 多次 parse 各自独立（新 DocumentParser）。
+
+## 5. 深化批（契约覆盖增量）
+1. 整表回调序列：`<p>zz</p>` -> `S:html@0*、S:head@0*、E:head@0、S:body@0*、S:p@0、T:zz@3、E:p@5、E:body@8、E:html@8、$:\n`（* 表 IMPLIED）。
+2. 空输入只产出一个默认 eol 事件 `\n`（无结构无文本）；`<!DOCTYPE html><p>x` 跳过 doctype 但骨架照常；构造 ParserDelegator 后 `DTD.getDTD("html32")` 可命中缓存。
+3. 异常语义（实测）：null reader 不传播（内部 NPE 经 handleError 报告，含 eol 事件）；null callback NPE 传播；回调 RuntimeException 被吞并报告；Reader IOException 原样传播（含消息）。
+4. 序列化：serialVersionUID=1832828210669556215（两版一致）；round-trip 后仍可正常解析（readObject 内部重新 setDefaultDTD）。
