@@ -18,8 +18,13 @@
  * 5. 边界：null key/value 允许；重复 put 更新值但不移动（插入序）；访问序下 put 更新算访问。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.SequencedMap;
@@ -40,6 +45,30 @@ public class LinkedHashMapTest {
     static boolean hasDeclared(Class<?> c, String name, Class<?>... p) {
         try { c.getDeclaredMethod(name, p); return true; }
         catch (NoSuchMethodException e) { return false; }
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <K, V> LinkedHashMap<K, V> roundTrip(LinkedHashMap<K, V> m) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(m); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (LinkedHashMap<K, V>) ois.readObject();
+        }
     }
 
     static void testWhiteBox() throws Exception {
@@ -135,6 +164,58 @@ public class LinkedHashMapTest {
               "reversed() view order");
     }
 
+    // ---- contract deep-dive (constructor matrix / clone / serialization /
+    //      cross-impl equals) ------------------------------------------------
+
+    static void testConstructorMatrix() {
+        checkThrows(IllegalArgumentException.class, () -> new LinkedHashMap<String, Integer>(-1),
+                    "LinkedHashMap(-1) IAE");
+        checkThrows(IllegalArgumentException.class, () -> new LinkedHashMap<String, Integer>(1, 0.0f),
+                    "LinkedHashMap(1, 0.0f) IAE");
+        checkThrows(IllegalArgumentException.class, () -> new LinkedHashMap<String, Integer>(1, Float.NaN),
+                    "LinkedHashMap(1, NaN) IAE");
+        checkThrows(NullPointerException.class, () -> new LinkedHashMap<String, Integer>((Map<String, Integer>) null),
+                    "LinkedHashMap(null Map) NPE");
+    }
+
+    static void testClone() {
+        LinkedHashMap<String, Integer> m = new LinkedHashMap<>();
+        m.put("a", 1);
+        m.put("b", 2);
+        @SuppressWarnings("unchecked")
+        LinkedHashMap<String, Integer> clone = (LinkedHashMap<String, Integer>) m.clone();
+        check(clone != m && clone.equals(m), "clone distinct and equal");
+        check(new ArrayList<>(clone.keySet()).equals(Arrays.asList("a", "b")), "clone preserves order");
+        clone.put("c", 3);
+        check(clone.size() == 3 && m.size() == 2, "clone structural independence");
+    }
+
+    static void testSerialization() throws Exception {
+        LinkedHashMap<String, Integer> m = new LinkedHashMap<>();
+        m.put("a", 1);
+        m.put("b", 2);
+        LinkedHashMap<String, Integer> r = roundTrip(m);
+        check(r != m && r.equals(m), "round-trip distinct and equal");
+        check(new ArrayList<>(r.keySet()).equals(Arrays.asList("a", "b")), "round-trip preserves order");
+        r.put("c", 3);
+        check(r.size() == 3 && m.size() == 2, "round-trip result independent");
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(LinkedHashMap.class);
+        check(osc.getSerialVersionUID() == 3801124242820219131L, "LinkedHashMap serialVersionUID stable");
+    }
+
+    static void testCrossImplEquals() {
+        LinkedHashMap<String, Integer> lhm = new LinkedHashMap<>();
+        lhm.put("a", 1);
+        lhm.put("b", 2);
+        HashMap<String, Integer> hm = new HashMap<>();
+        hm.put("b", 2);
+        hm.put("a", 1);
+        check(lhm.equals(hm) && hm.equals(lhm), "LinkedHashMap/HashMap equals order-independent");
+        check(lhm.hashCode() == hm.hashCode(), "hashCode equal across implementations");
+        hm.put("c", 3);
+        check(!lhm.equals(hm), "!equals different content");
+    }
+
     static void testBlackBox() {
         LinkedHashMap<String, Integer> a = new LinkedHashMap<>(16, 0.75f);
         a.put("x", 1);
@@ -209,6 +290,10 @@ public class LinkedHashMapTest {
         testRemoveEldestEntry();
         testSequencedMapOps();
         testBlackBox();
+        testConstructorMatrix();
+        testClone();
+        testSerialization();
+        testCrossImplEquals();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

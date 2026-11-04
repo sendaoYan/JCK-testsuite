@@ -16,8 +16,14 @@
  * 5. 边界：null 允许并保持插入位置；add 重复返回 false。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.SequencedSet;
 import java.util.Set;
@@ -33,6 +39,30 @@ public class LinkedHashSetTest {
     static boolean hasMethod(Class<?> c, String name, Class<?>... p) {
         try { c.getMethod(name, p); return true; }
         catch (NoSuchMethodException e) { return false; }
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <E> LinkedHashSet<E> roundTrip(LinkedHashSet<E> s) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(s); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (LinkedHashSet<E>) ois.readObject();
+        }
     }
 
     static void testWhiteBox() throws Exception {
@@ -88,6 +118,52 @@ public class LinkedHashSetTest {
         check(!a.equals(b), "!equals different content");
     }
 
+    // ---- contract deep-dive (constructor matrix / clone / serialization /
+    //      cross-impl equals) ------------------------------------------------
+
+    static void testConstructorMatrix() {
+        checkThrows(IllegalArgumentException.class, () -> new LinkedHashSet<String>(-1),
+                    "LinkedHashSet(-1) IAE");
+        checkThrows(IllegalArgumentException.class, () -> new LinkedHashSet<String>(1, 0.0f),
+                    "LinkedHashSet(1, 0.0f) IAE");
+        checkThrows(IllegalArgumentException.class, () -> new LinkedHashSet<String>(1, Float.NaN),
+                    "LinkedHashSet(1, NaN) IAE");
+        checkThrows(NullPointerException.class, () -> new LinkedHashSet<String>((Collection<String>) null),
+                    "LinkedHashSet(null Collection) NPE");
+        LinkedHashSet<String> copy = new LinkedHashSet<>(Arrays.asList("c", "a", "b"));
+        check(new ArrayList<>(copy).equals(Arrays.asList("c", "a", "b")),
+              "LinkedHashSet(Collection) preserves order");
+    }
+
+    static void testClone() {
+        LinkedHashSet<String> s = new LinkedHashSet<>(Arrays.asList("a", "b"));
+        @SuppressWarnings("unchecked")
+        LinkedHashSet<String> clone = (LinkedHashSet<String>) s.clone();
+        check(clone != s && clone.equals(s), "clone distinct and equal");
+        clone.add("c");
+        check(clone.size() == 3 && s.size() == 2, "clone structural independence");
+    }
+
+    static void testSerialization() throws Exception {
+        LinkedHashSet<String> s = new LinkedHashSet<>(Arrays.asList("a", "b", "c"));
+        LinkedHashSet<String> r = roundTrip(s);
+        check(r != s && r.equals(s), "round-trip distinct and equal");
+        check(new ArrayList<>(r).equals(Arrays.asList("a", "b", "c")), "round-trip preserves order");
+        r.add("d");
+        check(r.size() == 4 && s.size() == 3, "round-trip result independent");
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(LinkedHashSet.class);
+        check(osc.getSerialVersionUID() == -2851667679971038690L, "LinkedHashSet serialVersionUID stable");
+    }
+
+    static void testCrossImplEquals() {
+        LinkedHashSet<String> lhs = new LinkedHashSet<>(Arrays.asList("a", "b", "c"));
+        HashSet<String> hs = new HashSet<>(Arrays.asList("c", "a", "b"));
+        check(lhs.equals(hs) && hs.equals(lhs), "LinkedHashSet/HashSet equals order-independent");
+        check(lhs.hashCode() == hs.hashCode(), "hashCode equal across implementations");
+        hs.add("d");
+        check(!lhs.equals(hs), "!equals different content");
+    }
+
     static void testBlackBox() {
         LinkedHashSet<String> a = new LinkedHashSet<>(16, 0.75f);
         a.add("x");
@@ -116,6 +192,10 @@ public class LinkedHashSetTest {
         testSequencedOps();
         testEqualsHashCode();
         testBlackBox();
+        testConstructorMatrix();
+        testClone();
+        testSerialization();
+        testCrossImplEquals();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
