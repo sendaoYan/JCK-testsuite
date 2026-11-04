@@ -110,9 +110,83 @@ public class FormatterTest {
                 () -> f.format("%d", 1), "format after close throws FormatterClosedException");
     }
 
+    // ---- 本棒新增：完整契约覆盖 ----
+    static void testConstructorNullMatrix() {
+        Formatter a = new Formatter((Appendable) null, Locale.US);
+        check(a.out() instanceof StringBuilder, "Appendable null -> StringBuilder");
+        a.close();
+
+        Formatter b = new Formatter((Appendable) null);
+        check(b.out() instanceof StringBuilder, "Appendable null (default locale) -> StringBuilder");
+        b.close();
+
+        Formatter c = new Formatter((Locale) null);
+        c.format("%d", 1);
+        check("1".equals(c.toString()), "null Locale -> no localization");
+        c.close();
+
+        assertThrows(NullPointerException.class, () -> new Formatter((java.io.PrintStream) null),
+                "Formatter((PrintStream)null) NPE");
+        assertThrows(NullPointerException.class, () -> new Formatter((java.io.OutputStream) null),
+                "Formatter((OutputStream)null) NPE");
+        assertThrows(NullPointerException.class, () -> {
+            try { new Formatter((String) null); }
+            catch (java.io.FileNotFoundException e) { throw new AssertionError("unexpected FNFE", e); }
+        }, "Formatter((String)null) NPE");
+        assertThrows(NullPointerException.class, () -> {
+            try { new Formatter((java.io.File) null); }
+            catch (java.io.FileNotFoundException e) { throw new AssertionError("unexpected FNFE", e); }
+        }, "Formatter((File)null) NPE");
+        assertThrows(NullPointerException.class, () -> {
+            try { new Formatter(new java.io.ByteArrayOutputStream(), (String) null); }
+            catch (java.io.UnsupportedEncodingException e) { throw new AssertionError("unexpected UEE", e); }
+        }, "Formatter(os, null charset) NPE");
+    }
+
+    static void testFormatLocaleOverride() {
+        StringBuilder sb = new StringBuilder();
+        Formatter f = new Formatter(sb, Locale.US);
+        f.format(Locale.US, "%.2f", 3.14159);
+        check("3.14".equals(sb.toString()), "format(Locale,...) override");
+        check(f.locale() == Locale.US, "locale unchanged after format(Locale,...)");
+        f.close();
+    }
+
+    static void testRelativeIndex() {
+        Formatter f = new Formatter(Locale.ROOT);
+        f.format("%d %<d", 5);
+        check("5 5".equals(f.toString()), "relative index <");
+        f.close();
+    }
+
+    static void testFlushCloseIdempotent() {
+        StringBuilder sb = new StringBuilder();
+        Formatter f = new Formatter(sb, Locale.US);
+        f.format("x");
+        f.flush();
+        check(f.ioException() == null, "ioException() null before close");
+        f.close();
+        f.close();
+        check(f.ioException() == null, "ioException() null after clean close");
+        assertThrows(FormatterClosedException.class, () -> f.flush(), "flush after close FCE");
+    }
+
+    static void testIllegalFormatFlags() {
+        Formatter f = new Formatter(Locale.US);
+        assertThrows(java.util.IllegalFormatFlagsException.class, () -> f.format("%-05d", 1),
+                "- and 0 flags conflict -> IllegalFormatFlagsException");
+        assertThrows(NullPointerException.class, () -> f.format((String) null), "format(null) NPE");
+        f.close();
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstructorNullMatrix();
+        testFormatLocaleOverride();
+        testRelativeIndex();
+        testFlushCloseIdempotent();
+        testIllegalFormatFlags();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

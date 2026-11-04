@@ -127,9 +127,91 @@ public class ScannerTest {
         assertThrows(IllegalStateException.class, s::nextInt, "nextInt after close throws IllegalStateException");
     }
 
+    // ---- 本棒新增：完整契约覆盖 ----
+    static void testConstructorNullMatrix() {
+        assertThrows(NullPointerException.class, () -> new Scanner((Readable) null),
+                "Scanner((Readable)null) NPE");
+        assertThrows(NullPointerException.class, () -> new Scanner((java.io.InputStream) null),
+                "Scanner((InputStream)null) NPE");
+        assertThrows(NullPointerException.class, () -> new Scanner((String) null),
+                "Scanner((String)null) NPE");
+        assertThrows(NullPointerException.class,
+                () -> new Scanner((java.io.InputStream) null, "UTF-8"),
+                "Scanner((InputStream)null,charset) NPE");
+    }
+
+    static void testNullSetters() {
+        Scanner s = new Scanner("x");
+        assertThrows(NullPointerException.class, () -> s.useDelimiter((String) null),
+                "useDelimiter((String)null) NPE");
+        assertThrows(NullPointerException.class, () -> s.useLocale(null), "useLocale(null) NPE");
+    }
+
+    static void testRemoveUnsupported() {
+        assertThrows(UnsupportedOperationException.class, () -> new Scanner("a b").remove(),
+                "remove() UOE");
+    }
+
+    static void testIoException() {
+        Scanner s = new Scanner("1 2");
+        check(s.ioException() == null, "ioException() null for String source");
+        s.close();
+    }
+
+    static void testMatchAndToString() {
+        Scanner s = new Scanner("hello 42");
+        check(s.hasNext("hello"), "hasNext(pattern)");
+        check("hello".equals(s.next("hello")), "next(pattern)");
+        check(s.match() != null && "hello".equals(s.match().group()), "match() returns last match");
+        check(s.toString() != null && s.toString().length() > 0, "toString non-empty");
+        check(s.hasNextInt() && s.nextInt() == 42, "nextInt after match");
+    }
+
+    static void testFindWithinHorizonAndSkip() {
+        Scanner s = new Scanner("abc123def");
+        check("123".equals(s.findInLine("\\d+")), "findInLine digits");
+        check("def".equals(s.findWithinHorizon("\\w+", 3)), "findWithinHorizon");
+
+        Scanner s2 = new Scanner("skip these numbers 42");
+        s2.skip("skip these numbers ");
+        check(s2.nextInt() == 42, "skip(pattern) then nextInt");
+    }
+
+    static void testPrimitiveVariants() {
+        Scanner s = new Scanner("42 7 9223372036854775807 true FALSE 3.25 255 12345678901234567890");
+        check(s.nextByte() == 42, "nextByte");
+        check(s.nextShort() == 7, "nextShort");
+        check(s.nextLong() == Long.MAX_VALUE, "nextLong");
+        check(s.nextBoolean(), "nextBoolean true");
+        check(!s.nextBoolean(), "nextBoolean FALSE (case-insensitive)");
+        s.useLocale(java.util.Locale.US);
+        check(s.nextFloat() == 3.25f, "nextFloat");
+        check(s.nextBigInteger().intValue() == 255, "nextBigInteger");
+        check("12345678901234567890".equals(s.nextBigDecimal().toPlainString()), "nextBigDecimal");
+    }
+
+    static void testResetSemantics() {
+        Scanner s = new Scanner("10");
+        s.useRadix(16);
+        s.useLocale(java.util.Locale.US);
+        s.useDelimiter("X");
+        s.reset();
+        check(s.radix() == 10, "reset restores radix 10");
+        check(s.locale().equals(java.util.Locale.getDefault()), "reset restores default locale");
+        check(s.delimiter().pattern() != null, "reset restores default delimiter");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstructorNullMatrix();
+        testNullSetters();
+        testRemoveUnsupported();
+        testIoException();
+        testMatchAndToString();
+        testFindWithinHorizonAndSkip();
+        testPrimitiveVariants();
+        testResetSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
