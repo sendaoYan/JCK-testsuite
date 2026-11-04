@@ -1,6 +1,8 @@
 /*
  * @test
- * @summary java.util.EventListenerProxy API conformance: getListener.
+ * @summary java.util.EventListenerProxy API conformance (Java 8 surface): complete contract
+ *          coverage of the constructor (stores listener verbatim, null allowed) and getListener()
+ *          returning the exact stored instance.
  * @run main EventListenerProxyTest
  */
 
@@ -31,8 +33,16 @@ public class EventListenerProxyTest {
         check(p.getListener() == listener, "getListener");
     }
 
+    static void testNullListener() {
+        // Constructor does not null-check; null listener is stored and returned.
+        EventListenerProxy<MyListener> p = new Proxy(null);
+        check(p.getListener() == null, "null listener stored verbatim");
+        check(p instanceof EventListener, "still an EventListener");
+    }
+
     public static void main(String[] args) {
         testEventListenerProxy();
+        testNullListener();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

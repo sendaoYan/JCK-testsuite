@@ -15,6 +15,16 @@ public class StringJoinerTest {
         passed++;
     }
 
+    static void assertThrows(Class<? extends Throwable> exType, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (exType.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (threw " + t + ")");
+        }
+        throw new AssertionError(msg + " (no exception)");
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.StringJoiner");
@@ -74,9 +84,34 @@ public class StringJoinerTest {
         check("none".equals(empty.toString()), "merging empty joiners keeps emptyValue");
     }
 
+    // ---- 本棒新增：null 契约 ----
+    static void testNullContracts() {
+        assertThrows(NullPointerException.class, () -> new StringJoiner(null),
+                "StringJoiner((CharSequence)null) NPE");
+        assertThrows(NullPointerException.class, () -> new StringJoiner(",", null, "]"),
+                "StringJoiner(null prefix) NPE");
+        assertThrows(NullPointerException.class, () -> new StringJoiner(null, "[", "]"),
+                "StringJoiner(null delimiter) NPE");
+        assertThrows(NullPointerException.class, () -> new StringJoiner(",", "[", null),
+                "StringJoiner(null suffix) NPE");
+        assertThrows(NullPointerException.class, () -> new StringJoiner(",").setEmptyValue(null),
+                "setEmptyValue(null) NPE");
+        assertThrows(NullPointerException.class, () -> new StringJoiner(",").merge(null),
+                "merge(null) NPE");
+
+        // add(null) appends the literal "null"; add("") makes the joiner non-empty.
+        StringJoiner sj = new StringJoiner(",");
+        sj.add(null);
+        check("null".equals(sj.toString()), "add(null) -> \"null\"");
+        StringJoiner sj2 = new StringJoiner(",").setEmptyValue("EMPTY");
+        sj2.add("");
+        check("".equals(sj2.toString()), "add(\"\") non-empty with empty element");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNullContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

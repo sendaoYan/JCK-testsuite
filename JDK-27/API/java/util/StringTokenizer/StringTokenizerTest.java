@@ -112,9 +112,18 @@ public class StringTokenizerTest {
                 "nextElement exhausted throws NoSuchElementException");
     }
 
+    static void testNextTokenSwitchDelim() {
+        StringTokenizer st = new StringTokenizer("a-b+c", "-");
+        check("a".equals(st.nextToken()), "token a with -");
+        // switching delimiter set to "+": "-" becomes an ordinary character.
+        check("-b".equals(st.nextToken("+")), "nextToken(+,) token -b");
+        check("c".equals(st.nextToken()), "token c with +");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNextTokenSwitchDelim();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
