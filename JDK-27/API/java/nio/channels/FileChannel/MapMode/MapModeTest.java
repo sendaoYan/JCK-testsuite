@@ -6,7 +6,10 @@
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -86,9 +89,72 @@ public class MapModeTest {
         }
     }
 
+    // ---- A5 white-box additions: structure of the MapMode class ----
+    static void testWhiteBoxA5() throws Exception {
+        Class<?> c = Class.forName("java.nio.channels.FileChannel$MapMode");
+        check(c.getSuperclass() == Object.class, "extends Object directly");
+        check(!java.lang.Enum.class.isAssignableFrom(c), "not a java.lang.Enum subtype");
+        int publicStaticFinal = 0;
+        for (Field f : c.getFields())
+            if (Modifier.isPublic(f.getModifiers()) && Modifier.isStatic(f.getModifiers())
+                    && Modifier.isFinal(f.getModifiers()))
+                publicStaticFinal++;
+        check(publicStaticFinal == 3, "exactly the three exported constants");
+        check(c.getFields().length == 3, "no other public fields");
+        boolean privateCtor = true;
+        for (Constructor<?> ct : c.getDeclaredConstructors())
+            if (!Modifier.isPrivate(ct.getModifiers())) privateCtor = false;
+        check(privateCtor && c.getDeclaredConstructors().length == 1,
+              "single private ctor MapMode(String) (javap 实测)");
+        boolean enumStyle = false;
+        for (Method m : c.getMethods())
+            if (m.getName().equals("values") || m.getName().equals("valueOf")) enumStyle = true;
+        check(!enumStyle, "no enum-style values()/valueOf() methods");
+        check(Modifier.isPublic(c.getModifiers()), "public class");
+        check(!Modifier.isAbstract(c.getModifiers()), "concrete class");
+    }
+
+    // ---- A5 black-box additions: constant identity / equals / hashCode / subrange map ----
+    static void testBlackBoxA5() throws Exception {
+        check(FileChannel.MapMode.READ_ONLY.equals(FileChannel.MapMode.READ_ONLY), "self equals");
+        check(!FileChannel.MapMode.READ_ONLY.equals(FileChannel.MapMode.READ_WRITE), "distinct not equal");
+        check(!FileChannel.MapMode.READ_ONLY.equals(FileChannel.MapMode.PRIVATE), "READ_ONLY != PRIVATE");
+        check(!FileChannel.MapMode.READ_WRITE.equals(FileChannel.MapMode.PRIVATE), "READ_WRITE != PRIVATE");
+        check(!FileChannel.MapMode.PRIVATE.equals(null), "equals(null) false");
+        check(!FileChannel.MapMode.READ_ONLY.equals("READ_ONLY"), "not equal to same-named String");
+        check(FileChannel.MapMode.READ_ONLY.hashCode() == FileChannel.MapMode.READ_ONLY.hashCode(),
+              "hashCode stable across calls");
+        check(FileChannel.MapMode.READ_ONLY.getClass() == FileChannel.MapMode.PRIVATE.getClass(),
+              "all three constants share the MapMode class");
+
+        Path dir = Files.createTempDirectory("jck-a5-mm");
+        try {
+            Path file = dir.resolve("mm2.bin");
+            Files.write(file, new byte[] {10, 20, 30, 40});
+            try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+                check(ch.map(FileChannel.MapMode.READ_ONLY, 2, 2).capacity() == 2,
+                      "subrange map honours position+size");
+                ByteBuffer slice = ch.map(FileChannel.MapMode.READ_ONLY, 1, 2);
+                check(slice.get(0) == 20 && slice.get(1) == 30, "subrange content starts at position");
+            }
+            try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ,
+                    StandardOpenOption.WRITE)) {
+                MappedByteBuffer pv = ch.map(FileChannel.MapMode.PRIVATE, 0, 4);
+                pv.put(2, (byte) 88);
+                pv.force();
+                check(pv.get(2) == 88, "PRIVATE map sees its own write");
+                check(Files.readAllBytes(file)[2] == 30, "PRIVATE subrange write not visible in file");
+            }
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testWhiteBoxA5();
+        testBlackBoxA5();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

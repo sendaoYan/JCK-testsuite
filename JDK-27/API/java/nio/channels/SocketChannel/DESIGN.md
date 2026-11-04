@@ -33,3 +33,20 @@ TCP 客户端通道：阻塞/非阻塞 connect+finishConnect、读写、scatter/
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：53 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 状态机矩阵：未连接 read/write → NotYetConnectedException；无 pending 的 finishConnect →
+  NoConnectionPendingException；已连接再 connect → AlreadyConnectedException；pending 期间再 connect →
+  ConnectionPendingException；连接被拒 → java.net.ConnectException。
+- 非阻塞 connect 三态流（pending ↔ !completedNow、OP_CONNECT 就绪、finishConnect 收尾）。
+- 8 字节 + 64KiB 双向**字节精确**回环；非阻塞写推进（对端非阻塞排水 + 有界自旋 20 万次）。
+- 对端关闭 → select 就绪 + read -1 粘性；shutdownInput → read -1。
+- shutdownOutput 后 write：**版本差异**——JDK-8 抛精确 ClosedChannelException、JDK-27 抛精确
+  AsynchronousCloseException，双侧各自断言并在代码互注释。
+- socket() 适配器：同一性/端口/流回环；非阻塞模式流式读写 → IllegalBlockingModeException。
+- Buffer 契约：write(null)/read(null) → NPE；read 入只读 → IAE；write 出只读视图合法。
+- 关闭后 read/write/connect/finishConnect/bind/getOption → ClosedChannelException。
+
+本机实测断言数：136 条（深化前 37）。

@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：19 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 15 → 31）：testDeepened（注入）：相对 READ 通道往返、NOFOLLOW_LINKS 视图、嵌套
+NOFOLLOW 流、负例精确类型（deleteDirectory 非空 -> DirectoryNotEmptyException、缺失 ->
+NoSuchFileException、deleteFile 目录 -> FileSystemException）、close 后 deleteFile ->
+ClosedDirectoryStreamException；实测修正：getFileAttributeView 在流 close 后返回惰性视图不抛
+（任务书假设抛异常被推翻，改断言惰性语义）。

@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：18 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 19 → 58）：glob 矩阵（** 跨段、**/*.java 至少一层、[abc]/[!abc]、? 恰一字符、
+大小写敏感、绝对路径 glob:/tmp/*.txt、空模式匹配空路径）；regex 矩阵（锚定、分组、转义、
+[/] 类、尾随分隔符被规范化）；工厂负例精确类型（未知语法 -> UnsupportedOperationException
+[探针修正，任务书猜 IAE]、null -> NPE、""/无冒号/":" -> IllegalArgumentException、畸形 ->
+PatternSyntaxException[IAE 子类]）；工厂新实例等价性；与 Paths.get 实例互操作。

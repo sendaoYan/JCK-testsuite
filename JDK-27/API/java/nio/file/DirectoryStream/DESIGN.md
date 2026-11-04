@@ -33,3 +33,10 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：13 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 14 → 28）：与 JDK-8 侧同套（无 "."/".."、glob 大小写敏感、Filter IOException ->
+DirectoryIteratorException 且 cause 同对象、RuntimeException 原样传播、close 后 iterator() ->
+IllegalStateException / 已取 iterator.next() -> NoSuchElementException、iterator.remove -> UOE、
+NotDirectoryException/NoSuchFileException/NPE 精确类型、glob 大括号备选、大小写保留）。

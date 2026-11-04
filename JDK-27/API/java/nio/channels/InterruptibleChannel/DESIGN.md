@@ -33,3 +33,15 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：11 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 6 个实现类赋值矩阵（SocketChannel/ServerSocketChannel/DatagramChannel/Pipe 两端/FileChannel）。
+- 阻塞 read + interrupt → 精确 ClosedByInterruptException + 通道关闭 + **线程中断状态保留**；
+  阻塞 read + close → 精确 AsynchronousCloseException（回环连接对，对端静默确保真阻塞）。
+- 阻塞 accept + interrupt/close、阻塞 receive + interrupt 同语义。
+- 全部有界：latch 确认启动 + parkNanos(300ms) 稳定 + join(10_000) 超时即失败。
+- spi.AbstractInterruptibleChannel 属 A7 批次，未触碰。
+
+本机实测断言数：34 条（深化前 12）。

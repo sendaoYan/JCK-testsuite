@@ -28,3 +28,11 @@
 - 文件类用例全部 `Files.createTempDirectory("jck")` + finally 递归删除。
 - 平台相关能力以运行时能力守护，不支持时跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：28 条。
+
+### 4.1 A5 契约深化追加
+
+新增 testInputStreamAdapter（available==remaining、单字节精确、批量到 EOF、len0、3 组越界、reset ->
+IOException、markSupported false、skip 截断/EOF、关闭后读 CCE、双关无害）、testOutputStreamAdapter
+（off/len 切片、flush 保开、关闭后 flush OK/写 CCE、READ 通道 NonWritable）、testReaderWriterDeep
+（CJK+emoji 往返、minBuffer=4、REPLACE 解码、writer 关通道）、testChannelAdapters（JDK-8 实测：适配器
+close 后读仍委托底层流）、testOverloadSurface（JDK-8 无 Charset 重载，2+2）。断言数 28→82 条（JDK-8 实测）。

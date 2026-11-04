@@ -32,3 +32,17 @@ AlreadyBoundException：java.nio.channels 包的运行时/受检异常，报告�
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：6 条。
+
+
+### 批次 A8 深化（第 4 部分补充）
+
+在既有白盒/黑盒之上新增契约级四件套（与 JDK-8 侧等价；全部条目先经探针在 JDK-8(8u372) 与
+JDK-27(27.0.1) 双侧实测，行为一致处不再注明）：
+1. 白盒层级：直接父类 == IllegalStateException（javap 双侧实证）、继承链、Serializable、FQN。
+2. 构造矩阵：唯一无参公共构造器（反射）、message null、toString 裸类名。
+3. 序列化：serialVersionUID == 6796072983322737592L（双侧一致）+ round-trip 类型/消息/cause/suppressed/栈深保持。
+4. 真实触发：SSC bind 两次：null 与显式地址、阻塞与非阻塞模式全覆盖；断言异常后原绑定端口保持、channel 仍 open。
+5. Throwable 契约：initCause 一次性（二次 ISE/self IAE）、fillInStackTrace 返回 this、构造捕获栈帧、
+   suppressed 空表 + addSuppressed、throw/catch 身份保持。
+- checkThrows 断言精确类型（getClass() == expected）；触发场景全回环/临时文件，daemon 线程 join 带超时。
+- 断言数 7 → 51 条。

@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：33 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testConnectStateContract/testReadWriteContract/testPendingAndCloseContract/testSurfaceContract/testChannelBasicsContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：ConnectionPendingException（双 connect 同步抛）、NotYetConnectedException、AlreadyConnectedException、ReadPendingException（挂起读+二次读）、WritePendingException（分块写饱和至 !isDone 后二次写）、IllegalArgumentException（只读缓冲/负 position）、shutdownOutput 后对端 read 返回 -1（EOF）
+- 确定性与健壮性：确定性构造：回环地址+临时端口；无数据+长超时构造挂起读；256KB 分块写至 future 未完成构造挂起写；挂起操作 + close → AsynchronousCloseException（handler failed 与 Future ExecutionException.getCause 双通道）。
+- 版本差异（按侧断言）：异步 close 的失败经 Future（ExecutionException cause=ClosedChannelException/AsynchronousCloseException）与 handler failed() 交付，同步方法不抛；写大缓冲区可部分完成后挂起（非一次挂起）。
+- 本机实测断言数：24 → 102 条。

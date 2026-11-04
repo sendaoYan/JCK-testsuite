@@ -64,9 +64,51 @@ public class ModifierTest {
         }
     }
 
+    // ---- appended: interface shape + empty/unknown modifier matrix (measured) ----
+    static void testShapeAndEdges() throws Exception {
+        Class<?> c = Class.forName("java.nio.file.WatchEvent$Modifier");
+        java.lang.reflect.Method[] declared = c.getDeclaredMethods();
+        check(declared.length == 1, "exactly one declared method");
+        check(java.lang.reflect.Modifier.isAbstract(declared[0].getModifiers()),
+              "name() is abstract");
+        check(c.getTypeParameters().length == 0, "not generic");
+        check(c.getInterfaces().length == 0, "no parent interfaces");
+        check(SensitivityWatchEventModifier.values().length == 3,
+              "three sensitivity levels (measured)");
+        check("MEDIUM".equals(SensitivityWatchEventModifier.MEDIUM.name()),
+              "MEDIUM sensitivity name");
+
+        Path dir = Files.createTempDirectory("jck");
+        try (WatchService ws = FileSystems.getDefault().newWatchService()) {
+            // empty modifier array is always fine
+            java.nio.file.WatchKey plain = dir.register(ws,
+                    new java.nio.file.WatchEvent.Kind<?>[] { StandardWatchEventKinds.ENTRY_CREATE },
+                    new Modifier[0]);
+            check(plain != null && plain.isValid(), "empty modifier array accepted");
+            plain.cancel();
+
+            // unknown modifier is rejected with the exact message (measured)
+            Modifier bogus = new Modifier() {
+                public String name() { return "JCK_BOGUS_MOD"; } };
+            boolean uoe = false;
+            String msg = null;
+            try {
+                dir.register(ws,
+                        new java.nio.file.WatchEvent.Kind<?>[] { StandardWatchEventKinds.ENTRY_CREATE },
+                        new Modifier[] { bogus });
+            } catch (UnsupportedOperationException e) { uoe = true; msg = e.getMessage(); }
+            check(uoe, "unknown modifier -> UnsupportedOperationException");
+            check("Modifier not supported".equals(msg),
+                  "message is 'Modifier not supported' (measured)");
+        } finally {
+            Files.deleteIfExists(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testShapeAndEdges();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -33,3 +33,15 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：24 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- sink()/source() 多次调用同一对象；两端 validOps/阻塞翻转/provider。
+- 16 字节 FIFO 精确 + gather/scatter 跨缓冲顺序；非阻塞：source read 0、sink 小写完成。
+- Selector 集成：写入后 OP_READ 就绪；sink 注册后立即 OP_WRITE 就绪。
+- 半关闭语义：sink 关闭 → source 排空后 read -1 粘性；source 关闭 → sink 写最终
+  精确 java.io.IOException（Broken pipe，4096x64KiB 有界写触发，不依赖内核缓冲）。
+- 两端各自关闭后操作 → ClosedChannelException；重复关闭幂等。
+
+本机实测断言数：47 条（深化前 23）。

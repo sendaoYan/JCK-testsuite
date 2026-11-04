@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：15 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：take() 契约（就绪即返、daemon 线程 close 唤醒→ClosedWatchServiceException latch+join 有界）；注册失败矩阵（缺失目录 NoSuchFileException/普通文件 NotDirectoryException/单独 OVERFLOW IAE 实测/OVERFLOW+真实事件合法）；poll 边界（poll(0,SECONDS) 即返 null、poll(1,null) NPE）；服务隔离与互不影响；接口形态（声明方法恰 4 个 poll()/poll(long,TimeUnit)/take()/close() 双侧实测一致、返回型精确、newWatchService 每次返回全新实例、closed 后 timed poll 同样 ClosedWatchServiceException）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

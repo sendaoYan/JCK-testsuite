@@ -33,3 +33,17 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：8 条。
+
+### 第 4 部分补充（批次 A12 契约深化）
+
+在既有白盒+黑盒基础上追加 `testContract()`（及 FileAttribute 的 `testContract2()`），契约维度扩至：
+- 从文件属性发现当前组→lookup 往返；instanceof 三层；toString==name；重复查找等值；
+- 用户/组主体同名亦不等（Unix 实现类型区分，对称）；setGroup(查得组) 往返；
+  自定义实现 setGroup→ProviderMismatch；缺失组名→UPNFE（JDK-27 实测 getName 为空串，版本差异）；
+  null NPE、空名 UPNFE。
+
+健壮性：新增用例仍走临时目录 + finally 递归清理；权限/属主/DOS 位修改类断言先恢复再删；
+负例用 checkThrows/checkThrowsIO 断言精确异常类型（IO 路径用 IORunnable 变体）；
+平台实测事实（Linux ext4：acl 视图不可用、dos/user 视图可用、dos 属性经 user.DOSATTRIB xattr
+模拟且 readonly 不被内核强制、creationTime 为模拟值、ctime 不可设置）在断言处注释。
+JDK-27 侧实测断言数：28 条。

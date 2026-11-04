@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：14 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testSignatureContract/testBehaviourThroughInterface。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：getDeclaredMethods 恰 4 个且全部抽象；接口面读写/关闭语义与具体通道一致；AsynchronousFileChannel（positioned）与同步 SocketChannel 不实现本接口
+- 确定性与健壮性：以 AsynchronousSocketChannel 为实现，经接口引用完成 Future/handler 双形式读写与 close。
+- 版本差异（按侧断言）：无版本差异（方法面双侧一致）。
+- 本机实测断言数：14 → 37 条。

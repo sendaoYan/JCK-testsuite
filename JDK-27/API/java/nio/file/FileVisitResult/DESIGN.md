@@ -33,3 +33,10 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：13 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 11 → 34）：与 JDK-8 侧同套（ordinal 0..3 声明序、values 克隆、valueOf 负例 IAE/
+NPE、EnumSet 矩阵；行为矩阵：SKIP_SIBLINGS@pre -> [pre]、SKIP_SUBTREE@visitFile ≈ CONTINUE、
+TERMINATE@pre -> [pre]、SKIP_SIBLINGS@visitFile -> [pre,file,post]、TERMINATE@visitFile ->
+[pre,file] 无 post——探针 Probe8 双侧实测一致）。

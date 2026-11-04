@@ -32,3 +32,12 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：11 条。
+
+
+### 第 4 部分补充（批次 A11 契约深化）
+
+在既有用例之上新增 testContract* 系列（构造矩阵 / getMessage-null 分支矩阵 / initCause 一次性 / serialVersionUID 4355821422286746137 + round-trip / 真实触发 / 精确负例）：
+
+- 真实触发：Paths.get/FileSystem.getPath("a\u0000b")：input 回显、reason="Nul character not allowed"、index=-1、消息精确；Paths.get(null)→NPE；合法路径对照。
+- 断言计数更新（JDK-8 侧 / JDK-27 侧）：42 / 47 条（`PASS (N assertions)` 实测）。
+- 健壮性：临时目录 + finally 递归清理；权限用例 finally 恢复；能力守护（root/跨 store/zip provider）NOTE 跳过不判失败。

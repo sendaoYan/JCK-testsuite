@@ -8,6 +8,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.WatchService;
 import java.util.Set;
 
 public class FileSystemTest {
@@ -16,6 +17,20 @@ public class FileSystemTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    interface Op { void run() throws Exception; }
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    static void checkThrows(Class<? extends Throwable> ex, Op r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -90,9 +105,94 @@ public class FileSystemTest {
         check(FileSystems.getDefault() == fs, "default fs is a singleton");
     }
 
+    // ===== deepened contract coverage (batch A9) =====
+    static void testContractMatrix() throws Exception {
+        FileSystem fs = FileSystems.getDefault();
+
+        // separator: "/" on Linux (Unix contract; also equals File.separator)
+        check("/".equals(fs.getSeparator()), "separator is / on Linux");
+        check(fs.getSeparator().equals(java.io.File.separator), "separator matches File.separator");
+
+        // getPath: joining, empty, null matrix
+        check(fs.getPath("a", "b", "c").equals(java.nio.file.Paths.get("a/b/c")), "getPath joins like Paths.get");
+        check(fs.getPath("x").getNameCount() == 1, "getPath single segment");
+        check(fs.getPath("").getNameCount() == 1, "getPath empty string is the empty path");
+        check(fs.getPath("a/b").equals(fs.getPath("a", "b")), "getPath single equals multi");
+        checkThrows(NullPointerException.class, () -> fs.getPath(null), "getPath(null) NPE");
+        checkThrows(NullPointerException.class,
+              () -> fs.getPath("a", new String[] {null}), "getPath(null element) NPE");
+
+        // root directories: exactly "/" on Linux
+        java.util.List<Path> roots = new java.util.ArrayList<>();
+        for (Path r : fs.getRootDirectories()) roots.add(r);
+        check(roots.size() == 1, "exactly one root on Linux");
+        check("/".equals(roots.get(0).toString()), "root is /");
+        check(roots.get(0).isAbsolute(), "root is absolute");
+
+        // file stores: first store must expose name and type
+        int storeCount = 0;
+        java.nio.file.FileStore first = null;
+        for (java.nio.file.FileStore s : fs.getFileStores()) {
+            storeCount++;
+            if (first == null) first = s;
+        }
+        check(storeCount >= 1, "at least one file store");
+        check(first != null && !first.name().isEmpty(), "first store name non-empty");
+        check(first != null && !first.type().isEmpty(), "first store type non-empty");
+
+        // supported views (Linux: basic, owner, posix, user, unix)
+        Set<String> views = fs.supportedFileAttributeViews();
+        check(views.contains("basic"), "basic view");
+        check(views.contains("owner"), "owner view");
+        check(views.contains("posix"), "posix view on Linux");
+        check(views.contains("user"), "user view on Linux");
+        check(!views.contains("nope-view"), "unknown view not reported");
+
+        // path matcher factory negatives (positives covered by PathMatcherTest)
+        checkThrows(NullPointerException.class, () -> fs.getPathMatcher(null),
+              "getPathMatcher(null) NPE");
+        checkThrows(IllegalArgumentException.class, () -> fs.getPathMatcher(""),
+              "getPathMatcher(\"\") IAE (no syntax)");
+        checkThrows(IllegalArgumentException.class, () -> fs.getPathMatcher("*.java"),
+              "getPathMatcher without syntax prefix IAE");
+        check(fs.getPathMatcher("regex:.*") != null, "regex matcher factory");
+
+        // watch service lifecycle
+        WatchService ws = fs.newWatchService();
+        check(ws != null, "newWatchService non-null");
+        ws.close();
+        ws.close();
+        check(true, "watch service close idempotent");
+        checkThrows(java.nio.file.ClosedWatchServiceException.class, () -> ws.poll(),
+              "poll after close -> ClosedWatchServiceException");
+
+        // provider identity: default fs provider is the installed "file" provider
+        boolean identity = false;
+        java.util.List<String> schemes = new java.util.ArrayList<>();
+        for (java.nio.file.spi.FileSystemProvider p : java.nio.file.spi.FileSystemProvider.installedProviders()) {
+            schemes.add(p.getScheme());
+            if ("file".equals(p.getScheme()) && p == fs.provider()) identity = true;
+        }
+        check(identity, "fs.provider() is the installed 'file' provider (same object)");
+        check(schemes.contains("file"), "installedProviders contains 'file'");
+        check(schemes.contains("jar"), "installedProviders contains 'jar' (zipfs)");
+        // JDK-9+ ships the jrt filesystem provider (JDK-8 does not)
+        check(schemes.contains("jrt"), "JDK-27 installedProviders contains 'jrt'");
+
+        // close() on default fs: UnsupportedOperationException (probe-confirmed); still open
+        checkThrows(UnsupportedOperationException.class, () -> fs.close(),
+              "close default fs -> UnsupportedOperationException");
+        check(fs.isOpen(), "default fs still open after failed close");
+
+        // toString non-null and fs still usable
+        check(fs.toString() != null && !fs.toString().isEmpty(), "toString non-empty");
+        check(fs.getPath("after/close") != null, "usable after close attempt");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractMatrix();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

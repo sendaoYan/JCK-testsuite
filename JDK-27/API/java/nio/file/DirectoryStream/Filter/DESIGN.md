@@ -33,3 +33,8 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：7 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 8 → 26）：与 JDK-8 侧同套（accept 每候选恰一次、条目 parent == dir、IOException
+包装 cause 同对象、RuntimeException 不包装、DirectoryIteratorException 形状、精确选择集）。

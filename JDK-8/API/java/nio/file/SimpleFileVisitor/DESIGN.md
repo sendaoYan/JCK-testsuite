@@ -29,3 +29,12 @@ FileVisitor 的默认实现类 (具体类、受保护构造): 各回调默认 CO
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：10 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 11 → 33）：白盒：恰 4 个声明方法（为 FileVisitor 各方法提供默认实现）、全 public、
+无声明字段、protected 无参构造。实测修正：默认实现四个方法对 file/dir 与 attrs 参数均
+requireNonNull -> NullPointerException（任务书假设"忽略 null attrs"被运行结果推翻，改为断言精确
+NPE）；postVisitDirectory(dir, ioe) 按身份重抛同一 IOException 对象；子类 super.visitFileFailed
+先观察后重抛；SimpleFileVisitor<Object> 泛型实例化接受任意 T；全遍历计数
+（2 pre / 3 file / 2 post）；裸子类可完整走平坦树。

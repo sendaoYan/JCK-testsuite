@@ -24,3 +24,12 @@
 
 - 白盒：public / final / 父类 `Object` / 唯一声明构造器为 private / 恰好三个 public 常量。
 - 黑盒：三个常量的 `toString()`、两两不等、常量自等。
+
+### 第 4 部分增补（A3 批次：契约深化）
+
+1. **非枚举结构**: !isEnum、!Enum.isAssignableFrom、常量非 Enum 实例（Enum.class.isInstance）；
+   **无 values()/valueOf(String) 方法**（反射断言，typesafe enum 而非语言枚举）。
+2. **常量身份**: 三常量 == 恒等、equals 自反、hashCode 稳定、equals(null)/equals(自身 toString
+   字符串) false；三 toString 两两互异（补全既有精确值断言）。
+3. **配置往返**: 三 Action×decoder.onMalformedInput/encoder.onUnmappableCharacter 均返回
+   this+getter 精确回读；活对象上可切换（IGNORE→REPORT、REPLACE→IGNORE 各断言）。

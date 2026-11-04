@@ -153,9 +153,116 @@ public class FileLockTest {
         }
     }
 
+    // ---- A5 additions: final-method surface, full overlap matrix, zero-length semantics ----
+
+    /** Runnable that may throw checked exceptions (for negative cases). */
+    interface IO { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> type, IO r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (expected " + type.getSimpleName()
+                    + ", got " + t.getClass().getName() + ")");
+        }
+        throw new AssertionError(msg + " (no exception thrown)");
+    }
+
+    static void testWhiteBoxA5() throws Exception {
+        Class<?> c = FileLock.class;
+        check(Modifier.isFinal(c.getMethod("channel").getModifiers()), "channel() is final");
+        check(Modifier.isFinal(c.getMethod("position").getModifiers()), "position() is final");
+        check(Modifier.isFinal(c.getMethod("size").getModifiers()), "size() is final");
+        check(Modifier.isFinal(c.getMethod("isShared").getModifiers()), "isShared() is final");
+        check(Modifier.isFinal(c.getMethod("overlaps", long.class, long.class).getModifiers()),
+              "overlaps() is final");
+        check(Modifier.isFinal(c.getMethod("close").getModifiers()), "close() is final");
+        check(Modifier.isFinal(c.getMethod("toString").getModifiers()), "toString() is final");
+        check(Modifier.isAbstract(c.getMethod("isValid").getModifiers()), "isValid() abstract");
+        check(Modifier.isAbstract(c.getMethod("release").getModifiers()), "release() abstract");
+    }
+
+    static void testBlackBoxA5() throws Exception {
+        Path dir = Files.createTempDirectory("jck-a5-fl27");
+        try {
+            Path file = dir.resolve("lock27.bin");
+            Files.write(file, new byte[100]);
+            try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ,
+                    StandardOpenOption.WRITE)) {
+                FileLock lock = ch.tryLock(10, 10, false); // range [10,20)
+                // 常见两侧一致项 + JDK-27 零长差异（实测：零长查询在锁起点也视为重叠）
+                check(lock.overlaps(0, 0), "JDK-27: zero-length query at 0 -> true");
+                check(lock.overlaps(10, 0), "JDK-27: zero-length query at lock start -> true");
+                check(!lock.overlaps(20, 0), "zero-length query at end boundary -> false");
+                check(!lock.overlaps(25, 0), "zero-length query after range -> false");
+                check(lock.overlaps(10, Long.MAX_VALUE),
+                      "JDK-27: overlaps tolerates position+size overflow (实测)");
+
+                checkThrows(IllegalArgumentException.class,
+                        () -> new StubLock(ch, -1, 1, false), "ctor negative position -> IAE");
+                checkThrows(IllegalArgumentException.class,
+                        () -> new StubLock(ch, 0, -1, false), "ctor negative size -> IAE");
+                // 版本差异（实测）：null channel —— JDK-27 抛 NPE（JDK-8 允许）
+                checkThrows(NullPointerException.class,
+                        () -> new StubLock((FileChannel) null, 0, 1, false), "ctor null channel -> NPE (JDK-27)");
+
+                lock.release();
+                lock.release();
+                check(!lock.isValid(), "release is idempotent (实测幂等)");
+
+                // 同 JVM 不同 FileChannel 实例：重叠锁 OFLE、不重叠可获
+                FileLock held = ch.tryLock(10, 10, false);
+                try (FileChannel ch2 = FileChannel.open(file, StandardOpenOption.READ,
+                        StandardOpenOption.WRITE)) {
+                    checkThrows(java.nio.channels.OverlappingFileLockException.class,
+                            () -> ch2.tryLock(15, 5, false),
+                            "overlap via another channel instance (per file per JVM)");
+                    FileLock other = ch2.tryLock(50, 10, false);
+                    check(other != null, "non-overlap via another channel succeeds");
+                    other.release();
+                }
+                held.release();
+
+                FileLock whole = ch.lock();
+                check(whole.position() == 0 && whole.size() == Long.MAX_VALUE,
+                      "no-arg lock() covers the whole file");
+                whole.release();
+
+                // JDK-27 实测：零长锁请求被规范化为 (pos, MAX_VALUE-pos)
+                FileLock z = ch.tryLock(5, 0, false);
+                check(z.position() == 5 && z.size() == Long.MAX_VALUE - 5,
+                      "JDK-27 normalizes zero-size lock to (pos, MAX-pos)");
+                checkThrows(java.nio.channels.OverlappingFileLockException.class,
+                        () -> ch.tryLock(50, 1, false),
+                        "normalized zero-length lock covers the rest of the file");
+                FileLock before = ch.tryLock(0, 1, false);
+                check(before != null, "range before the normalized lock stays free");
+                before.release();
+                z.release();
+            }
+
+            try (FileChannel wo = FileChannel.open(file, StandardOpenOption.WRITE)) {
+                checkThrows(java.nio.channels.NonReadableChannelException.class,
+                        () -> wo.tryLock(0, 10, true), "shared lock needs read access");
+                FileLock excl = wo.tryLock(0, 10, false);
+                check(excl != null && !excl.isShared(), "exclusive on WRITE-only channel");
+                FileLock extra = wo.tryLock(20, 5, false);
+                wo.close();
+                check(!excl.isValid() && !extra.isValid(), "close invalidates every lock");
+                checkThrows(java.nio.channels.ClosedChannelException.class,
+                        () -> excl.release(), "release after channel close");
+            }
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testWhiteBoxA5();
+        testBlackBoxA5();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

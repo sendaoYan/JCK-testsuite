@@ -28,3 +28,10 @@
 - 文件类用例全部 `Files.createTempDirectory("jck")` + finally 递归删除。
 - 平台相关能力以运行时能力守护，不支持时跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：9 条。
+
+### 4.1 A5 契约深化追加
+
+新增 ArrayByteChannel 双工最小实现（读写共享游标、round-trip、关闭后双方向 CCE）、testWhiteBoxA5
+（零声明方法的纯组合接口、恰 Readable+Writable 两父、FileChannel/Socket/Datagram 是 ByteChannel 而
+Pipe.SourceChannel 不是）、testFileChannelView（READ 面 NonWritable、WRITE 面 NonReadable 且开于
+position 0、EOF 追加写扩展、关闭矩阵）。断言数 9→37 条（JDK-8 实测）。

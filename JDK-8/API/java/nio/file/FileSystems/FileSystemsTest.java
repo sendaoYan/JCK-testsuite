@@ -26,6 +26,20 @@ public class FileSystemsTest {
         passed++;
     }
 
+    interface Op { void run() throws Exception; }
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    static void checkThrows(Class<? extends Throwable> ex, Op r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
+    }
+
     static void hasMethod(Class<?> c, String name, Class<?>... params) {
         try { c.getMethod(name, params); }
         catch (NoSuchMethodException e) { throw new AssertionError("missing method " + name); }
@@ -78,9 +92,87 @@ public class FileSystemsTest {
         }
     }
 
+    // ===== deepened contract coverage (batch A9): probe-confirmed exact types =====
+    static void testUriLookupMatrix() throws Exception {
+        FileSystem def = FileSystems.getDefault();
+        check(FileSystems.getFileSystem(URI.create("file:///")) == def,
+              "getFileSystem(file:///) returns the default fs");
+        check(FileSystems.getFileSystem(URI.create("file:///")).isOpen(),
+              "returned fs is open");
+        checkThrows(IllegalArgumentException.class,
+              () -> FileSystems.getFileSystem(URI.create("file:///nope")),
+              "getFileSystem(file URI with path) -> IllegalArgumentException");
+        checkThrows(java.nio.file.ProviderNotFoundException.class,
+              () -> FileSystems.getFileSystem(URI.create("bogus://x")),
+              "getFileSystem unknown scheme -> ProviderNotFoundException");
+        checkThrows(NullPointerException.class,
+              () -> FileSystems.getFileSystem(null), "getFileSystem(null) NPE");
+        checkThrows(java.nio.file.FileSystemNotFoundException.class,
+              () -> FileSystems.getFileSystem(URI.create("jar:file:///tmp/nope.zip!/")),
+              "getFileSystem closed jar fs -> FileSystemNotFoundException");
+
+        // newFileSystem(URI, ...) over the default provider
+        java.util.Map<String, Object> env = new HashMap<>();
+        checkThrows(java.nio.file.FileSystemAlreadyExistsException.class,
+              () -> FileSystems.newFileSystem(URI.create("file:///"), env),
+              "newFileSystem(file:) -> FileSystemAlreadyExistsException (probe-confirmed)");
+        checkThrows(java.nio.file.FileSystemAlreadyExistsException.class,
+              () -> FileSystems.newFileSystem(URI.create("file:///"), null),
+              "newFileSystem(file:, null env) -> FileSystemAlreadyExistsException");
+        checkThrows(java.nio.file.ProviderNotFoundException.class,
+              () -> FileSystems.newFileSystem(URI.create("bogus://x"), env),
+              "newFileSystem(bogus:) -> ProviderNotFoundException");
+        checkThrows(java.nio.file.ProviderNotFoundException.class,
+              () -> FileSystems.newFileSystem(URI.create("bogus://x"), env, null),
+              "newFileSystem(bogus:, loader) -> ProviderNotFoundException");
+        checkThrows(NullPointerException.class,
+              () -> FileSystems.newFileSystem((URI) null, env), "newFileSystem(null URI) NPE");
+    }
+
+    // zip filesystem via Path (both JDKs) + reflection of JDK-13+ overloads
+    static void testZipPathFileSystem() throws Exception {
+        Path zip = Files.createTempFile("jck-fs-path", ".zip");
+        try {
+            try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zip))) {
+                zos.putNextEntry(new ZipEntry("entry.txt"));
+                zos.write("path-zip".getBytes(StandardCharsets.UTF_8));
+                zos.closeEntry();
+            }
+            try (FileSystem zfs = FileSystems.newFileSystem(zip, (ClassLoader) null)) {
+                check(zfs.isOpen(), "zipfs via path open");
+                check("/".equals(zfs.getSeparator()), "zipfs separator /");
+                check(!zfs.isReadOnly(), "zipfs writable");
+                Path entry = zfs.getPath("/entry.txt");
+                check(Files.isRegularFile(entry), "zipfs entry regular");
+                check("path-zip".equals(new String(Files.readAllBytes(entry), StandardCharsets.UTF_8)),
+                      "zipfs entry content via path-opened fs");
+                java.util.Set<String> views = zfs.supportedFileAttributeViews();
+                check(views.contains("basic") && views.contains("zip"),
+                      "zipfs views contain basic and zip");
+                check(zfs.provider() != null && "jar".equals(zfs.provider().getScheme()),
+                      "zipfs provider scheme jar");
+                check(zfs.getPath("a", "b").toString().equals("a/b"), "zipfs getPath join");
+            }
+            check(true, "zipfs closed by try-with-resources");
+            // JDK-8 API surface: only newFileSystem(Path, ClassLoader) exists;
+            // the Path+Map and single-arg Path overloads arrived later
+            boolean hasMapOverload = true, hasSingleOverload = true;
+            try { FileSystems.class.getMethod("newFileSystem", Path.class, Map.class); }
+            catch (NoSuchMethodException e) { hasMapOverload = false; }
+            try { FileSystems.class.getMethod("newFileSystem", Path.class); }
+            catch (NoSuchMethodException e) { hasSingleOverload = false; }
+            check(!hasMapOverload, "JDK-8 has no newFileSystem(Path, Map) (JDK-13+)");
+            check(!hasSingleOverload, "JDK-8 has no newFileSystem(Path) single-arg (JDK-13+)");
+        } finally {
+            Files.deleteIfExists(zip);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testUriLookupMatrix();
+        testZipPathFileSystem();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

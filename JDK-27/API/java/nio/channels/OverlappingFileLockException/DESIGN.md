@@ -32,3 +32,17 @@ OverlappingFileLockException：java.nio.channels 包的运行时/受检异常，
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：6 条。
+
+
+### 批次 A8 深化（第 4 部分补充）
+
+在既有白盒/黑盒之上新增契约级四件套（与 JDK-8 侧等价；全部条目先经探针在 JDK-8(8u372) 与
+JDK-27(27.0.1) 双侧实测，行为一致处不再注明）：
+1. 白盒层级：直接父类 == IllegalStateException（javap 双侧实证）、继承链、Serializable、FQN。
+2. 构造矩阵：唯一无参公共构造器（反射）、message null、toString 裸类名。
+3. 序列化：serialVersionUID == 2047812138163068433L（双侧一致）+ round-trip 类型/消息/cause/suppressed/栈深保持。
+4. 真实触发：临时文件双 FileChannel：跨通道 tryLock/阻塞 lock 重叠、同通道重叠、区间内零长锁 → 精确类型；相邻区域与区域后零长锁成功（对照）；release 后区间可重锁。版本差异（预实测）：持锁 (0,10) 时 tryLock(0,0) 零长锁，JDK-8 成功（零长不重叠语义）、JDK-27 抛 —— 双侧各自断言并注释。
+5. Throwable 契约：initCause 一次性（二次 ISE/self IAE）、fillInStackTrace 返回 this、构造捕获栈帧、
+   suppressed 空表 + addSuppressed、throw/catch 身份保持。
+- checkThrows 断言精确类型（getClass() == expected）；触发场景全回环/临时文件，daemon 线程 join 带超时。
+- 断言数 7 → 56 条。

@@ -33,3 +33,18 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：37 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- select(负超时) → IllegalArgumentException（精确类）；正超时上下界测量。
+- wakeup 粘性：预触发后 select(60_000)/select(0) 立即返回 0（消除时序竞态）；双重 wakeup 不叠加。
+- 守护线程 wakeup 唤醒阻塞 select（latch + join(10_000) 有界）；close() 唤醒阻塞 select 返回 0。
+- closed selector 后 keys/selectedKeys/selectNow/select(long)/select → ClosedSelectorException 矩阵；
+  wakeup() 关闭后 no-op 返回 this。
+- selectedKeys 协议：add → UnsupportedOperationException，remove/clear 允许。
+- 一个通道注册两个 selector：**连接后的回环对**上断言 not-ready（未连接 socket 对 READ/WRITE
+  都可能立即就绪，这是本批实测出的平台事实）。
+- JDK-11+ 专属：selectNow(Consumer) 返回 0 且消费者不 invoked（JDK-27 侧断言）。
+
+本机实测断言数：111 条（深化前 31）。

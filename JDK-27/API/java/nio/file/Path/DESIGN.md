@@ -30,3 +30,12 @@ toAbsolutePath/toFile -> Path.of(URI) 与绝对路径等价 -> equals/hashCode -
 
 健壮性: 纯内存路径运算，无文件/网络/线程依赖；不依赖墙钟/随机；headless 安全不加 @key。
 本机实测断言数: 34 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 30 → 206）：与 JDK-8 侧同套（分量/子路径越界矩阵、resolve("") 非同对象、normalize
+幂等、endsWith 规范右锚、compareTo 字节序、toUri 尾随分隔符、空路径 getNameCount==1），
+全部以 Path.of 形态镜像；另加 testPathOf：Path.of(String)/of(String...)/of(URI) 与 Paths.get
+等价、null -> NPE、非分层 URI -> IllegalArgumentException。
+
+版本差异：Path.of 三工厂为 JDK-11+ API（JDK-8 侧反射断言不存在）；其余契约两版一致。

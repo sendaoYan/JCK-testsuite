@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：9 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testSignatureContract/testCloseSemanticsThroughInterface。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：declared methods 恰 1 个（close）；异步通道族三个实现类均实现本接口、非 InterruptibleChannel；接口面 close 幂等、close 后 Future 失败 cause 为 ClosedChannelException
+- 确定性与健壮性：经接口引用对文件通道与套接字通道执行 close 幂等与关闭后失败断言。
+- 版本差异（按侧断言）：无版本差异。
+- 本机实测断言数：10 → 28 条。

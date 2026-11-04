@@ -33,3 +33,16 @@ TCP 服务端通道：bind/accept、阻塞与非阻塞接受、validOps=OP_ACCEP
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：30 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 未绑定 accept → NotYetBoundException（阻塞/非阻塞两态）；未绑定 socket().getLocalPort==-1。
+- bind(null) 通配地址 + 临时端口、bind(回环) 精确、重复 bind → AlreadyBoundException、backlog 重载。
+- Selector OP_ACCEPT 完整事件流：selectNow 0 → 客户端连接 → select==1 → readyOps==OP_ACCEPT →
+  accept → selectedKeys.remove → drained。
+- 阻塞 accept + 守护线程客户端；socket() 适配器 accept（java.net 桥接）。
+- 选项：SO_RCVBUF>=、SO_REUSEADDR 布尔往返；SO_SNDBUF/IP_MULTICAST_TTL → UnsupportedOperationException。
+- 关闭后 accept/bind/setOption/getOption → ClosedChannelException；close 幂等。
+
+本机实测断言数：80 条（深化前 25）。

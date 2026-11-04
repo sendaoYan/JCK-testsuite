@@ -29,3 +29,9 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：19 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：key 同一性（同 service 重复注册同目录返回同一 WatchKey 对象——LinuxWatchService 实测；不同 service 各自 key 且各自收到事件）；cancel 语义（幂等、cancel 后 watchable() 保留、pollEvents 空、reset false、取消后不再收事件 poll(2s)=null）；重新注册产生新 key 且只收新事件；closed service 的 key（isValid false、pollEvents 空不抛、reset false、cancel 容忍、watchable 保留）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

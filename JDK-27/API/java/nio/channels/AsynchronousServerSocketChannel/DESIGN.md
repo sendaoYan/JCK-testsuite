@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：27 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testUnboundAndBindContract/testAcceptContract/testGroupAndSurfaceContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：NotYetBoundException（未 bind 即 accept）、AcceptPendingException（挂起 accept + 二次 accept，Future 与 handler 两种形式）、AlreadyBoundException、bind(null) 自动分配、backlog 语义
+- 确定性与健壮性：close 终止挂起 accept → Future.get 抛 ExecutionException，cause 精确为 AsynchronousCloseException（双侧实测）；accept 无超时重载（API 面断言）。
+- 版本差异（按侧断言）：close 后再 accept 的失败经 Future 交付（非同步抛）；accept 无 timeout 重载。
+- 本机实测断言数：23 → 71 条。

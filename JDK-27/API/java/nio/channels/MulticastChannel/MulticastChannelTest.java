@@ -98,9 +98,122 @@ public class MulticastChannelTest {
         }
     }
 
+    // ===================== A6 deepening: join idempotency / group round trip / multicast options =====================
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    static void checkThrows(Class<? extends Throwable> ex, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
+    }
+
+    static void testJoinIdempotency() throws Exception {
+        InetAddress group = InetAddress.getByName("239.255.19.1");
+        NetworkInterface nif = null;
+        for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
+            if (!ni.isUp() || !ni.supportsMulticast() || ni.isLoopback()) continue;
+            boolean hasV4 = false;
+            for (InetAddress a : java.util.Collections.list(ni.getInetAddresses()))
+                if (a instanceof java.net.Inet4Address) hasV4 = true;
+            if (hasV4) { nif = ni; break; }
+        }
+        if (nif == null) {
+            System.out.println("NOTE: no multicast-capable non-loopback interface; idempotency test skipped");
+            return;
+        }
+        try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
+            dc.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
+            dc.bind(new InetSocketAddress(group, 0));
+            MembershipKey k1 = dc.join(group, nif);
+            MembershipKey k2 = dc.join(group, nif);
+            check(k1 == k2, "re-join of the same group yields the same key");
+            check(k1.networkInterface() == nif, "membership interface identity");
+            check(k1.group().equals(group), "membership group");
+            k1.drop();
+            check(!k1.isValid(), "invalid after drop");
+            MembershipKey k3 = dc.join(group, nif);
+            check(k3 != k1 && k3.isValid(), "fresh key after drop+re-join");
+            // source-specific join while any-source member is rejected
+            InetAddress src = InetAddress.getByName("192.0.2.77");
+            MembershipKey any = k3;
+            boolean threw = false;
+            try { dc.join(group, nif, src); }
+            catch (IllegalStateException e) { threw = true; }
+            check(threw, "source-specific join while any-source member -> IllegalStateException");
+            check(any.isValid(), "original membership untouched by the rejected join");
+        }
+    }
+
+    static void testGroupRoundTrip() throws Exception {
+        NetworkInterface nif = null;
+        for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
+            if (!ni.isUp() || !ni.supportsMulticast() || ni.isLoopback()) continue;
+            boolean hasV4 = false;
+            for (InetAddress a : java.util.Collections.list(ni.getInetAddresses()))
+                if (a instanceof java.net.Inet4Address) hasV4 = true;
+            if (hasV4) { nif = ni; break; }
+        }
+        if (nif == null) return;
+        InetAddress group = InetAddress.getByName("239.255.19.2");
+        try (DatagramChannel rx = DatagramChannel.open(java.net.StandardProtocolFamily.INET);
+             DatagramChannel tx = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
+            rx.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
+            rx.bind(new InetSocketAddress(group, 0));
+            rx.join(group, nif);
+            rx.configureBlocking(false);
+            int port = ((InetSocketAddress) rx.getLocalAddress()).getPort();
+            tx.setOption(java.net.StandardSocketOptions.IP_MULTICAST_IF, nif);
+            byte[] payload = {9, 8, 7, 6};
+            check(tx.send(ByteBuffer.wrap(payload), new InetSocketAddress(group, port)) == 4,
+                  "sent 4 bytes to the group");
+            try (java.nio.channels.Selector sel = java.nio.channels.Selector.open()) {
+                rx.register(sel, java.nio.channels.SelectionKey.OP_READ);
+                check(sel.select(5_000) == 1, "group datagram made the channel readable");
+                java.nio.ByteBuffer in = java.nio.ByteBuffer.allocate(16);
+                check(rx.receive(in) != null, "received from the group");
+                check(in.position() == 4, "payload length exact");
+                boolean same = true;
+                for (int i = 0; i < 4; i++)
+                    if (in.get(i) != payload[i]) { same = false; break; }
+                check(same, "group payload byte-exact");
+            }
+        }
+    }
+
+    static void testMulticastOptions() throws Exception {
+        try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
+            check(dc.supportedOptions().contains(java.net.StandardSocketOptions.IP_MULTICAST_IF),
+                  "IP_MULTICAST_IF supported");
+            check(dc.supportedOptions().contains(java.net.StandardSocketOptions.IP_MULTICAST_TTL),
+                  "IP_MULTICAST_TTL supported");
+            check(dc.supportedOptions().contains(java.net.StandardSocketOptions.IP_MULTICAST_LOOP),
+                  "IP_MULTICAST_LOOP supported");
+            dc.setOption(java.net.StandardSocketOptions.IP_MULTICAST_TTL, 3);
+            check(dc.getOption(java.net.StandardSocketOptions.IP_MULTICAST_TTL) == 3,
+                  "IP_MULTICAST_TTL readback 3");
+            dc.setOption(java.net.StandardSocketOptions.IP_MULTICAST_TTL, 1);
+            check(dc.getOption(java.net.StandardSocketOptions.IP_MULTICAST_TTL) == 1,
+                  "IP_MULTICAST_TTL readback 1");
+            boolean loop = dc.getOption(java.net.StandardSocketOptions.IP_MULTICAST_LOOP);
+            dc.setOption(java.net.StandardSocketOptions.IP_MULTICAST_LOOP, !loop);
+            check(dc.getOption(java.net.StandardSocketOptions.IP_MULTICAST_LOOP) == !loop,
+                  "IP_MULTICAST_LOOP toggles");
+            dc.setOption(java.net.StandardSocketOptions.IP_MULTICAST_LOOP, loop);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testJoinIdempotency();
+        testGroupRoundTrip();
+        testMulticastOptions();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

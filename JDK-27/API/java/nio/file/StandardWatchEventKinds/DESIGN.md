@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：14 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：kind 矩阵（entry 三者 type Path、OVERFLOW type Object 实测、toString==name、引用相等矩阵、HashSet size=4、同名自制 Kind 不等）；容器白盒（final/私有构造/字段>=4）；inotify 实测：注册三事件→写新文件→有界 poll 分批重试至 CREATE+MODIFY 均见（JDK-27 实测 MODIFY 可能晚于首批到达，重试吸收）→context 精确/count==1→reset→delete→ENTRY_DELETE。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

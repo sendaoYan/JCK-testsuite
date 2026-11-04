@@ -4,6 +4,7 @@
  * @run main MappedByteBufferTest
  */
 
+import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
@@ -18,6 +19,33 @@ public class MappedByteBufferTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static void checkThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (expected " + type.getSimpleName()
+                    + ", got " + t.getClass().getName() + ")");
+        }
+        throw new AssertionError(msg + " (no exception thrown)");
+    }
+
+    /** An operation that may throw a checked IOException (FileChannel.map & co.). */
+    interface IORunnable { void run() throws IOException; }
+
+    /** checkThrows for operations whose signature declares IOException. */
+    static void checkThrowsIO(Class<? extends Throwable> type, IORunnable r, String msg)
+            throws IOException {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (expected " + type.getSimpleName()
+                    + ", got " + t.getClass().getName() + ")");
+        }
+        throw new AssertionError(msg + " (no exception thrown)");
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -117,9 +145,162 @@ public class MappedByteBufferTest {
         }
     }
 
+    /**
+     * Contract matrix beyond the basics: direct-memory property set, load/force return
+     * values, channel-position neutrality, map parameter validation, beyond-EOF and
+     * closed/immutable-channel failures, PRIVATE fork isolation, cursor behavior on a
+     * mapped buffer, and cross-family equality with a heap buffer. Owns its own temp
+     * file and cleans up in finally.
+     */
+    static void testContractMatrix() throws Exception {
+        Path dir = Files.createTempDirectory("jck-mapped-mx");
+        try {
+            Path f = dir.resolve("matrix.bin");
+            byte[] data = new byte[256];
+            for (int i = 0; i < data.length; i++) data[i] = (byte) i;
+            Files.write(f, data);
+
+            try (FileChannel ch = FileChannel.open(f, StandardOpenOption.READ)) {
+                MappedByteBuffer ro = ch.map(FileChannel.MapMode.READ_ONLY, 0, 256);
+                check(ro.isDirect(), "mapped buffer isDirect");
+                check(!ro.hasArray(), "mapped buffer hasArray false");
+                checkThrows(UnsupportedOperationException.class, () -> ro.array(),
+                        "mapped array() -> UnsupportedOperationException");
+                checkThrows(UnsupportedOperationException.class, () -> ro.arrayOffset(),
+                        "mapped arrayOffset() -> UnsupportedOperationException");
+                check(ro.load() == ro, "load() returns this");
+                check(!ro.isLoaded() || ro.isLoaded(), "isLoaded() callable without throwing");
+                check(ro.force() == ro, "read-only map force() returns this without throwing");
+                check(ro.asReadOnlyBuffer().isReadOnly(),
+                        "asReadOnlyBuffer of a mapped buffer is read-only");
+
+                // map() does not move the channel position.
+                ch.position(16);
+                ch.map(FileChannel.MapMode.READ_ONLY, 0, 16);
+                check(ch.position() == 16, "map leaves the channel position unchanged");
+
+                // Views stay direct and stay MappedByteBuffer.
+                check(ro.slice().isDirect() && ro.slice() instanceof MappedByteBuffer,
+                        "slice of a mapped buffer is a direct MappedByteBuffer");
+
+                // Relative reads follow the normal cursor contract.
+                MappedByteBuffer rel = ch.map(FileChannel.MapMode.READ_ONLY, 0, 4);
+                check(rel.get() == 0 && rel.position() == 1,
+                        "relative get on a mapped buffer advances the cursor");
+
+                // Parameter validation: negative offset/size, oversize length, beyond EOF.
+                checkThrowsIO(IllegalArgumentException.class,
+                        () -> ch.map(FileChannel.MapMode.READ_ONLY, -1, 8),
+                        "map(-1,8) -> IllegalArgumentException");
+                checkThrowsIO(IllegalArgumentException.class,
+                        () -> ch.map(FileChannel.MapMode.READ_ONLY, 0, -1),
+                        "map(0,-1) -> IllegalArgumentException");
+                checkThrowsIO(IllegalArgumentException.class,
+                        () -> ch.map(FileChannel.MapMode.READ_ONLY, 0, (long) Integer.MAX_VALUE + 1),
+                        "map(0,MAX+1) size beyond int range -> IllegalArgumentException");
+                checkThrowsIO(IOException.class,
+                        () -> ch.map(FileChannel.MapMode.READ_ONLY, (long) Integer.MAX_VALUE + 1, 1),
+                        "map(MAX+1,1) would extend the file -> IOException on a read-only channel");
+                checkThrowsIO(IOException.class,
+                        () -> ch.map(FileChannel.MapMode.READ_ONLY, 250, 10),
+                        "map(READ_ONLY,250,10) beyond EOF -> IOException");
+            }
+
+            // Closed channel and immutable channel failures.
+            FileChannel cc = FileChannel.open(f, StandardOpenOption.READ);
+            cc.close();
+            checkThrowsIO(java.nio.channels.ClosedChannelException.class,
+                    () -> cc.map(FileChannel.MapMode.READ_ONLY, 0, 4),
+                    "map on a closed channel -> ClosedChannelException");
+            try (RandomAccessFile raf = new RandomAccessFile(f.toFile(), "r")) {
+                checkThrowsIO(java.nio.channels.NonWritableChannelException.class,
+                        () -> raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 4),
+                        "READ_WRITE map on a read-only channel -> NonWritableChannelException");
+            }
+
+            // READ_WRITE write-back through force, verified from the file system.
+            try (FileChannel ch = FileChannel.open(f, StandardOpenOption.READ,
+                    StandardOpenOption.WRITE)) {
+                MappedByteBuffer rw = ch.map(FileChannel.MapMode.READ_WRITE, 100, 4);
+                rw.put(0, (byte) 55);
+                check(rw.force() == rw, "READ_WRITE force() returns this");
+            }
+            check(Files.readAllBytes(f)[100] == 55, "mapped write persisted to the file after force");
+
+            // PRIVATE mappings fork: writes stay private per mapping and never reach the file.
+            try (FileChannel ch = FileChannel.open(f, StandardOpenOption.READ,
+                    StandardOpenOption.WRITE)) {
+                MappedByteBuffer p1 = ch.map(FileChannel.MapMode.PRIVATE, 0, 16);
+                MappedByteBuffer p2 = ch.map(FileChannel.MapMode.PRIVATE, 0, 16);
+                p1.put(0, (byte) 77);
+                check(p1.get(0) == 77, "private map sees its own write");
+                check(p2.get(0) == 0, "sibling private map does not see the write");
+            }
+            check(Files.readAllBytes(f)[0] == 0, "PRIVATE writes never reach the file");
+
+            // Cross-family equality with a heap buffer holding the same content.
+            try (FileChannel ch = FileChannel.open(f, StandardOpenOption.READ)) {
+                MappedByteBuffer ro = ch.map(FileChannel.MapMode.READ_ONLY, 0, 256);
+                check(ro.equals(java.nio.ByteBuffer.wrap(Files.readAllBytes(f))),
+                        "mapped buffer equals a heap buffer with identical content");
+                checkThrows(java.nio.ReadOnlyBufferException.class, () -> ro.compact(),
+                        "compact on a read-only mapped buffer -> ReadOnlyBufferException");
+            }
+        } finally {
+            Files.deleteIfExists(dir.resolve("matrix.bin"));
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    /**
+     * (JDK-13+) force(int index, int length): writes back a subrange, returns this,
+     * and validates the index/length range against the mapping's capacity.
+     */
+    static void testForceRange27() throws Exception {
+        Path dir = Files.createTempDirectory("jck-mapped-rng");
+        try {
+            Path f = dir.resolve("range.bin");
+            byte[] data = new byte[32];
+            for (int i = 0; i < data.length; i++) data[i] = (byte) i;
+            Files.write(f, data);
+            try (FileChannel ch = FileChannel.open(f, StandardOpenOption.READ,
+                    StandardOpenOption.WRITE)) {
+                MappedByteBuffer m = ch.map(FileChannel.MapMode.READ_WRITE, 0, 16);
+                m.put(4, (byte) 44);
+                check(m.force(4, 4) == m, "force(index,length) returns this (JDK-13+)");
+                checkThrows(IndexOutOfBoundsException.class, () -> m.force(-1, 4),
+                        "force(-1,4) -> IndexOutOfBoundsException (JDK-13+)");
+                checkThrows(IndexOutOfBoundsException.class, () -> m.force(0, -1),
+                        "force(0,-1) -> IndexOutOfBoundsException (JDK-13+)");
+                checkThrows(IndexOutOfBoundsException.class, () -> m.force(13, 4),
+                        "force(13,4) index+length > capacity -> IndexOutOfBoundsException (JDK-13+)");
+                checkThrows(IndexOutOfBoundsException.class, () -> m.force(17, 0),
+                        "force(17,0) index > capacity -> IndexOutOfBoundsException (JDK-13+)");
+                m.force(16, 0);
+                check(m.position() == 0,
+                        "force(capacity,0) accepted at the boundary, cursor untouched (JDK-13+)");
+                m.force(0, 16);
+                check(m.limit() == 16,
+                        "force(0,capacity) full-range boundary accepted (JDK-13+)");
+            }
+            check(Files.readAllBytes(f)[4] == 44,
+                    "force(index,length) write-back visible in the file (JDK-13+)");
+            try (FileChannel ch = FileChannel.open(f, StandardOpenOption.READ)) {
+                MappedByteBuffer rm = ch.map(FileChannel.MapMode.READ_ONLY, 0, 16);
+                check(rm.force(0, 4) == rm,
+                        "read-only map force(index,length) returns this without throwing (JDK-13+)");
+            }
+        } finally {
+            Files.deleteIfExists(dir.resolve("range.bin"));
+            Files.deleteIfExists(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractMatrix();
+        testForceRange27();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

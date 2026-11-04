@@ -33,3 +33,10 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：? 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 15 → 40）：URI 矩阵与 JDK-8 一致（newFileSystem(file:) -> FileSystemAlreadyExists
+Exception、getFileSystem(不存在) -> IllegalArgumentException、bogus -> ProviderNotFound
+Exception）；zipfs newFileSystem(zip, (ClassLoader) null) 可用；另实测 newFileSystem(Path)/
+newFileSystem(Path, Map) 重载（JDK-13+）可用，JDK-8 侧无此重载。

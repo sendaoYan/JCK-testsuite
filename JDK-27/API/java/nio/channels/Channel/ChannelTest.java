@@ -80,9 +80,52 @@ public class ChannelTest {
         }
     }
 
+    // ---- A5 additions: minimal user implementation + exact interface surface ----
+    static final class FlagChannel implements Channel {
+        private boolean open = true;
+        int closeCount;
+        public boolean isOpen() { return open; }
+        public void close() { open = false; closeCount++; }
+    }
+
+    static void testWhiteBoxA5() throws Exception {
+        int own = 0;
+        for (Method m : Channel.class.getMethods())
+            if (m.getDeclaringClass() == Channel.class) own++;
+        check(own == 2, "exactly isOpen and close declared on the interface");
+        boolean anyDefault = false;
+        for (Method m : Channel.class.getMethods())
+            if (m.isDefault()) anyDefault = true;
+        check(!anyDefault, "no default methods (implementers must supply both)");
+        check(Channel.class.getMethod("isOpen").getReturnType() == boolean.class,
+              "isOpen returns boolean");
+        check(Channel.class.getMethod("close").getReturnType() == void.class, "close returns void");
+        Class<?>[] ex = Channel.class.getMethod("close").getExceptionTypes();
+        check(ex.length == 1 && ex[0] == java.io.IOException.class, "close declares throws IOException");
+    }
+
+    static void testBlackBoxA5() throws Exception {
+        FlagChannel fc = new FlagChannel();
+        check(fc.isOpen(), "custom channel starts open");
+        try (Channel c = fc) {
+            check(c == fc && c.isOpen(), "usable inside try-with-resources");
+        }
+        check(!fc.isOpen(), "try-with-resources closed it exactly once");
+        check(fc.closeCount == 1, "close invoked once");
+        fc.close();
+        check(fc.closeCount == 2 && !fc.isOpen(), "extra close tolerated by the implementation");
+
+        Channel dc = java.nio.channels.DatagramChannel.open();
+        check(dc.isOpen(), "datagram channel open via Channel");
+        dc.close();
+        check(!dc.isOpen(), "datagram channel closed");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testWhiteBoxA5();
+        testBlackBoxA5();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

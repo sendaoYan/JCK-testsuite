@@ -29,3 +29,11 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：13 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 11 → 35）：四方法精确签名（参数类型/返回类型/throws IOException）反射断言；
+非 @FunctionalInterface；无默认方法。行为：attributes 参数非 null 且 isDirectory/isRegularFile
+与条目种类一致；postVisitDirectory 正常流 ioe == null；嵌套顺序 pre:sub < file:f2 < post:sub；
+非存在起点 -> 单次 visitFileFailed 且异常为精确 NoSuchFileException、路径为起点本身；
+visitFile 返回 null -> NPE（探针证实）；RuntimeException/IOException 从回调原样传播不包装。

@@ -10,6 +10,8 @@
 import java.lang.reflect.Modifier;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.CharBuffer;
 import java.nio.ReadOnlyBufferException;
 
@@ -208,9 +210,245 @@ public class CharBufferTest {
         check("null".contentEquals(apnull), "append(null CharSequence) appends \"null\"");
     }
 
+    // ===================== A1 batch: contract deepening =====================
+
+    /** read() throws IOException (checked); adapt it to Runnable for checkThrows. */
+    static Runnable uncheckedRead(final CharBuffer src, final CharBuffer dst) {
+        return () -> {
+            try {
+                src.read(dst);
+            } catch (java.io.IOException e) {
+                throw new RuntimeException(e);
+            }
+        };
+    }
+
+    /** read(CharBuffer): drain semantics, partial copy, negative cases. */
+    static void testReadSemantics() throws Exception {
+        CharBuffer src = CharBuffer.wrap("hello");
+        CharBuffer dst = CharBuffer.allocate(8);
+        check(src.read(dst) == 5, "read copies all remaining chars");
+        check(src.position() == 5 && dst.position() == 5, "read advances both cursors");
+        check(src.read(dst) == -1, "read from a drained source returns -1");
+        check(CharBuffer.wrap("").read(dst) == -1, "read from an empty source returns -1");
+        CharBuffer ro = CharBuffer.allocate(2).asReadOnlyBuffer();
+        checkThrows(ReadOnlyBufferException.class, uncheckedRead(CharBuffer.wrap("x"), ro),
+                "read into a read-only target -> ReadOnlyBufferException");
+        CharBuffer big = CharBuffer.wrap("abcdef");
+        CharBuffer small = CharBuffer.allocate(2);
+        check(big.read(small) == 2, "read copies min(src.remaining, dst.remaining)");
+        small.flip();
+        check("ab".contentEquals(small) && big.position() == 2 && big.charAt(0) == 'c',
+                "read copies in order and advances the source");
+    }
+
+    /** Bulk put/get over arrays and strings: matrices with precise exception types. */
+    static void testBulkPutGet() {
+        CharBuffer src = CharBuffer.wrap("xyz");
+        CharBuffer dst = CharBuffer.allocate(5);
+        dst.put(src);
+        check(dst.position() == 3 && src.position() == 3, "put(CharBuffer) advances both cursors");
+        check(dst.get(0) == 'x' && dst.get(1) == 'y' && dst.get(2) == 'z',
+                "put(CharBuffer) copies in order");
+        CharBuffer self = CharBuffer.allocate(3);
+        checkThrows(IllegalArgumentException.class, () -> self.put(self),
+                "put(this) -> IllegalArgumentException");
+        checkThrows(NullPointerException.class, () -> CharBuffer.allocate(2).put((CharBuffer) null),
+                "put((CharBuffer)null) -> NullPointerException");
+        checkThrows(BufferOverflowException.class, () -> CharBuffer.allocate(1).put(CharBuffer.wrap("ab")),
+                "put(CharBuffer) without room -> BufferOverflowException");
+        CharBuffer roSrc = CharBuffer.wrap("ab").asReadOnlyBuffer();
+        CharBuffer writable = CharBuffer.allocate(2);
+        writable.put(roSrc);
+        check(writable.get(0) == 'a', "a read-only buffer may serve as a put source");
+        checkThrows(NullPointerException.class, () -> CharBuffer.allocate(2).put((char[]) null),
+                "put((char[])null) -> NullPointerException");
+        checkThrows(NullPointerException.class, () -> CharBuffer.allocate(2).get((char[]) null),
+                "get((char[])null) -> NullPointerException");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.allocate(4).put(new char[2], -1, 1),
+                "put(src,off,len) negative offset -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.allocate(4).put(new char[2], 1, 2),
+                "put(src,off,len) off+len > src.length -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.allocate(4).get(new char[2], 0, 3),
+                "get(dst,off,len) len > dst.length -> IndexOutOfBoundsException");
+        checkThrows(BufferOverflowException.class, () -> CharBuffer.allocate(2).put(new char[3]),
+                "put(char[]) without room -> BufferOverflowException");
+        checkThrows(BufferUnderflowException.class, () -> CharBuffer.allocate(2).get(new char[3]),
+                "get(char[]) beyond remaining -> BufferUnderflowException");
+        CharBuffer part = CharBuffer.wrap("abc");
+        char[] out = new char[4];
+        part.get(out, 1, 2);
+        check(part.position() == 2 && out[0] == 0 && out[1] == 'a' && out[2] == 'b' && out[3] == 0,
+                "bulk get writes exactly len chars at the offset");
+        checkThrows(BufferOverflowException.class, () -> CharBuffer.allocate(1).put("ab"),
+                "put(String) without room -> BufferOverflowException");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.allocate(4).put("abc", -1, 1),
+                "put(String,-1,1) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.allocate(4).put("abc", 2, -1),
+                "put(String,2,-1) negative end -> IndexOutOfBoundsException");
+        // NOTE: put(String,int,int) takes (start,end) indices, not (offset,length).
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.allocate(4).put("abc", 1, 4),
+                "put(String,1,4) end > string length -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.allocate(4).put("abc", 3, 1),
+                "put(String,3,1) end < start -> IndexOutOfBoundsException");
+        CharBuffer emptyRange = CharBuffer.allocate(4);
+        emptyRange.put("abc", 2, 2);
+        check(emptyRange.position() == 0, "put(String,start,start) copies an empty range");
+        CharBuffer ps = CharBuffer.allocate(8);
+        ps.put("abcdef", 2, 5);
+        check(ps.position() == 3, "put(String,start,end) advances by end-start");
+        ps.flip();
+        check("cde".contentEquals(ps), "put(String,start,end) copies the [start,end) substring");
+    }
+
+    /** CharSequence/Appendable surface: relative indexing and live views. */
+    static void testCharSequenceContract() {
+        CharBuffer cb = CharBuffer.wrap("abcd");
+        cb.position(2);
+        check(cb.charAt(0) == 'c', "charAt is relative to position");
+        check("cd".contentEquals(cb.subSequence(0, 2)), "subSequence is relative to position");
+        checkThrows(IndexOutOfBoundsException.class, () -> cb.charAt(2),
+                "charAt(remaining) relative -> IndexOutOfBoundsException");
+        CharBuffer shared = CharBuffer.wrap(new char[]{'a', 'b', 'c', 'd'});
+        CharBuffer sub = (CharBuffer) shared.subSequence(1, 3);
+        check(sub.charAt(0) == 'b' && sub.length() == 2,
+                "subSequence view exposes [start,end) relative to the current position");
+        check(sub.position() == 1 && sub.limit() == 3,
+                "subSequence view: position = position+start, limit = position+end");
+        sub.put(sub.position(), 'X');
+        check(shared.charAt(1) == 'X', "subSequence view shares the backing array");
+        CharBuffer ap = CharBuffer.allocate(6);
+        check(ap.append('a') == ap, "append(char) returns this");
+        check(ap.append("b") == ap, "append(CharSequence) returns this");
+        check(ap.append("XXcd", 2, 4) == ap,
+                "append(CharSequence,int,int) appends the [start,end) subsequence");
+        check(ap.position() == 4, "append advances the position by the appended char count");
+        ap.flip();
+        check("abcd".contentEquals(ap), "append appends in order");
+        checkThrows(java.nio.BufferOverflowException.class, () -> CharBuffer.allocate(1).append("ab"),
+                "append overflowing the remaining space -> BufferOverflowException");
+        check(CharBuffer.wrap("abc", 0, 0).length() == 0, "wrap(csq,0,0) is an empty view");
+        CharBuffer w = CharBuffer.wrap("hello", 2, 5);
+        check(w.position() == 2 && w.limit() == 5 && w.capacity() == 5,
+                "wrap(csq,start,end): position=start, limit=end, capacity=csq.length");
+        check("llo".contentEquals(w), "wrap(csq,start,end) exposes the selected range");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.wrap("abc", 1, 4),
+                "wrap(csq,1,4) end > length -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.wrap("abc", -1, 2),
+                "wrap(csq,-1,2) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.wrap("abc", 3, 0),
+                "wrap(csq,3,0) start > end -> IndexOutOfBoundsException");
+    }
+
+    /**
+     * Byte order of char buffers: allocation/wrapping uses the native order
+     * (LITTLE_ENDIAN on x86_64, asserted against nativeOrder()); views inherit
+     * the creating byte buffer's order.
+     */
+    static void testOrderSemantics() {
+        check(CharBuffer.allocate(4).order() == ByteOrder.nativeOrder(),
+                "heap CharBuffer order is the native order");
+        check(CharBuffer.allocate(4).order() == ByteOrder.LITTLE_ENDIAN,
+                "native order is LITTLE_ENDIAN on x86_64");
+        check(CharBuffer.wrap("ab").order() == ByteOrder.nativeOrder(),
+                "wrap(CharSequence) order is the native order");
+        check(CharBuffer.wrap(new char[2]).order() == ByteOrder.nativeOrder(),
+                "wrap(char[]) order is the native order");
+        check(ByteBuffer.allocate(8).asCharBuffer().order() == ByteOrder.BIG_ENDIAN,
+                "char view of a big-endian byte buffer inherits BIG_ENDIAN");
+        ByteBuffer le = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+        check(le.asCharBuffer().order() == ByteOrder.LITTLE_ENDIAN,
+                "char view of a little-endian byte buffer inherits LITTLE_ENDIAN");
+    }
+
+    /** slice/duplicate/asReadOnly independence, mark copy, compact semantics. */
+    static void testViewsAndCompact() {
+        CharBuffer ro = CharBuffer.wrap("abcd").asReadOnlyBuffer();
+        check(ro.duplicate().isReadOnly(), "duplicate of a read-only buffer is read-only");
+        CharBuffer roS = CharBuffer.wrap("abcd").asReadOnlyBuffer();
+        roS.position(1);
+        roS.limit(3);
+        CharBuffer slice = roS.slice();
+        check(slice.isReadOnly() && slice.capacity() == 2,
+                "slice of a read-only buffer is read-only with region capacity");
+        checkThrows(ReadOnlyBufferException.class, () -> slice.put(0, 'x'),
+                "read-only slice put -> ReadOnlyBufferException");
+        CharBuffer mk = CharBuffer.wrap(new char[6]);
+        mk.position(2);
+        mk.mark();
+        mk.position(4);
+        mk.limit(5);
+        CharBuffer du = mk.duplicate();
+        check(du.position() == 4 && du.limit() == 5, "duplicate copies position and limit");
+        du.reset();
+        check(du.position() == 2, "duplicate copies the mark");
+        CharBuffer cp = CharBuffer.allocate(6);
+        cp.put('a').put('b').put('c');
+        cp.flip();
+        cp.get();
+        cp.compact();
+        check(cp.position() == 2 && cp.limit() == 6 && cp.get(0) == 'b' && cp.get(1) == 'c',
+                "compact shifts [position,limit) to the front");
+        CharBuffer cp2 = CharBuffer.allocate(4);
+        cp2.put('x');
+        cp2.mark();
+        cp2.flip();
+        cp2.get();
+        cp2.compact();
+        checkThrows(java.nio.InvalidMarkException.class, () -> cp2.reset(),
+                "compact discards the mark");
+        checkThrows(ReadOnlyBufferException.class,
+                () -> CharBuffer.allocate(2).asReadOnlyBuffer().compact(),
+                "compact on a read-only buffer -> ReadOnlyBufferException");
+        check(CharBuffer.allocate(2).asReadOnlyBuffer().asReadOnlyBuffer().isReadOnly(),
+                "asReadOnlyBuffer of a read-only buffer stays read-only");
+        char[] backing = {'a', 'b', 'c', 'd'};
+        CharBuffer src = CharBuffer.wrap(backing);
+        src.position(1);
+        src.limit(3);
+        CharBuffer sl = src.slice();
+        sl.put(0, 'Z');
+        check(backing[1] == 'Z' && sl.get(0) == 'Z',
+                "slice writes through to the backing array");
+        check(sl.arrayOffset() == 1, "heap slice arrayOffset == source position");
+    }
+
+    /** equals/compareTo/hashCode compare only [position,limit), by char value. */
+    static void testEqualsCompareToHashCode() {
+        CharBuffer a = CharBuffer.wrap("ab");
+        CharBuffer p = CharBuffer.wrap("xxab");
+        p.position(2);
+        check(a.equals(p) && p.equals(a), "equals compares only [position,limit)");
+        check(a.hashCode() == p.hashCode(), "hashCode depends only on the remaining region");
+        CharBuffer x = CharBuffer.wrap("ab");
+        CharBuffer y = CharBuffer.wrap("ax");
+        check(x.compareTo(y) < 0 && y.compareTo(x) > 0,
+                "compareTo sign follows the first differing char");
+        CharBuffer s = CharBuffer.wrap("ab");
+        CharBuffer l = CharBuffer.wrap("abcd");
+        check(s.compareTo(l) < 0 && l.compareTo(s) > 0,
+                "compareTo sign follows the remaining length when the prefix is equal");
+        CharBuffer p2 = CharBuffer.wrap("zzab");
+        p2.position(2);
+        check(s.compareTo(p2) == 0, "compareTo ignores the position prefix");
+        check(s.compareTo(s) == 0, "compareTo with itself is zero");
+        check(CharBuffer.wrap("A").compareTo(CharBuffer.wrap("a")) < 0,
+                "compareTo compares raw char values ('A' < 'a')");
+        check(CharBuffer.allocate(0).equals(CharBuffer.allocate(0)),
+                "two empty char buffers are equal");
+        CharBuffer heapEq = CharBuffer.wrap(new char[]{'a', 'b'});
+        check(a.equals(heapEq), "heap and CharSequence-backed buffers with equal content are equal");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testReadSemantics();
+        testBulkPutGet();
+        testCharSequenceContract();
+        testOrderSemantics();
+        testViewsAndCompact();
+        testEqualsCompareToHashCode();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

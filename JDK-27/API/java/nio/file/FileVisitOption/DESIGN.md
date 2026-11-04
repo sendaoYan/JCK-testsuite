@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：8 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 9 → 28）：枚举契约（ordinal 0、values 克隆、toString==name、valueOf 往返、
+负例 IAE/NPE、EnumSet 矩阵）；FOLLOW_LINKS 行为（探针 /tmp/nio-a9-probe/Probe7 实测，与 JDK-8
+一致）：目录符号链接默认 visitFile(isSymbolicLink) 不进入、FOLLOW_LINKS 下 preVisitDirectory
+并重访目标内容；自环 -> FileSystemLoopException 精确；断链两种模式均走 visitFile 不进
+visitFileFailed。

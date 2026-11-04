@@ -107,9 +107,204 @@ public class ServerSocketChannelTest {
         }
     }
 
+    // ===================== A6 deepening: bind/accept lifecycle, selector flow, options, close =====================
+
+    static final InetAddress LO = InetAddress.getLoopbackAddress();
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    /** Throwing action so lambdas may call methods that declare checked IOException. */
+    interface Op { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> ex, Op r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
+    }
+
+    static void testUnboundState() throws Exception {
+        try (ServerSocketChannel ssc = ServerSocketChannel.open()) {
+            check(ssc.getLocalAddress() == null, "unbound: getLocalAddress is null");
+            check(ssc.socket().getLocalPort() == -1, "unbound: adaptor port is -1");
+            check(!ssc.socket().isBound(), "unbound: adaptor not bound");
+            check(ssc.validOps() == SelectionKey.OP_ACCEPT, "validOps only OP_ACCEPT");
+            check(ssc.provider() == java.nio.channels.spi.SelectorProvider.provider(),
+                  "default provider");
+            checkThrows(java.nio.channels.NotYetBoundException.class, () -> ssc.accept(),
+                        "blocking accept before bind -> NotYetBoundException");
+            ssc.configureBlocking(false);
+            checkThrows(java.nio.channels.NotYetBoundException.class, () -> ssc.accept(),
+                        "non-blocking accept before bind -> NotYetBoundException");
+        }
+    }
+
+    static void testBindSemantics() throws Exception {
+        try (ServerSocketChannel ssc = ServerSocketChannel.open()) {
+            check(ssc.bind(null) == ssc, "bind(null) returns this");
+            InetSocketAddress wild = (InetSocketAddress) ssc.getLocalAddress();
+            check(wild != null && wild.getPort() > 0, "wildcard bind has an ephemeral port");
+            check(wild.getAddress().isAnyLocalAddress(), "bind(null) binds the wildcard address");
+            checkThrows(java.nio.channels.AlreadyBoundException.class, () -> ssc.bind(null),
+                        "second bind -> AlreadyBoundException");
+            checkThrows(java.nio.channels.AlreadyBoundException.class,
+                        () -> ssc.bind(new InetSocketAddress(LO, 0)),
+                        "bind to another address while bound -> AlreadyBoundException");
+        }
+        try (ServerSocketChannel ssc = ServerSocketChannel.open()) {
+            InetSocketAddress a = (InetSocketAddress)
+                    ssc.bind(new InetSocketAddress(LO, 0), 5).getLocalAddress();
+            check(a.getAddress().equals(LO), "bind(loopback, backlog) binds the loopback address");
+            check(a.getPort() > 0, "ephemeral port with backlog overload");
+            check(ssc.socket().getLocalPort() == a.getPort(), "adaptor port matches");
+        }
+    }
+
+    static void testSelectorAcceptFlow() throws Exception {
+        try (ServerSocketChannel ssc = ServerSocketChannel.open()) {
+            ssc.bind(new InetSocketAddress(LO, 0));
+            ssc.configureBlocking(false);
+            InetSocketAddress addr = (InetSocketAddress) ssc.getLocalAddress();
+            try (java.nio.channels.Selector sel = java.nio.channels.Selector.open()) {
+                SelectionKey key = ssc.register(sel, SelectionKey.OP_ACCEPT);
+                check(sel.selectNow() == 0, "not ready before client connects");
+                try (SocketChannel client = SocketChannel.open(addr)) {
+                    check(client.isConnected(), "client connected (blocking open-connect)");
+                    check(sel.select(5_000) == 1, "exactly one ready channel");
+                    check(sel.selectedKeys().size() == 1, "exactly one selected key");
+                    check(key.readyOps() == SelectionKey.OP_ACCEPT, "readyOps == OP_ACCEPT");
+                    SocketChannel accepted = ssc.accept();
+                    check(accepted != null, "accept returns the pending connection");
+                    check(accepted.isConnected(), "accepted channel is connected");
+                    InetSocketAddress remote = (InetSocketAddress) accepted.getRemoteAddress();
+                    check(remote.getPort()
+                          == ((InetSocketAddress) client.getLocalAddress()).getPort(),
+                          "accepted remote port equals client local port");
+                    check(accepted.isBlocking(), "accepted channel defaults to blocking");
+                    check(sel.selectedKeys().remove(key), "remove processed key");
+                    check(sel.selectNow() == 0, "no further readiness");
+                    check(ssc.accept() == null, "accept drained the pending connection");
+                    accepted.close();
+                }
+            }
+        }
+    }
+
+    static void testBlockingAcceptWithDaemonClient() throws Exception {
+        try (ServerSocketChannel ssc = ServerSocketChannel.open()) {
+            ssc.bind(new InetSocketAddress(LO, 0));
+            final InetSocketAddress addr = (InetSocketAddress) ssc.getLocalAddress();
+            final SocketChannel[] client = new SocketChannel[1];
+            Thread t = new Thread(() -> {
+                try { client[0] = SocketChannel.open(addr); }
+                catch (Exception ignore) { }
+            }, "ssc-client");
+            t.setDaemon(true);
+            t.start();
+            SocketChannel accepted = ssc.accept(); // blocking until the client arrives
+            check(accepted != null && accepted.isConnected(), "blocking accept returned a connection");
+            t.join(5_000);
+            check(!t.isAlive(), "client daemon finished");
+            check(client[0] != null && client[0].isConnected(), "client side connected");
+            accepted.close();
+            client[0].close();
+        }
+    }
+
+    static void testSocketAdaptor() throws Exception {
+        try (ServerSocketChannel ssc = ServerSocketChannel.open()) {
+            ssc.bind(new InetSocketAddress(LO, 0));
+            java.net.ServerSocket sock = ssc.socket();
+            check(sock.getChannel() == ssc, "adaptor getChannel identity");
+            check(sock.getLocalPort() == ((InetSocketAddress) ssc.getLocalAddress()).getPort(),
+                  "adaptor local port equals channel port");
+            final InetSocketAddress addr = (InetSocketAddress) ssc.getLocalAddress();
+            final java.net.Socket[] client = new java.net.Socket[1];
+            Thread t = new Thread(() -> {
+                try { client[0] = new java.net.Socket(addr.getAddress(), addr.getPort()); }
+                catch (Exception ignore) { }
+            }, "ssc-sock-client");
+            t.setDaemon(true);
+            t.start();
+            java.net.Socket accepted = sock.accept();
+            check(accepted != null && accepted.isConnected(), "adaptor accept returned a socket");
+            t.join(5_000);
+            check(!t.isAlive(), "adaptor client daemon finished");
+            accepted.close();
+            if (client[0] != null) client[0].close();
+        }
+    }
+
+    static void testOptionDetails() throws Exception {
+        try (ServerSocketChannel ssc = ServerSocketChannel.open()) {
+            check(ssc.setOption(StandardSocketOptions.SO_REUSEADDR, true) == ssc,
+                  "setOption returns this");
+            check(ssc.getOption(StandardSocketOptions.SO_REUSEADDR), "SO_REUSEADDR readback true");
+            ssc.setOption(StandardSocketOptions.SO_REUSEADDR, false);
+            check(!ssc.getOption(StandardSocketOptions.SO_REUSEADDR), "SO_REUSEADDR readback false");
+            checkThrows(UnsupportedOperationException.class,
+                        () -> ssc.setOption(StandardSocketOptions.SO_SNDBUF, 1024),
+                        "setOption(SO_SNDBUF) on SSC -> UnsupportedOperationException");
+            checkThrows(UnsupportedOperationException.class,
+                        () -> ssc.getOption(StandardSocketOptions.SO_SNDBUF),
+                        "getOption(SO_SNDBUF) on SSC -> UnsupportedOperationException");
+            checkThrows(UnsupportedOperationException.class,
+                        () -> ssc.setOption(StandardSocketOptions.IP_MULTICAST_TTL, 1),
+                        "setOption(IP_MULTICAST_TTL) on SSC -> UnsupportedOperationException");
+        }
+    }
+
+    static void testCloseSemantics() throws Exception {
+        ServerSocketChannel ssc = ServerSocketChannel.open();
+        ssc.bind(new InetSocketAddress(LO, 0));
+        ssc.close();
+        check(!ssc.isOpen(), "closed");
+        checkThrows(java.nio.channels.ClosedChannelException.class, () -> ssc.accept(),
+                    "accept after close -> ClosedChannelException");
+        checkThrows(java.nio.channels.ClosedChannelException.class, () -> ssc.bind(null),
+                    "bind after close -> ClosedChannelException");
+        checkThrows(java.nio.channels.ClosedChannelException.class,
+                    () -> ssc.setOption(StandardSocketOptions.SO_RCVBUF, 1024),
+                    "setOption after close -> ClosedChannelException");
+        checkThrows(java.nio.channels.ClosedChannelException.class,
+                    () -> ssc.getOption(StandardSocketOptions.SO_RCVBUF),
+                    "getOption after close -> ClosedChannelException");
+        ssc.close(); // idempotent
+        check(!ssc.isOpen(), "still closed after second close");
+        check(ssc.validOps() == SelectionKey.OP_ACCEPT, "validOps still queryable after close");
+    }
+
+    static void testRegisterWhileBound() throws Exception {
+        try (ServerSocketChannel ssc = ServerSocketChannel.open();
+             java.nio.channels.Selector sel = java.nio.channels.Selector.open()) {
+            ssc.bind(new InetSocketAddress(LO, 0));
+            checkThrows(java.nio.channels.IllegalBlockingModeException.class,
+                        () -> ssc.register(sel, SelectionKey.OP_ACCEPT),
+                        "register while blocking -> IllegalBlockingModeException");
+            ssc.configureBlocking(false);
+            SelectionKey key = ssc.register(sel, SelectionKey.OP_ACCEPT);
+            check(key.isValid(), "registered non-blocking bound channel");
+            checkThrows(java.nio.channels.IllegalBlockingModeException.class,
+                        () -> ssc.configureBlocking(true),
+                        "configureBlocking(true) while registered -> IllegalBlockingModeException");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testUnboundState();
+        testBindSemantics();
+        testSelectorAcceptFlow();
+        testBlockingAcceptWithDaemonClient();
+        testSocketAdaptor();
+        testOptionDetails();
+        testCloseSemantics();
+        testRegisterWhileBound();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

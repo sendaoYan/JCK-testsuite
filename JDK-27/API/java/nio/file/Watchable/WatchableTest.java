@@ -79,9 +79,80 @@ public class WatchableTest {
         }
     }
 
+    // ---- appended: overload shapes via reflection ----
+    static void testOverloadShapes() throws Exception {
+        Class<?> c = Class.forName("java.nio.file.Watchable");
+        Class<?> ws = Class.forName("java.nio.file.WatchService");
+        Class<?> kindArr = Class.forName("[Ljava.nio.file.WatchEvent$Kind;");
+        Class<?> modArr = Class.forName("[Ljava.nio.file.WatchEvent$Modifier;");
+        boolean varargsForm = false;
+        boolean extendedForm = false;
+        for (java.lang.reflect.Method m : c.getMethods()) {
+            if (!m.getName().equals("register")) continue;
+            Class<?>[] ps = m.getParameterTypes();
+            if (ps.length == 2 && ps[0] == ws && ps[1] == kindArr) varargsForm = true;
+            if (ps.length == 3 && ps[0] == ws && ps[1] == kindArr && ps[2] == modArr)
+                extendedForm = true;
+        }
+        check(varargsForm, "register(WatchService, Kind...) form present");
+        check(extendedForm, "register(WatchService, Kind[], Modifier[]) form present");
+        check(WatchKey.class.isAssignableFrom(
+                      c.getMethod("register", ws, kindArr).getReturnType()),
+              "register returns WatchKey");
+        check(Watchable.class.isAssignableFrom(Path.class), "Path implements Watchable");
+    }
+
+    // ---- appended: arg pass-through + missing/non-directory registration ----
+    static void testEdges() throws Exception {
+        Path dir = Files.createTempDirectory("jck");
+        try (WatchService ws = FileSystems.getDefault().newWatchService()) {
+            // a custom Watchable is a plain contract: args pass through verbatim
+            final java.nio.file.WatchEvent.Kind<?>[] captured =
+                    new java.nio.file.WatchEvent.Kind<?>[1];
+            final java.nio.file.WatchEvent.Modifier[] capturedMods =
+                    new java.nio.file.WatchEvent.Modifier[1];
+            Watchable custom = new Watchable() {
+                public WatchKey register(WatchService s, java.nio.file.WatchEvent.Kind<?>... events) {
+                    return register(s, events, new java.nio.file.WatchEvent.Modifier[0]);
+                }
+                public WatchKey register(WatchService s, java.nio.file.WatchEvent.Kind<?>[] events,
+                                         java.nio.file.WatchEvent.Modifier... modifiers) {
+                    captured[0] = events.length > 0 ? events[0] : null;
+                    capturedMods[0] = modifiers.length > 0 ? modifiers[0] : null;
+                    return null;
+                }
+            };
+            WatchKey none = custom.register(ws, StandardWatchEventKinds.ENTRY_DELETE);
+            check(none == null, "custom implementation return value passes through");
+            check(captured[0] == StandardWatchEventKinds.ENTRY_DELETE,
+                  "varargs arrive as a Kind[]");
+            check(capturedMods[0] == null, "default modifier array is empty");
+
+            boolean nsfe = false;
+            try { dir.resolve("ghost").register(ws, StandardWatchEventKinds.ENTRY_CREATE); }
+            catch (java.nio.file.NoSuchFileException e) { nsfe = true; }
+            check(nsfe, "register missing directory -> NoSuchFileException");
+            Path plain = dir.resolve("plain.txt");
+            Files.writeString(plain, "p");
+            boolean nde = false;
+            try { plain.register(ws, StandardWatchEventKinds.ENTRY_CREATE); }
+            catch (java.nio.file.NotDirectoryException e) { nde = true; }
+            check(nde, "register a regular file -> NotDirectoryException");
+            boolean npe = false;
+            try { dir.register(ws, (java.nio.file.WatchEvent.Kind<?>[]) null); }
+            catch (NullPointerException e) { npe = true; }
+            check(npe, "register with null events -> NullPointerException");
+        } finally {
+            try { Files.deleteIfExists(dir.resolve("plain.txt")); } catch (Exception ignore) { }
+            Files.deleteIfExists(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testOverloadShapes();
+        testEdges();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

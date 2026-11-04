@@ -4,6 +4,9 @@
  * @run main FileTypeDetectorTest
  */
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.spi.FileTypeDetector;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -18,6 +21,15 @@ public class FileTypeDetectorTest {
         passed++;
     }
 
+    /** Fixed-answer detector exercising the protected constructor contract. */
+    static final class FixedDetector extends FileTypeDetector {
+        int calls;
+        public String probeContentType(Path path) {
+            calls++;
+            return "application/jck";
+        }
+    }
+
     static void testFileTypeDetector() {
         check(Modifier.isAbstract(FileTypeDetector.class.getModifiers()), "is abstract");
 
@@ -27,8 +39,120 @@ public class FileTypeDetectorTest {
         for (String n : required) check(names.contains(n), "has method " + n);
     }
 
-    public static void main(String[] args) {
+    // ---- appended: abstract shape ----
+    static void testShape() throws Exception {
+        Class<?> c = Class.forName("java.nio.file.spi.FileTypeDetector");
+        check(Modifier.isPublic(c.getModifiers()), "public class");
+        check(!c.isInterface(), "class, not interface");
+        check(c.getSuperclass() == Object.class, "extends Object directly");
+        // JDK-8 declares an extra private (Void) security-gate constructor; the
+        // public contract is the protected no-arg constructor for subclasses
+        boolean hasProtected = false;
+        for (java.lang.reflect.Constructor<?> ct : c.getDeclaredConstructors())
+            if (Modifier.isProtected(ct.getModifiers())) hasProtected = true;
+        check(hasProtected, "protected constructor for subclasses");
+        check(java.util.Arrays.stream(c.getDeclaredConstructors())
+                .anyMatch(ct -> ct.getParameterTypes().length == 0
+                      && Modifier.isProtected(ct.getModifiers())),
+              "protected no-arg constructor");
+        Method probe = c.getMethod("probeContentType", Path.class);
+        check(probe.getReturnType() == String.class, "probeContentType returns String");
+        check(Modifier.isAbstract(probe.getModifiers()), "probeContentType is abstract");
+        check(Modifier.isPublic(probe.getModifiers()), "probeContentType is public");
+    }
+
+    // ---- appended: subclass contract ----
+    static void testSubclassContract() throws Exception {
+        Path dir = Files.createTempDirectory("jck");
+        try {
+            Path f = dir.resolve("anything.bin");
+            Files.write(f, "x".getBytes(StandardCharsets.UTF_8));
+
+            // fixed answer, call counting, repeated calls
+            FixedDetector d = new FixedDetector();
+            check("application/jck".equals(d.probeContentType(f)), "custom answer returned");
+            check(d.calls == 1, "exactly one probe call");
+            d.probeContentType(f);
+            d.probeContentType(dir.resolve("ghost"));
+            check(d.calls == 3, "each call counted, missing files included");
+
+            // null is a legal answer (content type unknown)
+            FileTypeDetector unknown = new FileTypeDetector() {
+                public String probeContentType(Path path) { return null; } };
+            check(unknown.probeContentType(f) == null, "null means unknown");
+
+            // IOException from a detector propagates verbatim to its caller
+            final java.io.IOException boom = new java.io.IOException("jck-probe-failure");
+            FileTypeDetector failing = new FileTypeDetector() {
+                public String probeContentType(Path path) throws java.io.IOException {
+                    throw boom;
+                } };
+            boolean propagated = false;
+            try { failing.probeContentType(f); }
+            catch (java.io.IOException e) { propagated = (e == boom); }
+            check(propagated, "detector IOException propagates as the same object");
+
+            // null-path handling is subclass-defined (the interface imposes no
+            // check), so a trivial detector simply answers for null as well
+            FixedDetector counting = new FixedDetector();
+            check("application/jck".equals(counting.probeContentType(null)),
+                  "null-path handling is subclass-defined (no platform check)");
+            check(counting.calls == 1, "body entered once for null path");
+        } finally {
+            try { Files.deleteIfExists(dir.resolve("anything.bin")); } catch (Exception ignore) { }
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    // ---- appended: Files.probeContentType delegation (platform MIME table measured) ----
+    static void testPlatformDelegation() throws Exception {
+        Path dir = Files.createTempDirectory("jck");
+        try {
+            // common extensions resolved from the platform MIME table (measured)
+            check("text/plain".equals(Files.probeContentType(dir.resolve("x.txt"))),
+                  ".txt -> text/plain (measured)");
+            check("application/pdf".equals(Files.probeContentType(dir.resolve("x.pdf"))),
+                  ".pdf -> application/pdf (measured)");
+            check("text/html".equals(Files.probeContentType(dir.resolve("x.html"))),
+                  ".html -> text/html (measured)");
+            check("image/png".equals(Files.probeContentType(dir.resolve("x.png"))),
+                  ".png -> image/png (measured)");
+            // unknown and absent extensions yield null
+            check(Files.probeContentType(dir.resolve("x.jcknoext")) == null,
+                  "made-up extension -> null (measured)");
+            check(Files.probeContentType(dir.resolve("noext")) == null,
+                  "no extension -> null (measured)");
+
+            // the file need not exist: lookup is name-based and never throws here
+            check("text/plain".equals(Files.probeContentType(dir.resolve("ghost.txt"))),
+                  "missing .txt file still resolves text/plain, no IOException (measured)");
+
+            // content does not override a known extension
+            Path disguised = dir.resolve("y.txt");
+            Files.write(disguised, "%PDF-1.4 junk".getBytes(StandardCharsets.UTF_8));
+            check("text/plain".equals(Files.probeContentType(disguised)),
+                  "extension wins over content (measured)");
+
+            // our own detector is NOT in the default delegation chain (no ServiceLoader
+            // registration), so its answers never leak into Files.probeContentType
+            check(Files.probeContentType(dir.resolve("x.jckcustom")) == null,
+                  "unregistered detector is never consulted (measured)");
+
+            // a directory: JDK-8 consults a GIO-based detector on this host (measured)
+            String dirType = Files.probeContentType(dir);
+            check(dirType == null || "inode/directory".equals(dirType),
+                  "directory probe yields null or inode/directory (host-dependent)");
+        } finally {
+            try { Files.deleteIfExists(dir.resolve("y.txt")); } catch (Exception ignore) { }
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
         testFileTypeDetector();
+        testShape();
+        testSubclassContract();
+        testPlatformDelegation();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

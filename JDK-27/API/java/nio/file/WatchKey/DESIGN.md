@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：19 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：key 同一性（同 service 重复注册同目录返回同一对象——LinuxWatchService 实测；不同 service 各自收事件）；cancel 语义（幂等/watchable 保留/pollEvents 空/reset false/取消后 poll(2s)=null）；重新注册新 key 只收新事件；closed service key 全套（invalid/pollEvents 空不抛/reset false/cancel 容忍）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

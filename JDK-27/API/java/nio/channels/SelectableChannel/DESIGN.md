@@ -33,3 +33,15 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：30 条。
+
+### A6 契约深化（追加）
+
+深化维度（全部经 JDK-27 实测锁定，双侧对称）：
+- 四类通道 validOps 精确矩阵（SSC==OP_ACCEPT、SC==READ|WRITE|CONNECT、DC==READ|WRITE、pipe 两端各一）。
+- 阻塞模式 register → IllegalBlockingModeException（DC + pipe 两端，精确异常类）。
+- configureBlocking 返回 this、blockingLock 同一性 + 同线程持锁可重入。
+- 非法兴趣位(1<<5)/负数 → IllegalArgumentException；ops=0 合法。
+- 关闭后 register/configureBlocking → ClosedChannelException；keyFor 语义；provider 绑定。
+- JDK-27 侧注意：Pipe 不是 AutoCloseable（只有 sink/source 两端是），资源式写法须拆分。
+
+本机实测断言数：73 条（深化前 24）。

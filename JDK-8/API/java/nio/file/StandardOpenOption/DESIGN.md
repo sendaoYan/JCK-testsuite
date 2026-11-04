@@ -29,3 +29,9 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：23 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：全量 10 常量矩阵（顺序 [READ,WRITE,APPEND,TRUNCATE_EXISTING,CREATE,CREATE_NEW,DELETE_ON_CLOSE,SPARSE,SYNC,DSYNC] 双侧实测/ordinal/valueOf 往返/compareTo 链/EnumSet）；组合矩阵实测（READ+APPEND→IAE、WRITE+APPEND+TRUNCATE_EXISTING→IAE、APPEND 单独合法且隐含 WRITE、TRUNCATE_EXISTING 单独不截断、CREATE 打开既有不截断、CREATE_NEW+SPARSE 建 0 字节、SYNC/DSYNC 打开写成功）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

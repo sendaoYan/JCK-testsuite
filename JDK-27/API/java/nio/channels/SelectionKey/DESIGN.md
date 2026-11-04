@@ -33,3 +33,17 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：43 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 常量矩阵（1/4/8/16、单比特、并集 29）；interestOps 往返、0 合法、非法位/OP_ACCEPT/负数 → IAE。
+- attachment 生命周期：2 参 register 等价 attach(null) → **清除**原附件（RI 行为，双侧一致）；
+  显式带参重注册恢复。
+- isValid 三条失效路径（通道关闭/选择器关闭/cancel）；取消后 7 个谓词 → CancelledKeyException，
+  attach/channel/selector 仍可用；JDK-27 侧 interestOpsOr/interestOpsAnd 同抛 CancelledKeyException。
+- 真实回环事件流上的 readyOps 精确断言（accept/read/connect）。
+- 版本差异：interestOps 切到 OP_WRITE 后 JDK-27 的 readyOps 保留先前选中的 OP_READ 位（探测得 5），
+  该侧只断言包含 OP_WRITE；JDK-8 侧精确等于 4。双侧代码互注释。
+
+本机实测断言数：101 条（深化前 27）。

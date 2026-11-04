@@ -28,3 +28,14 @@
 - 文件类用例全部 `Files.createTempDirectory("jck")` + finally 递归删除。
 - 平台相关能力以运行时能力守护，不支持时跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：68 条。
+
+### 4.1 A5 契约深化追加
+
+新增 testWhiteBoxOverloads（open==2/read==4/write==4 重载面、JDK-8 无 Arena map 重载、读写/锁方法 final）、
+testOpenOptionMatrix（NoSuchFile/FileAlreadyExists/CREATE_NEW/TRUNCATE_EXISTING/READ+APPEND IAE/
+DELETE_ON_CLOSE 打开即摘链并可用/默认 READ/重开新实例）、testPositionSemantics（position 移动/越界/clamp）、
+testAppendMode（APPEND 恒写尾、position() 恒报 EOF、READ 缺失 NonReadable）、testTransfer（transferTo 推进
+目标位置、transferFrom 绝对定位不推进、源位置语义、JDK-8 transferFrom 越界尾部为 0）、testMapMatrix
+（三种模式/越界 IOException vs 扩展/null NPE/零长映射）、testLockMatrix（重叠 OFLE/共享/越界/全文件/
+JDK-8 零长锁字面 (5,0)）、testClosedChannelMatrix（关闭后 14 操作 CCE）、testGatherScatterExtras。
+断言数 68→239 条（JDK-8 实测）。

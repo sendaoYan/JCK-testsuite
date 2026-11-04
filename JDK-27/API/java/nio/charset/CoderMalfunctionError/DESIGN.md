@@ -23,3 +23,15 @@
 
 - 白盒：public / 非 final / 父类 `Error` / `Exception` 构造器。
 - 黑盒：构造→`Error` 层级→`getCause()` 返回原异常→`getMessage()` 等于 `cause.toString()`→堆栈非空。
+
+## 深化追加（批次 A4，契约级）
+
+- 构造矩阵：cause 同一性、message == cause.toString()、toString 精确格式、null cause → getCause null 且
+  message null（Throwable(Throwable) 语义，非字面量 "null"）、二次 initCause → IllegalStateException。
+- 真实触发（契约级）：自定义 BoomDecoder/BoomEncoder（覆盖 decodeLoop/encodeLoop 抛
+  BufferOverflowException/BufferUnderflowException）→ decode/encode（3 参与便捷版）抛 CoderMalfunctionError
+  且 cause 为同一异常实例。
+- **JDK-27 版本特有**：coder 模板为 `catch (RuntimeException x)`（jdk27 Charset-X-Coder.java.template），
+  decodeLoop 抛任意 RuntimeException（如 ArithmeticException）都会被包装为 CoderMalfunctionError；
+  JDK-8 只包装 BufferUnderflow/BufferOverflow（各自断言，见 JDK-8 侧 testWrapScopeJdk8）。
+- 序列化：serialVersionUID == -1151412348057794301L（双侧实测一致）；round-trip 后 cause/message 保持。

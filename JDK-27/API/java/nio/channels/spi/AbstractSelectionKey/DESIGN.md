@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：12 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testStructureContract/testValidInvalidateContract/testAttachContract/testRealKeyContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：新 key valid；cancel 立即失效且幂等；attach 返回前值、attach(null) 清空、identity 保持；真实键 interestOps 越界抛 IllegalArgumentException、interestOps(int) 返回自身、通道 close 使 key 失效
+- 确定性与健壮性：OP_READ/OP_WRITE/OP_CONNECT/OP_ACCEPT 常量值 1/4/8/16 断言。
+- 版本差异（按侧断言）：无行为差异。
+- 本机实测断言数：13 → 45 条。

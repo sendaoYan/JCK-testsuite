@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：14 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testInterfaceContract/testStandaloneContract/testCompletedPathInRealOperation/testFailedPathInRealOperation/testHandlerUsedByFileChannel。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：接口恰好 2 方法且均无 default；completed/failed 的 attachment（含 null）原样交付；失败路径精确类型（connect 拒绝 → IOException 族；挂起读 + close → AsynchronousCloseException）
+- 确定性与健壮性：失败路径两处真实触发：连接拒绝对称端口、挂起读被 close 打断；文件通道 handler 写与参数预校验（负 position 在触碰 handler 前同步抛 IAE）。
+- 版本差异（按侧断言）：无版本差异；回调在组线程执行，附件/结果语义一致。
+- 本机实测断言数：14 → 51 条。

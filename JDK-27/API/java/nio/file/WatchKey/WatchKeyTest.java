@@ -72,9 +72,88 @@ public class WatchKeyTest {
         }
     }
 
+    // ---- appended: key identity across registrations (LinuxWatchService measured) ----
+    static void testKeyIdentity() throws Exception {
+        Path dir = Files.createTempDirectory("jck");
+        try (WatchService ws = FileSystems.getDefault().newWatchService()) {
+            WatchKey first = dir.register(ws, StandardWatchEventKinds.ENTRY_CREATE,
+                    StandardWatchEventKinds.ENTRY_DELETE);
+            WatchKey second = dir.register(ws, StandardWatchEventKinds.ENTRY_CREATE);
+            // the default provider returns the SAME key for the same watchable
+            check(second == first,
+                  "re-registering the same directory returns the same key (measured)");
+            check(second.watchable() == dir, "watchable still the directory");
+
+            try (WatchService other = FileSystems.getDefault().newWatchService()) {
+                WatchKey otherKey = dir.register(other, StandardWatchEventKinds.ENTRY_CREATE);
+                check(otherKey != first, "different service -> different key");
+                check(otherKey.isValid() && first.isValid(), "both keys valid");
+                Files.writeString(dir.resolve("id.txt"), "i");
+                WatchKey a = ws.poll(5, java.util.concurrent.TimeUnit.SECONDS);
+                WatchKey b = other.poll(5, java.util.concurrent.TimeUnit.SECONDS);
+                check(a == first, "first service signalled its own key");
+                check(b == otherKey, "second service signalled its own key");
+                a.reset();
+                b.reset();
+                otherKey.cancel();
+            }
+        } finally {
+            try { Files.deleteIfExists(dir.resolve("id.txt")); } catch (Exception ignore) { }
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    // ---- appended: cancel semantics and closed-service keys ----
+    static void testCancelAndCloseSemantics() throws Exception {
+        Path dir = Files.createTempDirectory("jck");
+        try (WatchService ws = FileSystems.getDefault().newWatchService()) {
+            WatchKey key = dir.register(ws, StandardWatchEventKinds.ENTRY_CREATE);
+            key.cancel();
+            key.cancel();
+            check(!key.isValid(), "double cancel still invalid, no exception");
+            check(key.watchable() == dir, "watchable preserved after cancel");
+            check(key.pollEvents().isEmpty(), "cancelled key queue empty");
+            check(!key.reset(), "cancelled key reset -> false");
+            // a cancelled watchable no longer receives events (inotify measured)
+            Files.writeString(dir.resolve("dead.txt"), "d");
+            WatchKey none = ws.poll(2, java.util.concurrent.TimeUnit.SECONDS);
+            check(none == null, "cancelled key receives nothing (must)");
+
+            WatchKey fresh = dir.register(ws, StandardWatchEventKinds.ENTRY_CREATE);
+            check(fresh != key && fresh.isValid(), "fresh key after cancel");
+            Files.writeString(dir.resolve("live.txt"), "l");
+            WatchKey fired = ws.poll(5, java.util.concurrent.TimeUnit.SECONDS);
+            check(fired == fresh, "fresh key receives events");
+            boolean delivered = false;
+            for (java.nio.file.WatchEvent<?> e : fired.pollEvents())
+                if (e.kind() == StandardWatchEventKinds.ENTRY_CREATE
+                        && "live.txt".equals(e.context().toString()))
+                    delivered = true;
+            check(delivered, "fresh key sees its own event, not the cancelled one");
+            check(fired.reset(), "fresh key re-arms");
+
+            // keys of a closed service stay queryable but dead (measured)
+            WatchService doomed = FileSystems.getDefault().newWatchService();
+            WatchKey k = dir.register(doomed, StandardWatchEventKinds.ENTRY_CREATE);
+            doomed.close();
+            check(!k.isValid(), "closed service invalidates keys");
+            check(k.pollEvents().isEmpty(), "closed-service key pollEvents empty, no throw");
+            check(!k.reset(), "closed-service key reset -> false");
+            k.cancel();
+            check(true, "closed-service key cancel tolerated");
+            check(k.watchable() == dir, "watchable preserved after service close");
+        } finally {
+            for (String n : new String[] {"dead.txt", "live.txt"})
+                try { Files.deleteIfExists(dir.resolve(n)); } catch (Exception ignore) { }
+            Files.deleteIfExists(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testKeyIdentity();
+        testCancelAndCloseSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

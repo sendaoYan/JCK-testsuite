@@ -33,3 +33,14 @@ Pipe 读端：仅 OP_READ 可注册。
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：5 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 读契约：精确内容、scattering 跨缓冲顺序（注意 >0x7F 字面量须 (byte) 强转比较）。
+- sink 关闭 → 排空后 read -1 粘性。
+- 阻塞模式 register → IllegalBlockingModeException；OP_WRITE 注册 → IllegalArgumentException；
+  OP_READ 写入后 select 就绪。
+- 关闭后 read → ClosedChannelException。
+
+本机实测断言数：28 条（深化前 12）。

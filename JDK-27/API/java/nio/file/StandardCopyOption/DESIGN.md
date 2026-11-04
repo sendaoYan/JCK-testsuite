@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：15 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：精确枚举矩阵（顺序/ordinal/name/compareTo/valueOf 往返/EnumSet）；选项作用域实测（move+REPLACE 覆盖、copy+ATOMIC_MOVE UOE、move+COPY_ATTRIBUTES UOE、目录 copy/ATOMIC_MOVE、COPY_ATTRIBUTES mtime 精确）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

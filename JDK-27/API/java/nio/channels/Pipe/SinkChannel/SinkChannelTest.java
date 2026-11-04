@@ -71,9 +71,81 @@ public class SinkChannelTest {
         }
     }
 
+    // ===================== A6 deepening: write contracts / register / close =====================
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    /** Throwing action so lambdas may call methods that declare checked IOException. */
+    interface Op { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> ex, Op r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
+    }
+
+    static void testWriteContracts() throws Exception {
+        Pipe pipe = Pipe.open();
+        try {
+            Pipe.SinkChannel sink = pipe.sink();
+            check(sink.isOpen(), "open");
+            check(sink.validOps() == SelectionKey.OP_WRITE, "validOps is exactly OP_WRITE");
+            check((sink.validOps() & SelectionKey.OP_READ) == 0, "sink can never be selected for read");
+            check(sink.write(ByteBuffer.wrap(new byte[] {0x41, 0x42})) == 2, "write 2 exact");
+            check(sink.write(ByteBuffer.wrap(new byte[] {0x43})) == 1, "second write 1");
+            ByteBuffer all = ByteBuffer.allocate(3);
+            while (all.hasRemaining()) check(pipe.source().read(all) > 0, "source drains");
+            check(all.get(0) == 0x41 && all.get(1) == 0x42 && all.get(2) == 0x43, "FIFO order");
+            sink.configureBlocking(false);
+            check(!sink.isBlocking(), "non-blocking");
+            ByteBuffer w = ByteBuffer.wrap(new byte[] {9, 9, 9});
+            while (w.hasRemaining()) check(sink.write(w) >= 0, "non-blocking write progresses");
+        } finally {
+            pipe.sink().close();
+            pipe.source().close();
+        }
+    }
+
+    static void testRegisterAndClose() throws Exception {
+        Pipe pipe = Pipe.open();
+        try (java.nio.channels.Selector sel = java.nio.channels.Selector.open()) {
+            Pipe.SinkChannel sink = pipe.sink();
+            checkThrows(java.nio.channels.IllegalBlockingModeException.class,
+                        () -> sink.register(sel, SelectionKey.OP_WRITE),
+                        "register while blocking -> IllegalBlockingModeException");
+            sink.configureBlocking(false);
+            SelectionKey key = sink.register(sel, SelectionKey.OP_WRITE);
+            check(key.isValid(), "registered non-blocking sink");
+            check(sel.select(5_000) == 1, "sink writable once registered");
+            check(key.isWritable(), "key isWritable");
+            checkThrows(IllegalArgumentException.class,
+                        () -> sink.register(sel, SelectionKey.OP_READ),
+                        "sink register OP_READ -> IllegalArgumentException");
+        } finally {
+            pipe.sink().close();
+            pipe.source().close();
+        }
+        Pipe p2 = Pipe.open();
+        Pipe.SinkChannel closed = p2.sink();
+        closed.close();
+        check(!closed.isOpen(), "closed sink not open");
+        checkThrows(java.nio.channels.ClosedChannelException.class,
+                    () -> closed.write(ByteBuffer.wrap(new byte[] {1})),
+                    "write after close -> ClosedChannelException");
+        check(closed.validOps() == SelectionKey.OP_WRITE, "validOps still queryable after close");
+        p2.source().close();
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testWriteContracts();
+        testRegisterAndClose();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

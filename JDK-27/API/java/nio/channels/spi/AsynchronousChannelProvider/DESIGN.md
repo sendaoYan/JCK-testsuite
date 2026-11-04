@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：15 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testSurfaceContract/testProviderSingletonContract/testRecordingProviderContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：4 个抽象方法逐一签名断言；无 public 构造器；RecordingProvider 委托默认 provider 后端到端 connect/accept/读写；外来组经委托链仍被 IllegalChannelGroupException 拒绝
+- 确定性与健壮性：记录型子类直接 new（protected ctor 可达）；全部组 shutdownNow + awaitTermination 有界。
+- 版本差异（按侧断言）：构造器差异：JDK-8 另有一个 private AsynchronousChannelProvider(Void) 权限检查构造器（声明构造器 2 个），JDK-27 仅 1 个 protected；按侧断言。
+- 本机实测断言数：13 → 46 条。

@@ -19,6 +19,20 @@ public class SecureDirectoryStreamTest {
         passed++;
     }
 
+    interface Op { void run() throws Exception; }
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    static void checkThrows(Class<? extends Throwable> ex, Op r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.nio.file.SecureDirectoryStream");
@@ -114,9 +128,98 @@ public class SecureDirectoryStreamTest {
         }
     }
 
+    // ===== deepened contract coverage (batch A9): probe-confirmed =====
+    @SuppressWarnings("unchecked")
+    static void testDeepened() throws Exception {
+        Path dir = Files.createTempDirectory("jck-sds2");
+        try {
+            DirectoryStream<Path> raw = Files.newDirectoryStream(dir);
+            if (!(raw instanceof SecureDirectoryStream)) {
+                raw.close();
+                System.out.println("NOTE: no secure stream support; deepened part skipped");
+                check(true, "graceful skip recorded");
+                return;
+            }
+            SecureDirectoryStream<Path> sds = (SecureDirectoryStream<Path>) raw;
+            try {
+                // read channel round-trip through the stream
+                try (var ch = sds.newByteChannel(Path.of("rw.txt"),
+                        java.util.Set.of(StandardOpenOption.CREATE, StandardOpenOption.WRITE))) {
+                    ch.write(java.nio.ByteBuffer.wrap("abc".getBytes()));
+                }
+                try (var ch = sds.newByteChannel(Path.of("rw.txt"),
+                        java.util.Set.of(StandardOpenOption.READ))) {
+                    java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(3);
+                    ch.read(buf);
+                    check(new String(buf.array()).equals("abc"), "read channel through stream");
+                }
+                // CREATE_NEW + WRITE on existing -> FileAlreadyExistsException
+                // (note: CREATE_NEW alone without WRITE opens read-only without error)
+                checkThrows(java.nio.file.FileAlreadyExistsException.class,
+                      () -> sds.newByteChannel(Path.of("rw.txt"),
+                            java.util.Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)),
+                      "CREATE_NEW+WRITE existing -> FileAlreadyExistsException");
+                // NOFOLLOW view variant reads the same file
+                var v = sds.getFileAttributeView(Path.of("rw.txt"),
+                        java.nio.file.attribute.BasicFileAttributeView.class,
+                        java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                check(v != null && v.readAttributes().size() == 3, "NOFOLLOW view reads size");
+                // nested stream with NOFOLLOW option
+                Files.createDirectory(dir.resolve("nd"));
+                Files.writeString(dir.resolve("nd").resolve("inner"), "i");
+                try (SecureDirectoryStream<Path> nested = sds.newDirectoryStream(Path.of("nd"),
+                        java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    int c = 0;
+                    for (Path p : nested) c++;
+                    check(c == 1, "nested NOFOLLOW stream lists entries");
+                }
+                // deleteDirectory nonempty -> DirectoryNotEmptyException
+                checkThrows(java.nio.file.DirectoryNotEmptyException.class,
+                      () -> sds.deleteDirectory(Path.of("nd")),
+                      "deleteDirectory nonempty -> DirectoryNotEmptyException");
+                // deleteDirectory missing -> NoSuchFileException
+                checkThrows(java.nio.file.NoSuchFileException.class,
+                      () -> sds.deleteDirectory(Path.of("ghostd")),
+                      "deleteDirectory missing -> NoSuchFileException");
+                // deleteFile on a directory -> FileSystemException "Is a directory" (probe-confirmed)
+                checkThrows(java.nio.file.FileSystemException.class,
+                      () -> sds.deleteFile(Path.of("nd")),
+                      "deleteFile on directory -> FileSystemException");
+                // deleteDirectory on a file -> FileSystemException
+                checkThrows(java.nio.file.FileSystemException.class,
+                      () -> sds.deleteDirectory(Path.of("rw.txt")),
+                      "deleteDirectory on file -> FileSystemException");
+                // clean up nested content through the stream itself
+                try (SecureDirectoryStream<Path> nested = sds.newDirectoryStream(Path.of("nd"))) {
+                    for (Path p : nested) nested.deleteFile(Path.of(p.getFileName().toString()));
+                }
+                sds.deleteDirectory(Path.of("nd"));
+                check(!Files.exists(dir.resolve("nd")), "deleteDirectory after emptying");
+                sds.deleteFile(Path.of("rw.txt"));
+                check(!Files.exists(dir.resolve("rw.txt")), "deleteFile cleanup");
+            } finally {
+                try { sds.close(); } catch (Exception ignore) { }
+            }
+            // close semantics for further operations
+            checkThrows(java.nio.file.ClosedDirectoryStreamException.class,
+                  () -> sds.deleteFile(Path.of("x")),
+                  "deleteFile after close -> ClosedDirectoryStreamException");
+            // views are lazy: obtaining one after close does not throw
+            check(sds.getFileAttributeView(
+                      java.nio.file.attribute.BasicFileAttributeView.class) != null,
+                  "getFileAttributeView after close returns a lazy view (no throw)");
+        } finally {
+            try (var s = Files.walk(dir)) {
+                s.sorted(java.util.Comparator.reverseOrder())
+                 .forEach(p -> { try { Files.deleteIfExists(p); } catch (Exception ignore) { } });
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepened();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

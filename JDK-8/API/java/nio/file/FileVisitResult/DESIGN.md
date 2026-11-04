@@ -29,3 +29,13 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：13 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 11 → 34）：声明序 ordinal 0..3（CONTINUE/TERMINATE/SKIP_SUBTREE/SKIP_SIBLINGS）；
+values() 每次新数组且可涂写不影响枚举；toString == name；compareTo 按声明序；valueOf 全往返；
+负例精确类型 valueOf(小写)/valueOf(未知) -> IllegalArgumentException、valueOf(null) -> NPE；
+EnumSet of/noneOf/allOf/range 矩阵。行为矩阵（探针 /tmp/nio-a9-probe/Probe8 双侧实测）：
+SKIP_SIBLINGS@preVisitDirectory -> [pre] 完结（无条目无 post）；SKIP_SUBTREE@visitFile ≈ CONTINUE；
+TERMINATE@preVisitDirectory -> [pre]；SKIP_SIBLINGS@visitFile 平坦目录 -> [pre,file,post]；
+TERMINATE@visitFile -> [pre,file] 无 post。

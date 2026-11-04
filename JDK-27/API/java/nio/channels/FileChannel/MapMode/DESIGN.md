@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：15 条。
+
+### 4.1 A5 契约深化追加
+
+新增 testWhiteBoxA5（二进制名/非枚举/恰 3 公共常量/私有构造 MapMode(String)/无 values-valueOf）与
+testBlackBoxA5（toString 精确值 "READ-ONLY"/"READ-WRITE"/"PRIVATE"、equals/hashCode 恒等、三模式映射
+行为含 PRIVATE 写不落盘）。断言数 15→35 条（JDK-27 实测）。

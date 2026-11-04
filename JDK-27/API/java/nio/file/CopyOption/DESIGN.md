@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：6 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：marker 结构（public/零声明方法/Object 外无方法）；实现者归类（StandardCopyOption 三常量、LinkOption 双实现、匿名实现合法）；选项槽边界（空数组等价无选项、LinkOption.NOFOLLOW_LINKS 在 CopyOption 槽复制链接本身、null 元素 NPE 双侧实测）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

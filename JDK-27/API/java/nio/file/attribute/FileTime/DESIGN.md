@@ -33,3 +33,18 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：34 条。
+
+### 第 4 部分补充（批次 A12 契约深化）
+
+在既有白盒+黑盒基础上追加 `testContract()`（及 FileAttribute 的 `testContract2()`），契约维度扩至：
+- fromMillis 往返矩阵（0/负/Long.MAX_VALUE/Long.MIN_VALUE）；to(TimeUnit) 七单位换算
+  （截断向零、饱和：MAX 毫秒→微/纳秒饱和，纳秒往返损失精度实测 9223372036854）；
+- 跨表示 equals（1000ms==1s）、亚毫秒 compareTo（999ns<1ms<…、1000000ns==1ms）；
+- toInstant 往返；toString 14 个精确串（epoch/纪元前/三种小数位/0001/9999 年/远未来/远过去）；
+- FileTime 非 Serializable + ObjectOutputStream 拒绝；Files mtime 往返含纪元前。
+
+健壮性：新增用例仍走临时目录 + finally 递归清理；权限/属主/DOS 位修改类断言先恢复再删；
+负例用 checkThrows/checkThrowsIO 断言精确异常类型（IO 路径用 IORunnable 变体）；
+平台实测事实（Linux ext4：acl 视图不可用、dos/user 视图可用、dos 属性经 user.DOSATTRIB xattr
+模拟且 readonly 不被内核强制、creationTime 为模拟值、ctime 不可设置）在断言处注释。
+JDK-27 侧实测断言数：94 条。

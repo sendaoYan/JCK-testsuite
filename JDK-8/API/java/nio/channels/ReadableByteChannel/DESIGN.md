@@ -28,3 +28,9 @@
 - 文件类用例全部 `Files.createTempDirectory("jck")` + finally 递归删除。
 - 平台相关能力以运行时能力守护，不支持时跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：12 条。
+
+### 4.1 A5 契约深化追加
+
+新增 ArrayChannel 最小实现（顺序交付、n 语义、[position,limit) 遵守、满缓冲 0、关闭后 CCE）、
+testWhiteBoxA5（单声明方法/throws IOException/无 default/无写向）、testFileChannelView（偏移缓冲、
+只读目标缓冲 IAE（实测）、空缓冲 0）。断言数 12→33 条（JDK-8 实测）。

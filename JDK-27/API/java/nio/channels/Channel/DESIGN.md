@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：14 条。
+
+### 4.1 A5 契约深化追加
+
+新增 testWhiteBoxA5（接口面恰 isOpen+close、无 default、返回类型、close throws IOException）与
+testBlackBoxA5（FlagChannel 最小实现：try-with-resources 恰关闭一次、二次关闭被容忍；DatagramChannel
+经 Channel 视图开合）。断言数 14→26 条（JDK-27 实测）。

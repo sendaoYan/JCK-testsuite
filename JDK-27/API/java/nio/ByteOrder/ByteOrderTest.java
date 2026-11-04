@@ -105,9 +105,89 @@ public class ByteOrderTest {
         check(ByteOrder.BIG_ENDIAN.getDeclaringClass() == ByteOrder.class, "getDeclaringClass");
     }
 
+    /** Enum extras (JDK-9+): defensive values() copy, EnumSet coverage, field surface. */
+    static void testEnumExtras() throws Exception {
+        check(ByteOrder.values() != ByteOrder.values(), "values() returns a defensive copy");
+        check(java.util.EnumSet.allOf(ByteOrder.class).size() == 2,
+                "EnumSet.allOf covers exactly the two constants");
+        check(ByteOrder.values().length == java.util.EnumSet.allOf(ByteOrder.class).size(),
+                "values() and EnumSet agree on the constant count");
+        check(ByteOrder.nativeOrder().ordinal() == 0,
+                "nativeOrder() == LITTLE_ENDIAN on x86_64 and is declared first (ordinal 0)");
+        Class<?> c = Class.forName("java.nio.ByteOrder");
+        check(c.getFields().length == 2, "exactly two public fields: BIG_ENDIAN, LITTLE_ENDIAN");
+        check(c.getField("BIG_ENDIAN").getType() == ByteOrder.class
+                && c.getField("LITTLE_ENDIAN").getType() == ByteOrder.class,
+                "both constants are typed ByteOrder");
+    }
+
+    /** Endianness contract: host order, factory defaults, order switching, views. */
+    static void testEndiannessContract() {
+        // This host is x86_64, so the native order is little-endian.
+        check(ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN,
+                "nativeOrder() == LITTLE_ENDIAN on x86_64");
+
+        // Default BIG_ENDIAN for every byte-buffer factory.
+        check(ByteBuffer.allocateDirect(8).order() == ByteOrder.BIG_ENDIAN,
+                "direct buffer default order is BIG_ENDIAN");
+        check(ByteBuffer.wrap(new byte[8]).order() == ByteOrder.BIG_ENDIAN,
+                "wrapped buffer default order is BIG_ENDIAN");
+        // Implementation-stable (not promised by the javadoc): slice/duplicate/
+        // asReadOnlyBuffer reset the order to the BIG_ENDIAN default instead of
+        // carrying the source's explicit order over; verified on heap and direct
+        // buffers on both JDK-8 and JDK-27.
+        ByteBuffer dup = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).duplicate();
+        check(dup.order() == ByteOrder.BIG_ENDIAN,
+                "duplicate resets the order to BIG_ENDIAN (implementation-stable)");
+        check(ByteBuffer.allocateDirect(8).order(ByteOrder.LITTLE_ENDIAN).slice().order()
+                == ByteOrder.BIG_ENDIAN, "slice of a direct buffer resets the order too");
+
+        // order() never rewrites bytes; it only changes their interpretation.
+        ByteBuffer mixed = ByteBuffer.allocate(8);
+        mixed.putLong(0x0102030405060708L);
+        mixed.flip();
+        mixed.order(ByteOrder.LITTLE_ENDIAN);
+        check(mixed.getLong() == 0x0807060504030201L,
+                "switching order reinterprets the same bytes");
+        mixed.rewind();
+        mixed.order(ByteOrder.BIG_ENDIAN);
+        check(mixed.getLong() == 0x0102030405060708L, "switching back restores the value");
+
+        // Typed views track the creating byte buffer's explicit order, not the host order.
+        ByteBuffer be = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN);
+        check(be.asCharBuffer().order() == ByteOrder.BIG_ENDIAN
+                && be.asIntBuffer().order() == ByteOrder.BIG_ENDIAN,
+                "views inherit the explicit BIG_ENDIAN order even on a little-endian host");
+        ByteBuffer le = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+        check(le.asCharBuffer().order() == ByteOrder.LITTLE_ENDIAN
+                && le.asLongBuffer().order() == ByteOrder.LITTLE_ENDIAN,
+                "views inherit the explicit LITTLE_ENDIAN order");
+
+        // Native-order equivalence: the same long laid out under native vs BIG_ENDIAN.
+        ByteBuffer nativeLayout = ByteBuffer.allocate(8).order(ByteOrder.nativeOrder());
+        nativeLayout.putLong(0x0102030405060708L);
+        nativeLayout.flip();
+        ByteBuffer beLayout = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN);
+        beLayout.putLong(0x0102030405060708L);
+        beLayout.flip();
+        if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
+            check(nativeLayout.get(0) == 0x08 && beLayout.get(0) == 0x01,
+                    "native LE layout stores the low byte first");
+        } else {
+            check(nativeLayout.get(0) == 0x01 && beLayout.get(0) == 0x01,
+                    "on a big-endian host both layouts agree");
+        }
+
+        // Cross-type equality and null safety.
+        check(!ByteOrder.BIG_ENDIAN.equals(null), "equals(null) is false");
+        check(!ByteOrder.BIG_ENDIAN.equals("BIG_ENDIAN"), "equals across types is false");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEnumExtras();
+        testEndiannessContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

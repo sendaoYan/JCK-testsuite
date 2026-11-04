@@ -33,3 +33,17 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：14 条。
+
+### 第 4 部分补充（批次 A12 契约深化）
+
+在既有白盒+黑盒基础上追加 `testContract()`（及 FileAttribute 的 `testContract2()`），契约维度扩至：
+- name "owner"；getOwner 等于当前用户 lookup；setOwner 自身往返；setOwner(null) NPE；
+- 外来实现属主→ProviderMismatchException；缺失文件 get/setOwner 负例；
+- posix 视图 owner 面（name 保持 "posix"）；Files.getOwner/setOwner 往返；
+  setAttribute/getAttribute("owner:owner"、"posix:owner") 往返；目录视图。
+
+健壮性：新增用例仍走临时目录 + finally 递归清理；权限/属主/DOS 位修改类断言先恢复再删；
+负例用 checkThrows/checkThrowsIO 断言精确异常类型（IO 路径用 IORunnable 变体）；
+平台实测事实（Linux ext4：acl 视图不可用、dos/user 视图可用、dos 属性经 user.DOSATTRIB xattr
+模拟且 readonly 不被内核强制、creationTime 为模拟值、ctime 不可设置）在断言处注释。
+JDK-27 侧实测断言数：33 条。

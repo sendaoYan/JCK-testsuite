@@ -29,3 +29,12 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：5 条。
+
+
+### 第 4 部分补充（批次 A11 契约深化）
+
+在既有用例之上新增 testContract* 系列（构造矩阵 / getMessage-null 分支矩阵 / initCause 一次性 / serialVersionUID -1390291775875351931 + round-trip / 真实触发 / 精确负例）：
+
+- 真实触发：readAttributes/delete/newInputStream/newDirectoryStream/copy 缺失路径五种触发 + deleteIfExists(false)/exists(false) 静默对照。
+- 断言计数更新（JDK-8 侧 / JDK-27 侧）：31 / 31 条（`PASS (N assertions)` 实测）。
+- 健壮性：临时目录 + finally 递归清理；权限用例 finally 恢复；能力守护（root/跨 store/zip provider）NOTE 跳过不判失败。

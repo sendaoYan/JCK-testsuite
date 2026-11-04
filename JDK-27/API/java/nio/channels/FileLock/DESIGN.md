@@ -33,3 +33,10 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：48 条。
+
+### 4.1 A5 契约深化追加
+
+新增 testWhiteBoxA5（抽象类/2 受保护构造/final 方法面/isValid+release 抽象）与 testBlackBoxA5：
+JDK-27 侧钉死零长锁查询 overlaps(0,0)/(10,0) 为 true、(20,0)/(25,0) 为 false、overlaps(10,Long.MAX_VALUE)
+true（无溢出回绕）；StubLock null channel 构造 -> NPE；tryLock(5,0) 规范化为 (5, MAX-5)。与 JDK-8 侧
+字面零长语义的差异双侧各自断言。断言数 48→76 条（JDK-27 实测）。

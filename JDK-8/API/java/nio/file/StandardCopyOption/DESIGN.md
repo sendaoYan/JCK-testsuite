@@ -29,3 +29,9 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：15 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：精确枚举矩阵（values 恰 [REPLACE_EXISTING,COPY_ATTRIBUTES,ATOMIC_MOVE] 双侧实测顺序/ordinal/name/compareTo 链/toString/valueOf 全量往返/EnumSet/valueOf 小写 IAE）；选项作用域实测（move+REPLACE_EXISTING 覆盖既有文件、copy+ATOMIC_MOVE→UOE、move+COPY_ATTRIBUTES→UOE、空目录 copy 无选项建目标/REPLACE 覆盖空目录、目录 ATOMIC_MOVE 同存储成功 ext4、COPY_ATTRIBUTES mtime 毫秒级精确保持）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

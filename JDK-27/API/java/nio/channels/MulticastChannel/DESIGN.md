@@ -33,3 +33,16 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：16 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 多播网卡选择器：up + supportsMulticast + IPv4，优先非 loopback，缺失时 NOTE+跳过（本机
+  lo 不支持多播，实际使用 enx9c69d332d386）。
+- join 幂等（同组同网卡同一 key）、drop 后重 join 新 key、getter 同一性。
+- 真实组播回环：rx 绑定组地址 + join + 发送侧 setOption(IP_MULTICAST_IF) → send → select==1 →
+  receive 字节精确。
+- 特定源 join 与任意源共存 → IllegalStateException；关闭后 join → ClosedChannelException；
+  经接口 close；IP_MULTICAST_TTL/LOOP 往返。
+
+本机实测断言数：34 条（深化前 18）。

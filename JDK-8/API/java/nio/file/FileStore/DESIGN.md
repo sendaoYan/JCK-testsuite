@@ -29,3 +29,11 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：25 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 18 → 50）：name/type/toString 非空；同目录两路径得到同一 store；空间三元组
+(total/unallocated/usable) 有界且 usable <= total；getAttribute("totalSpace") 等与 getter 恒等；
+supportsFileAttributeView 矩阵（basic/posix/owner true，acl false）；getFileStoreAttributeView
+(FileStoreAttributeView.class) -> null；Files.getFileStore(不存在) -> NoSuchFileException 精确；
+getAttribute 未知名 -> UnsupportedOperationException。

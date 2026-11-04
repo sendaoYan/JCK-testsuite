@@ -29,3 +29,9 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：15 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：完整枚举矩阵（values 恰 [NOFOLLOW_LINKS]/ordinal 0/compareTo 自身 0/toString==name/declaringClass/EnumSet allOf·noneOf/valueOf 往返/valueOf 小写 IAE/hashCode 稳定）；跟随语义扩展（空 LinkOption[] 等价默认跟随、notExists 同步、isRegularFile 跟随 true/isDirectory false、size 跟随取目标、delete 仅删链接目标存活、默认 copy 复制目标内容 vs NOFOLLOW 复制链接、getAttribute basic:isSymbolicLink 两态）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

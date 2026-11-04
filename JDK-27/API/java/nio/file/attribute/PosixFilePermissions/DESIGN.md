@@ -33,3 +33,19 @@ POSIX 权限工具：fromString/toString/asFileAttribute。
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：22 条。
+
+### 第 4 部分补充（批次 A12 契约深化）
+
+在既有白盒+黑盒基础上追加 `testContract()`（及 FileAttribute 的 `testContract2()`），契约维度扩至：
+- fromString 精确成员矩阵 + 9 槽位逐位灵敏度 + 错字符逐槽 IAE + 6 模式往返；
+- 非法矩阵（null NPE；""/短/长/非法字符 IAE 且消息精确 "Invalid mode"）；toString(null) NPE；
+  null 元素集合→"---------"；
+- asFileAttribute 快照隔离/null NPE/空集合法；createFile 精确模式（umask 不参与）+ mode 000
+  + AccessDeniedException；字符串属性族（posix:permissions Set、basic:size Long、
+  "posix:permissions,size" 键集、posix:nosuch IAE、bogusview UOE）。
+
+健壮性：新增用例仍走临时目录 + finally 递归清理；权限/属主/DOS 位修改类断言先恢复再删；
+负例用 checkThrows/checkThrowsIO 断言精确异常类型（IO 路径用 IORunnable 变体）；
+平台实测事实（Linux ext4：acl 视图不可用、dos/user 视图可用、dos 属性经 user.DOSATTRIB xattr
+模拟且 readonly 不被内核强制、creationTime 为模拟值、ctime 不可设置）在断言处注释。
+JDK-27 侧实测断言数：87 条。

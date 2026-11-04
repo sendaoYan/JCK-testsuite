@@ -33,3 +33,16 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：26 条。
+
+### 第 4 部分补充（批次 A12 契约深化）
+
+在既有白盒+黑盒基础上追加 `testContract()`（及 FileAttribute 的 `testContract2()`），契约维度扩至：
+- 文件/目录/链接（NOFOLLOW true、跟随读目标）类型矩阵；size 精确与增长；
+- fileKey 非 null 且跨读取稳定（equals/hashCode 一致、对象各异）；空文件 size 0；
+- 缺失文件 NoSuchFileException；NOFOLLOW 读普通文件等价；basic:isRegularFile/size 字符串属性族。
+
+健壮性：新增用例仍走临时目录 + finally 递归清理；权限/属主/DOS 位修改类断言先恢复再删；
+负例用 checkThrows/checkThrowsIO 断言精确异常类型（IO 路径用 IORunnable 变体）；
+平台实测事实（Linux ext4：acl 视图不可用、dos/user 视图可用、dos 属性经 user.DOSATTRIB xattr
+模拟且 readonly 不被内核强制、creationTime 为模拟值、ctime 不可设置）在断言处注释。
+JDK-27 侧实测断言数：50 条。

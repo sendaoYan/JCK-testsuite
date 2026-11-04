@@ -26,3 +26,9 @@
 - 白盒：public / final / 父类 `BasicPermission` / 两个构造器。
 - 黑盒：name/actions 读回 → `equals/hashCode` → `implies` → 两参构造器空/ null actions →
   非法 name/actions 异常。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：计算型 serialVersionUID=-1441492453772213220（与 JDK-8 同值实测）；序列化 round-trip；newPermissionCollection 非 null + implies 链；implies(null) false、跨类 equals false、toString 含名；负例扩展（basic/空名/双参空名 IAE、null 名 NPE）。注：JDK-27 该类已 @deprecated(forRemoval)。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

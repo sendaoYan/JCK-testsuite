@@ -25,6 +25,20 @@ public class SimpleFileVisitorTest {
         passed++;
     }
 
+    interface Op { void run() throws Exception; }
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    static void checkThrows(Class<? extends Throwable> ex, Op r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
+    }
+
     // ---- white-box: structure via reflection ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.nio.file.SimpleFileVisitor");
@@ -99,9 +113,140 @@ public class SimpleFileVisitorTest {
         }
     }
 
+    // ===== deepened contract coverage (batch A9) =====
+    static void testWhiteBoxDeep() throws Exception {
+        Class<?> c = Class.forName("java.nio.file.SimpleFileVisitor");
+        java.lang.reflect.Method[] dm = c.getDeclaredMethods();
+        check(dm.length == 4, "exactly four declared methods, got " + dm.length);
+        boolean allPublic = true, allConcrete = true;
+        for (java.lang.reflect.Method m : dm) {
+            if (!java.lang.reflect.Modifier.isPublic(m.getModifiers())) allPublic = false;
+            if (java.lang.reflect.Modifier.isAbstract(m.getModifiers())) allConcrete = false;
+        }
+        check(allPublic, "all visit methods are public");
+        check(allConcrete, "no abstract methods (concrete defaults)");
+        check(c.getDeclaredFields().length == 0, "stateless: no declared fields");
+        check(c.getDeclaredConstructors()[0].getParameterCount() == 0,
+              "default constructor takes no arguments");
+        check(java.lang.reflect.Modifier.isProtected(
+              c.getDeclaredConstructors()[0].getModifiers()), "constructor is protected");
+        // every FileVisitor method has a default implementation here
+        for (java.lang.reflect.Method m : java.nio.file.FileVisitor.class.getMethods()) {
+            boolean found = false;
+            for (java.lang.reflect.Method d : dm)
+                if (d.getName().equals(m.getName())) found = true;
+            check(found, "implements default for " + m.getName());
+        }
+    }
+
+    static void testBlackBoxDeep() throws Exception {
+        MyVisitor v = new MyVisitor();
+        Path dir = Files.createTempDirectory("jck-sfv");
+        try {
+            Path f = dir.resolve("d.txt");
+            Files.write(f, new byte[] {1});
+            BasicFileAttributes attrs = Files.readAttributes(f,
+                    java.nio.file.attribute.BasicFileAttributes.class);
+
+            // null arguments are rejected by the defaults (Objects.requireNonNull, probe-confirmed)
+            checkThrows(NullPointerException.class, () -> v.visitFile(f, null),
+                  "visitFile(file, null attrs) -> NullPointerException");
+            checkThrows(NullPointerException.class, () -> v.visitFile(null, attrs),
+                  "visitFile(null file, attrs) -> NullPointerException");
+            checkThrows(NullPointerException.class, () -> v.preVisitDirectory(dir, null),
+                  "preVisitDirectory(dir, null attrs) -> NullPointerException");
+            checkThrows(NullPointerException.class, () -> v.preVisitDirectory(null, attrs),
+                  "preVisitDirectory(null dir, attrs) -> NullPointerException");
+
+            // postVisitDirectory re-throws the terminating IOException by identity
+            IOException stop = new IOException("stop-walk");
+            boolean sameObject = false;
+            try { v.postVisitDirectory(dir, stop); }
+            catch (IOException e) { sameObject = (e == stop); }
+            check(sameObject, "postVisitDirectory(dir, ioe) rethrows the SAME IOException");
+
+            // null path is rejected before the rethrow (probe-confirmed requireNonNull)
+            IOException err = new IOException("failed");
+            checkThrows(NullPointerException.class, () -> v.visitFileFailed(null, err),
+                  "visitFileFailed(null file, ioe) -> NullPointerException");
+            checkThrows(NullPointerException.class,
+                  () -> v.postVisitDirectory(null, null),
+                  "postVisitDirectory(null dir, ...) -> NullPointerException");
+
+            // subclass can delegate to the protected default via super
+            class Delegating extends SimpleFileVisitor<Path> {
+                IOException seen;
+                public FileVisitResult visitFileFailed(Path p, IOException e) throws IOException {
+                    seen = e;
+                    return super.visitFileFailed(p, e);
+                }
+            }
+            Delegating d = new Delegating();
+            IOException subErr = new IOException("sub");
+            boolean superRethrew = false;
+            try { d.visitFileFailed(f, subErr); }
+            catch (IOException e) { superRethrew = (e == subErr); }
+            check(d.seen == subErr && superRethrew, "super.visitFileFailed rethrows after observation");
+
+            // generic instantiation with a non-Path type parameter
+            SimpleFileVisitor<Object> ov = new SimpleFileVisitor<Object>() { };
+            check(ov.visitFile(new Object(), attrs) == FileVisitResult.CONTINUE,
+                  "SimpleFileVisitor<Object> accepts any T");
+
+            // full traversal through inherited defaults
+            Path sub = dir.resolve("sub");
+            Files.createDirectory(sub);
+            Files.write(sub.resolve("x.txt"), new byte[] {2});
+            Files.write(sub.resolve("y.txt"), new byte[] {3});
+            final AtomicInteger pre = new AtomicInteger(), files = new AtomicInteger(),
+                    post = new AtomicInteger();
+            Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
+                public FileVisitResult preVisitDirectory(Path p, BasicFileAttributes a)
+                        throws IOException {
+                    pre.incrementAndGet();
+                    return super.preVisitDirectory(p, a);
+                }
+                public FileVisitResult visitFile(Path p, BasicFileAttributes a)
+                        throws IOException {
+                    files.incrementAndGet();
+                    return super.visitFile(p, a);
+                }
+                public FileVisitResult postVisitDirectory(Path p, IOException e)
+                        throws IOException {
+                    post.incrementAndGet();
+                    return super.postVisitDirectory(p, e);
+                }
+            });
+            check(pre.get() == 2, "two directories entered (root + sub)");
+            check(files.get() == 3, "three files visited, got " + files.get());
+            check(post.get() == 2, "two postVisitDirectory callbacks");
+
+            // bare SimpleFileVisitor subclass walks a flat tree without overrides
+            Path flat = Files.createTempDirectory("jck-sfv2");
+            try {
+                Files.write(flat.resolve("one"), new byte[] {1});
+                Files.write(flat.resolve("two"), new byte[] {2});
+                Files.walkFileTree(flat, new MyVisitor());
+                check(true, "bare subclass completes a flat walk (no exception)");
+            } finally {
+                Files.deleteIfExists(flat.resolve("one"));
+                Files.deleteIfExists(flat.resolve("two"));
+                Files.deleteIfExists(flat);
+            }
+        } finally {
+            try (Stream<Path> s = Files.walk(dir)) {
+                for (Path p : s.sorted(java.util.Comparator.reverseOrder())
+                        .collect(Collectors.toList()))
+                    try { Files.deleteIfExists(p); } catch (Exception ignore) { }
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testWhiteBoxDeep();
+        testBlackBoxDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -33,3 +33,10 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：26 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 19 → 51）：与 JDK-8 侧同套（name/type/toString、同目录同 store、空间三元组有界、
+getAttribute 与 getter 恒等、未知名 -> UnsupportedOperationException、视图矩阵 basic/posix/owner
+true + acl false、getFileStoreAttributeView -> null、Files.getFileStore(不存在) ->
+NoSuchFileException）。

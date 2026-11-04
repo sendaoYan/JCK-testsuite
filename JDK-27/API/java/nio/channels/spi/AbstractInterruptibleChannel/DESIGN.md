@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：18 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testStructureContract/testCloseLifecycleContract/testBeginEndContract/testSelfInterruptContract/testOtherThreadInterruptContract/testRealOperationInterruptContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：close 幂等且 implCloseChannel 恰好执行一次；另一线程在 begin/end 窗口内中断 → ClosedByInterruptException 且通道关闭（双侧确定）；真实阻塞读被中断同样精确抛出
+- 确定性与健壮性：窗口法：helper 线程 begin→CountDownLatch 停留→主线程 interrupt→end(false)，全部有界等待、线程守护。
+- 版本差异（按侧断言）：自中断差异：JDK-8 在 begin/end 窗口内 Thread.currentThread().interrupt() 会使 end(false)/end(true) 抛 ClosedByInterruptException 并关闭通道；JDK-27 不抛、通道保持打开（end 只上报真实 park 中收到的中断）。两条路径各自按侧断言。
+- 本机实测断言数：18 → 57 条。

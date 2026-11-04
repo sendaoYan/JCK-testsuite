@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：9 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：子类契约（调用计数、IOException 同对象透传、null 路径由子类自定——接口无检查实测）；Files 委派精确矩阵（.txt/.pdf/.html/.png 精确值、未知扩展 null、缺失文件不抛、扩展名优先、未注册 detector 不被咨询、目录恒 null——JDK-8 为 inode/directory，差异记录）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

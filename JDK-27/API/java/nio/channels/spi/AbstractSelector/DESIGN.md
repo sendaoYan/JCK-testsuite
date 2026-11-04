@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：20 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testStructureContract/testLifecycleContract/testRegisterDeregisterContract/testSelectSurfaceContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：close 幂等且 implCloseSelector 恰一次；close 时 deregister 使其 key 全部失效且通道 isRegistered 归 false（双侧实测）；keys/selectedKeys 初始空、selectedKeys 可修改；selectNow/select()/select(t)/wakeup 契约；Selector.open() 即 AbstractSelector
+- 确定性与健壮性：探测 selector 子类 + 真实 SocketChannel 走真实 register 路径。
+- 版本差异（按侧断言）：无行为差异。
+- 本机实测断言数：21 → 51 条。

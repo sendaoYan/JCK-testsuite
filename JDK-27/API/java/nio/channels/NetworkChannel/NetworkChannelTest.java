@@ -73,9 +73,93 @@ public class NetworkChannelTest {
         }
     }
 
+    // ===================== A6 deepening: unbound addresses / datagram contract / closed rules =====================
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    /** Throwing action so lambdas may call methods that declare checked IOException. */
+    interface Op { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> ex, Op r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
+    }
+
+    static void testUnboundAndUnconnectedAddresses() throws Exception {
+        InetAddress lo = InetAddress.getLoopbackAddress();
+        try (SocketChannel sc = SocketChannel.open();
+             ServerSocketChannel ssc = ServerSocketChannel.open();
+             java.nio.channels.DatagramChannel dc = java.nio.channels.DatagramChannel.open()) {
+            check(sc.getLocalAddress() == null, "unbound SocketChannel: local address null");
+            check(sc.getRemoteAddress() == null, "unconnected SocketChannel: remote null");
+            check(ssc.getLocalAddress() == null, "unbound ServerSocketChannel: local null");
+            check(dc.getLocalAddress() == null, "unbound DatagramChannel: local null");
+            check(dc.getRemoteAddress() == null, "unconnected DatagramChannel: remote null");
+            // bind(null) wildcard vs bind(loopback) exact
+            NetworkChannel w = ssc;
+            check(w.bind(null) == w, "bind(null) returns this");
+            InetSocketAddress wild = (InetSocketAddress) w.getLocalAddress();
+            check(wild != null && wild.getPort() > 0, "wildcard ephemeral port");
+            check(wild.getAddress().isAnyLocalAddress(), "bind(null) uses the wildcard address");
+            try (ServerSocketChannel s2 = ServerSocketChannel.open()) {
+                InetSocketAddress a = (InetSocketAddress)
+                        s2.bind(new InetSocketAddress(lo, 0)).getLocalAddress();
+                check(a.getAddress().equals(lo), "bind(loopback) binds the loopback address");
+                checkThrows(java.nio.channels.AlreadyBoundException.class,
+                            () -> s2.bind(new InetSocketAddress(lo, 0)),
+                            "second bind -> AlreadyBoundException");
+            }
+        }
+    }
+
+    static void testContractThroughDatagramChannel() throws Exception {
+        try (java.nio.channels.DatagramChannel dc = java.nio.channels.DatagramChannel.open()) {
+            NetworkChannel nc = dc;
+            nc.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+            check(nc.getLocalAddress() != null, "bound address available");
+            check(nc.getOption(StandardSocketOptions.SO_RCVBUF) > 0, "SO_RCVBUF positive");
+            nc.setOption(StandardSocketOptions.SO_BROADCAST, true);
+            check(nc.getOption(StandardSocketOptions.SO_BROADCAST), "SO_BROADCAST readback true");
+            checkThrows(UnsupportedOperationException.class,
+                        () -> nc.setOption(StandardSocketOptions.SO_KEEPALIVE, true),
+                        "stream-only option on datagram -> UnsupportedOperationException");
+            checkThrows(UnsupportedOperationException.class,
+                        () -> nc.getOption(StandardSocketOptions.SO_KEEPALIVE),
+                        "getOption unsupported -> UnsupportedOperationException");
+        }
+    }
+
+    static void testClosedChannelRules() throws Exception {
+        try (SocketChannel sc = SocketChannel.open()) {
+            sc.close();
+            NetworkChannel nc = sc;
+            checkThrows(java.nio.channels.ClosedChannelException.class, () -> nc.bind(null),
+                        "bind after close -> ClosedChannelException");
+            checkThrows(java.nio.channels.ClosedChannelException.class,
+                        () -> nc.getOption(StandardSocketOptions.SO_SNDBUF),
+                        "getOption after close -> ClosedChannelException");
+            checkThrows(java.nio.channels.ClosedChannelException.class,
+                        () -> nc.setOption(StandardSocketOptions.SO_SNDBUF, 1024),
+                        "setOption after close -> ClosedChannelException");
+            checkThrows(java.nio.channels.ClosedChannelException.class, () -> nc.getLocalAddress(),
+                        "getLocalAddress after close -> ClosedChannelException (per javadoc)");
+            check(!nc.supportedOptions().isEmpty(),
+                  "supportedOptions still queryable after close");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testUnboundAndUnconnectedAddresses();
+        testContractThroughDatagramChannel();
+        testClosedChannelRules();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

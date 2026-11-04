@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：7 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：marker 结构；实现者归类（StandardOpenOption 十常量、LinkOption）；选项槽边界（open() 无选项默认 READ 只读、空数组等价、null 元素 NPE 双侧实测、NOFOLLOW 对常规文件照常打开）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

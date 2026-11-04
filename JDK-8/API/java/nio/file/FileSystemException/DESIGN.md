@@ -29,3 +29,12 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：9 条。
+
+
+### 第 4 部分补充（批次 A11 契约深化）
+
+在既有用例之上新增 testContract* 系列（构造矩阵 / getMessage-null 分支矩阵 / initCause 一次性 / serialVersionUID -3055425747967319812 + round-trip / 真实触发 / 精确负例）：
+
+- 真实触发：真实 NoSuchFileException（readAttributes 缺失文件）作载体断言三 getter/消息。
+- 断言计数更新（JDK-8 侧 / JDK-27 侧）：71 / 71 条（`PASS (N assertions)` 实测）。
+- 健壮性：临时目录 + finally 递归清理；权限用例 finally 恢复；能力守护（root/跨 store/zip provider）NOTE 跳过不判失败。

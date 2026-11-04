@@ -29,3 +29,14 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：17 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 15 → 39）：getFileSystem/newFileSystem 各 URI 精确异常矩阵：
+newFileSystem(file:) -> FileSystemAlreadyExistsException（探针修正，任务书猜 IAE）；
+getFileSystem(file:///nope) -> IllegalArgumentException；bogus: -> ProviderNotFoundException；
+jar: 未打开 -> FileSystemNotFoundException；newFileSystem((URI)null, ...) -> NPE。
+zipfs 双侧可用：newFileSystem(zipPath, (ClassLoader) null) 打开 -> "/" 根目录 -> 关闭。
+
+版本差异：JDK-8 有 newFileSystem(Path, ClassLoader) 但无 newFileSystem(Path)/
+newFileSystem(Path, Map)（8 侧反射断言不存在，27 侧实测可用）。

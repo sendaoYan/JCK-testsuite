@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：68 条。
+
+### 4.1 A5 契约深化追加
+
+与 JDK-8 侧同构的九组矩阵（重载面/open 选项/位置/APPEND/transfer/map/锁/关闭/gather-scatter），另含
+JDK-27 特有断言：map(MapMode,long,long,Arena)→MemorySegment（confined Arena、JAVA_BYTE 读写、只读映射
+isReadOnly）；transferFrom 越界自动扩展文件（dst size 5010、洞为零）；lock(0,0) 与持有 (0,10) 冲突；
+tryLock(5,0) 零长锁规范化为 (5, Long.MAX_VALUE-5)。版本差异双侧各自断言并注明。
+断言数 68→247 条（JDK-27 实测）。

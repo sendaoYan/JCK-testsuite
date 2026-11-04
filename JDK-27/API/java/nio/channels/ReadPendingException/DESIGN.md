@@ -32,3 +32,11 @@ ReadPendingException：java.nio.channels 包的运行时/受检异常，报告�
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：6 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testExceptionObjectContract/testSerializationContract/testRealTriggerContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：无参构造 message/cause 为 null；toString 无 message 后缀；fillInStackTrace 返回 this；serialVersionUID=1986315242191227217 双侧一致；序列化 round-trip 保类型
+- 确定性与健壮性：真实触发：回环连接 + 无数据长超时读挂起 → 二次 read 同步抛 ReadPendingException；对端写入一字节后挂起读正常完成。
+- 版本差异（按侧断言）：serialVersionUID 双侧一致，行为无差异。
+- 本机实测断言数：14 → 31 条。

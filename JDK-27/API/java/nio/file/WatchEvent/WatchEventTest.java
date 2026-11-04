@@ -71,9 +71,79 @@ public class WatchEventTest {
         }
     }
 
+    // ---- appended: accessor structural detail ----
+    static void testStructure() throws Exception {
+        Class<?> c = Class.forName("java.nio.file.WatchEvent");
+        check("T".equals(c.getTypeParameters()[0].getName()), "parameter is <T>");
+        check(c.getMethod("kind").getReturnType()
+                      == Class.forName("java.nio.file.WatchEvent$Kind"),
+              "kind() returns WatchEvent.Kind");
+        check(c.getMethod("count").getReturnType() == int.class, "count() returns int");
+        check(c.getMethod("context").getReturnType() == Object.class,
+              "context() returns Object");
+    }
+
+    // ---- appended: live precision (context resolution / poll-once / delete) ----
+    static void testLivePrecision() throws Exception {
+        Path dir = Files.createTempDirectory("jck");
+        try (WatchService ws = FileSystems.getDefault().newWatchService()) {
+            java.nio.file.WatchKey key = dir.register(ws, StandardWatchEventKinds.ENTRY_CREATE,
+                    StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+            Path f = dir.resolve("prec.txt");
+            Files.writeString(f, "v");
+            // CREATE and MODIFY may arrive in separate inotify batches: bounded retry
+            boolean sawCreate = false;
+            boolean sawModify = false;
+            long deadline = System.currentTimeMillis() + 5_000;
+            while (!(sawCreate && sawModify) && System.currentTimeMillis() < deadline) {
+                java.nio.file.WatchKey signalled =
+                        ws.poll(2, java.util.concurrent.TimeUnit.SECONDS);
+                if (signalled == null) break;
+                check(signalled == key, "key signalled");
+                List<WatchEvent<?>> events = signalled.pollEvents();
+                for (WatchEvent<?> e : events) {
+                    check(e.kind() != null, "kind() never null");
+                    check(e.count() >= 1, "count() at least one");
+                    if (e.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
+                        sawCreate = true;
+                        check(e.count() == 1, "fresh create count == 1");
+                        Path p = (Path) e.context();
+                        check("prec.txt".equals(p.toString()), "context exact file name");
+                        check(!p.isAbsolute(), "context relative to the directory");
+                        check(dir.resolve(p).equals(f), "dir.resolve(context) locates the file");
+                    }
+                    if (e.kind() == StandardWatchEventKinds.ENTRY_MODIFY) sawModify = true;
+                }
+                check(signalled.pollEvents().isEmpty(), "events retrieved exactly once");
+                check(signalled.reset(), "key re-armed");
+            }
+            check(sawCreate, "ENTRY_CREATE observed (must)");
+            check(sawModify, "ENTRY_MODIFY observed (ext4/inotify measured stable)");
+
+            Files.delete(f);
+            java.nio.file.WatchKey delKey =
+                    ws.poll(5, java.util.concurrent.TimeUnit.SECONDS);
+            check(delKey == key, "delete signalled the same key");
+            boolean sawDelete = false;
+            for (WatchEvent<?> e : delKey.pollEvents())
+                if (e.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
+                    sawDelete = true;
+                    check("prec.txt".equals(e.context().toString()),
+                          "delete context exact file name");
+                }
+            check(sawDelete, "ENTRY_DELETE observed (must)");
+            delKey.reset();
+        } finally {
+            try { Files.deleteIfExists(dir.resolve("prec.txt")); } catch (Exception ignore) { }
+            Files.deleteIfExists(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testStructure();
+        testLivePrecision();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

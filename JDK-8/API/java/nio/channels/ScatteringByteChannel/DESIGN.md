@@ -28,3 +28,9 @@
 - 文件类用例全部 `Files.createTempDirectory("jck")` + finally 递归删除。
 - 平台相关能力以运行时能力守护，不支持时跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：14 条。
+
+### 4.1 A5 契约深化追加
+
+新增 ScatteringSource 最小实现（顺序分发记录、窗口选择、EOF -1 语义、null 元素 NPE、窗口越界
+IndexOutOfBoundsException）、testWhiteBoxA5（恰 2 声明重载/返回 long/无 default/无写向）、FileChannel
+视图矩阵（全满 0、越界、null 数组 NPE、空 scatter 0、EOF -1）。断言数 14→40 条（JDK-8 实测）。

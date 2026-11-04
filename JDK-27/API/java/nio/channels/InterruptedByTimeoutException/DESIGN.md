@@ -32,3 +32,11 @@ InterruptedByTimeoutException：java.nio.channels 包的运行时/受检异常�
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：5 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testExceptionObjectContract/testSerializationContract/testRealTriggerContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：extends IOException；serialVersionUID=-4268008601014042947；round-trip 保类型
+- 确定性与健壮性：真实触发：60ms 超时读 + 保证无数据 → failed(InterruptedByTimeoutException, attachment)，attachment 原样交付。
+- 版本差异（按侧断言）：serialVersionUID 双侧一致，行为无差异。
+- 本机实测断言数：6 → 30 条。

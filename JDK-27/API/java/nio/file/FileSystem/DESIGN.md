@@ -33,3 +33,10 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：32 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 22 → 66）：与 JDK-8 侧同套（separator、getPath null/空、根目录恰 1、首个 store、
+视图集、getPathMatcher 负例、WatchService close/poll、provider 同一性、close -> UOE 且仍 open）。
+
+版本差异：installedProviders 本版 = [file, jar, jrt]（jrt 为 JDK-9+；JDK-8 无）。

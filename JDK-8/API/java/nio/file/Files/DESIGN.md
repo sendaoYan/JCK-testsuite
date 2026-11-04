@@ -45,3 +45,32 @@ getLastModifiedTime/isReadable/isWritable/probeContentType -> deleteIfExists(tru
 全局状态/网络依赖；非 ASCII 用 UTF-8 字面量 (jtreg 以 UTF-8 编译)；不硬编码路径分隔符
 (全部 dir.resolve(...))；headless 安全不加 @key。
 本机实测断言数: 56 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 34 → 254）：存在性矩阵（LinkOption.NOFOLLOW_LINKS 下符号链接）；createTempDirectory/
+createTempFile 前后缀契约；readAllBytes/write/lines/newBufferedReader 往返；copy 矩阵（目录 ->
+新建空目录，非递归；REPLACE_EXISTING）；move 矩阵（ATOMIC_MOVE 本机可用；目标非空且无 REPLACE ->
+FileAlreadyExistsException；目标为目录且带 REPLACE -> DirectoryNotEmptyException）；delete 非空目录
+-> DirectoryNotEmptyException；readSymbolicLink 普通文件 -> NotLinkException；newInputStream
+(WRITE/APPEND) -> UnsupportedOperationException、newOutputStream(READ) -> IllegalArgumentException、
+显式 WRITE 不截断 [1,8,9]、APPEND 追加 [1,8,9,2]；newDirectoryStream 矩阵；walk 负深度 ->
+IllegalArgumentException、maxDepth==0 起点按 visitFile 访问；walkFileTree 非存在起点 ->
+visitFileFailed(NoSuchFileException)；readAttributes("basic:*") 恰 9 键且 size 为 Long；
+probeContentType(".txt") -> text/plain、未知后缀 -> null；getFileAttributeView(不存在) 返回非空
+惰性视图（探针修正，任务书猜 null）；isSameFile/Files.getFileStore 组合。
+
+负例矩阵（实测精确类型，节选）：
+| 操作 | 异常 |
+|---|---|
+| move onto 非空目录（无 REPLACE） | FileAlreadyExistsException |
+| move 目录 onto 目录（带 REPLACE，目标非空） | DirectoryNotEmptyException |
+| delete 非空目录 | DirectoryNotEmptyException |
+| readSymbolicLink 普通文件 | NotLinkException |
+| newInputStream(WRITE) | UnsupportedOperationException |
+| newOutputStream(READ) | IllegalArgumentException |
+| walkFileTree 负深度 / walk(-1) | IllegalArgumentException |
+
+版本差异（重大，实测）：isSameFile 对两个不存在的路径 JDK-8 抛 NoSuchFileException、
+JDK-27 返回 false——两版测试分支不同。readString/writeString/mismatch 仅 JDK-27（27 侧
+testStringMethods 覆盖默认 UTF-8/显式 UTF-16、mismatch 相等 -1/首差/前缀/空串）。

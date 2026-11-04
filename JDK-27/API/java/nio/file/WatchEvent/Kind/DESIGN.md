@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：3 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：方法签名细节（name String/type Class/泛型 T）；OVERFLOW type Object 实测；默认 provider 拒绝非标准 kind 且消息恰为 kind 名（实测精确串）；同名自制 Kind 不等常量。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

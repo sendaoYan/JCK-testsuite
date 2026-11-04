@@ -32,3 +32,11 @@ AcceptPendingException：java.nio.channels 包的运行时/受检异常，报告
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：6 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testExceptionObjectContract/testSerializationContract/testRealTriggerContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：无参构造 message/cause 为 null；serialVersionUID=2721339977965416421；round-trip 保类型
+- 确定性与健壮性：真实触发：无连接挂起 accept → Future 与 handler 两种二次 accept 均同步抛；pending.cancel(false) 后 isCancelled。
+- 版本差异（按侧断言）：serialVersionUID 双侧一致，行为无差异。
+- 本机实测断言数：7 → 33 条。

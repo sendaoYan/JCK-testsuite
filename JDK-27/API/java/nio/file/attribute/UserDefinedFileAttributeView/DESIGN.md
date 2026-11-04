@@ -33,3 +33,20 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：21 条。
+
+### 第 4 部分补充（批次 A12 契约深化）
+
+在既有白盒+黑盒基础上追加 `testContract()`（及 FileAttribute 的 `testContract2()`），契约维度扩至：
+- write/read 返回字节数与 size 精确、内容逐字节、read 后 position 前进；
+- 覆盖更新、多属性并存 list、delete 移除且他属性不动、零长度属性、
+  write 只传 remaining、read 从 position 填充；
+- 负例精确类型：缺属性 read/size/delete→FileSystemException（ENODATA）、缓冲过小/零容量→
+  FileSystemException（ERANGE "Insufficient space in buffer"）、null（名/缓冲）NPE、空名 FileSystemException、
+  getAttribute("user:缺失")→FileSystemException；
+- Files.setAttribute/getAttribute byte[] 往返；目录属性同样可用。
+
+健壮性：新增用例仍走临时目录 + finally 递归清理；权限/属主/DOS 位修改类断言先恢复再删；
+负例用 checkThrows/checkThrowsIO 断言精确异常类型（IO 路径用 IORunnable 变体）；
+平台实测事实（Linux ext4：acl 视图不可用、dos/user 视图可用、dos 属性经 user.DOSATTRIB xattr
+模拟且 readonly 不被内核强制、creationTime 为模拟值、ctime 不可设置）在断言处注释。
+JDK-27 侧实测断言数：56 条。

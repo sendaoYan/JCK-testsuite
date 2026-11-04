@@ -33,3 +33,16 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：22 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 生命周期：join/drop 幂等、getter 在 drop 后仍可读（仅 isValid 翻转）、重 join 新 key、
+  通道关闭失效、关闭后 join → ClosedChannelException。
+- block 契约：返回 this、**重复 block 幂等 no-op（RI 偏离 javadoc 的 ISE，以实测为准并注释）**、
+  unblock 未 block → ISE、block(null) → NPE、block(组播地址) → IAE、drop 后 block/unblock → ISE。
+- 特定源成员：sourceAddress 记录、重 join 幂等、特定源上 block/unblock → ISE、
+  任意源在场时特定源 join → ISE。
+- 真实源过滤数据面：block 发送网卡地址后 select(1s)==0（被滤除）→ unblock 恢复送达。
+
+本机实测断言数：46 条（深化前 16）。

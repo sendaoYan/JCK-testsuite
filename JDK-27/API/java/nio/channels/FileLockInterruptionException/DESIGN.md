@@ -32,3 +32,10 @@ FileLockInterruptionException：java.nio.channels 包的运行时/受检异常�
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：8 条。
+
+### 4.1 A5 契约深化追加
+
+新增白盒（extends IOException、serialVersionUID==7104080643653532383L、round-trip 序列化、initCause 二次
+IllegalStateException）与黑盒确定性触发：Thread.currentThread().interrupt() + ch.lock() -> 本异常，
+且通道已被关闭（isOpen false，InterruptibleChannel 契约）、中断标志保持置位（Thread.interrupted() 观测）。
+断言数 8→19 条（JDK-27 实测，与 JDK-8 侧行为一致）。

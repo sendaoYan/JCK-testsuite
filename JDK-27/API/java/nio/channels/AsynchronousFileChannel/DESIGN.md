@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：34 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testOpenOptionsContract/testReadWriteContract/testLockContract/testSurfaceContract/testPooledOpenContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：IllegalArgumentException（负 position、只读缓冲写）、NonWritableChannelException（只读打开后写/独占锁）、NonReadableChannelException、OverlappingFileLockException（同 JVM 重叠锁）、ClosedChannelException 经 Future cause 交付（closed 后 read/write/lock 均非同步抛）
+- 确定性与健壮性：稀疏洞算术（写入 pos 超过 size → 中间零填充）逐字节断言；锁 valid 到通道 close 即失效；临时目录 finally 递归清理。
+- 版本差异（按侧断言）：closed 通道的 read/write/lock 全部经 Future 交付 ClosedChannelException，不同步抛；独占锁在只读通道上抛 NonWritableChannelException。
+- 本机实测断言数：27 → 109 条。

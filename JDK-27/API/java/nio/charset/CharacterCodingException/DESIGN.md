@@ -25,3 +25,14 @@
 - 白盒：public / 非 final / 父类 `IOException` / 无参构造器。
 - 黑盒：直接 `new` → message null → cause null → 堆栈非空；
   用 US-ASCII 编码器对 `€`（不可映射）编码得到 unmappable `CoderResult` → `throwException()` 抛出 `CharacterCodingException`（实际为 `UnmappableCharacterException`）。
+
+## 深化追加（批次 A4，契约级）
+
+- 家族层级：MIE/UCE 均为 CCE 子类，反向不成立；CCE 可赋值给 IOException/Exception（受检）、Serializable。
+- Throwable 状态契约：唯一无参构造 message/getLocalizedMessage 均 null、toString 无消息后缀；
+  无 cause 构造 → initCause 返回 this、二次 initCause → IllegalStateException；addSuppressed/getSuppressed 有效。
+- 真实触发链：decoder REPORT 解码 {0xC3} 抛出的运行时类型是 MalformedInputException（getInputLength==1），
+  catch (CharacterCodingException) 与 catch (IOException) 均命中；encoder REPORT 编码 "\u4e2d" 抛 UCE。
+  反向空间：Charset.encode/decode 便捷入口默认 REPLACE，永不抛本异常。
+- 序列化：serialVersionUID == 8421532232154627783L（实测 JDK-8/JDK-27 一致）；round-trip 后
+  message/cause/层级保持；initCause 附加的 cause 往返保持。

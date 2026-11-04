@@ -33,3 +33,8 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：9 条。
+
+### 4.1 A5 契约深化追加
+
+与 JDK-8 侧同构：双工最小实现共享游标 + 纯组合接口白盒 + FileChannel 模式矩阵（NonWritable/
+NonReadable/EOF 扩展/关闭矩阵）。断言数 9→37 条（JDK-27 实测）。

@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：28 条。
+
+### 4.1 A5 契约深化追加
+
+与 JDK-8 侧同构的四组适配器矩阵，另含 JDK-27 特有断言：newReader/newWriter(...,Charset) 3+3 重载存在并
+以 "键😀" 行为验证往返；适配器 close 后读/写 -> ClosedChannelException（JDK-8 侧为继续委托，双侧各自
+断言）。断言数 28→83 条（JDK-27 实测）。

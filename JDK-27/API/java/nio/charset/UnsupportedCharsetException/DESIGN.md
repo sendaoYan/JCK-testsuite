@@ -25,3 +25,12 @@
 - 白盒：public / 非 final / 父类 `IllegalArgumentException` / `String` 构造器。
 - 黑盒：直接 `new` → `getCharsetName`/`getMessage` 一致 → 层级 → 无 cause → 堆栈非空；
   `Charset.forName("definitely-not-a-real-charset")` 触发该异常。
+
+## 深化追加（批次 A4，契约级）
+
+- 构造矩阵：message==name、toString 精确、null → getCharsetName()==null 且不抛、getMessage() 为字面量 "null"、空串保留。
+- forName 触发矩阵：4 个合法未知名逐个断言精确类型 + 名称保真；非法名（"bad name"/""）→ ICE 而非本异常；
+  forName(null) → IllegalArgumentException；isSupported 未知合法名 false 不抛、非法名 → ICE。
+- 白盒补充：唯一自有方法 getCharsetName()；Serializable。
+- 序列化：serialVersionUID == 1490765524727386367L（双侧实测一致）；round-trip 名称/message/null 名称保持。
+- 子类：用户子类 super(name) 委派。

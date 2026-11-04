@@ -90,9 +90,155 @@ public class MembershipKeyTest {
         }
     }
 
+    // ===================== A6 deepening: getters after drop / block contract / source filtering =====================
+
+    /** Throwing action so lambdas may call methods that declare checked IOException. */
+    interface Op { void run() throws Exception; }
+
+    /** Negative-path helper: asserts the EXACT exception class (no subclasses). */
+    static void checkThrows(Class<? extends Throwable> ex, Op r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t.getClass() != ex)
+                throw new AssertionError(msg + ": expected " + ex.getName() + " got " + t);
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + ex.getName() + " but nothing thrown");
+    }
+
+    static NetworkInterface pickMulticastInterface() throws Exception {
+        NetworkInterface fallback = null;
+        for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
+            if (!ni.isUp() || !ni.supportsMulticast()) continue;
+            boolean hasV4 = false;
+            for (InetAddress a : java.util.Collections.list(ni.getInetAddresses()))
+                if (a instanceof java.net.Inet4Address) hasV4 = true;
+            if (!hasV4) continue;
+            if (!ni.isLoopback()) return ni;
+            if (fallback == null) fallback = ni;
+        }
+        return fallback;
+    }
+
+    static void testLifecycleNegatives() throws Exception {
+        NetworkInterface nif = pickMulticastInterface();
+        if (nif == null) {
+            System.out.println("NOTE: no multicast-capable interface; extra membership tests skipped");
+            return;
+        }
+        InetAddress group = InetAddress.getByName("239.255.18.1");
+        try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
+            dc.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
+            dc.bind(new InetSocketAddress(group, 0));
+            MembershipKey key = dc.join(group, nif);
+            check(key.isValid(), "fresh membership valid before drop");
+            key.drop();
+            // getters stay readable after drop, only validity flips
+            check(key.group().equals(group), "group() readable after drop");
+            check(key.networkInterface() == nif, "networkInterface() readable after drop");
+            check(key.channel() == dc, "channel() readable after drop");
+            checkThrows(IllegalStateException.class, () -> key.block(group),
+                        "block after drop -> IllegalStateException");
+            checkThrows(IllegalStateException.class, () -> key.unblock(group),
+                        "unblock after drop -> IllegalStateException");
+            MembershipKey rejoined = dc.join(group, nif);
+            check(rejoined != key, "re-join yields a new key");
+        }
+    }
+
+    static void testBlockContract() throws Exception {
+        NetworkInterface nif = pickMulticastInterface();
+        if (nif == null) return;
+        InetAddress group = InetAddress.getByName("239.255.18.2");
+        try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
+            dc.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
+            dc.bind(new InetSocketAddress(group, 0));
+            MembershipKey key = dc.join(group, nif);
+            InetAddress src = InetAddress.getByName("127.0.0.1");
+            check(key.block(src) == key, "block returns this key");
+            // implementation is idempotent: blocking the same source again is a no-op
+            // (the javadoc mentions IllegalStateException, but the RI just returns)
+            check(key.block(src) == key, "re-block of the same source is a no-op in the RI");
+            check(key.unblock(src) == key, "unblock returns this key");
+            checkThrows(IllegalStateException.class, () -> key.unblock(src),
+                        "unblock of a not-blocked source -> IllegalStateException");
+            checkThrows(NullPointerException.class, () -> key.block(null),
+                        "block(null) -> NullPointerException");
+            checkThrows(IllegalArgumentException.class,
+                        () -> key.block(InetAddress.getByName("224.0.0.1")),
+                        "block(multicast source) -> IllegalArgumentException");
+        }
+    }
+
+    static void testSourceSpecificMembership() throws Exception {
+        NetworkInterface nif = pickMulticastInterface();
+        if (nif == null) return;
+        InetAddress group = InetAddress.getByName("239.255.18.3");
+        InetAddress src = InetAddress.getByName("192.0.2.66");
+        try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
+            dc.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
+            dc.bind(new InetSocketAddress(group, 0));
+            MembershipKey key = dc.join(group, nif, src);
+            check(key.sourceAddress().equals(src), "sourceAddress() records the filter source");
+            check(dc.join(group, nif, src) == key, "re-join with same source is idempotent");
+            checkThrows(IllegalStateException.class, () -> key.block(src),
+                        "block on source-specific membership -> IllegalStateException");
+            checkThrows(IllegalStateException.class, () -> key.unblock(src),
+                        "unblock on source-specific membership -> IllegalStateException");
+            key.drop();
+            MembershipKey any = dc.join(group, nif);
+            check(any.isValid(), "any-source join after dropping source-specific");
+            checkThrows(IllegalStateException.class, () -> dc.join(group, nif, src),
+                        "source-specific join while any-source member -> IllegalStateException");
+        }
+    }
+
+    static void testSourceFilteringDelivery() throws Exception {
+        NetworkInterface nif = pickMulticastInterface();
+        if (nif == null) return;
+        InetAddress group = InetAddress.getByName("239.255.18.4");
+        InetAddress ifaceAddr = null;
+        for (InetAddress a : java.util.Collections.list(nif.getInetAddresses()))
+            if (a instanceof java.net.Inet4Address) ifaceAddr = a;
+        try (DatagramChannel rx = DatagramChannel.open(java.net.StandardProtocolFamily.INET);
+             DatagramChannel tx = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
+            rx.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
+            rx.bind(new InetSocketAddress(group, 0));
+            MembershipKey key = rx.join(group, nif);
+            rx.configureBlocking(false);
+            tx.setOption(java.net.StandardSocketOptions.IP_MULTICAST_IF, nif);
+            int port = ((InetSocketAddress) rx.getLocalAddress()).getPort();
+            try (java.nio.channels.Selector sel = java.nio.channels.Selector.open()) {
+                rx.register(sel, java.nio.channels.SelectionKey.OP_READ);
+                tx.send(java.nio.ByteBuffer.wrap(new byte[] {1}),
+                        new InetSocketAddress(group, port));
+                check(sel.select(5_000) == 1, "unblocked group datagram received");
+                java.nio.ByteBuffer drain = java.nio.ByteBuffer.allocate(8);
+                check(rx.receive(drain) != null, "drained");
+                sel.selectedKeys().clear();
+                key.block(ifaceAddr);
+                tx.send(java.nio.ByteBuffer.wrap(new byte[] {2}),
+                        new InetSocketAddress(group, port));
+                check(sel.select(1_000) == 0, "blocked source datagram is filtered out");
+                key.unblock(ifaceAddr);
+                tx.send(java.nio.ByteBuffer.wrap(new byte[] {3}),
+                        new InetSocketAddress(group, port));
+                check(sel.select(5_000) == 1, "unblocking restores delivery");
+                java.nio.ByteBuffer got = java.nio.ByteBuffer.allocate(8);
+                check(rx.receive(got) != null && got.get(0) == 3, "payload after unblock exact");
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLifecycleNegatives();
+        testBlockContract();
+        testSourceSpecificMembership();
+        testSourceFilteringDelivery();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

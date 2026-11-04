@@ -19,3 +19,18 @@
 健壮性: 无墙钟/随机/哈希顺序/全局状态/文件/网络/线程依赖 (MappedByteBuffer 除外, 用临时文件
 并在 finally 清理); 字节序断言显式 order(...) 固定布局不依赖平台 nativeOrder; 中文/emoji 用
 Unicode 字面量固定; 固定输入跨平台一致.
+
+
+### A1 批次深化（追加）
+- read(CharBuffer) 语义: 读到 src 满或 Sequence 尾返回实际数、EOF 返回 -1、只读目标 ROBE。
+- 批量 put 矩阵: put(String)/put(char[])/put(CharBuffer)/put(String,int,int)——注意
+  put(String,start,end) 是 [start,end) 下标语义而非 (offset,length)(双侧实测一致)。
+- CharSequence 契约: charAt/length/subSequence 相对 position、toString 为剩余区域、
+  subSequence 返回 position=pos+start/limit=pos+end 的共享数组活视图、append 返回 this 且取
+  [start,end) 子序列、wrap(csq,start,end) 越界矩阵(IOOBE)。
+- order 语义: heap 分配/包装 CharBuffer 的 order == nativeOrder(x86_64 为 LITTLE_ENDIAN,
+  jdk8u X-Buffer 模板注释佐证), byte buffer 视图继承创建者显式 order。
+- 视图/compact: slice/duplicate/asReadOnly 独立游标+共享内容+只读矩阵、compact 搬移语义;
+  equals 只看剩余区域、compareTo 按 char 值字典序(仅断符号, 不断言具体差值)。
+- JDK-27 独有: mismatch(相等-1/差异下标/前缀/相对 position); JDK-8 侧反射记录缺失。
+- 断言数 81 -> 152 (JDK-8) / 67 -> 144 (JDK-27)。

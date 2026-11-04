@@ -33,3 +33,13 @@ Pipe 写端：仅 OP_WRITE 可注册。
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：5 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 写契约：精确计数、多次写 FIFO、gathering 跨缓冲顺序、非阻塞写推进。
+- 阻塞模式 register → IllegalBlockingModeException；OP_READ 注册 → IllegalArgumentException；
+  OP_WRITE 注册后 select 就绪。
+- 关闭后 write → ClosedChannelException；validOps 关闭后仍可查询。
+
+本机实测断言数：31 条（深化前 15）。

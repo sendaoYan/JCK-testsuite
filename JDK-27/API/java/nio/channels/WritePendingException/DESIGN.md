@@ -32,3 +32,11 @@ WritePendingException：java.nio.channels 包的运行时/受检异常，报告�
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：6 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testExceptionObjectContract/testSerializationContract/testRealTriggerContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：无参构造 message/cause 为 null；serialVersionUID=7031871839266032276；round-trip 保类型
+- 确定性与健壮性：真实触发：SO_SNDBUF/SO_RCVBUF 压到 1024 后 256KB 分块写至 future 未完成 → 二次 write 同步抛；排空对端后挂起写完成。
+- 版本差异（按侧断言）：serialVersionUID 双侧一致，行为无差异。
+- 本机实测断言数：7 → 32 条。

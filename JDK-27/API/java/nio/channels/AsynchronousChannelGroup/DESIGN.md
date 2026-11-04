@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：30 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testFixedPoolStateContract/testShutdownNowContract/testExecutorBackedGroupsContract/testSurfaceContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：IllegalArgumentException（withFixedThreadPool(0/-1)）、ShutdownChannelGroupException（shutdownNow 后 open）、IllegalChannelGroupException（外来 provider 的组）、构造器 protected、awaitTermination 活组有界等待返回 false
+- 确定性与健壮性：守护线程工厂；所有组 shutdown/awaitTermination 有界；shutdownNow 强制关闭组内通道并使 open 再抛 ShutdownChannelGroupException。
+- 版本差异（按侧断言）：公共 API 无 withWorkStealing（javap 双侧核实，brief 有误）；withCachedThreadPool(pool, -1) 不抛异常（initialSize<=0 仅记为默认）。
+- 本机实测断言数：23 → 79 条。

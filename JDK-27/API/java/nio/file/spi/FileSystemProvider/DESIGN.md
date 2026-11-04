@@ -33,3 +33,9 @@ provider SPI：installedProviders、scheme、newFileSystem/getFileSystem/getPath
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：44 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：JDK-27 专属面（exists(Path,LinkOption...) 四情形、readAttributesIfExists 两情形、方法存在性断言；仅一个 protected 构造无安全门）；注册表（jar+jrt 存在实测、默认 fs 同对象）；URI/负例/属性全矩阵（getPath mailto·authority IAE、null NPE、newFileSystem mailto IAE、getFileSystem 仅根/https IAE、==默认 fs、delete/copy/isSameFile/readAttributes/checkAccess null NPE、createDirectory 已存在/父缺失、delete 缺失、EXECUTE 不可执行 AccessDenied、isHidden 点文件、getFileStore name/type、readAttributes(String) size 为 Long 实测、newFileSystem(Path,Map) UOE、newInputStream 全量）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

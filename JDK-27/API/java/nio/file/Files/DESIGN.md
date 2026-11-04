@@ -36,3 +36,15 @@ write/readAllBytes -> copy + REPLACE_EXISTING -> move + REPLACE_EXISTING -> mism
 全局状态/网络依赖；非 ASCII 用 UTF-8 字面量；不硬编码路径分隔符 (Path.of(dir.toString(),...) 与
 dir.resolve(...))；headless 安全不加 @key。
 本机实测断言数: 30 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 25 → 239）：与 JDK-8 侧同套（存在性 NOFOLLOW、createTemp 矩阵、字节/行/流读写、
+copy 目录语义、move 矩阵含 ATOMIC_MOVE、delete 非空 -> DirectoryNotEmptyException、
+readSymbolicLink -> NotLinkException、newInputStream(WRITE/APPEND) -> UOE、newOutputStream(READ)
+-> IAE、walk 负深度 IAE、maxDepth==0、walkFileTree 非存在起点 visitFileFailed、basic:* 恰 9 键、
+probeContentType）；另加 testStringMethods（JDK-11+，版本注释）：writeString 默认 UTF-8/显式
+UTF-16、readString 往返、mismatch 相等 -1/首差 2/前缀短长度/空 0。
+
+版本差异（重大，实测）：isSameFile 两不存在路径 JDK-8 抛 NoSuchFileException、JDK-27 返回 false
+（本版断言不抛）；readString/writeString/mismatch 仅本版。

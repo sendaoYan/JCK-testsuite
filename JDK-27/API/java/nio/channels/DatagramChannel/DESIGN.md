@@ -33,3 +33,17 @@ UDP 通道：无连接 send/receive、connect 配对读写、scatter/gather、di
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：45 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- send 未绑定先发送 → 自动绑定（通配地址 + 端口）；回环 send/receive 内容与发送方端口精确匹配。
+- receive 截断语义：发 10 字节收 4 字节（余丢弃）；非阻塞无数据 → null。
+- 未连接 read/write → NotYetConnectedException；connect(null) → NPE；connect 返回 this；
+  disconnect 幂等；连接对字节流收发。
+- **版本差异**：已连接通道 send 到其它地址 → JDK-8 IllegalArgumentException、
+  JDK-27 AlreadyConnectedException，双侧各自断言并互注释。
+- 选项矩阵（SO_BROADCAST 布尔、SO_KEEPALIVE → UOE）；关闭后 send/receive/read/write/connect →
+  ClosedChannelException。
+
+本机实测断言数：106 条（深化前 30）。

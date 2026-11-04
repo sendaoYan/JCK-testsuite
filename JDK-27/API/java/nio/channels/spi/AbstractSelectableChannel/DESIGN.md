@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：29 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testStructureContract/testProviderAndBlockingContract/testRegisterContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：register 阻塞态抛 IllegalBlockingModeException、ops 越界抛 IllegalArgumentException、closed 通道抛 ClosedChannelException、已注册时 configureBlocking 抛 IllegalBlockingModeException、同 selector 重复 register 复用同一 key 并替换附件、validOps 三类实通道逐一断言
+- 确定性与健壮性：真实 SocketChannel 与探测子类双路径：探测 selector 子类记录 register 调用，close 经 deregister 后 key 失效。
+- 版本差异（按侧断言）：无行为差异（方法面一致）。
+- 本机实测断言数：24 → 77 条。

@@ -24,3 +24,12 @@ get((URI)null) 抛 NullPointerException。
 
 健壮性: 纯内存路径运算，无文件/网络/线程依赖；不依赖墙钟/随机；headless 安全不加 @key。
 本机实测断言数: 15 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 14 → 42）：多段拼接矩阵（含空段与首段绝对）；NUL 字符 -> InvalidPathException
+且 getIndex()==-1；null 矩阵（首段/后继段 null -> NPE）；file URI 矩阵（存在/非存在/带尾随
+分隔符的往返）；URI 负例精确类型：file 相对 URI -> IllegalArgumentException，
+jar:/bogus:/http: -> FileSystemNotFoundException。
+
+版本差异：JDK-8 反射断言无 Path.of；JDK-27 侧含 Path.of(URI) 镜像断言。

@@ -98,9 +98,94 @@ public class StandardOpenOptionTest {
         }
     }
 
+    // ---- appended: full 10-constant enum matrix ----
+    static void testEnumMatrix() {
+        StandardOpenOption[] vals = StandardOpenOption.values();
+        check(vals.length == 10, "exactly 10 constants");
+        String[] expected = {"READ", "WRITE", "APPEND", "TRUNCATE_EXISTING", "CREATE",
+                "CREATE_NEW", "DELETE_ON_CLOSE", "SPARSE", "SYNC", "DSYNC"};
+        for (int i = 0; i < expected.length; i++)
+            check(vals[i].name().equals(expected[i]) && vals[i].ordinal() == i,
+                  "values[" + i + "] == " + expected[i] + " (order measured on both JDKs)");
+        for (StandardOpenOption o : StandardOpenOption.values()) {
+            check(StandardOpenOption.valueOf(o.name()) == o, "valueOf round-trip " + o);
+            check(o.toString().equals(o.name()), "toString == name for " + o);
+        }
+        for (int i = 1; i < vals.length; i++)
+            check(vals[i - 1].compareTo(vals[i]) < 0, "compareTo order at " + i);
+        check(java.util.EnumSet.allOf(StandardOpenOption.class).size() == 10,
+              "EnumSet allOf size 10");
+        check(java.util.EnumSet.of(StandardOpenOption.READ, StandardOpenOption.WRITE).size() == 2,
+              "EnumSet of two");
+        boolean iae = false;
+        try { StandardOpenOption.valueOf("read"); }
+        catch (IllegalArgumentException e) { iae = true; }
+        check(iae, "valueOf wrong case -> IllegalArgumentException");
+    }
+
+    // ---- appended: option-combination matrix (measured on Linux) ----
+    static void testCombinationMatrix() throws Exception {
+        Path dir = Files.createTempDirectory("jck");
+        try {
+            Path f = dir.resolve("comb.txt");
+            Files.writeString(f, "abcdef");
+
+            boolean iae1 = false;
+            try (var ch = FileChannel.open(f, StandardOpenOption.READ,
+                    StandardOpenOption.APPEND)) { }
+            catch (IllegalArgumentException e) { iae1 = true; }
+            check(iae1, "READ + APPEND -> IllegalArgumentException");
+
+            boolean iae2 = false;
+            try (var ch = FileChannel.open(f, StandardOpenOption.WRITE,
+                    StandardOpenOption.APPEND, StandardOpenOption.TRUNCATE_EXISTING)) { }
+            catch (IllegalArgumentException e) { iae2 = true; }
+            check(iae2, "WRITE + APPEND + TRUNCATE_EXISTING -> IllegalArgumentException");
+
+            try (var ch = FileChannel.open(f, StandardOpenOption.APPEND)) {
+                ch.write(java.nio.ByteBuffer.wrap("gh".getBytes()));
+                check(ch.size() == 8, "APPEND alone writes at the end");
+            }
+            try (var ch = FileChannel.open(f, StandardOpenOption.TRUNCATE_EXISTING)) {
+                check(ch.size() == 8, "TRUNCATE_EXISTING without WRITE keeps content");
+            }
+            try (var ch = FileChannel.open(f, StandardOpenOption.WRITE,
+                    StandardOpenOption.CREATE)) {
+                check(ch.size() == 8, "CREATE on existing keeps content");
+            }
+            Path fresh = dir.resolve("fresh.bin");
+            try (var ch = FileChannel.open(fresh, StandardOpenOption.WRITE,
+                    StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE)) {
+                check(ch.size() == 0, "SPARSE open via CREATE_NEW succeeds");
+            }
+            check(Files.exists(fresh), "SPARSE target created");
+            try (var ch = FileChannel.open(dir.resolve("sync.bin"),
+                    StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.SYNC)) {
+                ch.write(java.nio.ByteBuffer.wrap("s".getBytes()));
+                check(true, "SYNC write succeeds");
+            }
+            try (var ch = FileChannel.open(dir.resolve("dsync.bin"),
+                    StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.DSYNC)) {
+                ch.write(java.nio.ByteBuffer.wrap("d".getBytes()));
+                check(true, "DSYNC write succeeds");
+            }
+        } finally {
+            try (var st = Files.walk(dir)) {
+                java.util.List<Path> l = new java.util.ArrayList<>();
+                st.forEach(l::add);
+                java.util.Collections.reverse(l);
+                for (Path p : l) { try { Files.deleteIfExists(p); } catch (Exception ignore) { } }
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEnumMatrix();
+        testCombinationMatrix();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

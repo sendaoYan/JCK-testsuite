@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：12 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增（对齐 JDK-8 追加内容）：完整枚举矩阵（values 顺序/name/ordinal/compareTo/toString/declaringClass/valueOf 往返/valueOf 小写 IAE/valueOf(null) NPE/EnumSet）；provider.checkAccess 真实调用（rwx 全过、EXECUTE 不可执行 AccessDeniedException、缺失 NoSuchFileException、null NPE）。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

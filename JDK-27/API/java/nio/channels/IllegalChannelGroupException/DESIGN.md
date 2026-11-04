@@ -32,3 +32,11 @@ IllegalChannelGroupException：java.nio.channels 包的运行时/受检异常，
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：8 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testExceptionObjectContract/testSerializationContract/testRealTriggerContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：extends IllegalArgumentException；serialVersionUID=-2495041211157744253；round-trip 保类型
+- 确定性与健壮性：真实触发：ForeignProvider + ForeignGroup（子类构造，非默认 provider）→ open(socket|server)(foreignGroup) 抛 IllegalChannelGroupException。
+- 版本差异（按侧断言）：serialVersionUID 双侧一致，行为无差异。
+- 本机实测断言数：9 → 34 条。

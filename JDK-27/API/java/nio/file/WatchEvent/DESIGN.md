@@ -33,3 +33,9 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：15 条。
+
+### 第 4 部分追加（批次 A10 契约深化）
+
+新增：访问器结构（kind 返回 Kind/count int/context Object/泛型名 T）；inotify 实测：分批重试至 CREATE+MODIFY 均见、CREATE count==1、context Path 精确且相对、dir.resolve(context) 定位、事件取出即消费、reset 后 delete→ENTRY_DELETE context 精确。
+
+- 本机实测断言数（追加后）：见当前 `PASS (N assertions)` 输出。

@@ -33,3 +33,14 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：18 条。
+
+### A6 契约深化（追加）
+
+深化维度：
+- 未绑定/未连接时 getLocalAddress/getRemoteAddress == null（Socket/ServerSocket/Datagram 三型）。
+- bind(null) 通配 + 临时端口（返回 this）、bind(回环) 精确、重复 bind → AlreadyBoundException。
+- 经接口类型的选项链式/往返；不支持选项 set/get → UnsupportedOperationException。
+- 关闭后 bind/setOption/getOption → ClosedChannelException；**getLocalAddress 关闭后按 javadoc 抛
+  ClosedChannelException**（首批误写为返回 null，实测纠正）；supportedOptions 关闭后仍可查询。
+
+本机实测断言数：38 条（深化前 15）。

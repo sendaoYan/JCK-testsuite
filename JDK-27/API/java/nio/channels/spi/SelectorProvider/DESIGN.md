@@ -33,3 +33,11 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：25 条。
+
+### A7 批次深化（契约覆盖增强，append-only，原断言全部保留）
+
+- 新增方法：testProviderSurfaceContract/testOpenContract/testProtocolFamilyOverloadsContract。
+- 负例矩阵（精确异常类型，同步抛 vs 经 Future/handler 交付分开断言）：provider() 缓存单例；openDatagramChannel(null) 抛 NullPointerException；两次 open 各自独立；inheritedChannel null 或 open 通道（环境相关，柔性断言）；JDK-27：openDatagramChannel(UNIX) 抛 UnsupportedOperationException + UNIX 域全双工 round-trip（bind/connect/accept/写读 1 字节）
+- 确定性与健壮性：JDK-8 侧断言 openSocketChannel(ProtocolFamily)/openServerSocketChannel(ProtocolFamily) 与 StandardProtocolFamily.UNIX 常量均不存在。
+- 版本差异（按侧断言）：JDK-16+ 的 ProtocolFamily 流通道重载仅 JDK-27 存在（双侧反射断言）；INET6 数据报在本机 JDK-8 抛 UnsupportedOperationException、JDK-27 可用（环境差异，不做硬断言）；inheritedChannel 双侧均非 null（JDK-8 为 server-socket 形态、JDK-27 为 socket 形态，环境相关故柔性断言）。
+- 本机实测断言数：20 → 58 条。

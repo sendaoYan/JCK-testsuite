@@ -70,9 +70,44 @@ public class KindTest {
         }
     }
 
+    // ---- appended: method signatures + message detail (measured) ----
+    static void testSignaturesAndMessage() throws Exception {
+        Class<?> c = Class.forName("java.nio.file.WatchEvent$Kind");
+        check("T".equals(c.getTypeParameters()[0].getName()), "parameter is <T>");
+        check(c.getMethod("name").getReturnType() == String.class, "name() returns String");
+        check(c.getMethod("type").getReturnType() == Class.class, "type() returns Class<?>");
+        check(StandardWatchEventKinds.OVERFLOW.type() == Object.class,
+              "overflow type Object (measured)");
+        check(StandardWatchEventKinds.ENTRY_DELETE.type() == Path.class, "delete type Path");
+
+        Path dir = Files.createTempDirectory("jck");
+        try (WatchService ws = FileSystems.getDefault().newWatchService()) {
+            // the default provider's message is exactly the kind name (measured)
+            Kind<Path> bogus = new Kind<>() {
+                public String name() { return "JCK_BOGUS_KIND"; }
+                public Class<Path> type() { return Path.class; } };
+            boolean uoe = false;
+            String msg = null;
+            try { dir.register(ws, bogus); }
+            catch (UnsupportedOperationException e) { uoe = true; msg = e.getMessage(); }
+            check(uoe, "nonstandard kind -> UnsupportedOperationException");
+            check("JCK_BOGUS_KIND".equals(msg), "message is exactly the kind name");
+
+            // a look-alike sharing the standard name still never equals it
+            Kind<Path> fake = new Kind<>() {
+                public String name() { return "ENTRY_CREATE"; }
+                public Class<Path> type() { return Path.class; } };
+            check(!fake.equals(StandardWatchEventKinds.ENTRY_CREATE),
+                  "look-alike not equal to the standard singleton");
+        } finally {
+            Files.deleteIfExists(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSignaturesAndMessage();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

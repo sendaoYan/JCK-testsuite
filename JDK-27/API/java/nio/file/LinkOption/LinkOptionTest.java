@@ -70,9 +70,77 @@ public class LinkOptionTest {
         }
     }
 
+    // ---- appended: enum matrix ----
+    static void testEnumMatrix() {
+        LinkOption[] vals = LinkOption.values();
+        check(vals.length == 1, "single constant");
+        check(vals[0] == LinkOption.NOFOLLOW_LINKS, "values[0] NOFOLLOW_LINKS");
+        check("NOFOLLOW_LINKS".equals(LinkOption.NOFOLLOW_LINKS.name()), "name");
+        check(LinkOption.NOFOLLOW_LINKS.ordinal() == 0, "ordinal 0");
+        check("NOFOLLOW_LINKS".equals(LinkOption.NOFOLLOW_LINKS.toString()),
+              "toString == name");
+        check(LinkOption.NOFOLLOW_LINKS.compareTo(LinkOption.NOFOLLOW_LINKS) == 0,
+              "compareTo self == 0");
+        check(LinkOption.NOFOLLOW_LINKS.getDeclaringClass() == LinkOption.class,
+              "declaring class");
+        check(java.util.EnumSet.allOf(LinkOption.class).size() == 1, "EnumSet allOf size 1");
+        check(java.util.EnumSet.noneOf(LinkOption.class).isEmpty(), "EnumSet noneOf empty");
+        check(LinkOption.valueOf("NOFOLLOW_LINKS") == LinkOption.NOFOLLOW_LINKS,
+              "valueOf round-trip");
+        check(LinkOption.NOFOLLOW_LINKS.hashCode()
+              == LinkOption.valueOf("NOFOLLOW_LINKS").hashCode(), "hashCode stable");
+        boolean iae = false;
+        try { LinkOption.valueOf("nofollow_links"); }
+        catch (IllegalArgumentException e) { iae = true; }
+        check(iae, "valueOf wrong case -> IllegalArgumentException");
+    }
+
+    // ---- appended: follow/unfollow semantics across operations ----
+    static void testFollowSemantics() throws Exception {
+        Path dir = Files.createTempDirectory("jck");
+        try {
+            Path target = dir.resolve("tgt.txt");
+            Files.writeString(target, "0123456789");
+            Path link = dir.resolve("lnk");
+            Files.createSymbolicLink(link, target);
+
+            check(Files.exists(link, new LinkOption[0]) == Files.exists(link),
+                  "empty LinkOption[] == default (follow)");
+            check(Files.notExists(link, new LinkOption[0]) == Files.notExists(link),
+                  "empty LinkOption[] notExists matches default");
+            check(Files.isRegularFile(link), "isRegularFile follows the link");
+            check(!Files.isDirectory(link), "file link is not a directory");
+            check(Files.size(link) == 10, "size follows to the target");
+
+            Files.delete(link);
+            check(!Files.exists(link, LinkOption.NOFOLLOW_LINKS), "link gone after delete");
+            check(Files.exists(target), "target survives link deletion");
+
+            Files.createSymbolicLink(link, target);
+            Path followedCopy = dir.resolve("followed.txt");
+            Files.copy(link, followedCopy);
+            check(Files.isRegularFile(followedCopy) && !Files.isSymbolicLink(followedCopy),
+                  "default copy duplicates the target content");
+            check(Files.size(followedCopy) == 10, "followed copy size matches");
+
+            Object symFollowed = Files.getAttribute(link, "basic:isSymbolicLink");
+            Object symUnfollowed = Files.getAttribute(link, "basic:isSymbolicLink",
+                    LinkOption.NOFOLLOW_LINKS);
+            check(Boolean.FALSE.equals(symFollowed), "followed getAttribute hides the link");
+            check(Boolean.TRUE.equals(symUnfollowed),
+                  "NOFOLLOW getAttribute exposes the link");
+        } finally {
+            for (String n : new String[] {"tgt.txt", "lnk", "followed.txt"})
+                try { Files.deleteIfExists(dir.resolve(n)); } catch (Exception ignore) { }
+            Files.deleteIfExists(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEnumMatrix();
+        testFollowSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

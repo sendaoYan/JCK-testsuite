@@ -29,3 +29,14 @@
 - 平台相关能力（权限/符号链接/watch 事件）以运行时能力守护，不支持时打印 NOTE 跳过，不判失败；
   headless 安全，不加 @key。
 - 本机实测断言数：31 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 21 → 65）：getSeparator()=="//" 即 "/"（Linux 契约注释）；getPath null/空串矩阵；
+根目录 getRootDirectories 恰 1 个且为 "/"；首个 FileStore name/type 非空；
+supportedFileAttributeViews 含 basic/owner/posix/user；getPathMatcher(null) -> NPE、
+""/无冒号 -> IllegalArgumentException；newWatchService close 幂等 + 关闭后 poll ->
+ClosedWatchServiceException；provider() 与 FileSystems.getDefault().provider() 同一性；
+close() -> UnsupportedOperationException（默认文件系统不可关）且 isOpen 仍 true。
+
+版本差异：installedProviders JDK-8 = [file, jar]；JDK-27 = [file, jar, jrt]（jrt 仅 27 有）。

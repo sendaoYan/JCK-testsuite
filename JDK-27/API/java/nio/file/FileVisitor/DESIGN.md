@@ -33,3 +33,10 @@
 - 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
   守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
 - 本机实测断言数：13 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 11 → 35）：与 JDK-8 侧同套（四方法精确签名、非函数式接口、无默认方法、
+生命周期表 attributes 非 null / postVisitDirectory ioe==null、嵌套顺序、非存在起点 ->
+visitFileFailed(精确 NoSuchFileException + 起点路径)、null 返回 -> NPE、RuntimeException/
+IOException 原样传播）。

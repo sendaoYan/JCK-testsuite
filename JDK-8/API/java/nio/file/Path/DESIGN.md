@@ -35,3 +35,17 @@ equals/hashCode/compareTo -> subpath 越界与 getName(-1) 抛 IllegalArgumentEx
 
 健壮性: 纯内存路径运算，无文件/网络/线程依赖；不依赖墙钟/随机；headless 安全不加 @key。
 本机实测断言数: 50 条。
+
+## 深化追加（契约级，批次 A9）
+
+新增维度（断言 37 → 213）：分量/子路径越界矩阵（subpath(0,0)/(3,3)/(2,1)/(0,4)/(-1,2)、
+getName(±越界) 全部 IllegalArgumentException 精确类型）；resolve("") 等值但非同对象；已规范路径
+normalize() == this（幂等）；"/a/bc".endsWith("/bc") == false（endsWith 规范右锚语义）；
+"/a/b".compareTo("a/b") < 0（字节序 '/'<'a'）；toUri 存在目录尾随 "/"、非存在无尾随；
+空路径 getNameCount()==1；iterator 顺序分量；startsWith/endsWith Path 与 String 双形态矩阵。
+
+负例矩阵（实测精确类型）：subpath 越界/负值 -> IllegalArgumentException；getName 越界 ->
+IllegalArgumentException；resolve(null)/getName(null) -> NPE。
+
+版本差异：JDK-8 无 Path.of（反射断言不存在）；JDK-27 侧 testPathOf 覆盖 of(String)/
+of(String...)/of(URI) 与 Paths.get 等价、null -> NPE、非分层 URI -> IllegalArgumentException。
