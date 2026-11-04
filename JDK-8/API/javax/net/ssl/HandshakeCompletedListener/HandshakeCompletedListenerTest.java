@@ -1,26 +1,66 @@
 /*
  * @test
- * @summary javax.net.ssl.HandshakeCompletedListener conformance: interface hierarchy and key methods.
+ * @summary javax.net.ssl.HandshakeCompletedListener conformance: white-box structure + black-box behavior.
  * @run main HandshakeCompletedListenerTest
  */
-
+import java.lang.reflect.*;
+import java.util.*;
+import java.io.*;
+import java.security.*;
+import javax.net.ssl.*;
 public class HandshakeCompletedListenerTest {
     static int passed;
-
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-
-    public static void main(String[] args) throws Exception {
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    interface Act { Object run() throws Exception; }
+    static Object expect(Act a) { try { return a.run(); } catch (Throwable t) { return t.getClass().getSimpleName(); } }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.net.ssl.HandshakeCompletedListener");
-        check(c.isInterface(), "is interface");
-        java.util.Set<String> in = new java.util.HashSet<String>();
-        for (Class<?> i : c.getInterfaces()) in.add(i.getName());
-        java.util.Set<String> ms = new java.util.HashSet<String>();
-        for (java.lang.reflect.Method m : c.getDeclaredMethods()) ms.add(m.getName());
-        check(ms.contains("handshakeCompleted"), "declares handshakeCompleted");
-
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(c.isInterface(), "interface");
+    }
+    static Object sessionDefault(java.lang.reflect.Method m) {
+        Class<?> rt = m.getReturnType();
+        if (rt == boolean.class) return false;
+        if (rt == int.class) return 0;
+        if (rt == long.class) return 0L;
+        return null;
+    }
+    static SSLSession mockSession() {
+        return (SSLSession) Proxy.newProxyInstance(
+            HandshakeCompletedListenerTest.class.getClassLoader(),
+            new Class<?>[] { SSLSession.class },
+            (proxy, method, args) -> {
+                switch (method.getName()) {
+                    case "toString": return "mock-session";
+                    case "hashCode": return 0;
+                    case "equals": return proxy == args[0];
+                    case "getId": return new byte[0];
+                    case "getValueNames": return new String[0];
+                    default: return sessionDefault(method);
+                }
+            });
+    }
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        // directly invoke the interface method through the interface type (invokeinterface)
+        SSLContext ctx = SSLContext.getDefault();
+        SSLSocket sock = (SSLSocket) ctx.getSocketFactory().createSocket();
+        SSLSession session = mockSession();
+        final HandshakeCompletedEvent[] seen = new HandshakeCompletedEvent[1];
+        HandshakeCompletedListener l = new HandshakeCompletedListener() {
+            public void handshakeCompleted(HandshakeCompletedEvent e) { seen[0] = e; }
+        };
+        HandshakeCompletedEvent ev = new HandshakeCompletedEvent(sock, session);
+        l.handshakeCompleted(ev);
+        check(seen[0] == ev, "handshakeCompleted delivered event");
+        check(ev.getSession() == session, "event session preserved");
+        check(ev.getSocket() == sock, "event socket preserved");
+        check(l instanceof java.util.EventListener, "is EventListener");
+    }
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

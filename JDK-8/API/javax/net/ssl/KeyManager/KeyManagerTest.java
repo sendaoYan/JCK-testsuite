@@ -1,25 +1,32 @@
 /*
  * @test
- * @summary javax.net.ssl.KeyManager conformance: interface hierarchy and key methods.
+ * @summary javax.net.ssl.KeyManager conformance: white-box structure + black-box behavior.
  * @run main KeyManagerTest
  */
-
+import java.lang.reflect.*;
+import java.util.*;
+import java.io.*;
+import java.security.*;
+import javax.net.ssl.*;
 public class KeyManagerTest {
     static int passed;
-
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-
-    public static void main(String[] args) throws Exception {
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    interface Act { Object run() throws Exception; }
+    static Object expect(Act a) { try { return a.run(); } catch (Throwable t) { return t.getClass().getSimpleName(); } }
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.net.ssl.KeyManager");
-        check(c.isInterface(), "is interface");
-        java.util.Set<String> in = new java.util.HashSet<String>();
-        for (Class<?> i : c.getInterfaces()) in.add(i.getName());
-        java.util.Set<String> ms = new java.util.HashSet<String>();
-        for (java.lang.reflect.Method m : c.getDeclaredMethods()) ms.add(m.getName());
-
+        check(Modifier.isPublic(c.getModifiers()), "public");
+        check(c.isInterface(), "interface");
+    }
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        javax.net.ssl.KeyManager x = new javax.net.ssl.KeyManager() {};
+        check(x != null, "marker instantiable");
+    }
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
