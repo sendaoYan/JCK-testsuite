@@ -7,6 +7,10 @@
  * @run main PropertyResourceBundleTest
  */
 
+import java.util.Locale;
+import java.util.ResourceBundle;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.util.MissingResourceException;
@@ -70,11 +74,79 @@ public class PropertyResourceBundleTest {
                      "getStringArray on String value -> ClassCastException");
     }
 
+
+    // ===================== 契约深化：转义读取/父链 keySet/IO 异常透传/UTF-8 语义 =====================
+
+    static void testUtf8EncodingContract() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("prb8");
+        java.nio.file.Path iso = dir.resolve("iso.properties");
+        java.nio.file.Files.write(iso, "k=caf\\u00e9".getBytes("ISO-8859-1"));
+        PropertyResourceBundle b1 = new PropertyResourceBundle(
+              new java.io.FileInputStream(iso.toFile()));
+        check("caf\u00e9".equals(b1.getString("k")),
+              "ISO-8859-1 file with unicode escape round-trips");
+        java.nio.file.Path raw = dir.resolve("raw.properties");
+        java.nio.file.Files.write(raw, "k=caf\u00e9".getBytes("UTF-8"));
+        PropertyResourceBundle b2 = new PropertyResourceBundle(
+              new java.io.FileInputStream(raw.toFile()));
+        check(!"caf\u00e9".equals(b2.getString("k")),
+              "JDK-8 reads raw UTF-8 bytes as ISO-8859-1 (mojibake, escapes required)");
+        deletePrbTemp(dir);
+    }
+
+    static void testParentKeySetUnion() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("prbp");
+        java.nio.file.Files.write(dir.resolve("chain.properties"),
+              "pk=pv\nboth=parent".getBytes("ISO-8859-1"));
+        java.nio.file.Files.write(dir.resolve("chain_fr.properties"),
+              "ck=cv\nboth=child".getBytes("ISO-8859-1"));
+        URLClassLoader cl = new URLClassLoader(new URL[]{ dir.toUri().toURL() });
+        ResourceBundle child = ResourceBundle.getBundle("chain", new Locale("fr"), cl);
+        check("cv".equals(child.getString("ck")), "child (fr) own key");
+        check("child".equals(child.getString("both")), "child shadows parent value");
+        check("pv".equals(child.getString("pk")), "parent key resolved through chain");
+        check(child.keySet().containsAll(java.util.Arrays.asList("ck", "pk", "both")),
+              "PropertyResourceBundle keySet includes parent keys");
+        check(child.getClass().getName().endsWith("PropertyResourceBundle")
+              || child instanceof PropertyResourceBundle,
+              "properties-format bundle loaded from classpath");
+        cl.close();
+        deletePrbTemp(dir);
+    }
+
+    static void testReaderConstructorAndIoFailure() throws Exception {
+        PropertyResourceBundle ok = new PropertyResourceBundle(new java.io.StringReader("a=1\nb=2"));
+        check("1".equals(ok.getString("a")) && "2".equals(ok.getString("b")),
+              "Reader ctor parses all entries");
+        java.io.Reader bad = new java.io.Reader() {
+            public int read(char[] cbuf, int off, int len) throws java.io.IOException {
+                throw new java.io.IOException("boom");
+            }
+            public void close() { }
+        };
+        try {
+            new PropertyResourceBundle(bad);
+            check(false, "IOException from Reader propagates");
+        } catch (java.io.IOException ioe) {
+            check("boom".equals(ioe.getMessage()), "IOException from Reader propagates");
+        }
+    }
+
+    static void deletePrbTemp(java.nio.file.Path dir) throws Exception {
+        java.nio.file.DirectoryStream<java.nio.file.Path> ds = java.nio.file.Files.newDirectoryStream(dir);
+        for (java.nio.file.Path p : ds) java.nio.file.Files.deleteIfExists(p);
+        ds.close();
+        java.nio.file.Files.deleteIfExists(dir);
+    }
+
     public static void main(String[] args) throws Exception {
         testPropertyResourceBundle();
         testReaderConstructor();
         testNullConstructor();
         testMissingAndUnicode();
+        testUtf8EncodingContract();
+        testParentKeySetUnion();
+        testReaderConstructorAndIoFailure();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

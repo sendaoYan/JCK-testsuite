@@ -18,5 +18,6 @@
 | 继承 | extends IOException |
 | 构造器 | String/Throwable 构造、消息/起因回传 |
 | 触发 | loadFromXML(坏 XML) 抛 InvalidPropertiesFormatException |
+| P0 | 契约深化：两种构造器语义/cause 无包装 | testIpfContracts |
 
 共 3 组场景、约 5 个 check（`testBlackBox()`）。

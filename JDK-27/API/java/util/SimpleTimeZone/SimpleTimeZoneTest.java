@@ -120,9 +120,52 @@ public class SimpleTimeZoneTest {
         check(a.hashCode() == b.hashCode(), "equal zones equal hashCode");
     }
 
+
+    // ===================== 契约深化：规则等价性/US 规则 DST/非法参数矩阵 =====================
+    static void testSimpleTimeZoneContracts() {
+        SimpleTimeZone custom = new SimpleTimeZone(3600000, "X");
+        check(custom.getRawOffset() == 3600000 && !custom.useDaylightTime(),
+              "raw offset, no DST by default");
+        check(custom.hasSameRules(new SimpleTimeZone(3600000, "Y")),
+              "hasSameRules ignores zone id");
+        check(!custom.hasSameRules(new SimpleTimeZone(7200000, "Y")),
+              "hasSameRules detects offset difference");
+        check(custom.equals(new SimpleTimeZone(3600000, "X"))
+              && !custom.equals(new SimpleTimeZone(3600000, "W")),
+              "equals includes zone id");
+        check(custom.clone() instanceof SimpleTimeZone, "clone returns SimpleTimeZone");
+        check(custom.getDSTSavings() == 0, "no-DST zone savings 0");
+        SimpleTimeZone stz = new SimpleTimeZone(-5 * 3600000, "EST5",
+              java.util.Calendar.MARCH, 8, -java.util.Calendar.SUNDAY, 2 * 3600000,
+              java.util.Calendar.NOVEMBER, 1, -java.util.Calendar.SUNDAY, 2 * 3600000);
+        @SuppressWarnings("deprecation")
+        java.util.Date jul = new java.util.Date(2023 - 1900, java.util.Calendar.JULY, 1);
+        @SuppressWarnings("deprecation")
+        java.util.Date jan = new java.util.Date(2023 - 1900, java.util.Calendar.JANUARY, 1);
+        check(stz.inDaylightTime(jul) && !stz.inDaylightTime(jan),
+              "US-style rules: DST on in July, off in January");
+        check(stz.useDaylightTime() && stz.getDSTSavings() == 3600000,
+              "useDaylightTime + default savings 1h");
+        try {
+            new SimpleTimeZone(0, "Z", java.util.Calendar.MARCH, 8, -java.util.Calendar.SUNDAY,
+                  2 * 3600000, java.util.Calendar.NOVEMBER, 1, -java.util.Calendar.SUNDAY,
+                  2 * 3600000, 0);
+            check(false, "zero dstSavings IAE");
+        } catch (IllegalArgumentException iae) { check(true, "zero dstSavings IAE"); }
+        try {
+            SimpleTimeZone bad = new SimpleTimeZone(0, "Z");
+            bad.setStartRule(13, 8, -1, 0);
+            check(false, "setStartRule bad month IAE");
+        } catch (IllegalArgumentException iae) { check(true, "setStartRule bad month IAE"); }
+        SimpleTimeZone sy = new SimpleTimeZone(0, "Z");
+        sy.setStartYear(1990);
+        check(!sy.useDaylightTime(), "setStartYear alone does not enable DST");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSimpleTimeZoneContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

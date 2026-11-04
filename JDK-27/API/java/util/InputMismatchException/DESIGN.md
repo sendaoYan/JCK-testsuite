@@ -18,5 +18,6 @@ Scanner 读取的 token 与请求类型不匹配或超出范围时抛出的异�
 | 继承 | extends NoSuchElementException |
 | 构造器 | ()/String 两个构造、消息回传 |
 | 触发 | Scanner("xyz").nextInt() 抛 InputMismatchException |
+| P0 | 契约深化：层次/构造矩阵/Scanner 触发 | testMismatchContracts |
 
 共 3 组场景、约 5 个 check（`testBlackBox()`）。

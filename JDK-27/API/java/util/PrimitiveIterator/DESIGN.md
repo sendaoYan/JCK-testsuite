@@ -23,5 +23,6 @@ forEachRemaining(IntConsumer) 消费。
 | nextInt | 无装箱返回 int |
 | forEachRemaining | IntConsumer 消费剩余 |
 | 耗尽 | hasNext false |
+| P0 | 契约深化：三种原生迭代器/混合 next()/forEachRemaining 双重载；自定义实现探针/空 NPE/双重载分派/Spliterators 桥接/类型标记 | testPrimitiveIteratorContracts |
 
 共 4 组场景、约 7 个 check（`testBlackBox()`）。

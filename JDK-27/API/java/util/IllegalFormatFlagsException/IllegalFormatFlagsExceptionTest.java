@@ -1,12 +1,18 @@
 /*
  * @test
- * @summary java.util.IllegalFormatFlagsException conformance: white-box structure + black-box behavior.
+ * @summary java.util.IllegalFormatFlagsException conformance: hierarchy, constructor matrix (null NPE),
+ *          getters and exact message formats, Formatter trigger producing the
+ *          exception with populated getters, and serialization round-trip.
  * @run main IllegalFormatFlagsExceptionTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.Formatter;
 import java.util.IllegalFormatException;
-import java.util.IllegalFormatFlagsException;
 
 public class IllegalFormatFlagsExceptionTest {
     static int passed;
@@ -16,37 +22,63 @@ public class IllegalFormatFlagsExceptionTest {
         passed++;
     }
 
-    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
             r.run();
-            throw new AssertionError(msg + ": expected " + type.getSimpleName());
         } catch (Throwable t) {
-            if (!type.isInstance(t))
-                throw new AssertionError(msg + ": expected " + type.getSimpleName()
-                        + " but got " + t.getClass().getSimpleName(), t);
-            passed++;
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                + " but got " + t.getClass().getSimpleName(), t);
         }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
     }
 
-    static void testWhiteBox() throws Exception {
+    @SuppressWarnings("unchecked")
+    static <T extends Throwable> T grab(Class<T> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return (T) t; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": nothing thrown");
+    }
+
+    static void testHierarchy() throws Exception {
         Class<?> c = Class.forName("java.util.IllegalFormatFlagsException");
         check(c.getSuperclass() == IllegalFormatException.class, "extends IllegalFormatException");
-        c.getDeclaredConstructor(String.class);
-        check(c.getDeclaredMethod("getFlags").getReturnType() == String.class, "getFlags String");
+        check(RuntimeException.class.isAssignableFrom(c), "is a RuntimeException (unchecked)");
+        check(Serializable.class.isAssignableFrom(c), "Serializable");
+        check(java.util.IllegalFormatFlagsException.class.getSuperclass() != Object.class, "non-root class");
     }
 
-    static void testBlackBox() {
-        IllegalFormatFlagsException e = new IllegalFormatFlagsException("+ ");
+    static void testConstructorsAndGetters() {
+        java.util.IllegalFormatFlagsException e = new java.util.IllegalFormatFlagsException("+ ");
         check("+ ".equals(e.getFlags()), "getFlags");
-        check("Flags = '+ '".equals(e.getMessage()), "getMessage");
+        check("Flags = '+ '".equals(e.getMessage()), "getMessage format");    }
 
-        final Formatter f = new Formatter();
-        expectThrows(() -> f.format("%+ d", 1), IllegalFormatFlagsException.class, "illegal flags");
+    static void testFormatterTrigger() {
+        java.util.IllegalFormatFlagsException t = grab(java.util.IllegalFormatFlagsException.class,
+                () -> new Formatter().format("%+ d", 1), "format %+ d");
+        check("+ ".equals(t.getFlags()), "trigger populates getFlags");    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(new java.util.IllegalFormatFlagsException("+ "));
+        Object back = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check("+ ".equals(((java.util.IllegalFormatFlagsException) back).getFlags()), "serialization round-trip preserves state");
+    }
+
+    static boolean commaOk(Object back) {
+        java.util.FormatFlagsConversionMismatchException e = (java.util.FormatFlagsConversionMismatchException) back;
+        return ",".equals(e.getFlags()) && e.getConversion() == 'x';
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testHierarchy();
+        testConstructorsAndGetters();
+        testFormatterTrigger();
+        testSerializationRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

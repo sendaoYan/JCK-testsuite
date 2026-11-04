@@ -23,6 +23,7 @@
 | P0 | getString/getObject/containsKey/getKeys | testListResourceBundle |
 | P0 | getStringArray + 缺失 MRE | testStringArrayAndMissing |
 | P0 | getContents() null → NPE | testNullContents |
+| P0 | 契约深化：父链联合 keySet/handleKeySet 范围/getKeys 全枚举 | testListBundleContracts |
 
 ## 关键规范细节
 

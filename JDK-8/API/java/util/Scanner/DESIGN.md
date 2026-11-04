@@ -43,6 +43,7 @@
 | P1 | findInLine/findWithinHorizon/skip | testFindAndSkip |
 | P1 | reset 恢复默认 | testReset |
 | P1 | match() + toString | testMatchAndToString |
+| P0 | 契约深化：分隔符/进制/Locale/关闭矩阵/IO 透传 | testDelimiterContracts、testFindSkipContracts |
 
 ## 关键规范细节
 

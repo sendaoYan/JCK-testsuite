@@ -77,10 +77,45 @@ public class ListResourceBundleTest {
                      "null key -> NPE on access");
     }
 
+
+    // ===================== 契约深化：父链联合 keySet/handleKeySet 范围/getKeys 全枚举 =====================
+    static class BaseBundle extends ListResourceBundle {
+        protected Object[][] getContents() {
+            return new Object[][] { {"pk", "pv"}, {"both", "base"} };
+        }
+    }
+
+    static class DerivedBundle extends BaseBundle {
+        protected Object[][] getContents() {
+            return new Object[][] { {"ck", "cv"}, {"both", "derived"} };
+        }
+        Object[][] ownContents() { return super.getContents(); }
+    }
+
+    static void testListBundleContracts() {
+        DerivedBundle d = new DerivedBundle();
+        check("cv".equals(d.getString("ck")), "derived key");
+        check("derived".equals(d.getString("both")), "derived shadows base in contents");
+        check(d.getContents() != null && d.getContents().length == 2,
+              "getContents returns derived array");
+        Object[][] own = d.ownContents();
+        boolean baseShape = own.length == 2;
+        for (Object[] pair : own) if (!"pv".equals(pair[1]) && !"base".equals(pair[1])) baseShape = false;
+        check(baseShape, "super.getContents from subclass returns the BASE implementation (non-virtual super call)");
+        java.util.Set<String> keys = d.keySet();
+        check(keys.contains("ck"), "keySet contains derived key");
+        check(!keys.contains("zz"), "keySet excludes unknown key");
+        java.util.Enumeration<String> en = d.getKeys();
+        int n = 0;
+        while (en.hasMoreElements()) { en.nextElement(); n++; }
+        check(n == 2, "getKeys enumerates exactly the contents entries");
+    }
+
     public static void main(String[] args) {
         testListResourceBundle();
         testStringArrayAndMissing();
         testNullContents();
+        testListBundleContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -18,5 +18,6 @@
 | 继承 | extends Error |
 | 构造器 | String/(String,Throwable)、消息/起因回传 |
 | 捕获 | 可作为 Error 捕获 |
+| P0 | 契约深化：Error 层次/cause 保持/字符串形式 | testSceContracts |
 
 共 3 组场景、约 5 个 check（`testBlackBox()`）。

@@ -26,3 +26,9 @@
   - `String.format` 固定 Locale 输出与位置参数。
   - `out()`/`locale()` 返回后端与构造 Locale。
   - close 后 format 抛 FormatterClosedException。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：转换符矩阵/精度/分组/异常族/getter | 见 Test 内「契约深化」区块 |

@@ -28,6 +28,7 @@
 | P0 | numericCode/fractionDigits/symbol/displayName/toString | testAttributes |
 | P1 | getAvailableCurrencies | testAvailableCurrencies |
 | P1 | Serializable round-trip 缓存实例 | testSerialization |
+| P0 | 契约深化：实例缓存/数值码/显示名/异常消息矩阵 | testCurrencyContracts |
 
 ## 关键规范细节
 

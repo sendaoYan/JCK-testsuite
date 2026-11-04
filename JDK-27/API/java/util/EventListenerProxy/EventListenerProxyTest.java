@@ -74,9 +74,23 @@ public class EventListenerProxyTest {
         check(p2.getListener() == p.getListener(), "independent proxies share the wrapped listener");
     }
 
+
+    // ===================== 契约深化：equals/hashCode 遵循监听器/可作 EventListener =====================
+    static void testProxyContracts() {
+        MyListener first = new MyListener("a");
+        EventListenerProxy<MyListener> p1 = new Proxy(first);
+        EventListenerProxy<MyListener> p2 = new Proxy(first);
+        check(!p1.equals(p2), "EventListenerProxy does not override equals (identity semantics)");
+        check(p1.equals(p1), "equals reflexive");
+        check(!p1.equals(new Proxy(new MyListener("b"))), "different listener not equal");
+        java.util.EventListener asIfc = p1;
+        check(asIfc != null, "proxy is itself an EventListener (chaining)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testProxyContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

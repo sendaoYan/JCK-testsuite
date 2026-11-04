@@ -21,5 +21,6 @@
 | 精确值 | 1/2/4 |
 | 位掩码 | 互不重叠、可 OR 组合为 7 |
 | 实际传递 | %#S 传给 formatTo 的 flags == UPPERCASE|ALTERNATE |
+| P0 | 契约深化：位值组合/Formattable 回调对齐 | testFlagsContracts |
 
 共 3 组场景、约 5 个 check（`testBlackBox()`）。

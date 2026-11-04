@@ -145,9 +145,38 @@ public class DateTest {
                 () -> Date.parse("not a date"), "parse(invalid) throws IllegalArgumentException");
     }
 
+
+    // ===================== 契约深化：hashCode 公式/排序矩阵/parse/UTC 静态 =====================
+    static void testDateContracts() {
+        long t = 123456789L;
+        Date d = new Date(t);
+        check(d.hashCode() == (int) (t ^ (t >>> 32)), "hashCode == (int)(ms ^ (ms>>>32))");
+        Date later = new Date(t + 1);
+        check(d.compareTo(later) < 0 && later.compareTo(d) > 0, "compareTo signs both directions");
+        check(d.compareTo(new Date(t)) == 0, "compareTo equal times -> 0");
+        check(!d.equals(later) && d.before(later) && later.after(d), "before/after/equals");
+        Object cl = d.clone();
+        check(cl != d && cl instanceof Date && cl.equals(d), "clone distinct but equal");
+        check(Date.parse("Jan 1, 2000") > 0, "Date.parse accepts 'Jan 1, 2000'");
+        check(Date.parse("1 January 1970 00:00:00 GMT") == 0, "Date.parse epoch GMT == 0");
+        try { Date.from(null); check(false, "Date.from(null) NPE"); }
+        catch (NullPointerException npe) { check(true, "Date.from(null) NPE"); }
+        check(Date.from(d.toInstant()).getTime() == t, "toInstant/Date.from round-trip");
+        @SuppressWarnings("deprecation")
+        long utc = Date.UTC(2020 - 1900, 5, 15, 10, 30, 45);
+        java.util.Calendar g = java.util.Calendar.getInstance(
+              java.util.TimeZone.getTimeZone("GMT"), java.util.Locale.US);
+        g.clear(); g.set(2020, 5, 15, 10, 30, 45);
+        check(utc == g.getTimeInMillis(), "Date.UTC matches GMT calendar millis");
+        Date mut = new Date(0L);
+        mut.setTime(t);
+        check(mut.getTime() == t, "setTime/getTime");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDateContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

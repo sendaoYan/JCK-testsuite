@@ -40,6 +40,7 @@
 | P1 | clone 独立 + setTimeZone | testCloneAndTimeZone |
 | P1 | getMinimum/Maximum/getActualMaximum 闰年 | testMinMax |
 | P1 | 序列化往返 + 复活字段完整 | testSerialization |
+| P0 | 契约深化：字段常量/周参数/lenient 归一化/add-roll/极限/显示名 | testCalendarContracts |
 
 ## 关键规范细节
 

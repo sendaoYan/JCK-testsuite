@@ -26,3 +26,9 @@
   - 自定义子类 `getLocale()`（未设置）与 `getBaseBundleName()` → null。
   - `getBundle(null)` → NPE；`getBundle(不存在 baseName)` → MissingResourceException；
     `clearCache()` 可调用。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：真实属性文件回退链/父链 keySet/缓存/clearCache | 见 Test 内「契约深化」区块 |

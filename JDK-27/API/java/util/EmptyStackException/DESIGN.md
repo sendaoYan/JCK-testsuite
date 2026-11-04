@@ -18,5 +18,6 @@
 | 构造器 | 无参构造可用、消息 null |
 | 触发 | 空 Stack pop 抛 EmptyStackException |
 | 非空 | push 后可 pop 不抛 |
+| P0 | 契约深化：null 消息/Stack 触发矩阵/层次；唯一构造器参数/序列化 round-trip/空栈 search 不抛/栈轨迹可设 | testEmptyStackContracts、testStackTraceContract |
 
 共 3 组场景、约 4 个 check（`testBlackBox()`）。

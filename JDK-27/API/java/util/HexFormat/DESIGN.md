@@ -23,5 +23,6 @@
 | parseHex | 往返、奇数 IAE、非法字符 NFE |
 | 数字转换 | fromHexDigits/toHexDigits/toHighHexDigit |
 | 静态 | isHexDigit/fromHexDigit |
+| P0 | 契约深化：round-trip 闭环/区间校验/大写流/toHexDigits 定位参数 | testHexRoundTripContracts |
 
 共 5 组场景、约 16 个 check（`testBlackBox()`）。

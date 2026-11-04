@@ -24,8 +24,27 @@ public class ServiceConfigurationErrorTest {
         check(e2.getCause() == cause, "(String,Throwable) ctor sets cause");
     }
 
+
+    // ===================== 契约深化：Error 层次/cause 保持/字符串形式 =====================
+    static void testSceContracts() {
+        check(ServiceConfigurationError.class.getSuperclass() == Error.class,
+              "extends Error (unchecked, not Exception)");
+        check(!Exception.class.isAssignableFrom(ServiceConfigurationError.class),
+              "not an Exception subtype");
+        ServiceConfigurationError e = new ServiceConfigurationError("boom");
+        check("boom".equals(e.getMessage()), "message ctor");
+        check(e.getCause() == null, "no cause by default");
+        IllegalStateException cause = new IllegalStateException("root");
+        ServiceConfigurationError e2 = new ServiceConfigurationError("msg", cause);
+        check("msg".equals(e2.getMessage()) && e2.getCause() == cause,
+              "2-arg ctor message + cause");
+        check(e.toString().startsWith("java.util.ServiceConfigurationError"),
+              "toString names the class");
+    }
+
     public static void main(String[] args) {
         testServiceConfigurationError();
+        testSceContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

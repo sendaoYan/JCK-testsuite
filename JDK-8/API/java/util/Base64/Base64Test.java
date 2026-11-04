@@ -197,7 +197,146 @@ public class Base64Test {
             "decode(null ByteBuffer) NPE");
     }
 
-    public static void main(String[] args) {
+    // ===================== 契约深化：RFC 4648 向量/解码错误消息/非规范输入 =====================
+
+    static void testRfc4648Vectors() {
+        // RFC 4648 第 10 节测试向量（basic 字母表）
+        String[][] vec = {
+            {"", ""},
+            {"f", "Zg=="},
+            {"fo", "Zm8="},
+            {"foo", "Zm9v"},
+            {"foob", "Zm9vYg=="},
+            {"fooba", "Zm9vYmE="},
+            {"foobar", "Zm9vYmFy"},
+        };
+        for (String[] v : vec) {
+            String enc = Base64.getEncoder().encodeToString(v[0].getBytes(StandardCharsets.UTF_8));
+            check(v[1].equals(enc), "RFC4648 vector encode '" + v[0] + "'");
+            byte[] dec = Base64.getDecoder().decode(v[1]);
+            check(v[0].equals(new String(dec, StandardCharsets.UTF_8)), "RFC4648 vector decode " + v[1]);
+        }
+        // 0xfb 0xef 0xbe 三字节：四个 6-bit 组均为 62 → basic "++++"、url "----"
+        byte[] three = {(byte) 0xfb, (byte) 0xef, (byte) 0xbe};
+        check("++++".equals(Base64.getEncoder().encodeToString(three)), "0xfbefbe -> ++++");
+        check("----".equals(Base64.getUrlEncoder().encodeToString(three)), "0xfbefbe url -> ----");
+        check(Arrays.equals(three, Base64.getUrlDecoder().decode("----")), "---- decode roundtrip");
+    }
+
+    static void testDecodeErrorMessages() {
+        // 长度 <2 → IAE "at least have 2 bytes"
+        try {
+            Base64.getDecoder().decode("Z");
+            check(false, "length-1 decode should fail");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("2 bytes"),
+                  "length-1 message mentions 2 bytes");
+        }
+        // 非法字符 → IAE "Illegal base64 character"
+        try {
+            Base64.getDecoder().decode("Zm9*");
+            check(false, "bad char decode should fail");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("Illegal base64 character"),
+                  "illegal char message");
+        }
+        // 中间 '=' 后又有数据 → IAE "incorrect ending byte"
+        try {
+            Base64.getDecoder().decode("Zg==Zg==");
+            check(false, "mid-padding decode should fail");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("ending"),
+                  "mid-padding message mentions ending byte");
+        }
+        // basic 拒绝 CRLF；MIME 容忍并忽略
+        expectThrows(IllegalArgumentException.class, () -> Base64.getDecoder().decode("Zm9v\r\nYmFy"),
+                     "basic decoder rejects CRLF");
+        check("foobar".equals(new String(
+                Base64.getMimeDecoder().decode("Zm9v\r\nYmFy"), StandardCharsets.UTF_8)),
+              "MIME decoder ignores CRLF");
+        // MIME 解码器忽略任意非字母表字符（含注释式垃圾）
+        check("fo".equals(new String(
+                Base64.getMimeDecoder().decode("Zm!8="), StandardCharsets.UTF_8)),
+              "MIME decoder ignores illegal chars");
+        // URL 解码器拒绝 basic 字母表的 '+'
+        expectThrows(IllegalArgumentException.class, () -> Base64.getUrlDecoder().decode("++8="),
+                     "URL decoder rejects '+'");
+        // 无填充输入被接受（残余位为零）
+        check("f".equals(new String(Base64.getDecoder().decode("Zg"), StandardCharsets.UTF_8)),
+              "unpadded 2-char accepted");
+        check("fo".equals(new String(Base64.getDecoder().decode("Zm8"), StandardCharsets.UTF_8)),
+              "unpadded 3-char accepted");
+        // 残余位非零：仍解码（前缀语义）
+        check(Base64.getDecoder().decode("Zh").length == 1, "2-char with nonzero tail decodes 1 byte");
+    }
+
+    static void testEncoderIntoArrayErrors() {
+        try {
+            Base64.getEncoder().encode(new byte[2], new byte[1]);
+            check(false, "encode into small dst should fail");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("too small"),
+                  "encode dst-too-small message");
+        }
+        byte[] okDst = new byte[4];
+        check(Base64.getEncoder().encode(new byte[2], okDst) == 4, "encode into dst returns bytes written");
+        try {
+            Base64.getDecoder().decode("Zm8=".getBytes(StandardCharsets.US_ASCII), new byte[1]);
+            check(false, "decode into small dst should fail");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null, "decode dst-too-small message non-null");
+        }
+        // encode/decode(src,dst) 只写 dst 前缀
+        byte[] decDst = new byte[8];
+        int n = Base64.getDecoder().decode("Zm8=".getBytes(StandardCharsets.US_ASCII), decDst);
+        check(n == 2 && decDst[0] == 'f' && decDst[1] == 'o' && decDst[2] == 0,
+              "decode into dst returns count and leaves rest untouched");
+    }
+
+    static void testMimeLineLayout() {
+        byte[] hundred = new byte[100];
+        String mime = Base64.getMimeEncoder().encodeToString(hundred);
+        // 100 字节 → 132 个数据字符 + 1 个 CRLF = 138；两行（76 + 56）
+        check(mime.length() == 138, "MIME 100-byte length 138");
+        String[] lines = mime.split("\r\n", -1);
+        check(lines.length == 2 && lines[0].length() == 76, "MIME first line 76 chars");
+        check(lines[1].endsWith("==")
+              && !lines[1].substring(0, lines[1].length() - 2).contains("="),
+              "MIME second line has padding only at end");
+        check(mime.endsWith("="), "MIME output ends with padding");
+        // 自定义分隔符与行宽
+        Base64.Encoder custom = Base64.getMimeEncoder(10, "$".getBytes(StandardCharsets.US_ASCII));
+        String c = custom.encodeToString(new byte[30]);
+        check("AAAAAAAA$AAAAAAAA$AAAAAAAA$AAAAAAAA$AAAAAAAA".equals(c), "custom separator layout");
+        // 解码忽略自定义分隔符
+        check(new byte[30].length == Base64.getMimeDecoder().decode(c).length, "custom sep decode length");
+    }
+
+    static void testWrapStreamRoundtrip() throws Exception {
+        // wrap 双向 round-trip（含 >76 字节触发分块）
+        byte[] payload = new byte[250];
+        for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        java.io.OutputStream os = Base64.getEncoder().wrap(bos);
+        os.write(payload);
+        os.close();
+        java.io.InputStream is = Base64.getDecoder().wrap(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        byte[] back = new byte[250];
+        int off = 0, r;
+        while ((r = is.read(back, off, back.length - off)) > 0) off += r;
+        check(off == 250 && Arrays.equals(payload, back), "wrap encode/decode 250-byte roundtrip");
+        is.close();
+        // MIME wrap 解码忽略 CRLF
+        java.io.InputStream mis = Base64.getMimeDecoder().wrap(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        off = 0;
+        while ((r = mis.read(back, off, back.length - off)) > 0) off += r;
+        check(off == 250, "MIME wrap stream roundtrip length");
+        mis.close();
+    }
+
+    public static void main(String[] args) throws Exception {
         testBasic();
         testUrlSafe();
         testWithoutPadding();
@@ -208,6 +347,11 @@ public class Base64Test {
         testWrapStream();
         testInvalidDecode();
         testNullMatrix();
+        testRfc4648Vectors();
+        testDecodeErrorMessages();
+        testEncoderIntoArrayErrors();
+        testMimeLineLayout();
+        testWrapStreamRoundtrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

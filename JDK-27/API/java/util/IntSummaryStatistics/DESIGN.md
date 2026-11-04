@@ -23,3 +23,9 @@
   - combine 后汇总正确。
   - (count,min,max,sum) 构造器与负 count 抛 IAE。
   - 空统计的 min/max/average 边界值。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：空态边界/平均值精确/4 参构造(版本差异) | testSummaryContracts |

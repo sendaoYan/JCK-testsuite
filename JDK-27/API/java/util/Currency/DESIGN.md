@@ -24,3 +24,9 @@
   - `getInstance(Locale.US)` == USD、`getAvailableCurrencies` 含 USD、实例缓存相等。
   - `getInstance(null String/Locale)` → NPE；非法/空代码 → IAE；小写/混合大小写 → IAE（代码大小写敏感）。
   - Serializable 往返返回缓存实例（`==`）。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：实例缓存/数值码/显示名/异常消息矩阵 | testCurrencyContracts |

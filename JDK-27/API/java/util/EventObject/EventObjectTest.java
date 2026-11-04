@@ -76,9 +76,80 @@ public class EventObjectTest {
         check(a1 != a2, "distinct events are distinct objects");
     }
 
+    // ---- 契约深化（追加） ----
+
+    static void testNullSourceMessage() {
+        try {
+            new EventObject(null);
+            throw new AssertionError("expected IllegalArgumentException");
+        } catch (IllegalArgumentException ex) {
+            check("null source".equals(ex.getMessage()), "null source message exact");
+        }
+    }
+
+    static void testToStringExact() {
+        Object src = "SRC";
+        EventObject e = new EventObject(src);
+        // 文档格式：getClass().getName() + "[source=" + source + "]"
+        check(("java.util.EventObject[source=" + src + "]").equals(e.toString()),
+              "toString exact documented format");
+        class NamedEvent extends EventObject {
+            NamedEvent(Object source) { super(source); }
+        }
+        NamedEvent ne = new NamedEvent(src);
+        check((ne.getClass().getName() + "[source=" + src + "]").equals(ne.toString()),
+              "subclass toString names its own class");
+        check(e.toString().equals(e.toString()), "toString idempotent");
+    }
+
+    static void testIdentityEquality() {
+        Object src = new Object();
+        EventObject a = new EventObject(src);
+        EventObject b = new EventObject(src);
+        check(!a.equals(b), "same source does not imply equality (identity equals)");
+        check(a.equals(a), "identity equals reflexive");
+        check(a.hashCode() == a.hashCode(), "hashCode stable");
+    }
+
+    static void testSerializationTransientSource() throws Exception {
+        EventObject eo = new EventObject("PERSIST");
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(eo);
+        oos.close();
+        java.io.ObjectInputStream ois =
+            new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()));
+        EventObject back = (EventObject) ois.readObject();
+        ois.close();
+        // source 字段是 transient：还原后 getSource()==null（文档化字段修饰符）
+        check(back.getSource() == null, "source is transient: null after round-trip");
+        check(!back.equals(eo), "identity equals: revived event differs from original");
+        check(back != eo, "revived event is a new object");
+        check(back.toString().contains("source=null"), "toString renders transient null source");
+    }
+
+
+    // ===================== 契约深化：null source IAE/Serializable/toString 前缀 =====================
+    static void testEventObjectContracts() {
+        Object src = new Object();
+        EventObject e = new EventObject(src);
+        check(e.getSource() == src, "getSource identity");
+        check(e.toString().startsWith("java.util.EventObject"),
+              "toString starts with class name");
+        try { new EventObject(null); check(false, "EventObject(null) IAE"); }
+        catch (IllegalArgumentException iae) { check(true, "EventObject(null) IAE"); }
+        check(java.io.Serializable.class.isAssignableFrom(EventObject.class),
+              "EventObject is Serializable");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNullSourceMessage();
+        testToStringExact();
+        testIdentityEquality();
+        testSerializationTransientSource();
+        testEventObjectContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

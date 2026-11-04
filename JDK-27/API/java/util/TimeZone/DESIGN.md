@@ -26,3 +26,9 @@
   - `GMT+05:00`/`GMT-05:00` 固定偏移与 `getOffset(epoch)`。
   - `getAvailableIDs` 非空、`getAvailableIDs(0)` 含 GMT。
   - `getTimeZone(ZoneId)`/`toZoneId` 往返、`getDisplayName(Locale.US)` 非空。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：自定义偏移/未知ID/DST 判定/双 getOffset/默认区切换 | testTimeZoneContracts |

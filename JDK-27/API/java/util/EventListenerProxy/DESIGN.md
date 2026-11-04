@@ -27,5 +27,6 @@
 | null | 构造接受 null、getListener 返回 null |
 | 泛型 | 类型化 getListener 保留具体类型 |
 | 多代理 | 多个代理共享同一监听器 |
+| P0 | 契约深化：equals/hashCode 遵循监听器/可作 EventListener | testProxyContracts |
 
 共 5 组场景、约 6 个 check（`testBlackBox()`）。

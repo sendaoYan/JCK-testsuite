@@ -36,6 +36,7 @@
 | P1 | v1 的 timestamp/clockSequence/node + v4 UOE | testVersion1Accessors |
 | P1 | compareTo 排序 | testCompareTo |
 | P1 | Serializable round-trip | testSerialization |
+| P0 | 契约深化：MD5 已知向量 + nil UUID + 位运算 | 见 Test 内「契约深化」区块 |
 
 ## 关键规范细节
 

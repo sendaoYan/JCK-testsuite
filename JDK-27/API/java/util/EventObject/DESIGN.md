@@ -29,3 +29,17 @@
 | 独立性 | 同源事件对象互异 |
 
 共 5 组场景、约 8 个 check（`testBlackBox()`）。
+
+## 5. 契约深化（追加）
+
+| 测试点 | 用例方法 |
+|---|---|
+| null source IAE 消息精确 "null source" | testNullSourceMessage |
+| toString 文档格式 getClass().getName()+"[source="+source+"]"（本类与子类逐字） | testToStringExact |
+| 同 source 两个事件不等（Object 同一性 equals）、hashCode 稳定 | testIdentityEquality |
+| **source 字段是 transient：序列化往返后 getSource()==null**、toString 含 "source=null"、还原体不等于原对象 | testSerializationTransientSource |
+
+### 易错细节
+
+- EventObject(null) → IllegalArgumentException，消息恒为 `"null source"`。
+- source 为 transient：反序列化后 getSource() 返回 null（不是原 source 也不是异常）——序列化事件需子类自定义 writeObject。

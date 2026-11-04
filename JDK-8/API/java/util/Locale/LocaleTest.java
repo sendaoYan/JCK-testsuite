@@ -121,6 +121,80 @@ public class LocaleTest {
         check(best != null, "lookup returns a locale");
     }
 
+
+    // ===================== 契约深化：forLanguageTag 容错/ISO3 异常/类别默认区/权重排序/filter 顺序 =====================
+    static void testLocaleContracts() {
+        check("und".equals(Locale.forLanguageTag("!!").toLanguageTag()),
+              "forLanguageTag tolerates ill-formed -> und");
+        check("und".equals(Locale.forLanguageTag("und").toLanguageTag()), "und round-trips");
+        check("x-private".equals(Locale.forLanguageTag("x-private").toLanguageTag()),
+              "private-use-only tag round-trips");
+        check("ja-JP-u-ca-japanese-nu-jpan".equals(
+              Locale.forLanguageTag("ja-JP-u-ca-japanese-nu-jpan").toLanguageTag()),
+              "multiple unicode extensions round-trip");
+        check("en-Latn-US".equals(
+              new Locale.Builder().setLanguageTag("EN-latn-US").build().toLanguageTag()),
+              "language tag normalized to canonical case");
+        check("Latn".equals(Locale.forLanguageTag("sr-Latn-RS").getScript()), "getScript");
+        check("1996".equals(Locale.forLanguageTag("de-DE-1996").getVariant()),
+              "variant from tag subtag");
+        check("foo".equals(Locale.forLanguageTag("de-DE-x-foo").getExtension('x')),
+              "private extension value");
+        try {
+            new Locale("qq").getISO3Language();
+            check(false, "unknown ISO3 language MissingResourceException");
+        } catch (java.util.MissingResourceException mre) {
+            check(true, "unknown ISO3 language MissingResourceException");
+        }
+        Locale oldAll = Locale.getDefault();
+        Locale oldDisplay = Locale.getDefault(Locale.Category.DISPLAY);
+        Locale oldFormat = Locale.getDefault(Locale.Category.FORMAT);
+        try {
+            Locale.setDefault(Locale.Category.DISPLAY, Locale.FRENCH);
+            check(Locale.FRENCH.equals(Locale.getDefault(Locale.Category.DISPLAY)),
+                  "setDefault(DISPLAY) takes effect");
+            check(Locale.getDefault(Locale.Category.FORMAT).equals(oldFormat),
+                  "FORMAT untouched by DISPLAY change");
+            Locale.setDefault(Locale.Category.FORMAT, Locale.GERMAN);
+            check(Locale.GERMAN.equals(Locale.getDefault(Locale.Category.FORMAT)),
+                  "setDefault(FORMAT) takes effect");
+            check(Locale.getDefault().equals(oldAll),
+                  "overall default untouched by category setDefault");
+        } finally {
+            Locale.setDefault(Locale.Category.DISPLAY, oldDisplay);
+            Locale.setDefault(Locale.Category.FORMAT, oldFormat);
+        }
+        List<Locale.LanguageRange> ranges =
+              Locale.LanguageRange.parse("fr-CH;q=0.8, en;q=0.9, *;q=0.1");
+        check(ranges.size() == 3, "parse yields three ranges");
+        check("en".equals(ranges.get(0).getRange()) && ranges.get(0).getWeight() == 0.9,
+              "parse orders by descending weight");
+        check("fr-ch".equals(ranges.get(1).getRange()) && ranges.get(1).getWeight() == 0.8,
+              "range normalized to lowercase");
+        check("*".equals(ranges.get(2).getRange()) && ranges.get(2).getWeight() == 0.1,
+              "wildcard range last");
+        List<Locale.LanguageRange> pr = Locale.LanguageRange.parse("ja-JP, en-US, *");
+        List<Locale> tags = new java.util.ArrayList<>();
+        tags.add(Locale.forLanguageTag("en-US"));
+        tags.add(Locale.forLanguageTag("ja-JP"));
+        tags.add(Locale.forLanguageTag("de"));
+        List<Locale> f = Locale.filter(pr, tags);
+        check(f.size() == 3, "filter with wildcard matches all three");
+        check("en-US".equals(f.get(0).toLanguageTag())
+              && "ja-JP".equals(f.get(1).toLanguageTag())
+              && "de".equals(f.get(2).toLanguageTag()),
+              "JDK-8 filter preserves input-list order");
+        check("ja-JP".equals(Locale.lookup(pr, tags).toLanguageTag()), "lookup best match");
+        check(Locale.lookup(Locale.LanguageRange.parse("fr"), tags) == null, "lookup miss -> null");
+        List<String> strs = new java.util.ArrayList<>();
+        strs.add("en-us");
+        strs.add("JA-jp");
+        List<String> ft = Locale.filterTags(Locale.LanguageRange.parse("ja-JP, en"), strs);
+        check(ft.size() == 2 && "ja-jp".equals(ft.get(0)) && "en-us".equals(ft.get(1)),
+              "JDK-8 filterTags lowercases results");
+        check("ja-jp".equals(Locale.lookupTag(pr, strs)), "JDK-8 lookupTag lowercases result");
+    }
+
     public static void main(String[] args) {
         testConstants();
         testConstruction();
@@ -132,6 +206,7 @@ public class LocaleTest {
         testDisplayNames();
         testAvailableLocales();
         testFilterLookup();
+        testLocaleContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

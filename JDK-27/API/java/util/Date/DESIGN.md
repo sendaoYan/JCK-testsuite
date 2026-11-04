@@ -27,3 +27,9 @@
   - clone 不同对象但值相等。
   - `Date.UTC` 固定 epoch 边界、`toInstant`/`from` 往返。
   - `parse` 非法输入抛 IllegalArgumentException（不依赖默认时区，`parse` 只断异常类型）。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：hashCode 公式/排序矩阵/parse/UTC 静态 | testDateContracts |

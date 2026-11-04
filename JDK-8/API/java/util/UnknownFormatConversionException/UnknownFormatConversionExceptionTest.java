@@ -1,11 +1,18 @@
 /*
  * @test
- * @summary java.util.UnknownFormatConversionException API conformance: getConversion.
+ * @summary java.util.UnknownFormatConversionException conformance: hierarchy, constructor matrix (null NPE),
+ *          getters and exact message formats, Formatter trigger producing the
+ *          exception with populated getters, and serialization round-trip.
  * @run main UnknownFormatConversionExceptionTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.Formatter;
 import java.util.IllegalFormatException;
-import java.util.UnknownFormatConversionException;
 
 public class UnknownFormatConversionExceptionTest {
     static int passed;
@@ -15,15 +22,68 @@ public class UnknownFormatConversionExceptionTest {
         passed++;
     }
 
-    static void testUnknownFormatConversionException() {
-        UnknownFormatConversionException e = new UnknownFormatConversionException("y");
-        check(e instanceof IllegalFormatException, "extends IllegalFormatException");
-        check("y".equals(e.getConversion()), "getConversion");
-        check(e.getMessage().contains("y"), "message includes the conversion");
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
     }
 
-    public static void main(String[] args) {
-        testUnknownFormatConversionException();
+    @SuppressWarnings("unchecked")
+    static <T extends Throwable> T grab(Class<T> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return (T) t; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": nothing thrown");
+    }
+
+    static void testHierarchy() throws Exception {
+        Class<?> c = Class.forName("java.util.UnknownFormatConversionException");
+        check(c.getSuperclass() == IllegalFormatException.class, "extends IllegalFormatException");
+        check(RuntimeException.class.isAssignableFrom(c), "is a RuntimeException (unchecked)");
+        check(Serializable.class.isAssignableFrom(c), "Serializable");
+        check(java.util.UnknownFormatConversionException.class.getSuperclass() != Object.class, "non-root class");
+    }
+
+    static void testConstructorsAndGetters() {
+        java.util.UnknownFormatConversionException e = new java.util.UnknownFormatConversionException("q");
+        check("q".equals(e.getConversion()), "getConversion");
+        check("Conversion = 'q'".equals(e.getMessage()), "getMessage format");
+        expect(NullPointerException.class, () -> new java.util.UnknownFormatConversionException(null),
+               "null conversion NPE");    }
+
+    static void testFormatterTrigger() {
+        java.util.UnknownFormatConversionException t = grab(java.util.UnknownFormatConversionException.class,
+                () -> new Formatter().format("%q", 1), "format %q");
+        check("q".equals(t.getConversion()), "trigger populates getConversion");
+        java.util.UnknownFormatConversionException t2 = grab(java.util.UnknownFormatConversionException.class,
+                () -> new Formatter().format("100%"), "trailing percent");
+        check("%".equals(t2.getConversion()), "trailing percent conversion is '%'");    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(new java.util.UnknownFormatConversionException("q"));
+        Object back = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check("q".equals(((java.util.UnknownFormatConversionException) back).getConversion()), "serialization round-trip preserves state");
+    }
+
+    static boolean commaOk(Object back) {
+        java.util.FormatFlagsConversionMismatchException e = (java.util.FormatFlagsConversionMismatchException) back;
+        return ",".equals(e.getFlags()) && e.getConversion() == 'x';
+    }
+
+    public static void main(String[] args) throws Exception {
+        testHierarchy();
+        testConstructorsAndGetters();
+        testFormatterTrigger();
+        testSerializationRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

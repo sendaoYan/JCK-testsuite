@@ -29,11 +29,17 @@
 | P0 | schedule 周期任务执行至少一次 | testSchedulePeriodic |
 | P0 | scheduleAtFixedRate 执行至少一次 | testScheduleAtFixedRate |
 | P1 | cancel 幂等 + purge >= 0 | testCancelIdempotentAndPurge |
+| P0 | 契约深化：负延迟/负周期/null/任务复用异常矩阵 | testArgumentContracts |
 
 ## 关键规范细节
 
 - `cancel()` 幂等；`purge()` 返回移除的已取消任务数（≥0）。
 - 用 daemon Timer 避免残留线程；测试结束 cancel。
+
+## 契约深化（本轮新增）
+
+- 固定速率周期任务计数：`scheduleAtFixedRate(task, 0, 5)` + CountDownLatch 等 3 次（`testPeriodicFixedRateCounts`）。
+- 任务状态机：未调度 `cancel()` 返回 false；`scheduledExecutionTime()` 运行前后一致且不早于调度时刻（`testTaskStateMachine`）。
 
 ## 注意事项
 

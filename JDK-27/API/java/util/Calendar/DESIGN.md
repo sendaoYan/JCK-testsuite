@@ -27,3 +27,9 @@
   - `add` 跨年进位 vs `roll` 同年环绕。
   - `getActualMaximum` 闰年 29 / 平年 28 / 四月 30。
   - `setTimeInMillis`/`getTimeInMillis` 往返、clone/equals 组合。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：字段常量/周参数/lenient 归一化/add-roll/极限/显示名 | testCalendarContracts |

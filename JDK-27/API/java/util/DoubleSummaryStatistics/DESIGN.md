@@ -20,3 +20,9 @@
 - 白盒：`Class.forName` 断言类、实现 DoubleConsumer、关键方法存在。
 - 黑盒：accept 汇总、combine、(count,min,max,sum) 构造与负 count 抛 IAE、
   空统计的 min=+Inf/max=-Inf/average=0 边界。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：空态边界/负值序列/toString/4 参构造(版本差异) | testSummaryContracts |

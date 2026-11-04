@@ -17,5 +17,6 @@
 | 构造+getter | getErrorIndex（含默认 -1）精确值 |
 | 触发 | setLanguage("abcdefghi") 抛 IllformedLocaleException |
 | 继承 | extends RuntimeException |
+| P0 | 契约深化：层次/消息保持/Builder 触发携带错误索引 | testIllformedContracts |
 
 共 3 组场景、约 5 个 check（`testBlackBox()`）。

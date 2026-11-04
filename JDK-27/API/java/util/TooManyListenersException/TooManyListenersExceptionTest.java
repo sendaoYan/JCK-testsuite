@@ -35,9 +35,22 @@ public class TooManyListenersExceptionTest {
         check(caught, "catchable as checked exception");
     }
 
+
+    // ===================== 契约深化：受检异常语义/cause 缺省 =====================
+    static void testTooManyContracts() {
+        check(Exception.class.isAssignableFrom(TooManyListenersException.class)
+              && !RuntimeException.class.isAssignableFrom(TooManyListenersException.class),
+              "checked Exception (not RuntimeException)");
+        check(new TooManyListenersException().getMessage() == null, "no-arg null message");
+        check("one only".equals(new TooManyListenersException("one only").getMessage()),
+              "message ctor");
+        check(new TooManyListenersException("m").getCause() == null, "no cause by default");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testTooManyContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

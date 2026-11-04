@@ -24,6 +24,7 @@
 | P0 | 无注册服务空迭代 + reload | testServiceLoader |
 | P0 | null NPE + load(Class,ClassLoader) + loadInstalled | testNullAndFactories |
 | P1 | toString 非空 | testToString |
+| P0 | 契约深化：META-INF/services 闭环/配置顺序/新实例语义/SCE 矩阵 | 见 Test 内「契约深化」区块 |
 
 ## 关键规范细节
 

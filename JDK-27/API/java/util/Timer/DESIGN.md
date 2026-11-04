@@ -22,3 +22,6 @@
   - `purge` 对空队列返回 0，取消排队的远未来任务后 purge 返回 1，再 purge 返回 0。
   - `cancel` 后 schedule 抛 IllegalStateException。
   - 一次性任务用 CountDownLatch.await(超时) 验证执行。
+
+  - 契约深化：固定速率周期任务计数（latch 等 3 次）、任务状态机（未调度 cancel false）、
+    scheduledExecutionTime 运行前后稳定 —— `testPeriodicFixedRateCounts`、`testTaskStateMachine`。

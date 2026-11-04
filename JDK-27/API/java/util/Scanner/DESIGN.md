@@ -27,3 +27,9 @@
   - hasNextInt/nextInt（含 radix 16）。
   - nextLine/hasNextLine、findInLine 前进。
   - InputMismatchException、NoSuchElementException、close 后 IllegalStateException。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：分隔符/进制/Locale/关闭矩阵/IO 透传 | testDelimiterContracts、testFindSkipContracts |

@@ -23,3 +23,9 @@
   - countTokens/hasMoreTokens/nextToken/nextToken(delim) 组合与耗尽抛 NoSuchElementException。
   - 默认空白分隔符、returnDelims 返回分隔符。
   - hasMoreElements/nextElement 与耗尽异常。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：- | testContracts |

@@ -56,9 +56,26 @@ public class InvalidPropertiesFormatExceptionTest {
         check(thrown, "malformed XML throws InvalidPropertiesFormatException");
     }
 
+
+    // ===================== 契约深化：两种构造器语义/cause 无包装 =====================
+    static void testIpfContracts() {
+        check(InvalidPropertiesFormatException.class.getSuperclass() == java.io.IOException.class,
+              "extends IOException (checked)");
+        check(InvalidPropertiesFormatException.class.getName().startsWith("java.util."),
+              "lives in java.util");
+        RuntimeException cause = new RuntimeException("bad-xml");
+        InvalidPropertiesFormatException e = new InvalidPropertiesFormatException(cause);
+        check(e.getCause() == cause, "(Throwable) ctor stores cause verbatim");
+        check(e.getMessage() == null || String.valueOf(e.getMessage()).contains("bad-xml"),
+              "(Throwable) ctor message null or derived from cause (impl-dependent)");
+        check(new InvalidPropertiesFormatException("m").getCause() == null,
+              "(String) ctor leaves cause null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testIpfContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

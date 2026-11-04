@@ -154,6 +154,39 @@ public class GregorianCalendarTest {
               "getWeeksInWeekYear 52..53");
     }
 
+
+    // ===================== 契约深化：闰年矩阵/纪元/1582 换历/纯格里历归一化 =====================
+    static void testGregorianContracts() {
+        java.util.TimeZone gmt = java.util.TimeZone.getTimeZone("GMT");
+        GregorianCalendar gc = new GregorianCalendar(gmt, java.util.Locale.US);
+        check(gc.isLeapYear(2000) && gc.isLeapYear(2024), "leap years 2000/2024");
+        check(!gc.isLeapYear(1900) && !gc.isLeapYear(2023), "non-leap 1900/2023");
+        check(GregorianCalendar.AD == 1 && GregorianCalendar.BC == 0, "AD==1 BC==0 constants");
+        check(new GregorianCalendar(gmt, java.util.Locale.US).get(Calendar.ERA) == GregorianCalendar.AD,
+              "default era is AD");
+        GregorianCalendar bc = new GregorianCalendar(gmt, java.util.Locale.US);
+        bc.clear(); bc.set(Calendar.ERA, GregorianCalendar.BC); bc.set(1, Calendar.JANUARY, 1);
+        check(bc.get(Calendar.YEAR) == 1 && bc.get(Calendar.ERA) == GregorianCalendar.BC,
+              "BC era set round-trip");
+        check("1582-10-15T00:00:00Z".equals(
+              new GregorianCalendar().getGregorianChange().toInstant().toString()),
+              "default Gregorian change Oct 15 1582 UTC");
+        GregorianCalendar proleptic = new GregorianCalendar(gmt, java.util.Locale.US);
+        proleptic.setGregorianChange(new java.util.Date(Long.MIN_VALUE));
+        proleptic.clear(); proleptic.set(1500, Calendar.FEBRUARY, 29);
+        check(proleptic.get(Calendar.MONTH) == Calendar.MARCH
+              && proleptic.get(Calendar.DAY_OF_MONTH) == 1,
+              "change=MIN gives proleptic Gregorian: Feb 29 1500 -> Mar 1");
+        GregorianCalendar z = new GregorianCalendar(gmt, java.util.Locale.US);
+        check(z.toZonedDateTime().toInstant().toEpochMilli() == z.getTimeInMillis(),
+              "toZonedDateTime preserves instant");
+        GregorianCalendar julian = new GregorianCalendar(gmt, java.util.Locale.US);
+        julian.setGregorianChange(new java.util.Date(Long.MAX_VALUE));
+        julian.clear(); julian.set(1500, Calendar.FEBRUARY, 29);
+        check(julian.get(Calendar.DAY_OF_MONTH) == 29,
+              "change=MAX pure Julian keeps Feb 29 1500");
+    }
+
     public static void main(String[] args) {
         testLeapYear();
         testConstructors();
@@ -165,6 +198,7 @@ public class GregorianCalendarTest {
         testMinMax();
         testEqualsClone();
         testWeekDate();
+        testGregorianContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

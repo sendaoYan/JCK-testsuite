@@ -34,6 +34,7 @@
 | P1 | getID/setID（null NPE）+ 显示名（固定 Locale） | testIdDisplayName |
 | P1 | getAvailableIDs/getAvailableIDs(0)/getDefault | testAvailableIds |
 | P1 | ZoneId 往返 + clone | testZoneIdAndClone |
+| P0 | 契约深化：自定义偏移/未知ID/DST 判定/双 getOffset/默认区切换 | testTimeZoneContracts |
 
 ## 关键规范细节
 

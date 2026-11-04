@@ -31,6 +31,7 @@
 | P0 | 三个 DST 规则构造器（savings/time-mode 变体） | testConstructorsWithRules |
 | P0 | setStartRule/setEndRule 全重载 + setStartYear | testStartEndRuleOverloads |
 | P0 | clone/equals/hashCode/hasSameRules/toString | testCloneEqualsHashCode |
+| P0 | 契约深化：规则等价性/US 规则 DST/非法参数矩阵 | testSimpleTimeZoneContracts |
 
 ## 关键规范细节
 

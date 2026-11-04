@@ -25,5 +25,6 @@ x = e.nextElement()` 遍历；`asIterator()` 桥接到增强 for/forEachRemainin
 | 异常 | 耗尽后 nextElement 抛 NoSuchElementException |
 | 生产源 | Vector.elements、空枚举 |
 | asIterator | 桥接 forEachRemaining、remove 抛 UnsupportedOperationException |
+| P0 | 契约深化：asIterator 适配器/remove 语义；自定义枚举探针（含 null 元素）/空枚举/Vector 非 fail-fast/asIterator 细节 | testEnumerationContracts |
 
 共 4 组场景、约 10 个 check（`testBlackBox()`）。

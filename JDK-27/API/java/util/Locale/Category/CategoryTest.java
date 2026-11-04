@@ -20,8 +20,29 @@ public class CategoryTest {
         check(Locale.Category.DISPLAY != Locale.Category.FORMAT, "distinct constants");
     }
 
+
+    // ===================== 契约深化：完整常量表/类别默认区独立生效 =====================
+    static void testCategoryContracts() {
+        Locale.Category[] vals = Locale.Category.values();
+        check(vals.length == 2, "exactly 2 constants");
+        check(Locale.Category.valueOf("DISPLAY") == Locale.Category.DISPLAY
+              && Locale.Category.valueOf("FORMAT") == Locale.Category.FORMAT,
+              "valueOf both constants");
+        check("DISPLAY".equals(Locale.Category.DISPLAY.name())
+              && "FORMAT".equals(Locale.Category.FORMAT.name()), "constant names");
+        Locale oldDisplay = Locale.getDefault(Locale.Category.DISPLAY);
+        try {
+            Locale.setDefault(Locale.Category.DISPLAY, Locale.FRENCH);
+            check(Locale.FRENCH.equals(Locale.getDefault(Locale.Category.DISPLAY)),
+                  "DISPLAY default settable");
+        } finally {
+            Locale.setDefault(Locale.Category.DISPLAY, oldDisplay);
+        }
+    }
+
     public static void main(String[] args) {
         testCategory();
+        testCategoryContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

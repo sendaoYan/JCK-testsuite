@@ -52,9 +52,40 @@ public class EventListenerTest {
         check(!EventListener.class.isAssignableFrom(String.class), "String is not a listener");
     }
 
+    // ---- 契约深化（追加）：EventListenerProxy 包装契约 ----
+
+    static class RecordingListener implements EventListener {
+        int events;
+    }
+
+    /** EventListenerProxy 是抽象类，最小具体化探针。 */
+    static class MyProxy extends java.util.EventListenerProxy<RecordingListener> {
+        MyProxy(RecordingListener listener) { super(listener); }
+    }
+
+    static void testProxyContract() {
+        RecordingListener inner = new RecordingListener();
+        MyProxy proxy = new MyProxy(inner);
+        check(proxy instanceof EventListener, "proxy is an EventListener");
+        check(proxy.getListener() == inner, "getListener returns constructor argument by identity");
+        check(proxy.getListener() == proxy.getListener(), "getListener stable");
+        check(inner.events == 0, "proxy does not touch wrapped listener state");
+        check(!proxy.equals(new MyProxy(inner)), "proxy equality is identity, not content");
+        check(proxy.equals(proxy), "identity equality reflexive");
+        check(java.lang.reflect.Modifier.isAbstract(
+                  java.util.EventListenerProxy.class.getModifiers()),
+              "EventListenerProxy is abstract");
+        // 泛型边界：<T extends EventListener>
+        check(EventListener.class.isAssignableFrom(java.util.EventListenerProxy.class),
+              "EventListenerProxy is itself an EventListener");
+        check(!java.util.EventListenerProxy.class.isAssignableFrom(EventListener.class),
+              "EventListener is not a proxy subtype");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testProxyContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

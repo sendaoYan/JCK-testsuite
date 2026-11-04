@@ -29,6 +29,66 @@ public class StringTokenizerTest {
         throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
     }
 
+    // ---- 契约深化 ----
+    static void testContracts() {
+        // null 输入 NPE
+        try { new StringTokenizer(null); check(false, "null string NPE"); }
+        catch (NullPointerException npe) { check(true, "null string NPE"); }
+        // null delim 不在构造期校验：推迟到首次取词（双侧一致）
+        try {
+            StringTokenizer nd = new StringTokenizer("a", null);
+            check(true, "null delims tolerated at construction");
+            nd.nextToken();
+            check(false, "null delims NPE deferred to use");
+        } catch (NullPointerException npe) { check(true, "null delims NPE deferred to use"); }
+        try { new StringTokenizer(null, ","); check(false, "null string 2-arg NPE"); }
+        catch (NullPointerException npe) { check(true, "null string 2-arg NPE"); }
+        try { new StringTokenizer(null, ",", true); check(false, "null string 3-arg NPE"); }
+        catch (NullPointerException npe) { check(true, "null string 3-arg NPE"); }
+        // 耗尽后 nextToken → NoSuchElementException
+        StringTokenizer ex = new StringTokenizer("a");
+        ex.nextToken();
+        try { ex.nextToken(); check(false, "exhausted nextToken NSEE"); }
+        catch (java.util.NoSuchElementException nsee) { check(true, "exhausted nextToken NSEE"); }
+        try { ex.nextElement(); check(false, "exhausted nextElement NSEE"); }
+        catch (java.util.NoSuchElementException nsee) { check(true, "exhausted nextElement NSEE"); }
+        try { ex.nextToken(","); check(false, "exhausted nextToken(delims) NSEE"); }
+        catch (java.util.NoSuchElementException nsee) { check(true, "exhausted nextToken(delims) NSEE"); }
+        // nextToken(null) NPE
+        StringTokenizer nn = new StringTokenizer("a b");
+        try { nn.nextToken(null); check(false, "nextToken(null) NPE"); }
+        catch (NullPointerException npe) { check(true, "nextToken(null) NPE"); }
+        // 空分隔符字符串：没有分隔符，整串一个 token
+        StringTokenizer noDelim = new StringTokenizer("a b", "");
+        check(noDelim.countTokens() == 1 && "a b".equals(noDelim.nextToken()), "empty delims -> whole string");
+        // countTokens 不推进
+        StringTokenizer cnt = new StringTokenizer("a b c");
+        check(cnt.countTokens() == 3 && cnt.countTokens() == 3, "countTokens does not consume");
+        // 3 参构造 returnDelims=true 的完整序列
+        StringTokenizer rd = new StringTokenizer("a,b", ",", true);
+        StringBuilder seq = new StringBuilder();
+        while (rd.hasMoreTokens()) seq.append(rd.nextToken());
+        check("a,b".equals(seq.toString()), "returnDelims full sequence a , b");
+        // 连续分隔符与 returnDelims
+        StringTokenizer rd2 = new StringTokenizer(",,x", ",", true);
+        seq.setLength(0);
+        while (rd2.hasMoreTokens()) seq.append(rd2.nextToken());
+        check(",,x".equals(seq.toString()), "adjacent delims each emitted");
+        // nextToken(newDelims) 永久切换分隔符集合（后续调用沿用新集合）
+        StringTokenizer sw = new StringTokenizer("a b|c");
+        check("a".equals(sw.nextToken()), "first token under default delims");
+        check(" b".equals(sw.nextToken("|")), "nextToken(delims) switches set, non-delim space kept in token");
+        check("c".equals(sw.nextToken("|")), "continues with switched delims");
+        try { sw.nextToken("|"); check(false, "exhausted after switch NSEE"); }
+        catch (java.util.NoSuchElementException nsee) { check(true, "exhausted after switch NSEE"); }
+        // Enumeration 视角
+        StringTokenizer en = new StringTokenizer("1 2");
+        int n = 0;
+        while (en.hasMoreElements()) { en.nextElement(); n++; }
+        check(n == 2, "Enumeration view count");
+        check(!en.hasMoreElements(), "Enumeration exhausted");
+    }
+
     static void testTokens() {
         StringTokenizer st = new StringTokenizer("a b c", " ");
         check(st.countTokens() == 3, "countTokens");
@@ -92,6 +152,7 @@ public class StringTokenizerTest {
 
     public static void main(String[] args) {
         testTokens();
+        testContracts();
         testDefaultDelimiter();
         testReturnDelims();
         testNextTokenSwitchDelim();

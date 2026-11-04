@@ -114,9 +114,54 @@ public class TimeZoneTest {
               "getDisplayName non-empty");
     }
 
+
+    // ===================== 契约深化：自定义偏移/未知ID/DST 判定/双 getOffset/默认区切换 =====================
+    static void testTimeZoneContracts() {
+        TimeZone gmt530 = TimeZone.getTimeZone("GMT+05:30");
+        check(gmt530.getRawOffset() == 19800000 && "GMT+05:30".equals(gmt530.getID()),
+              "custom GMT offset parsed");
+        check(TimeZone.getTimeZone("GMT+5").getRawOffset() == 18000000, "single-digit offset");
+        TimeZone bogus = TimeZone.getTimeZone("Bogus/Zone");
+        check("GMT".equals(bogus.getID()) && bogus.getRawOffset() == 0, "unknown id -> GMT");
+        try { TimeZone.getTimeZone((String) null); check(false, "getTimeZone(null) NPE"); }
+        catch (NullPointerException npe) { check(true, "getTimeZone(null) NPE"); }
+        TimeZone ny = TimeZone.getTimeZone("America/New_York");
+        java.util.Calendar jul = java.util.Calendar.getInstance(
+              TimeZone.getTimeZone("GMT"), java.util.Locale.US);
+        jul.clear(); jul.set(2023, java.util.Calendar.JULY, 1);
+        java.util.Calendar jan = java.util.Calendar.getInstance(
+              TimeZone.getTimeZone("GMT"), java.util.Locale.US);
+        jan.clear(); jan.set(2023, java.util.Calendar.JANUARY, 1);
+        check(ny.inDaylightTime(jul.getTime()) && !ny.inDaylightTime(jan.getTime()),
+              "NY DST on in July, off in January");
+        check(ny.useDaylightTime() && !TimeZone.getTimeZone("GMT").useDaylightTime(),
+              "useDaylightTime");
+        check(ny.getDSTSavings() == 3600000 && TimeZone.getTimeZone("GMT").getDSTSavings() == 0,
+              "DST savings 1h vs 0");
+        check(ny.getOffset(1, 2023, java.util.Calendar.JULY, 15, java.util.Calendar.SATURDAY, 0)
+              == -14400000, "era-form getOffset EDT -4h");
+        check(ny.getOffset(123456789L) == -18000000, "millis-form getOffset EST -5h");
+        check(TimeZone.getTimeZone("GMT").hasSameRules(TimeZone.getTimeZone("UTC")),
+              "GMT/UTC same rules");
+        TimeZone old = TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("GMT+02:00"));
+            check("GMT+02:00".equals(TimeZone.getDefault().getID()), "setDefault/getDefault");
+        } finally {
+            TimeZone.setDefault(old);
+        }
+        check("America/New_York".equals(TimeZone.getTimeZone("America/New_York").toZoneId().getId()),
+              "toZoneId round-trip");
+        check(TimeZone.getTimeZone("GMT").clone() instanceof TimeZone, "clone returns TimeZone");
+        check(TimeZone.getAvailableIDs().length > 0
+              && TimeZone.getAvailableIDs(3600000).length > 0,
+              "available ids overall and by offset");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testTimeZoneContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

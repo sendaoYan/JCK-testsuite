@@ -23,5 +23,6 @@ Observer 用 `update(Observable, Object)` 接收。
 | 参数传递 | notifyObservers()/notifyObservers(arg) |
 | changed 复位 | 通知后 hasChanged false |
 | 观察者管理 | add/delete/count/deleteObservers |
+| P0 | 契约深化：未 setChanged 不通知/参数 null 语义/deleteObservers/NPE | testObservableContracts |
 
 共 4 组场景、约 10 个 check（`testBlackBox()`）。

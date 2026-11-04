@@ -27,8 +27,21 @@ public class ObserverTest {
         check("x".equals(seen[1]), "update receives the argument");
     }
 
+
+    // ===================== 契约深化：update 回调参数矩阵（直接调用契约） =====================
+    static void testObserverContracts() {
+        final Object[] got = new Object[2];
+        Observer o = (src, arg) -> { got[0] = src; got[1] = arg; };
+        Observable src = new Observable();
+        o.update(src, "arg");
+        check(got[0] == src && "arg".equals(got[1]), "update receives (source, arg) verbatim");
+        o.update(null, null);
+        check(got[0] == null && got[1] == null, "update tolerates nulls (no validation)");
+    }
+
     public static void main(String[] args) {
         testObserver();
+        testObserverContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

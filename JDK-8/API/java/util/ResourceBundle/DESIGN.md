@@ -26,6 +26,7 @@
 | P0 | getStringArray + 缺失 null + MissingResourceException + CCE | testStringArrayAndMissing |
 | P1 | getLocale/getBaseBundleName | testLocaleAndBaseName |
 | P0 | getBundle(null) NPE / 不存在 MRE / clearCache | testGetBundleErrors |
+| P0 | 契约深化：真实属性文件回退链/父链 keySet/缓存/clearCache | 见 Test 内「契约深化」区块 |
 
 ## 关键规范细节
 

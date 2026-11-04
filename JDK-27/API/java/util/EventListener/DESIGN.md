@@ -23,3 +23,12 @@
 | 反向 | String 不是 EventListener |
 
 共 3 组场景、约 6 个 check（`testBlackBox()`）。
+
+## 5. 契约深化（追加）：EventListenerProxy 包装契约
+
+| 测试点 | 用例方法 |
+|---|---|
+| EventListenerProxy 抽象类、自身实现 EventListener（可作代理挂到监听列表） | testProxyContract |
+| getListener() 返回构造参数同一实例（==）、稳定 | testProxyContract |
+| 代理不触碰被包装监听器状态；equals 为同一性（两个包同一 listener 的代理不相等） | testProxyContract |
+| 泛型边界 T extends EventListener 的指派方向（proxy→listener 可、反向不可） | testProxyContract |

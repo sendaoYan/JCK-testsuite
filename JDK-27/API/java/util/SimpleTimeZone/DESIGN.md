@@ -23,3 +23,9 @@
   - 设定 DST 规则后 `useDaylightTime` true、`getDSTSavings` 1 小时。
   - `getOffset` 在 7 月（DST）与 1 月（标准时）分别等于 raw+dst 与 raw。
   - clone/equals/hashCode/hasSameRules 组合。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：规则等价性/US 规则 DST/非法参数矩阵 | testSimpleTimeZoneContracts |

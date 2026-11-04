@@ -41,6 +41,7 @@
 | P1 | wrap(OutputStream) 流编码 | testWrapStream |
 | P0 | 非法输入 IAE（非法字符、长度 1 mod 4） | testInvalidDecode |
 | P0 | null NPE 矩阵（encode/decode/encodeToString/wrap/ByteBuffer） | testNullMatrix |
+| P0 | 契约深化：RFC 4648 向量/解码错误消息/非规范输入 | 见 Test 内「契约深化」区块 |
 
 ## 关键规范细节
 

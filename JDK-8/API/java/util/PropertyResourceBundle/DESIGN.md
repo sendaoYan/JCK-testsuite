@@ -24,6 +24,7 @@
 | P0 | Reader 构造 + keySet/getKeys | testReaderConstructor |
 | P0 | null 构造 NPE | testNullConstructor |
 | P0 | unicode 转义 + 缺失 MRE + getStringArray CCE | testMissingAndUnicode |
+| P0 | 契约深化：转义读取/父链 keySet/IO 异常透传/UTF-8 语义 | testUtf8EncodingContract |
 
 ## 关键规范细节
 

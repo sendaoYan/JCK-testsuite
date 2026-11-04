@@ -40,6 +40,7 @@
 | P1 | min/max/actual 范围 | testMinMax |
 | P1 | equals/hashCode + clone 独立 | testEqualsClone |
 | P1 | week-date（isWeekDateSupported/getWeekYear/setWeekDate） | testWeekDate |
+| P0 | 契约深化：闰年矩阵/纪元/1582 换历/纯格里历归一化 | testGregorianContracts |
 
 ## 关键规范细节
 

@@ -33,6 +33,7 @@
 | P1 | nextDouble/nextFloat 大量采样都在 [0,1) | testNextFloatDoubleContract |
 | P1 | ints/longs/doubles 流大小 + 范围 + IAE + 确定性 | testIntStreams / testLongStreams / testDoubleStreams |
 | P1 | Serializable round-trip 保持序列 | testSerialization |
+| P0 | 契约深化：跨方法全序列确定性闭环 | testNextIntBoundContract、testNextBytesContract、testNextFloatDoubleContract |
 
 ## 关键规范细节
 

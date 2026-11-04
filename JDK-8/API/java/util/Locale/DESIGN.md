@@ -36,6 +36,7 @@
 | P1 | display name（固定 Locale.ENGLISH 非空） | testDisplayNames |
 | P1 | available locales/ISO codes | testAvailableLocales |
 | P1 | LanguageRange filter/lookup | testFilterLookup |
+| P0 | 契约深化：forLanguageTag 容错/ISO3 异常/类别默认区/权重排序/filter 顺序 | testLocaleContracts |
 
 ## 关键规范细节
 

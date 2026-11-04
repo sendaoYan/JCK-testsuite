@@ -44,10 +44,12 @@ public class TimerTest {
     }
 
     // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testPurge();
         testCancelSemantics();
         testOneShotRuns();
+        testPeriodicFixedRateCounts();
+        testTaskStateMachine();
     }
 
     static void testPurge() {
@@ -90,6 +92,51 @@ public class TimerTest {
             check(taskRan.get(), "task run() was invoked");
         } catch (InterruptedException e) {
             throw new AssertionError("interrupted: " + e);
+        } finally {
+            timer.cancel();
+        }
+    }
+
+
+    // ---- 契约深化：固定速率周期任务计数 / 任务状态机 / scheduledExecutionTime ----
+    static void testPeriodicFixedRateCounts() throws Exception {
+        CountDownLatch three = new CountDownLatch(3);
+        java.util.concurrent.atomic.AtomicInteger runs = new java.util.concurrent.atomic.AtomicInteger();
+        Timer timer = new Timer(true);
+        try {
+            timer.scheduleAtFixedRate(new TimerTask() {
+                public void run() {
+                    runs.incrementAndGet();
+                    three.countDown();
+                }
+            }, 0, 5);
+            check(three.await(10, TimeUnit.SECONDS), "fixed-rate task reached 3 runs within timeout");
+            check(runs.get() >= 3, "run counter >= 3");
+        } finally {
+            timer.cancel();
+        }
+        check(runs.get() >= 3, "counter stable after cancel");
+    }
+
+    static void testTaskStateMachine() throws Exception {
+        TimerTask fresh = new TimerTask() { public void run() { } };
+        check(!fresh.cancel(), "cancel on never-scheduled task returns false");
+        Timer timer = new Timer(true);
+        try {
+            CountDownLatch ran = new CountDownLatch(1);
+            java.util.concurrent.atomic.AtomicLong firstAt = new java.util.concurrent.atomic.AtomicLong();
+            TimerTask t = new TimerTask() {
+                public void run() {
+                    firstAt.compareAndSet(0, scheduledExecutionTime());
+                    ran.countDown();
+                }
+            };
+            long before = System.currentTimeMillis();
+            timer.schedule(t, 20);
+            check(ran.await(10, TimeUnit.SECONDS), "task ran");
+            check(t.scheduledExecutionTime() == firstAt.get(),
+                  "scheduledExecutionTime stable after run");
+            check(firstAt.get() >= before, "scheduledExecutionTime >= schedule-time wall clock");
         } finally {
             timer.cancel();
         }

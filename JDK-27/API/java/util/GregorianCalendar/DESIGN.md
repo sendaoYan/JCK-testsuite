@@ -27,3 +27,9 @@
   - epoch 字段、`getCalendarType`。
   - `add` 跨年 vs `roll` 同年、`getActualMaximum` 闰年/平年。
   - `toZonedDateTime`/`from` 往返（epoch 秒与 UTC zone 不变）。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：闰年矩阵/纪元/1582 换历/纯格里历归一化 | testGregorianContracts |

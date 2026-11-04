@@ -18,5 +18,6 @@
 | 构造器 | 4 个构造器全部存在且可用 |
 | 消息/起因 | getMessage/getCause 回传 |
 | 触发 | 空迭代器 next 抛 NSEE |
+| P0 | 契约深化：触发矩阵/(Throwable) 构造(9+)/空迭代器触发；序列化 round-trip/直接构造 (Throwable)/(String,Throwable)/Vector 首末触发 | testNseeContracts |
 
 共 3 组场景、约 8 个 check（`testBlackBox()`）。

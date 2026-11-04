@@ -26,3 +26,9 @@
   - `nameUUIDFromBytes` 确定性与版本 3/变体 2。
   - equals/hashCode、compareTo 符号与相等。
   - 边界/等价：nil UUID `(0,0)` 往返且 version/variant==0；version 位 12-15（`0x1000..0x5000` → 1..5）；variant 高位（`0x8000..`→2、`0xc000..`→6、`0x0`→0）；compareTo 按 msb 再 lsb 排序；fromString 空串/无连字符抛 IAE；`nameUUIDFromBytes("")` 命中 RFC 4122 向量 `d41d8cd9-8f00-3204-a980-0998ecf8427e`。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：MD5 已知向量 + nil UUID + 位运算 | 见 Test 内「契约深化」区块 |

@@ -30,3 +30,9 @@
   - clone 独立但 equals/hashCode 相等；equals 语义。
   - 扩展：`forLanguageTag("en-US-u-ca-gregory")` 的 unicode 扩展与 `stripExtensions`。
   - `Locale.filter`/`Locale.LanguageRange.parse` 过滤与匹配。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：forLanguageTag 容错/ISO3 异常/类别默认区/权重排序/filter 顺序 | testLocaleContracts |

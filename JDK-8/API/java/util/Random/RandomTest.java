@@ -37,6 +37,32 @@ public class RandomTest {
         throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
     }
 
+    // ---- 契约深化：跨方法全序列确定性闭环 ----
+    static void testFullSequenceDeterminism() {
+        Random a = new Random(-42L);
+        Random b = new Random(-42L);
+        boolean same = true;
+        for (int i = 0; i < 64; i++) {
+            same &= a.nextInt() == b.nextInt();
+            same &= a.nextLong() == b.nextLong();
+            same &= a.nextInt(1000) == b.nextInt(1000);
+            same &= a.nextDouble() == b.nextDouble();
+            same &= a.nextFloat() == b.nextFloat();
+            same &= a.nextBoolean() == b.nextBoolean();
+            same &= a.nextGaussian() == b.nextGaussian();
+        }
+        check(same, "all next* methods deterministic for same seed");
+        // 序列推进：连续 nextInt 不重复同值（固定 seed 的已知首值）
+        Random r = new Random(42L);
+        check(r.nextInt() == -1170105035, "Random(42) first nextInt known value");
+        check(r.nextInt() != -1170105035, "sequence advances");
+        // 已知向量锁定：seed 0 的前三个 nextInt
+        Random z = new Random(0L);
+        int z1 = z.nextInt(), z2 = z.nextInt(), z3 = z.nextInt();
+        check(z1 == -1155484576 && z2 == -723955400 && z3 == 1033096058,
+              "Random(0) first three nextInt known vector");
+    }
+
     static void testSeedReproducibility() {
         Random a = new Random(12345L);
         Random b = new Random(12345L);
@@ -244,6 +270,7 @@ public class RandomTest {
 
     public static void main(String[] args) throws Exception {
         testSeedReproducibility();
+        testFullSequenceDeterminism();
         testRanges();
         testNextIntBoundContract();
         testNextBytesContract();

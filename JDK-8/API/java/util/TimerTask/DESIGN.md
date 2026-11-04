@@ -24,6 +24,7 @@
 | P0 | run 被调用（latch） | testTimerTask |
 | P0 | cancel 返回语义（true→false）+ Runnable | testCancelSemantics |
 | P0 | scheduledExecutionTime 非负 | testScheduledExecutionTime |
+| P0 | 契约深化：- | testRunAndStateContract |
 
 ## 关键规范细节
 

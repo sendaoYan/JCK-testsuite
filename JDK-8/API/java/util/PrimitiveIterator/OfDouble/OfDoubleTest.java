@@ -29,8 +29,25 @@ public class OfDoubleTest {
         check(sum[0] == 9.0, "forEachRemaining");
     }
 
+
+    // ===================== 契约深化：next 混用/装箱 Consumer 重载/耗尽异常 =====================
+    static void testOfDoubleContracts() {
+        java.util.PrimitiveIterator.OfDouble it = java.util.stream.DoubleStream.of(0.5, 1.5).iterator();
+        check(it.nextDouble() == 0.5 && it.next().equals(Double.valueOf(1.5)),
+              "nextDouble() and boxed next() interoperate");
+        try { it.nextDouble(); check(false, "exhausted nextDouble NSEE"); }
+        catch (java.util.NoSuchElementException nsee) { check(true, "exhausted nextDouble NSEE"); }
+        final java.util.List<Double> boxed = new java.util.ArrayList<Double>();
+        java.util.stream.DoubleStream.of(1.5, 2.5).iterator()
+              .forEachRemaining((java.util.function.Consumer<Double>) boxed::add);
+        check(boxed.size() == 2 && boxed.get(0) == 1.5 && boxed.get(1) == 2.5,
+              "boxed Consumer overload drains all elements");
+        check(!java.util.stream.DoubleStream.empty().iterator().hasNext(), "empty stream iterator");
+    }
+
     public static void main(String[] args) {
         testOfDouble();
+        testOfDoubleContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

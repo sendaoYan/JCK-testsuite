@@ -19,3 +19,9 @@
 - 白盒：`Class.forName` 断言 final 类、实现 Iterable、关键方法存在。
 - 黑盒（未注册提供者的服务，确定性为空）：
   - iterator 无元素、findFirst 为空 Optional、stream 计数 0、reload 后仍为空。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：META-INF/services 闭环/配置顺序/新实例语义/SCE 矩阵 | 见 Test 内「契约深化」区块 |

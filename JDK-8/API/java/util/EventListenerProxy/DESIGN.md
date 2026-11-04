@@ -24,6 +24,7 @@
 |---|---|---|
 | P0 | getListener 返回同一实例 + implements EventListener | testEventListenerProxy |
 | P0 | null listener 原样存取（不 NPE） | testNullListener |
+| P0 | 契约深化：equals/hashCode 遵循监听器/可作 EventListener | testProxyContracts |
 
 ## 关键规范细节
 

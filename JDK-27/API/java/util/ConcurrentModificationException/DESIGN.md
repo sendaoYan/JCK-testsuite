@@ -19,5 +19,6 @@
 | 构造器 | 4 个构造器全部存在且可用 |
 | 消息/起因 | getMessage 回传字符串、getCause 回传 Throwable |
 | fail-fast 触发 | 迭代中 add 后 next 抛 CME |
+| P0 | 契约深化：构造矩阵/cause 保持/触发（fail-fast 迭代）；序列化 round-trip/initCause 一次性/suppressed/多载体触发 | testCmeContracts |
 
 共 3 组场景、约 8 个 check（`testBlackBox()`）。

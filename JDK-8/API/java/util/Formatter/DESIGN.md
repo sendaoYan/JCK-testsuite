@@ -35,6 +35,7 @@
 | P1 | locale()/out() | testLocaleAndOut |
 | P0 | flush/close/close 幂等/ioException/FCE | testFlushCloseIoException |
 | P0 | IllegalFormat 家族（conversion/unknown/missing/flags/null） | testIllegalFormatFamily |
+| P0 | 契约深化：转换符矩阵/精度/分组/异常族/getter | 见 Test 内「契约深化」区块 |
 
 ## 关键规范细节
 

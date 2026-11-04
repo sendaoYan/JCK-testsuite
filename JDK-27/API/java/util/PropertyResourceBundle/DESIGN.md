@@ -23,3 +23,9 @@
   - getString/getObject 缺失键抛 MissingResourceException；
     getStringArray 对 String 值抛 ClassCastException。
   - `PropertyResourceBundle((InputStream/Reader)null)` → NPE。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：转义读取/父链 keySet/IO 异常透传/UTF-8 语义 | testUtf8EncodingContract |

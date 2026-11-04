@@ -94,9 +94,37 @@ public class IntSummaryStatisticsTest {
         check(stats.getAverage() == 0.0, "empty average 0.0");
     }
 
+
+    // ===================== 契约深化：空态边界/平均值精确/4 参构造(版本差异) =====================
+    static void testSummaryContracts() {
+        IntSummaryStatistics empty = new IntSummaryStatistics();
+        check(empty.getCount() == 0 && empty.getSum() == 0, "empty count/sum zero");
+        check(empty.getMin() == Integer.MAX_VALUE && empty.getMax() == Integer.MIN_VALUE,
+              "empty min=MAX_VALUE max=MIN_VALUE (identity values)");
+        check(empty.getAverage() == 0.0, "empty average 0.0");
+        IntSummaryStatistics s = new IntSummaryStatistics();
+        s.accept(3); s.accept(-2);
+        check(s.getCount() == 2 && s.getSum() == 1, "sum with negative");
+        check(s.getMin() == -2 && s.getMax() == 3, "min/max with negative");
+        check(s.getAverage() == 0.5, "fractional average of ints");
+        check(s.toString() != null && s.toString().length() > 0, "toString non-empty");
+        try {
+            java.lang.reflect.Constructor<IntSummaryStatistics> c4 =
+                  IntSummaryStatistics.class.getConstructor(
+                      long.class, int.class, int.class, long.class);
+            IntSummaryStatistics built = c4.newInstance(2, -2, 3, 1);
+            check(built.getCount() == 2 && built.getSum() == 1, "4-arg ctor (JDK 22+)");
+        } catch (NoSuchMethodException nsme) {
+            check(false, "4-arg ctor expected present");
+        } catch (ReflectiveOperationException re) {
+            check(false, "4-arg ctor invocation failed");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSummaryContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

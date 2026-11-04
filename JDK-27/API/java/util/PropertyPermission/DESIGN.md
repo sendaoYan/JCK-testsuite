@@ -19,5 +19,6 @@ actions 用逗号分隔的 read/write。链路：构造 -> implies 判定 -> get
 | implies | 通配 implies 具体名、动作子集判定 |
 | 非法 action | 抛 IllegalArgumentException |
 | equals/hashCode | 同名同 action 相等 |
+| P0 | 契约深化：implies 矩阵/动作规范化/通配与前缀/权限集合 | testPermissionContracts |
 
 共 4 组场景、约 8 个 check（`testBlackBox()`）。

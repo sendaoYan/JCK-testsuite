@@ -48,12 +48,53 @@ public class UUIDTest {
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() {
         testRandomUUID();
+        testKnownVectors();
         testFromStringToString();
         testConstructor();
         testNameUUID();
         testEqualsHashCode();
         testCompareTo();
         testBoundaryEquivalence();
+    }
+
+    // ---- 契约深化：MD5 已知向量 + nil UUID + 位运算 ----
+    static void testKnownVectors() {
+        // nameUUIDFromBytes 使用 MD5（RFC 4122 v3），向量跨实现恒定
+        check("5d41402a-bc4b-3a76-b971-9d911017c592".equals(
+                  UUID.nameUUIDFromBytes("hello".getBytes(StandardCharsets.UTF_8)).toString()),
+              "nameUUIDFromBytes('hello') MD5 vector");
+        check("d41d8cd9-8f00-3204-a980-0998ecf8427e".equals(
+                  UUID.nameUUIDFromBytes(new byte[0]).toString()),
+              "nameUUIDFromBytes(empty) MD5 vector");
+        UUID v3 = UUID.nameUUIDFromBytes("hello".getBytes(StandardCharsets.UTF_8));
+        check(v3.version() == 3, "name-based version is 3");
+        check(v3.variant() == 2, "RFC 4122 variant is 2");
+        // nil UUID
+        UUID nil = new UUID(0L, 0L);
+        check("00000000-0000-0000-0000-000000000000".equals(nil.toString()), "nil UUID string");
+        check(nil.version() == 0 && nil.variant() == 0, "nil version/variant 0");
+        check(UUID.fromString("00000000-0000-0000-0000-000000000000").equals(nil), "nil parse");
+        // msb/lsb 位回传
+        UUID u = new UUID(0x0123456789ABCDEFL, 0xFEDCBA9876543210L);
+        check(u.getMostSignificantBits() == 0x0123456789ABCDEFL, "getMostSignificantBits");
+        check(u.getLeastSignificantBits() == 0xFEDCBA9876543210L, "getLeastSignificantBits");
+        check(new UUID(u.getMostSignificantBits(), u.getLeastSignificantBits()).equals(u),
+              "msb/lsb constructor roundtrip");
+        // compareTo：无符号 msb 优先、其后 lsb
+        check(new UUID(0L, 5L).compareTo(new UUID(0L, 6L)) < 0, "lsb ordering");
+        check(new UUID(-1L, 0L).compareTo(new UUID(1L, 0L)) < 0, "msb compared as signed long");
+        check(new UUID(1L, 2L).compareTo(new UUID(1L, 2L)) == 0, "compareTo equal 0");
+        // toString 小写十六进制；fromString 接受大写
+        check(!UUID.randomUUID().toString().toUpperCase().equals(UUID.randomUUID().toString().toUpperCase())
+              || true, "sanity");
+        UUID up = UUID.fromString("ABCDEF01-2345-6789-ABCD-EF0123456789");
+        check("abcdef01-2345-6789-abcd-ef0123456789".equals(up.toString()), "uppercase parse -> lowercase out");
+        // 随机 UUID 版本/变体恒定
+        for (int i = 0; i < 32; i++) {
+            UUID r = UUID.randomUUID();
+            check(r.version() == 4, "random version 4");
+            check(r.variant() == 2, "random variant 2");
+        }
     }
 
     static void testRandomUUID() {

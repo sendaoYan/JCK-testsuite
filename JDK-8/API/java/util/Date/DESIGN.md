@@ -40,6 +40,7 @@
 | P0 | UTC 固定 epoch 值 | testUtc |
 | P1 | 弃用字段 set/get 往返 + getDay 范围 | testDeprecatedFieldRoundtrip |
 | P1 | Serializable 往返（含 MIN_VALUE）+ 复活后可用 | testSerialization |
+| P0 | 契约深化：hashCode 公式/排序矩阵/parse/UTC 静态 | testDateContracts |
 
 ## 关键规范细节
 

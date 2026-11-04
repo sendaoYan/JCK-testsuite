@@ -29,8 +29,25 @@ public class OfLongTest {
         check(sum[0] == 9L, "forEachRemaining");
     }
 
+
+    // ===================== 契约深化：next 混用/装箱 Consumer 重载/耗尽异常 =====================
+    static void testOfLongContracts() {
+        java.util.PrimitiveIterator.OfLong it = java.util.stream.LongStream.of(7L, 8L).iterator();
+        check(it.nextLong() == 7L && it.next().equals(Long.valueOf(8L)),
+              "nextLong() and boxed next() interoperate");
+        try { it.nextLong(); check(false, "exhausted nextLong NSEE"); }
+        catch (java.util.NoSuchElementException nsee) { check(true, "exhausted nextLong NSEE"); }
+        final java.util.List<Long> boxed = new java.util.ArrayList<Long>();
+        java.util.stream.LongStream.of(1L, 2L).iterator()
+              .forEachRemaining((java.util.function.Consumer<Long>) boxed::add);
+        check(boxed.size() == 2 && boxed.get(0) == 1L && boxed.get(1) == 2L,
+              "boxed Consumer overload drains all elements");
+        check(!java.util.stream.LongStream.empty().iterator().hasNext(), "empty stream iterator");
+    }
+
     public static void main(String[] args) {
         testOfLong();
+        testOfLongContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

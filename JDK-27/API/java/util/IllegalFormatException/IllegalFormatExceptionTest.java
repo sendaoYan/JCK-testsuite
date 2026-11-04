@@ -1,22 +1,14 @@
 /*
  * @test
- * @summary java.util.IllegalFormatException conformance: white-box structure + black-box behavior.
+ * @summary java.util.IllegalFormatException conformance: package-private root of the
+ *          format-specifier exception hierarchy; cannot be instantiated directly;
+ *          Formatter throws its concrete subclasses with exact types; unchecked.
  * @run main IllegalFormatExceptionTest
  */
 
-import java.lang.reflect.Modifier;
-import java.util.DuplicateFormatFlagsException;
-import java.util.FormatFlagsConversionMismatchException;
-import java.util.IllegalFormatCodePointException;
-import java.util.IllegalFormatConversionException;
+import java.io.Serializable;
+import java.util.Formatter;
 import java.util.IllegalFormatException;
-import java.util.IllegalFormatFlagsException;
-import java.util.IllegalFormatPrecisionException;
-import java.util.IllegalFormatWidthException;
-import java.util.MissingFormatArgumentException;
-import java.util.MissingFormatWidthException;
-import java.util.UnknownFormatConversionException;
-import java.util.UnknownFormatFlagsException;
 
 public class IllegalFormatExceptionTest {
     static int passed;
@@ -26,45 +18,74 @@ public class IllegalFormatExceptionTest {
         passed++;
     }
 
-    static void testWhiteBox() throws Exception {
+    static void testHierarchy() throws Exception {
         Class<?> c = Class.forName("java.util.IllegalFormatException");
         check(c.getSuperclass() == IllegalArgumentException.class,
-                "extends IllegalArgumentException");
-        check(c.getConstructors().length == 0, "no public constructor");
+              "extends IllegalArgumentException");
+        check(RuntimeException.class.isAssignableFrom(c), "unchecked RuntimeException");
+        check(Serializable.class.isAssignableFrom(c), "Serializable");
+        // 构造器全部包私有：外部无法直接 new
+        int pub = 0;
+        for (java.lang.reflect.Constructor<?> k : c.getDeclaredConstructors()) {
+            if (java.lang.reflect.Modifier.isPublic(k.getModifiers())) pub++;
+        }
+        check(pub == 0, "no public constructors (package-private only)");
     }
 
-    static void testBlackBox() {
-        Object[] subs = {
-            new DuplicateFormatFlagsException(","),
-            new FormatFlagsConversionMismatchException("#", 's'),
-            new IllegalFormatCodePointException(0x110000),
-            new IllegalFormatConversionException('d', String.class),
-            new IllegalFormatFlagsException("+"),
-            new IllegalFormatPrecisionException(2),
-            new IllegalFormatWidthException(-1),
-            new MissingFormatArgumentException("%s"),
-            new MissingFormatWidthException("%-d"),
-            new UnknownFormatConversionException("y"),
-            new UnknownFormatFlagsException("!"),
-        };
-        for (Object o : subs) {
-            check(o instanceof IllegalFormatException, o.getClass().getSimpleName()
-                    + " is IllegalFormatException");
-            check(o instanceof IllegalArgumentException, o.getClass().getSimpleName()
-                    + " is IllegalArgumentException");
+    static void testSubclassFamily() throws Exception {
+        // 11 个具体子类均属于本族
+        String[] subs = {
+            "DuplicateFormatFlagsException", "FormatFlagsConversionMismatchException",
+            "IllegalFormatCodePointException", "IllegalFormatConversionException",
+            "IllegalFormatFlagsException", "IllegalFormatPrecisionException",
+            "IllegalFormatWidthException", "MissingFormatArgumentException",
+            "MissingFormatWidthException", "UnknownFormatConversionException",
+            "UnknownFormatFlagsException" };
+        for (String s : subs) {
+            Class<?> k = Class.forName("java.util." + s);
+            check(IllegalFormatException.class.isAssignableFrom(k), s + " is an IllegalFormatException");
+            check(IllegalArgumentException.class.isAssignableFrom(k), s + " is unchecked");
         }
-        boolean caught = false;
-        try {
-            throw new MissingFormatArgumentException("%s");
-        } catch (IllegalArgumentException e) {
-            caught = true;
+        check(subs.length == 11, "family member count");
+    }
+
+    static void testFormatterThrowsFamily() {
+        Formatter f = new Formatter();
+        // 触发后捕获的具体类型都是 IllegalFormatException 族
+        Class<? extends Throwable>[] expected = new Class[] {
+            java.util.IllegalFormatConversionException.class,
+            java.util.UnknownFormatConversionException.class,
+            java.util.MissingFormatArgumentException.class,
+            java.util.IllegalFormatFlagsException.class,
+            java.util.DuplicateFormatFlagsException.class,
+            java.util.IllegalFormatPrecisionException.class,
+            java.util.IllegalFormatWidthException.class,
+            java.util.MissingFormatWidthException.class };
+        Runnable[] triggers = new Runnable[] {
+            () -> f.format("%d", "x"),
+            () -> f.format("%q", 1),
+            () -> f.format("%s and %s", "one"),
+            () -> f.format("%+ d", 1),
+            () -> f.format("%,,d", 1),
+            () -> f.format("%5.3d", 1),
+            () -> f.format("%5n"),
+            () -> f.format("%-d", 1) };
+        for (int i = 0; i < triggers.length; i++) {
+            try {
+                triggers[i].run();
+                check(false, "trigger " + i + " should throw");
+            } catch (IllegalFormatException e) {
+                check(expected[i].isInstance(e), "trigger " + i + " yields " + expected[i].getSimpleName());
+
+            }
         }
-        check(caught, "catchable as IllegalArgumentException");
+        f.close();
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testHierarchy();
+        testSubclassFamily();
+        testFormatterThrowsFamily();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

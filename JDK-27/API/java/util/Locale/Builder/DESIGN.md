@@ -22,3 +22,9 @@
 - 白盒：`Class.forName("java.util.Locale$Builder")` 断言 final 类与关键方法存在。
 - 黑盒：language/region/script/variant/extension、setLocale、setLanguageTag、
   unicode 属性/关键字、clear、clearExtensions 保留 language/region 等组合。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：unicode 扩展键值/clearExtensions/非法输入矩阵/错误索引 | testBuilderContracts |

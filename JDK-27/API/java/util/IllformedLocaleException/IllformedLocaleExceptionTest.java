@@ -48,9 +48,29 @@ public class IllformedLocaleExceptionTest {
                 IllformedLocaleException.class, "ill-formed language");
     }
 
+
+    // ===================== 契约深化：层次/消息保持/Builder 触发携带错误索引 =====================
+    static void testIllformedContracts() {
+        check(new IllformedLocaleException("m") instanceof RuntimeException,
+              "extends RuntimeException");
+        check("m2".equals(new IllformedLocaleException("m2").getMessage()), "message preserved");
+        check(new IllformedLocaleException("m2").getErrorIndex() == -1,
+              "1-arg ctor default index -1");
+        check(new IllformedLocaleException("i3", 7).getMessage().startsWith("i3")
+              && new IllformedLocaleException("i3", 7).getErrorIndex() == 7,
+              "2-arg ctor message + index (message decorated with index)");
+        try {
+            new java.util.Locale.Builder().setRegion("USA");
+            check(false, "Builder.setRegion triggers IllformedLocaleException");
+        } catch (IllformedLocaleException ile) {
+            check(ile.getErrorIndex() >= 0, "trigger carries error index");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testIllformedContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

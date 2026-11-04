@@ -18,5 +18,6 @@
 | 构造+getter | getClassName/getKey/getMessage 精确值 |
 | 触发 | getBundle(不存在) 抛 MissingResourceException |
 | 继承 | extends RuntimeException |
+| P0 | 契约深化：层次/构造器矩阵/getter 保持 | testMissingResourceContracts |
 
 共 3 组场景、约 5 个 check（`testBlackBox()`）。

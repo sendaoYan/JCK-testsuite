@@ -29,6 +29,7 @@
 | P0 | nextToken(delim) 切换分隔符 | testNextTokenSwitchDelim |
 | P0 | Enumeration hasMoreElements/nextElement + 耗尽 | testEnumeration |
 | P1 | 空串无 token + 无分隔符整串一个 token | testEmptyAndNoDelims |
+| P0 | 契约深化：- | testContracts |
 
 ## 关键规范细节
 

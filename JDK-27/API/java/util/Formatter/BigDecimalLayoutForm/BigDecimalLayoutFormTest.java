@@ -22,8 +22,29 @@ public class BigDecimalLayoutFormTest {
               != Formatter.BigDecimalLayoutForm.SCIENTIFIC, "distinct constants");
     }
 
+
+    // ===================== 契约深化：枚举常量全集/valueOf/ordinal 稳定 =====================
+    static void testLayoutContracts() {
+        java.util.Formatter.BigDecimalLayoutForm[] vals =
+              java.util.Formatter.BigDecimalLayoutForm.values();
+        check(vals.length == 2, "exactly two constants");
+        check(java.util.Formatter.BigDecimalLayoutForm.valueOf("SCIENTIFIC")
+                    == java.util.Formatter.BigDecimalLayoutForm.SCIENTIFIC
+              && java.util.Formatter.BigDecimalLayoutForm.valueOf("DECIMAL_FLOAT")
+                    == java.util.Formatter.BigDecimalLayoutForm.DECIMAL_FLOAT,
+              "valueOf both constants");
+        check(java.util.Formatter.BigDecimalLayoutForm.SCIENTIFIC
+                    != java.util.Formatter.BigDecimalLayoutForm.DECIMAL_FLOAT,
+              "distinct constants");
+        check(java.util.Formatter.BigDecimalLayoutForm.SCIENTIFIC.ordinal() == 0,
+              "SCIENTIFIC declared first (ordinal 0)");
+        check("SCIENTIFIC".equals(java.util.Formatter.BigDecimalLayoutForm.SCIENTIFIC.name()),
+              "constant names");
+    }
+
     public static void main(String[] args) {
         testBigDecimalLayoutForm();
+        testLayoutContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

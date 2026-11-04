@@ -86,9 +86,71 @@ public class LocaleBuilderTest {
               "clearExtensions keeps language/region");
     }
 
+
+    // ===================== 契约深化：unicode 扩展键值/clearExtensions/非法输入矩阵/错误索引 =====================
+    static void testBuilderContracts() {
+        Locale.Builder b = new Locale.Builder().setLanguageTag("ja-JP-u-ca-japanese");
+        check("ca-japanese".equals(b.build().getExtension('u')), "u extension value");
+        check("japanese".equals(b.build().getUnicodeLocaleType("ca")), "unicode keyword type");
+        b.setUnicodeLocaleKeyword("nu", "latn");
+        check("latn".equals(b.build().getUnicodeLocaleType("nu")),
+              "setUnicodeLocaleKeyword adds second keyword");
+        b.clearExtensions();
+        check("ja-JP".equals(b.build().toLanguageTag()), "clearExtensions drops u");
+        check("und".equals(new Locale.Builder().clear().build().toLanguageTag()),
+              "clear resets everything to und");
+        // 非法输入矩阵（IllformedLocaleException + getErrorIndex）
+        java.util.IllformedLocaleException e1 = grab(() -> new Locale.Builder().setRegion("USA"));
+        check(e1.getErrorIndex() == 0 && e1.getMessage().startsWith("Ill-formed region"),
+              "setRegion(USA) message + index 0");
+        java.util.IllformedLocaleException e2 = grab(() -> new Locale.Builder().setScript("latin"));
+        check(e2.getErrorIndex() == 0 && e2.getMessage().startsWith("Ill-formed script"),
+              "setScript(latin) message + index 0");
+        java.util.IllformedLocaleException e3 = grab(() -> new Locale.Builder().setLanguage("e#"));
+        check(e3.getErrorIndex() == 0 && e3.getMessage().startsWith("Ill-formed language"),
+              "setLanguage(e#) message + index 0");
+        java.util.IllformedLocaleException e4 =
+              grab(() -> new Locale.Builder().setVariant("TOOLONG-VARIANT-EXTRA-7-89"));
+        check(e4.getErrorIndex() == 22, "overlong variant error index 22");
+        java.util.IllformedLocaleException e5 =
+              grab(() -> new Locale.Builder().setExtension('u', "ca-bogus-x"));
+        check(e5.getErrorIndex() == 9, "bad unicode extension value index 9");
+        java.util.IllformedLocaleException e6 = grab(() -> new Locale.Builder().setExtension('q', "x"));
+        check(e6.getErrorIndex() == 0, "invalid singleton index 0");
+        try {
+            new Locale.Builder().setLanguageTag("!!");
+            check(false, "setLanguageTag(!!) IllformedLocaleException");
+        } catch (java.util.IllformedLocaleException ile) {
+            check(ile.getErrorIndex() == 0, "setLanguageTag(!!) IllformedLocaleException");
+        }
+        check("en-Latn-US-x-foo".equals(
+              new Locale.Builder().setLanguageTag("EN-latn-US-x-foo").build().toLanguageTag()),
+              "setLanguageTag normalizes case and keeps private use");
+        new Locale.Builder().setLanguage(null);
+        check(true, "setLanguage(null) tolerated (clears)");
+        new Locale.Builder().setExtension('x', "foo");
+        check(true, "private-use singleton 'x' accepted");
+        Locale.Builder reuse = new Locale.Builder().setLanguage("en").setRegion("US");
+        Locale v1 = reuse.build();
+        Locale v2 = reuse.build();
+        check(v1 == v2 && v1.equals(v2),
+              "build() reusable; Locale instances are interned per value");
+    }
+
+    static java.util.IllformedLocaleException grab(Runnable r) {
+        try {
+            r.run();
+        } catch (java.util.IllformedLocaleException ile) {
+            passed++;
+            return ile;
+        }
+        throw new AssertionError("expected IllformedLocaleException");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testBuilderContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

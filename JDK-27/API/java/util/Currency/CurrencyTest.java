@@ -125,9 +125,47 @@ public class CurrencyTest {
         check("USD".equals(revived.getCurrencyCode()), "revived currency code");
     }
 
+
+    // ===================== 契约深化：实例缓存/数值码/显示名/异常消息矩阵 =====================
+    static void testCurrencyContracts() {
+        Currency usd = Currency.getInstance("USD");
+        check(usd == Currency.getInstance("USD"), "getInstance caches single instance");
+        check(usd.equals(Currency.getInstance(Locale.US))
+              && usd.hashCode() == Currency.getInstance("USD").hashCode(),
+              "equals/hashCode consistent across lookups");
+        Currency cny = Currency.getInstance(Locale.CHINA);
+        check("CNY".equals(cny.getCurrencyCode()), "getInstance(Locale.CHINA) -> CNY");
+        check("CNY".equals(Currency.getInstance("CNY").getCurrencyCode()), "getInstance(code CNY)");
+        check(cny.getDefaultFractionDigits() == 2 && cny.getNumericCode() == 156, "CNY fd 2 numeric 156");
+        check(Currency.getInstance("EUR").getDefaultFractionDigits() == 2, "EUR fd 2");
+        check("US Dollar".equals(usd.getDisplayName(Locale.US)), "getDisplayName(US)");
+        check("dollar des \u00c9tats-Unis".equals(usd.getDisplayName(Locale.FRENCH)),
+              "getDisplayName(FRENCH) localized");
+        check("$".equals(usd.getSymbol(Locale.US)), "USD symbol in US is $");
+        check("CN\u00a5".equals(Currency.getInstance("CNY").getSymbol(Locale.US)),
+              "CNY symbol in US is CN\u00a5 (CLDR data)");
+        try { Currency.getInstance("BOGUS"); check(false, "BOGUS code IAE"); }
+        catch (IllegalArgumentException iae) {
+            check(true, "BOGUS code IAE");
+            check(iae.getMessage() != null && iae.getMessage().contains("BOGUS")
+                  && iae.getMessage().contains("3"), "descriptive IAE message names code and length");
+        }
+        try { Currency.getInstance(new Locale("xx", "XX")); check(false, "xx_XX locale IAE"); }
+        catch (IllegalArgumentException iae) {
+            check(true, "xx_XX locale IAE");
+            check(iae.getMessage() != null && iae.getMessage().contains("xx_XX"),
+                  "descriptive bad-country IAE message names locale");
+        }
+        // getNumericCodeAsString：JDK 24+ 新增，返回零填充三位字符串
+        check("840".equals(usd.getNumericCodeAsString()), "getNumericCodeAsString zero-padded 840");
+        check("156".equals(Currency.getInstance("CNY").getNumericCodeAsString()),
+              "CNY getNumericCodeAsString 156");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCurrencyContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

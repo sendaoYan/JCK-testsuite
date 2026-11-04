@@ -215,6 +215,88 @@ public class CalendarTest {
               "revived Calendar fields intact");
     }
 
+
+    // ===================== 契约深化：字段常量/周参数/lenient 归一化/add-roll/极限/显示名 =====================
+    static void testCalendarContracts() {
+        java.util.TimeZone gmt = java.util.TimeZone.getTimeZone("GMT");
+        check(Calendar.ERA == 0 && Calendar.YEAR == 1 && Calendar.MONTH == 2
+              && Calendar.WEEK_OF_YEAR == 3 && Calendar.WEEK_OF_MONTH == 4
+              && Calendar.DAY_OF_MONTH == 5 && Calendar.DAY_OF_YEAR == 6
+              && Calendar.DAY_OF_WEEK == 7 && Calendar.DAY_OF_WEEK_IN_MONTH == 8
+              && Calendar.AM_PM == 9 && Calendar.HOUR == 10 && Calendar.HOUR_OF_DAY == 11
+              && Calendar.MINUTE == 12 && Calendar.SECOND == 13 && Calendar.MILLISECOND == 14
+              && Calendar.ZONE_OFFSET == 15 && Calendar.DST_OFFSET == 16
+              && Calendar.FIELD_COUNT == 17, "field constant values 0..17");
+        check(Calendar.JANUARY == 0 && Calendar.DECEMBER == 11, "month constants 0-based");
+        check(Calendar.SUNDAY == 1 && Calendar.MONDAY == 2 && Calendar.SATURDAY == 7,
+              "day-of-week constants");
+        check(Calendar.AM == 0 && Calendar.PM == 1, "AM/PM constants");
+        check(Calendar.getInstance(gmt, java.util.Locale.US).getFirstDayOfWeek() == 1
+              && Calendar.getInstance(gmt, java.util.Locale.US).getMinimalDaysInFirstWeek() == 1,
+              "US week parameters Sunday/1");
+        check(Calendar.getInstance(gmt, java.util.Locale.FRANCE).getFirstDayOfWeek() == 2,
+              "France first day of week Monday");
+        Calendar len = Calendar.getInstance(gmt, java.util.Locale.US);
+        len.clear(); len.set(2000, Calendar.FEBRUARY, 31);
+        check(len.get(Calendar.MONTH) == Calendar.MARCH && len.get(Calendar.DAY_OF_MONTH) == 2,
+              "lenient Feb 31 2000 normalizes to Mar 2");
+        Calendar strict = Calendar.getInstance(gmt, java.util.Locale.US);
+        strict.setLenient(false);
+        strict.clear(); strict.set(2000, Calendar.FEBRUARY, 31);
+        try { strict.get(Calendar.MONTH); check(false, "non-lenient Feb 31 IAE"); }
+        catch (IllegalArgumentException iae) { check(true, "non-lenient Feb 31 IAE"); }
+        Calendar base = Calendar.getInstance(gmt, java.util.Locale.US);
+        base.clear(); base.set(2000, Calendar.JANUARY, 31);
+        Calendar a1 = (Calendar) base.clone();
+        a1.add(Calendar.MONTH, 1);
+        check(a1.get(Calendar.YEAR) == 2000 && a1.get(Calendar.MONTH) == Calendar.FEBRUARY
+              && a1.get(Calendar.DAY_OF_MONTH) == 29, "add(MONTH,1) Jan31 -> Feb29");
+        Calendar r1 = (Calendar) base.clone();
+        r1.roll(Calendar.MONTH, 1);
+        check(r1.get(Calendar.YEAR) == 2000 && r1.get(Calendar.MONTH) == Calendar.FEBRUARY
+              && r1.get(Calendar.DAY_OF_MONTH) == 29, "roll(MONTH,1) stays within year");
+        Calendar a2 = (Calendar) base.clone();
+        a2.add(Calendar.MONTH, 13);
+        check(a2.get(Calendar.YEAR) == 2001 && a2.get(Calendar.MONTH) == Calendar.FEBRUARY
+              && a2.get(Calendar.DAY_OF_MONTH) == 28, "add(MONTH,13) carries into Feb 2001");
+        Calendar r2 = (Calendar) base.clone();
+        r2.roll(Calendar.DAY_OF_MONTH, -1);
+        check(r2.get(Calendar.DAY_OF_MONTH) == 30 && r2.get(Calendar.MONTH) == Calendar.JANUARY,
+              "roll(DAY_OF_MONTH,-1) wraps within month");
+        Calendar feb2000 = Calendar.getInstance(gmt, java.util.Locale.US);
+        feb2000.clear(); feb2000.set(2000, Calendar.FEBRUARY, 5);
+        check(feb2000.getActualMaximum(Calendar.DAY_OF_MONTH) == 29, "leap Feb actual max 29");
+        Calendar apr2001 = Calendar.getInstance(gmt, java.util.Locale.US);
+        apr2001.clear(); apr2001.set(2001, Calendar.APRIL, 5);
+        check(apr2001.getActualMaximum(Calendar.DAY_OF_MONTH) == 30, "April actual max 30");
+        check(apr2001.getMaximum(Calendar.DAY_OF_MONTH) == 31
+              && apr2001.getMinimum(Calendar.MONTH) == 0
+              && apr2001.getGreatestMinimum(Calendar.DAY_OF_MONTH) == 1
+              && apr2001.getLeastMaximum(Calendar.DAY_OF_MONTH) == 28,
+              "maximum/minimum/greatestMinimum/leastMaximum");
+        check("gregory".equals(apr2001.getCalendarType()), "getCalendarType gregory");
+        Calendar c1 = Calendar.getInstance(gmt, java.util.Locale.US);
+        c1.clear(); c1.set(2000, 0, 1);
+        Calendar c2 = Calendar.getInstance(gmt, java.util.Locale.US);
+        c2.clear(); c2.set(2001, 0, 1);
+        check(c1.compareTo(c2) < 0 && c1.before(c2) && !c1.after(c2), "compareTo/before/after");
+        check(c1.toInstant().toEpochMilli() == c1.getTimeInMillis(), "toInstant matches timeInMillis");
+        Calendar disp = Calendar.getInstance(gmt, java.util.Locale.US);
+        disp.clear(); disp.set(2023, Calendar.JULY, 9);
+        check("Sun".equals(disp.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.SHORT, java.util.Locale.US)),
+              "SHORT day-of-week display name Sun");
+        check("July".equals(disp.getDisplayName(Calendar.MONTH, Calendar.LONG, java.util.Locale.US)),
+              "LONG month display name July");
+        java.util.Map<String, Integer> names =
+              disp.getDisplayNames(Calendar.MONTH, Calendar.SHORT, java.util.Locale.US);
+        check(names != null && names.containsKey("Jan") && names.containsKey("Jul"),
+              "getDisplayNames contains Jan/Jul");
+        Calendar cl = Calendar.getInstance(gmt, java.util.Locale.US);
+        cl.clear();
+        check(!cl.isSet(Calendar.YEAR), "clear unsets fields");
+        check(Calendar.getAvailableLocales().length > 0, "getAvailableLocales non-empty");
+    }
+
     public static void main(String[] args) throws Exception {
         testEpoch();
         testSet();
@@ -226,6 +308,7 @@ public class CalendarTest {
         testCloneAndTimeZone();
         testMinMax();
         testSerialization();
+        testCalendarContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

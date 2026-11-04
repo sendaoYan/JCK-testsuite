@@ -25,3 +25,9 @@
   - MIME 长输入往返、`wrap` 流式编码到 `ByteArrayOutputStream`。
   - 非法输入解码抛 IllegalArgumentException。
   - 边界/等价：编码长度 `4*ceil(n/3)`（n=0..5）；withoutPadding 去 `=` 后长度规则；basic 字母表 `+/` vs URL `-_`；MIME 76 列 CRLF 换行；basic 解码容忍缺 padding、长度 mod4==1 拒绝。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：RFC 4648 向量/解码错误消息/非规范输入 | 见 Test 内「契约深化」区块 |

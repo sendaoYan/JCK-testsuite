@@ -19,3 +19,9 @@
 - 黑盒（固定 `getContents`）：getString/getObject/getStringArray/containsKey/getKeys/keySet 组合；
   getString/getObject/getStringArray 缺失键抛 MissingResourceException；
   `getContents()` 返回 null 或 null key/value 时，首次访问抛 NullPointerException（懒加载）。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：父链联合 keySet/handleKeySet 范围/getKeys 全枚举 | testListBundleContracts |

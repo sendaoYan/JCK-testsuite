@@ -18,5 +18,6 @@
 | 继承 | 受检异常，extends Exception |
 | 构造器 | ()/String 两个构造、消息回传 |
 | catch 可用性 | 作为 Exception 被 catch |
+| P0 | 契约深化：受检异常语义/cause 缺省 | testTooManyContracts |
 
 共 3 组场景、约 5 个 check（`testBlackBox()`）。

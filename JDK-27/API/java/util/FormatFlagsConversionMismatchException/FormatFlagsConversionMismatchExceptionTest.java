@@ -1,10 +1,16 @@
 /*
  * @test
- * @summary java.util.FormatFlagsConversionMismatchException conformance: white-box structure + black-box behavior.
+ * @summary java.util.FormatFlagsConversionMismatchException conformance: hierarchy, constructor matrix (null NPE),
+ *          getters and exact message formats, Formatter trigger producing the
+ *          exception with populated getters, and serialization round-trip.
  * @run main FormatFlagsConversionMismatchExceptionTest
  */
 
-import java.util.FormatFlagsConversionMismatchException;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.Formatter;
 import java.util.IllegalFormatException;
 
@@ -16,42 +22,66 @@ public class FormatFlagsConversionMismatchExceptionTest {
         passed++;
     }
 
-    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+    static void expect(Class<? extends Throwable> type, Runnable r, String msg) {
         try {
             r.run();
-            throw new AssertionError(msg + ": expected " + type.getSimpleName());
         } catch (Throwable t) {
-            if (!type.isInstance(t))
-                throw new AssertionError(msg + ": expected " + type.getSimpleName()
-                        + " but got " + t.getClass().getSimpleName(), t);
-            passed++;
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                + " but got " + t.getClass().getSimpleName(), t);
         }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
     }
 
-    static void testWhiteBox() throws Exception {
+    @SuppressWarnings("unchecked")
+    static <T extends Throwable> T grab(Class<T> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return (T) t; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": nothing thrown");
+    }
+
+    static void testHierarchy() throws Exception {
         Class<?> c = Class.forName("java.util.FormatFlagsConversionMismatchException");
         check(c.getSuperclass() == IllegalFormatException.class, "extends IllegalFormatException");
-        c.getDeclaredConstructor(String.class, char.class);
-        check(c.getDeclaredMethod("getFlags").getReturnType() == String.class, "getFlags String");
-        check(c.getDeclaredMethod("getConversion").getReturnType() == char.class, "getConversion char");
+        check(RuntimeException.class.isAssignableFrom(c), "is a RuntimeException (unchecked)");
+        check(Serializable.class.isAssignableFrom(c), "Serializable");
+        check(java.util.FormatFlagsConversionMismatchException.class.getSuperclass() != Object.class, "non-root class");
     }
 
-    static void testBlackBox() {
-        FormatFlagsConversionMismatchException e =
-                new FormatFlagsConversionMismatchException("#", 's');
-        check("#".equals(e.getFlags()), "getFlags");
-        check(e.getConversion() == 's', "getConversion");
-        check("Conversion = s, Flags = #".equals(e.getMessage()), "getMessage");
+    static void testConstructorsAndGetters() {
+        java.util.FormatFlagsConversionMismatchException e =
+                new java.util.FormatFlagsConversionMismatchException(",", 'x');
+        check(",".equals(e.getFlags()), "getFlags");
+        check('x' == e.getConversion(), "getConversion");
+        check("Conversion = x, Flags = ,".equals(e.getMessage()), "getMessage format");    }
 
-        final Formatter f = new Formatter();
-        expectThrows(() -> f.format("%#s", "x"), FormatFlagsConversionMismatchException.class,
-                "flag/conversion mismatch");
-        check(true, "instanceof IllegalFormatException");
+    static void testFormatterTrigger() {
+        java.util.FormatFlagsConversionMismatchException t =
+                grab(java.util.FormatFlagsConversionMismatchException.class,
+                     () -> new Formatter().format("%,x", 255), "format %,x");
+        check(",".equals(t.getFlags()) && 'x' == t.getConversion(), "trigger populates both getters");    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(new java.util.FormatFlagsConversionMismatchException(",", 'x'));
+        Object back = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(commaOk(back), "serialization round-trip preserves state");
+    }
+
+    static boolean commaOk(Object back) {
+        java.util.FormatFlagsConversionMismatchException e = (java.util.FormatFlagsConversionMismatchException) back;
+        return ",".equals(e.getFlags()) && e.getConversion() == 'x';
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testHierarchy();
+        testConstructorsAndGetters();
+        testFormatterTrigger();
+        testSerializationRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

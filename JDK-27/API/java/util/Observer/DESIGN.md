@@ -17,5 +17,6 @@
 | 接口性 | 单抽象方法 update |
 | 回调 | lambda 实现收到 Observable 与参数 |
 | 多观察者 | 多个 Observer 都收到通知 |
+| P0 | 契约深化：update 回调参数矩阵（直接调用契约） | testObserverContracts |
 
 共 3 组场景、约 5 个 check（`testBlackBox()`）。

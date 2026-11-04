@@ -24,3 +24,9 @@
   - `nextInt(bound)` 范围、`nextInt(0)` 抛 IAE。
   - `nextDouble`/`nextFloat` 在 [0,1)、`nextBytes` 填充。
   - `setSeed` 重置序列、`ints`/`longs`/`doubles` 流确定性、`nextGaussian` 确定性。
+
+## 4. 测试用例设计
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 契约深化：跨方法全序列确定性闭环 | testNextBytesContract、testStreamContracts |

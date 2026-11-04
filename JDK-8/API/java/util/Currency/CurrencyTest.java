@@ -98,6 +98,49 @@ public class CurrencyTest {
         check(revived == usd, "Serializable round-trip returns cached instance");
     }
 
+
+    // ===================== 契约深化：实例缓存/数值码/显示名/异常消息矩阵 =====================
+    static void testCurrencyContracts() {
+        Currency usd = Currency.getInstance("USD");
+        check(usd == Currency.getInstance("USD"), "getInstance caches single instance");
+        check(usd.equals(Currency.getInstance(Locale.US))
+              && usd.hashCode() == Currency.getInstance("USD").hashCode(),
+              "equals/hashCode consistent across lookups");
+        Currency cny = Currency.getInstance(Locale.CHINA);
+        check("CNY".equals(cny.getCurrencyCode()), "getInstance(Locale.CHINA) -> CNY");
+        check("CNY".equals(Currency.getInstance("CNY").getCurrencyCode()), "getInstance(code CNY)");
+        check(cny.getDefaultFractionDigits() == 2 && cny.getNumericCode() == 156, "CNY fd 2 numeric 156");
+        check(Currency.getInstance("EUR").getDefaultFractionDigits() == 2, "EUR fd 2");
+        check("US Dollar".equals(usd.getDisplayName(Locale.US)), "getDisplayName(US)");
+        check("dollar des \u00c9tats-Unis".equals(usd.getDisplayName(Locale.FRENCH)),
+              "getDisplayName(FRENCH) localized");
+        check("$".equals(usd.getSymbol(Locale.US)), "USD symbol in US is $");
+        check("CNY".equals(CnySymbol()), "CNY symbol in US is CNY (JDK-8 non-CLDR data)");
+        try { Currency.getInstance("BOGUS"); check(false, "BOGUS code IAE"); }
+        catch (IllegalArgumentException iae) {
+            check(true, "BOGUS code IAE");
+            check(iae.getMessage() == null, "JDK-8 IAE message is null");
+        }
+        try { Currency.getInstance(new Locale("xx", "XX")); check(false, "xx_XX locale IAE"); }
+        catch (IllegalArgumentException iae) {
+            check(true, "xx_XX locale IAE");
+            check(iae.getMessage() == null, "JDK-8 bad-country IAE message is null");
+        }
+        // getNumericCodeAsString 为 JDK 24+ 新增：此处反射探测应不存在
+        try {
+            Currency.class.getMethod("getNumericCodeAsString").invoke(usd);
+            check(false, "getNumericCodeAsString should be absent on this JDK");
+        } catch (NoSuchMethodException nsme) {
+            check(true, "getNumericCodeAsString absent pre-JDK-24");
+        } catch (Exception e) {
+            check(false, "getNumericCodeAsString invocation failed");
+        }
+    }
+
+    static String CnySymbol() {
+        return Currency.getInstance("CNY").getSymbol(Locale.US);
+    }
+
     public static void main(String[] args) throws Exception {
         testUsd();
         testFromLocale();
@@ -106,6 +149,7 @@ public class CurrencyTest {
         testAttributes();
         testAvailableCurrencies();
         testSerialization();
+        testCurrencyContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
