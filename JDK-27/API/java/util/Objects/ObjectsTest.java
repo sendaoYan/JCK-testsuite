@@ -56,6 +56,51 @@ public class ObjectsTest {
         testRequireNonNullElse();
         testIndexChecks();
         testBoundaryEquivalence();
+        testDeepNullSemantics();
+    }
+
+    static void testDeepNullSemantics() {
+        // requireNonNull(obj, supplier): supplier not called when non-null; null supplier NPE;
+        // supplier returning null message -> NPE with null message.
+        final boolean[] called = {false};
+        Object o = new Object();
+        check(Objects.requireNonNull(o, () -> { called[0] = true; return "x"; }) == o,
+              "requireNonNull(supplier) non-null");
+        check(!called[0], "supplier not called when non-null");
+        assertThrows(NullPointerException.class,
+                () -> Objects.requireNonNull(null, (java.util.function.Supplier<String>) null),
+                "requireNonNull(null, null supplier) NPE");
+        try {
+            Objects.requireNonNull(null, () -> null);
+            throw new AssertionError("expected NPE");
+        } catch (NullPointerException e) {
+            check(e.getMessage() == null, "supplier null message -> null message");
+        }
+
+        // compare null matrix.
+        check(Objects.compare(null, null, String::compareTo) == 0, "compare(null,null) == 0");
+        check(Objects.compare("a", "a", null) == 0, "compare(a,a,null) == 0 short-circuit");
+        assertThrows(NullPointerException.class,
+                () -> Objects.compare(null, "x", String::compareTo), "compare(null,x) NPE");
+        assertThrows(NullPointerException.class,
+                () -> Objects.compare("x", null, String::compareTo), "compare(x,null) NPE");
+
+        // deepEquals nested/2D/array-vs-scalar/int[]-vs-Integer[].
+        check(Objects.deepEquals(new int[][]{{1, 2}, {3, 4}}, new int[][]{{1, 2}, {3, 4}}),
+              "deepEquals 2D int arrays");
+        check(!Objects.deepEquals(new int[]{1}, 1), "deepEquals array vs scalar false");
+        check(!Objects.deepEquals(new int[]{1, 2}, new Integer[]{1, 2}),
+              "deepEquals int[] vs Integer[] false");
+
+        // hash with null elements and single null element == Arrays.hashCode.
+        check(Objects.hash("k", null) == java.util.Arrays.hashCode(new Object[]{"k", null}),
+              "hash null element == Arrays.hashCode");
+        check(Objects.hash((Object) null) == java.util.Arrays.hashCode(new Object[]{null}),
+              "hash single null == Arrays.hashCode");
+
+        // toString of object whose toString() returns null.
+        Object nullToString = new Object() { public String toString() { return null; } };
+        check(Objects.toString(nullToString) == null, "toString(object null toString) == null");
     }
 
     static void testRequireNonNull() {
