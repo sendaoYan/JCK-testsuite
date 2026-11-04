@@ -31,3 +31,11 @@
   - 内存序访问器 + compareAndExchange 见证值。
   - long[] 构造复制语义、toString、越界/负长度异常。
   - 并发：8 线程按索引 incrementAndGet，每槽位最终值 == N*M/4。
+
+### 本轮契约深化追加
+
+- 越界全矩阵（ArrayIndexOutOfBoundsException，9 方法×负/length）（`testIndexBoundsFull`）。
+- 64 位环绕（per-index incrementAndGet 跨 MAX）+ 返回值序列 + 函数收到旧值（`testWrapAndSequences`）。
+- 序列化 round-trip（`testSerialization`）。
+
+断言规模：PASS (66 assertions)。

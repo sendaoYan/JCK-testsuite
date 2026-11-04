@@ -28,4 +28,12 @@
   - `getBlocker(null)` 抛 `NullPointerException`。
   - `setCurrentBlocker(obj)` → `getBlocker` 读取 → 清空为 null。
   - 跨线程：子线程 `setCurrentBlocker` + latch 握手 → 主线程 `getBlocker(t)` 读取 → `unpark(t)` → join 结束。
+- 本轮深化新增（append-only，断言 21 → 36）：
+  - `testUnparkThenPark(Object/Nanos)ReturnsImmediately`：先 unpark 后 park 各变体立即返回（顺序无关性核心契约）。
+  - `testPermitNotCumulative`：unpark×2 → park 消费一次 → 第二次 parkNanos(200ms) 真等 ≥100ms（有界观察）。
+  - `testInterruptedParkReturnsImmediately`：已中断线程 park 立即返回且中断位保留；Thread.interrupted() 清除后恢复等待。
+  - `testGetBlockerOfParkedThread`：park(blocker) 期间他线程观测 blocker 并在唤醒后确认清除（有界 spin）。
+  - `testParkNanosBlockerParked`、`testParkNullBlocker`、`testParkImmediateVariants`（parkNanos(0/1)/parkUntil(0)）。
+  - `testUnparkTerminatedThreadIsHarmless`：对已终止线程 unpark 无异常。
+
 - 健壮性：确定性（permit 语义消除竞态），daemon 线程，不 sleep、不依赖墙钟、无全局副作用。

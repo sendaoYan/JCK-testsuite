@@ -51,9 +51,59 @@ public class ScheduledFutureTest {
         }
     }
 
+    // ---- Part 3: white-box lock: no methods of its own ----
+    static void testInterfaceLock() throws Exception {
+        Class<?> c = cls("java.util.concurrent.ScheduledFuture");
+        check(c.getDeclaredMethods().length == 0,
+              "declares no methods of its own (Delayed + Future union)");
+        check(c.getTypeParameters().length == 1, "one type parameter <V>");
+        check(RunnableScheduledFuture.class.isAssignableFrom(FutureTask.class) == false,
+              "plain FutureTask is not scheduled");
+    }
+
+    // ---- Part 4: trigger-time ordering via compareTo ----
+    static void testCompareToTriggerTime() {
+        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        try {
+            ScheduledFuture<?> earlier = exec.schedule(() -> { }, 1, TimeUnit.HOURS);
+            ScheduledFuture<?> later = exec.schedule(() -> { }, 2, TimeUnit.HOURS);
+            check(earlier.compareTo(later) < 0, "earlier trigger compares less");
+            check(later.compareTo(earlier) > 0, "later trigger compares greater");
+            check(earlier.compareTo(earlier) == 0, "compareTo reflexive");
+        } finally {
+            exec.shutdownNow();
+        }
+    }
+
+    // ---- Part 5: zero-delay Callable/Runnable + cancel semantics ----
+    static void testZeroDelayAndCancel() throws Exception {
+        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        try {
+            ScheduledFuture<String> f = exec.schedule(() -> "ran", 0, TimeUnit.MILLISECONDS);
+            check("ran".equals(f.get()), "zero-delay Callable runs and returns its value");
+            check(f.isDone() && !f.isCancelled(), "completed normally");
+            check(f.getDelay(TimeUnit.NANOSECONDS) <= 0, "delay <= 0 after completion");
+            ScheduledFuture<?> r = exec.schedule(() -> { }, 0, TimeUnit.MILLISECONDS);
+            check(r.get() == null, "Runnable variant get() is null");
+            ScheduledFuture<?> c = exec.schedule(() -> { }, 1, TimeUnit.HOURS);
+            check(c.cancel(true), "cancel(true) on pending task succeeds");
+            check(c.isCancelled() && c.isDone(), "cancelled and done");
+            boolean got = false;
+            try { c.get(); }
+            catch (CancellationException expected) { got = true; }
+            check(got, "get() on cancelled scheduled future throws CancellationException");
+            check(!c.cancel(false), "re-cancel returns false (FutureTask semantics)");
+        } finally {
+            exec.shutdownNow();
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testInterfaceLock();
+        testCompareToTriggerTime();
+        testZeroDelayAndCancel();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

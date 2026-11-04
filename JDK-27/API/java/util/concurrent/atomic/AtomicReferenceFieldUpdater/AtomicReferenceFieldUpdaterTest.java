@@ -151,9 +151,80 @@ public class AtomicReferenceFieldUpdaterTest {
         check(u.get(c) == N * M, "concurrent updateAndGet over volatile reference field loses no updates");
     }
 
+    // ---- 契约深化：消息精确断言 / static·private·null 校验 / identity 语义 / 多对象隔离 ----
+    static class StaticField {
+        static volatile String sv;
+    }
+    static class PrivateField {
+        private volatile String pv;
+    }
+
+    static void checkMessage(Runnable r, Class<? extends Throwable> exType, String expect, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (!exType.isInstance(t)) throw new AssertionError(msg + " (threw " + t + ")");
+            check(expect.equals(t.getMessage()), msg + " message <" + t.getMessage() + "> equals <" + expect + ">");
+            return;
+        }
+        throw new AssertionError(msg + " (no exception)");
+    }
+
+    static void testValidationMessages() {
+        checkMessage(() -> AtomicReferenceFieldUpdater.newUpdater(PlainField.class, String.class, "value"),
+                IllegalArgumentException.class, "Must be volatile type", "non-volatile field message");
+        // static 字段 → IAE（JDK-27 实测消息 "Must not be a static field"；JDK-8 消息为 null）
+        checkMessage(() -> AtomicReferenceFieldUpdater.newUpdater(StaticField.class, String.class, "sv"),
+                IllegalArgumentException.class, "Must not be a static field", "static field message");
+        // private 字段（跨类不可见）→ RuntimeException（包装 IllegalAccessException）
+        // 注：JDK-11+ 同文件嵌套类是 nestmate，可访问；用 java.base 的 private volatile String 才不可达
+        assertThrows(RuntimeException.class,
+                () -> AtomicReferenceFieldUpdater.newUpdater(Thread.class, String.class, "name"),
+                "foreign private field rejected");
+        assertThrows(RuntimeException.class,
+                () -> AtomicReferenceFieldUpdater.newUpdater(Holder.class, String.class, null),
+                "null field name rejected");
+        assertThrows(RuntimeException.class,
+                () -> AtomicReferenceFieldUpdater.newUpdater(null, String.class, "value"),
+                "null class rejected");
+    }
+
+    static void testIdentitySemantics() {
+        // CAS 按 ==（引用同一性）匹配
+        String a1 = new String("a");
+        String a2 = new String("a");
+        check(a1.equals(a2) && a1 != a2, "precondition: equals but not same reference");
+        AtomicReferenceFieldUpdater<Holder, String> u =
+            AtomicReferenceFieldUpdater.newUpdater(Holder.class, String.class, "value");
+        Holder h = new Holder();
+        u.set(h, a1);
+        check(!u.compareAndSet(h, a2, "z"), "CAS with equals-but-not-same expected fails");
+        check(u.get(h) == a1, "failed identity CAS leaves same reference");
+        check(u.compareAndSet(h, a1, "b"), "CAS with identical (==) expected succeeds");
+        // null 期望值
+        Holder h2 = new Holder();
+        check(u.compareAndSet(h2, null, "n"), "CAS(null, v) on null field succeeds");
+    }
+
+    static void testMultiObjectIndependence() {
+        AtomicReferenceFieldUpdater<Holder, String> u =
+            AtomicReferenceFieldUpdater.newUpdater(Holder.class, String.class, "value");
+        Holder h1 = new Holder();
+        Holder h2 = new Holder();
+        u.set(h1, "o1");
+        u.set(h2, "o2");
+        check("o1".equals(u.get(h1)) && "o2".equals(u.get(h2)), "two objects hold independent values");
+        check(u.compareAndSet(h1, "o1", "n1"), "CAS on h1");
+        check("o2".equals(u.get(h2)), "CAS on h1 leaves h2 untouched");
+        check(!u.compareAndSet(h2, "o1", "x") && "o2".equals(u.get(h2)), "failed CAS on h2 leaves it unchanged");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testValidationMessages();
+        testIdentitySemantics();
+        testMultiObjectIndependence();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

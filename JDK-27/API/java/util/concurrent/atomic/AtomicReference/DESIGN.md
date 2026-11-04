@@ -28,3 +28,12 @@
   - toString 对 null 与值的行为。
   - 内存序访问器 + compareAndExchange 见证值。
   - 并发：8 线程 updateAndGet(Integer 自增) 10 万次，最终值 == N*M。
+
+### 本轮契约深化追加
+
+- **identity 语义**：equals() 相等不同对象 CAS/compareAndExchange 失败、getAndSet 返回精确旧引用、null 期望分支（`testIdentitySemantics`）。
+- 函数收到旧引用（getAndUpdate/accumulateAndGet 副作用列表）（`testFunctionReceivesOldReference`）。
+- 序列化 round-trip：反序列化重建 String → 驻留字面量 identity CAS 失败（须 copy.get() 作期望）（`testSerialization`）。
+- weakCompareAndSet @Deprecated（`testDeprecationContract`）。
+
+断言规模：PASS (46 assertions)。

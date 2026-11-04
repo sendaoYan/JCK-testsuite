@@ -11,7 +11,15 @@ JDK 内部：`java.util.concurrent.StructuredTaskScope.open(UnaryOperator)` 传�
 
 ## 4. 测试用例设计 + 自动化实现
 场景：
-1. 白盒：`Class.forName` 断言 interface/final/enum/继承 + 反射核对方法签名。
-2. 黑盒：SubmissionPublisher/StructuredTaskScope 等真实实现走组合操作链路并断言。
+1. 白盒：接口 + withThreadFactory/withName/withTimeout 三 wither。
+2. 黑盒主干：fluent 链用于 open。
+3. 契约深化：wither 返回**新实例**（不可变 wither 语义、不同 wither 互不相同）、open 传入默认 Configuration
+   （testWitherSemantics）；自定义线程工厂 → 平台线程 + 工厂命名线程（testThreadFactoryConfiguration）；
+   短超时真实触发（ExecutionException cause CancelledByTimeoutException、isCancelled）与宽超时不扰动
+   （testTimeoutConfiguration）。
 
-实现：`ConfigurationTest.java`（`testWhiteBox` + `testBlackBox`）。
+实现：`ConfigurationTest.java`（14 断言）。
+
+## 关键规范细节（实测锁定）
+- wither 均返回新 Configuration 实例（cfg == cfg.withName(x) 为 false）。
+- withName 命名的是 scope，不改变子任务线程名（子任务线程名断言只对 withThreadFactory 做）。

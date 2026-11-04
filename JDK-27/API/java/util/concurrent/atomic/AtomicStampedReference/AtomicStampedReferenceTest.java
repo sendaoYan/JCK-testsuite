@@ -70,9 +70,47 @@ public class AtomicStampedReferenceTest {
         check(ref.getStamp() == 201, "failed attemptStamp leaves stamp unchanged");
     }
 
+    // ---- 契约深化：identity 语义 / 双失配分支 / null 引用分支 / stamp-only CAS ----
+    static void testIdentitySemantics() {
+        String a1 = new String("a");
+        String a2 = new String("a");
+        check(a1.equals(a2) && a1 != a2, "precondition: equals but not same reference");
+        AtomicStampedReference<String> ref = new AtomicStampedReference<>(a1, 0);
+        check(!ref.compareAndSet(a2, "b", 0, 1), "identity CAS with equals-but-not-same ref fails");
+        check(ref.getReference() == a1 && ref.getStamp() == 0, "failed identity CAS leaves state unchanged");
+        check(!ref.attemptStamp(a2, 5), "attemptStamp with non-matching identity ref fails");
+        check(ref.getStamp() == 0, "failed attemptStamp leaves stamp unchanged");
+        check(ref.compareAndSet(a1, "b", 0, 1), "identity CAS with == ref succeeds");
+    }
+
+    static void testBothMismatchAndNull() {
+        // ref 与 stamp 都失配 → false 且不变
+        AtomicStampedReference<Integer> ref = new AtomicStampedReference<>(10, 1);
+        check(!ref.compareAndSet(99, 30, 9, 3), "both-mismatch CAS returns false");
+        check(ref.getReference() == 10 && ref.getStamp() == 1, "both-mismatch leaves state unchanged");
+        // newRef == 现值、仅换戳：成功且引用不变
+        check(ref.compareAndSet(10, 10, 1, 2), "same-ref stamp-only CAS succeeds");
+        check(ref.getReference() == 10 && ref.getStamp() == 2, "stamp-only CAS changes only stamp");
+        // newStamp == 现戳、仅换引用
+        check(ref.compareAndSet(10, 11, 2, 2), "same-stamp ref-only CAS succeeds");
+        check(ref.getReference() == 11 && ref.getStamp() == 2, "ref-only CAS changes only reference");
+        // expectedRef 为 null 的分支
+        AtomicStampedReference<String> n = new AtomicStampedReference<>(null, 0);
+        check(n.compareAndSet(null, "v", 0, 1), "CAS(null, v, 0, 1) on null initial succeeds");
+        check(!n.compareAndSet(null, "w", 1, 2), "CAS(null, w) after set fails");
+        // attemptStamp 只改戳不动引用
+        check(n.attemptStamp("v", 7), "attemptStamp matching ref returns true");
+        check("v".equals(n.getReference()) && n.getStamp() == 7, "attemptStamp changed only stamp");
+        // set 无条件更新两者
+        n.set("next", 10);
+        check("next".equals(n.getReference()) && n.getStamp() == 10, "set updates reference and stamp");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testIdentitySemantics();
+        testBothMismatchAndNull();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

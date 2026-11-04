@@ -12,8 +12,15 @@
 - JDK 自带测试：`tck/RecursiveTaskTest.java`、`test/jdk/java/util/concurrent/forkjoin/`。
 
 ## 4. 测试用例设计 + 自动化实现
-场景：
-1. 白盒：抽象类 + 继承 ForkJoinTask + 抽象 compute()。
+场景（32 断言）：
+1. 白盒：抽象类 + 继承 ForkJoinTask + 抽象 compute() + public 无参构造 + getRawResult 具体（非抽象）。
 2. 黑盒：平凡 compute 返回值；分治求和（fork/join）与串行和一致。
+3. rawResult 生命周期：null → invoke → 42 → join/get/getRawResult 一致。
+4. 分治求和 1..100==5050（invokeAll + 外部 fork/join 双路径）；递归最大值收敛固定最大 500；Fib(10)==55。
+5. 异常语义：同线程 == 原对象；跨线程 rebuilt+cause；子异常经父 join 传播。
+6. timed get(150ms) → TimeoutException；释放后 777。
+7. reinitialize：getRawResult()==10（旧值保留，文档 "unaffected"），再执行 20。
 
-实现：`RecursiveTaskTest.java`（6 断言）。
+易错规范细节：固定数组固定结果（5050）；阻塞任务 latch 且 finally 释放；异常 == 断言仅同线程。
+
+实现：`RecursiveTaskTest.java`（32 断言）。优先级：分治值正确性 > rawResult/reinit 契约 > 异常/超时。

@@ -225,6 +225,278 @@ public class LinkedBlockingQueueTest {
                 "unbounded remainingCapacity after 2");
     }
 
+    @SuppressWarnings("unchecked")
+    static <T extends Throwable> T expectThrowsMsg(Runnable r, Class<T> type, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return type.cast(t); }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                                     + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
+    static void awaitBounded(CountDownLatch latch, String what) throws InterruptedException {
+        if (!latch.await(5, TimeUnit.SECONDS))
+            throw new AssertionError("timeout (5s) waiting for: " + what);
+    }
+
+    // ---- Part 3: blocking-queue contract deepening ----
+    static void testSixMethodTwoStateTable() {
+        LinkedBlockingQueue<String> q = new LinkedBlockingQueue<>(2);
+        // empty state
+        check(q.isEmpty() && q.size() == 0, "two-state: initially empty");
+        expectThrows(() -> q.remove(), NoSuchElementException.class, "two-state: remove() empty NSEE");
+        expectThrows(() -> q.element(), NoSuchElementException.class, "two-state: element() empty NSEE");
+        check(q.poll() == null, "two-state: poll() empty null");
+        check(q.peek() == null, "two-state: peek() empty null");
+        check(q.add("a") && q.add("b"), "two-state: add succeeds while space remains");
+        // full state
+        IllegalStateException ise = expectThrowsMsg(() -> q.add("c"),
+                IllegalStateException.class, "two-state: add() full ISE");
+        check("Queue full".equals(ise.getMessage()), "two-state: add() full message exactly 'Queue full'");
+        check(!q.offer("c"), "two-state: offer() full false");
+        check(q.size() == 2, "two-state: failed insert leaves size unchanged");
+        check("a".equals(q.element()) && "a".equals(q.peek()), "two-state: element/peek full return head");
+        check("a".equals(q.remove()) && "b".equals(q.remove()), "two-state: remove() drains FIFO");
+    }
+
+    static void testConstructorIaeMessage() {
+        IllegalArgumentException e0 = expectThrowsMsg(() -> new LinkedBlockingQueue<String>(0),
+                IllegalArgumentException.class, "ctor capacity 0 IAE");
+        check(e0.getMessage() == null, "ctor capacity 0 IAE has null message");
+        IllegalArgumentException en = expectThrowsMsg(() -> new LinkedBlockingQueue<String>(-1),
+                IllegalArgumentException.class, "ctor capacity negative IAE");
+        check(en.getMessage() == null, "ctor negative IAE has null message");
+        LinkedBlockingQueue<Integer> one = new LinkedBlockingQueue<>(1);
+        check(one.remainingCapacity() == 1 && one.offer(1) && !one.offer(2), "capacity 1 constructor usable");
+    }
+
+    static void testUnboundedCapacityGrowth() {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>();
+        boolean all = true;
+        for (int i = 0; i < 100; i++) all &= q.offer(i);
+        check(all, "unbounded offer of 100 elements never fails");
+        check(q.size() == 100, "size after 100 offers");
+        check(q.remainingCapacity() == Integer.MAX_VALUE - 100, "remainingCapacity = MAX - size");
+        boolean fifo = true;
+        for (int i = 0; i < 100; i++) fifo &= (q.poll() == i);
+        check(fifo, "100 elements drain in FIFO order");
+        check(q.isEmpty(), "empty after draining 100");
+    }
+
+    static void testDrainToEdges() {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(4);
+        q.add(1);
+        q.add(2);
+        List<Integer> sink = new ArrayList<>();
+        check(q.drainTo(sink, 0) == 0, "drainTo(max=0) returns 0");
+        check(sink.isEmpty() && q.size() == 2, "drainTo(max=0) mutates nothing");
+        IllegalArgumentException iae = expectThrowsMsg(() -> q.drainTo(q),
+                IllegalArgumentException.class, "drainTo(self) IAE");
+        check(iae.getMessage() == null, "drainTo(self) IAE has null message");
+        check(q.size() == 2, "drainTo(self) leaves queue unchanged");
+        q.add(3);
+        List<Integer> part = new ArrayList<>();
+        check(q.drainTo(part, 2) == 2 && part.equals(Arrays.asList(1, 2)),
+                "drainTo(max) truncates at max in FIFO order");
+        check(q.size() == 1 && q.peek() == 3, "drainTo(max) leaves remainder");
+        List<Integer> rest = new ArrayList<>();
+        check(q.drainTo(rest) == 1 && rest.equals(Arrays.asList(3)) && q.isEmpty(),
+                "drainTo remainder drains with source cleared");
+    }
+
+    static void testTimedOfferWaitsWhenFull() throws Exception {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(1);
+        q.add(1);
+        long t0 = System.nanoTime();
+        check(!q.offer(2, 200, TimeUnit.MILLISECONDS), "timed offer on full waits then returns false");
+        check(System.nanoTime() - t0 >= 150_000_000L, "timed offer waited ~200ms, not immediate");
+        q.clear();
+        t0 = System.nanoTime();
+        check(q.poll(200, TimeUnit.MILLISECONDS) == null, "timed poll on empty waits then returns null");
+        check(System.nanoTime() - t0 >= 150_000_000L, "timed poll waited ~200ms, not immediate");
+    }
+
+    static void testInterruptedTake() throws Exception {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>();
+        CountDownLatch entered = new CountDownLatch(1), done = new CountDownLatch(1);
+        AtomicBoolean gotIE = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            entered.countDown();
+            try {
+                q.take();
+            } catch (InterruptedException e) {
+                gotIE.set(true);
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(entered, "take thread entry");
+        t.interrupt();
+        awaitBounded(done, "interrupted take completion");
+        t.join(5000);
+        check(gotIE.get(), "blocked take interrupted -> InterruptedException");
+        check(!t.isAlive(), "interrupted take thread terminated");
+    }
+
+    static void testInterruptStatusAtEntry() throws Exception {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>();
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicBoolean gotIE = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            Thread.currentThread().interrupt(); // status set before take()
+            try {
+                q.take();
+            } catch (InterruptedException e) {
+                gotIE.set(true);
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(done, "pre-interrupted take completion");
+        t.join(5000);
+        check(gotIE.get(), "take with pre-set interrupt status throws InterruptedException");
+    }
+
+    static void testInterruptedPut() throws Exception {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(1);
+        q.add(1);
+        CountDownLatch entered = new CountDownLatch(1), done = new CountDownLatch(1);
+        AtomicBoolean gotIE = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            entered.countDown();
+            try {
+                q.put(2);
+            } catch (InterruptedException e) {
+                gotIE.set(true);
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(entered, "put thread entry");
+        t.interrupt();
+        awaitBounded(done, "interrupted put completion");
+        t.join(5000);
+        check(gotIE.get(), "blocked put interrupted -> InterruptedException");
+        check(q.size() == 1 && q.peek() == 1, "queue unchanged after interrupted put");
+    }
+
+    static void testIteratorRemoveAndWeakConsistency() {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(4);
+        q.add(1);
+        q.add(2);
+        q.add(3);
+        java.util.Iterator<Integer> it = q.iterator();
+        check(it.hasNext() && it.next() == 1, "iterator first element");
+        it.remove();
+        check(q.size() == 2 && q.peek() == 2, "iterator.remove removes current element");
+        // weak consistency: fresh queue, first next() consumed, then structural removal
+        LinkedBlockingQueue<Integer> w = new LinkedBlockingQueue<>(4);
+        w.add(1);
+        w.add(2);
+        w.add(3);
+        java.util.Iterator<Integer> itw = w.iterator();
+        check(itw.next() == 1, "weak-consistency iterator first element");
+        check(w.remove(Integer.valueOf(3)), "structural removal during iteration");
+        List<Integer> rest = new ArrayList<>();
+        while (itw.hasNext()) rest.add(itw.next()); // must not throw CME
+        check(rest.equals(Arrays.asList(2)), "weakly consistent iterator survives removal, no CME");
+    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(3);
+        q.add(1);
+        q.add(2);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(q);
+        }
+        Object back;
+        try (java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            back = ois.readObject();
+        }
+        @SuppressWarnings("unchecked")
+        LinkedBlockingQueue<Integer> rt = (LinkedBlockingQueue<Integer>) back;
+        check(rt.size() == 2, "serialization round-trip preserves element count");
+        check(rt.poll() == 1 && rt.poll() == 2 && rt.isEmpty(), "serialization round-trip preserves FIFO order");
+        check(rt.remainingCapacity() == 3, "serialization round-trip preserves capacity");
+        check(rt.offer(1) && rt.offer(2) && rt.offer(3), "round-tripped queue accepts capacity elements");
+        check(!rt.offer(4), "round-tripped queue is still bounded by original capacity");
+    }
+
+    static void testNullRejectionExtended() {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(2);
+        try {
+            q.put(null);
+            throw new AssertionError("put(null) must throw NPE");
+        } catch (NullPointerException expected) {
+            passed++;
+        } catch (InterruptedException e) {
+            throw new AssertionError("put(null) interrupted instead of NPE");
+        }
+        try {
+            q.offer(null, 1, TimeUnit.SECONDS);
+            throw new AssertionError("offer(null,timeout) must throw NPE");
+        } catch (NullPointerException expected) {
+            passed++;
+        } catch (InterruptedException e) {
+            throw new AssertionError("offer(null,timeout) interrupted instead of NPE");
+        }
+        expectThrows(() -> q.drainTo(null), NullPointerException.class, "drainTo(null)");
+        check(!q.contains(null), "contains(null) false");
+        check(!q.remove(null), "remove(null) false");
+        check(q.isEmpty(), "queue unchanged after null rejections");
+    }
+
+    static void testEqualsIdentitySemantics() {
+        LinkedBlockingQueue<Integer> a = new LinkedBlockingQueue<>();
+        LinkedBlockingQueue<Integer> b = new LinkedBlockingQueue<>();
+        check(a.add(1) && a.add(2) && b.add(1) && b.add(2), "setup: equal contents, distinct instances");
+        check(a.equals(a), "equals(self) true");
+        check(!a.equals(b), "no element-based equals override (identity semantics)");
+        check(!a.equals(null), "equals(null) false");
+        check(!a.equals(Arrays.asList(1, 2)), "queue not equal to List with same elements");
+    }
+
+    static void testToArrayExactContract() {
+        LinkedBlockingQueue<String> q = new LinkedBlockingQueue<>(4);
+        q.add("a");
+        q.add("b");
+        q.add("c");
+        Object[] arr = q.toArray();
+        check(arr.getClass() == Object[].class && arr.length == 3, "toArray() exact length");
+        check(Arrays.equals(arr, new Object[]{"a", "b", "c"}), "toArray() follows iteration order");
+        String[] small = q.toArray(new String[0]);
+        check(small.getClass() == String[].class, "toArray(T[0]) exact runtime type");
+        check(Arrays.equals(small, new String[]{"a", "b", "c"}), "toArray(T[0]) contents in order");
+        String[] exact = q.toArray(new String[3]);
+        check(exact.getClass() == String[].class && "c".equals(exact[2]), "toArray(T[exact size]) filled");
+    }
+
+    static void testContainsRemoveMiddle() {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(4);
+        q.add(1);
+        q.add(2);
+        q.add(3);
+        check(q.contains(2), "contains middle element");
+        check(q.remove(Integer.valueOf(2)), "remove middle element");
+        check(!q.contains(2) && q.size() == 2, "middle element gone");
+        check(Arrays.equals(q.toArray(), new Object[]{1, 3}), "order preserved after middle removal");
+    }
+
+    static void testAddAllOverflowPartial() {
+        LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(2);
+        IllegalStateException ise = expectThrowsMsg(
+                () -> q.addAll(Arrays.asList(1, 2, 3)), IllegalStateException.class,
+                "addAll overflow ISE");
+        check("Queue full".equals(ise.getMessage()), "addAll overflow message 'Queue full'");
+        check(q.size() == 2, "addAll overflow retains already-inserted prefix");
+        check(q.poll() == 1 && q.poll() == 2 && q.isEmpty(), "retained prefix in order");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testUnboundedAndBounded();
@@ -233,6 +505,21 @@ public class LinkedBlockingQueueTest {
         testDrainTo();
         testNullRejection();
         testBlackBox();
+        testSixMethodTwoStateTable();
+        testConstructorIaeMessage();
+        testUnboundedCapacityGrowth();
+        testDrainToEdges();
+        testTimedOfferWaitsWhenFull();
+        testInterruptedTake();
+        testInterruptStatusAtEntry();
+        testInterruptedPut();
+        testIteratorRemoveAndWeakConsistency();
+        testSerializationRoundTrip();
+        testNullRejectionExtended();
+        testEqualsIdentitySemantics();
+        testToArrayExactContract();
+        testContainsRemoveMiddle();
+        testAddAllOverflowPartial();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -183,6 +183,135 @@ public class ConcurrentLinkedDequeTest {
         check(spd.toString() != null && spd.toString().contains("1"), "toString non-null");
     }
 
+    // ---- appended: contract deepening ----
+    static void testEmptyStateMatrix() {
+        ConcurrentLinkedDeque<Integer> d = new ConcurrentLinkedDeque<>();
+        check(d.isEmpty() && d.size() == 0, "fresh deque empty");
+        check(d.peekFirst() == null && d.peekLast() == null, "peekFirst/Last empty null");
+        check(d.pollFirst() == null && d.pollLast() == null, "pollFirst/Last empty null");
+        check(d.peek() == null && d.poll() == null, "peek/poll empty null");
+        expectThrows(() -> d.getFirst(), java.util.NoSuchElementException.class, "getFirst empty");
+        expectThrows(() -> d.getLast(), java.util.NoSuchElementException.class, "getLast empty");
+        expectThrows(() -> d.removeFirst(), java.util.NoSuchElementException.class, "removeFirst empty");
+        expectThrows(() -> d.removeLast(), java.util.NoSuchElementException.class, "removeLast empty");
+        expectThrows(() -> d.pop(), java.util.NoSuchElementException.class, "pop empty");
+        expectThrows(() -> d.remove(), java.util.NoSuchElementException.class, "remove() empty");
+        expectThrows(() -> d.element(), java.util.NoSuchElementException.class, "element() empty");
+        expectThrows(() -> d.iterator().next(), java.util.NoSuchElementException.class, "iterator next empty");
+        expectThrows(() -> d.descendingIterator().next(), java.util.NoSuchElementException.class,
+                     "descendingIterator next empty");
+        check(d.toString().equals("[]"), "empty toString []");
+    }
+
+    static void testNullMatrix() {
+        ConcurrentLinkedDeque<Integer> d = new ConcurrentLinkedDeque<>();
+        expectThrows(() -> d.offer(null), NullPointerException.class, "offer(null)");
+        expectThrows(() -> d.offerLast(null), NullPointerException.class, "offerLast(null)");
+        expectThrows(() -> d.push(null), NullPointerException.class, "push(null)");
+        // CLD quirk: occurrence-removal rejects null with NPE (unlike contains)
+        expectThrows(() -> d.removeFirstOccurrence(null), NullPointerException.class,
+                     "removeFirstOccurrence(null) throws NPE");
+        expectThrows(() -> d.removeLastOccurrence(null), NullPointerException.class,
+                     "removeLastOccurrence(null) throws NPE");
+        expectThrows(() -> d.remove(null), NullPointerException.class,
+                     "remove(null) delegates to removeFirstOccurrence -> NPE");
+        expectThrows(() -> new ConcurrentLinkedDeque<Integer>(null), NullPointerException.class,
+                     "ctor(null Collection)");
+        expectThrows(() -> new ConcurrentLinkedDeque<Integer>(java.util.Arrays.asList(1, null)),
+                     NullPointerException.class, "ctor(Collection with null)");
+        expectThrows(() -> d.addAll(null), NullPointerException.class, "addAll(null)");
+        expectThrows(() -> d.addAll(java.util.Arrays.asList(1, null)), NullPointerException.class,
+                     "addAll(Collection with null)");
+        check(!d.contains(null), "contains(null) returns false");
+    }
+
+    static void testOccurrenceRemovalThree() {
+        // three occurrences: both directions remove exactly one, distinguishable instance
+        ConcurrentLinkedDeque<Integer> t = new ConcurrentLinkedDeque<>(java.util.Arrays.asList(7, 0, 7, 7));
+        t.removeFirstOccurrence(7);
+        check(t.peekFirst() == 0, "rfo removes the head instance");
+        check(t.size() == 3, "rfo removes exactly one");
+        ConcurrentLinkedDeque<Integer> u = new ConcurrentLinkedDeque<>(java.util.Arrays.asList(7, 0, 7, 7));
+        u.removeLastOccurrence(7);
+        check(u.peekLast() == 7 && u.peekFirst() == 7 && u.size() == 3,
+              "rlo removes only the last instance");
+        java.util.List<Integer> rest = new java.util.ArrayList<>();
+        for (int x : u) rest.add(x);
+        check(rest.equals(java.util.Arrays.asList(7, 0, 7)), "rlo leaves [7,0,7]");
+    }
+
+    static void testIterators() {
+        ConcurrentLinkedDeque<Integer> d = new ConcurrentLinkedDeque<>(java.util.Arrays.asList(1, 2, 3));
+        Iterator<Integer> it = d.iterator();
+        expectThrows(() -> it.remove(), IllegalStateException.class,
+                     "iterator.remove before next throws IllegalStateException");
+        check(it.next() == 1, "iterator next");
+        it.remove();
+        check(d.size() == 2 && d.peekFirst() == 2, "iterator.remove unlinks head element");
+        expectThrows(() -> it.remove(), IllegalStateException.class,
+                     "second consecutive iterator.remove throws IllegalStateException");
+        Iterator<Integer> desc = d.descendingIterator();
+        expectThrows(() -> desc.remove(), IllegalStateException.class,
+                     "descendingIterator.remove before next throws IllegalStateException");
+        check(desc.next() == 3, "descendingIterator next");
+        desc.remove();
+        check(d.size() == 1 && d.peekFirst() == 2, "descendingIterator.remove unlinks tail element");
+        // weak consistency: structural change mid-iteration does not throw CME
+        ConcurrentLinkedDeque<Integer> w = new ConcurrentLinkedDeque<>(java.util.Arrays.asList(1, 2, 3));
+        Iterator<Integer> wit = w.iterator();
+        w.addLast(99);
+        int n = 0;
+        while (wit.hasNext()) { wit.next(); n++; }
+        check(n >= 3, "iterator completes after concurrent add (no CME)");
+    }
+
+    static void testSerialization() throws Exception {
+        check(java.io.ObjectStreamClass.lookup(ConcurrentLinkedDeque.class).getSerialVersionUID()
+              == 876323262645176354L, "serialVersionUID locked");
+        ConcurrentLinkedDeque<Integer> d = new ConcurrentLinkedDeque<>(java.util.Arrays.asList(1, 2, 3));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(d);
+        }
+        @SuppressWarnings("unchecked")
+        ConcurrentLinkedDeque<Integer> copy = (ConcurrentLinkedDeque<Integer>)
+            new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.size() == 3, "round-trip size");
+        check(copy.peekFirst() == 1 && copy.peekLast() == 3, "round-trip keeps both ends");
+        check(copy.pollFirst() == 1 && copy.pollLast() == 3, "resurrected deque usable");
+    }
+
+    static void testConcurrentBothEnds() throws Exception {
+        // bounded two-producer proof: head producer + tail producer, then verify exact accounting
+        final ConcurrentLinkedDeque<Integer> d = new ConcurrentLinkedDeque<>();
+        final int n = 500;
+        final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(2);
+        Runnable head = () -> {
+            for (int i = 0; i < n; i++) d.addFirst(i);
+            done.countDown();
+        };
+        Runnable tail = () -> {
+            for (int i = 0; i < n; i++) d.addLast(100000 + i); // disjoint value range
+            done.countDown();
+        };
+        Thread t0 = new Thread(head, "cld-head");
+        Thread t1 = new Thread(tail, "cld-tail");
+        t0.setDaemon(true);
+        t1.setDaemon(true);
+        t0.start();
+        t1.start();
+        check(done.await(5, java.util.concurrent.TimeUnit.SECONDS), "both producers finished in 5s");
+        check(d.size() == 2 * n, "all elements from both ends present");
+        java.util.HashSet<Integer> seen = new java.util.HashSet<>();
+        while (!d.isEmpty()) {
+            Integer h = d.pollFirst();
+            if (h != null) seen.add(h);
+            Integer t2 = d.pollLast();
+            if (t2 != null) seen.add(t2);
+        }
+        check(seen.size() == 2 * n, "no duplicates and no losses across both ends");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testDequeSemantics();
@@ -191,6 +320,12 @@ public class ConcurrentLinkedDequeTest {
         testNullRejection();
         testDescendingIterator();
         testBlackBox();
+        testEmptyStateMatrix();
+        testNullMatrix();
+        testOccurrenceRemovalThree();
+        testIterators();
+        testSerialization();
+        testConcurrentBothEnds();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

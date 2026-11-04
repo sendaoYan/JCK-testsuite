@@ -34,3 +34,12 @@
   - Number 视图 intValue/longValue/floatValue/doubleValue。
   - 内存序访问器 + compareAndExchange 见证值。
   - 并发：8 线程各 incrementAndGet 10 万次，最终值 == N*M（无丢失更新）。
+
+### 本轮契约深化追加
+
+- 精确返回值序列：getAndDecrement 从 0 到负、0..4 全等序列、getAndAdd 负增量、addAndGet(MIN_VALUE) 环绕、getAndSet 链、toString（`testReturnSequences`）。
+- updateAndGet/getAndUpdate 函数收到旧值（副作用列表证明）、accumulateAndGet 组合器收到 (旧, x)（`testFunctionReceivesOldValue`）。
+- 溢出环绕三例（MAX↔MIN）（`testOverflowWrap`）；序列化 round-trip（`testSerialization`）。
+- weakCompareAndSet @Deprecated 反射断言（`testDeprecationContract`）。
+
+断言规模：PASS (63 assertions)。

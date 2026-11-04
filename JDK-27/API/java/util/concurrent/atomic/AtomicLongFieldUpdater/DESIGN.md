@@ -29,3 +29,11 @@
   - 异常：非 volatile → IllegalArgumentException；int 字段 → IllegalArgumentException（必须 long）；
     未知字段 → RuntimeException；错误实例 → ClassCastException。
   - 并发：8 线程对共享 `volatile long` 字段 incrementAndGet，最终值 == N*M。
+
+### 本轮契约深化追加
+
+- 消息精确断言："Must be volatile type" / "Must be long type" / "Must not be a static field"（JDK-27 实测）（`testValidationMessages`）。
+- private 跨类（AtomicLong.value）→ RuntimeException；null 参数 → RuntimeException（`testValidationMessages`）。
+- 多对象互不干扰 + updater incrementAndGet 64 位环绕（`testMultiObjectIndependence`）。
+
+断言规模：PASS (43 assertions)。

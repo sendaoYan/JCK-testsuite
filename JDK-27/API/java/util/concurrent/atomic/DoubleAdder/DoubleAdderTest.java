@@ -96,9 +96,86 @@ public class DoubleAdderTest {
         check(a.sum() >= 0.0 && a.sum() <= (double) N * M, "concurrent add sum stays within [0, N*M]");
     }
 
+    // ---- 契约深化：二进制可精确浮点 / 负数 / sumThenReset 二次 / 序列化 / 双线程精确 ----
+    static void testExactBinarySums() {
+        // 只用可精确表示的二进制浮点数（0.5/0.25/0.125）
+        DoubleAdder a = new DoubleAdder();
+        a.add(0.5);
+        a.add(0.25);
+        check(a.sum() == 0.75, "0.5 + 0.25 == 0.75 exactly");
+        a.add(0.125);
+        check(a.sum() == 0.875, "0.875 exact");
+        a.reset();
+        for (int i = 0; i < 10; i++) a.add(0.5);
+        check(a.sum() == 5.0, "ten 0.5 adds sum to exactly 5.0");
+        a.add(-2.5);
+        check(a.sum() == 2.5, "negative add exact");
+        a.add(-2.5);
+        check(a.sum() == 0.0, "negative add back to zero");
+        check(1.0 / a.sum() == Double.POSITIVE_INFINITY, "sum is +0.0 not -0.0");
+    }
+
+    static void testResetSemantics() {
+        DoubleAdder a = new DoubleAdder();
+        a.add(1.0);
+        a.reset();
+        check(a.sum() == 0.0, "reset returns to zero");
+        check(a.sumThenReset() == 0.0, "sumThenReset after reset returns 0");
+        a.add(0.25);
+        check(a.sumThenReset() == 0.25, "sumThenReset returns old sum");
+        check(a.sumThenReset() == 0.0, "second sumThenReset returns 0");
+        a.add(-0.75);
+        check(a.toString().equals("-0.75"), "toString of negative sum");
+    }
+
+    static void testSerialization() throws Exception {
+        DoubleAdder a = new DoubleAdder();
+        a.add(0.5);
+        a.add(0.25);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(a);
+        }
+        DoubleAdder copy;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            copy = (DoubleAdder) ois.readObject();
+        }
+        check(copy.sum() == 0.75, "serialization round-trip preserves sum");
+        copy.add(0.25);
+        check(copy.sum() == 1.0, "deserialized instance remains operational");
+    }
+
+    static void testTwoThreadBounded() throws Exception {
+        // 两 daemon 线程各 add 1000 次 0.5，join 有界后 sum == 1000.0（二进制精确值，无顺序误差）
+        final DoubleAdder a = new DoubleAdder();
+        final java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        Thread t1 = new Thread(() -> {
+            try { start.await(); } catch (InterruptedException ignored) { }
+            for (int i = 0; i < 1000; i++) a.add(0.5);
+        });
+        Thread t2 = new Thread(() -> {
+            try { start.await(); } catch (InterruptedException ignored) { }
+            for (int i = 0; i < 1000; i++) a.add(0.5);
+        });
+        t1.setDaemon(true);
+        t2.setDaemon(true);
+        t1.start();
+        t2.start();
+        start.countDown();
+        t1.join(10_000);
+        t2.join(10_000);
+        check(!t1.isAlive() && !t2.isAlive(), "both worker threads finished within bound");
+        check(a.sum() == 1000.0, "two-thread sum is exactly 1000.0");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testExactBinarySums();
+        testResetSemantics();
+        testSerialization();
+        testTwoThreadBounded();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

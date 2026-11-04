@@ -145,9 +145,66 @@ public class AtomicLongFieldUpdaterTest {
         check(u.get(c) == N * M, "concurrent incrementAndGet over volatile long field loses no updates");
     }
 
+    // ---- 契约深化：消息精确断言 / static·private·null 校验 / 多对象隔离 / 64 位环绕 ----
+    static class StaticField {
+        static volatile long sv;
+    }
+    static class PrivateField {
+        private volatile long pv;
+    }
+
+    static void checkMessage(Runnable r, Class<? extends Throwable> exType, String expect, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (!exType.isInstance(t)) throw new AssertionError(msg + " (threw " + t + ")");
+            check(expect.equals(t.getMessage()), msg + " message <" + t.getMessage() + "> equals <" + expect + ">");
+            return;
+        }
+        throw new AssertionError(msg + " (no exception)");
+    }
+
+    static void testValidationMessages() {
+        checkMessage(() -> AtomicLongFieldUpdater.newUpdater(PlainField.class, "value"),
+                IllegalArgumentException.class, "Must be volatile type", "non-volatile field message");
+        checkMessage(() -> AtomicLongFieldUpdater.newUpdater(IntField.class, "value"),
+                IllegalArgumentException.class, "Must be long type", "int field message");
+        // static 字段 → IAE（JDK-27 实测消息 "Must not be a static field"；JDK-8 消息为 null）
+        checkMessage(() -> AtomicLongFieldUpdater.newUpdater(StaticField.class, "sv"),
+                IllegalArgumentException.class, "Must not be a static field", "static field message");
+        // private 字段（跨类不可见）→ RuntimeException（包装 IllegalAccessException）
+        // 注：JDK-11+ 同文件嵌套类是 nestmate，可访问；用 java.base 的 private volatile long 才不可达
+        assertThrows(RuntimeException.class,
+                () -> AtomicLongFieldUpdater.newUpdater(java.util.concurrent.atomic.AtomicLong.class, "value"),
+                "foreign private field rejected");
+        assertThrows(RuntimeException.class,
+                () -> AtomicLongFieldUpdater.newUpdater(Counter.class, null), "null field name rejected");
+        assertThrows(RuntimeException.class,
+                () -> AtomicLongFieldUpdater.newUpdater(null, "value"), "null class rejected");
+    }
+
+    static void testMultiObjectIndependence() {
+        AtomicLongFieldUpdater<Counter> u = AtomicLongFieldUpdater.newUpdater(Counter.class, "value");
+        Counter c1 = new Counter();
+        Counter c2 = new Counter();
+        u.set(c1, 11L);
+        u.set(c2, 22L);
+        check(u.get(c1) == 11L && u.get(c2) == 22L, "two objects hold independent values");
+        check(u.compareAndSet(c1, 11L, 33L) && u.get(c1) == 33L, "CAS on c1");
+        check(u.get(c2) == 22L, "CAS on c1 leaves c2 untouched");
+        check(!u.compareAndSet(c2, 11L, 0L) && u.get(c2) == 22L, "failed CAS on c2 leaves it unchanged");
+        u.addAndGet(c1, 1L);
+        check(u.get(c1) == 34L && u.get(c2) == 22L, "per-object adds independent");
+        // 64 位环绕
+        u.set(c1, Long.MAX_VALUE);
+        check(u.incrementAndGet(c1) == Long.MIN_VALUE, "updater incrementAndGet wraps MAX to MIN");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testValidationMessages();
+        testMultiObjectIndependence();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

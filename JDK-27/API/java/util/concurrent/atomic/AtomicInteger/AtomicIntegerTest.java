@@ -140,9 +140,81 @@ public class AtomicIntegerTest {
         check(a.get() == N * M, "concurrent incrementAndGet loses no updates");
     }
 
+    // ---- 契约深化：返回值序列 / 函数收到旧值 / 溢出环绕 / 序列化 / @Deprecated ----
+    static void testReturnSequences() {
+        AtomicInteger a = new AtomicInteger(0);
+        check(a.getAndDecrement() == 0 && a.get() == -1, "getAndDecrement from 0 to negative");
+        check(a.decrementAndGet() == -2, "decrementAndGet continues negative");
+        a.set(0);
+        boolean seq = true;
+        for (int i = 0; i < 5; i++) seq &= (a.getAndIncrement() == i);
+        check(seq, "getAndIncrement return sequence 0..4");
+        a.set(10);
+        check(a.getAndAdd(-20) == 10 && a.get() == -10, "getAndAdd negative delta");
+        check(a.addAndGet(Integer.MIN_VALUE) == -10 + Integer.MIN_VALUE, "addAndGet MIN_VALUE wraps");
+        check(a.addAndGet(0) == -10 + Integer.MIN_VALUE, "addAndGet 0 no-op");
+        a.set(1);
+        check(a.getAndSet(2) == 1 && a.getAndSet(3) == 2 && a.get() == 3, "getAndSet chain returns old values");
+        check(a.toString().equals("3"), "toString exact value");
+    }
+
+    static void testFunctionReceivesOldValue() {
+        AtomicInteger a = new AtomicInteger(7);
+        java.util.List<Integer> seen = new java.util.ArrayList<>();
+        int r = a.updateAndGet(x -> { seen.add(x); return x + 1; });
+        check(seen.size() == 1 && seen.get(0) == 7, "updateAndGet function receives old value");
+        check(r == 8, "updateAndGet returns new value");
+        seen.clear();
+        int old = a.getAndUpdate(x -> { seen.add(x); return x * 10; });
+        check(seen.get(0) == 8, "getAndUpdate function receives old value");
+        check(old == 8 && a.get() == 80, "getAndUpdate returns old, stores new");
+        java.util.List<Integer> accArgs = new java.util.ArrayList<>();
+        int rr = a.accumulateAndGet(5, (x, y) -> { accArgs.add(x); accArgs.add(y); return x - y; });
+        check(accArgs.get(0) == 80 && accArgs.get(1) == 5, "accumulateAndGet combiner receives (old, x)");
+        check(rr == 75, "accumulateAndGet returns new value");
+        check(a.getAndAccumulate(100, (x, y) -> x + y) == 75, "getAndAccumulate returns old value");
+    }
+
+    static void testOverflowWrap() {
+        AtomicInteger a = new AtomicInteger(Integer.MAX_VALUE);
+        check(a.incrementAndGet() == Integer.MIN_VALUE, "incrementAndGet wraps MAX_VALUE to MIN_VALUE");
+        check(a.getAndDecrement() == Integer.MIN_VALUE && a.get() == Integer.MAX_VALUE,
+                "decrement wraps MIN_VALUE to MAX_VALUE");
+        AtomicInteger b = new AtomicInteger(Integer.MIN_VALUE);
+        check(b.decrementAndGet() == Integer.MAX_VALUE, "decrementAndGet wraps MIN_VALUE to MAX_VALUE");
+        check(b.addAndGet(-1) == Integer.MAX_VALUE - 1, "addAndGet across MAX boundary");
+    }
+
+    static void testSerialization() throws Exception {
+        AtomicInteger a = new AtomicInteger(42);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(a);
+        }
+        AtomicInteger copy;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            copy = (AtomicInteger) ois.readObject();
+        }
+        check(copy.get() == 42, "serialization round-trip preserves value");
+        copy.compareAndSet(42, 43);
+        check(copy.get() == 43, "deserialized instance remains operational");
+    }
+
+    static void testDeprecationContract() throws Exception {
+        // JDK-9 起 weakCompareAndSet 标记 @Deprecated
+        java.lang.reflect.Method w = AtomicInteger.class.getMethod("weakCompareAndSet", int.class, int.class);
+        check(w.isAnnotationPresent(Deprecated.class), "weakCompareAndSet is deprecated since JDK-9");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testReturnSequences();
+        testFunctionReceivesOldValue();
+        testOverflowWrap();
+        testSerialization();
+        testDeprecationContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

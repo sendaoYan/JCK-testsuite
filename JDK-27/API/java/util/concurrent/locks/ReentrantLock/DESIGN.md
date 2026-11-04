@@ -35,4 +35,13 @@
   - 公平性 `isFair()`。
   - 条件：`newCondition` + `await/signal` 两线程确定性握手；`awaitNanos(1)`/`await(1,ns)` 立即超时；`signalAll` 唤醒两个 waiter；`hasWaiters/getWaitQueueLength` 在持锁时断言。
   - 无持锁 `unlock` 抛 `IllegalMonitorStateException`。
+- 本轮深化新增（append-only，断言 61 → 90，与 JDK-8 侧同构）：
+  - `testOverReleaseThrowsIMSE`：**超释 unlock（lock×2/unlock×3 第三次）→ IMSE（无消息，实测）**。
+  - `testHoldCountThreeLevels`：重入 3 层计数逐层递减。
+  - `testWaiterQueryEdgeCases`：**未持锁 hasWaiters/getWaitQueueLength → IMSE；null → NPE；外来条件 → IAE "Not owner"**；持锁空队 false/0。
+  - `testTryLockZeroTimeoutContended`：`tryLock(0,unit)` 被占 false（latch）。
+  - `testQueuedThreadIntrospection`：**spinUntil getQueueLength==1 后 hasQueuedThreads/hasQueuedThread/getQueueLength 观测，释放后队列清空**。
+  - `testConditionNegativeNanos`：`awaitNanos(-1)`/`await(-1,unit)` 立即超时且无残留 waiter。
+  - `testLockInterruptiblyRetrySucceeds`：被中断后主线程仍持有；释放后子线程重试成功。
+  - `testBlackBox`（ExposedReentrantLock）：getOwner/getQueuedThreads/getWaitingThreads/toString "[Locked by thread ...]"/"[Unlocked]"。
 - 健壮性：固定线程 + `CountDownLatch` 确定性同步，daemon 线程 + latch 收尾，不 sleep、不依赖墙钟、无全局副作用。headless-safe，不加 `@key`。

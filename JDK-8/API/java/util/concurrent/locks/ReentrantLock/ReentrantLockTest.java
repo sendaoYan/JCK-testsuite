@@ -48,6 +48,21 @@ public class ReentrantLockTest {
         return t;
     }
 
+    static void await(CountDownLatch l, String what) throws InterruptedException {
+        if (!l.await(5, TimeUnit.SECONDS))
+            throw new AssertionError("timeout waiting for " + what);
+    }
+
+    // Bounded spin until a condition holds; hard timeout converts a hang into an error.
+    static void spinUntil(java.util.function.BooleanSupplier cond, String what) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!cond.getAsBoolean()) {
+            if (System.nanoTime() > deadline)
+                throw new AssertionError("timeout waiting for " + what);
+            Thread.yield();
+        }
+    }
+
     // Exposes the protected introspection methods for the black-box harness.
     static class ExposedReentrantLock extends ReentrantLock {
         Thread owner() { return getOwner(); }
@@ -276,6 +291,146 @@ public class ReentrantLockTest {
                      "unlock without hold throws IllegalMonitorStateException");
     }
 
+    // ---- Part 3: deepened contract tests ----
+    static void testOverReleaseThrowsIMSE() {
+        ReentrantLock lock = new ReentrantLock();
+        check(lock.getHoldCount() == 0, "getHoldCount 0 on a fresh unlocked lock");
+        lock.lock();
+        lock.lock();
+        lock.unlock();
+        lock.unlock();
+        check(lock.getHoldCount() == 0, "hold count back to 0 after two unlocks");
+        expectThrows(lock::unlock, IllegalMonitorStateException.class,
+                     "unlock beyond the held count throws IllegalMonitorStateException");
+    }
+
+    static void testHoldCountThreeLevels() {
+        ReentrantLock lock = new ReentrantLock();
+        lock.lock();
+        lock.lock();
+        lock.lock();
+        check(lock.getHoldCount() == 3, "hold count 3 after three locks");
+        check(lock.isHeldByCurrentThread() && lock.isLocked(), "still held at depth 3");
+        lock.unlock();
+        check(lock.getHoldCount() == 2, "hold count 2");
+        check(lock.isLocked(), "still locked at depth 2");
+        lock.unlock();
+        check(lock.getHoldCount() == 1, "hold count 1");
+        lock.unlock();
+        check(lock.getHoldCount() == 0 && !lock.isLocked(), "fully released");
+    }
+
+    static void testWaiterQueryEdgeCases() {
+        ReentrantLock lock = new ReentrantLock();
+        Condition own = lock.newCondition();
+        // The wait counts may only be queried while holding the lock (documented IMSE).
+        expectThrows(() -> lock.hasWaiters(own), IllegalMonitorStateException.class,
+                     "hasWaiters without holding the lock throws IMSE");
+        expectThrows(() -> lock.getWaitQueueLength(own), IllegalMonitorStateException.class,
+                     "getWaitQueueLength without holding the lock throws IMSE");
+        lock.lock();
+        try {
+            check(!lock.hasWaiters(own), "hasWaiters false while holding with no waiters");
+            check(lock.getWaitQueueLength(own) == 0, "getWaitQueueLength 0 while holding");
+        } finally {
+            lock.unlock();
+        }
+        // Null condition is rejected.
+        expectThrows(() -> lock.hasWaiters(null), NullPointerException.class,
+                     "hasWaiters(null) throws NPE");
+        expectThrows(() -> lock.getWaitQueueLength(null), NullPointerException.class,
+                     "getWaitQueueLength(null) throws NPE");
+        // A condition created by another lock is rejected.
+        Condition foreign = new ReentrantLock().newCondition();
+        expectThrows(() -> lock.hasWaiters(foreign), IllegalArgumentException.class,
+                     "hasWaiters(foreign condition) throws IllegalArgumentException(\"Not owner\")");
+        expectThrows(() -> lock.getWaitQueueLength(foreign), IllegalArgumentException.class,
+                     "getWaitQueueLength(foreign condition) throws IAE");
+    }
+
+    static void testTryLockZeroTimeoutContended() throws Exception {
+        final ReentrantLock lock = new ReentrantLock();
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            lock.lock();
+            held.countDown();
+            try { await(release, "release"); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            finally { lock.unlock(); }
+        });
+        await(held, "child to hold");
+        check(!lock.tryLock(0, TimeUnit.NANOSECONDS), "tryLock(0,unit) false when contended");
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive(), "child finished");
+    }
+
+    static void testQueuedThreadIntrospection() throws Exception {
+        final ReentrantLock lock = new ReentrantLock();
+        lock.lock(); // held by main
+        final CountDownLatch done = new CountDownLatch(1);
+        final Thread child = startDaemon(() -> {
+            lock.lock(); // enqueues behind main
+            lock.unlock();
+            done.countDown();
+        });
+        spinUntil(() -> lock.getQueueLength() == 1, "child to enqueue");
+        check(lock.hasQueuedThreads(), "hasQueuedThreads true with a queued thread");
+        check(lock.getQueueLength() == 1, "getQueueLength 1");
+        check(lock.hasQueuedThread(child), "hasQueuedThread true for the blocked child");
+        check(lock.isLocked() && lock.isHeldByCurrentThread(), "main still holds the lock");
+        lock.unlock();
+        await(done, "child to acquire after release");
+        child.join(5000);
+        check(!child.isAlive(), "child finished");
+        check(!lock.hasQueuedThreads(), "queue empty after the child acquired");
+    }
+
+    static void testConditionNegativeNanos() throws Exception {
+        ReentrantLock lock = new ReentrantLock();
+        Condition cond = lock.newCondition();
+        lock.lock();
+        try {
+            check(cond.awaitNanos(-1L) <= 0, "awaitNanos(-1) times out immediately");
+            check(!cond.await(-1L, TimeUnit.NANOSECONDS), "await(-1,unit) false immediately");
+            check(lock.getWaitQueueLength(cond) == 0, "no waiters after negative timeouts");
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    static void testLockInterruptiblyRetrySucceeds() throws Exception {
+        final ReentrantLock lock = new ReentrantLock();
+        lock.lock(); // held by main
+        final CountDownLatch started = new CountDownLatch(1);
+        final CountDownLatch interrupted = new CountDownLatch(1);
+        final CountDownLatch reacquired = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            started.countDown();
+            try {
+                lock.lockInterruptibly();
+            } catch (InterruptedException expected) {
+                interrupted.countDown();
+                try {
+                    lock.lockInterruptibly(); // retry: succeeds once main releases
+                    lock.unlock();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                reacquired.countDown();
+            }
+        });
+        await(started, "child to start");
+        t.interrupt();
+        await(interrupted, "child to abort with InterruptedException");
+        check(lock.isHeldByCurrentThread() && lock.getHoldCount() == 1,
+              "lock still held by main after the child was interrupted");
+        lock.unlock();
+        await(reacquired, "child to re-acquire after main releases");
+        t.join(5000);
+    }
+
     static void testBlackBox() {
         ExposedReentrantLock lock = new ExposedReentrantLock();
         check(lock.owner() == null, "getOwner null when unlocked");
@@ -304,6 +459,13 @@ public class ReentrantLockTest {
         testConditionSignalAll();
         testUnlockWithoutHold();
         testBlackBox();
+        testOverReleaseThrowsIMSE();
+        testHoldCountThreeLevels();
+        testWaiterQueryEdgeCases();
+        testTryLockZeroTimeoutContended();
+        testQueuedThreadIntrospection();
+        testConditionNegativeNanos();
+        testLockInterruptiblyRetrySucceeds();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

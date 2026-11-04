@@ -134,9 +134,48 @@ public class AtomicBooleanTest {
         check(winners.get() == 1, "exactly one thread wins the CAS");
     }
 
+    // ---- 契约深化：CAS 全分支矩阵 / getAndSet 双向 / 序列化 / @Deprecated ----
+    static void testCasMatrix() {
+        // false -> true 成功分支：返回 true 且 get == update
+        AtomicBoolean b = new AtomicBoolean(false);
+        check(b.compareAndSet(false, true), "CAS false->true returns true");
+        check(b.get(), "CAS success leaves value == update");
+        // 失败分支：期望不符 → false 且值不变
+        check(!b.compareAndSet(false, true), "CAS stale expect returns false");
+        check(b.get(), "CAS failure leaves value unchanged");
+        check(b.compareAndSet(true, false) && !b.get(), "CAS true->false success");
+        b.set(true);
+        check(b.compareAndSet(true, true) && b.get(), "CAS same-value success");
+        check(b.getAndSet(false) && !b.get(), "getAndSet true->false returns old true");
+        check(!b.getAndSet(true) && b.get(), "getAndSet false->true returns old false");
+    }
+
+    static void testSerialization() throws Exception {
+        AtomicBoolean b = new AtomicBoolean(true);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(b);
+        }
+        AtomicBoolean copy;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            copy = (AtomicBoolean) ois.readObject();
+        }
+        check(copy.get(), "serialization round-trip preserves value");
+        check(copy.compareAndSet(true, false) && !copy.get(), "deserialized instance remains operational");
+    }
+
+    static void testDeprecationContract() throws Exception {
+        java.lang.reflect.Method w = AtomicBoolean.class.getMethod("weakCompareAndSet", boolean.class, boolean.class);
+        check(w.isAnnotationPresent(Deprecated.class), "weakCompareAndSet is deprecated since JDK-9");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCasMatrix();
+        testSerialization();
+        testDeprecationContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

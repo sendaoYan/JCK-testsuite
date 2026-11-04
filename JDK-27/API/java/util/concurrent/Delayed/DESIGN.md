@@ -17,10 +17,13 @@
 - 使用范式：延迟任务/缓存过期的核心抽象。
 
 ## 4. 测试用例设计 + 自动化实现
-实现位置：`DelayedTest.java`（`testWhiteBox()` + 多个 `test*` 黑盒）。
+实现位置：`DelayedTest.java`（`testWhiteBox()` + 多个 `test*` 黑盒，PASS 43 断言）。
 - 白盒：`Class.forName` + `isInterface` + 直接父接口 `Comparable` + 抽象方法 `getDelay(TimeUnit)`。
 - 黑盒组合链路：
   - 自定义 `D`：`getDelay(MILLISECONDS)` 为正、`getDelay(NANOSECONDS)` 在 (0,1e9] 区间；过期实例 `getDelay ≤ 0`。
   - `compareTo`：晚到期 > 早到期、早到期 < 晚到期。
   - 最小 `DelayQueue` 用法：早到期元素先被 `poll`，未来元素保留。
+- 深化批次追加（契约级）：
+  - `testFullUnitMatrix`：固定 1 天 = 86400e9 ns 对全部 7 个单位**精确锁定**（DAYS=1/HOURS=24/MINUTES=1440/SECONDS=86400/MILLIS=86400000/MICROS=86400000000/NANOS=86400000000000）；截断语义（1_999_999_999 ns → SECONDS=1 非 2，MILLIS=1999）；0/负延迟（-2s → SECONDS=-2）。
+  - `testCompareToMatrix`：反身 0/等值 0/小于/大于全矩阵；signum 反对称；三分量传递；极值 Long.MAX_VALUE 序；`compareTo(null)` → NPE（Comparable 契约）。
 - 健壮性：固定纳秒延迟（单调 `nanoTime`，不用墙钟）、不 sleep、无全局副作用、headless-safe。

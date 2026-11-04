@@ -26,4 +26,11 @@
   - `newCondition()` 返回非空 `Condition`。
   - `tryLock(timeout)`：空闲时 true；被另一线程持有时超时 false。
   - `lockInterruptibly()`：被持有时可被中断抛出 `InterruptedException`；空闲时正常获取。
+- 本轮深化新增（append-only，断言 15 → 22）：
+  - `testLockHoldingState`：经 `Lock` 引用 `lock()` 后对 `ReentrantLock` 断言 isLocked/isHeldByCurrentThread/getHoldCount==1。
+  - `testTryLockFalseWhenHeldByOther`：子线程 latch 持锁，主线程 `tryLock()` false（确定性）。
+  - `testLockInterruptibly`：子线程等待被中断 → InterruptedException 且未获取（主线程仍持有）。
+  - `testUnlockWithoutHold`：未持锁 `unlock()` → IllegalMonitorStateException（无消息，实测）。
+  - `testNewConditionDistinct`：两次 `newCondition()` 返回不同实例。
+
 - 健壮性：daemon 线程 + CountDownLatch 同步，无 sleep、无墙钟、无全局副作用、headless-safe。

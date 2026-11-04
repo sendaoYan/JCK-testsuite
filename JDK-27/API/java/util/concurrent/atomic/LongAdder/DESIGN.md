@@ -27,3 +27,10 @@
   - reset/sumThenReset 语义。
   - Number 视图 longValue/intValue/floatValue/doubleValue；toString == Long.toString(sum)。
   - 并发：8 线程各 add(1) 10 万次，最终 sum == N*M（long 精确）。
+
+### 本轮契约深化追加
+
+- 负数 add/decrement 越零/sumThenReset 二次调用 0/toString 负值/sum 跨 MAX 补码环绕（`testNegativeAndReset`）。
+- 两 daemon 线程各 1000 次 add/increment，join(10s) 有界后 sum==2000（`testTwoThreadBounded`）。
+
+断言规模：PASS (31 assertions)。

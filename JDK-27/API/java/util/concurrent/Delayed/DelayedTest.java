@@ -105,11 +105,62 @@ public class DelayedTest {
         check(two.compareTo(new FixedDelay(1_000_000_000L)) == 0, "compareTo equal delays");
     }
 
+    // ---- getDelay conversion matrix: all 7 units, exact values ----
+    static void testFullUnitMatrix() {
+        FixedDelay oneDay = new FixedDelay(86_400_000_000_000L);
+        check(oneDay.getDelay(TimeUnit.DAYS) == 1L, "getDelay(DAYS) == 1");
+        check(oneDay.getDelay(TimeUnit.HOURS) == 24L, "getDelay(HOURS) == 24");
+        check(oneDay.getDelay(TimeUnit.MINUTES) == 1440L, "getDelay(MINUTES) == 1440");
+        check(oneDay.getDelay(TimeUnit.SECONDS) == 86_400L, "getDelay(SECONDS) == 86400");
+        check(oneDay.getDelay(TimeUnit.MILLISECONDS) == 86_400_000L, "getDelay(MILLISECONDS) == 86400000");
+        check(oneDay.getDelay(TimeUnit.MICROSECONDS) == 86_400_000_000L, "getDelay(MICROSECONDS) == 86400000000");
+        check(oneDay.getDelay(TimeUnit.NANOSECONDS) == 86_400_000_000_000L,
+              "getDelay(NANOSECONDS) == 86400000000000");
+
+        // truncation on down-conversion: floor, not round
+        FixedDelay odd = new FixedDelay(1_999_999_999L);
+        check(odd.getDelay(TimeUnit.SECONDS) == 1L, "down-conversion truncates to 1 s");
+        check(odd.getDelay(TimeUnit.MILLISECONDS) == 1999L, "1_999_999_999 ns -> 1999 ms");
+
+        // zero / expired (negative) delays
+        FixedDelay zero = new FixedDelay(0L);
+        check(zero.getDelay(TimeUnit.NANOSECONDS) == 0L, "zero delay");
+        FixedDelay past = new FixedDelay(-2_000_000_000L);
+        check(past.getDelay(TimeUnit.SECONDS) == -2L, "expired delay converts to -2 s");
+        check(past.getDelay(TimeUnit.NANOSECONDS) < 0, "expired delay is negative in nanos");
+    }
+
+    // ---- compareTo sign matrix: 0 / negative / positive, antisymmetric, transitive ----
+    static void testCompareToMatrix() {
+        FixedDelay a = new FixedDelay(1_000_000_000L);
+        FixedDelay b = new FixedDelay(2_000_000_000L);
+        FixedDelay a2 = new FixedDelay(1_000_000_000L);
+        check(a.compareTo(a) == 0, "compareTo is reflexive");
+        check(a.compareTo(a2) == 0, "equal deadlines compare 0");
+        check(Integer.signum(a.compareTo(a2)) == 0 && Integer.signum(a2.compareTo(a)) == 0,
+              "signum 0 is symmetric");
+        check(a.compareTo(b) < 0 && b.compareTo(a) > 0, "ordering by deadline");
+        check(Integer.signum(a.compareTo(b)) == -Integer.signum(b.compareTo(a)),
+              "compareTo is antisymmetric");
+        FixedDelay c = new FixedDelay(3_000_000_000L);
+        check(a.compareTo(b) < 0 && b.compareTo(c) < 0 && a.compareTo(c) < 0,
+              "compareTo is transitive");
+        FixedDelay tiny = new FixedDelay(-1L);
+        FixedDelay huge = new FixedDelay(Long.MAX_VALUE);
+        check(tiny.compareTo(huge) < 0, "extreme-scale ordering");
+        boolean npe = false;
+        try { a.compareTo(null); }
+        catch (NullPointerException expected) { npe = true; }
+        check(npe, "compareTo(null) throws NPE per Comparable contract");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testGetDelayAndCompareTo();
         testDelayQueueUsage();
         testBlackBox();
+        testFullUnitMatrix();
+        testCompareToMatrix();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

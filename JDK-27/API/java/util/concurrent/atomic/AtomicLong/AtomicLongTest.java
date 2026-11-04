@@ -134,9 +134,80 @@ public class AtomicLongTest {
         check(a.get() == (long) N * M, "concurrent addAndGet loses no updates");
     }
 
+    // ---- 契约深化：返回值序列 / 函数收到旧值 / 溢出环绕 / 序列化 / @Deprecated ----
+    static void testReturnSequences() {
+        AtomicLong a = new AtomicLong(0L);
+        check(a.getAndDecrement() == 0L && a.get() == -1L, "getAndDecrement from 0 to negative");
+        check(a.decrementAndGet() == -2L, "decrementAndGet continues negative");
+        a.set(0L);
+        boolean seq = true;
+        for (long i = 0; i < 5; i++) seq &= (a.getAndIncrement() == i);
+        check(seq, "getAndIncrement return sequence 0..4");
+        a.set(10L);
+        check(a.getAndAdd(-20L) == 10L && a.get() == -10L, "getAndAdd negative delta");
+        check(a.addAndGet(Long.MIN_VALUE) == -10L + Long.MIN_VALUE, "addAndGet MIN_VALUE wraps");
+        check(a.addAndGet(0L) == -10L + Long.MIN_VALUE, "addAndGet 0 no-op");
+        a.set(1L);
+        check(a.getAndSet(2L) == 1L && a.getAndSet(3L) == 2L && a.get() == 3L, "getAndSet chain returns old values");
+        check(a.toString().equals("3"), "toString exact value");
+    }
+
+    static void testFunctionReceivesOldValue() {
+        AtomicLong a = new AtomicLong(7L);
+        java.util.List<Long> seen = new java.util.ArrayList<>();
+        long r = a.updateAndGet(x -> { seen.add(x); return x + 1L; });
+        check(seen.size() == 1 && seen.get(0) == 7L, "updateAndGet function receives old value");
+        check(r == 8L, "updateAndGet returns new value");
+        seen.clear();
+        long old = a.getAndUpdate(x -> { seen.add(x); return x * 10L; });
+        check(seen.get(0) == 8L, "getAndUpdate function receives old value");
+        check(old == 8L && a.get() == 80L, "getAndUpdate returns old, stores new");
+        java.util.List<Long> accArgs = new java.util.ArrayList<>();
+        long rr = a.accumulateAndGet(5L, (x, y) -> { accArgs.add(x); accArgs.add(y); return x - y; });
+        check(accArgs.get(0) == 80L && accArgs.get(1) == 5L, "accumulateAndGet combiner receives (old, x)");
+        check(rr == 75L, "accumulateAndGet returns new value");
+        check(a.getAndAccumulate(100L, (x, y) -> x + y) == 75L, "getAndAccumulate returns old value");
+    }
+
+    static void testOverflowWrap() {
+        AtomicLong a = new AtomicLong(Long.MAX_VALUE);
+        check(a.incrementAndGet() == Long.MIN_VALUE, "incrementAndGet wraps MAX_VALUE to MIN_VALUE");
+        check(a.getAndDecrement() == Long.MIN_VALUE && a.get() == Long.MAX_VALUE,
+                "decrement wraps MIN_VALUE to MAX_VALUE");
+        AtomicLong b = new AtomicLong(Long.MIN_VALUE);
+        check(b.decrementAndGet() == Long.MAX_VALUE, "decrementAndGet wraps MIN_VALUE to MAX_VALUE");
+        check(b.addAndGet(-1L) == Long.MAX_VALUE - 1L, "addAndGet across MAX boundary");
+    }
+
+    static void testSerialization() throws Exception {
+        AtomicLong a = new AtomicLong(42L);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(a);
+        }
+        AtomicLong copy;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            copy = (AtomicLong) ois.readObject();
+        }
+        check(copy.get() == 42L, "serialization round-trip preserves value");
+        copy.addAndGet(1L);
+        check(copy.get() == 43L, "deserialized instance remains operational");
+    }
+
+    static void testDeprecationContract() throws Exception {
+        java.lang.reflect.Method w = AtomicLong.class.getMethod("weakCompareAndSet", long.class, long.class);
+        check(w.isAnnotationPresent(Deprecated.class), "weakCompareAndSet is deprecated since JDK-9");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testReturnSequences();
+        testFunctionReceivesOldValue();
+        testOverflowWrap();
+        testSerialization();
+        testDeprecationContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

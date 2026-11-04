@@ -8,6 +8,9 @@
 
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.StampedLock;
@@ -20,9 +23,33 @@ public class StampedLockTest {
         passed++;
     }
 
+    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                                         + " but got " + t.getClass().getSimpleName(), t);
+            passed++;
+        }
+    }
+
     static boolean hasMethod(Class<?> c, String name, Class<?>... p) {
         try { c.getMethod(name, p); return true; }
         catch (NoSuchMethodException e) { return false; }
+    }
+
+    static Thread startDaemon(Runnable r) {
+        Thread t = new Thread(r);
+        t.setDaemon(true);
+        t.start();
+        return t;
+    }
+
+    static void await(CountDownLatch l, String what) throws InterruptedException {
+        if (!l.await(5, TimeUnit.SECONDS))
+            throw new AssertionError("timeout waiting for " + what);
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -88,6 +115,201 @@ public class StampedLockTest {
         long w = sl.writeLock();
         check(!sl.validate(opt), "validate false after a writer");
         sl.unlockWrite(w);
+        long opt2 = sl.tryOptimisticRead(); // a fresh stamp validates again
+        check(opt2 != 0, "new optimistic stamp non-zero after the write");
+        check(sl.validate(opt2), "new optimistic stamp validates");
+        check(!StampedLock.isLockStamp(opt2), "new stamp is an optimistic stamp");
+    }
+
+    // ---- Part 3: deepened contract tests ----
+    static void testReadLockMultipleHolds() {
+        StampedLock sl = new StampedLock();
+        long r1 = sl.readLock();
+        long r2 = sl.readLock(); // same thread may hold the read lock more than once
+        check(r1 != 0 && r2 != 0 && r1 != r2, "two distinct non-zero read stamps");
+        check(StampedLock.isReadLockStamp(r1) && StampedLock.isReadLockStamp(r2),
+              "both stamps classify as read stamps");
+        check(sl.getReadLockCount() == 2, "read lock count 2");
+        check(sl.isReadLocked(), "read locked");
+        sl.unlockRead(r1);
+        check(sl.getReadLockCount() == 1, "read lock count 1 after first unlockRead");
+        sl.unlockRead(r2);
+        check(sl.getReadLockCount() == 0 && !sl.isReadLocked(), "fully released");
+    }
+
+    static void testReadSharedAcrossThreads() throws Exception {
+        final StampedLock sl = new StampedLock();
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        final AtomicBoolean childHolds = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            long r = sl.readLock();
+            if (r != 0) {
+                childHolds.set(true);
+                entered.countDown();
+                try { await(release, "release"); }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                finally { sl.unlockRead(r); }
+            } else {
+                entered.countDown();
+            }
+        });
+        await(entered, "child to hold the read lock");
+        check(childHolds.get(), "child acquired the read lock");
+        long r = sl.readLock(); // main shares the read lock with the child
+        check(r != 0, "main acquires the read lock while the child holds it");
+        check(sl.getReadLockCount() == 2, "two concurrent readers");
+        sl.unlockRead(r);
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive(), "child finished");
+        check(sl.getReadLockCount() == 0, "read count back to 0");
+    }
+
+    static void testOptimisticDoesNotBlockWriter() throws Exception {
+        final StampedLock sl = new StampedLock();
+        long opt = sl.tryOptimisticRead();
+        check(opt != 0, "optimistic stamp outstanding");
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        final AtomicBoolean writerGot = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            long w = sl.writeLock(); // must acquire immediately: optimistic reads never block
+            writerGot.set(w != 0);
+            entered.countDown();
+            try { await(release, "release"); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            finally { if (w != 0) sl.unlockWrite(w); }
+        });
+        await(entered, "writer to acquire");
+        check(writerGot.get(), "writer acquired while an optimistic read was outstanding");
+        check(!sl.validate(opt), "the optimistic stamp is invalidated by the writer");
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive() && !sl.isWriteLocked(), "writer released and finished");
+        long opt2 = sl.tryOptimisticRead();
+        check(opt2 != 0 && sl.validate(opt2), "optimistic reads work again after the write");
+    }
+
+    static void testUnlockWrongStampThrowsIMSE() {
+        StampedLock sl = new StampedLock();
+        expectThrows(() -> sl.unlockWrite(0L), IllegalMonitorStateException.class,
+                     "unlockWrite(0) throws IMSE");
+        expectThrows(() -> sl.unlockRead(0L), IllegalMonitorStateException.class,
+                     "unlockRead(0) throws IMSE");
+        expectThrows(() -> sl.unlock(0L), IllegalMonitorStateException.class,
+                     "unlock(0) throws IMSE");
+        long w = sl.writeLock();
+        expectThrows(() -> sl.unlockRead(w), IllegalMonitorStateException.class,
+                     "unlockRead(writeStamp) throws IMSE");
+        sl.unlockWrite(w);
+        long r = sl.readLock();
+        expectThrows(() -> sl.unlockWrite(r), IllegalMonitorStateException.class,
+                     "unlockWrite(readStamp) throws IMSE");
+        sl.unlockRead(r);
+        check(!sl.isReadLocked() && !sl.isWriteLocked(), "lock usable after the IMSE probes");
+    }
+
+    static void testValidateZeroStampFalse() {
+        StampedLock sl = new StampedLock();
+        check(!sl.validate(0L), "validate(0) false");
+    }
+
+    static void testContendedTryLocksReturnZero() throws Exception {
+        final StampedLock sl = new StampedLock();
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            long w = sl.writeLock();
+            held.countDown();
+            try { await(release, "release"); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            finally { sl.unlockWrite(w); }
+        });
+        await(held, "writer to hold");
+        check(sl.tryWriteLock() == 0, "tryWriteLock 0 while another thread holds write");
+        check(sl.tryReadLock() == 0, "tryReadLock 0 while another thread holds write");
+        try {
+            check(sl.tryWriteLock(50, TimeUnit.MILLISECONDS) == 0, "timed tryWriteLock 0 while contended");
+            check(sl.tryReadLock(50, TimeUnit.MILLISECONDS) == 0, "timed tryReadLock 0 while contended");
+        } catch (InterruptedException e) {
+            throw new AssertionError("unexpected interrupt", e);
+        }
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive(), "writer finished");
+        check(sl.tryWriteLock() != 0, "tryWriteLock non-zero once free");
+        sl.tryUnlockWrite();
+    }
+
+    static void testConvertReadToWriteWithOtherReaderReturnsZero() throws Exception {
+        final StampedLock sl = new StampedLock();
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            long r = sl.readLock();
+            entered.countDown();
+            try { await(release, "release"); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            finally { sl.unlockRead(r); }
+        });
+        await(entered, "other reader to hold");
+        long mine = sl.readLock();
+        check(mine != 0, "main also holds the read lock");
+        check(sl.tryConvertToWriteLock(mine) == 0,
+              "read->write conversion fails while another reader holds");
+        check(sl.isReadLocked() && sl.getReadLockCount() == 2, "both reads still held");
+        sl.unlockRead(mine);
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive(), "other reader finished");
+        // Sole reader conversion succeeds (must run after the other reader released).
+        long sole = sl.readLock();
+        check(sl.tryConvertToWriteLock(sole) != 0, "read->write conversion succeeds for the sole reader");
+        check(sl.isWriteLocked() && !sl.isReadLocked(), "write held after conversion");
+        sl.tryUnlockWrite();
+    }
+
+    static void testConvertReadToOptimistic() {
+        StampedLock sl = new StampedLock();
+        long r = sl.readLock();
+        long o = sl.tryConvertToOptimisticRead(r);
+        check(o != 0, "read->optimistic conversion succeeds for the sole reader");
+        check(!sl.isReadLocked(), "read released by the conversion");
+        check(sl.validate(o), "converted optimistic stamp validates");
+        check(StampedLock.isOptimisticReadStamp(o), "converted stamp is an optimistic stamp");
+    }
+
+    static void testToStringState() {
+        StampedLock sl = new StampedLock();
+        check(sl.toString().contains("Unlocked"), "toString unlocked");
+        long w = sl.writeLock();
+        check(sl.toString().contains("Write-locked"), "toString write-locked");
+        sl.unlockWrite(w);
+        long r = sl.readLock();
+        check(sl.toString().contains("Read-locks"), "toString read-locked");
+        sl.unlockRead(r);
+        check(sl.toString().contains("Unlocked"), "toString unlocked again");
+    }
+
+    static void testInterruptiblyVariants() throws Exception {
+        StampedLock sl = new StampedLock();
+        // Pending interrupt: lockInterruptibly throws at once instead of blocking.
+        final CountDownLatch done = new CountDownLatch(1);
+        final AtomicBoolean caught = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            Thread.currentThread().interrupt();
+            try {
+                sl.writeLockInterruptibly();
+            } catch (InterruptedException expected) {
+                caught.set(true);
+            }
+            done.countDown();
+        });
+        await(done, "child to finish");
+        t.join(5000);
+        check(caught.get(), "writeLockInterruptibly throws on a pending interrupt");
+        check(!sl.isWriteLocked(), "write not acquired by the interrupted thread");
     }
 
     static void testStampPredicates() {
@@ -216,6 +438,16 @@ public class StampedLockTest {
         testLockViews();
         testTryLocksWhenFree();
         testBlackBox();
+        testReadLockMultipleHolds();
+        testReadSharedAcrossThreads();
+        testOptimisticDoesNotBlockWriter();
+        testUnlockWrongStampThrowsIMSE();
+        testValidateZeroStampFalse();
+        testContendedTryLocksReturnZero();
+        testConvertReadToWriteWithOtherReaderReturnsZero();
+        testConvertReadToOptimistic();
+        testToStringState();
+        testInterruptiblyVariants();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

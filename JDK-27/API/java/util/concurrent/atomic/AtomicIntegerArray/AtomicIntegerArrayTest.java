@@ -155,9 +155,59 @@ public class AtomicIntegerArrayTest {
         }
     }
 
+    // ---- 契约深化：越界矩阵（含 CAS/getAndSet/lazySet）/ 函数收到旧值 / 序列化 ----
+    static void testIndexBoundsFull() {
+        final AtomicIntegerArray a = new AtomicIntegerArray(2);
+        // JDK-27 实测：越界抛 ArrayIndexOutOfBoundsException（JDK-8 为平铺 IndexOutOfBoundsException）
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndSet(-1, 0, 1), "compareAndSet(-1, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndSet(2, 0, 1), "compareAndSet(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAndSet(2, 1), "getAndSet(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.lazySet(5, 1), "lazySet(5, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAndAdd(-1, 1), "getAndAdd(-1, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAndUpdate(2, x -> x), "getAndUpdate(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAcquire(2), "getAcquire(length)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.setRelease(2, 1), "setRelease(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndExchange(2, 0, 1), "compareAndExchange(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getOpaque(2), "getOpaque(length)");
+        check(a.get(0) == 0 && a.get(1) == 0, "failed bound-checked ops leave values untouched");
+    }
+
+    static void testFunctionReceivesOldValue() {
+        AtomicIntegerArray a = new AtomicIntegerArray(2);
+        a.set(0, 7);
+        java.util.List<Integer> seen = new java.util.ArrayList<>();
+        a.getAndUpdate(0, x -> { seen.add(x); return x + 1; });
+        check(seen.size() == 1 && seen.get(0) == 7, "getAndUpdate(index) function receives old value");
+        java.util.List<Integer> accArgs = new java.util.ArrayList<>();
+        a.accumulateAndGet(1, 5, (x, y) -> { accArgs.add(x); accArgs.add(y); return x + y; });
+        check(accArgs.get(0) == 0 && accArgs.get(1) == 5, "accumulateAndGet(index) combiner receives (old, x)");
+        check(a.get(1) == 5, "accumulateAndGet(index) stores combined");
+    }
+
+    static void testSerialization() throws Exception {
+        AtomicIntegerArray a = new AtomicIntegerArray(new int[]{1, 2, 3});
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(a);
+        }
+        AtomicIntegerArray copy;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            copy = (AtomicIntegerArray) ois.readObject();
+        }
+        check(copy.length() == 3, "serialization preserves length");
+        check(copy.get(0) == 1 && copy.get(1) == 2 && copy.get(2) == 3, "serialization preserves elements");
+        copy.set(0, 42);
+        check(a.get(0) == 1, "deserialized copy is independent of original");
+        check(copy.compareAndSet(1, 2, 22), "deserialized instance remains operational");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testIndexBoundsFull();
+        testFunctionReceivesOldValue();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

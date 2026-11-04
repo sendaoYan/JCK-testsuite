@@ -10,8 +10,15 @@ ForkJoinPool 托管阻塞接口。`block()` 执行阻塞、`isReleasable()` 判�
 JDK 内部：`java.util.concurrent.ForkJoinPool.managedBlock`；`java.util.concurrent.Phaser`/`CountedCompleter` 内部使用。
 
 ## 4. 测试用例设计 + 自动化实现
-场景：
-1. 白盒：`Class.forName` 断言 interface/enum/继承层次 + 反射核对关键方法签名。
-2. 黑盒：用具体实现（LinkedBlockingQueue/ConcurrentHashMap/Executor 族等）走多步组合操作并断言可观察行为。
+场景（18 断言）：
+1. 白盒：接口 + block/isReleasable 存在；返回 boolean；block 只声明 InterruptedException（受检异常面仅此一个）；isReleasable 无受检；无 default 方法。
+2. 黑盒：releasable blocker 直接返回；非 releasable blocker 调 block()。
+3. releasable 路径：isReleasable=true → block() 计数 0。
+4. 阻塞路径：block() 恰 1 次、released=true。
+5. managedBlock(null) → NPE。
+6. 异常中继：InterruptedException/RuntimeException 均 **== 原对象** 中继。
+7. worker 内 managedBlock 补偿路径：阻塞释放后值 99。
 
-实现：`ManagedBlockerTest.java`（`testWhiteBox` + `testBlackBox`）。
+易错规范细节：block() 不能声明 IOException（接口签名限制）；latch 有界 ≤5s 且 finally 释放。
+
+实现：`ManagedBlockerTest.java`（18 断言）。优先级：调用规则 > 异常中继 == > null 边界 > 补偿路径。

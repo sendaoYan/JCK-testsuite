@@ -29,3 +29,11 @@
   - 异常：非 volatile → IllegalArgumentException；long 字段 → IllegalArgumentException（必须 int）；
     未知字段 → RuntimeException；错误实例 → ClassCastException。
   - 并发：8 线程对共享 `volatile int` 字段 incrementAndGet，最终值 == N*M。
+
+### 本轮契约深化追加
+
+- **消息精确断言**："Must be volatile type" / "Must be integer type" / static 字段 "Must not be a static field"（JDK-27 实测；JDK-8 static 消息为 null）（`testValidationMessages`）。
+- private 跨类（java.base AtomicInteger.value）→ RuntimeException；null 字段名/null 类 → RuntimeException。注：JDK-11+ 嵌套类是 nestmate 可访问，故用跨类负例（`testValidationMessages`）。
+- 多对象互不干扰（`testMultiObjectIndependence`）。
+
+断言规模：PASS (42 assertions)。

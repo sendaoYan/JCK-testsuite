@@ -54,9 +54,28 @@ public class AbstractOwnableSynchronizerTest {
         check(aos.get() == other, "owner overwritten by another thread reference");
     }
 
+    static void testCrossThreadSetAndGet() throws Exception {
+        final AOS aos = new AOS();
+        aos.set(Thread.currentThread());
+        final java.util.concurrent.CountDownLatch set = new java.util.concurrent.CountDownLatch(1);
+        Thread t = new Thread(() -> {
+            aos.set(Thread.currentThread()); // another thread may set/clear the owner
+            set.countDown();
+        });
+        t.setDaemon(true);
+        t.start();
+        if (!set.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            throw new AssertionError("timeout waiting for other thread to set the owner");
+        t.join(5000);
+        check(aos.get() == t, "owner visible across threads equals the setter thread");
+        aos.set(null);
+        check(aos.get() == null, "owner reset from main");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCrossThreadSetAndGet();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -76,9 +76,86 @@ public class ScheduledExecutorServiceTest {
         check(ses.awaitTermination(10, TimeUnit.SECONDS), "terminates after shutdownNow");
     }
 
+    // ---- 追加：契约深化（接口层） ----
+
+    // 延迟任务到期执行（latch 有界，不断言精确时间）；未到期状态用远期任务确定性观察
+    static void testDelayedExecution() throws Exception {
+        ScheduledExecutorService ses = Executors.newScheduledThreadPool(1);
+        try {
+            ScheduledFuture<?> far = ses.schedule(() -> { }, 10, TimeUnit.MINUTES);
+            check(!far.isDone() && !far.isCancelled(), "10 分钟延迟任务在观察点必未完成");
+            check(far.getDelay(TimeUnit.SECONDS) > 0, "未到期任务 getDelay > 0");
+            check(far.cancel(false), "取消远期任务");
+            CountDownLatch ran = new CountDownLatch(1);
+            ScheduledFuture<?> f = ses.schedule(ran::countDown, 200, TimeUnit.MILLISECONDS);
+            check(ran.await(5, TimeUnit.SECONDS), "延迟任务到期执行");
+            check(f.isDone(), "执行后 isDone");
+        } finally {
+            ses.shutdownNow();
+        }
+        check(ses.awaitTermination(5, TimeUnit.SECONDS), "terminates");
+    }
+
+    // 周期任务跑 N 次后取消
+    static void testPeriodicCountN() throws Exception {
+        ScheduledExecutorService ses = Executors.newScheduledThreadPool(1);
+        try {
+            CountDownLatch three = new CountDownLatch(3);
+            ScheduledFuture<?> fr = ses.scheduleAtFixedRate(three::countDown, 0, 50, TimeUnit.MILLISECONDS);
+            check(three.await(5, TimeUnit.SECONDS), "scheduleAtFixedRate 跑满 3 次");
+            check(fr.cancel(true), "取消 fixedRate 任务");
+            CountDownLatch two = new CountDownLatch(2);
+            ScheduledFuture<?> fd = ses.scheduleWithFixedDelay(two::countDown, 0, 50, TimeUnit.MILLISECONDS);
+            check(two.await(5, TimeUnit.SECONDS), "scheduleWithFixedDelay 跑满 2 次");
+            check(fd.cancel(true), "取消 fixedDelay 任务");
+        } finally {
+            ses.shutdownNow();
+        }
+        check(ses.awaitTermination(5, TimeUnit.SECONDS), "terminates");
+    }
+
+    // 负延迟立即执行；shutdown 后 schedule 被拒
+    static void testEdgeSemantics() throws Exception {
+        ScheduledExecutorService ses = Executors.newScheduledThreadPool(1);
+        try {
+            CountDownLatch ran = new CountDownLatch(1);
+            ses.schedule(ran::countDown, -5, TimeUnit.MILLISECONDS);
+            check(ran.await(5, TimeUnit.SECONDS), "负延迟任务立即执行");
+        } finally {
+            ses.shutdown();
+        }
+        check(ses.awaitTermination(5, TimeUnit.SECONDS), "terminates");
+        boolean ree = false;
+        try {
+            ses.schedule(() -> { }, 1, TimeUnit.MILLISECONDS);
+            check(false, "shutdown 后 schedule 应被拒");
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            ree = e.getMessage() != null && e.getMessage().contains("rejected from");
+        }
+        check(ree, "shutdown 后 schedule 抛 REE（消息含 \"rejected from\"）");
+    }
+
+    // 接口继承方法经引用可用（submit/execute/invokeAll）
+    static void testInheritedMembers() throws Exception {
+        ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
+        try {
+            check(ses.submit(() -> 3).get() == 3, "submit 经接口引用");
+            CountDownLatch ran = new CountDownLatch(1);
+            ses.execute(ran::countDown);
+            check(ran.await(5, TimeUnit.SECONDS), "execute 经接口引用（即刻任务语义）");
+        } finally {
+            ses.shutdownNow();
+        }
+        check(ses.awaitTermination(5, TimeUnit.SECONDS), "terminates");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDelayedExecution();
+        testPeriodicCountN();
+        testEdgeSemantics();
+        testInheritedMembers();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

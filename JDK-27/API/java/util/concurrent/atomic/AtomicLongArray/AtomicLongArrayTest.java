@@ -150,9 +150,65 @@ public class AtomicLongArrayTest {
         }
     }
 
+    // ---- 契约深化：越界矩阵（含 CAS/getAndSet/lazySet）/ 64 位环绕 / 序列化 ----
+    static void testIndexBoundsFull() {
+        final AtomicLongArray a = new AtomicLongArray(2);
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndSet(-1, 0L, 1L), "compareAndSet(-1, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndSet(2, 0L, 1L), "compareAndSet(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAndSet(2, 1L), "getAndSet(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.lazySet(5, 1L), "lazySet(5, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAndAdd(-1, 1L), "getAndAdd(-1, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAcquire(2), "getAcquire(length)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.setRelease(2, 1L), "setRelease(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndExchange(2, 0L, 1L), "compareAndExchange(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getOpaque(2), "getOpaque(length)");
+        check(a.get(0) == 0L && a.get(1) == 0L, "failed bound-checked ops leave values untouched");
+    }
+
+    static void testWrapAndSequences() {
+        AtomicLongArray a = new AtomicLongArray(2);
+        // 64 位环绕：per-index increment 跨 MAX
+        a.set(0, Long.MAX_VALUE);
+        check(a.incrementAndGet(0) == Long.MIN_VALUE, "per-index incrementAndGet wraps MAX to MIN");
+        check(a.getAndDecrement(0) == Long.MIN_VALUE && a.get(0) == Long.MAX_VALUE,
+                "per-index getAndDecrement wraps MIN to MAX");
+        // 返回值序列
+        a.set(1, 0L);
+        boolean seq = true;
+        for (long i = 0; i < 5; i++) seq &= (a.getAndIncrement(1) == i);
+        check(seq, "per-index getAndIncrement return sequence 0..4");
+        check(a.get(1) == 5L, "value after sequence");
+        // 函数收到旧值
+        java.util.List<Long> seen = new java.util.ArrayList<>();
+        a.getAndUpdate(1, x -> { seen.add(x); return x * 2L; });
+        check(seen.size() == 1 && seen.get(0) == 5L, "getAndUpdate(index) function receives old value");
+        check(a.get(1) == 10L, "getAndUpdate stores new value");
+    }
+
+    static void testSerialization() throws Exception {
+        AtomicLongArray a = new AtomicLongArray(new long[]{1L, 2L, 3L});
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(a);
+        }
+        AtomicLongArray copy;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            copy = (AtomicLongArray) ois.readObject();
+        }
+        check(copy.length() == 3, "serialization preserves length");
+        check(copy.get(0) == 1L && copy.get(1) == 2L && copy.get(2) == 3L, "serialization preserves elements");
+        copy.set(0, 42L);
+        check(a.get(0) == 1L, "deserialized copy is independent of original");
+        check(copy.compareAndSet(1, 2L, 22L), "deserialized instance remains operational");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testIndexBoundsFull();
+        testWrapAndSequences();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

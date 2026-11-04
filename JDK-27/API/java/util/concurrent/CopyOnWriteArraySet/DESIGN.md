@@ -26,3 +26,22 @@
   - 迭代快照（创建后 add，迭代器见旧快照）。
   - `equals/removeAll/retainAll`。
 - 健壮性：固定输入、无顺序依赖（先排序再断言）、无全局副作用、headless-safe。
+
+## 4.1 契约深化追加（第二轮，PASS 36 → 70 断言）
+
+| 优先级 | 测试点 | 用例方法（追加） |
+|---|---|---|
+| P0 | 空态：contains false、remove false、空迭代器 next NSEE、toString "[]" | testEmptyState |
+| P0 | **迭代序 = 首次出现插入序**（可固定序列全等断言）：ctor(5,3,1,3,5)→[5,3,1]、addAll→[c,a,b]、add 追加尾部 | testIterationOrderIsInsertionOrder |
+| P0 | **null 容忍**：add(null)/contains(null)/第二次 false/remove(null)；addAll(null)/ctor(null) NPE | testNullTolerance |
+| P0 | 快照迭代精确序：取迭代器后 add，迭代内容不变全等；iterator.remove UOE | testIteratorSnapshotExactOrder |
+| P1 | 跨实现 equals/hashCode 与 HashSet 对称 | testCrossImplEqualsHashSet |
+| P1 | 序列化 round-trip（含 null、保插入序、suid 锁定、复活可 add） | testSerialization |
+| P1 | spliterator：DISTINCT\|IMMUTABLE\|SIZED\|SUBSIZED（实测 int=17473，只断关键位） | testSpliteratorCharacteristics |
+
+### 易错规范细节（实测记录）
+
+- COWAS **允许 null 元素**（只有一个，去重）——与 CHM/CSLM/CSLS null 全拒对照。
+- 迭代序是**确定的插入序**（独有契约），修正了原设计"先排序再断言"的保守做法，改为固定序列全等。
+- iterator.remove → UnsupportedOperationException（快照）。
+- serialVersionUID = 5457747651344034263L（与 JDK-8 一致）。

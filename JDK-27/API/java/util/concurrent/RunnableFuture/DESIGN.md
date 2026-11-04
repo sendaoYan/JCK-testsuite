@@ -12,8 +12,10 @@
 - JDK 自带测试：`tck/FutureTaskTest.java`、`test/jdk/java/util/concurrent/FutureTask/` 覆盖该接口经 FutureTask 的行为。
 
 ## 4. 测试用例设计 + 自动化实现
-场景：
+场景（深化批次追加 run 幂等/cancel 先行/线程执行）：
 1. 白盒：接口 + 继承 Runnable + 继承 Future + run() 方法 + FutureTask 实现它。
 2. 黑盒（经 FutureTask）：run 前未完成、run 后完成且未取消、get 返回结果、`(Runnable, 固定结果)` 形式。
+3. run 幂等：两次 run() 后 callable 计数仍为 1；run 后 cancel 恒 false 且值仍可用。
+4. cancel 先行：cancel(true) 后 run 不执行 callable（计数 0）；作为 Runnable 交给 daemon Thread 执行（join 5s）后 isDone 且 get==值。
 
-实现：`RunnableFutureTest.java`（10 断言）。
+实现：`RunnableFutureTest.java`（`testWhiteBox` + `testBlackBox` + `testRunIdempotent` + `testCancelBeforeRun`，PASS 22 断言）。

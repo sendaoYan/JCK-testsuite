@@ -32,3 +32,10 @@
   - updateAndGet/getAndUpdate/accumulateAndGet/getAndAccumulate。
   - Number 视图；内存序访问器 + compareAndExchange 见证值。
   - 并发：8 线程各 addAndGet(1) 10 万次，最终值 == N*M。
+
+### 本轮契约深化追加
+
+- 精确返回值序列 + getAndSet 链 + toString（`testReturnSequences`）；函数收到旧值契约（`testFunctionReceivesOldValue`）。
+- 溢出环绕三例（`testOverflowWrap`）；序列化 round-trip（`testSerialization`）；weakCompareAndSet @Deprecated（`testDeprecationContract`）。
+
+断言规模：PASS (63 assertions)。

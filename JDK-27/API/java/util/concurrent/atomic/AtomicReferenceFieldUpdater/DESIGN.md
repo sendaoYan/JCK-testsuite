@@ -29,3 +29,11 @@
   - 异常：非 volatile → IllegalArgumentException；原始类型字段（int）→ IllegalArgumentException（必须引用）；
     引用类型不匹配 → ClassCastException；未知字段 → RuntimeException；错误实例 → ClassCastException。
   - 并发：8 线程对共享 `volatile Integer` 字段 updateAndGet 自增，最终值 == N*M。
+
+### 本轮契约深化追加
+
+- 消息精确断言："Must be volatile type" / static "Must not be a static field"；private 跨类（Thread.name）→ RuntimeException；null 参数 → RuntimeException（`testValidationMessages`）。
+- **identity 语义**：equals 相等不同对象 CAS 失败、null 期望分支（`testIdentitySemantics`）。
+- 多对象互不干扰（`testMultiObjectIndependence`）。
+
+断言规模：PASS (40 assertions)。

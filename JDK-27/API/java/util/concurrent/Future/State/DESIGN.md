@@ -10,8 +10,9 @@ Future 状态枚举：`RUNNING`/`SUCCESS`/`FAILED`/`CANCELLED`。`Future.state()
 JDK 内部：`java.util.concurrent.Future.state()` 默认实现与 `CompletableFuture.state()` 覆盖；`test/jdk/java/util/concurrent/Future/` 覆盖。
 
 ## 4. 测试用例设计 + 自动化实现
-场景：
-1. 白盒：`Class.forName` 断言 interface/enum/继承层次 + 反射核对关键方法签名。
-2. 黑盒：用具体实现（LinkedBlockingQueue/ConcurrentHashMap/Executor 族等）走多步组合操作并断言可观察行为。
+场景（深化批次追加枚举内蕴契约）：
+1. 白盒：`Class.forName` 断言 enum + values/valueOf 方法签名。
+2. 黑盒：四值存在性 + 四种 future 的 state() 映射（RUNNING/SUCCESS/FAILED/CANCELLED）。
+3. 枚举内蕴契约：**声明序锁定 RUNNING(0)/SUCCESS(1)/FAILED(2)/CANCELLED(3)**（ordinal 断言）；name() 四值精确；valueOf round-trip + Enum.valueOf；自然序==ordinal 序（Comparable）；单例恒等（valueOf 与常量 ==）；getDeclaringClass；values() 返回防御性拷贝（改首元素不影响再次取值）；valueOf("bogus") → IllegalArgumentException；valueOf(null) → NullPointerException；toString==name。
 
-实现：`StateTest.java`（`testWhiteBox` + `testBlackBox`）。
+实现：`StateTest.java`（`testWhiteBox` + `testBlackBox` + `testEnumContract`，PASS 36 断言）。

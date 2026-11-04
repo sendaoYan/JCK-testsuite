@@ -32,3 +32,11 @@
   - 内存序访问器 + compareAndExchange 见证值。
   - int[] 构造复制语义（源数组改动不影响）、toString、越界（get/set）抛 IOOBE、负长度抛 NegativeArraySizeException。
   - 并发：8 线程按索引 incrementAndGet，每个槽位最终值 == N*M/4。
+
+### 本轮契约深化追加
+
+- **越界全矩阵（JDK-27 实测 ArrayIndexOutOfBoundsException）：compareAndSet/getAndSet/lazySet/getAndAdd/getAndUpdate/getAcquire/setRelease/compareAndExchange/getOpaque 负索引与 length**（`testIndexBoundsFull`）。
+- getAndUpdate/accumulateAndGet 函数按索引收到旧值（`testFunctionReceivesOldValue`）。
+- 序列化 round-trip 保长保值、副本独立（`testSerialization`）。
+
+断言规模：PASS (65 assertions)。

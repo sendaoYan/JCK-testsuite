@@ -12,8 +12,11 @@
 - JDK 自带测试：`tck/ExecutorsTest.java`、`test/jdk/java/util/concurrent/Executors/` 覆盖 callable 适配。
 
 ## 4. 测试用例设计 + 自动化实现
-场景：
+场景（深化批次追加注解/异常透传恒等/null 语义）：
 1. 白盒：接口、单抽象方法 `call()`。
 2. 黑盒：返回计算值；抛受检异常被传播；经 `ExecutorService.submit` 取结果并 terminate。
+3. @FunctionalInterface 注解存在；lambda/方法引用形态；返回数组的恒等性（同一实例透传）。
+4. 异常透传恒等（==）：受检 IOException、非受检 IllegalStateException、Error（LinkageError）均原对象传播不包装。
+5. Callable<Void> 返回 null；重复调用为普通方法语义（计数递增）。
 
-实现：`CallableTest.java`（7 断言）。
+实现：`CallableTest.java`（`testWhiteBox` + `testBlackBox` + `testAnnotationAndLambdas` + `testExceptionPropagation` + `testNullSemantics`，PASS 19 断言）。

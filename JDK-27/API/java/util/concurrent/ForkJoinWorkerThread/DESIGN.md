@@ -10,8 +10,14 @@ ForkJoinPool 工作线程（继承 Thread）。`getPool`/`getPoolIndex`/`getQueu
 JDK 内部：`java.util.concurrent.ForkJoinPool.ForkJoinWorkerThreadFactory`；`test/jdk/java/util/concurrent/ForkJoinPool/` 覆盖。
 
 ## 4. 测试用例设计 + 自动化实现
-场景：
-1. 白盒：`Class.forName` 断言 class/abstract/final/继承 + 反射核对方法与构造器签名。
-2. 黑盒：真实实例化 + 多步组合操作断言（Future/队列/策略/随机范围等）。
+场景（26 断言）：
+1. 白盒：类/extends Thread/getPool/getPoolIndex/getQueuedTaskCount/run + onStart/onTermination 声明存在。
+2. 黑盒：默认工厂创建 worker（绑定池、getPoolIndex、getQueuedTaskCount==0、daemon、ForkJoinPool- 前缀）。
+3. 自定义子类实例化：构造时绑定池、poolIndex>=0、daemon。
+4. 运行中身份：pool.invoke 内 getPool==pool、daemon、默认名、poolIndex>=0、**getQueuedTaskCount()>=0（JDK-9+ 实例 API，运行中可调用）**。
+5. 自定义命名 worker（Cw- 前缀）。
+6. 生命周期钩子：onStart>=1、shutdownNow+awaitTermination 后 onTermination>=1。
 
-实现：`ForkJoinWorkerThreadTest.java`（`testWhiteBox` + `testBlackBox`）。
+易错规范细节：身份断言只走自定义池 pool.invoke（确定性在 worker 执行）；钩子计数 AtomicInteger；池 finally shutdownNow。
+
+实现：`ForkJoinWorkerThreadTest.java`（26 断言）。优先级：身份/钩子契约 > JDK-9+ getQueuedTaskCount > 命名。

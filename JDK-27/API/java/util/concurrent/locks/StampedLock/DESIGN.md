@@ -34,4 +34,16 @@
   - 戳谓词：`isWriteLockStamp/isReadLockStamp/isOptimisticReadStamp/isLockStamp` 分类。
   - 转换：写→读、读→写（唯一读者时）、写→乐观，断言模式切换与 stamp 类型。
   - 通用 `unlock(long)` 释放读/写；`asReadLock/asWriteLock/asReadWriteLock` 视图的 lock/unlock 联动。
+- 本轮深化新增（append-only，断言 69 → 116）：
+  - `testReadLockMultipleHolds`：同线程两次 readLock 得不同 stamp、getReadLockCount==2、逐个释放。
+  - `testReadSharedAcrossThreads`：latch 双读者共享。
+  - `testOptimisticDoesNotBlockWriter`：**乐观读未决时 writeLock 立即成功，旧 stamp validate false，新乐观可验证**。
+  - `testUnlockWrongStampThrowsIMSE`：**unlockWrite(0)/unlockRead(0)/unlock(0)/unlockRead(writeStamp)/unlockWrite(readStamp) 全部 IMSE（无消息）**，且锁仍可用。
+  - `testValidateZeroStampFalse`：validate(0) false。
+  - `testContendedTryLocksReturnZero`：被写者持有时 tryWriteLock/tryReadLock/timed 全 0。
+  - `testConvertReadToWriteWithOtherReaderReturnsZero`：他读者在场 read→write 返回 0（join 后再验唯一读者成功路径，消竞态）。
+  - `testConvertReadToOptimistic`：转换即释放读、stamp 可验证。
+  - `testToStringState`："[Unlocked]"/"[Write-locked]"/"[Read-locks" 三态。
+  - `testInterruptiblyVariants`：待决中断 writeLockInterruptibly 立即 IE 且未获取。
+
 - 健壮性：单线程确定性，无 sleep、无墙钟、无全局副作用。headless-safe。

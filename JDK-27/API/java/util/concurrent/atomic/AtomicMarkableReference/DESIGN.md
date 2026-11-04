@@ -28,3 +28,10 @@
   - compareAndSet 成功；引用不匹配、标记不匹配分别失败且状态不变。
   - weakCompareAndSet 成功/失败。
   - attemptMark 成功（引用匹配只改标记）、失败（引用不匹配标记不变）。
+
+### 本轮契约深化追加
+
+- **identity 语义**：equals 相等不同对象 CAS/attemptMark 均失败且状态不变（`testIdentitySemantics`）。
+- 双失配分支 + 仅换 mark/仅换引用成功分支 + null 引用分支 + attemptMark 只改 mark + set 无条件（`testBothMismatchAndNull`）。
+
+断言规模：PASS (42 assertions)。

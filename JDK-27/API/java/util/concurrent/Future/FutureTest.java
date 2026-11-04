@@ -6,6 +6,7 @@
  */
 
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
@@ -106,9 +107,99 @@ public class FutureTest {
         }
     }
 
+    // ---- Part 3: default-method state matrix driven by CompletableFuture ----
+    static void testStateMatrix() throws Exception {
+        // RUNNING -> SUCCESS
+        CompletableFuture<String> running = new CompletableFuture<>();
+        check(running.state() == Future.State.RUNNING, "incomplete CompletableFuture is RUNNING");
+        boolean illRan = false;
+        try { running.resultNow(); }
+        catch (IllegalStateException expected) { illRan = true; }
+        check(illRan, "resultNow on RUNNING throws IllegalStateException");
+        running.complete("v");
+        check(running.state() == Future.State.SUCCESS, "completed is SUCCESS");
+        check("v".equals(running.resultNow()), "resultNow returns the value");
+        boolean illExc = false;
+        try { running.exceptionNow(); }
+        catch (IllegalStateException expected) { illExc = true; }
+        check(illExc, "exceptionNow on SUCCESS throws IllegalStateException");
+        // cancel-failed corner: completed future cannot be cancelled
+        check(!running.cancel(false), "cancel(false) on completed future returns false");
+        check(running.state() == Future.State.SUCCESS, "state unchanged after failed cancel");
+
+        // RUNNING -> CANCELLED
+        CompletableFuture<Integer> cancelled = new CompletableFuture<>();
+        check(cancelled.cancel(false), "cancel on pending succeeds");
+        check(cancelled.state() == Future.State.CANCELLED, "cancelled is CANCELLED");
+        boolean illRes = false;
+        // JDK-19+ contract (default impl, and CF's override alike): resultNow on a
+        // cancelled future throws IllegalStateException, NOT CancellationException
+        try { cancelled.resultNow(); }
+        catch (IllegalStateException expected) { illRes = true; }
+        check(illRes, "resultNow on CANCELLED throws IllegalStateException");
+        boolean illExc2 = false;
+        try { cancelled.exceptionNow(); }
+        catch (IllegalStateException expected) { illExc2 = true; }
+        check(illExc2, "exceptionNow on CANCELLED throws IllegalStateException");
+        // empirically-locked (JDK-8 & JDK-27 alike): CompletableFuture re-cancel keeps
+        // returning true (it returns isCancelled()), unlike FutureTask.
+        check(cancelled.cancel(true), "CompletableFuture re-cancel returns true again (实测)");
+
+        // FutureTask default-method messages (实测, JDK-27 default impl wording)
+        FutureTask<Integer> ftCancelled = new FutureTask<>(() -> 1);
+        ftCancelled.cancel(false);
+        try { ftCancelled.resultNow(); }
+        catch (IllegalStateException expected) {
+            check("Task was cancelled".equals(expected.getMessage()),
+                  "FutureTask cancelled resultNow message locked");
+        }
+        FutureTask<Integer> ftOk = new FutureTask<>(() -> 1);
+        ftOk.run();
+        try { ftOk.exceptionNow(); }
+        catch (IllegalStateException expected) {
+            check("Task completed with a result".equals(expected.getMessage()),
+                  "FutureTask success exceptionNow message locked");
+        }
+
+        // RUNNING -> FAILED
+        CompletableFuture<Integer> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new IllegalStateException("boom"));
+        check(failed.state() == Future.State.FAILED, "exceptionally-completed is FAILED");
+        check(failed.exceptionNow() instanceof IllegalStateException,
+              "exceptionNow returns the cause");
+        check("boom".equals(failed.exceptionNow().getMessage()), "cause message preserved");
+        boolean illRes2 = false;
+        try { failed.resultNow(); }
+        catch (IllegalStateException expected) { illRes2 = true; }
+        check(illRes2, "resultNow on FAILED throws IllegalStateException");
+        check(CompletableFuture.failedFuture(new Exception()).state() == Future.State.FAILED,
+              "failedFuture is FAILED");
+        check(CompletableFuture.completedFuture(1).state() == Future.State.SUCCESS,
+              "completedFuture is SUCCESS");
+    }
+
+    // ---- Part 4: get(timeout) unit handling on completed vs pending ----
+    static void testTimeoutSemantics() throws Exception {
+        Future<String> done = CompletableFuture.completedFuture("v");
+        check("v".equals(done.get(0, TimeUnit.MILLISECONDS)),
+              "zero timeout on a completed future returns the value");
+        check("v".equals(done.get(1, TimeUnit.NANOSECONDS)),
+              "1ns timeout on a completed future still returns the value");
+        CompletableFuture<Integer> pending = new CompletableFuture<>();
+        boolean got = false;
+        try { pending.get(20, TimeUnit.MILLISECONDS); }
+        catch (TimeoutException expected) { got = true; }
+        check(got, "get(timeout) on a never-completing future throws TimeoutException");
+        check(!pending.isDone(), "timing out does not complete the future");
+        check(pending.cancel(true), "a timed-out pending future can still be cancelled");
+        check(pending.isCancelled(), "cancelled after timeout");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testStateMatrix();
+        testTimeoutSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

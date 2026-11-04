@@ -26,6 +26,34 @@ public class AbstractQueuedSynchronizerTest {
         return t;
     }
 
+    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                                         + " but got " + t.getClass().getSimpleName(), t);
+            passed++;
+        }
+    }
+
+    static void await(java.util.concurrent.CountDownLatch l, String what) throws InterruptedException {
+        if (!l.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            throw new AssertionError("timeout waiting for " + what);
+    }
+
+    // Bounded spin until a condition holds (used to observe queue enqueue, which has
+    // no latch hook); hard timeout converts a hang into an AssertionError.
+    static void spinUntil(java.util.function.BooleanSupplier cond, String what) {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while (!cond.getAsBoolean()) {
+            if (System.nanoTime() > deadline)
+                throw new AssertionError("timeout waiting for " + what);
+            Thread.yield();
+        }
+    }
+
     // Exclusive boolean mutex: state 1 = held.
     static class Mutex extends AbstractQueuedSynchronizer {
         protected boolean tryAcquire(int arg) { return compareAndSetState(0, 1); }
@@ -35,6 +63,19 @@ public class AbstractQueuedSynchronizerTest {
         int state() { return getState(); }
         void state(int v) { setState(v); }
         boolean casState(int e, int u) { return compareAndSetState(e, u); }
+        AbstractQueuedSynchronizer.ConditionObject newConditionObject() { return new ConditionObject(); }
+    }
+
+    // Strict mutex: release without holding reports failure instead of blindly clearing.
+    static class StrictMutex extends AbstractQueuedSynchronizer {
+        protected boolean tryAcquire(int arg) { return compareAndSetState(0, 1); }
+        protected boolean tryRelease(int arg) {
+            if (getState() != 1) return false;
+            setState(0);
+            return true;
+        }
+        protected boolean isHeldExclusively() { return getState() == 1; }
+        int state() { return getState(); }
         AbstractQueuedSynchronizer.ConditionObject newConditionObject() { return new ConditionObject(); }
     }
 
@@ -185,9 +226,175 @@ public class AbstractQueuedSynchronizerTest {
         check(woken.get(), "ConditionObject signal wakes waiter");
     }
 
+    // ---- Part 3: deepened contract tests ----
+    static void testToStringContainsState() {
+        Mutex m = new Mutex();
+        check(m.toString().contains("State = 0"), "toString reflects state 0");
+        m.state(4);
+        check(m.toString().contains("State = 4"), "toString reflects state 4");
+        check(m.toString().contains("empty queue"), "toString reports empty queue");
+        m.state(0);
+    }
+
+    static void testStrictReleaseReturnsFalse() {
+        // AQS.release does not itself throw when tryRelease fails; it returns false.
+        // (The IllegalMonitorStateException familiar from ReentrantLock is thrown by
+        // ReentrantLock.Sync.tryRelease, not by the AQS framework.)
+        StrictMutex m = new StrictMutex();
+        check(m.state() == 0, "strict mutex initially free");
+        check(!m.release(1), "release without acquisition returns false");
+        check(m.state() == 0, "state unchanged by failed release");
+        m.acquire(1);
+        check(m.state() == 1, "acquired");
+        check(m.release(1), "release while held returns true");
+        check(!m.release(1), "double release returns false");
+    }
+
+    static void testForeignConditionRejected() {
+        Mutex m1 = new Mutex();
+        Mutex m2 = new Mutex();
+        AbstractQueuedSynchronizer.ConditionObject own = m1.newConditionObject();
+        AbstractQueuedSynchronizer.ConditionObject foreign = m2.newConditionObject();
+        check(m1.owns(own), "owns true for own condition");
+        check(!m1.owns(foreign), "owns false for a condition of another synchronizer");
+        expectThrows(() -> m1.hasWaiters(foreign), IllegalArgumentException.class,
+                     "hasWaiters(foreign condition) throws IllegalArgumentException(\"Not owner\")");
+        expectThrows(() -> m1.getWaitQueueLength(foreign), IllegalArgumentException.class,
+                     "getWaitQueueLength(foreign condition) throws IAE");
+        expectThrows(() -> m1.getWaitingThreads(foreign), IllegalArgumentException.class,
+                     "getWaitingThreads(foreign condition) throws IAE");
+    }
+
+    static void testIsQueuedNull() {
+        Mutex m = new Mutex();
+        expectThrows(() -> m.isQueued(null), NullPointerException.class,
+                     "isQueued(null) throws NPE");
+    }
+
+    static void testQueuedThreadObservation() throws Exception {
+        final Mutex m = new Mutex();
+        m.acquire(1); // held by main
+        final CountDownLatch done = new CountDownLatch(1);
+        final Thread child = startDaemon(() -> {
+            m.acquire(1); // enqueues behind main
+            m.release(1);
+            done.countDown();
+        });
+        // Deterministic observation: wait until the child is actually enqueued.
+        spinUntil(() -> m.getQueueLength() == 1, "child to enqueue");
+        check(m.hasQueuedThreads(), "hasQueuedThreads true with a queued thread");
+        check(m.getQueueLength() == 1, "getQueueLength 1");
+        check(m.isQueued(child), "isQueued true for the blocked child");
+        check(m.getFirstQueuedThread() == child, "getFirstQueuedThread is the blocked child");
+        check(m.getQueuedThreads().contains(child), "getQueuedThreads contains the child");
+        check(m.getExclusiveQueuedThreads().contains(child), "getExclusiveQueuedThreads contains the child");
+        check(m.hasQueuedPredecessors(), "hasQueuedPredecessors true while a waiter is queued");
+        check(m.hasContended(), "hasContended true after contention");
+        m.release(1); // let the child through
+        await(done, "child to acquire after release");
+        child.join(5000);
+        check(!child.isAlive(), "child finished");
+        check(!m.hasQueuedThreads(), "queue empty again after the child acquired");
+    }
+
+    static void testCrossThreadTryAcquireFails() throws Exception {
+        final Mutex m = new Mutex();
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            m.acquire(1);
+            held.countDown();
+            try { await(release, "release"); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            finally { m.release(1); }
+        });
+        await(held, "child to hold");
+        check(!m.tryAcquire(1), "tryAcquire fails while another thread holds (cross-thread)");
+        check(m.isQueued(Thread.currentThread()) == false, "failed tryAcquire does not enqueue");
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive(), "child released and finished");
+    }
+
+    static void testTryAcquireNanosContendedFalse() throws Exception {
+        final Mutex m = new Mutex();
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            m.acquire(1);
+            held.countDown();
+            try { await(release, "release"); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            finally { m.release(1); }
+        });
+        await(held, "child to hold");
+        check(!m.tryAcquireNanos(1, 50_000_000L), "tryAcquireNanos(50ms) false while contended");
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive(), "child finished");
+    }
+
+    static void testAcquireInterruptiblyThrows() throws Exception {
+        final Mutex m = new Mutex();
+        m.acquire(1); // held by main
+        final CountDownLatch started = new CountDownLatch(1);
+        final CountDownLatch done = new CountDownLatch(1);
+        final AtomicBoolean interrupted = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            started.countDown();
+            try {
+                m.acquireInterruptibly(1);
+                m.release(1); // not reached on the interrupt path
+            } catch (InterruptedException expected) {
+                interrupted.set(true);
+            } finally {
+                done.countDown();
+            }
+        });
+        await(started, "child to start");
+        t.interrupt();
+        await(done, "child to abort");
+        t.join(5000);
+        check(interrupted.get(), "acquireInterruptibly throws InterruptedException when interrupted");
+        check(m.state() == 1, "mutex still held by main after child was interrupted");
+        m.release(1);
+        // The interrupted thread can acquire normally once the lock is free again.
+        final CountDownLatch reacquired = new CountDownLatch(1);
+        Thread t2 = startDaemon(() -> {
+            try { m.acquireInterruptibly(1); m.release(1); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            reacquired.countDown();
+        });
+        await(reacquired, "interrupted thread to re-acquire after release");
+        t2.join(5000);
+    }
+
+    static void testConditionSignalNoWaitersIsNoOp() throws Exception {
+        Mutex m = new Mutex();
+        AbstractQueuedSynchronizer.ConditionObject cond = m.newConditionObject();
+        m.acquire(1);
+        try {
+            cond.signal();     // held, no waiters: must not throw
+            cond.signalAll();
+            check(m.getWaitQueueLength(cond) == 0, "no waiters after signalling an empty condition");
+            passed++;
+        } finally {
+            m.release(1);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testToStringContainsState();
+        testStrictReleaseReturnsFalse();
+        testForeignConditionRejected();
+        testIsQueuedNull();
+        testQueuedThreadObservation();
+        testCrossThreadTryAcquireFails();
+        testTryAcquireNanosContendedFalse();
+        testAcquireInterruptiblyThrows();
+        testConditionSignalNoWaitersIsNoOp();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

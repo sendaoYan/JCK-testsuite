@@ -29,3 +29,11 @@
   - Number 视图 doubleValue/longValue/intValue/floatValue。
   - toString == Double.toString(sum)。
   - 并发：8 线程各 add(1.0) 5 万次，仅断言 sum 落在 [0, N*M]（浮点合并顺序因并行度而异）。
+
+### 本轮契约深化追加
+
+- 二进制可精确浮点（0.5/0.25/0.125）sum 全等、负数、+0.0 非 -0.0（`testExactBinarySums`）。
+- sumThenReset 二次调用返回 0、toString 负值（`testResetSemantics`）；序列化 round-trip（`testSerialization`）。
+- 双 daemon 线程各 1000×add(0.5) join 有界后 sum==1000.0 精确（0.5 为 2^-1，无合并顺序误差）（`testTwoThreadBounded`）。
+
+断言规模：PASS (32 assertions)。

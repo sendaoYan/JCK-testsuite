@@ -110,9 +110,70 @@ public class AtomicReferenceTest {
         check(r.get() == N * M, "concurrent updateAndGet loses no updates");
     }
 
+    // ---- 契约深化：identity 语义 / 函数收到旧引用 / 序列化 identity / @Deprecated ----
+    static void testIdentitySemantics() {
+        // CAS 按 ==（引用同一性）匹配：两个 equals() 相等的不同对象 CAS 失败
+        String a1 = new String("a");
+        String a2 = new String("a");
+        check(a1.equals(a2) && a1 != a2, "precondition: equals but not same reference");
+        AtomicReference<String> r = new AtomicReference<>(a1);
+        check(!r.compareAndSet(a2, "b"), "CAS with equals-but-not-same expected fails");
+        check(r.get() == a1, "failed identity CAS leaves same reference in place");
+        check(r.compareAndExchange(a2, "x") == a1 && r.get() == a1,
+                "compareAndExchange failure returns actual (identity) reference");
+        check(r.getAndSet(a2) == a1, "getAndSet returns exact old reference");
+        // null 期望值参与 identity 匹配
+        AtomicReference<String> n = new AtomicReference<>(null);
+        check(n.compareAndSet(null, "x"), "CAS(null, x) on null initial succeeds");
+        check(!n.compareAndSet(null, "y"), "CAS(null, y) after set fails");
+        n.set(null);
+        check(!n.compareAndSet("x", "y") && n.get() == null, "CAS with non-null expect on null value fails");
+    }
+
+    static void testFunctionReceivesOldReference() {
+        AtomicReference<String> r = new AtomicReference<>("a");
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        String old = r.getAndUpdate(s -> { seen.add(s); return s + "1"; });
+        check(seen.size() == 1 && "a".equals(seen.get(0)), "getAndUpdate function receives old value");
+        check("a".equals(old), "getAndUpdate returns old reference");
+        java.util.List<String> accArgs = new java.util.ArrayList<>();
+        r.accumulateAndGet("x", (s, t) -> { accArgs.add(s); accArgs.add(t); return s + t; });
+        check("a1".equals(accArgs.get(0)) && "x".equals(accArgs.get(1)),
+                "accumulateAndGet combiner receives (old reference, x)");
+    }
+
+    static void testSerialization() throws Exception {
+        AtomicReference<String> s = new AtomicReference<>("keep");
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(s);
+        }
+        AtomicReference<String> copy;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            @SuppressWarnings("unchecked")
+            AtomicReference<String> t = (AtomicReference<String>) ois.readObject();
+            copy = t;
+        }
+        check("keep".equals(copy.get()), "serialization round-trip preserves reference value");
+        // 反序列化会重建 String 对象：驻留字面量与流中读出的对象 == 不匹配 → identity CAS 失败
+        check(!copy.compareAndSet("keep", "nope"), "identity CAS with interned literal fails on deserialized value");
+        check(copy.compareAndSet(copy.get(), "kept"), "CAS with actual stored reference succeeds after round-trip");
+        check("kept".equals(copy.get()), "deserialized instance remains operational");
+    }
+
+    static void testDeprecationContract() throws Exception {
+        java.lang.reflect.Method w = AtomicReference.class.getMethod("weakCompareAndSet", Object.class, Object.class);
+        check(w.isAnnotationPresent(Deprecated.class), "weakCompareAndSet is deprecated since JDK-9");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testIdentitySemantics();
+        testFunctionReceivesOldReference();
+        testSerialization();
+        testDeprecationContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

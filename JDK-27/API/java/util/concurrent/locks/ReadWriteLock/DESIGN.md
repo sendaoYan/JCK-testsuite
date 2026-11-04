@@ -22,4 +22,9 @@
   - 写锁重入（同线程再次 `tryLock` true）。
   - 持写锁线程可获取读锁（降级）。
   - 释放后读锁可正常获取。
+- 本轮深化新增（append-only，断言 9 → 13）：
+  - `testLockPairStableIdentity`：**`readLock()==readLock()`、`writeLock()==writeLock()`、两把锁互为不同对象**（重复调用同实例）。
+  - `testWriteExcludesReaders`：主持写，子线程 `readLock().tryLock()` false（join 确定性）。
+  - `testWriteExcludesWriters`：主持写，子线程 `writeLock().tryLock()` false。
+
 - 健壮性：单线程确定性、无 sleep、无墙钟、无全局副作用、headless-safe。

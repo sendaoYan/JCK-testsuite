@@ -30,4 +30,12 @@
   - 独占阻塞 `acquire`：子线程阻塞、主线程 `release` 解阻塞（CountDownLatch 同步）。
   - 共享闩 `tryAcquireShared`/`tryReleaseShared`/`acquireShared`/`tryAcquireSharedNanos`/`acquireSharedInterruptibly`。
   - `ConditionObject`：`owns`/`hasWaiters`/`getWaitQueueLength`/`getWaitingThreads` + `await/signal` 握手。
+- 本轮深化新增（append-only，断言 45 → 103）：
+  - `StrictMutex`（long 版）与 `testStrictReleaseReturnsFalse`：未持锁 release → false 不抛。
+  - `testLongStateWideValues`：setState(Long.MAX_VALUE/MIN_VALUE) 读回、CAS 成功/失败、toString 反映（64 位全宽）。
+  - `testForeignConditionRejected`（IAE "Not owner"/owns false）、`testIsQueuedNull`（NPE）、`testToStringContainsState`。
+  - `testQueuedThreadObservation`：争用队列全套检视（spinUntil 入队）。
+  - `testCrossThreadTryAcquireFails`、`testTryAcquireNanosContendedFalse`、`testAcquireInterruptiblyThrows`、`testConditionSignalNoWaitersIsNoOp`。
+  - 白盒补充：**构造器 JDK 17 起 public**（JDK-27 侧断言，与 JDK-8 的 protected 相对）。
+
 - 健壮性：daemon 线程 + CountDownLatch 收尾，无 sleep、无墙钟、无全局副作用、headless-safe。

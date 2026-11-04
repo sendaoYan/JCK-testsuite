@@ -31,4 +31,11 @@
   - 降级：写锁 → 获取读锁 → 释放写锁 → 读锁仍持有。
   - 升级被阻塞：持读锁时 `writeLock().tryLock()` 为 false。
   - `ReadLock.newCondition()` 抛 `UnsupportedOperationException`；`WriteLock.newCondition()` 的 await/signal 两线程确定性握手。
+- 本轮深化新增（append-only，断言 55 → 85，另有 ReadLock/WriteLock 子目录专测）：
+  - `testReadSharedBothThreadsHoldSimultaneously`：双向 latch 两线程同时持读锁（getReadLockCount==2）。
+  - `testReadExcludesWriters`/`testWriteExcludesReaders`/`testWriteExcludesWriters`：互斥矩阵（子线程 tryLock false）。
+  - `testHoldCountMatrix`：写持有时读计数 0；写+读×2 矩阵；降级后读计数仍在。
+  - `testUnlockWithoutHold`：**ReadLock.unlock 未持锁 → IMSE 带 "attempt to unlock read lock, not locked by current thread"（唯一带消息者）；WriteLock → IMSE 无消息**；超释 IMSE。
+  - `testToStringState`："Write locks = 1"/"Read locks = 2"、ReadLock/WriteLock toString。
+
 - 健壮性：`CountDownLatch` + 锁自身同步，daemon 线程，不 sleep、无墙钟、无全局副作用。

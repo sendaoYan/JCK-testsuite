@@ -29,3 +29,27 @@
   - `subSet/headSet/tailSet` 边界。
   - null 拒绝（add/contains/remove）。
 - 健壮性：固定输入、有序容器天然有序、无全局副作用、headless-safe。
+
+## 4.1 契约深化追加（第二轮，PASS 44 → 127 断言）
+
+| 优先级 | 测试点 | 用例方法（追加） |
+|---|---|---|
+| P0 | 空态：poll null、first/last NSEE、空迭代器 next NSEE、toString "[]" | testEmptyState |
+| P0 | **导航矩阵**（键集 10/20/30/40）：ceiling/floor/higher/lower 全分支含边界 null | testNavigationMatrix |
+| P0 | **范围视图**：subSet 两/四参、head/tail 布尔边界；视图活（父 add 可见）；视图写直通；**越界 add IAE（"key out of range"）** | testSubSetsFull |
+| P0 | descendingSet 逆序 + 删除直通 + 二次 descending 复原 | testDescendingWriteThrough |
+| P0 | 迭代器 remove 支持 + 未 next ISE + 弱一致（并发 add 不抛 CME）+ 升序全等 | testIteratorContract |
+| P0 | **null 全拒**：add/contains/remove/ceiling/floor/higher/lower/addAll/ctor 全 NPE | testNullFullRejection |
+| P1 | ctor(Collection) 排序去重 + ctor(SortedSet) 保序保比较器 + addAll 计数 + clone 独立 | testConstructorsAndAddAll |
+| P1 | 批量 + 跨实现 equals/hashCode 与 TreeSet + toArray 升序/null 终止符 | testBulkAndEqualsTreeSet |
+| P1 | spliterator：ORDERED\|SORTED\|DISTINCT\|NONNULL\|CONCURRENT、非 SIZED | testSpliteratorCharacteristics |
+| P1 | 序列化：自然序 + 逆序 Comparator round-trip 保序保比较器、suid 锁定 | testSerialization |
+
+### 易错规范细节（实测记录）
+
+- JDK-27 新增 SequencedSet 的 `addFirst`/`addLast` **恒抛 UnsupportedOperationException**（黑盒已断言）。
+- null 全拒**含导航查询**：ceiling(null)/floor(null)/higher(null)/lower(null) 都抛 NPE。
+- 越界视图 add 的 IAE 消息两侧均为 **"key out of range"**（可断言片段）。
+- 迭代器**支持 remove**（与 COW 快照迭代器 UOE 对照）；未 next/连续 remove → IllegalStateException。
+- equals 是 Set 语义，与 TreeSet 跨实现相等与迭代顺序无关。
+- serialVersionUID = -2479143111061671589L（与 JDK-8 一致）。

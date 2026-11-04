@@ -26,3 +26,10 @@
   - compareAndSet 成功；引用不匹配、版本不匹配分别失败且状态不变。
   - weakCompareAndSet 成功/失败。
   - attemptStamp 成功（引用匹配只改版本）、失败（引用不匹配版本不变）。
+
+### 本轮契约深化追加
+
+- **identity 语义**：equals 相等不同对象 CAS/attemptStamp 均失败且状态不变（`testIdentitySemantics`）。
+- 双失配分支 + 仅换戳/仅换引用成功分支 + null 引用分支 + attemptStamp 只改戳 + set 无条件（`testBothMismatchAndNull`）。
+
+断言规模：PASS (40 assertions)。

@@ -25,3 +25,11 @@
   - 求和累加器 + Number 视图（longValue/intValue/floatValue/doubleValue）。
   - toString == Long.toString(get)。
   - 并发：8 线程各 accumulate(1)（求和 identity=0），最终 get == N*M（long 精确）。
+
+### 本轮契约深化追加
+
+- **64 位环绕契约**：accumulate(MAX)×2 → get()==-2、MIN+(-1)→MAX，均不抛 ArithmeticException（JDK-27 实测；get/longValue 均为环绕语义）（`testOverflowWrapContract`）。
+- Math::max 累加器全分支（相等值/reset 回 identity/getThenReset）（`testMaxAccumulator`）。
+- 负数累计 + toString + getThenReset 链（`testSumDetails`）。
+
+断言规模：PASS (34 assertions)。

@@ -146,9 +146,68 @@ public class AtomicReferenceArrayTest {
         }
     }
 
+    // ---- 契约深化：identity 语义 / 越界矩阵（含 CAS/getAndSet/lazySet）/ null 元素 / 序列化 ----
+    static void testIdentitySemantics() {
+        String a1 = new String("a");
+        String a2 = new String("a");
+        check(a1.equals(a2) && a1 != a2, "precondition: equals but not same reference");
+        AtomicReferenceArray<String> arr = new AtomicReferenceArray<>(2);
+        arr.set(0, a1);
+        check(!arr.compareAndSet(0, a2, "z"), "indexed CAS with equals-but-not-same expected fails");
+        check(arr.get(0) == a1, "failed identity CAS leaves same reference");
+        check(arr.compareAndExchange(0, a2, "x") == a1, "compareAndExchange failure returns actual reference");
+        check(arr.compareAndSet(0, a1, "b"), "indexed CAS with identical (==) expected succeeds");
+        // null 元素契约
+        check(arr.get(1) == null, "initial element null");
+        check(arr.compareAndSet(1, null, "n"), "indexed CAS(null, v) on null element succeeds");
+        check(!arr.compareAndSet(1, null, "m"), "indexed CAS(null, m) after set fails");
+        arr.set(1, null);
+        check(arr.get(1) == null, "set(null) stores null");
+        check(arr.compareAndExchange(1, null, "q") == null, "compareAndExchange on null element returns null witness");
+    }
+
+    static void testIndexBoundsFull() {
+        final AtomicReferenceArray<String> a = new AtomicReferenceArray<>(2);
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndSet(-1, "a", "b"), "compareAndSet(-1, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndSet(2, "a", "b"), "compareAndSet(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAndSet(2, "x"), "getAndSet(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.lazySet(5, "x"), "lazySet(5, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAndUpdate(2, s -> s), "getAndUpdate(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getAcquire(2), "getAcquire(length)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.setRelease(2, "x"), "setRelease(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.compareAndExchange(2, "a", "b"), "compareAndExchange(length, ..)");
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> a.getPlain(2), "getPlain(length)");
+        check(a.get(0) == null && a.get(1) == null, "failed bound-checked ops leave elements untouched");
+    }
+
+    static void testSerialization() throws Exception {
+        AtomicReferenceArray<String> a = new AtomicReferenceArray<>(new String[]{"x", "y"});
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(a);
+        }
+        AtomicReferenceArray<String> copy;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            @SuppressWarnings("unchecked")
+            AtomicReferenceArray<String> t = (AtomicReferenceArray<String>) ois.readObject();
+            copy = t;
+        }
+        check(copy.length() == 2, "serialization preserves length");
+        check("x".equals(copy.get(0)) && "y".equals(copy.get(1)), "serialization preserves elements");
+        copy.set(0, "z");
+        check("x".equals(a.get(0)), "deserialized copy is independent of original");
+        // 反序列化会重建 String 对象：用实际存储引用做 identity CAS
+        check(copy.compareAndSet(1, copy.get(1), "w"), "CAS with actual stored reference succeeds after round-trip");
+        check("w".equals(copy.get(1)), "deserialized instance remains operational");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testIdentitySemantics();
+        testIndexBoundsFull();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

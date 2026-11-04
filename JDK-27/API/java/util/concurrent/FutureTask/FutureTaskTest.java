@@ -131,9 +131,308 @@ public class FutureTaskTest {
         check(doneHook.get(), "done() hook invoked on completion");
     }
 
+    // JDK-19+ state()/toString() full contract: pending -> RUNNING / "Not completed",
+    // run -> SUCCESS / "Completed normally", failure -> FAILED / "Completed
+    // exceptionally", cancel -> CANCELLED / "Cancelled".
+    static void testStateAndToStringContract() throws Exception {
+        FutureTask<Integer> pending = new FutureTask<>(() -> 1);
+        check(pending.state() == Future.State.RUNNING, "pending state is RUNNING");
+        check(pending.toString().contains("Not completed"), "pending toString says Not completed");
+        pending.run();
+        check(pending.state() == Future.State.SUCCESS, "SUCCESS after normal run");
+        check(pending.toString().contains("Completed normally"), "success toString says Completed normally");
+        FutureTask<Integer> failed = new FutureTask<>(() -> { throw new IllegalStateException("boom"); });
+        failed.run();
+        check(failed.state() == Future.State.FAILED, "FAILED after throwing run");
+        check(failed.toString().contains("Completed exceptionally"), "failed toString says Completed exceptionally");
+        check(failed.toString().contains("IllegalStateException"), "failed toString includes cause class");
+        FutureTask<Integer> cancelled = new FutureTask<>(() -> 1);
+        cancelled.cancel(false);
+        check(cancelled.state() == Future.State.CANCELLED, "CANCELLED after cancel");
+        check(cancelled.toString().contains("Cancelled"), "cancelled toString says Cancelled");
+        // resultNow/exceptionNow on terminal mismatches (Future default guidance
+        // overridden by FutureTask: cancelled -> ISE, not CancellationException)
+        try {
+            cancelled.resultNow();
+            check(false, "resultNow on cancelled should throw");
+        } catch (IllegalStateException expected) {
+            check(true, "resultNow on cancelled -> IllegalStateException");
+        }
+        try {
+            new FutureTask<Integer>(() -> 1).resultNow();
+            check(false, "resultNow on running should throw");
+        } catch (IllegalStateException expected) {
+            check(true, "resultNow on RUNNING -> IllegalStateException");
+        }
+    }
+
+    // cancel(false) on a RUNNING task: returns true, does NOT interrupt the
+    // running computation, and the computed result is discarded (get -> CE).
+    static void testCancelFalseWhileRunning() throws Exception {
+        java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        final boolean[] interruptedInside = {false};
+        FutureTask<Integer> ft = new FutureTask<>(() -> {
+            started.countDown();
+            try { release.await(); } catch (InterruptedException e) { interruptedInside[0] = true; }
+            return 7;
+        });
+        Thread t = new Thread(ft::run);
+        t.setDaemon(true);
+        t.start();
+        check(started.await(5, TimeUnit.SECONDS), "task running (cancel(false) scenario)");
+        check(ft.cancel(false), "cancel(false) on running task returns true");
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive(), "running thread finished");
+        check(!interruptedInside[0], "cancel(false) does not interrupt the computation");
+        check(ft.isCancelled() && ft.isDone(), "cancelled and done after cancel(false)");
+        check(ft.state() == Future.State.CANCELLED, "CANCELLED state after cancel(false)");
+        try {
+            ft.get();
+            check(false, "get after cancel(false) should throw");
+        } catch (CancellationException expected) {
+            check(true, "computed result discarded: get -> CancellationException");
+        }
+    }
+
+    // cancel(true) on a RUNNING task interrupts the thread running the callable.
+    static void testCancelTrueWhileRunning() throws Exception {
+        java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        final int[] interruptCount = {0};
+        FutureTask<Integer> ft = new FutureTask<>(() -> {
+            started.countDown();
+            try { release.await(); } catch (InterruptedException e) { interruptCount[0]++; }
+            return 8;
+        });
+        Thread t = new Thread(ft::run);
+        t.setDaemon(true);
+        t.start();
+        check(started.await(5, TimeUnit.SECONDS), "task running (cancel(true) scenario)");
+        check(ft.cancel(true), "cancel(true) on running task returns true");
+        release.countDown(); // release anyway; interrupt must already have arrived
+        t.join(5000);
+        check(!t.isAlive(), "interrupted runner finished");
+        check(interruptCount[0] >= 1, "cancel(true) delivered InterruptedException to computation");
+        check(ft.isCancelled(), "cancelled after cancel(true)");
+    }
+
+    // protected runAndReset(): true on a fresh task (callable runs, no result set,
+    // isDone stays false); false once set()/cancel()/callable-throw terminated it.
+    static class RRTask extends FutureTask<Integer> {
+        final int[] calls;
+        RRTask(java.util.concurrent.Callable<Integer> c, int[] calls) { super(c); this.calls = calls; }
+        boolean rnr() { return runAndReset(); }
+        void inject(int v) { set(v); }
+    }
+
+    static void testRunAndReset() throws Exception {
+        int[] calls = {0};
+        RRTask t = new RRTask(() -> { calls[0]++; return 1; }, calls);
+        check(t.rnr(), "runAndReset on fresh task returns true");
+        check(calls[0] == 1, "runAndReset invoked the callable");
+        check(!t.isDone() && !t.isCancelled(), "runAndReset leaves task runnable (no result)");
+        check(t.state() == Future.State.RUNNING, "RUNNING after successful runAndReset");
+        check(t.rnr(), "runAndReset can run the task again");
+        check(calls[0] == 2, "callable invoked twice across two runAndReset");
+        RRTask done = new RRTask(() -> { calls[0]++; return 1; }, calls);
+        done.inject(9);
+        check(!done.rnr(), "runAndReset false after set()");
+        check(calls[0] == 2, "callable not re-invoked after set()");
+        RRTask cancelled = new RRTask(() -> { calls[0]++; return 1; }, calls);
+        cancelled.cancel(false);
+        check(!cancelled.rnr(), "runAndReset false after cancel()");
+        check(calls[0] == 2, "callable not invoked for cancelled runAndReset");
+        RRTask throwing = new RRTask(() -> { calls[0]++; throw new RuntimeException("boom"); }, calls);
+        check(!throwing.rnr(), "runAndReset false when callable throws");
+        check(throwing.isDone(), "throwing runAndReset completes the task exceptionally");
+        try {
+            throwing.get();
+            check(false, "get after throwing runAndReset should throw");
+        } catch (ExecutionException expected) {
+            check(true, "runAndReset wraps callable failure in ExecutionException");
+        }
+    }
+
+    // done() fires exactly once per terminal state: on cancel, and on set()+run().
+    static void testDoneHookCounts() throws Exception {
+        final int[] onCancel = {0};
+        FutureTask<Integer> c = new FutureTask<Integer>(() -> 1) {
+            protected void done() { onCancel[0]++; }
+        };
+        c.cancel(true);
+        check(onCancel[0] == 1, "done() invoked exactly once on cancel");
+        c.run(); // no-op, must not re-fire done()
+        check(onCancel[0] == 1, "done() not re-invoked by no-op run after cancel");
+
+        class DTask extends FutureTask<Integer> {
+            int count;
+            DTask() { super(() -> 1); }
+            void inject(int v) { set(v); }
+            protected void done() { count++; }
+        }
+        DTask d = new DTask();
+        d.inject(5);
+        d.run();
+        d.run();
+        check(d.count == 1, "done() invoked exactly once for set-then-run");
+        check(d.get() == 5, "injected result preserved");
+    }
+
+    // set() before run(): subsequent run() is a no-op and the callable never runs.
+    static void testSetBeforeRun() throws Exception {
+        final int[] calls = {0};
+        class PreSet extends FutureTask<Integer> {
+            PreSet() { super(() -> { calls[0]++; return 1; }); }
+            void inject(int v) { set(v); }
+        }
+        PreSet p = new PreSet();
+        p.inject(10);
+        p.run();
+        p.run();
+        check(calls[0] == 0, "callable never invoked when result was set before run");
+        check(p.isDone(), "task done after set()");
+        check(p.get() == 10, "get returns pre-set value");
+    }
+
+    // Multiple threads blocked in get() are all released by one completion.
+    static void testMultipleWaiters() throws Exception {
+        class WaiterTask extends FutureTask<Integer> {
+            WaiterTask() { super(() -> 1); }
+            void inject(int v) { set(v); }
+        }
+        final WaiterTask ft = new WaiterTask();
+        final java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(3);
+        final java.util.concurrent.CountDownLatch finished = new java.util.concurrent.CountDownLatch(3);
+        final int[] results = {0, 0, 0};
+        for (int i = 0; i < 3; i++) {
+            final int idx = i;
+            Thread t = new Thread(() -> {
+                try {
+                    entered.countDown();
+                    results[idx] = ft.get();
+                } catch (Exception e) {
+                    throw new AssertionError(e);
+                } finally {
+                    finished.countDown();
+                }
+            });
+            t.setDaemon(true);
+            t.start();
+        }
+        check(entered.await(5, TimeUnit.SECONDS), "all waiters parked in get()");
+        ft.inject(42);
+        check(finished.await(5, TimeUnit.SECONDS), "all waiters released by completion");
+        check(results[0] == 42 && results[1] == 42 && results[2] == 42, "all waiters got the value");
+    }
+
+    // get(timeout) in terminal states returns immediately (no TimeoutException).
+    static void testTimedGetTerminalStates() throws Exception {
+        FutureTask<Integer> done = new FutureTask<>(() -> 3);
+        done.run();
+        check(done.get(5, TimeUnit.SECONDS) == 3, "timed get on completed returns value immediately");
+        FutureTask<Integer> cancelled = new FutureTask<>(() -> 3);
+        cancelled.cancel(false);
+        try {
+            cancelled.get(5, TimeUnit.SECONDS);
+            check(false, "timed get on cancelled should throw");
+        } catch (CancellationException expected) {
+            check(true, "timed get on cancelled -> CancellationException");
+        }
+        FutureTask<Integer> failed = new FutureTask<>(() -> { throw new IllegalArgumentException("x"); });
+        failed.run();
+        try {
+            failed.get(5, TimeUnit.SECONDS);
+            check(false, "timed get on failed should throw");
+        } catch (ExecutionException expected) {
+            check(expected.getCause() instanceof IllegalArgumentException, "timed get on failed -> ExecutionException");
+        }
+    }
+
+    // ExecutionException carries the original exception object by identity.
+    static void testExceptionIdentity() throws Exception {
+        RuntimeException boom = new RuntimeException("identity");
+        FutureTask<Integer> ft = new FutureTask<>(() -> { throw boom; });
+        ft.run();
+        try {
+            ft.get();
+            check(false, "get should throw");
+        } catch (ExecutionException expected) {
+            check(expected.getCause() == boom, "ExecutionException cause is the original object (==)");
+        }
+    }
+
+    // FutureTask is NOT Serializable (contract: no Serializable interface).
+    static void testNotSerializable() throws Exception {
+        check(!java.io.Serializable.class.isAssignableFrom(FutureTask.class),
+                "FutureTask does not implement Serializable");
+        FutureTask<Integer> done = new FutureTask<>(() -> 42);
+        done.run();
+        try {
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+            oos.writeObject(done);
+            oos.close();
+            check(false, "writing a FutureTask should throw NotSerializableException");
+        } catch (java.io.NotSerializableException expected) {
+            check(true, "writeObject(FutureTask) -> NotSerializableException");
+        }
+    }
+
+    // A FutureTask cancelled while queued in an executor is a no-op when the
+    // pool eventually dequeues it: the callable never runs. A FIFO tail task
+    // behind it proves the worker already dequeued (and skipped) it.
+    static void testQueuedCancelledIsNoOp() throws Exception {
+        final int[] calls = {0};
+        java.util.concurrent.CountDownLatch gateStarted = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch gateOpened = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ThreadPoolExecutor pool = new java.util.concurrent.ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<Runnable>(4));
+        try {
+            FutureTask<Integer> gate = new FutureTask<>(() -> {
+                gateStarted.countDown();
+                gateOpened.await(5, TimeUnit.SECONDS);
+                return 0;
+            });
+            FutureTask<Integer> queued = new FutureTask<>(() -> { calls[0]++; return 1; });
+            FutureTask<Integer> tail = new FutureTask<>(() -> 2);
+            pool.execute(gate);
+            check(gateStarted.await(5, TimeUnit.SECONDS), "worker is busy on the gate task");
+            pool.execute(queued); // FIFO: parks in the queue behind the busy worker
+            pool.execute(tail);   // FIFO: parks behind `queued`
+            check(queued.cancel(false), "queued task cancelled");
+            gateOpened.countDown();
+            check(tail.get(5, TimeUnit.SECONDS) == 2, "tail done: worker dequeued past the cancelled task");
+            check(gate.get(5, TimeUnit.SECONDS) == 0, "gate task completed");
+            check(queued.isDone(), "cancelled queued task reached terminal state");
+            try {
+                queued.get();
+                check(false, "get on queue-cancelled task should throw");
+            } catch (CancellationException expected) {
+                check(true, "queue-cancelled get -> CancellationException");
+            }
+            check(calls[0] == 0, "callable of cancelled queued task never invoked");
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testStateAndToStringContract();
+        testCancelFalseWhileRunning();
+        testCancelTrueWhileRunning();
+        testRunAndReset();
+        testDoneHookCounts();
+        testSetBeforeRun();
+        testMultipleWaiters();
+        testTimedGetTerminalStates();
+        testExceptionIdentity();
+        testNotSerializable();
+        testQueuedCancelledIsNoOp();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

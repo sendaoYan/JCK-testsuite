@@ -27,4 +27,15 @@
   - `awaitUntil(new Date(0))`（过去时刻）返回 false。
   - `awaitUninterruptibly()` 由 `signal` 唤醒返回。
   - `signalAll()` 唤醒两个等待者。
+- 本轮深化新增（append-only，断言 14 → 44）：
+  - `testAwaitReleasesLock`：waiter 进 await 后主线程能 `lock()` 成功 = await 释放锁的确定性证明 + hasWaiters/getWaitQueueLength==1。
+  - `testTimedAwaits`：awaitNanos(1)/(-1)、await(1ns)、awaitUntil(past) 全部超时且无残留 waiter。
+  - `testAwaitWithoutLockThrowsIMSE`：**未持锁 await/awaitUninterruptibly/awaitNanos/await(timeout)/awaitUntil → IMSE（无消息）**。
+  - `testSignalWithoutLockThrowsIMSE`：未持锁 signal/signalAll → IMSE。
+  - `testSignalWithNoWaitersIsNoOp`：持锁无 waiter 的 signal/signalAll 不抛。
+  - `testAwaitInterrupted`：中断 → InterruptedException 且中断位被清除。
+  - `testAwaitUninterruptibly`：中断仍等待、返回后中断位保留。
+  - `testSignalAllWakesAllThree`：N=3 全唤醒；`testConditionIsolation`：两条件互不串扰。
+  - `testWaiterCountQueries`：**未持锁 hasWaiters/getWaitQueueLength → IMSE**；持锁 false/0、1 waiter → 1。
+
 - 健壮性：daemon 线程 + CountDownLatch 同步，无 sleep、无墙钟（仅用过去固定 Date）、无全局副作用、headless-safe。

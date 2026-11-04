@@ -88,9 +88,56 @@ public class LongAccumulatorTest {
         check(acc.get() == (long) N * M, "concurrent accumulate loses no updates (exact sum)");
     }
 
+    // ---- 契约深化：64 位环绕契约 / max 函数 / getThenReset 链 / 负数 ----
+    static void testOverflowWrapContract() {
+        // 经典契约点（JDK-27 实测）：get()/longValue() 按补码 64 位环绕，不抛 ArithmeticException
+        LongAccumulator acc = new LongAccumulator(Long::sum, 0L);
+        acc.accumulate(Long.MAX_VALUE);
+        acc.accumulate(Long.MAX_VALUE);
+        check(acc.get() == -2L, "MAX_VALUE twice wraps to -2 (no ArithmeticException)");
+        check(acc.longValue() == -2L, "longValue matches wrapped sum");
+        check(acc.intValue() == -2, "intValue of wrapped sum");
+        LongAccumulator neg = new LongAccumulator(Long::sum, 0L);
+        neg.accumulate(Long.MIN_VALUE);
+        neg.accumulate(-1L);
+        check(neg.get() == Long.MAX_VALUE, "MIN_VALUE + (-1) wraps to MAX_VALUE");
+        check(neg.doubleValue() == 9.223372036854776E18, "doubleValue of wrapped MAX");
+    }
+
+    static void testMaxAccumulator() {
+        LongAccumulator max = new LongAccumulator(Math::max, Long.MIN_VALUE);
+        check(max.get() == Long.MIN_VALUE, "max identity");
+        max.accumulate(5L);
+        max.accumulate(3L);
+        max.accumulate(9L);
+        max.accumulate(-1L);
+        check(max.get() == 9L, "Math::max keeps maximum");
+        max.accumulate(9L);
+        check(max.get() == 9L, "accumulating equal max keeps value");
+        max.reset();
+        check(max.get() == Long.MIN_VALUE, "reset returns to max identity");
+        max.accumulate(-100L);
+        check(max.getThenReset() == -100L, "getThenReset on max accumulator");
+        check(max.get() == Long.MIN_VALUE, "max accumulator reset to identity");
+    }
+
+    static void testSumDetails() {
+        LongAccumulator acc = new LongAccumulator(Long::sum, 0L);
+        acc.accumulate(-5L);
+        acc.accumulate(-10L);
+        check(acc.get() == -15L, "negative accumulate exact");
+        check(acc.toString().equals("-15"), "toString == Long.toString(get)");
+        check(acc.getThenReset() == -15L, "getThenReset returns value");
+        check(acc.getThenReset() == 0L, "second getThenReset returns identity");
+        check(acc instanceof Number, "LongAccumulator is a Number");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testOverflowWrapContract();
+        testMaxAccumulator();
+        testSumDetails();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

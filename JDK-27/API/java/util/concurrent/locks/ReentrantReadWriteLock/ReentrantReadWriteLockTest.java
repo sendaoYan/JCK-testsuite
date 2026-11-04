@@ -49,6 +49,11 @@ public class ReentrantReadWriteLockTest {
         return t;
     }
 
+    static void await(CountDownLatch l, String what) throws InterruptedException {
+        if (!l.await(5, TimeUnit.SECONDS))
+            throw new AssertionError("timeout waiting for " + what);
+    }
+
     // Exposes the protected introspection methods for the black-box harness.
     static class ExposedRRWL extends ReentrantReadWriteLock {
         Thread owner() { return getOwner(); }
@@ -207,6 +212,132 @@ public class ReentrantReadWriteLockTest {
         ReentrantReadWriteLock.ReadLock rl = rwl.readLock();
         check(rl.tryLock(1, TimeUnit.NANOSECONDS), "read tryLock(timeout) when free");
         rl.unlock();
+        check(rwl.writeLock().tryLock(1, TimeUnit.NANOSECONDS), "write tryLock(timeout) when free");
+        rwl.writeLock().unlock();
+    }
+
+    // ---- Part 3: deepened contract tests ----
+    static void testReadSharedBothThreadsHoldSimultaneously() throws Exception {
+        final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+        final ReentrantReadWriteLock.ReadLock rl = rwl.readLock();
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            rl.lock(); // child holds the read lock
+            entered.countDown();
+            try { await(release, "release"); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            finally { rl.unlock(); }
+        });
+        await(entered, "child to hold the read lock");
+        // Bidirectional deterministic proof of read sharing: while the child holds the
+        // read lock, main acquires it too.
+        check(rl.tryLock(), "main acquires the read lock while the child holds it");
+        check(rwl.getReadLockCount() == 2, "two read holders simultaneously");
+        rl.unlock();
+        release.countDown();
+        t.join(5000);
+        check(!t.isAlive(), "child finished");
+        check(rwl.getReadLockCount() == 0, "read count back to 0");
+    }
+
+    static void testReadExcludesWriters() throws Exception {
+        final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+        rwl.readLock().lock(); // main holds read
+        final AtomicBoolean gotWrite = new AtomicBoolean(true);
+        Thread t = startDaemon(() -> gotWrite.set(rwl.writeLock().tryLock()));
+        t.join(5000);
+        check(!t.isAlive() && !gotWrite.get(), "writer tryLock false while another thread holds read");
+        rwl.readLock().unlock();
+    }
+
+    static void testWriteExcludesReaders() throws Exception {
+        final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+        rwl.writeLock().lock(); // main holds write
+        final AtomicBoolean gotRead = new AtomicBoolean(true);
+        Thread t = startDaemon(() -> gotRead.set(rwl.readLock().tryLock()));
+        t.join(5000);
+        check(!t.isAlive() && !gotRead.get(), "reader tryLock false while another thread holds write");
+        rwl.writeLock().unlock();
+    }
+
+    static void testWriteExcludesWriters() throws Exception {
+        final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+        rwl.writeLock().lock(); // main holds write
+        final AtomicBoolean gotWrite = new AtomicBoolean(true);
+        Thread t = startDaemon(() -> gotWrite.set(rwl.writeLock().tryLock()));
+        t.join(5000);
+        check(!t.isAlive() && !gotWrite.get(), "second writer tryLock false while another thread holds write");
+        rwl.writeLock().unlock();
+    }
+
+    static void testHoldCountMatrix() {
+        ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+        // Unheld state
+        check(rwl.getReadLockCount() == 0 && rwl.getReadHoldCount() == 0,
+              "read counts 0 when nothing held");
+        check(rwl.getWriteHoldCount() == 0 && !rwl.isWriteLocked(),
+              "write counts 0 when nothing held");
+        // Write held: read counts still 0
+        rwl.writeLock().lock();
+        check(rwl.getReadLockCount() == 0 && rwl.getReadHoldCount() == 0,
+              "read counts 0 while only write is held");
+        check(rwl.getWriteHoldCount() == 1, "write hold 1");
+        // Write + reentrant read x2 (full hold state)
+        rwl.readLock().lock();
+        rwl.readLock().lock();
+        check(rwl.getWriteHoldCount() == 1, "write hold still 1 with reads held");
+        check(rwl.getReadLockCount() == 2, "read lock count 2");
+        check(rwl.getReadHoldCount() == 2, "read hold count 2 (reentrant)");
+        check(rwl.isWriteLocked() && rwl.isWriteLockedByCurrentThread(), "write still held");
+        rwl.writeLock().unlock(); // downgrade path leaves the reads
+        check(!rwl.isWriteLocked() && rwl.getWriteHoldCount() == 0, "write released");
+        check(rwl.getReadLockCount() == 2 && rwl.getReadHoldCount() == 2, "reads survive the write release");
+        rwl.readLock().unlock();
+        rwl.readLock().unlock();
+        check(rwl.getReadLockCount() == 0 && rwl.getReadHoldCount() == 0, "all counts back to 0");
+    }
+
+    static void testToStringState() {
+        ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+        check(rwl.toString().contains("Write locks = 0") && rwl.toString().contains("Read locks = 0"),
+              "toString reports no locks held");
+        rwl.writeLock().lock();
+        check(rwl.toString().contains("Write locks = 1"), "toString reports the write lock");
+        rwl.readLock().lock();
+        rwl.readLock().lock();
+        check(rwl.toString().contains("Read locks = 2"), "toString reports both read holds");
+        rwl.writeLock().unlock();
+        check(rwl.toString().contains("Write locks = 0"), "toString write back to 0");
+        rwl.readLock().unlock();
+        rwl.readLock().unlock();
+        ReentrantReadWriteLock.ReadLock rl = rwl.readLock();
+        ReentrantReadWriteLock.WriteLock wl = rwl.writeLock();
+        check(rl.toString().contains("Read locks = 0"), "ReadLock.toString initial");
+        rl.lock();
+        check(rl.toString().contains("Read locks = 1"), "ReadLock.toString held");
+        rl.unlock();
+        check(wl.toString().contains("Unlocked"), "WriteLock.toString unlocked");
+        wl.lock();
+        check(wl.toString().contains("Locked by thread"), "WriteLock.toString locked");
+        wl.unlock();
+    }
+
+    static void testUnlockWithoutHold() {
+        ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+        ReentrantReadWriteLock.ReadLock rl = rwl.readLock();
+        ReentrantReadWriteLock.WriteLock wl = rwl.writeLock();
+        expectThrows(rl::unlock, IllegalMonitorStateException.class,
+                     "ReadLock.unlock without hold throws IMSE");
+        expectThrows(wl::unlock, IllegalMonitorStateException.class,
+                     "WriteLock.unlock without hold throws IMSE");
+        // Over-release: read twice, release three times -> IMSE on the third.
+        rl.lock();
+        rl.lock();
+        rl.unlock();
+        rl.unlock();
+        expectThrows(rl::unlock, IllegalMonitorStateException.class,
+                     "ReadLock.unlock beyond hold count throws IMSE");
     }
 
     static void testBlackBox() {
@@ -248,6 +379,13 @@ public class ReentrantReadWriteLockTest {
         testFairness();
         testReadLockTryLockTimeout();
         testBlackBox();
+        testReadSharedBothThreadsHoldSimultaneously();
+        testReadExcludesWriters();
+        testWriteExcludesReaders();
+        testWriteExcludesWriters();
+        testHoldCountMatrix();
+        testToStringState();
+        testUnlockWithoutHold();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

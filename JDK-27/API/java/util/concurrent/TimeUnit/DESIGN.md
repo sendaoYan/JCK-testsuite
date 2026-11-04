@@ -18,3 +18,12 @@ final 枚举，7 常量（NANOSECONDS..DAYS）。转换 `convert(long, TimeUnit)
 2. 黑盒：精确转换（含 Duration 截断）、ChronoUnit 映射、valueOf/values；sleep/timedJoin/timedWait 仅断「不早退」（下限宽松，不断精确耗时）。
 
 实现：`TimeUnitTest.java`（34 断言）。
+
+### 本轮契约深化追加
+
+- values() 顺序（ordinal 0..6）、name==toString、valueOf 往返、compareTo 序、valueOf("BOGUS"/null) 负例（`testValuesOrderAndNames`）。
+- **7×7 换算矩阵（每单位 toX(1) 精确值表）**、MINUTES.toSeconds(90)==5400、convert 双向、截断朝零 4 例（`testFullConversionMatrix`）。
+- **饱和矩阵**：4 单位 toNanos(MAX/MIN)、多路跨级饱和；不溢出路径精确（SECONDS.toMinutes(MAX)==153722867280912930、NANOS.toMillis(MAX)==9223372036854）（`testSaturation`）。
+- **ChronoUnit 全表双向映射 + of(WEEKS) IAE + convert(Duration) 截断/负数/饱和**（`testChronoUnitFullMapping`）。
+
+断言规模：PASS (190 assertions)。

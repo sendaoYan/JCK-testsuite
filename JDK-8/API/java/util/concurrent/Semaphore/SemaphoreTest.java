@@ -2,8 +2,9 @@
  * @test
  * @summary java.util.concurrent.Semaphore conformance: white-box structure + black-box
  *          behavior (acquire/release/tryAcquire/permits/drainPermits/fairness, bulk
- *          acquire/release, acquireUninterruptibly, negative-count validation,
- *          serialization round-trip).
+ *          acquire/release, acquireUninterruptibly with interrupt-status retention,
+ *          timed tryAcquire released during wait, reducePermits probe, negative
+ *          arguments/permits, serialization round-trip).
  * @run main SemaphoreTest
  */
 
@@ -12,8 +13,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SemaphoreTest {
     static int passed;
@@ -141,9 +144,192 @@ public class SemaphoreTest {
         check(copy.availablePermits() == 1, "deserialized instance remains operational");
     }
 
+    // ---- Part 3: contract deepening (appended) ----
+
+    static void testWhiteBoxExtra() throws Exception {
+        Class<?> c = cls("java.util.concurrent.Semaphore");
+        hasMethod(c, "acquireUninterruptibly", int.class);
+        hasMethod(c, "tryAcquire", int.class);
+        hasMethod(c, "tryAcquire", int.class, long.class, TimeUnit.class);
+        try {
+            c.getDeclaredMethod("reducePermits", int.class); // protected member
+            check(true, "protected reducePermits(int) is declared");
+        } catch (NoSuchMethodException e) {
+            check(false, "reducePermits(int) missing");
+        }
+    }
+
+    // negative bulk arguments are rejected by every form; zero is a no-op
+    static void testNegativeArguments() throws Exception {
+        try {
+            new Semaphore(1).acquire(-1);
+            check(false, "acquire(-1) should throw");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() == null, "acquire(-1) IAE carries no detail message");
+        }
+        expectThrows(IllegalArgumentException.class, () -> new Semaphore(1).release(-1), "release(-1) rejected");
+        expectThrows(IllegalArgumentException.class, () -> new Semaphore(1).tryAcquire(-1), "tryAcquire(-1) rejected");
+        expectThrows(IllegalArgumentException.class, () -> new Semaphore(1).acquireUninterruptibly(-1),
+                "acquireUninterruptibly(-1) rejected");
+        expectThrows(IllegalArgumentException.class,
+                () -> new Semaphore(1).tryAcquire(-1, 1, TimeUnit.MILLISECONDS), "tryAcquire(-1, timeout) rejected");
+        Semaphore z = new Semaphore(2);
+        z.acquire(0);
+        z.release(0);
+        z.acquireUninterruptibly(0);
+        check(z.availablePermits() == 2, "acquire(0)/release(0)/acquireUninterruptibly(0) are no-ops");
+        check(z.tryAcquire(0), "tryAcquire(0) succeeds without consuming permits");
+        check(z.availablePermits() == 2, "tryAcquire(0) leaves the permit count unchanged");
+    }
+
+    // timed tryAcquire: immediate success, timeout failure, success once released during the wait
+    static void testTimedTryAcquire() throws Exception {
+        Semaphore s = new Semaphore(1);
+        check(s.tryAcquire(1, TimeUnit.SECONDS), "timed tryAcquire succeeds immediately when a permit is free");
+        check(!s.tryAcquire(50, TimeUnit.MILLISECONDS), "timed tryAcquire returns false on timeout when exhausted");
+
+        Semaphore w = new Semaphore(1);
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        final CountDownLatch done = new CountDownLatch(1);
+        Thread t = new Thread(() -> {
+            try {
+                w.acquire();
+                entered.countDown();
+                release.await(5, TimeUnit.SECONDS);
+                w.release();
+            } catch (InterruptedException e) {
+                throw new AssertionError(e);
+            } finally {
+                done.countDown();
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        check(entered.await(5, TimeUnit.SECONDS), "worker acquired the permit");
+        check(w.availablePermits() == 0, "permit held by the worker");
+        release.countDown();
+        check(w.tryAcquire(5, TimeUnit.SECONDS), "timed tryAcquire succeeds once the permit is released");
+        check(done.await(5, TimeUnit.SECONDS), "worker finished");
+        t.join(5000);
+        check(!t.isAlive(), "worker thread finished");
+    }
+
+    // interrupting an acquire: InterruptedException, permit left for others
+    static void testAcquireInterrupted() throws Exception {
+        final Semaphore s = new Semaphore(0);
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch done = new CountDownLatch(1);
+        final AtomicBoolean interrupted = new AtomicBoolean();
+        Thread t = new Thread(() -> {
+            entered.countDown();
+            try {
+                s.acquire();
+            } catch (InterruptedException e) {
+                interrupted.set(true);
+            } finally {
+                done.countDown();
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        check(entered.await(5, TimeUnit.SECONDS), "worker started waiting for a permit");
+        t.interrupt();
+        check(done.await(5, TimeUnit.SECONDS), "interrupted acquire returns promptly (bounded)");
+        t.join(5000);
+        check(!t.isAlive(), "interrupted worker finished");
+        check(interrupted.get(), "acquire throws InterruptedException when interrupted");
+        check(s.availablePermits() == 0, "no permit was consumed by the interrupted acquire");
+    }
+
+    // acquireUninterruptibly: the interrupt does not abort the wait; the interrupt
+    // status is still set after the acquire completes
+    static void testAcquireUninterruptiblyInterrupt() throws Exception {
+        final Semaphore s = new Semaphore(0);
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch done = new CountDownLatch(1);
+        final AtomicBoolean acquired = new AtomicBoolean();
+        final AtomicBoolean stillInterrupted = new AtomicBoolean();
+        Thread t = new Thread(() -> {
+            entered.countDown();
+            s.acquireUninterruptibly(); // an interrupt while waiting must not abort it
+            acquired.set(true);
+            stillInterrupted.set(Thread.currentThread().isInterrupted());
+            done.countDown();
+        });
+        t.setDaemon(true);
+        t.start();
+        check(entered.await(5, TimeUnit.SECONDS), "worker started waiting for a permit");
+        t.interrupt();
+        check(!acquired.get(), "an interrupt alone does not grant a permit");
+        s.release();
+        check(done.await(5, TimeUnit.SECONDS), "worker acquired the permit despite the interrupt (bounded)");
+        t.join(5000);
+        check(!t.isAlive(), "worker thread finished");
+        check(acquired.get(), "acquireUninterruptibly completed after the release");
+        check(stillInterrupted.get(), "interrupt status is preserved by acquireUninterruptibly");
+        check(s.availablePermits() == 0, "permit consumed by the worker");
+    }
+
+    // reducePermits is protected: a subclass probe may drive permits negative
+    static class ReducibleSemaphore extends Semaphore {
+        ReducibleSemaphore(int permits) { super(permits); }
+        void reduce(int reduction) { reducePermits(reduction); }
+    }
+
+    static void testReducePermits() {
+        ReducibleSemaphore s = new ReducibleSemaphore(2);
+        s.reduce(3);
+        check(s.availablePermits() == -1, "reducePermits may drive the permit count negative (legal)");
+        s.release(4);
+        check(s.availablePermits() == 3, "releases compensate reduced permits");
+        try {
+            new ReducibleSemaphore(1).reduce(-1);
+            check(false, "negative reduction should throw");
+        } catch (IllegalArgumentException e) {
+            check(true, "reducePermits(negative) throws IAE");
+        }
+    }
+
+    // releasing without acquiring may exceed the initial permit count
+    static void testReleaseBeyondInitial() {
+        Semaphore s = new Semaphore(1);
+        s.release();
+        check(s.availablePermits() == 2, "release() without acquire exceeds the initial count");
+        s.release(3);
+        check(s.availablePermits() == 5, "release(n) may push permits well beyond the initial count");
+    }
+
+    // negative initial permits: legal; acquires must wait for releases to compensate
+    static void testNegativePermits() throws Exception {
+        Semaphore neg = new Semaphore(-1);
+        check(neg.availablePermits() == -1, "negative initial permits are legal");
+        check(!neg.tryAcquire(50, TimeUnit.MILLISECONDS), "acquire waits until releases compensate the deficit");
+        neg.release(2);
+        check(neg.availablePermits() == 1, "two releases compensate one negative permit");
+    }
+
+    static void testToStringAndDrain() {
+        check(new Semaphore(5).toString().contains("Permits = 5"), "toString reports the permit count");
+        Semaphore f = new Semaphore(2, true);
+        check(f.drainPermits() == 2, "fair drainPermits returns all available permits");
+        check(f.availablePermits() == 0, "fair drainPermits leaves zero permits");
+        Semaphore neg = new Semaphore(-3, false);
+        check(neg.drainPermits() == -3, "drainPermits on negative permits reports the negative count");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
+        testWhiteBoxExtra();
         testBlackBox();
+        testNegativeArguments();
+        testTimedTryAcquire();
+        testAcquireInterrupted();
+        testAcquireUninterruptiblyInterrupt();
+        testReducePermits();
+        testReleaseBeyondInitial();
+        testNegativePermits();
+        testToStringAndDrain();
         testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }

@@ -37,3 +37,14 @@
 
 - 溢出环绕（wrap-around）；`weakCompareAndSet` 允许虚假失败需重试。
 - JDK-8 无 JDK 9+ 排序访问器与 compareAndExchange，不移植。
+
+## 5. 契约深化追加（本轮）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | getAndDecrement 从 0 到负 / 返回值序列 / getAndAdd 负增量 / addAndGet(MIN_VALUE) 环绕 / getAndSet 链 / toString | testReturnSequences |
+| P0 | updateAndGet·getAndUpdate·accumulateAndGet·getAndAccumulate 的函数收到旧值与返回值契约 | testFunctionReceivesOldValue |
+| P0 | Number 视图（intValue 窄化 / longValue 2^62+1 精确 / 小值 float·double 精确） | testNumberViews |
+| P1 | JDK-9+ 访问模式族 13 方法缺席反射断言 + weakCompareAndSet 未废弃 | testAbsentJdk9Methods |
+
+断言规模：PASS (71 assertions)。

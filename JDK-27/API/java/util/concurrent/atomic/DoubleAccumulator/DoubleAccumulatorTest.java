@@ -97,9 +97,42 @@ public class DoubleAccumulatorTest {
         check(acc.get() >= 0.0 && acc.get() <= (double) N * M, "concurrent accumulate stays within [0, N*M]");
     }
 
+    // ---- 契约深化：二进制可精确浮点 / 负数 / getThenReset 链 / identity 返回 ----
+    static void testExactBinarySums() {
+        DoubleAccumulator acc = new DoubleAccumulator(Double::sum, 0.0);
+        acc.accumulate(0.5);
+        acc.accumulate(0.25);
+        check(acc.get() == 0.75, "0.5 + 0.25 == 0.75 exactly");
+        acc.accumulate(0.125);
+        check(acc.get() == 0.875, "0.875 exact");
+        acc.reset();
+        check(acc.get() == 0.0, "reset to identity");
+        acc.accumulate(-0.5);
+        acc.accumulate(0.25);
+        check(acc.get() == -0.25, "-0.5 + 0.25 == -0.25 exactly");
+        check(acc.getThenReset() == -0.25, "getThenReset returns current value");
+        check(acc.getThenReset() == 0.0, "second getThenReset returns identity");
+        check(acc.toString().equals("0.0"), "toString after reset");
+    }
+
+    static void testMaxDetails() {
+        DoubleAccumulator max = new DoubleAccumulator(Math::max, Double.NEGATIVE_INFINITY);
+        max.accumulate(0.5);
+        max.accumulate(0.125);
+        max.accumulate(0.75);
+        check(max.get() == 0.75, "Math::max keeps maximum (exact binary fractions)");
+        max.accumulate(-1.0);
+        check(max.get() == 0.75, "smaller value does not change max");
+        max.accumulate(0.75);
+        check(max.get() == 0.75, "accumulating equal max keeps value");
+        check(max instanceof Number, "DoubleAccumulator is a Number");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testExactBinarySums();
+        testMaxDetails();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

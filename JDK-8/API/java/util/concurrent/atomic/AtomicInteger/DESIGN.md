@@ -45,3 +45,16 @@
 - `lazySet` 只保证最终可见，需后续 volatile 读改写建立顺序。
 - 溢出是环绕（wrap-around），不是饱和。
 - JDK-8 无 `compareAndExchange*`/`setPlain`/`getOpaque` 等 JDK 9+ 方法，不移植。
+
+## 5. 契约深化追加（本轮）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | getAndDecrement 从 0 到负 / 返回值序列 0..4 全等 / getAndAdd 负增量 / addAndGet(MIN_VALUE) 环绕 | testReturnSequences |
+| P0 | getAndSet 返回链（旧值逐次）+ toString 精确值 | testReturnSequences |
+| P0 | updateAndGet 函数收到旧值（副作用列表证明）/ getAndUpdate 返回旧值 | testFunctionReceivesOldValue |
+| P0 | accumulateAndGet 组合器收到 (旧值, x) / getAndAccumulate 返回旧值 | testFunctionReceivesOldValue |
+| P0 | Number 视图负值与 instanceof | testNumberViews |
+| P1 | JDK-9+ 访问模式族 13 方法缺席反射断言 + weakCompareAndSet 未废弃 | testAbsentJdk9Methods |
+
+断言规模：PASS (70 assertions)。

@@ -77,9 +77,47 @@ public class AtomicMarkableReferenceTest {
         check("a".equals(ref.getReference()) && ref.isMarked(), "attemptMark toggles mark without touching reference");
     }
 
+    // ---- 契约深化：identity 语义 / 双失配分支 / null 引用分支 / mark-only CAS ----
+    static void testIdentitySemantics() {
+        String a1 = new String("a");
+        String a2 = new String("a");
+        check(a1.equals(a2) && a1 != a2, "precondition: equals but not same reference");
+        AtomicMarkableReference<String> ref = new AtomicMarkableReference<>(a1, false);
+        check(!ref.compareAndSet(a2, "b", false, true), "identity CAS with equals-but-not-same ref fails");
+        check(ref.getReference() == a1 && !ref.isMarked(), "failed identity CAS leaves state unchanged");
+        check(!ref.attemptMark(a2, true), "attemptMark with non-matching identity ref fails");
+        check(!ref.isMarked(), "failed attemptMark leaves mark unchanged");
+        check(ref.compareAndSet(a1, "b", false, true), "identity CAS with == ref succeeds");
+    }
+
+    static void testBothMismatchAndNull() {
+        // ref 与 mark 都失配 → false 且不变
+        AtomicMarkableReference<String> ref = new AtomicMarkableReference<>("r", true);
+        check(!ref.compareAndSet("x", "t", false, false), "both-mismatch CAS returns false");
+        check("r".equals(ref.getReference()) && ref.isMarked(), "both-mismatch leaves state unchanged");
+        // newRef == 现值、仅换 mark：成功且引用不变
+        check(ref.compareAndSet("r", "r", true, false), "same-ref mark-only CAS succeeds");
+        check("r".equals(ref.getReference()) && !ref.isMarked(), "mark-only CAS changes only mark");
+        // newMark == 现 mark、仅换引用
+        check(ref.compareAndSet("r", "s", false, false), "same-mark ref-only CAS succeeds");
+        check("s".equals(ref.getReference()) && !ref.isMarked(), "ref-only CAS changes only reference");
+        // expectedRef 为 null 的分支
+        AtomicMarkableReference<String> n = new AtomicMarkableReference<>(null, false);
+        check(n.compareAndSet(null, "v", false, true), "CAS(null, v, false, true) on null initial succeeds");
+        check(!n.compareAndSet(null, "w", true, false), "CAS(null, w) after set fails");
+        // attemptMark 只改 mark 不动引用
+        check(n.attemptMark("v", false), "attemptMark matching ref returns true");
+        check("v".equals(n.getReference()) && !n.isMarked(), "attemptMark changed only mark");
+        // set 无条件更新两者
+        n.set("next", true);
+        check("next".equals(n.getReference()) && n.isMarked(), "set updates reference and mark");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testIdentitySemantics();
+        testBothMismatchAndNull();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

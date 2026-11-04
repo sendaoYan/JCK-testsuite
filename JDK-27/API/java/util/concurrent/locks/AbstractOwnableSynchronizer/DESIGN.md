@@ -21,4 +21,7 @@
 - 黑盒（最小子类 `AOS` 暴露受保护方法）：
   - 初始 `getExclusiveOwnerThread() == null`；`set` 后返回同一线程引用。
   - `set(null)` 清空持有者；再次 `set(other)` 覆盖旧持有者（独占语义）。
+- 本轮深化新增（append-only，断言 12 → 13）：
+  - `testCrossThreadSetAndGet`：子线程 `setExclusiveOwnerThread(自身)` + latch，主线程 `getExclusiveOwnerThread()` 读到该线程引用（跨线程可见性）。
+
 - 健壮性：单线程确定性、无 sleep、无全局副作用、headless-safe。

@@ -31,4 +31,12 @@
   - 独占阻塞 `acquire`：子线程阻塞、主线程 `release` 解阻塞。
   - 共享闩 `tryAcquireShared`/`tryReleaseShared`/`acquireShared`/`tryAcquireSharedNanos`/`acquireSharedInterruptibly`。
   - `ConditionObject`：`owns`/`hasWaiters`/`getWaitQueueLength`/`getWaitingThreads` + `await/signal` 握手。
+- 本轮深化新增（append-only，断言 45 → 96）：
+  - `StrictMutex` 子类：`tryRelease` 未持有时返回 false（镜像 JDK 内置同步器）。
+  - `testStrictReleaseReturnsFalse`：**未持锁 release → 返回 false 不抛**（IMSE 是 ReentrantLock 层契约，非 AQS）。
+  - `testForeignConditionRejected`：外来 ConditionObject → hasWaiters/getWaitQueueLength/getWaitingThreads 抛 IAE "Not owner"；`owns` → false。
+  - `testIsQueuedNull`：`isQueued(null)` → NPE；`testToStringContainsState`："State = 4"/"empty queue"。
+  - `testQueuedThreadObservation`：**spinUntil 入队后 isQueued/getFirstQueuedThread/getQueuedThreads/getExclusiveQueuedThreads/hasQueuedPredecessors/hasContended 全套观测**。
+  - `testCrossThreadTryAcquireFails`、`testTryAcquireNanosContendedFalse`、`testAcquireInterruptiblyThrows`（中断后重试成功）、`testConditionSignalNoWaitersIsNoOp`。
+
 - 健壮性：daemon 线程 + CountDownLatch 收尾，无 sleep、无墙钟、无全局副作用、headless-safe。

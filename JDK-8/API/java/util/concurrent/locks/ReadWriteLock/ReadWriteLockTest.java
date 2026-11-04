@@ -25,8 +25,44 @@ public class ReadWriteLockTest {
         check(rl != wl, "read and write locks distinct");
     }
 
-    public static void main(String[] args) {
+    static void testLockPairStableIdentity() {
+        ReadWriteLock rwl = new ReentrantReadWriteLock();
+        check(rwl.readLock() == rwl.readLock(), "readLock() returns the same instance");
+        check(rwl.writeLock() == rwl.writeLock(), "writeLock() returns the same instance");
+        check(rwl.readLock() != rwl.writeLock(), "read and write pairs are distinct objects");
+    }
+
+    static void testWriteExcludesReaders() throws Exception {
+        final ReadWriteLock rwl = new ReentrantReadWriteLock();
+        rwl.writeLock().lock(); // main holds write
+        final java.util.concurrent.atomic.AtomicBoolean gotRead =
+            new java.util.concurrent.atomic.AtomicBoolean(true);
+        Thread t = new Thread(() -> gotRead.set(rwl.readLock().tryLock()));
+        t.setDaemon(true);
+        t.start();
+        t.join(5000);
+        check(!t.isAlive() && !gotRead.get(), "reader tryLock false while another thread holds write");
+        rwl.writeLock().unlock();
+    }
+
+    static void testWriteExcludesWriters() throws Exception {
+        final ReadWriteLock rwl = new ReentrantReadWriteLock();
+        rwl.writeLock().lock(); // main holds write
+        final java.util.concurrent.atomic.AtomicBoolean gotWrite =
+            new java.util.concurrent.atomic.AtomicBoolean(true);
+        Thread t = new Thread(() -> gotWrite.set(rwl.writeLock().tryLock()));
+        t.setDaemon(true);
+        t.start();
+        t.join(5000);
+        check(!t.isAlive() && !gotWrite.get(), "writer tryLock false while another thread holds write");
+        rwl.writeLock().unlock();
+    }
+
+    public static void main(String[] args) throws Exception {
         testReadWriteLock();
+        testLockPairStableIdentity();
+        testWriteExcludesReaders();
+        testWriteExcludesWriters();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -56,9 +56,44 @@ public class CompletionServiceTest {
         check(pool.awaitTermination(10, TimeUnit.SECONDS), "executor terminated");
     }
 
+    // ---- Part 3: interface structure lock (generics + abstractness) ----
+    static void testInterfaceLock() throws Exception {
+        Class<?> c = cls("java.util.concurrent.CompletionService");
+        check(c.getTypeParameters().length == 1, "one type parameter <V>");
+        check("V".equals(c.getTypeParameters()[0].getName()), "type parameter named V");
+        check(c.getDeclaredMethods().length == 5, "exactly 5 declared methods (locked method face)");
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            check(java.lang.reflect.Modifier.isAbstract(m.getModifiers()),
+                  m.getName() + " is abstract (no default impls)");
+        }
+        check(CompletionService.class.isAssignableFrom(ExecutorCompletionService.class),
+              "ExecutorCompletionService implements CompletionService");
+        check(!ExecutorService.class.isAssignableFrom(CompletionService.class)
+                  && !CompletionService.class.isAssignableFrom(ExecutorService.class),
+              "CompletionService and ExecutorService are unrelated interfaces");
+    }
+
+    // ---- Part 4: Runnable+fixed-result form and completion-queue visibility ----
+    static void testRunnableForm() throws Exception {
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            CompletionService<Integer> cs = new ExecutorCompletionService<>(pool);
+            Future<Integer> f = cs.submit(() -> 40 + 2);
+            check(f.get() == 42, "submit(Callable) result via Future");
+            Future<Integer> fr = cs.submit(() -> { }, 7);
+            check(fr.get() == 7, "submit(Runnable, V) yields the fixed result");
+            check(cs.take() == f || cs.take() == fr,
+                  "take() hands back a queued Future (completion queue populated)");
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testInterfaceLock();
+        testRunnableForm();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

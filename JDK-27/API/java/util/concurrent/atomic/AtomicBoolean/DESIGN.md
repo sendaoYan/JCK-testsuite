@@ -31,3 +31,11 @@
   - 各内存序访问器 setPlain/getPlain、setOpaque/getOpaque、setRelease/getAcquire。
   - compareAndExchange 返回见证值（成功返回旧值、失败返回当前值）。
   - 并发：8 线程对同一 `compareAndSet(false,true)`，恰好一个赢家（AtomicInteger 计数 ==1）。
+
+### 本轮契约深化追加
+
+- CAS 全分支矩阵（stale expect false 且不变 / same-value 成功 / getAndSet 双向返回旧布尔）。
+- 序列化 round-trip 保值且复活可 CAS（`testSerialization`）。
+- weakCompareAndSet 自 JDK-9 起 @Deprecated（反射断言，`testDeprecationContract`）。
+
+断言规模：PASS (39 assertions)。

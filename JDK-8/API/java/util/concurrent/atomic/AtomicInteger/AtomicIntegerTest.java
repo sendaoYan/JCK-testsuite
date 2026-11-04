@@ -145,9 +145,90 @@ public class AtomicIntegerTest {
         check(a.get() == N * M, "concurrent incrementAndGet loses no updates");
     }
 
+    // ---- 契约深化：精确返回值序列 / 函数收到旧值 / J9+ 方法缺席 ----
+    static void testReturnSequences() {
+        AtomicInteger a = new AtomicInteger(0);
+        // 0 减到负的边界：getAndDecrement 于 0 返回 0 且值变 -1
+        check(a.getAndDecrement() == 0 && a.get() == -1, "getAndDecrement from 0 to negative");
+        check(a.decrementAndGet() == -2, "decrementAndGet continues negative");
+        // 返回值序列全等：getAndIncrement 0..4 返回 0,1,2,3,4
+        a.set(0);
+        boolean seq = true;
+        for (int i = 0; i < 5; i++) seq &= (a.getAndIncrement() == i);
+        check(seq, "getAndIncrement return sequence 0..4");
+        check(a.get() == 5, "value after sequence");
+        // getAndAdd/addAndGet 精确
+        a.set(10);
+        check(a.getAndAdd(-20) == 10 && a.get() == -10, "getAndAdd negative delta");
+        check(a.addAndGet(Integer.MIN_VALUE) == -10 + Integer.MIN_VALUE, "addAndGet MIN_VALUE wraps");
+        check(a.addAndGet(0) == -10 + Integer.MIN_VALUE, "addAndGet 0 no-op");
+        // getAndSet 返回链
+        a.set(1);
+        check(a.getAndSet(2) == 1 && a.getAndSet(3) == 2 && a.get() == 3, "getAndSet chain returns old values");
+        check(a.toString().equals("3"), "toString exact value");
+    }
+
+    static void testFunctionReceivesOldValue() {
+        // updateAndGet 的函数收到旧值，返回新值
+        AtomicInteger a = new AtomicInteger(7);
+        java.util.List<Integer> seen = new java.util.ArrayList<>();
+        int r = a.updateAndGet(x -> { seen.add(x); return x + 1; });
+        check(seen.size() == 1 && seen.get(0) == 7, "updateAndGet function receives old value");
+        check(r == 8, "updateAndGet returns new value");
+        // getAndUpdate 返回旧值
+        seen.clear();
+        int old = a.getAndUpdate(x -> { seen.add(x); return x * 10; });
+        check(seen.get(0) == 8, "getAndUpdate function receives old value");
+        check(old == 8 && a.get() == 80, "getAndUpdate returns old, stores new");
+        // accumulateAndGet 组合器收到 (旧值, x)
+        java.util.List<Integer> accArgs = new java.util.ArrayList<>();
+        int rr = a.accumulateAndGet(5, (x, y) -> { accArgs.add(x); accArgs.add(y); return x - y; });
+        check(accArgs.get(0) == 80 && accArgs.get(1) == 5, "accumulateAndGet combiner receives (old, x)");
+        check(rr == 75, "accumulateAndGet returns new value");
+        // getAndAccumulate 返回旧值
+        check(a.getAndAccumulate(100, (x, y) -> x + y) == 75, "getAndAccumulate returns old value");
+    }
+
+    static void testNumberViews() {
+        AtomicInteger a = new AtomicInteger(-1);
+        check(a.intValue() == -1, "intValue negative");
+        check(a.longValue() == -1L, "longValue widens");
+        a.set(1_000_000);
+        check(a.floatValue() == 1_000_000.0f, "floatValue exact for small values");
+        check(a.doubleValue() == 1_000_000.0, "doubleValue exact for small values");
+        // Number 子类身份
+        check(a instanceof Number, "AtomicInteger is a Number");
+    }
+
+    // JDK-9+ 访问模式族在 JDK-8 中缺席（反射断言记录差异）
+    static void testAbsentJdk9Methods() throws Exception {
+        Class<?> c = AtomicInteger.class;
+        String[] absent = {
+            "getPlain", "setPlain", "getOpaque", "setOpaque",
+            "getAcquire", "setRelease",
+            "compareAndExchange", "compareAndExchangeAcquire", "compareAndExchangeRelease",
+            "weakCompareAndSetPlain", "weakCompareAndSetVolatile",
+            "weakCompareAndSetAcquire", "weakCompareAndSetRelease",
+        };
+        for (String name : absent) {
+            boolean found = false;
+            for (java.lang.reflect.Method m : c.getMethods()) {
+                if (m.getName().equals(name)) { found = true; break; }
+            }
+            check(!found, name + " must be absent in JDK-8");
+        }
+        // JDK-8 的 weakCompareAndSet 尚未标 @Deprecated（JDK-9 起废弃）
+        java.lang.reflect.Method w = c.getMethod("weakCompareAndSet", int.class, int.class);
+        check(!w.isAnnotationPresent(Deprecated.class), "weakCompareAndSet not yet deprecated in JDK-8");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testReturnSequences();
+        testFunctionReceivesOldValue();
+        testNumberViews();
+        testAbsentJdk9Methods();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

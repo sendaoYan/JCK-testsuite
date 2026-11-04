@@ -148,6 +148,148 @@ public class ConcurrentLinkedQueueTest {
         check(spq.toString() != null && spq.toString().contains("1"), "toString non-null");
     }
 
+    // ---- appended: contract deepening ----
+    static void testEmptyState() {
+        ConcurrentLinkedQueue<String> q = new ConcurrentLinkedQueue<>();
+        check(q.isEmpty() && q.size() == 0, "fresh queue empty");
+        check(q.peek() == null, "peek empty returns null");
+        check(q.poll() == null, "poll empty returns null");
+        expectThrows(() -> q.element(), java.util.NoSuchElementException.class,
+                     "element() empty throws NoSuchElementException");
+        check(!q.remove("x"), "remove(Object) empty false");
+        check(q.toString().equals("[]"), "empty toString []");
+        check(!q.iterator().hasNext(), "empty iterator hasNext false");
+        expectThrows(() -> q.iterator().next(), java.util.NoSuchElementException.class,
+                     "empty iterator next throws NoSuchElementException");
+        check(q.toArray().length == 0, "empty toArray length 0");
+    }
+
+    static void testFifoOrderExact() {
+        ConcurrentLinkedQueue<Integer> q = new ConcurrentLinkedQueue<>();
+        boolean offered = true;
+        for (int i = 1; i <= 10; i++) offered &= q.offer(i);
+        check(offered && q.size() == 10, "offered 10 elements");
+        boolean fifo = true;
+        for (int i = 1; i <= 10; i++) fifo &= (q.poll() == i);
+        check(fifo, "poll sequence is exactly FIFO 1..10");
+        check(q.isEmpty(), "queue drained");
+    }
+
+    static void testNullMatrix() {
+        ConcurrentLinkedQueue<String> q = new ConcurrentLinkedQueue<>();
+        expectThrows(() -> q.add(null), NullPointerException.class, "add(null)");
+        expectThrows(() -> new ConcurrentLinkedQueue<String>(null), NullPointerException.class,
+                     "ctor(null Collection)");
+        expectThrows(() -> new ConcurrentLinkedQueue<String>(Arrays.asList("a", null)),
+                     NullPointerException.class, "ctor(Collection with null element)");
+        expectThrows(() -> q.addAll(null), NullPointerException.class, "addAll(null)");
+        expectThrows(() -> q.addAll(Arrays.asList("ok", null)), NullPointerException.class,
+                     "addAll(Collection with null element)");
+    }
+
+    static void testIteratorRemove() {
+        ConcurrentLinkedQueue<Integer> q = new ConcurrentLinkedQueue<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> it = q.iterator();
+        expectThrows(() -> it.remove(), IllegalStateException.class,
+                     "iterator.remove before next throws IllegalStateException");
+        check(it.next() == 1, "iterator next");
+        it.remove();
+        check(q.size() == 2 && !q.contains(1), "iterator.remove removes the last returned");
+        expectThrows(() -> it.remove(), IllegalStateException.class,
+                     "second consecutive iterator.remove throws IllegalStateException");
+        check(it.hasNext() && it.next() == 2, "iteration continues after remove");
+    }
+
+    static void testToArrayNullTerminator() {
+        ConcurrentLinkedQueue<Integer> q = new ConcurrentLinkedQueue<>(Arrays.asList(1, 2));
+        Integer[] bigger = q.toArray(new Integer[4]);
+        check(bigger.length == 4 && bigger[0] == 1 && bigger[1] == 2 && bigger[2] == null,
+              "toArray(bigger) null-terminates at size");
+        Integer[] smaller = q.toArray(new Integer[1]);
+        check(smaller.length == 2 && smaller[0] == 1 && smaller[1] == 2,
+              "toArray(smaller) returns exact new array");
+    }
+
+    static void testSizeConsistency() {
+        ConcurrentLinkedQueue<Integer> q = new ConcurrentLinkedQueue<>();
+        for (int i = 0; i < 100; i++) q.offer(i);
+        check(q.size() == 100, "size is exact after 100 sequential offers");
+        check(!q.isEmpty(), "not empty");
+        int polled = 0;
+        while (q.poll() != null) polled++;
+        check(polled == 100 && q.size() == 0, "drained exactly 100");
+    }
+
+    static void testSpliteratorCharacteristics() {
+        ConcurrentLinkedQueue<Integer> q = new ConcurrentLinkedQueue<>(Arrays.asList(1, 2, 3));
+        java.util.Spliterator<Integer> sp = q.spliterator();
+        int ch = sp.characteristics();
+        check((ch & java.util.Spliterator.ORDERED) != 0, "spliterator ORDERED");
+        check((ch & java.util.Spliterator.NONNULL) != 0, "spliterator NONNULL");
+        check((ch & java.util.Spliterator.CONCURRENT) != 0, "spliterator CONCURRENT");
+        check((ch & java.util.Spliterator.SIZED) == 0, "spliterator not SIZED (weakly consistent)");
+        final int[] first = {-1};
+        check(sp.tryAdvance(x -> first[0] = x) && first[0] == 1, "tryAdvance first element");
+        java.util.List<Integer> rest = new java.util.ArrayList<>();
+        sp.forEachRemaining(rest::add);
+        check(rest.equals(Arrays.asList(2, 3)), "forEachRemaining after tryAdvance");
+        check(q.stream().count() == 3, "stream count");
+    }
+
+    static void testSerialization() throws Exception {
+        check(java.io.ObjectStreamClass.lookup(ConcurrentLinkedQueue.class).getSerialVersionUID()
+              == 196745693267521676L, "serialVersionUID locked");
+        ConcurrentLinkedQueue<Integer> q = new ConcurrentLinkedQueue<>(Arrays.asList(1, 2, 3));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(q);
+        }
+        @SuppressWarnings("unchecked")
+        ConcurrentLinkedQueue<Integer> copy = (ConcurrentLinkedQueue<Integer>)
+            new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.size() == 3, "round-trip size");
+        check(copy.poll() == 1 && copy.poll() == 2 && copy.poll() == 3,
+              "round-trip preserves FIFO order");
+        check(copy.offer(4) && copy.poll() == 4, "resurrected queue usable");
+    }
+
+    static void testConcurrentOfferPoll() throws Exception {
+        // bounded producer/consumer proof of FIFO handoff (daemon threads, 5s cap)
+        final ConcurrentLinkedQueue<Integer> q = new ConcurrentLinkedQueue<>();
+        final int n = 1000;
+        final java.util.concurrent.CountDownLatch produced = new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.CountDownLatch consumed = new java.util.concurrent.CountDownLatch(1);
+        final int[] consumedCount = {0};
+        final boolean[] ordered = {true};
+        Thread producer = new Thread(() -> {
+            for (int i = 0; i < n; i++) q.offer(i);
+            produced.countDown();
+        }, "clq-producer");
+        Thread consumer = new Thread(() -> {
+            int expected = 0;
+            try {
+                produced.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            Integer v;
+            while (expected < n && (v = q.poll()) != null) {
+                if (v != expected) ordered[0] = false;
+                expected++;
+            }
+            consumedCount[0] = expected;
+            consumed.countDown();
+        }, "clq-consumer");
+        producer.setDaemon(true);
+        consumer.setDaemon(true);
+        producer.start();
+        consumer.start();
+        check(consumed.await(5, java.util.concurrent.TimeUnit.SECONDS), "consumer finished within 5s");
+        producer.join(5000);
+        check(ordered[0], "consumed values arrive in FIFO order");
+        check(consumedCount[0] + q.size() == n, "no element lost (consumed + remaining == n)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testQueueSemantics();
@@ -155,6 +297,15 @@ public class ConcurrentLinkedQueueTest {
         testToArrayAndAddAll();
         testWeaklyConsistentIterator();
         testBlackBox();
+        testEmptyState();
+        testFifoOrderExact();
+        testNullMatrix();
+        testIteratorRemove();
+        testToArrayNullTerminator();
+        testSizeConsistency();
+        testSpliteratorCharacteristics();
+        testSerialization();
+        testConcurrentOfferPoll();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

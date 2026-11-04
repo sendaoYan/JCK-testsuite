@@ -25,3 +25,10 @@
   - 求最大累加器：identity=-Inf，Math::max 跟踪最大值；reset 回 -Inf。
   - Number 视图 doubleValue/longValue/intValue/floatValue；toString == Double.toString(get)。
   - 并发：8 线程各 accumulate(1.0)（求和 identity=0.0），仅断言 get 落在 [0, N*M]。
+
+### 本轮契约深化追加
+
+- 二进制可精确浮点（0.5/0.25/0.125）合并全等、负数、getThenReset 链（`testExactBinarySums`）。
+- Math::max 细节（相等值不变、instanceof Number）（`testMaxDetails`）。
+
+断言规模：PASS (30 assertions)。

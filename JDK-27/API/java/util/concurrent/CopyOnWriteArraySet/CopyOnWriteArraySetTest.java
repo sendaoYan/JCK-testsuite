@@ -129,6 +129,114 @@ public class CopyOnWriteArraySetTest {
         check(s.isEmpty(), "clear empties");
     }
 
+    // ---- appended: contract deepening ----
+    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                                         + " but got " + t.getClass().getSimpleName(), t);
+            passed++;
+        }
+    }
+
+    static void testEmptyState() {
+        CopyOnWriteArraySet<String> s = new CopyOnWriteArraySet<>();
+        check(s.isEmpty() && s.size() == 0, "fresh set empty");
+        check(!s.contains("x"), "contains empty false");
+        check(!s.remove("x"), "remove empty false");
+        check(!s.iterator().hasNext(), "empty iterator hasNext false");
+        expectThrows(() -> s.iterator().next(), java.util.NoSuchElementException.class,
+                     "empty iterator next throws NoSuchElementException");
+        check(s.toString().equals("[]"), "empty toString []");
+    }
+
+    static void testIterationOrderIsInsertionOrder() {
+        CopyOnWriteArraySet<Integer> s = new CopyOnWriteArraySet<>(Arrays.asList(5, 3, 1, 3, 5));
+        check(s.size() == 3, "constructor dedups keeping first occurrence");
+        List<Integer> order = new ArrayList<>();
+        for (int x : s) order.add(x);
+        check(order.equals(Arrays.asList(5, 3, 1)), "iteration order is insertion order");
+        CopyOnWriteArraySet<String> t = new CopyOnWriteArraySet<>();
+        check(t.addAll(Arrays.asList("c", "a", "c", "b", "a")), "addAll true");
+        List<String> o2 = new ArrayList<>();
+        for (String x : t) o2.add(x);
+        check(o2.equals(Arrays.asList("c", "a", "b")), "addAll preserves first-occurrence order");
+        check(t.toString().equals("[c, a, b]"), "toString in insertion order");
+        t.add("z");
+        check(t.toString().equals("[c, a, b, z]"), "add appends at the end");
+    }
+
+    static void testNullTolerance() {
+        CopyOnWriteArraySet<String> s = new CopyOnWriteArraySet<>();
+        check(s.add(null), "add(null) legal (backed by COWAL)");
+        check(s.contains(null), "contains(null) true");
+        check(!s.add(null), "second add(null) false");
+        check(s.add("a") && s.size() == 2, "size with null element");
+        expectThrows(() -> s.addAll(null), NullPointerException.class, "addAll(null)");
+        expectThrows(() -> new CopyOnWriteArraySet<String>(null), NullPointerException.class,
+                     "ctor(null Collection)");
+        check(s.remove(null) && !s.contains(null), "remove(null) works");
+    }
+
+    static void testIteratorSnapshotExactOrder() {
+        CopyOnWriteArraySet<Integer> s = new CopyOnWriteArraySet<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> it = s.iterator();
+        s.add(4);
+        s.remove(1);
+        List<Integer> seen = new ArrayList<>();
+        while (it.hasNext()) seen.add(it.next());
+        check(seen.equals(Arrays.asList(1, 2, 3)), "snapshot excludes later add AND remove");
+        Iterator<Integer> it2 = s.iterator();
+        it2.next();
+        expectThrows(() -> it2.remove(), UnsupportedOperationException.class,
+                     "iterator.remove unsupported (snapshot)");
+    }
+
+    static void testCrossImplEqualsHashSet() {
+        CopyOnWriteArraySet<Integer> c = new CopyOnWriteArraySet<>(Arrays.asList(1, 2, 3));
+        java.util.HashSet<Integer> hs = new java.util.HashSet<>(Arrays.asList(3, 2, 1));
+        check(c.equals(hs) && hs.equals(c), "cross-impl equals with HashSet");
+        check(c.hashCode() == hs.hashCode(), "hashCode matches Set contract");
+        hs.add(99);
+        check(!c.equals(hs), "different elements not equal");
+    }
+
+    static void testSerialization() throws Exception {
+        check(java.io.ObjectStreamClass.lookup(CopyOnWriteArraySet.class).getSerialVersionUID()
+              == 5457747651344034263L, "serialVersionUID locked");
+        CopyOnWriteArraySet<String> s = new CopyOnWriteArraySet<>(Arrays.asList("a", null, "b"));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(s);
+        }
+        @SuppressWarnings("unchecked")
+        CopyOnWriteArraySet<String> copy = (CopyOnWriteArraySet<String>)
+            new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.size() == 3 && copy.contains("a") && copy.contains(null), "round-trip incl. null");
+        List<String> order = new ArrayList<>();
+        for (String x : copy) order.add(x);
+        check(order.equals(Arrays.asList("a", null, "b")), "round-trip preserves insertion order");
+        check(copy.add("c") && copy.size() == 4, "resurrected set mutable");
+    }
+
+    static void testSpliteratorCharacteristics() {
+        CopyOnWriteArraySet<Integer> s = new CopyOnWriteArraySet<>(Arrays.asList(5, 3, 1));
+        java.util.Spliterator<Integer> sp = s.spliterator();
+        int ch = sp.characteristics();
+        check((ch & java.util.Spliterator.DISTINCT) != 0, "spliterator DISTINCT");
+        check((ch & java.util.Spliterator.IMMUTABLE) != 0, "spliterator IMMUTABLE");
+        check((ch & java.util.Spliterator.SIZED) != 0, "spliterator SIZED");
+        check(sp.estimateSize() == 3, "estimateSize exact");
+        final int[] first = {-1};
+        check(sp.tryAdvance(x -> first[0] = x) && first[0] == 5, "tryAdvance first in insertion order");
+        check(s.spliterator().trySplit() != null, "trySplit supported");
+        Integer[] bigger = s.toArray(new Integer[5]);
+        check(bigger.length == 5 && bigger[3] == null, "toArray(bigger) null-terminated");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSetSemantics();
@@ -136,6 +244,13 @@ public class CopyOnWriteArraySetTest {
         testIteratorSnapshot();
         testBulkOperationsAndEquals();
         testBlackBox();
+        testEmptyState();
+        testIterationOrderIsInsertionOrder();
+        testNullTolerance();
+        testIteratorSnapshotExactOrder();
+        testCrossImplEqualsHashSet();
+        testSerialization();
+        testSpliteratorCharacteristics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

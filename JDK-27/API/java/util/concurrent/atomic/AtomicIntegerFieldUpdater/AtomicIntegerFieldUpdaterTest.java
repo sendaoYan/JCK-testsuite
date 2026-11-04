@@ -150,9 +150,65 @@ public class AtomicIntegerFieldUpdaterTest {
         check(u.get(c) == N * M, "concurrent incrementAndGet over volatile field loses no updates");
     }
 
+    // ---- 契约深化：消息精确断言 / static·private·null 校验 / 多对象隔离 ----
+    static class StaticField {
+        static volatile int sv;
+    }
+    static class PrivateField {
+        private volatile int pv;
+    }
+
+    static void checkMessage(Runnable r, Class<? extends Throwable> exType, String expect, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (!exType.isInstance(t)) throw new AssertionError(msg + " (threw " + t + ")");
+            check(expect.equals(t.getMessage()), msg + " message <" + t.getMessage() + "> equals <" + expect + ">");
+            return;
+        }
+        throw new AssertionError(msg + " (no exception)");
+    }
+
+    static void testValidationMessages() {
+        // JDK-27 实测：消息精确断言
+        checkMessage(() -> AtomicIntegerFieldUpdater.newUpdater(PlainField.class, "value"),
+                IllegalArgumentException.class, "Must be volatile type", "non-volatile field message");
+        checkMessage(() -> AtomicIntegerFieldUpdater.newUpdater(LongField.class, "value"),
+                IllegalArgumentException.class, "Must be integer type", "long field message");
+        // static 字段 → IAE（JDK-27 实测消息 "Must not be a static field"；JDK-8 消息为 null）
+        checkMessage(() -> AtomicIntegerFieldUpdater.newUpdater(StaticField.class, "sv"),
+                IllegalArgumentException.class, "Must not be a static field", "static field message");
+        // private 字段（跨类不可见）→ RuntimeException（包装 IllegalAccessException）
+        // 注：JDK-11+ 同文件嵌套类是 nestmate，可访问；用 java.base 的 private volatile int 才不可达
+        assertThrows(RuntimeException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(java.util.concurrent.atomic.AtomicInteger.class, "value"),
+                "foreign private field rejected");
+        // null 字段名 / null 类 → RuntimeException（包装 NPE）
+        assertThrows(RuntimeException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(Counter.class, null), "null field name rejected");
+        assertThrows(RuntimeException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(null, "value"), "null class rejected");
+    }
+
+    static void testMultiObjectIndependence() {
+        AtomicIntegerFieldUpdater<Counter> u = AtomicIntegerFieldUpdater.newUpdater(Counter.class, "value");
+        Counter c1 = new Counter();
+        Counter c2 = new Counter();
+        u.set(c1, 11);
+        u.set(c2, 22);
+        check(u.get(c1) == 11 && u.get(c2) == 22, "two objects hold independent values");
+        check(u.compareAndSet(c1, 11, 33) && u.get(c1) == 33, "CAS on c1");
+        check(u.get(c2) == 22, "CAS on c1 leaves c2 untouched");
+        check(!u.compareAndSet(c2, 11, 0) && u.get(c2) == 22, "failed CAS on c2 leaves it unchanged");
+        u.incrementAndGet(c2);
+        check(u.get(c2) == 23 && u.get(c1) == 33, "per-object increments independent");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testValidationMessages();
+        testMultiObjectIndependence();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

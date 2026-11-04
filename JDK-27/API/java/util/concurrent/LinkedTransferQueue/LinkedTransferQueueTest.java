@@ -12,10 +12,13 @@ import java.util.AbstractQueue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class LinkedTransferQueueTest {
@@ -38,6 +41,31 @@ public class LinkedTransferQueueTest {
         }
     }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    @SuppressWarnings("unchecked")
+    static <T extends Throwable> T expectThrowsMsg(Runnable r, Class<T> type, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return type.cast(t); }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                                     + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
+    static <T extends Throwable> T expectThrowsThrowing(Class<T> type, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return type.cast(t); }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                    + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
     static boolean hasMethod(Class<?> c, String name, Class<?>... p) {
         try { c.getMethod(name, p); return true; }
         catch (NoSuchMethodException e) { return false; }
@@ -48,6 +76,11 @@ public class LinkedTransferQueueTest {
         t.setDaemon(true);
         t.start();
         return t;
+    }
+
+    static void awaitBounded(CountDownLatch latch, String what) throws InterruptedException {
+        if (!latch.await(5, TimeUnit.SECONDS))
+            throw new AssertionError("timeout (5s) waiting for: " + what);
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -182,6 +215,297 @@ public class LinkedTransferQueueTest {
         check(ts.toString() != null && ts.toString().contains("1"), "toString non-null");
     }
 
+    // ---- Part 3: blocking-queue contract deepening ----
+    static void testEmptyStateTable() {
+        LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        expectThrows(() -> q.element(), NoSuchElementException.class, "empty-state: element NSEE");
+        expectThrows(() -> q.remove(), NoSuchElementException.class, "empty-state: remove() NSEE");
+        check(q.poll() == null, "empty-state: poll null");
+        check(q.peek() == null, "empty-state: peek null");
+        check(q.isEmpty() && q.size() == 0, "empty-state: size 0");
+    }
+
+    static void testFifoStrictTen() {
+        LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        boolean all = true;
+        for (int i = 0; i < 10; i++) all &= q.offer(i);
+        check(all, "unbounded offer of 10 elements never fails");
+        boolean fifo = true;
+        for (int i = 0; i < 10; i++) fifo &= (q.poll() == i);
+        check(fifo, "10 elements drain in strict FIFO order");
+        check(q.isEmpty(), "empty after draining 10");
+    }
+
+    static void testTimedTryTransferNoConsumer() throws Exception {
+        LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        long t0 = System.nanoTime();
+        check(!q.tryTransfer(7, 200, TimeUnit.MILLISECONDS),
+                "timed tryTransfer waits then returns false with no consumer");
+        check(System.nanoTime() - t0 >= 150_000_000L, "timed tryTransfer waited ~200ms");
+        check(q.size() == 0 && q.isEmpty(), "failed timed tryTransfer does not enqueue");
+    }
+
+    static void testTryTransferWithWaitingConsumer() throws Exception {
+        final LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        final AtomicInteger got = new AtomicInteger(-1);
+        final CountDownLatch entered = new CountDownLatch(1), done = new CountDownLatch(1);
+        Thread c = startDaemon(() -> {
+            entered.countDown();
+            try {
+                got.set(q.take());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(entered, "consumer entry");
+        int spins = 0;
+        while (!q.hasWaitingConsumer()) {
+            Thread.yield();
+            if (++spins > 2_000_000)
+                throw new AssertionError("consumer never registered as waiting");
+        }
+        check(q.hasWaitingConsumer(), "hasWaitingConsumer true while consumer blocked");
+        check(q.getWaitingConsumerCount() == 1, "exactly one waiting consumer");
+        check(q.tryTransfer(42), "tryTransfer true with waiting consumer");
+        awaitBounded(done, "consumer completion");
+        c.join(5000);
+        check(got.get() == 42, "waiting consumer received transferred element");
+        check(q.isEmpty(), "queue empty after successful tryTransfer");
+        check(!q.hasWaitingConsumer() && q.getWaitingConsumerCount() == 0,
+                "no waiting consumer after handoff");
+    }
+
+    static void testTimedTryTransferWithConsumer() throws Exception {
+        final LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        final AtomicInteger got = new AtomicInteger(-1);
+        final CountDownLatch entered = new CountDownLatch(1), done = new CountDownLatch(1);
+        Thread c = startDaemon(() -> {
+            entered.countDown();
+            try {
+                got.set(q.take());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(entered, "consumer entry");
+        check(q.tryTransfer(9, 5, TimeUnit.SECONDS), "timed tryTransfer true once consumer arrives");
+        awaitBounded(done, "consumer completion");
+        c.join(5000);
+        check(got.get() == 9, "consumer received the timed tryTransfer element");
+    }
+
+    static void testTakeBlockedPairingWithProducer() throws Exception {
+        final LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        final AtomicInteger got = new AtomicInteger(-1);
+        final CountDownLatch entered = new CountDownLatch(1), done = new CountDownLatch(1);
+        Thread c = startDaemon(() -> {
+            entered.countDown();
+            try {
+                got.set(q.take());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(entered, "consumer entry");
+        q.put(9); // unblocks the blocked take
+        awaitBounded(done, "consumer completion");
+        c.join(5000);
+        check(got.get() == 9, "blocked take receives element from put");
+        check(q.isEmpty(), "queue empty after pairing");
+    }
+
+    static void testTimedPollEmptyWaits() throws Exception {
+        LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        long t0 = System.nanoTime();
+        check(q.poll(200, TimeUnit.MILLISECONDS) == null, "timed poll on empty waits then returns null");
+        check(System.nanoTime() - t0 >= 150_000_000L, "timed poll waited ~200ms");
+    }
+
+    static void testInterruptedTake() throws Exception {
+        final LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        final CountDownLatch entered = new CountDownLatch(1), done = new CountDownLatch(1);
+        final AtomicBoolean gotIE = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            entered.countDown();
+            try {
+                q.take();
+            } catch (InterruptedException e) {
+                gotIE.set(true);
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(entered, "take thread entry");
+        t.interrupt();
+        awaitBounded(done, "interrupted take completion");
+        t.join(5000);
+        check(gotIE.get(), "blocked take interrupted -> InterruptedException");
+        check(!t.isAlive(), "interrupted take thread terminated");
+    }
+
+    static void testInterruptStatusAtEntry() throws Exception {
+        final LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        final CountDownLatch done = new CountDownLatch(1);
+        final AtomicBoolean gotIE = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            Thread.currentThread().interrupt();
+            try {
+                q.transfer(1);
+            } catch (InterruptedException e) {
+                gotIE.set(true);
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(done, "pre-interrupted transfer completion");
+        t.join(5000);
+        check(gotIE.get(), "transfer with pre-set interrupt status throws InterruptedException");
+        check(q.isEmpty(), "queue untouched by interrupted transfer");
+    }
+
+    static void testInterruptedTransfer() throws Exception {
+        final LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        final CountDownLatch entered = new CountDownLatch(1), done = new CountDownLatch(1);
+        final AtomicBoolean gotIE = new AtomicBoolean(false);
+        Thread t = startDaemon(() -> {
+            entered.countDown();
+            try {
+                q.transfer(1);
+            } catch (InterruptedException e) {
+                gotIE.set(true);
+            } finally {
+                done.countDown();
+            }
+        });
+        awaitBounded(entered, "transfer thread entry");
+        t.interrupt();
+        awaitBounded(done, "interrupted transfer completion");
+        t.join(5000);
+        check(gotIE.get(), "blocked transfer interrupted -> InterruptedException");
+        check(q.isEmpty(), "queue untouched after interrupted transfer");
+    }
+
+    static void testNullRejectionExtended() {
+        final LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        expectThrows(() -> q.add(null), NullPointerException.class, "add(null)");
+        expectThrows(() -> q.offer(null), NullPointerException.class, "offer(null)");
+        expectThrowsThrowing(NullPointerException.class, () -> q.put(null), "put(null)");
+        expectThrowsThrowing(NullPointerException.class, () -> q.transfer(null), "transfer(null)");
+        expectThrowsThrowing(NullPointerException.class, () -> q.tryTransfer(null), "tryTransfer(null)");
+        expectThrowsThrowing(NullPointerException.class,
+                () -> q.tryTransfer(null, 1, TimeUnit.SECONDS), "tryTransfer(null,timeout)");
+        expectThrowsThrowing(NullPointerException.class,
+                () -> q.offer(null, 1, TimeUnit.SECONDS), "offer(null,timeout)");
+        expectThrows(() -> q.drainTo(null), NullPointerException.class, "drainTo(null)");
+        check(!q.contains(null), "contains(null) false");
+        check(!q.remove(null), "remove(null) false");
+        check(q.isEmpty(), "queue unchanged after null rejections");
+    }
+
+    static void testIteratorRemoveAndWeakConsistency() {
+        LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        q.add(1);
+        q.add(2);
+        q.add(3);
+        java.util.Iterator<Integer> it = q.iterator();
+        check(it.hasNext() && it.next() == 1, "iterator first element");
+        it.remove();
+        check(q.size() == 2 && q.peek() == 2, "iterator.remove removes current element");
+        // weak consistency: fresh queue, first next() consumed, then structural removal
+        LinkedTransferQueue<Integer> w = new LinkedTransferQueue<>();
+        w.add(1);
+        w.add(2);
+        w.add(3);
+        java.util.Iterator<Integer> itw = w.iterator();
+        check(itw.next() == 1, "weak-consistency iterator first element");
+        check(w.remove(Integer.valueOf(3)), "structural removal during iteration");
+        List<Integer> rest = new ArrayList<>();
+        while (itw.hasNext()) rest.add(itw.next()); // must not throw CME
+        check(rest.equals(Arrays.asList(2)), "weakly consistent iterator survives removal, no CME");
+    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>(Arrays.asList(1, 2));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(q);
+        }
+        Object back;
+        try (java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            back = ois.readObject();
+        }
+        @SuppressWarnings("unchecked")
+        LinkedTransferQueue<Integer> rt = (LinkedTransferQueue<Integer>) back;
+        check(rt.size() == 2, "serialization round-trip preserves element count");
+        check(rt.poll() == 1 && rt.poll() == 2 && rt.isEmpty(), "serialization round-trip preserves FIFO order");
+        check(rt.remainingCapacity() == Integer.MAX_VALUE, "round-tripped queue still unbounded");
+        check(rt.offer(3), "round-tripped queue still accepts elements");
+    }
+
+    static void testDrainToEdges() {
+        LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        q.add(1);
+        q.add(2);
+        List<Integer> sink = new ArrayList<>();
+        check(q.drainTo(sink, 0) == 0, "drainTo(max=0) returns 0");
+        check(sink.isEmpty() && q.size() == 2, "drainTo(max=0) mutates nothing");
+        IllegalArgumentException iae = expectThrowsMsg(() -> q.drainTo(q),
+                IllegalArgumentException.class, "drainTo(self) IAE");
+        check(iae.getMessage() == null, "drainTo(self) IAE has null message");
+        check(q.size() == 2, "drainTo(self) leaves queue unchanged");
+        q.add(3);
+        List<Integer> part = new ArrayList<>();
+        check(q.drainTo(part, 2) == 2 && part.equals(Arrays.asList(1, 2)),
+                "drainTo(max) truncates at max in FIFO order");
+        check(q.size() == 1 && q.peek() == 3, "drainTo(max) leaves remainder");
+        List<Integer> rest = new ArrayList<>();
+        check(q.drainTo(rest) == 1 && rest.equals(Arrays.asList(3)) && q.isEmpty(),
+                "drainTo remainder drains with source cleared");
+    }
+
+    static void testEqualsIdentitySemantics() {
+        LinkedTransferQueue<Integer> a = new LinkedTransferQueue<>();
+        LinkedTransferQueue<Integer> b = new LinkedTransferQueue<>();
+        check(a.add(1) && a.add(2) && b.add(1) && b.add(2), "setup: equal contents, distinct instances");
+        check(a.equals(a), "equals(self) true");
+        check(!a.equals(b), "no element-based equals override (identity semantics)");
+        check(!a.equals(null), "equals(null) false");
+        check(!a.equals(Arrays.asList(1, 2)), "queue not equal to List with same elements");
+    }
+
+    static void testToArrayExactContract() {
+        LinkedTransferQueue<String> q = new LinkedTransferQueue<>();
+        q.add("a");
+        q.add("b");
+        q.add("c");
+        Object[] arr = q.toArray();
+        check(arr.getClass() == Object[].class && arr.length == 3, "toArray() exact length");
+        check(Arrays.equals(arr, new Object[]{"a", "b", "c"}), "toArray() follows iteration order");
+        String[] small = q.toArray(new String[0]);
+        check(small.getClass() == String[].class, "toArray(T[0]) exact runtime type");
+        check(Arrays.equals(small, new String[]{"a", "b", "c"}), "toArray(T[0]) contents in order");
+        String[] exact = q.toArray(new String[3]);
+        check(exact.getClass() == String[].class && "c".equals(exact[2]), "toArray(T[exact size]) filled");
+    }
+
+    static void testContainsRemoveMiddle() {
+        LinkedTransferQueue<Integer> q = new LinkedTransferQueue<>();
+        q.add(1);
+        q.add(2);
+        q.add(3);
+        check(q.contains(2), "contains middle element");
+        check(q.remove(Integer.valueOf(2)), "remove middle element");
+        check(!q.contains(2) && q.size() == 2, "middle element gone");
+        check(Arrays.equals(q.toArray(), new Object[]{1, 3}), "order preserved after middle removal");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testFifoOfferPoll();
@@ -190,6 +514,23 @@ public class LinkedTransferQueueTest {
         testWaitingConsumerIntrospection();
         testDrainToAndNull();
         testBlackBox();
+        testEmptyStateTable();
+        testFifoStrictTen();
+        testTimedTryTransferNoConsumer();
+        testTryTransferWithWaitingConsumer();
+        testTimedTryTransferWithConsumer();
+        testTakeBlockedPairingWithProducer();
+        testTimedPollEmptyWaits();
+        testInterruptedTake();
+        testInterruptStatusAtEntry();
+        testInterruptedTransfer();
+        testNullRejectionExtended();
+        testIteratorRemoveAndWeakConsistency();
+        testSerializationRoundTrip();
+        testDrainToEdges();
+        testEqualsIdentitySemantics();
+        testToArrayExactContract();
+        testContainsRemoveMiddle();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

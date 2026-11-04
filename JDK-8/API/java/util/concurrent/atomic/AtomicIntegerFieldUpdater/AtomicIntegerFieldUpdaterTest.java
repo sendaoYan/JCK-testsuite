@@ -46,8 +46,84 @@ public class AtomicIntegerFieldUpdaterTest {
         check(u.get(c) == 42, "lazySet");
     }
 
+    // ---- 契约深化：newUpdater 反射前置校验矩阵 / 多对象隔离 / CAS 两分支 ----
+    static class BadFields {
+        public int nonVolatile;          // 非 volatile
+        public volatile long longField;  // 类型不匹配
+        public static volatile int staticField; // static 字段
+        private volatile int privateField;      // 不可见（private）
+        public volatile int okField;
+    }
+
+    static void assertThrows(Class<? extends Throwable> exType, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (exType.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (threw " + t + ")");
+        }
+        throw new AssertionError(msg + " (no exception)");
+    }
+
+    static void checkMessage(Runnable r, Class<? extends Throwable> exType, String expect, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (!exType.isInstance(t)) throw new AssertionError(msg + " (threw " + t + ")");
+            check(expect.equals(t.getMessage()), msg + " message <" + t.getMessage() + "> equals <" + expect + ">");
+            return;
+        }
+        throw new AssertionError(msg + " (no exception)");
+    }
+
+    static void testNewUpdaterValidation() {
+        // JDK-8 实测：非 volatile → IAE("Must be volatile type")
+        checkMessage(() -> AtomicIntegerFieldUpdater.newUpdater(BadFields.class, "nonVolatile"),
+                IllegalArgumentException.class, "Must be volatile type", "non-volatile field");
+        // 类型不匹配（long 字段）→ IAE("Must be integer type")
+        checkMessage(() -> AtomicIntegerFieldUpdater.newUpdater(BadFields.class, "longField"),
+                IllegalArgumentException.class, "Must be integer type", "long field with int updater");
+        // static 字段 → IAE（JDK-8 消息为 null，JDK-9+ 为 "Must not be a static field"）
+        assertThrows(IllegalArgumentException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(BadFields.class, "staticField"), "static field rejected");
+        // private 字段（不可见）→ RuntimeException（包装 IllegalAccessException）
+        // JDK-8 无 nestmate：同文件嵌套类 private 也拒绝
+        assertThrows(RuntimeException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(BadFields.class, "privateField"), "private field rejected");
+        // 跨类 private（java.base）→ RuntimeException
+        assertThrows(RuntimeException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(java.util.concurrent.atomic.AtomicInteger.class, "value"),
+                "foreign private field rejected");
+        // 不存在的字段 → RuntimeException（包装 NoSuchFieldException）
+        assertThrows(RuntimeException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(BadFields.class, "noSuchField"), "unknown field rejected");
+        // null 字段名 → RuntimeException（包装 NPE）
+        assertThrows(RuntimeException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(Counter.class, null), "null field name rejected");
+        // null 类 → RuntimeException（包装 NPE）
+        assertThrows(RuntimeException.class,
+                () -> AtomicIntegerFieldUpdater.newUpdater(null, "value"), "null class rejected");
+    }
+
+    static void testMultiObjectIndependence() {
+        // 多对象互不干扰：同一 updater 作用于不同 POJO 实例
+        AtomicIntegerFieldUpdater<Counter> u = AtomicIntegerFieldUpdater.newUpdater(Counter.class, "value");
+        Counter c1 = new Counter();
+        Counter c2 = new Counter();
+        u.set(c1, 11);
+        u.set(c2, 22);
+        check(u.get(c1) == 11 && u.get(c2) == 22, "two objects hold independent values");
+        check(u.compareAndSet(c1, 11, 33) && u.get(c1) == 33, "CAS on c1");
+        check(u.get(c2) == 22, "CAS on c1 leaves c2 untouched");
+        check(!u.compareAndSet(c2, 11, 0) && u.get(c2) == 22, "failed CAS on c2 leaves it unchanged");
+        u.incrementAndGet(c2);
+        check(u.get(c2) == 23 && u.get(c1) == 33, "per-object increments independent");
+    }
+
     public static void main(String[] args) {
         testUpdater();
+        testNewUpdaterValidation();
+        testMultiObjectIndependence();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

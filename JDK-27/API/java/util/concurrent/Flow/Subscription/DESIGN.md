@@ -11,7 +11,16 @@ JDK 内部：`java.util.concurrent.SubmissionPublisher` 内部 BufferedSubscript
 
 ## 4. 测试用例设计 + 自动化实现
 场景：
-1. 白盒：`Class.forName` 断言 interface/final/enum/继承 + 反射核对方法签名。
-2. 黑盒：SubmissionPublisher/StructuredTaskScope 等真实实现走组合操作链路并断言。
+1. 白盒：Subscription 接口 request(long)/cancel 方法面。
+2. 黑盒：订阅时 request 被调用。
+3. 契约深化：手写 DemandSubscriptionPublisher 验证 request 累计语义（request(2)+request(1)+request(MAX)
+   分批投递、饱和处理）、request(0)/request(-1) → onError(IllegalArgumentException)、cancel 幂等且其后零投递
+   （testCumulativeDemand/testRequestValidation/testCancelSemantics）；SubmissionPublisher 真链路
+   （未 request 零投递是因果保证而非时序、request(2) 恰投两条 FIFO、cancel 后 submit 不可见、
+   cancelled 订阅者无终态信号）（testSubmissionPublisherSubscription）。
 
-实现：`SubscriptionTest.java`（`testWhiteBox` + `testBlackBox`）。
+实现：`SubscriptionTest.java`（23 断言）。
+
+## 关键规范细节
+- 需求门控是**因果**性质：订阅者未调 request 前不可能收到 onNext（无需 sleep 即可确定断言）。
+- cancelled 订阅者连 onComplete 也收不到。

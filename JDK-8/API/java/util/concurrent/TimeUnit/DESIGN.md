@@ -39,3 +39,15 @@
 - `convert` 溢出饱和（返回 Long.MAX/MIN），不是环绕。
 - 负值换算朝零截断。
 - JDK-8 无 `toChronoUnit`/`of(ChronoUnit)`/`convert(Duration)`（JDK 9+），不移植。
+
+## 5. 契约深化追加（本轮）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | values() 顺序（ordinal 0..6）、name==toString、valueOf 往返、compareTo 序、valueOf("BOGUS")/null 负例 | testValuesOrderAndNames |
+| P0 | **7×7 换算矩阵（每单位 toX(1) 精确值表）** + MINUTES.toSeconds(90)==5400、DAYS.toMillis(1)==86400000 | testFullConversionMatrix |
+| P0 | convert 双向 + 截断朝零（NANOS.toSeconds(999999999)==0 等 4 例） | testFullConversionMatrix |
+| P0 | **饱和矩阵：SECONDS/MINUTES/HOURS/DAYS 的 toNanos(MAX)==MAX、toNanos(MIN)==MIN、多路跨级饱和**；不溢出路径精确（SECONDS.toMinutes(MAX)==153722867280912930） | testSaturation |
+| P1 | JDK-9+ 的 convert(Duration)/toChronoUnit/of(ChronoUnit) 缺席反射断言 | testAbsentJdk9Methods |
+
+断言规模：PASS (167 assertions)。

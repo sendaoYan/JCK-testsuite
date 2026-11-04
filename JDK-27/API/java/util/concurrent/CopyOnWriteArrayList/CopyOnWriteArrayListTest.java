@@ -203,6 +203,172 @@ public class CopyOnWriteArrayListTest {
         check(spl.toString() != null && spl.toString().contains("1"), "toString non-null");
     }
 
+    // ---- appended: contract deepening ----
+    static void testNullElements() {
+        CopyOnWriteArrayList<String> l = new CopyOnWriteArrayList<>();
+        check(l.add(null), "add(null) legal");
+        check(l.add("a"), "add after null");
+        check(l.add(null), "add(null) again");
+        check(l.size() == 3, "size");
+        check(l.indexOf(null) == 0, "indexOf(null) precise");
+        check(l.lastIndexOf(null) == 2, "lastIndexOf(null) precise");
+        check(l.contains(null), "contains(null) true");
+        check("a".equals(l.set(1, null)), "set(i,null) legal and returns old value");
+        check(l.get(1) == null, "set stored null");
+        check(l.remove(null) && l.size() == 2, "remove(null) removes exactly one");
+        check(l.remove(null) && l.remove(null) && !l.contains(null), "remaining nulls removed");
+        check(l.isEmpty(), "list fully drained of nulls");
+    }
+
+    static void testAddIfAbsentNull() {
+        CopyOnWriteArrayList<Integer> n = new CopyOnWriteArrayList<>();
+        check(n.addIfAbsent(null), "addIfAbsent(null) inserts");
+        check(!n.addIfAbsent(null), "addIfAbsent(null) duplicate false");
+        check(n.addAllAbsent(Arrays.asList(1, null, 1)) == 1, "addAllAbsent counts only new (1)");
+        check(n.size() == 2 && n.contains(null), "null kept exactly once");
+    }
+
+    static void testIteratorSnapshotVsArrayList() {
+        // core COW contract: iterator does NOT throw CME and does NOT see later adds
+        CopyOnWriteArrayList<Integer> l = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> it = l.iterator();
+        l.add(4);
+        List<Integer> seen = new ArrayList<>();
+        while (it.hasNext()) seen.add(it.next());
+        check(seen.equals(Arrays.asList(1, 2, 3)), "snapshot iterator excludes post-creation add");
+        // in-test contrast: ArrayList under the same scenario IS fail-fast
+        ArrayList<Integer> al = new ArrayList<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> alIt = al.iterator();
+        al.add(4);
+        boolean cme = false;
+        try { alIt.next(); } catch (java.util.ConcurrentModificationException expected) { cme = true; }
+        check(cme, "contrast: ArrayList iterator throws CME, COWAL never does");
+        // listIterator also iterates a snapshot
+        CopyOnWriteArrayList<Integer> l2 = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3));
+        java.util.ListIterator<Integer> li = l2.listIterator();
+        l2.set(0, 100);
+        List<Integer> seen2 = new ArrayList<>();
+        while (li.hasNext()) seen2.add(li.next());
+        check(seen2.equals(Arrays.asList(1, 2, 3)), "listIterator sees snapshot despite concurrent set");
+    }
+
+    static void testIteratorMutatorsUnsupported() {
+        CopyOnWriteArrayList<Integer> l = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> it = l.iterator();
+        it.next();
+        expectThrows(() -> it.remove(), UnsupportedOperationException.class, "iterator.remove");
+        java.util.ListIterator<Integer> li = l.listIterator();
+        li.next();
+        expectThrows(() -> li.set(9), UnsupportedOperationException.class, "listIterator.set");
+        expectThrows(() -> li.add(9), UnsupportedOperationException.class, "listIterator.add");
+        check(l.size() == 3, "list unchanged after unsupported mutations");
+        expectThrows(() -> l.listIterator(4), IndexOutOfBoundsException.class,
+                     "listIterator(4) on size 3 out of bounds");
+        expectThrows(() -> l.listIterator(-1), IndexOutOfBoundsException.class,
+                     "listIterator(-1) out of bounds");
+    }
+
+    static void testIndexBounds() {
+        CopyOnWriteArrayList<Integer> l = new CopyOnWriteArrayList<>(Arrays.asList(1));
+        expectThrows(() -> l.get(-1), IndexOutOfBoundsException.class, "get(-1)");
+        expectThrows(() -> l.get(2), IndexOutOfBoundsException.class, "get(2) size 1");
+        expectThrows(() -> l.add(99, 5), IndexOutOfBoundsException.class, "add(99,x) beyond size");
+        expectThrows(() -> l.remove(99), IndexOutOfBoundsException.class, "remove(99) beyond size");
+        expectThrows(() -> l.set(5, 1), IndexOutOfBoundsException.class, "set(5,x) beyond size");
+        expectThrows(() -> l.addAll(null), NullPointerException.class, "addAll(null)");
+        expectThrows(() -> new CopyOnWriteArrayList<String>((Collection<String>) null),
+                     NullPointerException.class, "ctor(null Collection)");
+        expectThrows(() -> new CopyOnWriteArrayList<String>((String[]) null),
+                     NullPointerException.class, "ctor(null array)");
+    }
+
+    static void testConstructors() {
+        // the array is defensively copied: mutating the source does not affect the list
+        String[] src = {"a", "b"};
+        CopyOnWriteArrayList<String> copy = new CopyOnWriteArrayList<>(src);
+        src[0] = "CHANGED";
+        check("a".equals(copy.get(0)), "ctor(E[]) copies the array defensively");
+        CopyOnWriteArrayList<Integer> fromColl = new CopyOnWriteArrayList<>(Arrays.asList(3, 1, 2));
+        check(fromColl.equals(Arrays.asList(3, 1, 2)), "ctor(Collection) preserves order");
+        check(new CopyOnWriteArrayList<Integer>().isEmpty(), "ctor() empty");
+    }
+
+    static void testSubListWriteThrough() {
+        CopyOnWriteArrayList<Integer> l = new CopyOnWriteArrayList<>(Arrays.asList(0, 1, 2, 3, 4));
+        List<Integer> sub = l.subList(1, 4);
+        sub.set(0, 99);
+        check(l.get(1) == 99, "subList.set writes through to parent");
+        sub.add(0, 77);
+        check(l.equals(Arrays.asList(0, 77, 99, 2, 3, 4)), "subList.add writes through to parent");
+        sub.remove(Integer.valueOf(77));
+        check(l.equals(Arrays.asList(0, 99, 2, 3, 4)), "subList.remove writes through to parent");
+        expectThrows(() -> l.subList(2, 1), IndexOutOfBoundsException.class, "subList(2,1)");
+        expectThrows(() -> l.subList(-1, 2), IndexOutOfBoundsException.class, "subList(-1,2)");
+        expectThrows(() -> l.subList(0, 99), IndexOutOfBoundsException.class, "subList(0,99)");
+    }
+
+    static void testSortStability() {
+        CopyOnWriteArrayList<String> s = new CopyOnWriteArrayList<>(Arrays.asList("bb", "aa", "ab", "ba"));
+        s.sort(java.util.Comparator.comparingInt(String::length));
+        check(s.equals(Arrays.asList("bb", "aa", "ab", "ba")), "sort stable for equal keys");
+    }
+
+    static void testCrossImplEquals() {
+        CopyOnWriteArrayList<Integer> a = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3));
+        ArrayList<Integer> al = new ArrayList<>(Arrays.asList(1, 2, 3));
+        check(a.equals(al) && al.equals(a), "cross-impl equals with ArrayList");
+        check(a.hashCode() == al.hashCode(), "hashCode matches List contract (== ArrayList's)");
+        check(a.toString().equals(al.toString()), "toString equals ArrayList's");
+        check(!a.equals(Arrays.asList(3, 2, 1)), "List equality is order-sensitive");
+    }
+
+    static void testToArraySnapshot() {
+        CopyOnWriteArrayList<Integer> r = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3));
+        Object[] arr = r.toArray();
+        r.add(7);
+        check(arr.length == 3 && !Arrays.asList(arr).contains(7),
+              "toArray snapshot independent of later mutations");
+        r.remove(Integer.valueOf(7));
+        Integer[] bigger = r.toArray(new Integer[5]);
+        check(bigger.length == 5 && bigger[3] == null, "toArray(bigger) null-terminated");
+    }
+
+    static void testSpliteratorCharacteristics() {
+        CopyOnWriteArrayList<Integer> l = new CopyOnWriteArrayList<>(Arrays.asList(1, 2, 3));
+        java.util.Spliterator<Integer> sp = l.spliterator();
+        int ch = sp.characteristics();
+        check((ch & java.util.Spliterator.ORDERED) != 0, "spliterator ORDERED");
+        check((ch & java.util.Spliterator.IMMUTABLE) != 0, "spliterator IMMUTABLE (snapshot)");
+        check((ch & java.util.Spliterator.SIZED) != 0, "spliterator SIZED");
+        check(sp.estimateSize() == 3, "estimateSize exact");
+        check(l.parallelStream().mapToInt(Integer::intValue).sum() == 6, "parallelStream sum");
+    }
+
+    static void testSerialization() throws Exception {
+        check(java.io.ObjectStreamClass.lookup(CopyOnWriteArrayList.class).getSerialVersionUID()
+              == 8673264195747942595L, "serialVersionUID locked");
+        CopyOnWriteArrayList<String> l = new CopyOnWriteArrayList<>(Arrays.asList("a", null, "c"));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(l);
+        }
+        @SuppressWarnings("unchecked")
+        CopyOnWriteArrayList<String> copy = (CopyOnWriteArrayList<String>)
+            new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(l) && copy.size() == 3, "round-trip preserves content incl. null");
+        check(copy.get(1) == null, "null element survives round-trip");
+        check(copy.add("z") && copy.get(3).equals("z"), "resurrected list mutable");
+    }
+
+    static void testClone() {
+        CopyOnWriteArrayList<Integer> l = new CopyOnWriteArrayList<>(Arrays.asList(1, 2));
+        @SuppressWarnings("unchecked")
+        CopyOnWriteArrayList<Integer> c = (CopyOnWriteArrayList<Integer>) l.clone();
+        check(c != l && c.equals(l), "clone equals but distinct");
+        c.add(3);
+        check(l.size() == 2 && c.size() == 3, "clone is structurally independent");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testListSemantics();
@@ -212,6 +378,19 @@ public class CopyOnWriteArrayListTest {
         testSortReplaceAll();
         testEquals();
         testBlackBox();
+        testNullElements();
+        testAddIfAbsentNull();
+        testIteratorSnapshotVsArrayList();
+        testIteratorMutatorsUnsupported();
+        testIndexBounds();
+        testConstructors();
+        testSubListWriteThrough();
+        testSortStability();
+        testCrossImplEquals();
+        testToArraySnapshot();
+        testSpliteratorCharacteristics();
+        testSerialization();
+        testClone();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

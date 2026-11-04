@@ -62,9 +62,69 @@ public class CallableTest {
         check(exec.awaitTermination(10, TimeUnit.SECONDS), "executor terminates");
     }
 
+    // ---- Part 3: functional-interface annotation + lambda/method-ref forms ----
+    static void testAnnotationAndLambdas() throws Exception {
+        Class<?> c = cls("java.util.concurrent.Callable");
+        check(c.isAnnotationPresent(FunctionalInterface.class),
+              "@FunctionalInterface annotation present");
+        Callable<Integer> lambda = () -> 21 * 2;
+        check(lambda.call() == 42, "lambda call returns the computed value");
+        Callable<Integer> ref = "abc"::length;
+        check(ref.call() == 3, "method reference call");
+        Object[] arr = { "shared" };
+        Callable<Object[]> identity = () -> arr;
+        check(identity.call() == arr, "lambda returns the exact same array instance");
+    }
+
+    // ---- Part 4: exception propagation identity (checked/unchecked/Error) ----
+    static void testExceptionPropagation() throws Exception {
+        final java.io.IOException boom = new java.io.IOException("io");
+        Callable<String> failing = () -> { throw boom; };
+        boolean got = false;
+        try { failing.call(); }
+        catch (java.io.IOException expected) {
+            check(expected == boom, "the exact same checked exception object propagates");
+            got = true;
+        }
+        check(got, "checked exception from call() is relayed with identity");
+
+        final IllegalStateException ise = new IllegalStateException("state");
+        Callable<Integer> failing2 = () -> { throw ise; };
+        boolean got2 = false;
+        try { failing2.call(); }
+        catch (IllegalStateException expected) {
+            check(expected == ise, "unchecked exception propagates with identity");
+            got2 = true;
+        }
+        check(got2, "unchecked exception from call() is relayed unwrapped");
+
+        final LinkageError err = new LinkageError("link");
+        Callable<Integer> erring = () -> { throw err; };
+        boolean got3 = false;
+        try { erring.call(); }
+        catch (LinkageError expected) {
+            check(expected == err, "Error propagates with identity");
+            got3 = true;
+        }
+        check(got3, "Error from call() is relayed unwrapped");
+    }
+
+    // ---- Part 5: null/Void semantics + repeated calls ----
+    static void testNullSemantics() throws Exception {
+        Callable<Void> voidTask = () -> null;
+        check(voidTask.call() == null, "Callable<Void> may return null");
+        final int[] counter = { 0 };
+        Callable<Integer> counting = () -> ++counter[0];
+        check(counting.call() == 1 && counting.call() == 2 && counting.call() == 3,
+              "repeated call() invocations behave like a normal method");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testAnnotationAndLambdas();
+        testExceptionPropagation();
+        testNullSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

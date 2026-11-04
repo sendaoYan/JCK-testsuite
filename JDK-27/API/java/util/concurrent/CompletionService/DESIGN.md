@@ -10,8 +10,10 @@
 JDK 内部：`java.util.concurrent.ExecutorCompletionService` 实现；`test/jdk/java/util/concurrent/ExecutorCompletionService/` 覆盖。
 
 ## 4. 测试用例设计 + 自动化实现
-场景：
+场景（深化批次追加接口结构锁 + Runnable 固定结果形态）：
 1. 白盒：`Class.forName` 断言 interface/enum/继承层次 + 反射核对关键方法签名。
-2. 黑盒：用具体实现（LinkedBlockingQueue/ConcurrentHashMap/Executor 族等）走多步组合操作并断言可观察行为。
+2. 黑盒：用具体实现（ExecutorCompletionService）走完成序/poll(timeout) 组合操作并断言可观察行为。
+3. 接口结构锁：单类型参数 V；恰好 5 个声明方法（锁定方法面）；5 方法全部 abstract（无 default）；ExecutorCompletionService 实现本接口；与 ExecutorService 互不 assignable。
+4. Runnable+固定结果形态：`submit(Runnable, 7)` 的 Future.get()==7；take() 取回的是 submit 时返回的同一 Future 对象（队列可见性）。
 
-实现：`CompletionServiceTest.java`（`testWhiteBox` + `testBlackBox`）。
+实现：`CompletionServiceTest.java`（`testWhiteBox` + `testBlackBox` + `testInterfaceLock` + `testRunnableForm`，PASS 25 断言）。

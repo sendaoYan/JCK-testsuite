@@ -5,6 +5,7 @@
  * @run main ThreadFactoryTest
  */
 
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -61,9 +62,53 @@ public class ThreadFactoryTest {
         check(ran[0], "starting the returned thread runs the supplied Runnable");
     }
 
+    // ---- Part 3: Executors.defaultThreadFactory product contract ----
+    static void testDefaultThreadFactory() {
+        ThreadFactory tf = Executors.defaultThreadFactory();
+        Thread t1 = tf.newThread(() -> { });
+        Thread t2 = tf.newThread(() -> { });
+        check(t1 != null && t2 != null, "defaultThreadFactory returns threads");
+        check(t1.getClass() == Thread.class, "product is a plain java.lang.Thread");
+        check(!t1.isDaemon() && !t2.isDaemon(), "default factory threads are non-daemon");
+        check(t1.getPriority() == Thread.NORM_PRIORITY, "default priority is NORM_PRIORITY");
+        check(t1.getState() == Thread.State.NEW, "returned thread is not started");
+        check(t1.getName().matches("pool-\\d+-thread-\\d+"),
+              "name matches 'pool-N-thread-M' pattern: " + t1.getName());
+        check(t2.getName().matches("pool-\\d+-thread-\\d+"), "second name matches the pattern");
+        check(!t1.getName().equals(t2.getName()), "distinct products get distinct names");
+        String[] p1 = t1.getName().split("-");
+        String[] p2 = t2.getName().split("-");
+        check(p1[1].equals(p2[1]) && Integer.parseInt(p2[3]) == Integer.parseInt(p1[3]) + 1,
+              "same factory increments the thread number");
+        // empirically-locked behaviour: a null Runnable is wrapped, not rejected
+        Thread nullTask = tf.newThread(null);
+        check(nullTask != null, "defaultThreadFactory().newThread(null) returns a Thread (实测)");
+        ThreadFactory other = Executors.defaultThreadFactory();
+        Thread t3 = other.newThread(() -> { });
+        check(t3.getName().matches("pool-\\d+-thread-\\d+"), "second factory name pattern");
+    }
+
+    // ---- Part 4: annotation fact + factory decorator composition ----
+    static void testAnnotationAndComposition() {
+        check(!cls("java.util.concurrent.ThreadFactory").isAnnotationPresent(FunctionalInterface.class),
+              "functional by shape only: no @FunctionalInterface annotation");
+        final java.util.concurrent.atomic.AtomicInteger made =
+            new java.util.concurrent.atomic.AtomicInteger();
+        final ThreadFactory base = Executors.defaultThreadFactory();
+        ThreadFactory counting = r -> {
+            made.incrementAndGet();
+            return base.newThread(r);
+        };
+        counting.newThread(() -> { });
+        counting.newThread(() -> { });
+        check(made.get() == 2, "decorating factory produced 2 threads");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDefaultThreadFactory();
+        testAnnotationAndComposition();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -30,3 +30,11 @@
   - 内存序访问器 + compareAndExchange 见证值。
   - E[] 构造复制语义、toString、越界/负长度异常。
   - 并发：8 线程按索引 updateAndGet(Integer) 自增，每槽位最终值 == N*M/4。
+
+### 本轮契约深化追加
+
+- **identity 语义**：索引 CAS/compareAndExchange 期望 equals 相等不同对象失败；null 元素契约（初始 null、CAS(null→v)、set(null)、exchange null 见证）（`testIdentitySemantics`）。
+- 越界全矩阵（ArrayIndexOutOfBoundsException：compareAndSet/getAndSet/lazySet/getAndUpdate/getAcquire/setRelease/compareAndExchange/getPlain）（`testIndexBoundsFull`）。
+- 序列化 round-trip（用实际存储引用做 identity CAS）（`testSerialization`）。
+
+断言规模：PASS (66 assertions)。

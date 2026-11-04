@@ -94,9 +94,59 @@ public class LongAdderTest {
         check(a.sum() == (long) N * M, "concurrent add loses no updates (exact long sum)");
     }
 
+    // ---- 契约深化：负数 add / sumThenReset 二次调用 / 环绕 / 双线程有界并发 ----
+    static void testNegativeAndReset() {
+        LongAdder a = new LongAdder();
+        a.add(-5L);
+        check(a.sum() == -5L, "negative add");
+        a.add(-7L);
+        check(a.sum() == -12L, "second negative add accumulates exactly");
+        a.increment();
+        check(a.sum() == -11L, "increment from negative");
+        a.decrement();
+        a.decrement();
+        check(a.sum() == -13L, "decrement below zero");
+        check(a.sumThenReset() == -13L, "first sumThenReset returns old sum");
+        check(a.sumThenReset() == 0L, "second sumThenReset returns 0 after reset");
+        check(a.sum() == 0L, "sum stays 0");
+        a.add(-9L);
+        check(a.toString().equals("-9"), "toString of negative sum");
+        a.reset();
+        check(a.toString().equals("0"), "toString of zero sum");
+        a.add(Long.MAX_VALUE);
+        check(a.sum() == Long.MAX_VALUE, "sum of Long.MAX_VALUE");
+        a.add(1L);
+        check(a.sum() == Long.MIN_VALUE, "long sum wraps (no exception)");
+    }
+
+    static void testTwoThreadBounded() throws Exception {
+        // 两 daemon 线程各 add 1000 次，join 有界后 sum == 2000（确定性结果断言）
+        final LongAdder a = new LongAdder();
+        final java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        Thread t1 = new Thread(() -> {
+            try { start.await(); } catch (InterruptedException ignored) { }
+            for (int i = 0; i < 1000; i++) a.add(1L);
+        });
+        Thread t2 = new Thread(() -> {
+            try { start.await(); } catch (InterruptedException ignored) { }
+            for (int i = 0; i < 1000; i++) a.increment();
+        });
+        t1.setDaemon(true);
+        t2.setDaemon(true);
+        t1.start();
+        t2.start();
+        start.countDown();
+        t1.join(10_000);
+        t2.join(10_000);
+        check(!t1.isAlive() && !t2.isAlive(), "both worker threads finished within bound");
+        check(a.sum() == 2000L, "two-thread add total is exactly 2000");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNegativeAndReset();
+        testTwoThreadBounded();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

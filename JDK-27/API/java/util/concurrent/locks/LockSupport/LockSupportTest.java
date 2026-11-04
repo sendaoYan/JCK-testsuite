@@ -8,6 +8,7 @@
 
 import java.lang.reflect.Modifier;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
 public class LockSupportTest {
@@ -40,6 +41,11 @@ public class LockSupportTest {
         t.setDaemon(true);
         t.start();
         return t;
+    }
+
+    static void await(CountDownLatch l, String what) throws InterruptedException {
+        if (!l.await(5, TimeUnit.SECONDS))
+            throw new AssertionError("timeout waiting for " + what);
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -118,6 +124,105 @@ public class LockSupportTest {
         check(true, "park(Object) with prior permit returns immediately");
     }
 
+    static void testUnparkThenParkNanosReturnsImmediately() {
+        LockSupport.unpark(Thread.currentThread());
+        long start = System.nanoTime();
+        LockSupport.parkNanos(2_000_000_000L); // 2s; permit must make it return at once
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        check(elapsedMs < 1000, "parkNanos returns immediately with a permit (took " + elapsedMs + "ms)");
+    }
+
+    static void testPermitNotCumulative() {
+        // Two unparks do not stack: the single outstanding permit is consumed by the
+        // first park, so a second (bounded) park must actually wait.
+        LockSupport.unpark(Thread.currentThread());
+        LockSupport.unpark(Thread.currentThread());
+        LockSupport.park(); // consumes the single permit
+        long start = System.nanoTime();
+        LockSupport.parkNanos(200_000_000L); // 200ms bounded observation
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        check(elapsedMs >= 100, "second park blocks after permit consumed (took " + elapsedMs + "ms)");
+    }
+
+    static void testParkNullBlocker() {
+        LockSupport.unpark(Thread.currentThread());
+        LockSupport.park(null); // null blocker is legal
+        check(true, "park(null) returns immediately with a permit");
+        check(LockSupport.getBlocker(Thread.currentThread()) == null,
+              "getBlocker null for park(null)");
+    }
+
+    static void testGetBlockerOfParkedThread() throws Exception {
+        final Object blocker = new Object();
+        final CountDownLatch done = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            LockSupport.park(blocker); // blocks until unpark
+            done.countDown();
+        });
+        // Bounded observation: the blocker is visible while the thread is parked.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        Object observed = null;
+        while (System.nanoTime() < deadline) {
+            observed = LockSupport.getBlocker(t);
+            if (observed != null) break;
+            Thread.yield();
+        }
+        check(observed == blocker, "park(blocker) records the blocker object");
+        LockSupport.unpark(t);
+        await(done, "parked thread to be released");
+        t.join(5000);
+        check(!t.isAlive(), "unpark releases parked thread");
+        check(LockSupport.getBlocker(t) == null, "blocker cleared after park returned");
+    }
+
+    static void testParkNanosBlockerParked() throws Exception {
+        final Object blocker = new Object();
+        final CountDownLatch done = new CountDownLatch(1);
+        Thread t = startDaemon(() -> {
+            LockSupport.parkNanos(blocker, 2_000_000_000L); // 2s bounded park
+            done.countDown();
+        });
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        Object observed = null;
+        while (System.nanoTime() < deadline) {
+            observed = LockSupport.getBlocker(t);
+            if (observed != null) break;
+            Thread.yield();
+        }
+        check(observed == blocker, "parkNanos(blocker,ns) records the blocker object");
+        LockSupport.unpark(t); // releases early
+        await(done, "timed parked thread to be released");
+        t.join(5000);
+        check(!t.isAlive(), "unpark releases timed parked thread");
+    }
+
+    static void testInterruptedParkReturnsImmediately() {
+        // A thread with a pending interrupt does not park: park returns at once and
+        // the interrupt status is preserved.
+        Thread.currentThread().interrupt();
+        long start = System.nanoTime();
+        LockSupport.parkNanos(2_000_000_000L); // would be 2s; interrupt makes it immediate
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        check(elapsedMs < 1000, "parkNanos returns immediately on interrupted thread (took "
+              + elapsedMs + "ms)");
+        check(Thread.currentThread().isInterrupted(), "interrupt status preserved by park");
+        check(Thread.interrupted(), "clearing the interrupt status returns true");
+        // After clearing, a bounded park waits normally again (sanity).
+        long start2 = System.nanoTime();
+        LockSupport.parkNanos(50_000_000L);
+        long elapsed2 = (System.nanoTime() - start2) / 1_000_000;
+        check(elapsed2 >= 25, "parkNanos waits again after clearing the interrupt");
+    }
+
+    static void testUnparkTerminatedThreadIsHarmless() throws Exception {
+        Thread t = startDaemon(() -> { });
+        t.join(5000);
+        check(!t.isAlive(), "helper thread terminated");
+        LockSupport.unpark(t); // no exception, no effect
+        LockSupport.unpark(t);
+        check(true, "unpark on a terminated thread is harmless");
+    }
+
     static void testBlackBox() {
         // parkUntil with a deadline in the past returns immediately (deterministic)
         LockSupport.parkUntil(0L);
@@ -136,6 +241,13 @@ public class LockSupportTest {
         testGetBlockerNullArgument();
         testSetCurrentBlockerAndCrossThread();
         testParkObjectPermit();
+        testUnparkThenParkNanosReturnsImmediately();
+        testPermitNotCumulative();
+        testParkNullBlocker();
+        testGetBlockerOfParkedThread();
+        testParkNanosBlockerParked();
+        testInterruptedParkReturnsImmediately();
+        testUnparkTerminatedThreadIsHarmless();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
