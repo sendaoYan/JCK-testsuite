@@ -110,6 +110,9 @@ public class CertStoreTest {
         // all selectors: null selector matches everything
         check(store.getCertificates(null).size() == 2, "null selector all certs");
         check(store.getCRLs(null).size() == 1, "null selector all crls");
+        // a null-selector result is an independent copy, not a live view of the store
+        store.getCertificates(null).clear();
+        check(store.getCertificates(null).size() == 2, "returned collection is a copy");
         // target by subject
         X509CertSelector sel = new X509CertSelector();
         sel.setSubject(root.getSubjectX500Principal());

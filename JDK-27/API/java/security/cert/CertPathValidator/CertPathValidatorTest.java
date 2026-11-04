@@ -154,6 +154,14 @@ public class CertPathValidatorTest {
         check(rev != null, "revocation checker");
         check(rev.getOptions().isEmpty(), "no default options");
 
+        // null parameters rejected
+        try {
+            v.validate(cp, null);
+            check(false, "null params rejected");
+        } catch (java.security.InvalidAlgorithmParameterException e) {
+            check(true, "null params InvalidAlgorithmParameterException");
+        }
+
     }
 
     public static void main(String[] args) throws Exception {

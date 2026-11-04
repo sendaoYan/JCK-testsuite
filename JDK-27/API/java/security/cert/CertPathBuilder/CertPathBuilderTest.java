@@ -120,6 +120,8 @@ public class CertPathBuilderTest {
         CertPathBuilder b = CertPathBuilder.getInstance("PKIX");
         check(b.getAlgorithm().equals("PKIX"), "algorithm");
         check(b.getProvider() != null, "provider");
+        check(CertPathBuilder.getInstance("PKIX", b.getProvider()).getAlgorithm().equals("PKIX"), "provider overload");
+        check(CertPathBuilder.getInstance("PKIX", b.getProvider().getName()).getAlgorithm().equals("PKIX"), "provider-name overload");
         try { CertPathBuilder.getInstance("BOGUS"); check(false, "unknown algorithm"); }
         catch (NoSuchAlgorithmException e) { check(true, "unknown algorithm NoSuchAlgorithmException"); }
         try { CertPathBuilder.getInstance("PKIX", "NoSuchProvider"); check(false, "unknown provider"); }
@@ -151,6 +153,14 @@ public class CertPathBuilderTest {
         // builder revocation checker
         PKIXRevocationChecker rev = (PKIXRevocationChecker) b.getRevocationChecker();
         check(rev.getOptions().isEmpty(), "builder revocation checker");
+
+        // null parameters rejected
+        try {
+            b.build(null);
+            check(false, "null params rejected");
+        } catch (java.security.InvalidAlgorithmParameterException e) {
+            check(true, "null params InvalidAlgorithmParameterException");
+        }
 
     }
 

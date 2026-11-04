@@ -95,6 +95,7 @@ public class X509CRLTest {
         check(crl.getType().equals("X.509"), "type");
         check(crl.getVersion() == 1, "v1 CRL");
         check(crl.getIssuerX500Principal().getName().contains("jck-root"), "issuer");
+        check(crl.getIssuerDN() != null && crl.getIssuerDN().getName().contains("jck-root"), "deprecated issuerDN");
         check(crl.getSigAlgName().startsWith("SHA384"), "sig alg");
         check(crl.getSigAlgOID().equals("1.2.840.113549.1.1.12"), "sig OID");
         check(crl.getSigAlgParams() == null, "no sig params");
@@ -111,6 +112,9 @@ public class X509CRLTest {
         check(crl.getRevokedCertificate(java.math.BigInteger.ONE) == null, "serial 1 not revoked");
         check(e.getCertificateIssuer() == null, "v1 entry issuer null");
         check(e.getRevocationReason() == null || e.getRevocationReason() instanceof CRLReason, "reason parse");
+        // raw ASN.1 surfaces
+        check(crl.getTBSCertList() != null && crl.getTBSCertList().length > 0, "TBSCertList non-empty");
+        check(crl.getSignature() != null && crl.getSignature().length > 0, "signature non-empty");
         // encoded round trip
         byte[] der = crl.getEncoded();
         check(der.length > 0, "encoded non-empty");

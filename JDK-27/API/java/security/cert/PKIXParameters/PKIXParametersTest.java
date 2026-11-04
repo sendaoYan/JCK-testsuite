@@ -177,9 +177,65 @@ public class PKIXParametersTest {
 
     }
 
+    // Unmodifiable view contracts, null-clearing setters and date clone semantics.
+    static void testViewsAndEdgeCases() throws Exception {
+        X509Certificate root = fixtureCert(ROOT_CERT_B64);
+        TrustAnchor anchor = new TrustAnchor(root, null);
+        PKIXParameters p = new PKIXParameters(Set.of(anchor));
+
+        // unmodifiable view contracts
+        try {
+            p.getTrustAnchors().add(anchor);
+            check(false, "trust anchors view unmodifiable");
+        } catch (UnsupportedOperationException e) { check(true, "trust anchors add UOE"); }
+        try {
+            p.getTrustAnchors().clear();
+            check(false, "trust anchors view clear unmodifiable");
+        } catch (UnsupportedOperationException e) { check(true, "trust anchors clear UOE"); }
+        try {
+            p.getInitialPolicies().add("1.2.3.4");
+            check(false, "initial policies view unmodifiable");
+        } catch (UnsupportedOperationException e) { check(true, "initial policies add UOE"); }
+        CertStore store = CertStore.getInstance("Collection", new CollectionCertStoreParameters(List.of(root)));
+        p.addCertStore(store);
+        try {
+            p.getCertStores().add(store);
+            check(false, "cert stores view unmodifiable");
+        } catch (UnsupportedOperationException e) { check(true, "cert stores add UOE"); }
+        try {
+            p.getCertPathCheckers().add(null);
+            check(false, "checkers view unmodifiable");
+        } catch (UnsupportedOperationException e) { check(true, "checkers add UOE"); }
+
+        // null clears for the list/set setters
+        p.setInitialPolicies(null);
+        check(p.getInitialPolicies().isEmpty(), "setInitialPolicies(null) empties");
+        p.setCertStores(null);
+        check(p.getCertStores().isEmpty(), "setCertStores(null) empties");
+        p.setCertPathCheckers(null);
+        check(p.getCertPathCheckers().isEmpty(), "setCertPathCheckers(null) empties");
+
+        // date clone semantics
+        java.util.Date d = new java.util.Date();
+        p.setDate(d);
+        check(p.getDate().equals(d), "setDate value");
+        check(p.getDate() != d, "setDate clones");
+
+        // empty keystore rejected
+        java.security.KeyStore emptyKs = java.security.KeyStore.getInstance("PKCS12");
+        emptyKs.load(null, null);
+        try {
+            new PKIXParameters(emptyKs);
+            check(false, "empty keystore rejected");
+        } catch (java.security.InvalidAlgorithmParameterException e) {
+            check(true, "empty keystore InvalidAlgorithmParameterException");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testViewsAndEdgeCases();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

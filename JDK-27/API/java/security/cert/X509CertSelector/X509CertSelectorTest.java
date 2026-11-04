@@ -143,9 +143,145 @@ public class X509CertSelectorTest {
 
     }
 
+    // Additional full-field round-trips, clone independence, null clearing and error contracts.
+    static void testSelectorRoundTrips() throws Exception {
+        X509Certificate root = fixtureCert(ROOT_CERT_B64);
+        X509Certificate leaf = fixtureCert(LEAF_CERT_B64);
+
+        // subject public key (PublicKey and byte[] forms)
+        X509CertSelector spk = new X509CertSelector();
+        spk.setSubjectPublicKey(root.getPublicKey());
+        check(spk.match(root) && !spk.match(leaf), "subject public key filter");
+        check(spk.getSubjectPublicKey().equals(root.getPublicKey()), "getSubjectPublicKey round-trip");
+        X509CertSelector spkBytes = new X509CertSelector();
+        spkBytes.setSubjectPublicKey(root.getPublicKey().getEncoded());
+        check(spkBytes.getSubjectPublicKey().equals(root.getPublicKey()), "setSubjectPublicKey(byte[]) round-trip");
+
+        // subject public key algorithm OID
+        X509CertSelector alg = new X509CertSelector();
+        alg.setSubjectPublicKeyAlgID("1.2.840.113549.1.1.1");
+        check(alg.match(root), "subject public key alg matches RSA");
+        check("1.2.840.113549.1.1.1".equals(alg.getSubjectPublicKeyAlgID()), "subject public key alg read back");
+
+        // subject key identifier round-trip + negative match
+        check(root.getExtensionValue("2.5.29.14") != null, "root has SKI extension");
+        byte[] ski = new byte[20];
+        for (int i = 0; i < ski.length; i++) ski[i] = (byte) i;
+        X509CertSelector skiSel = new X509CertSelector();
+        skiSel.setSubjectKeyIdentifier(ski);
+        check(Arrays.equals(skiSel.getSubjectKeyIdentifier(), ski), "getSubjectKeyIdentifier round-trip");
+        check(!skiSel.match(root), "mismatched SKI excludes cert");
+
+        // authority key identifier byte round-trip
+        byte[] aki = new byte[]{4, 3, 2, 1};
+        X509CertSelector akiSel = new X509CertSelector();
+        akiSel.setAuthorityKeyIdentifier(aki);
+        check(Arrays.equals(akiSel.getAuthorityKeyIdentifier(), aki), "authority key identifier round-trip");
+
+        // private key validity round-trip
+        X509CertSelector pkv = new X509CertSelector();
+        pkv.setPrivateKeyValid(java.util.Date.from(java.time.Instant.parse("2030-01-01T00:00:00Z")));
+        check(pkv.getPrivateKeyValid() != null, "private key validity read back");
+
+        // key usage read back
+        boolean[] kuBits = new boolean[9]; kuBits[0] = true; kuBits[3] = true;
+        X509CertSelector ku = new X509CertSelector();
+        ku.setKeyUsage(kuBits);
+        check(Arrays.equals(ku.getKeyUsage(), kuBits), "key usage read back");
+
+        // extended key usage round-trip
+        X509CertSelector eku = new X509CertSelector();
+        eku.setExtendedKeyUsage(Set.of("1.3.6.1.5.5.7.3.1"));
+        check(eku.getExtendedKeyUsage().equals(Set.of("1.3.6.1.5.5.7.3.1")), "extended key usage round-trip");
+
+        // subject alternative names round-trip
+        X509CertSelector san = new X509CertSelector();
+        List<List<?>> names = new ArrayList<>();
+        names.add(Arrays.asList(2, "example.com"));
+        san.setSubjectAlternativeNames(names);
+        check(san.getSubjectAlternativeNames().size() == 1, "SAN set size");
+        san.addSubjectAlternativeName(7, "127.0.0.1");
+        check(san.getSubjectAlternativeNames().size() == 2, "SAN add size");
+        san.setMatchAllSubjectAltNames(false);
+        check(!san.getMatchAllSubjectAltNames(), "matchAllSubjectAltNames toggle");
+
+        // name constraints round-trip (empty NameConstraints DER)
+        byte[] emptyNc = new byte[]{0x30, 0x00};
+        X509CertSelector nc = new X509CertSelector();
+        nc.setNameConstraints(emptyNc);
+        check(Arrays.equals(nc.getNameConstraints(), emptyNc), "name constraints round-trip");
+
+        // policy round-trip
+        X509CertSelector pol = new X509CertSelector();
+        pol.setPolicy(Set.of("1.2.3.4"));
+        check(pol.getPolicy().equals(Set.of("1.2.3.4")), "policy round-trip");
+
+        // path-to-names round-trip
+        X509CertSelector ptn = new X509CertSelector();
+        List<List<?>> paths = new ArrayList<>();
+        paths.add(Arrays.asList(2, "example.com"));
+        ptn.setPathToNames(paths);
+        check(ptn.getPathToNames().size() == 1, "pathToNames set size");
+        ptn.addPathToName(2, "example.org");
+        check(ptn.getPathToNames().size() == 2, "pathToNames add size");
+
+        // clone is a deep, independent copy
+        X509CertSelector original = new X509CertSelector();
+        original.setSerialNumber(root.getSerialNumber());
+        X509CertSelector copy = (X509CertSelector) original.clone();
+        check(copy != original, "clone distinct");
+        check(copy.getSerialNumber().equals(root.getSerialNumber()), "clone preserves value");
+        copy.setSerialNumber(BigInteger.TEN);
+        check(original.getSerialNumber().equals(root.getSerialNumber()), "mutating clone does not affect original");
+
+        // null clearing semantics
+        X509CertSelector clearable = new X509CertSelector();
+        clearable.setCertificate(root); clearable.setCertificate(null);
+        check(clearable.getCertificate() == null, "setCertificate(null) clears");
+        clearable.setSerialNumber(root.getSerialNumber()); clearable.setSerialNumber(null);
+        check(clearable.getSerialNumber() == null, "setSerialNumber(null) clears");
+        clearable.setCertificateValid(new Date()); clearable.setCertificateValid(null);
+        check(clearable.getCertificateValid() == null, "setCertificateValid(null) clears");
+        clearable.setKeyUsage(new boolean[9]); clearable.setKeyUsage(null);
+        check(clearable.getKeyUsage() == null, "setKeyUsage(null) clears");
+
+        // issuer/subject byte round-trips
+        X509CertSelector byIssuer = new X509CertSelector();
+        byIssuer.setIssuer(root.getIssuerX500Principal());
+        check(Arrays.equals(byIssuer.getIssuerAsBytes(), root.getIssuerX500Principal().getEncoded()),
+            "getIssuerAsBytes round-trip");
+        X509CertSelector bySubject = new X509CertSelector();
+        bySubject.setSubject(root.getSubjectX500Principal());
+        check(Arrays.equals(bySubject.getSubjectAsBytes(), root.getSubjectX500Principal().getEncoded()),
+            "getSubjectAsBytes round-trip");
+
+        // error contracts for malformed DER/OID inputs
+        try {
+            new X509CertSelector().setIssuer(new byte[]{1, 2, 3});
+            check(false, "setIssuer(bad bytes) rejected");
+        } catch (IOException e) { check(true, "setIssuer(bad bytes) IOException"); }
+        try {
+            new X509CertSelector().setSubject(new byte[]{1, 2, 3});
+            check(false, "setSubject(bad bytes) rejected");
+        } catch (IOException e) { check(true, "setSubject(bad bytes) IOException"); }
+        try {
+            new X509CertSelector().setSubjectPublicKey(new byte[]{1, 2, 3});
+            check(false, "setSubjectPublicKey(bad bytes) rejected");
+        } catch (IOException e) { check(true, "setSubjectPublicKey(bad bytes) IOException"); }
+        try {
+            new X509CertSelector().setExtendedKeyUsage(Set.of("not-an-oid"));
+            check(false, "setExtendedKeyUsage(bad oid) rejected");
+        } catch (IOException e) { check(true, "setExtendedKeyUsage(bad oid) IOException"); }
+        try {
+            new X509CertSelector().setPolicy(Set.of("not-an-oid"));
+            check(false, "setPolicy(bad oid) rejected");
+        } catch (IOException e) { check(true, "setPolicy(bad oid) IOException"); }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSelectorRoundTrips();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

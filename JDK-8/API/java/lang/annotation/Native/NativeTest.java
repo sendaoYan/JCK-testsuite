@@ -42,6 +42,7 @@ public class NativeTest {
         check(tgt != null && tgt.value().length == 1 && tgt.value()[0] == ElementType.FIELD,
               "@Target(FIELD)");
         check(Native.class.isAnnotationPresent(Documented.class), "@Documented on Native");
+        check(Native.class.getAnnotation(Documented.class) != null, "@Documented directly readable");
     }
 
     // ---- Part 2: behavior ----
@@ -56,6 +57,10 @@ public class NativeTest {
         Annotation a = Native.class.getAnnotation(Retention.class);
         check(a != null, "meta @Retention survives (it is RUNTIME retained)");
 
+        // the constants keep their values regardless of SOURCE-retained annotations
+        check(Constants.ANSI_FG_RED == 31, "annotated constant value intact");
+        check(Constants.PLAIN == 0, "plain constant value intact");
+
         // contrast: a plain field carries nothing
         Field plain = Constants.class.getField("PLAIN");
         check(plain.getAnnotations().length == 0, "plain field has none");
@@ -65,6 +70,7 @@ public class NativeTest {
             @Override public Class<? extends Annotation> annotationType() { return Native.class; }
         };
         check(instance.annotationType() == Native.class, "hand-written instance type");
+        check(instance.equals(instance), "hand-written instance reflexive");
 
         // JDK self-use examples are SOURCE-visible only in source, not at runtime
         check(Integer.class.getField("MAX_VALUE").getAnnotation(Native.class) == null,
