@@ -1,0 +1,21 @@
+super public class ReturnAddressType
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // JVMS 2.3.3: the returnAddress type is produced and consumed only by the
+    // jsr/ret opcodes.  Those opcodes are forbidden in class files of version
+    // 51.0 and above, so verification must reject this method.
+    public static Method jsrReturnAddress:"()V"
+        stack 1 locals 1
+    {
+        bytecode 0xA8, 0x00, 0x00;  // jsr +0
+        return;
+    }
+}

@@ -1,0 +1,12 @@
+super public class InstanceInitMustInvokeAnotherInit
+    version 52:0
+{
+    // JVMS 2.9.1: an instance initialization method must call another <init>
+    // (super.<init> or this.<init>) before using the object; an <init> that
+    // returns without doing so is rejected by the verifier.
+    public Method "<init>":"()V"
+        stack 0 locals 1
+    {
+        return;
+    }
+}

@@ -1,0 +1,45 @@
+super public class BooleanInternalRepresentation
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // JVMS 2.3.4: boolean values are represented on the operand stack and in
+    // local variables as an int (0 = false, 1 = true).
+    public static Method falseInt:"()Z"
+        stack 1 locals 0
+    {
+        iconst_0;
+        ireturn;
+    }
+
+    public static Method trueInt:"()Z"
+        stack 1 locals 0
+    {
+        iconst_1;
+        ireturn;
+    }
+
+    // JVMS 2.3.4: a boolean array stores each element as a byte, manipulated
+    // with baload/bastore.
+    public static Method arrayRoundTrip:"(Z)Z"
+        stack 3 locals 2
+    {
+        iconst_1;
+        newarray boolean;
+        astore_1;
+        aload_1;
+        iconst_0;
+        iload_0;
+        bastore;
+        aload_1;
+        iconst_0;
+        baload;
+        ireturn;
+    }
+}

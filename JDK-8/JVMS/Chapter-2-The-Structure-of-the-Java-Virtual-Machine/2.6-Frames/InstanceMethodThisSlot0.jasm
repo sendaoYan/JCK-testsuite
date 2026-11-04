@@ -1,0 +1,28 @@
+super public class InstanceMethodThisSlot0
+    version 52:0
+{
+    public Field value:"I";
+
+    public Method "<init>":"(I)V"
+        stack 2 locals 2
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        aload_0;
+        iload_1;
+        putfield Field InstanceMethodThisSlot0.value:"I";
+        return;
+    }
+
+    // JVMS 2.6.1: in an instance method local 0 holds the reference `this`,
+    // so the explicit argument occupies local 1.
+    public Method add:"(I)I"
+        stack 2 locals 2
+    {
+        aload_0;
+        getfield Field InstanceMethodThisSlot0.value:"I";
+        iload_1;
+        iadd;
+        ireturn;
+    }
+}

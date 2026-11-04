@@ -1,0 +1,33 @@
+super public class OperandStackOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // JVMS 3.11: swap exchanges the top two values, so after pushing a then b
+    // the subtraction computes b - a.
+    public static Method swapped:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        swap;
+        isub;
+        ireturn;
+    }
+
+    // JVMS 3.11: dup duplicates the top value, so x + x is computed.
+    public static Method doubled:"(I)I"
+        stack 2 locals 1
+    {
+        iload_0;
+        dup;
+        iadd;
+        ireturn;
+    }
+}

@@ -1,0 +1,20 @@
+super public class IllegalAccessErrorAccessor
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // JVMS 5.4.4: resolution of a symbolic reference to a private field of
+    // another class must fail access control with IllegalAccessError.
+    public static Method read:"()I"
+        stack 1 locals 0
+    {
+        getstatic Field IllegalAccessErrorTarget.secret:"I";
+        ireturn;
+    }
+}

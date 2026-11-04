@@ -1,0 +1,20 @@
+super public class NoSuchMethodErrorAccessor
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // JVMS 5.4.3: resolution of a symbolic reference to a method that does not
+    // exist on the named class fails with NoSuchMethodError.
+    public static Method call:"()I"
+        stack 1 locals 0
+    {
+        invokestatic Method java/lang/Object."doesNotExist":"()I";
+        ireturn;
+    }
+}

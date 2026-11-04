@@ -1,0 +1,20 @@
+super public class LocalVariableOutOfRange
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // JVMS 2.6.1: the method declares max_locals = 1 but reads local index 1,
+    // which is outside the local variable array; verification must reject it.
+    public static Method bad:"()I"
+        stack 1 locals 1
+    {
+        iload_1;
+        ireturn;
+    }
+}

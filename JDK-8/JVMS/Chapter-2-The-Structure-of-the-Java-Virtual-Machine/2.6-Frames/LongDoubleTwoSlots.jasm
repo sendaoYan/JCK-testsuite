@@ -1,0 +1,27 @@
+super public class LongDoubleTwoSlots
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // JVMS 2.6.1: a long occupies two consecutive local variable slots and a
+    // double occupies two more; the following int lands in the next free slot.
+    // Slots: l=0,1  d=2,3  i=4  -> 5 locals.  Returns (long)l + (long)d + i.
+    public static Method sum:"(JDI)J"
+        stack 4 locals 5
+    {
+        lload_0;
+        dload_2;
+        d2l;
+        ladd;
+        iload 4;
+        i2l;
+        ladd;
+        lreturn;
+    }
+}
