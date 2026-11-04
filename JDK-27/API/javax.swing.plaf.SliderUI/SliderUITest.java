@@ -1,12 +1,10 @@
 /*
  * @test
  * @summary javax.swing.plaf.SliderUI conformance: white-box structure + black-box behavior.
- * @key headful
  * @run main SliderUITest
  */
 
 import java.lang.reflect.Modifier;
-import java.awt.EventQueue;
 
 public class SliderUITest {
     static int passed;
@@ -15,31 +13,9 @@ public class SliderUITest {
         passed++;
     }
 
-    interface ThrowingRunnable { void run() throws Exception; }
-    static void runOnEDT(ThrowingRunnable r) throws Exception {
-        try {
-            EventQueue.invokeAndWait(() -> {
-                try { r.run(); }
-                catch (Exception e) { throw new RuntimeException(e); }
-            });
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            Throwable t = e.getCause();
-            if (t instanceof RuntimeException) throw (RuntimeException) t;
-            if (t instanceof Error) throw (Error) t;
-            throw new RuntimeException(t);
-        }
-    }
-
-    static Object reflectNew(String className, Class<?>[] paramTypes, Object... args) throws Exception {
-        Class<?> c = Class.forName(className);
-        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(paramTypes);
-        ctor.setAccessible(true);
-        return ctor.newInstance(args);
-    }
-
     public static void main(String[] args) throws Exception {
-        runOnEDT(SliderUITest::testWhiteBox);
-        runOnEDT(SliderUITest::testBlackBox);
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 
@@ -57,7 +33,57 @@ public class SliderUITest {
         check(c.getInterfaces().length == 0, "no interfaces");
     }
 
-    static void testBlackBox() throws Exception {
-        check(new javax.swing.JSlider().getUI() instanceof javax.swing.plaf.SliderUI, "UI is SliderUI");
+    static void testBlackBox() {
+        // Minimal anonymous subclass: its implicit constructor directly invokes the
+        // protected <init>() of javax.swing.plaf.SliderUI (owner + name + desc in bytecode),
+        // which is the method this tranche must re-cover. The base class declares no
+        // abstract methods, so an empty anonymous body is sufficient.
+        javax.swing.plaf.SliderUI ui = new javax.swing.plaf.SliderUI() {};
+        check(ui != null, "SliderUI anonymous subclass instantiates");
+        check(ui instanceof javax.swing.plaf.SliderUI, "instanceof SliderUI");
+
+        // Lightweight, never-displayed component + offscreen graphics keep this headless.
+        javax.swing.JComponent c = new javax.swing.JPanel();
+        java.awt.Graphics g = new java.awt.image.BufferedImage(
+                1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB).createGraphics();
+        try {
+            // Default ComponentUI install/paint/update/uninstall are no-ops and must not throw.
+            ui.installUI(c);
+            ui.paint(g, c);
+            ui.update(g, c);
+            ui.uninstallUI(c);
+        } finally {
+            g.dispose();
+        }
+
+        // Default sizing queries return null (no look-and-feel delegate installed).
+        check(ui.getPreferredSize(c) == null, "getPreferredSize default null");
+        check(ui.getMinimumSize(c) == null, "getMinimumSize default null");
+        check(ui.getMaximumSize(c) == null, "getMaximumSize default null");
+
+        // Hit detection for a 0x0, never-validated component reports not contained.
+        check(!ui.contains(c, 0, 0), "contains default false for empty bounds");
+
+        // Baseline defaults: no reasonable baseline; resize behavior OTHER.
+        check(ui.getBaseline(c, 10, 10) == -1, "getBaseline default -1");
+        check(ui.getBaselineResizeBehavior(c) == java.awt.Component.BaselineResizeBehavior.OTHER,
+                "getBaselineResizeBehavior default OTHER");
+
+        // Accessible children of a childless panel: zero, and index 0 resolves to null.
+        check(ui.getAccessibleChildrenCount(c) == 0, "getAccessibleChildrenCount default 0");
+        check(ui.getAccessibleChild(c, 0) == null, "getAccessibleChild default null");
+
+        // Parameter-validation contracts on baseline helpers.
+        boolean npeBaseline = false;
+        try { ui.getBaseline(null, 0, 0); } catch (NullPointerException e) { npeBaseline = true; }
+        check(npeBaseline, "getBaseline(null) throws NPE");
+
+        boolean npeBehavior = false;
+        try { ui.getBaselineResizeBehavior(null); } catch (NullPointerException e) { npeBehavior = true; }
+        check(npeBehavior, "getBaselineResizeBehavior(null) throws NPE");
+
+        boolean iaeBaseline = false;
+        try { ui.getBaseline(c, -1, 0); } catch (IllegalArgumentException e) { iaeBaseline = true; }
+        check(iaeBaseline, "getBaseline negative width throws IAE");
     }
 }

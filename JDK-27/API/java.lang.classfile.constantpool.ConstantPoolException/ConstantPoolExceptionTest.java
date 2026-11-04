@@ -54,14 +54,24 @@ public class ConstantPoolExceptionTest {
 
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() throws Exception {
+        // direct constructor invocations (all four public constructors)
+        ConstantPoolException a = new ConstantPoolException();
+        check(a.getMessage() == null, "no-arg constructor leaves message null");
+        ConstantPoolException b = new ConstantPoolException("boom");
+        check("boom".equals(b.getMessage()), "(String) constructor preserves message");
+        Throwable cause = new IllegalStateException("cause");
+        ConstantPoolException c = new ConstantPoolException(cause);
+        check(cause == c.getCause(), "(Throwable) constructor sets cause");
+        ConstantPoolException d = new ConstantPoolException("boom2", cause);
+        check("boom2".equals(d.getMessage()) && cause == d.getCause(), "(String,Throwable) constructor sets message+cause");
+        check(RuntimeException.class.isAssignableFrom(ConstantPoolException.class), "extends RuntimeException");
 
-        byte[] b = ClassFile.of().build(ClassDesc.of("pkg.T"), cb -> cb.withSuperclass(ClassDesc.of("java.lang.Object")));
-        ConstantPool cp = ClassFile.of().parse(b).constantPool();
+        // still reachable through the classfile API for an invalid constant-pool index
+        byte[] bytes = ClassFile.of().build(ClassDesc.of("pkg.T"), cb -> cb.withSuperclass(ClassDesc.of("java.lang.Object")));
+        ConstantPool cp = ClassFile.of().parse(bytes).constantPool();
         boolean thrown = false;
         try { cp.entryByIndex(0); } catch (ConstantPoolException e) { thrown = true; check(e.getMessage() != null, "message non-null"); }
         check(thrown, "thrown for invalid index");
-        check(RuntimeException.class.isAssignableFrom(ConstantPoolException.class), "extends RuntimeException");
-
     }
 
     public static void main(String[] args) throws Exception {

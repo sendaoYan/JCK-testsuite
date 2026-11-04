@@ -18,5 +18,5 @@ Swing 外观（Look & Feel）委托抽象基类，为具体外观实现定义组
 ## 4. 测试用例设计 + 自动化实现
 
 - 白盒（testWhiteBox）：通过 Class.forName 反射校验类的可加载性、修饰符、父类与实现的接口；
-- 黑盒（testBlackBox）：在 EDT 上 实例化（或经工厂/反射获取）并组合调用关键方法，断言返回值与副作用；
-- 自动化：采用 jtreg 单文件测试，headful 用例在事件分发线程（EDT）上运行，结束后释放组件。
+- 黑盒（testBlackBox）：以最小匿名子类 `new DesktopIconUI() {}` 直接调用受保护的 `<init>()`，再对未显示组件与离屏 Graphics 组合调用继承自 ComponentUI 的可观察方法（installUI/paint/update/uninstallUI/getPreferredSize/getMinimumSize/getMaximumSize/contains/getBaseline/getBaselineResizeBehavior/getAccessibleChildrenCount/getAccessibleChild），断言默认返回值形状（null / false / -1 / OTHER / 0）与 null 组件、负宽参数的参数契约；
+- 自动化：采用 jtreg 单文件测试，纯 headless（无 @key），不 new JFrame / setVisible，不依赖显示或 EDT。

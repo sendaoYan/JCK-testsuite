@@ -19,14 +19,45 @@ public class SSLSessionBindingListenerTest {
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "interface");
     }
+    static Object sessionDefault(java.lang.reflect.Method m) {
+        Class<?> rt = m.getReturnType();
+        if (rt == boolean.class) return false;
+        if (rt == int.class) return 0;
+        if (rt == long.class) return 0L;
+        return null;
+    }
+    static SSLSession mockSession() {
+        return (SSLSession) Proxy.newProxyInstance(
+            SSLSessionBindingListenerTest.class.getClassLoader(),
+            new Class<?>[] { SSLSession.class },
+            (proxy, method, args) -> {
+                switch (method.getName()) {
+                    case "toString": return "mock-session";
+                    case "hashCode": return 0;
+                    case "equals": return proxy == args[0];
+                    case "getId": return new byte[0];
+                    case "getValueNames": return new String[0];
+                    default: return sessionDefault(method);
+                }
+            });
+    }
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() throws Exception {
-        class L implements javax.net.ssl.SSLSessionBindingListener {
-            String bound, unbound;
-            public void valueBound(javax.net.ssl.SSLSessionBindingEvent e) { bound = e.getName(); }
-            public void valueUnbound(javax.net.ssl.SSLSessionBindingEvent e) { unbound = e.getName(); }
-        }
-        check(new L() instanceof java.util.EventListener, "is EventListener");
+        // directly invoke the interface methods through the interface type (invokeinterface)
+        SSLSession session = mockSession();
+        final String[] bound = new String[1], unbound = new String[1];
+        SSLSessionBindingListener l = new SSLSessionBindingListener() {
+            public void valueBound(SSLSessionBindingEvent e) { bound[0] = e.getName(); }
+            public void valueUnbound(SSLSessionBindingEvent e) { unbound[0] = e.getName(); }
+        };
+        SSLSessionBindingEvent ev = new SSLSessionBindingEvent(session, "attr");
+        l.valueBound(ev);
+        l.valueUnbound(ev);
+        check("attr".equals(bound[0]), "valueBound delivered name");
+        check("attr".equals(unbound[0]), "valueUnbound delivered name");
+        check("attr".equals(ev.getName()), "event name");
+        check(ev.getSession() == session, "event session preserved");
+        check(l instanceof java.util.EventListener, "is EventListener");
     }
     public static void main(String[] args) throws Exception {
         testWhiteBox();

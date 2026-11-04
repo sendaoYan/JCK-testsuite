@@ -38,14 +38,12 @@ public class RelationNotFoundExceptionTest {
 
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() throws Exception {
-        Class<?> c = Class.forName("javax.management.relation.RelationNotFoundException");
-
         // default constructor: message must be null
-        Throwable e1 = (Throwable) c.getDeclaredConstructor().newInstance();
+        javax.management.relation.RelationNotFoundException e1 = new javax.management.relation.RelationNotFoundException();
         check(e1.getMessage() == null, "default constructor must leave message null");
 
         // (String) constructor: message preserved verbatim
-        Throwable e2 = (Throwable) c.getConstructor(String.class).newInstance("boom-42");
+        javax.management.relation.RelationNotFoundException e2 = new javax.management.relation.RelationNotFoundException("boom-42");
         check("boom-42".equals(e2.getMessage()), "(String) constructor must preserve message");
         check(e2 instanceof javax.management.relation.RelationException, "chain: instanceof RelationException");
         check(e2 instanceof javax.management.JMException, "chain: instanceof JMException");

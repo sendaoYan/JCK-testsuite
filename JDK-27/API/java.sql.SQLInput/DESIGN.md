@@ -43,5 +43,5 @@ SQLData 的读/写流：readSQL/writeSQL 中按序 read*/write* 字段。
 
 ## 4. 测试用例设计 + 自动化实现
 - 白盒 `testWhiteBox()`：`Class.forName` + `isInterface`/`isEnum`/修饰符/父类/直接父接口/声明方法数断言。
-- 黑盒 `testBlackBox()`：构造/工厂实例化 → 多步组合操作 → 可观察行为断言（含边界与精确异常类型）。
+- 黑盒 `testBlackBox()`：`Proxy` 生成 `SQLInput` 实例（handler 对 28 个 `read*`/`wasNull` 按 name+arity 返回确定性哨兵值，引用类型返回 null），以接口类型 `invokeinterface` 逐方法调用并断言形状/哨兵，最后断言 28 次全部分派。
 - 确定性：不连数据库、不加载真实驱动、不依赖墙钟；固定输入与 Locale/时区无关断言。

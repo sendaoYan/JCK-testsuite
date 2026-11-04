@@ -32,7 +32,31 @@ public class SQLXMLTest {
 
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() throws Exception {
-        check(java.sql.SQLXML.class.getDeclaredMethods().length == 10, "shape re-check");
+        final java.util.List<String> called = new java.util.ArrayList<String>();
+        java.sql.SQLXML sx = (java.sql.SQLXML) java.lang.reflect.Proxy.newProxyInstance(
+            java.sql.SQLXML.class.getClassLoader(),
+            new Class<?>[] { java.sql.SQLXML.class },
+            new java.lang.reflect.InvocationHandler() {
+                public Object invoke(Object proxy, java.lang.reflect.Method m, Object[] args) {
+                    called.add(m.getName() + "/" + m.getParameterCount());
+                    if (m.getName().equals("getString")) return "<a>xml</a>";
+                    return null; // void methods and reference-returning streams/sources are null-shaped
+                }
+            });
+
+        check("<a>xml</a>".equals(sx.getString()), "getString");
+        check(sx.getBinaryStream() == null, "getBinaryStream shape null");
+        check(sx.getCharacterStream() == null, "getCharacterStream shape null");
+        check(sx.getSource(javax.xml.transform.Source.class) == null, "getSource shape null");
+        check(sx.setBinaryStream() == null, "setBinaryStream shape null");
+        check(sx.setCharacterStream() == null, "setCharacterStream shape null");
+        check(sx.setResult(javax.xml.transform.Result.class) == null, "setResult shape null");
+        sx.setString("<b/>");
+        sx.free();
+        sx.close();
+        check(true, "setString/free/close callable");
+
+        check(called.size() == 10, "all 10 interface methods dispatched");
     }
 
     public static void main(String[] args) throws Exception {

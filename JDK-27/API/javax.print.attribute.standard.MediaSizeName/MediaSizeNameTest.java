@@ -21,6 +21,11 @@ public class MediaSizeNameTest {
         for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
         return false;
     }
+    static final class MSN extends MediaSizeName {
+        MSN(int v) { super(v); }
+        String[] stringTable() { return super.getStringTable(); }
+        javax.print.attribute.EnumSyntax[] enumValueTable() { return super.getEnumValueTable(); }
+    }
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = load("javax.print.attribute.standard.MediaSizeName");
@@ -184,6 +189,16 @@ public class MediaSizeNameTest {
         check(MediaSizeName.ISO_A0.equals(MediaSizeName.ISO_A0), "equals self");
         check(!MediaSizeName.ISO_A0.equals(MediaSizeName.ISO_A1), "distinct constants unequal");
         check(!MediaSizeName.ISO_A0.equals(null) && !MediaSizeName.ISO_A0.equals("x"), "not equals null/foreign");
+
+        // direct protected-method invocation through a minimal subclass (super constructor + super getStringTable/getEnumValueTable)
+        MSN m = new MSN(0);
+        String[] st = m.stringTable();
+        check(st != null && st.length == 73, "getStringTable length");
+        check("iso-a0".equals(st[0]), "getStringTable first entry");
+        javax.print.attribute.EnumSyntax[] evt = m.enumValueTable();
+        check(evt != null && evt.length == 73, "getEnumValueTable length");
+        check(evt[0] == MediaSizeName.ISO_A0, "getEnumValueTable first entry");
+        check(m.getValue() == 0 && "iso-a0".equals(m.toString()), "subclass ctor sets value 0");
     }
 
 

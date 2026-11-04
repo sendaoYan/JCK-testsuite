@@ -21,6 +21,11 @@ public class MediaTrayTest {
         for (Method m : k.getMethods()) if (m.getName().equals(n)) return true;
         return false;
     }
+    static final class MT extends MediaTray {
+        MT(int v) { super(v); }
+        String[] stringTable() { return super.getStringTable(); }
+        javax.print.attribute.EnumSyntax[] enumValueTable() { return super.getEnumValueTable(); }
+    }
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = load("javax.print.attribute.standard.MediaTray");
@@ -55,6 +60,16 @@ public class MediaTrayTest {
         check(MediaTray.TOP.equals(MediaTray.TOP), "equals self");
         check(!MediaTray.TOP.equals(MediaTray.MIDDLE), "distinct constants unequal");
         check(!MediaTray.TOP.equals(null) && !MediaTray.TOP.equals("x"), "not equals null/foreign");
+
+        // direct protected-method invocation through a minimal subclass (super constructor + super getStringTable/getEnumValueTable)
+        MT m = new MT(0);
+        String[] st = m.stringTable();
+        check(st != null && st.length == 8, "getStringTable length");
+        check("top".equals(st[0]), "getStringTable first entry");
+        javax.print.attribute.EnumSyntax[] evt = m.enumValueTable();
+        check(evt != null && evt.length == 8, "getEnumValueTable length");
+        check(evt[0] == MediaTray.TOP, "getEnumValueTable first entry");
+        check(m.getValue() == 0 && "top".equals(m.toString()), "subclass ctor sets value 0");
     }
 
 

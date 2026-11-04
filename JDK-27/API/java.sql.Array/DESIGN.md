@@ -27,5 +27,5 @@
 
 ## 4. 测试用例设计 + 自动化实现
 - 白盒 `testWhiteBox()`：`Class.forName` + `isInterface`/`isEnum`/修饰符/父类/直接父接口/声明方法数断言。
-- 黑盒 `testBlackBox()`：构造/工厂实例化 → 多步组合操作 → 可观察行为断言（含边界与精确异常类型）。
+- 黑盒 `testBlackBox()`：JDK-27 的 `SerialArray` 只有 `SerialArray(Array[,Map])` 构造器（无 `Object[]` 构造器），故先用 Proxy 构造一个返回 `Object[]{...}`/`Types.JAVA_OBJECT`/`"java.lang.Object"` 的源 `Array`，再包成 `SerialArray`；全程以 `java.sql.Array` 接口类型 `invokeinterface` 调用全部 12 个方法：`getBaseType/getBaseTypeName/getArray(3 个重载)/getResultSet(4 个重载, SerialArray 规定抛 SerialException)/free/close`。
 - 确定性：不连数据库、不加载真实驱动、不依赖墙钟；固定输入与 Locale/时区无关断言。

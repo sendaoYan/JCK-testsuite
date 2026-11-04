@@ -22,10 +22,13 @@ public class SocketAddressTest {
     }
 
     static void testBlackBox() throws Exception {
-        // Abstract class: cannot instantiate directly; subtypes are the concrete use.
+        // Abstract class: instantiate through an anonymous minimal concrete subclass, directly invoking the public no-arg constructor.
         check(Modifier.isAbstract(SocketAddress.class.getModifiers()), "abstract instance check");
+        SocketAddress anon = new SocketAddress() { };
+        check(anon != null, "anonymous concrete subclass invokes public no-arg constructor");
+        check(anon instanceof SocketAddress, "anonymous subclass instanceof SocketAddress");
         SocketAddress sa = new InetSocketAddress(1234);
-        check(sa instanceof SocketAddress, "subtype instanceof");
+        check(sa instanceof SocketAddress, "InetSocketAddress instanceof SocketAddress");
         check(new InetSocketAddress(1234).equals(new InetSocketAddress(1234)), "subtype equals");
         check(new InetSocketAddress(1234).hashCode() == new InetSocketAddress(1234).hashCode(), "subtype hashCode");
     }

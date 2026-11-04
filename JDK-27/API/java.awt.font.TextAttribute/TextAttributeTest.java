@@ -52,6 +52,13 @@ public class TextAttributeTest {
 
         // attribute readResolve keeps canonical singleton identity
         check(TextAttribute.SIZE == TextAttribute.SIZE, "canonical singleton identity");
+
+        // direct calls to public inherited Attribute methods on the singleton constants
+        check("java.awt.font.TextAttribute(family)".equals(TextAttribute.FAMILY.toString()), "toString includes name");
+        check("java.awt.font.TextAttribute(size)".equals(TextAttribute.SIZE.toString()), "toString for SIZE");
+        check(TextAttribute.FAMILY.equals(TextAttribute.FAMILY), "equals self (identity)");
+        check(!TextAttribute.FAMILY.equals(TextAttribute.SIZE), "distinct keys not equal");
+        check(TextAttribute.FAMILY.hashCode() == TextAttribute.FAMILY.hashCode(), "hashCode stable");
     }
 
     public static void main(String[] args) throws Exception {

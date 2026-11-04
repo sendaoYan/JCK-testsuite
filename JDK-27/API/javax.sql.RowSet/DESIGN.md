@@ -55,5 +55,5 @@ JDBC 接口：由驱动/连接池供应商实现；用户面向接口编程（`C
 
 ## 4. 测试用例设计 + 自动化实现
 - 白盒 `testWhiteBox()`：`Class.forName` + `isInterface`/`isEnum`/修饰符/父类/直接父接口/声明方法数断言。
-- 黑盒 `testBlackBox()`：构造/工厂实例化 → 多步组合操作 → 可观察行为断言（含边界与精确异常类型）。
+- 黑盒 `testBlackBox()`：`Proxy` 生成 `RowSet` 实例（handler 对 12 个无参 getter 返回确定性哨兵值，其余 setter/监听器/`clearParameters`/`execute` 等 void 方法走默认返回），以接口类型 `invokeinterface` 逐方法调用全部 115 个声明方法（含全部 `setXxx` 重载，用类型化 null 消除 `setBlob/setClob/setNClob` 重载歧义），最后断言 115 次全部分派。
 - 确定性：不连数据库、不加载真实驱动、不依赖墙钟；固定输入与 Locale/时区无关断言。

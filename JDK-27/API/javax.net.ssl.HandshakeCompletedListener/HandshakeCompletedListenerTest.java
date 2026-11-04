@@ -19,13 +19,44 @@ public class HandshakeCompletedListenerTest {
         check(Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "interface");
     }
+    static Object sessionDefault(java.lang.reflect.Method m) {
+        Class<?> rt = m.getReturnType();
+        if (rt == boolean.class) return false;
+        if (rt == int.class) return 0;
+        if (rt == long.class) return 0L;
+        return null;
+    }
+    static SSLSession mockSession() {
+        return (SSLSession) Proxy.newProxyInstance(
+            HandshakeCompletedListenerTest.class.getClassLoader(),
+            new Class<?>[] { SSLSession.class },
+            (proxy, method, args) -> {
+                switch (method.getName()) {
+                    case "toString": return "mock-session";
+                    case "hashCode": return 0;
+                    case "equals": return proxy == args[0];
+                    case "getId": return new byte[0];
+                    case "getValueNames": return new String[0];
+                    default: return sessionDefault(method);
+                }
+            });
+    }
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() throws Exception {
-        class L implements javax.net.ssl.HandshakeCompletedListener {
-            javax.net.ssl.HandshakeCompletedEvent last;
-            public void handshakeCompleted(javax.net.ssl.HandshakeCompletedEvent e) { last = e; }
-        }
-        check(new L() instanceof java.util.EventListener, "is EventListener");
+        // directly invoke the interface method through the interface type (invokeinterface)
+        SSLContext ctx = SSLContext.getDefault();
+        SSLSocket sock = (SSLSocket) ctx.getSocketFactory().createSocket();
+        SSLSession session = mockSession();
+        final HandshakeCompletedEvent[] seen = new HandshakeCompletedEvent[1];
+        HandshakeCompletedListener l = new HandshakeCompletedListener() {
+            public void handshakeCompleted(HandshakeCompletedEvent e) { seen[0] = e; }
+        };
+        HandshakeCompletedEvent ev = new HandshakeCompletedEvent(sock, session);
+        l.handshakeCompleted(ev);
+        check(seen[0] == ev, "handshakeCompleted delivered event");
+        check(ev.getSession() == session, "event session preserved");
+        check(ev.getSocket() == sock, "event socket preserved");
+        check(l instanceof java.util.EventListener, "is EventListener");
     }
     public static void main(String[] args) throws Exception {
         testWhiteBox();

@@ -18,6 +18,10 @@ public class GuardingDynamicLinkerExporterTest {
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     static boolean hasMethod(Class<?> c, String n) { for (Method m : c.getMethods()) if (m.getName().equals(n)) return true; return false; }
 
+    static final class Exporter extends GuardingDynamicLinkerExporter {
+        public java.util.List<GuardingDynamicLinker> get() { return java.util.Collections.emptyList(); }
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("jdk.dynalink.linker.GuardingDynamicLinkerExporter");
         check(Modifier.isPublic(c.getModifiers()), "public");
@@ -28,8 +32,11 @@ public class GuardingDynamicLinkerExporterTest {
 
     static void testBlackBox() throws Exception {
         check(GuardingDynamicLinkerExporter.AUTOLOAD_PERMISSION_NAME != null, "AUTOLOAD_PERMISSION_NAME");
-        check(true, "abstract class; constant verified");
-
+        check("dynalink.exportLinkersAutomatically".equals(GuardingDynamicLinkerExporter.AUTOLOAD_PERMISSION_NAME), "AUTOLOAD_PERMISSION_NAME value");
+        Exporter e = new Exporter();
+        check(e instanceof GuardingDynamicLinkerExporter, "subclass instanceof");
+        java.util.List<GuardingDynamicLinker> links = e.get();
+        check(links != null && links.isEmpty(), "get returns empty list");
     }
 
     public static void main(String[] args) throws Exception {

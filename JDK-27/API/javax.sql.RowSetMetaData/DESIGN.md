@@ -32,5 +32,5 @@ RowSet 内部接口与元数据：读写器与 RowSetMetaDataImpl 之间交互�
 
 ## 4. 测试用例设计 + 自动化实现
 - 白盒 `testWhiteBox()`：`Class.forName` + `isInterface`/`isEnum`/修饰符/父类/直接父接口/声明方法数断言。
-- 黑盒 `testBlackBox()`：构造/工厂实例化 → 多步组合操作 → 可观察行为断言（含边界与精确异常类型）。
+- 黑盒 `testBlackBox()`：用 JDK 现成实现 `javax.sql.rowset.RowSetMetaDataImpl`，但以 `javax.sql.RowSetMetaData` 接口类型 `invokeinterface` 调用全部 17 个 `setXxx`（先 `setColumnCount(2)`，再对第 1 列设置各属性），随后经继承的 getter 做 set→get 往返断言（`setColumnCount/getColumnCount`、`setColumnLabel/getColumnLabel`、`setColumnType/getColumnType`、`setNullable/isNullable` 等）。
 - 确定性：不连数据库、不加载真实驱动、不依赖墙钟；固定输入与 Locale/时区无关断言。

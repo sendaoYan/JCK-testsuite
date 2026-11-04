@@ -36,6 +36,12 @@ public class NamingSecurityExceptionTest {
     static void testBlackBox() throws Exception {
         check(Modifier.isAbstract(NamingSecurityException.class.getModifiers()), "abstract confirmed");
 
+        // direct constructor invocation through minimal concrete subclasses
+        javax.naming.NamingSecurityException e1 = new javax.naming.NamingSecurityException() {};
+        check(e1.getMessage() == null, "no-arg constructor leaves message null");
+        javax.naming.NamingSecurityException e2 = new javax.naming.NamingSecurityException("sec-msg") {};
+        check("sec-msg".equals(e2.getMessage()), "(String) constructor preserves message");
+
         // polymorphic catch bucket for the security family
         javax.naming.AuthenticationException a = new javax.naming.AuthenticationException("auth");
         javax.naming.AuthenticationNotSupportedException b = new javax.naming.AuthenticationNotSupportedException("scheme");
