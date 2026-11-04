@@ -10,4 +10,4 @@
 - 来源：~/git/jdk25u-dev/src/jdk.jshell/share/classes/jdk/jshell/JShellConsole.java。
 
 ## 4. 测试用例设计 + 自动化实现
-白盒（结构断言）+ 黑盒（组合操作）。白盒 interface/public；黑盒降级（无实例化）。
+白盒（结构断言）+ 黑盒（组合操作）。白盒 interface/public；黑盒用字符串 reader/writer 支撑的最小实现直接调用 writer/reader/readLine/readPassword/flush/charset 六方法，断言返回形状与单例稳定性。

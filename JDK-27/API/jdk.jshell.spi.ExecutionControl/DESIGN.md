@@ -10,4 +10,4 @@ LocalExecutionControl 等实现。
 - 来源：~/git/jdk25u-dev/src/jdk.jshell/share/classes/jdk/jshell/spi/ExecutionControl.java。
 
 ## 4. 测试用例设计 + 自动化实现
-白盒（结构断言）+ 黑盒（组合操作）。白盒 interface/public/extends AutoCloseable；黑盒降级。
+白盒（结构断言）+ 黑盒（组合操作）。白盒 interface/public/extends AutoCloseable；黑盒用 LocalExecutionControl 实例以接口类型直接调用 load/redefine/invoke/varValue/addToClasspath/stop/extensionCommand/close，断言成功/NotImplemented/InternalException 等可观察行为；静态 generate(env,"local") 与 generate(env,"local",map) 经 ServiceLoader 返回引擎。

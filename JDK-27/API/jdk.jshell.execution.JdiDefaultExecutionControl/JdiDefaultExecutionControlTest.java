@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary jdk.jshell.execution.JdiDefaultExecutionControl conformance: jdi default execution control.
+ * @modules jdk.jshell
  * @run main JdiDefaultExecutionControlTest
  */
 
@@ -12,13 +13,30 @@ public class JdiDefaultExecutionControlTest {
     static void testWhiteBox() throws Exception {
 
         Class<?> c = Class.forName("jdk.jshell.execution.JdiDefaultExecutionControl");
-        check(!c.isInterface() && !java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "is concrete class");
+        check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "is concrete class");
         check(Modifier.isPublic(c.getModifiers()), "is public");
         check(c.getSuperclass().getName().equals("jdk.jshell.execution.JdiExecutionControl"), "extends JdiExecutionControl");
     }
 
     static void testBlackBox() throws Exception {
-        check(true, "no safe instantiable behavior; white-box only");
+        // White-box degradation: JdiDefaultExecutionControl exposes no
+        // public/protected constructor (only a private one plus the package-private
+        // static create() factory), and a live instance requires launching a real
+        // remote debuggee JVM over JDI — unsafe/non-headless. Assert method presence
+        // and constructor shape instead of behavior.
+        Class<?> c = Class.forName("jdk.jshell.execution.JdiDefaultExecutionControl");
+        check(hasMethod(c, "close"), "declares close()");
+        check(hasMethod(c, "invoke"), "declares invoke()");
+        check(hasMethod(c, "stop"), "declares stop()");
+        check(hasMethod(c, "vm"), "declares vm()");
+        Constructor<?>[] ctors = c.getDeclaredConstructors();
+        check(ctors.length == 1 && !Modifier.isPublic(ctors[0].getModifiers()),
+              "no public constructor (factory/private only)");
+    }
+
+    static boolean hasMethod(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
+        return false;
     }
 
     public static void main(String[] args) throws Exception {

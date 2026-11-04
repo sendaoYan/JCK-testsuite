@@ -10,4 +10,4 @@
 - 来源：~/git/jdk25u-dev/src/jdk.jshell/share/classes/jdk/jshell/execution/JdiDefaultExecutionControl.java。
 
 ## 4. 测试用例设计 + 自动化实现
-白盒（结构断言）+ 黑盒（组合操作）。白盒 具体类/public/继承；黑盒降级。
+白盒（结构断言）+ 黑盒（组合操作）。白盒 具体类/public/继承；黑盒降级——无 public/protected 构造（仅 private + 包私有 create() 工厂），实时实例需真实 JDI 远程调试 JVM，无安全 headless 路径，改以方法面存在性 + 构造形状断言（close/invoke/stop/vm + 非 public 构造）。

@@ -10,4 +10,4 @@
 - 来源：~/git/jdk25u-dev/src/jdk.jshell/share/classes/jdk/jshell/spi/ExecutionEnv.java。
 
 ## 4. 测试用例设计 + 自动化实现
-白盒（结构断言）+ 黑盒（组合操作）。白盒 interface/public；黑盒降级。
+白盒（结构断言）+ 黑盒（组合操作）。白盒 interface/public；黑盒用匿名实现直接调用 userIn/userOut/userErr/extraRemoteVMOptions/console/closeDown，断言返回配置对象与 closeDown 回调。
