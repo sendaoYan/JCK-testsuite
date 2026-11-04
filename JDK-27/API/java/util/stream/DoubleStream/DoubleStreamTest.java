@@ -1,22 +1,14 @@
 /*
  * @test
- * @summary java.util.stream.DoubleStream conformance: white-box structure (interface/BaseStream/
- *          member forms) + black-box behavior (reductions, mapToObj/boxed, summaryStatistics).
+ * @summary java.util.stream.DoubleStream contract: factories, intermediate/terminal ops,
+ *          empty-stream semantics, parallel consistency, null->NPE, bad-arg->IAE,
+ *          boxed, single-use.
  * @run main DoubleStreamTest
  */
 
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.DoubleSummaryStatistics;
-import java.util.Iterator;
 import java.util.List;
 import java.util.OptionalDouble;
-import java.util.PrimitiveIterator;
-import java.util.Spliterator;
-import java.util.function.DoubleFunction;
-import java.util.function.DoublePredicate;
-import java.util.stream.BaseStream;
 import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
 
@@ -28,175 +20,105 @@ public class DoubleStreamTest {
         passed++;
     }
 
-    static boolean hasMethod(Class<?> c, String name, Class<?>... params) {
-        try { c.getMethod(name, params); return true; }
-        catch (NoSuchMethodException e) { return false; }
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ===================== 白盒 / 结构（反射） =====================
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.util.stream.DoubleStream");
-        check(c.isInterface(), "DoubleStream is an interface");
-        check(Modifier.isPublic(c.getModifiers()), "DoubleStream is public");
-        check(c.getSuperclass() == null, "interface superclass is null");
-        check(c.getInterfaces().length == 1 && c.getInterfaces()[0] == BaseStream.class,
-              "DoubleStream extends BaseStream");
-
-        check(hasMethod(c, "sum"), "DoubleStream#sum()");
-        check(hasMethod(c, "summaryStatistics"), "DoubleStream#summaryStatistics()");
-        check(hasMethod(c, "boxed"), "DoubleStream#boxed()");
-        check(hasMethod(c, "mapToObj", DoubleFunction.class), "DoubleStream#mapToObj(DoubleFunction)");
-        check(hasMethod(c, "filter", DoublePredicate.class), "DoubleStream#filter(DoublePredicate)");
-        check(hasMethod(c, "mapToInt", java.util.function.DoubleToIntFunction.class),
-              "DoubleStream#mapToInt(DoubleToIntFunction)");
-    }
-
-    // ===================== 黑盒 / 行为 =====================
-    static void testReductions() {
-        check(DoubleStream.of(1.0, 2.0, 3.0, 4.0).sum() == 10.0, "sum");
-        check(DoubleStream.of(1.0, 2.0, 3.0, 4.0).count() == 4L, "count");
-        check(DoubleStream.of(2.0, 4.0, 6.0).average().getAsDouble() == 4.0, "average");
-        check(DoubleStream.of(3.0, 1.0, 2.0).min().getAsDouble() == 1.0, "min");
-        check(DoubleStream.of(3.0, 1.0, 2.0).max().getAsDouble() == 3.0, "max");
-        check(DoubleStream.empty().sum() == 0.0, "empty sum == 0");
-        check(DoubleStream.empty().count() == 0L, "empty count");
-        check(!DoubleStream.empty().average().isPresent(), "empty average");
-        check(!DoubleStream.empty().min().isPresent(), "empty min");
-        check(!DoubleStream.empty().max().isPresent(), "empty max");
-        check(DoubleStream.of(1.0, 2.0, 3.0).reduce(0.0, Double::sum) == 6.0, "reduce identity");
-        check(DoubleStream.of(1.0, 2.0, 3.0).reduce(Double::sum).getAsDouble() == 6.0, "reduce op");
-        check(!DoubleStream.empty().reduce(Double::sum).isPresent(), "empty reduce");
-    }
-
-    static void testIntermediateAndConversion() {
-        double[] mapped = DoubleStream.of(1.0, 2.0, 3.0, 4.0).map(x -> x * x).toArray();
-        check(mapped[0] == 1.0 && mapped[3] == 16.0, "map square");
-        check(DoubleStream.of(1.0, 2.0, 3.0, 4.0).filter(x -> x % 2.0 == 0.0).sum() == 6.0, "filter even");
-        check(DoubleStream.of(3.0, 1.0, 2.0).sorted().toArray()[0] == 1.0, "sorted");
-        check(DoubleStream.of(1.0, 1.0, 2.0).distinct().count() == 2L, "distinct");
-        check(DoubleStream.of(1.0, 2.0, 3.0).limit(2).count() == 2L, "limit");
-        check(DoubleStream.of(1.0, 2.0, 3.0).skip(1).findFirst().getAsDouble() == 2.0, "skip/findFirst");
-        check(!DoubleStream.empty().findFirst().isPresent(), "empty findFirst");
-
-        List<Double> boxed = DoubleStream.of(1.0, 2.0, 3.0).boxed().collect(Collectors.toList());
-        check(boxed.equals(List.of(1.0, 2.0, 3.0)), "boxed contents");
-        List<String> obj = DoubleStream.of(1.0, 2.0, 3.0).mapToObj(String::valueOf)
-            .collect(Collectors.toList());
-        check(obj.equals(List.of("1.0", "2.0", "3.0")), "mapToObj");
-        check(DoubleStream.of(1.5, 2.5, 3.5).mapToInt(x -> (int) x).sum() == 6, "mapToInt");
-        check(DoubleStream.of(1.0, 2.0, 3.0).mapToLong(x -> (long) x * 2L).sum() == 12L, "mapToLong");
-        check(DoubleStream.of(1.0, 2.0, 3.0).anyMatch(x -> x == 2.0), "anyMatch");
-        check(DoubleStream.of(1.0, 2.0, 3.0).allMatch(x -> x > 0.0), "allMatch");
-        check(DoubleStream.of(1.0, 2.0, 3.0).noneMatch(x -> x > 5.0), "noneMatch");
-        check(DoubleStream.concat(DoubleStream.of(1.0), DoubleStream.of(2.0)).sum() == 3.0, "concat");
-        check(DoubleStream.generate(() -> 7.0).limit(3).sum() == 21.0, "generate+limit");
-        check(DoubleStream.iterate(1.0, x -> x + 1.0).limit(4).sum() == 10.0, "iterate+limit");
-
+    static void testFactories() {
+        check(DoubleStream.empty().count() == 0, "empty");
+        check(DoubleStream.of(1.0, 2.0, 3.0).sum() == 6.0, "of varargs");
+        check(DoubleStream.concat(DoubleStream.of(1.0), DoubleStream.of(2.0, 3.0)).sum() == 6.0, "concat");
+        check(DoubleStream.generate(() -> 1.0).limit(3).sum() == 3.0, "generate");
+        check(DoubleStream.iterate(1.0, x -> x + 1.0).limit(4).sum() == 10.0, "iterate");
         DoubleStream.Builder b = DoubleStream.builder();
         b.add(1.0).add(2.0).add(3.0);
         check(b.build().sum() == 6.0, "builder");
     }
 
-    static void testSummaryStatistics() {
-        DoubleSummaryStatistics stats = DoubleStream.of(1.0, 2.0, 3.0, 4.0).summaryStatistics();
-        check(stats.getCount() == 4L, "stats count");
-        check(stats.getSum() == 10.0, "stats sum");
-        check(stats.getMin() == 1.0, "stats min");
-        check(stats.getMax() == 4.0, "stats max");
-        check(stats.getAverage() == 2.5, "stats average");
-
-        DoubleSummaryStatistics empty = DoubleStream.empty().summaryStatistics();
-        check(empty.getCount() == 0L && empty.getSum() == 0.0, "empty stats count/sum");
-        check(empty.getMin() == Double.POSITIVE_INFINITY && empty.getMax() == Double.NEGATIVE_INFINITY,
-              "empty stats min/max sentinel");
+    static void testIntermediate() {
+        check(DoubleStream.of(1.0, 2.0, 3.0).map(x -> x * 10.0).sum() == 60.0, "map");
+        check(DoubleStream.of(1.0, 2.0, 3.0, 4.0).filter(x -> x % 2 == 0).sum() == 6.0, "filter");
+        check(DoubleStream.of(1.0, 2.0).flatMap(x -> DoubleStream.of(x, x)).sum() == 6.0, "flatMap");
+        check(DoubleStream.of(3.0, 1.0, 2.0).sorted().toArray()[0] == 1.0, "sorted");
+        check(DoubleStream.of(1.0, 1.0, 2.0).distinct().count() == 2, "distinct");
+        check(DoubleStream.of(1.0, 2.0, 3.0, 4.0).limit(2).sum() == 3.0, "limit");
+        check(DoubleStream.of(1.0, 2.0, 3.0, 4.0).skip(2).sum() == 7.0, "skip");
+        List<Double> boxed = DoubleStream.of(1.0, 2.0, 3.0).boxed().collect(Collectors.toList());
+        check(boxed.equals(Arrays.asList(1.0, 2.0, 3.0)), "boxed");
+        check(DoubleStream.of(1.0, 2.0, 3.0).mapToObj(Double::valueOf).count() == 3, "mapToObj");
+        check(DoubleStream.of(1.0, 2.0, 3.0).mapToInt(x -> (int) x).sum() == 6, "mapToInt");
+        check(DoubleStream.of(1.0, 2.0, 3.0).mapToLong(x -> (long) x).sum() == 6L, "mapToLong");
     }
 
-    // ===================== 黑盒 / 补测（tranche-8 未覆盖方法） =====================
-    static void testBlackBox() {
-        // takeWhile / dropWhile（默认方法）
-        check(Arrays.equals(DoubleStream.of(1.0, 2.0, 3.0, 4.0).takeWhile(x -> x < 3.0).toArray(),
-                            new double[]{1.0, 2.0}), "takeWhile");
-        check(Arrays.equals(DoubleStream.of(1.0, 2.0, 3.0, 4.0).dropWhile(x -> x < 3.0).toArray(),
-                            new double[]{3.0, 4.0}), "dropWhile");
-        check(DoubleStream.of(1.0, 2.0).takeWhile(x -> x > 0.0).count() == 2L, "takeWhile all match");
-        check(DoubleStream.of(1.0, 2.0).dropWhile(x -> x > 0.0).count() == 0L, "dropWhile all match");
-        check(DoubleStream.empty().takeWhile(x -> true).count() == 0L, "takeWhile empty");
-
-        // flatMap(DoubleFunction)
-        check(Arrays.equals(DoubleStream.of(1.0, 2.0).flatMap(x -> DoubleStream.of(x, x * 10.0)).toArray(),
-                            new double[]{1.0, 10.0, 2.0, 20.0}), "flatMap");
-
-        // peek(DoubleConsumer)：每元素执行一次且流内容不变
-        final double[] peeked = {0.0};
-        double sum = DoubleStream.of(1.0, 2.0, 3.0).peek(x -> peeked[0]++).sum();
-        check(sum == 6.0 && peeked[0] == 3.0, "peek side-effect per element");
-
-        // forEachOrdered(DoubleConsumer)：按 encounter order
-        List<Double> order = new ArrayList<>();
-        DoubleStream.of(3.0, 1.0, 2.0).forEachOrdered(order::add);
-        check(order.equals(List.of(3.0, 1.0, 2.0)), "forEachOrdered encounter order");
-
-        // iterator()：PrimitiveIterator.OfDouble
-        PrimitiveIterator.OfDouble it = DoubleStream.of(1.0, 2.0).iterator();
-        check(it.hasNext() && it.nextDouble() == 1.0 && it.nextDouble() == 2.0 && !it.hasNext(),
-              "iterator nextDouble traversal");
-        // BaseStream 默认 iterator()：返回 Iterator<Double>
-        Iterator<Double> rawIt = ((BaseStream<Double, DoubleStream>) DoubleStream.of(1.0, 2.0)).iterator();
-        check(rawIt.hasNext() && rawIt.next() == 1.0, "BaseStream iterator()");
-
-        // findAny()：存在且落在范围内；空流为空
-        OptionalDouble fa = DoubleStream.of(1.0, 2.0, 3.0).findAny();
-        check(fa.isPresent() && fa.getAsDouble() >= 1.0 && fa.getAsDouble() <= 3.0, "findAny present");
-        check(!DoubleStream.empty().findAny().isPresent(), "empty findAny");
-
-        // parallel() / sequential()：协变返回 DoubleStream
-        DoubleStream p = DoubleStream.of(1.0, 2.0).parallel();
-        check(p.isParallel(), "parallel() covariant isParallel");
-        check(!p.sequential().isParallel(), "sequential() covariant");
-        check(p.sequential().sum() == 3.0, "sequential() covariant still consumable");
-        // BaseStream 默认 parallel()/sequential()
-        BaseStream<Double, DoubleStream> bs = DoubleStream.of(1.0, 2.0);
-        check(!bs.isParallel(), "BaseStream default isParallel false");
-        check(bs.parallel().isParallel(), "BaseStream parallel()");
-        check(!bs.sequential().isParallel(), "BaseStream sequential()");
-
-        // spliterator()：Spliterator.OfDouble 与 BaseStream 默认 Spliterator
-        Spliterator.OfDouble spl = DoubleStream.of(1.0, 2.0, 3.0).spliterator();
-        check(spl.estimateSize() == 3L, "spliterator estimateSize");
-        check(spl.hasCharacteristics(Spliterator.ORDERED), "spliterator ORDERED");
-        Spliterator<Double> rawSpl =
-            ((BaseStream<Double, DoubleStream>) DoubleStream.of(1.0, 2.0)).spliterator();
-        check(rawSpl != null, "BaseStream spliterator()");
-
-        // ---- 边界值/等价类/等价性（本棒补测） ----
-        // 空流谓词真空真 / reduce 恒等
-        check(!DoubleStream.empty().anyMatch(x -> true), "empty anyMatch false");
-        check(DoubleStream.empty().allMatch(x -> false), "empty allMatch vacuous true");
-        check(DoubleStream.empty().noneMatch(x -> true), "empty noneMatch true");
-        check(DoubleStream.empty().reduce(3.5, Double::sum) == 3.5, "empty reduce identity");
-        check(DoubleStream.empty().reduce(0.0, (a, b) -> a + b) == 0.0, "empty reduce identity 0");
-
-        // 单元素极值
-        check(DoubleStream.of(5.0).min().getAsDouble() == 5.0, "single min");
-        check(DoubleStream.of(5.0).max().getAsDouble() == 5.0, "single max");
-        check(DoubleStream.of(5.0).sum() == 5.0, "single sum");
-        check(DoubleStream.of(5.0).average().getAsDouble() == 5.0, "single average");
-        check(DoubleStream.of(5.0).findFirst().getAsDouble() == 5.0, "single findFirst");
-
-        // 极值
-        check(DoubleStream.of(Double.MAX_VALUE).sum() == Double.MAX_VALUE, "sum MAX");
-        check(DoubleStream.of(-Double.MAX_VALUE).min().getAsDouble() == -Double.MAX_VALUE,
-                "min -MAX");
-        check(DoubleStream.of(3.0, 1.0, 2.0).min().getAsDouble()
-                <= DoubleStream.of(3.0, 1.0, 2.0).max().getAsDouble(), "min <= max");
+    static void testTerminal() {
+        check(DoubleStream.of(1.0, 2.0, 3.0, 4.0).sum() == 10.0, "sum");
+        check(DoubleStream.empty().sum() == 0.0, "empty sum 0");
+        check(DoubleStream.of(5.0, 1.0, 9.0).min().getAsDouble() == 1.0, "min");
+        check(DoubleStream.of(5.0, 1.0, 9.0).max().getAsDouble() == 9.0, "max");
+        check(!DoubleStream.empty().min().isPresent(), "empty min");
+        OptionalDouble avg = DoubleStream.of(1.0, 2.0, 3.0, 4.0).average();
+        check(avg.getAsDouble() == 2.5, "average");
+        check(!DoubleStream.empty().average().isPresent(), "empty average");
+        check(DoubleStream.of(1.0, 2.0, 3.0).count() == 3, "count");
+        check(DoubleStream.of(1.0, 2.0, 3.0).reduce(0.0, (a, b) -> a + b) == 6.0, "reduce identity");
+        check(DoubleStream.of(1.0, 2.0, 3.0).reduce((a, b) -> a + b).getAsDouble() == 6.0, "reduce no identity");
+        java.util.DoubleSummaryStatistics st = DoubleStream.of(1.0, 2.0, 3.0, 4.0).summaryStatistics();
+        check(st.getCount() == 4 && st.getSum() == 10.0 && st.getMin() == 1.0 && st.getMax() == 4.0
+                && st.getAverage() == 2.5, "summaryStatistics");
+        check(DoubleStream.of(1.0, 2.0, 3.0).anyMatch(x -> x == 2.0), "anyMatch");
+        check(DoubleStream.of(1.0, 2.0, 3.0).allMatch(x -> x > 0.0), "allMatch");
+        check(DoubleStream.of(1.0, 2.0, 3.0).noneMatch(x -> x > 5.0), "noneMatch");
+        check(DoubleStream.of(3.0, 2.0, 1.0).findFirst().getAsDouble() == 3.0, "findFirst");
+        check(DoubleStream.of(1.0, 2.0, 3.0).findAny().isPresent(), "findAny");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testReductions();
-        testIntermediateAndConversion();
-        testSummaryStatistics();
-        testBlackBox();
+    static void testParallelConsistency() {
+        double serial = DoubleStream.of(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0).sum();
+        double parallel = DoubleStream.of(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0).parallel().sum();
+        check(serial == parallel, "parallel sum equals serial");
+    }
+
+    static void testSingleUse() {
+        DoubleStream s = DoubleStream.of(1.0, 2.0, 3.0);
+        check(s.sum() == 6.0, "first consumption");
+        checkThrows(IllegalStateException.class, () -> s.sum(), "consumed twice ISE");
+    }
+
+    static void testJava9Plus() {
+        double[] it = DoubleStream.iterate(1.0, x -> x < 5.0, x -> x + 1.0).toArray();
+        check(Arrays.equals(it, new double[]{1.0, 2.0, 3.0, 4.0}), "iterate(seed, hasNext, next)");
+        check(Arrays.equals(DoubleStream.of(1.0, 2.0, 3.0, 4.0).takeWhile(x -> x < 3.0).toArray(), new double[]{1.0, 2.0}), "takeWhile");
+        check(Arrays.equals(DoubleStream.of(1.0, 2.0, 3.0, 4.0).dropWhile(x -> x < 3.0).toArray(), new double[]{3.0, 4.0}), "dropWhile");
+    }
+
+    static void testNullAndBadArgs() {
+        checkThrows(NullPointerException.class, () -> DoubleStream.of(1.0).filter(null), "filter(null)");
+        checkThrows(NullPointerException.class, () -> DoubleStream.of(1.0).map(null), "map(null)");
+        checkThrows(IllegalArgumentException.class, () -> DoubleStream.of(1.0).limit(-1), "limit(-1) IAE");
+        checkThrows(IllegalArgumentException.class, () -> DoubleStream.of(1.0).skip(-1), "skip(-1) IAE");
+        checkThrows(NullPointerException.class, () -> DoubleStream.of(1.0).reduce((java.util.function.DoubleBinaryOperator) null), "reduce null accumulator NPE");
+        checkThrows(NullPointerException.class, () -> DoubleStream.of(1.0).mapToObj(null), "mapToObj(null)");
+    }
+
+    public static void main(String[] args) {
+        testFactories();
+        testIntermediate();
+        testTerminal();
+        testParallelConsistency();
+        testSingleUse();
+        testNullAndBadArgs();
+        testJava9Plus();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

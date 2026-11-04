@@ -1,22 +1,63 @@
 /*
  * @test
- * @summary java.net.URL conformance: white-box structure + black-box behavior.
+ * @summary java.net.URL conformance: white-box structure + full contract coverage.
+ *          component accessors, all six constructors incl. deprecated and
+ *          URLStreamHandler variants, JDK 20+ URL.of(URI, URLStreamHandler),
+ *          default-port resolution, relative resolution against a context,
+ *          equals/hashCode/sameFile host-case rules, toExternalForm/toURI,
+ *          exact MalformedURLException/NPE/URISyntaxException paths, and
+ *          serialization round-trip. No network I/O (no openConnection).
  * @run main URLTest
  */
 
-import java.lang.reflect.*;
-import java.net.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Modifier;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLStreamHandler;
 
 public class URLTest {
     static int passed;
-    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    interface ThrowR { void run() throws Exception; }
-    static void fails(Class<? extends Throwable> ex, String m, ThrowR r) {
-        try { r.run(); } catch (Throwable t) {
-            if (ex.isInstance(t)) { passed++; return; }
-            throw new AssertionError(m + " wrong exception " + t);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
         }
-        throw new AssertionError(m + " no exception");
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T obj) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        oos.close();
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return (T) ois.readObject();
+    }
+
+    static class TestHandler extends URLStreamHandler {
+        protected URLConnection openConnection(URL u) {
+            throw new AssertionError("openConnection must not be called");
+        }
     }
 
     static void testWhiteBox() throws Exception {
@@ -32,57 +73,127 @@ public class URLTest {
         check(c.getMethod("of", URI.class, URLStreamHandler.class) != null, "of");
     }
 
-    static void testBlackBox() throws Exception {
-        URL u = new URL("http://user:pw@example.com:8080/a/b?x=1#f");
-        check(u.getProtocol().equals("http"), "protocol");
-        check(u.getHost().equals("example.com"), "host");
-        check(u.getPort() == 8080, "port");
-        check(u.getDefaultPort() == 80, "defaultPort");
-        check(u.getPath().equals("/a/b"), "path");
-        check(u.getQuery().equals("x=1"), "query");
-        check(u.getRef().equals("f"), "ref");
-        check(u.getUserInfo().equals("user:pw"), "userInfo");
-        check(u.getAuthority().equals("user:pw@example.com:8080"), "authority");
-        check(u.getFile().equals("/a/b?x=1"), "file");
+    static void testComponents() throws Exception {
+        URL u = new URL("http://user:pass@example.com:8080/a/b?q=1#f");
+        check("http".equals(u.getProtocol()), "getProtocol");
+        check("user:pass".equals(u.getUserInfo()), "getUserInfo");
+        check("example.com".equals(u.getHost()), "getHost");
+        check(u.getPort() == 8080, "getPort");
+        check("/a/b".equals(u.getPath()), "getPath");
+        check("q=1".equals(u.getQuery()), "getQuery");
+        check("f".equals(u.getRef()), "getRef");
+        check("/a/b?q=1".equals(u.getFile()), "getFile");
+        check("user:pass@example.com:8080".equals(u.getAuthority()), "getAuthority");
+        check("http://user:pass@example.com:8080/a/b?q=1#f".equals(u.toExternalForm()), "toExternalForm");
+        check(u.toExternalForm().equals(u.toString()), "toString == toExternalForm");
+    }
 
-        // port defaults to -1 when not specified
-        URL noPort = new URL("http://example.com/");
-        check(noPort.getPort() == -1, "port -1 default");
-        check(noPort.getDefaultPort() == 80, "http default 80");
+    static void testEmptyComponents() throws Exception {
+        URL u = new URL("http://example.com");
+        check("".equals(u.getPath()), "empty path");
+        check("".equals(u.getFile()), "empty file");
+        check(null == u.getQuery(), "null query");
+        check(null == u.getRef(), "null ref");
+        check(null == u.getUserInfo(), "null userInfo");
+        check("example.com".equals(u.getAuthority()), "authority host only");
+        check(u.getPort() == -1, "getPort -1 without explicit port");
+    }
 
-        // multi-arg constructors
-        URL c1 = new URL("http", "example.com", "/x");
-        check(c1.toString().equals("http://example.com/x"), "ctor(protocol,host,file)");
-        URL c2 = new URL("http", "example.com", 8080, "/x");
-        check(c2.toString().equals("http://example.com:8080/x"), "ctor(protocol,host,port,file)");
+    static void testDefaultPort() throws Exception {
+        check(new URL("http://example.com").getDefaultPort() == 80, "http default port 80");
+        check(new URL("file:/tmp/x").getDefaultPort() == -1, "file default port -1");
+    }
 
-        // relative URL construction from a base
-        URL rel = new URL(u, "../other");
-        check(rel.toString().equals("http://user:pw@example.com:8080/other"), "relative resolve");
+    static void testConstructors() throws Exception {
+        URL four = new URL("http", "example.com", 8080, "/a/b");
+        check("http://example.com:8080/a/b".equals(four.toExternalForm()), "4-arg with port");
+        check(four.getPort() == 8080, "4-arg port");
 
-        // equals / sameFile
-        check(u.equals(new URL("http://user:pw@example.com:8080/a/b?x=1#f")), "equals");
-        check(u.hashCode() == new URL("http://user:pw@example.com:8080/a/b?x=1#f").hashCode(), "hashCode");
-        check(u.sameFile(new URL("http://user:pw@example.com:8080/a/b?x=1#g")), "sameFile");
-        check(!u.sameFile(new URL("http://user:pw@example.com:8080/a/b?y=2")), "not sameFile different query");
+        URL fourNoPort = new URL("http", "example.com", -1, "/a/b?q=1");
+        check("http://example.com/a/b?q=1".equals(fourNoPort.toExternalForm()), "4-arg -1 omits port");
+        check(fourNoPort.getPort() == -1, "4-arg -1 getPort");
 
-        // toExternalForm / toString / toURI
-        check(u.toExternalForm().equals("http://user:pw@example.com:8080/a/b?x=1#f"), "toExternalForm");
-        check(u.toString().equals(u.toExternalForm()), "toString==toExternalForm");
-        check(u.toURI().equals(URI.create("http://user:pw@example.com:8080/a/b?x=1#f")), "toURI");
+        @SuppressWarnings("deprecation")
+        URL three = new URL("http", "example.com", "/a");
+        check("http://example.com/a".equals(three.toExternalForm()), "deprecated 3-arg");
 
-        // of(URI) requires absolute, hierarchical
-        URL ofU = URL.of(URI.create("http://example.com/a"), null);
-        check(ofU.toString().equals("http://example.com/a"), "URL.of");
+        URL ctx = new URL("http://a/b/c/d;p?q");
+        check("http://a/b/c/g".equals(new URL(ctx, "g").toString()), "context relative");
+        check("http://a/g".equals(new URL(ctx, "/g").toString()), "context absolute path");
+        check("http://g".equals(new URL(ctx, "//g").toString()), "context network-path");
+        check("http://a/b/c/?y".equals(new URL(ctx, "?y").toString()), "context query only");
+        check("http://a/b/c/g?y#s".equals(new URL(ctx, "g?y#s").toString()), "context relative query+fragment");
+        check("http://example.com/a".equals(new URL(null, "http://example.com/a").toExternalForm()), "null context absolute spec");
 
-        // exceptions
-        fails(MalformedURLException.class, "unknown protocol", () -> new URL("nosuchproto://x/"));
-        fails(MalformedURLException.class, "non-numeric port", () -> new URL("http://example.com:abc/"));
+        URL withHandler = new URL("file", "", -1, "/bogus/index.html", new TestHandler());
+        check("file:/bogus/index.html".equals(withHandler.toExternalForm()), "5-arg with handler");
+        URL specWithHandler = new URL(null, "http://example.com/a", new TestHandler());
+        check("http://example.com/a".equals(specWithHandler.toExternalForm()), "3-arg handler spec");
+    }
+
+    static void testOfFactory() throws Exception {
+        URL u = URL.of(new URI("http://example.com/a"), new TestHandler());
+        check("http://example.com/a".equals(u.toExternalForm()), "of(URI,handler)");
+
+        URL u2 = URL.of(new URI("http://example.com/a"), null);
+        check("http://example.com/a".equals(u2.toExternalForm()), "of(URI,null) uses default handler");
+
+        URL mail = URL.of(new URI("mailto:user@example.com"), null);
+        check("mailto".equals(mail.getProtocol()), "of opaque URI keeps protocol");
+
+        checkThrows(IllegalArgumentException.class, () -> URL.of(new URI("/a/b"), null), "of relative URI -> IAE");
+    }
+
+    static void testValidation() {
+        checkThrows(MalformedURLException.class, () -> new URL("example.com/a"), "no protocol");
+        checkThrows(MalformedURLException.class, () -> new URL("nosuchproto://x/"), "unknown protocol");
+        checkThrows(MalformedURLException.class, () -> new URL("http", "h", -5, "/x"), "4-arg port < -1");
+        checkThrows(NullPointerException.class, () -> new URL(null, "h", -1, "/x"), "null protocol");
+    }
+
+    static void testEqualsHashCodeSameFile() throws Exception {
+        // URL.equals/hashCode/sameFile resolve the host (a DNS lookup for
+        // hostnames), so these use IP literals to stay offline/deterministic.
+        URL u = new URL("http://127.0.0.1/a");
+        URL v = new URL("http://127.0.0.1/a");
+        check(u.equals(v), "equals same literal");
+        check(u.hashCode() == v.hashCode(), "hashCode equal");
+        check(!u.equals(null), "equals null false");
+        check(!u.equals("http://127.0.0.1/a"), "equals non-URL false");
+        check(!new URL("http://127.0.0.1/a#x").equals(new URL("http://127.0.0.1/a")), "equals ref matters");
+        check(!new URL("http://127.0.0.1/a").equals(new URL("http://127.0.0.1/b")), "equals different path");
+
+        check(new URL("http://127.0.0.1/a#x").sameFile(new URL("http://127.0.0.1/a#y")), "sameFile ignores ref");
+        check(!new URL("http://127.0.0.1/a#x").sameFile(new URL("http://127.0.0.1/b#x")), "sameFile different path");
+    }
+
+    static void testToURI() throws Exception {
+        URL u = new URL("http://example.com/a%20b");
+        URI uri = u.toURI();
+        check("http://example.com/a%20b".equals(uri.toString()), "toURI string");
+        check("/a b".equals(uri.getPath()), "toURI decoded path");
+        checkThrows(java.net.URISyntaxException.class, () -> new URL("http://example.com/a b").toURI(), "toURI on unencoded space");
+    }
+
+    static void testSerialization() throws Exception {
+        URL u = new URL("http://example.com:8080/a/b?q=1#f");
+        URL u2 = roundTrip(u);
+        check(u.equals(u2), "serialization equals");
+        check(u.toExternalForm().equals(u2.toExternalForm()), "serialization external form");
+        check(u2.getPort() == 8080, "serialization port");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testComponents();
+        testEmptyComponents();
+        testDefaultPort();
+        testConstructors();
+        testOfFactory();
+        testValidation();
+        testEqualsHashCodeSameFile();
+        testToURI();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

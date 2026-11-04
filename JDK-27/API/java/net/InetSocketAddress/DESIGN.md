@@ -1,17 +1,45 @@
-# InetSocketAddress 设计文档
+# java.net.InetSocketAddress 测试设计案（JDK-27）
 
-## 一、API 功能
+> 覆盖目标：完整契约。三个构造器 + createUnresolved、null InetAddress 的 wildcard 语义、
+> 端口越界→IllegalArgumentException、getPort/getAddress/getHostName/getHostString/isUnresolved/toString、
+> resolved/unresolved 的 equals/hashCode、序列化。解析只用 loopback 字面量或显式 hostname（无网络）。
 
-IP 地址与端口号组成的套接字地址，支持未解析(hostname)地址与通配地址。
+## 1. API 功能
 
-## 二、Java 用户如何使用
+- 构造器：`(int port)`、`(InetAddress,int)`、`(String host,int)`；工厂 `createUnresolved(String,int)`。
+- 访问：`getPort/getAddress/getHostName/getHostString/isUnresolved/toString/equals/hashCode`、Serializable。
 
-用户 new InetSocketAddress(host, port) 或 new InetSocketAddress(InetAddress, port) 作为 Socket.connect/bind 与 ServerSocket.bind 的参数。
+## 2. 用户如何使用
 
-## 三、开源代码实际用法调研
+- `new InetSocketAddress(port)` 绑定 wildcard；`new InetSocketAddress(host,port)` 绑定解析地址；
+  `createUnresolved` 生成未解析地址（无反向解析）。
 
-Netty、gRPC、OkHttp 等所有基于 TCP/UDP 的框架都用 InetSocketAddress 表示端点。
+## 3. 参考来源
 
-## 四、测试用例设计
+- Oracle Java SE 8 javadoc（java/net/InetSocketAddress.html）。
+- OpenJDK `~/git/jdk8u-dev/jdk/test/java/net/InetSocketAddress/`。
+- JCK runtime-8b `~/JDK/testsuite/jck8b/JCK-runtime-8b/tests/api/java_net/InetSocketAddress/`
+  （CtorTests、UnresolvedTests、EqualsTests、serial）。
 
-构造解析/未解析地址并断言 getAddress/getHostName/getPort/getHostString/isUnresolved；通配地址自洽；equals 语义。
+## 4. 测试用例设计（映射到 InetSocketAddressTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 端口构造器合法/非法边界 + wildcard | testPortConstructor |
+| P0 | InetAddress 构造器 + null→wildcard + 非法端口 | testInetAddressConstructor |
+| P0 | String 构造器（loopback 字面量）+ 非法端口 | testStringConstructor |
+| P0 | createUnresolved + null host/非法端口 | testUnresolved |
+| P0 | equals/hashCode（unresolved host 大小写不敏感；resolved!=unresolved） | testEqualsHashCode |
+| P1 | 序列化 round-trip（resolved + unresolved） | testSerialization |
+
+## 易错规范细节（已锁入断言）
+
+- 合法端口 0..65535；`<0` 或 `>65535` 抛 IllegalArgumentException（0 合法）。
+- `new InetSocketAddress(null, port)` 与 `new InetSocketAddress(port)` → wildcard（isAnyLocalAddress）。
+- `createUnresolved(null, port)` 抛 IllegalArgumentException。
+- unresolved equals 对 host **大小写不敏感**；resolved 与 unresolved（即使同 IP 字符串）**不相等**。
+- `getHostString` 返回构造时传入的字符串（InetAddress 构造时返回其 hostname/地址）。
+
+## JDK-27 补充
+
+- unresolved `toString()` 为 `host/<unresolved>:port`（JDK 18+ 增加 `/` + `<unresolved>` 标记；JDK-8 为 `host:port`）。

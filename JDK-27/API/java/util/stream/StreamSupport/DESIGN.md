@@ -1,26 +1,31 @@
-# java.util.stream.StreamSupport 测试方案
+# java.util.stream.StreamSupport 测试设计案
 
-白盒结构断言在 `StreamSupportTest.testWhiteBox()`，黑盒行为断言在 `StreamSupportTest.testBlackBox()`。自动化实现见 `StreamSupportTest.java` 黑盒部分。
+> 覆盖目标：**完整契约**。断言不依赖迭代顺序，headless 安全，固定输入确定性。
 
-## 1. API 功能（按方法分组）
+## 1. API 提供了哪些功能
 
-- **引用流**：`stream(Spliterator, boolean)`、`stream(Supplier, int characteristics, boolean)`。
-- **原始流**：`intStream`/`longStream`/`doubleStream` 各有两个重载（`Spliterator.Of*` 与 `Supplier` 形式）。
+从 Spliterator/Supplier 创建流：stream/intStream/longStream/doubleStream，characteristics 传递，null->NPE。
+
 ## 2. Java 用户如何使用
 
-- 构造：`StreamSupport.stream(list.spliterator(), false)`、`StreamSupport.intStream(Arrays.spliterator(int[], from, to), false)`。
-- 典型调用：从自定义 `Spliterator` 或 `Iterator` 造流；`Supplier` 形式传 `SIZED|SUBSIZED` 特征。
-- 真实组合链路：`StreamSupport.stream(spliterator, false).filter(...).map(...).collect(...)`。
-## 3. 开源代码实际用法调研
+- 用工厂方法或 StreamSupport 创建流，链式中间操作后接一个终止操作。
+- 依赖惰性求值（中间操作在终止操作前不执行）、单次消费（重复消费抛 IllegalStateException）。
+- 依赖空流语义（sum=0、average/min/max 为空 Optional、reduce 返回空）。
+- 依赖 null 参数抛 NPE、limit/skip 负数抛 IllegalArgumentException。
 
-> 说明：本环境 WebSearch 不可用，调研基于 JDK-27 实现源码 `/data/yansendao/git/jdk25u-dev/src` 与自带测试 `test/jdk`，逐条标注 file:line，未凭记忆编造。
+## 3. 参考来源（不凭记忆编造）
 
-- `src/.../java/util/Collection.java:748`：`StreamSupport.stream(spliterator(), false)`。
-- `src/.../java/util/BitSet.java:1369`：`StreamSupport.intStream(new BitSetSpliterator(...), false)`。
-- `src/.../java/util/Scanner.java:2867`：`StreamSupport.stream(new TokenSpliterator(), false)`。
-## 4. 测试用例设计 + 自动化实现
+- **Oracle Java SE 8/27 javadoc**（`java/util/stream/*.html`）：各方法异常契约、惰性/单次消费语义。
+- **OpenJDK 回归** `~/git/jdk8u-dev/jdk/test/java/util/stream` + `~/git/jdk/test/jdk/java/util/stream`。
 
-- **正常**：`stream`/`intStream`/`longStream`/`doubleStream` 内容与求和；`parallel` 标志。
-- **组合**：`int[]` 子区间 `Arrays.spliterator(arr,1,4)`；iterator→`spliteratorUnknownSize`→`stream`；`Supplier` 重载 + 特征；`filter/map` 链。
-- **自动化**：`StreamSupportTest.testBlackBox()`。
-- **健壮性**：固定输入、无墙钟/无 Random、无 HashMap/HashSet 迭代顺序断言；不改 `System.*`/`TimeZone`/`Locale` 默认；无文件/端口/网络/线程/`System.exit`；纯 headless（无 `@key`）。
+## 4. 测试用例设计
+
+| 测试点 | 用例方法 |
+|---|---|
+| 工厂方法边界 | testFactories |
+| 惰性求值 / 单次消费 | testLaziness / testSingleUse |
+| 中间操作链 | testIntermediate |
+| 终止操作 + 空流语义 | testTerminal |
+| 并行/串行一致 | testParallelConsistency |
+| null/坏参数 -> NPE/IAE | testNullAndBadArgs |
+| JDK-27 专属方法 | testJava9Plus |

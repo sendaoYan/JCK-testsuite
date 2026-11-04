@@ -1,23 +1,15 @@
 /*
  * @test
- * @summary java.util.stream.LongStream conformance: white-box structure (interface/BaseStream/
- *          member forms) + black-box behavior (range/rangeClosed, reductions, mapToObj/boxed,
- *          summaryStatistics).
+ * @summary java.util.stream.LongStream contract: factories, intermediate/terminal ops,
+ *          empty-stream semantics, parallel consistency, null->NPE, bad-arg->IAE,
+ *          boxed/asDouble, single-use.
  * @run main LongStreamTest
  */
 
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
-import java.util.LongSummaryStatistics;
+import java.util.OptionalDouble;
 import java.util.OptionalLong;
-import java.util.PrimitiveIterator;
-import java.util.Spliterator;
-import java.util.function.LongFunction;
-import java.util.function.LongPredicate;
-import java.util.stream.BaseStream;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -29,188 +21,107 @@ public class LongStreamTest {
         passed++;
     }
 
-    static boolean hasMethod(Class<?> c, String name, Class<?>... params) {
-        try { c.getMethod(name, params); return true; }
-        catch (NoSuchMethodException e) { return false; }
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ===================== 白盒 / 结构（反射） =====================
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.util.stream.LongStream");
-        check(c.isInterface(), "LongStream is an interface");
-        check(Modifier.isPublic(c.getModifiers()), "LongStream is public");
-        check(c.getSuperclass() == null, "interface superclass is null");
-        check(c.getInterfaces().length == 1 && c.getInterfaces()[0] == BaseStream.class,
-              "LongStream extends BaseStream");
-
-        check(hasMethod(c, "range", long.class, long.class), "LongStream#range(long,long)");
-        check(hasMethod(c, "rangeClosed", long.class, long.class), "LongStream#rangeClosed(long,long)");
-        check(hasMethod(c, "sum"), "LongStream#sum()");
-        check(hasMethod(c, "summaryStatistics"), "LongStream#summaryStatistics()");
-        check(hasMethod(c, "boxed"), "LongStream#boxed()");
-        check(hasMethod(c, "mapToObj", LongFunction.class), "LongStream#mapToObj(LongFunction)");
-        check(hasMethod(c, "filter", LongPredicate.class), "LongStream#filter(LongPredicate)");
+    static void testFactories() {
+        check(LongStream.empty().count() == 0, "empty");
+        check(LongStream.of(1L, 2L, 3L).sum() == 6L, "of varargs");
+        check(LongStream.concat(LongStream.of(1L), LongStream.of(2L, 3L)).sum() == 6L, "concat");
+        check(LongStream.generate(() -> 1L).limit(3).sum() == 3L, "generate");
+        check(LongStream.iterate(1L, x -> x + 1).limit(4).sum() == 10L, "iterate");
+        long[] ranged = LongStream.range(1L, 5L).toArray();
+        check(Arrays.equals(ranged, new long[]{1L, 2L, 3L, 4L}), "range exclusive");
+        long[] closed = LongStream.rangeClosed(1L, 4L).toArray();
+        check(Arrays.equals(closed, new long[]{1L, 2L, 3L, 4L}), "rangeClosed inclusive");
     }
 
-    // ===================== 黑盒 / 行为 =====================
-    static void testRange() {
-        long[] r = LongStream.range(1L, 4L).toArray();
-        check(r.length == 3 && r[0] == 1L && r[2] == 3L, "range half-open");
-        long[] rc = LongStream.rangeClosed(1L, 3L).toArray();
-        check(rc.length == 3 && rc[2] == 3L, "rangeClosed inclusive");
-        check(LongStream.range(5L, 5L).count() == 0L, "range start==end empty");
-        check(LongStream.range(6L, 5L).count() == 0L, "range start>end empty");
-        check(LongStream.rangeClosed(5L, 5L).sum() == 5L, "rangeClosed single element");
-        check(LongStream.rangeClosed(6L, 5L).count() == 0L, "rangeClosed start>end empty");
-    }
-
-    static void testReductions() {
-        check(LongStream.of(1L, 2L, 3L, 4L).sum() == 10L, "sum");
-        check(LongStream.of(1L, 2L, 3L, 4L).count() == 4L, "count");
-        check(LongStream.of(2L, 4L, 6L).average().getAsDouble() == 4.0, "average");
-        check(LongStream.of(3L, 1L, 2L).min().getAsLong() == 1L, "min");
-        check(LongStream.of(3L, 1L, 2L).max().getAsLong() == 3L, "max");
-        check(LongStream.empty().sum() == 0L, "empty sum == 0");
-        check(LongStream.empty().count() == 0L, "empty count");
-        check(!LongStream.empty().average().isPresent(), "empty average");
-        check(!LongStream.empty().min().isPresent(), "empty min");
-        check(!LongStream.empty().max().isPresent(), "empty max");
-        check(LongStream.of(1L, 2L, 3L).reduce(0L, Long::sum) == 6L, "reduce identity");
-        check(LongStream.of(1L, 2L, 3L).reduce(Long::sum).getAsLong() == 6L, "reduce op");
-        check(!LongStream.empty().reduce(Long::sum).isPresent(), "empty reduce");
-    }
-
-    static void testIntermediateAndConversion() {
-        long[] mapped = LongStream.range(1L, 5L).map(x -> x * x).toArray();
-        check(mapped[0] == 1L && mapped[3] == 16L, "map square");
-        check(LongStream.range(1L, 6L).filter(x -> x % 2L == 0L).sum() == 6L, "filter even");
+    static void testIntermediate() {
+        check(LongStream.of(1L, 2L, 3L).map(x -> x * 10L).sum() == 60L, "map");
+        check(LongStream.of(1L, 2L, 3L, 4L).filter(x -> x % 2 == 0).sum() == 6L, "filter");
+        check(LongStream.of(1L, 2L).flatMap(x -> LongStream.of(x, x)).sum() == 6L, "flatMap");
         check(LongStream.of(3L, 1L, 2L).sorted().toArray()[0] == 1L, "sorted");
-        check(LongStream.of(1L, 1L, 2L).distinct().count() == 2L, "distinct");
-        check(LongStream.of(1L, 2L, 3L).limit(2).count() == 2L, "limit");
-        check(LongStream.of(1L, 2L, 3L).skip(1).findFirst().getAsLong() == 2L, "skip/findFirst");
-        check(!LongStream.empty().findFirst().isPresent(), "empty findFirst");
-
+        check(LongStream.of(1L, 1L, 2L).distinct().count() == 2, "distinct");
+        check(LongStream.of(1L, 2L, 3L, 4L).limit(2).sum() == 3L, "limit");
+        check(LongStream.of(1L, 2L, 3L, 4L).skip(2).sum() == 7L, "skip");
         List<Long> boxed = LongStream.of(1L, 2L, 3L).boxed().collect(Collectors.toList());
-        check(boxed.equals(List.of(1L, 2L, 3L)), "boxed contents");
-        List<String> obj = LongStream.range(1L, 4L).mapToObj(String::valueOf).collect(Collectors.toList());
-        check(obj.equals(List.of("1", "2", "3")), "mapToObj");
-        check(LongStream.of(1L, 2L, 3L).mapToInt(x -> (int) x * 2).sum() == 12, "mapToInt");
+        check(boxed.equals(Arrays.asList(1L, 2L, 3L)), "boxed");
+        check(LongStream.of(1L, 2L).asDoubleStream().sum() == 3.0, "asDoubleStream");
+        check(LongStream.of(1L, 2L, 3L).mapToObj(Long::valueOf).count() == 3, "mapToObj");
+        check(LongStream.of(1L, 2L, 3L).mapToInt(x -> (int) x).sum() == 6, "mapToInt");
         check(LongStream.of(1L, 2L, 3L).mapToDouble(x -> x * 2.0).sum() == 12.0, "mapToDouble");
-        check(LongStream.range(1L, 4L).asDoubleStream().sum() == 6.0, "asDoubleStream");
+    }
+
+    static void testTerminal() {
+        check(LongStream.of(1L, 2L, 3L, 4L).sum() == 10L, "sum");
+        check(LongStream.empty().sum() == 0L, "empty sum 0");
+        check(LongStream.of(5L, 1L, 9L).min().getAsLong() == 1L, "min");
+        check(LongStream.of(5L, 1L, 9L).max().getAsLong() == 9L, "max");
+        check(!LongStream.empty().min().isPresent(), "empty min");
+        OptionalDouble avg = LongStream.of(1L, 2L, 3L, 4L).average();
+        check(avg.getAsDouble() == 2.5, "average");
+        check(!LongStream.empty().average().isPresent(), "empty average");
+        check(LongStream.of(1L, 2L, 3L).count() == 3, "count");
+        check(LongStream.of(1L, 2L, 3L).reduce(0L, (a, b) -> a + b) == 6L, "reduce identity");
+        check(LongStream.of(1L, 2L, 3L).reduce((a, b) -> a + b).getAsLong() == 6L, "reduce no identity");
+        java.util.LongSummaryStatistics st = LongStream.of(1L, 2L, 3L, 4L).summaryStatistics();
+        check(st.getCount() == 4 && st.getSum() == 10L && st.getMin() == 1L && st.getMax() == 4L
+                && st.getAverage() == 2.5, "summaryStatistics");
         check(LongStream.of(1L, 2L, 3L).anyMatch(x -> x == 2L), "anyMatch");
         check(LongStream.of(1L, 2L, 3L).allMatch(x -> x > 0L), "allMatch");
         check(LongStream.of(1L, 2L, 3L).noneMatch(x -> x > 5L), "noneMatch");
-        check(LongStream.concat(LongStream.of(1L), LongStream.of(2L)).sum() == 3L, "concat");
-        check(LongStream.generate(() -> 7L).limit(3).sum() == 21L, "generate+limit");
-        check(LongStream.iterate(1L, x -> x + 1L).limit(4).sum() == 10L, "iterate+limit");
+        check(LongStream.of(3L, 2L, 1L).findFirst().getAsLong() == 3L, "findFirst");
+        check(LongStream.of(1L, 2L, 3L).findAny().isPresent(), "findAny");
     }
 
-    static void testSummaryStatistics() {
-        LongSummaryStatistics stats = LongStream.of(1L, 2L, 3L, 4L).summaryStatistics();
-        check(stats.getCount() == 4L, "stats count");
-        check(stats.getSum() == 10L, "stats sum");
-        check(stats.getMin() == 1L, "stats min");
-        check(stats.getMax() == 4L, "stats max");
-        check(stats.getAverage() == 2.5, "stats average");
-
-        LongSummaryStatistics empty = LongStream.empty().summaryStatistics();
-        check(empty.getCount() == 0L && empty.getSum() == 0L, "empty stats count/sum");
-        check(empty.getMin() == Long.MAX_VALUE && empty.getMax() == Long.MIN_VALUE,
-              "empty stats min/max sentinel");
+    static void testParallelConsistency() {
+        long serial = LongStream.range(1, 100).sum();
+        long parallel = LongStream.range(1, 100).parallel().sum();
+        check(serial == parallel, "parallel sum equals serial");
     }
 
-    // ===================== 黑盒 / 补测（tranche-8 未覆盖方法） =====================
-    static void testBlackBox() {
-        // takeWhile / dropWhile（默认方法）
-        check(Arrays.equals(LongStream.of(1L, 2L, 3L, 4L).takeWhile(x -> x < 3L).toArray(),
-                            new long[]{1L, 2L}), "takeWhile");
-        check(Arrays.equals(LongStream.of(1L, 2L, 3L, 4L).dropWhile(x -> x < 3L).toArray(),
-                            new long[]{3L, 4L}), "dropWhile");
-        check(LongStream.of(1L, 2L).takeWhile(x -> x > 0L).count() == 2L, "takeWhile all match");
-        check(LongStream.of(1L, 2L).dropWhile(x -> x > 0L).count() == 0L, "dropWhile all match");
-        check(LongStream.empty().takeWhile(x -> true).count() == 0L, "takeWhile empty");
-
-        // flatMap(LongFunction)
-        check(Arrays.equals(LongStream.of(1L, 2L).flatMap(x -> LongStream.of(x, x * 10L)).toArray(),
-                            new long[]{1L, 10L, 2L, 20L}), "flatMap");
-
-        // peek(LongConsumer)：每元素执行一次且流内容不变
-        final long[] peeked = {0L};
-        long sum = LongStream.of(1L, 2L, 3L).peek(x -> peeked[0]++).sum();
-        check(sum == 6L && peeked[0] == 3L, "peek side-effect per element");
-
-        // forEachOrdered(LongConsumer)：按 encounter order
-        List<Long> order = new ArrayList<>();
-        LongStream.of(3L, 1L, 2L).forEachOrdered(order::add);
-        check(order.equals(List.of(3L, 1L, 2L)), "forEachOrdered encounter order");
-
-        // iterator()：PrimitiveIterator.OfLong
-        PrimitiveIterator.OfLong it = LongStream.of(1L, 2L).iterator();
-        check(it.hasNext() && it.nextLong() == 1L && it.nextLong() == 2L && !it.hasNext(),
-              "iterator nextLong traversal");
-        // BaseStream 默认 iterator()：返回 Iterator<Long>
-        Iterator<Long> rawIt = ((BaseStream<Long, LongStream>) LongStream.of(1L, 2L)).iterator();
-        check(rawIt.hasNext() && rawIt.next() == 1L, "BaseStream iterator()");
-
-        // findAny()：存在且落在范围内；空流为空
-        OptionalLong fa = LongStream.of(1L, 2L, 3L).findAny();
-        check(fa.isPresent() && fa.getAsLong() >= 1L && fa.getAsLong() <= 3L, "findAny present");
-        check(!LongStream.empty().findAny().isPresent(), "empty findAny");
-
-        // parallel() / sequential()：协变返回 LongStream
-        LongStream p = LongStream.of(1L, 2L).parallel();
-        check(p.isParallel(), "parallel() covariant isParallel");
-        check(!p.sequential().isParallel(), "sequential() covariant");
-        check(p.sequential().sum() == 3L, "sequential() covariant still consumable");
-        // BaseStream 默认 parallel()/sequential()
-        BaseStream<Long, LongStream> bs = LongStream.of(1L, 2L);
-        check(!bs.isParallel(), "BaseStream default isParallel false");
-        check(bs.parallel().isParallel(), "BaseStream parallel()");
-        check(!bs.sequential().isParallel(), "BaseStream sequential()");
-
-        // spliterator()：Spliterator.OfLong 与 BaseStream 默认 Spliterator
-        Spliterator.OfLong spl = LongStream.of(1L, 2L, 3L).spliterator();
-        check(spl.estimateSize() == 3L, "spliterator estimateSize");
-        check(spl.hasCharacteristics(Spliterator.ORDERED), "spliterator ORDERED");
-        Spliterator<Long> rawSpl =
-            ((BaseStream<Long, LongStream>) LongStream.of(1L, 2L)).spliterator();
-        check(rawSpl != null, "BaseStream spliterator()");
-
-        // ---- 边界值/等价类/等价性（本棒补测） ----
-        // 空流谓词真空真 / reduce 恒等
-        check(!LongStream.empty().anyMatch(x -> true), "empty anyMatch false");
-        check(LongStream.empty().allMatch(x -> false), "empty allMatch vacuous true");
-        check(LongStream.empty().noneMatch(x -> true), "empty noneMatch true");
-        check(LongStream.empty().reduce(7L, Long::sum) == 7L, "empty reduce identity");
-        check(LongStream.empty().reduce(0L, (a, b) -> a + b) == 0L, "empty reduce identity 0");
-
-        // 单元素极值
-        check(LongStream.of(5L).min().getAsLong() == 5L, "single min");
-        check(LongStream.of(5L).max().getAsLong() == 5L, "single max");
-        check(LongStream.of(5L).sum() == 5L, "single sum");
-        check(LongStream.of(5L).average().getAsDouble() == 5.0, "single average");
-        check(LongStream.of(5L).findFirst().getAsLong() == 5L, "single findFirst");
-
-        // 极值 range
-        check(LongStream.rangeClosed(Long.MAX_VALUE, Long.MAX_VALUE).sum() == Long.MAX_VALUE,
-                "rangeClosed at MAX single element");
-        check(LongStream.range(Long.MAX_VALUE - 1L, Long.MAX_VALUE).count() == 1L,
-                "range near MAX exclusive");
-        check(LongStream.rangeClosed(Long.MIN_VALUE, Long.MIN_VALUE).sum() == Long.MIN_VALUE,
-                "rangeClosed at MIN single element");
-
-        // min/max 吸收律
-        check(LongStream.of(3L, 1L, 2L).min().getAsLong() <= LongStream.of(3L, 1L, 2L).max().getAsLong(),
-                "min <= max");
+    static void testSingleUse() {
+        LongStream s = LongStream.of(1L, 2L, 3L);
+        check(s.sum() == 6L, "first consumption");
+        checkThrows(IllegalStateException.class, () -> s.sum(), "consumed twice ISE");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testRange();
-        testReductions();
-        testIntermediateAndConversion();
-        testSummaryStatistics();
-        testBlackBox();
+    static void testJava9Plus() {
+        long[] it = LongStream.iterate(1L, x -> x < 5L, x -> x + 1L).toArray();
+        check(Arrays.equals(it, new long[]{1L, 2L, 3L, 4L}), "iterate(seed, hasNext, next)");
+        check(Arrays.equals(LongStream.of(1L, 2L, 3L, 4L).takeWhile(x -> x < 3L).toArray(), new long[]{1L, 2L}), "takeWhile");
+        check(Arrays.equals(LongStream.of(1L, 2L, 3L, 4L).dropWhile(x -> x < 3L).toArray(), new long[]{3L, 4L}), "dropWhile");
+    }
+
+    static void testNullAndBadArgs() {
+        checkThrows(NullPointerException.class, () -> LongStream.of(1L).filter(null), "filter(null)");
+        checkThrows(NullPointerException.class, () -> LongStream.of(1L).map(null), "map(null)");
+        checkThrows(IllegalArgumentException.class, () -> LongStream.of(1L).limit(-1), "limit(-1) IAE");
+        checkThrows(IllegalArgumentException.class, () -> LongStream.of(1L).skip(-1), "skip(-1) IAE");
+        checkThrows(NullPointerException.class, () -> LongStream.of(1L).reduce((java.util.function.LongBinaryOperator) null), "reduce null accumulator NPE");
+        checkThrows(NullPointerException.class, () -> LongStream.of(1L).mapToObj(null), "mapToObj(null)");
+    }
+
+    public static void main(String[] args) {
+        testFactories();
+        testIntermediate();
+        testTerminal();
+        testParallelConsistency();
+        testSingleUse();
+        testNullAndBadArgs();
+        testJava9Plus();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

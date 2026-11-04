@@ -1,27 +1,31 @@
-# java.util.stream.Collector 测试方案
+# java.util.stream.Collector 测试设计案
 
-白盒结构断言在 `CollectorTest.testWhiteBox()`，黑盒行为断言在 `CollectorTest.testBlackBox()`。自动化实现见 `CollectorTest.java` 黑盒部分。
+> 覆盖目标：**完整契约**。断言不依赖迭代顺序，headless 安全，固定输入确定性。
 
-## 1. API 功能（按方法分组）
+## 1. API 提供了哪些功能
 
-- **工厂**：`of(Supplier, BiConsumer, BinaryOperator)`（恒等 finisher）、`of(Supplier, BiConsumer, BinaryOperator, Function, Characteristics...)`（显式 finisher）。
-- **访问器**：`supplier()`、`accumulator()`、`combiner()`、`finisher()`、`characteristics()`。
+Collector 接口与 of() 工厂、Characteristics 枚举、supplier/accumulator/combiner/finisher。
+
 ## 2. Java 用户如何使用
 
-- 构造：`Collector.of(ArrayList::new, List::add, (a,b)->{a.addAll(b); return a;})`。
-- 典型调用：`stream.collect(collector)` 驱动 supplier→accumulator→(combiner)→finisher。
-- 真实组合链路：`of(...)` 定义 → `Stream.filter(...).map(...).collect(c)` 收尾。
-## 3. 开源代码实际用法调研
+- 用工厂方法或 StreamSupport 创建流，链式中间操作后接一个终止操作。
+- 依赖惰性求值（中间操作在终止操作前不执行）、单次消费（重复消费抛 IllegalStateException）。
+- 依赖空流语义（sum=0、average/min/max 为空 Optional、reduce 返回空）。
+- 依赖 null 参数抛 NPE、limit/skip 负数抛 IllegalArgumentException。
 
-> 说明：本环境 WebSearch 不可用，调研基于 JDK-27 实现源码 `/data/yansendao/git/jdk25u-dev/src` 与自带测试 `test/jdk`，逐条标注 file:line，未凭记忆编造。
+## 3. 参考来源（不凭记忆编造）
 
-- `src/.../java/util/stream/package-info.java:626`：`Collector.of(...)` 工厂说明。
-- `src/.../java/util/stream/Collector.java:150`：javadoc 示例 `Collector.of(TreeSet::new, TreeSet::add, ...)`。
-- `src/.../java/lang/String.java:4041`：`stream.collect(Collectors.joining(...))` —— Collector 驱动的收尾用法。
-## 4. 测试用例设计 + 自动化实现
+- **Oracle Java SE 8/27 javadoc**（`java/util/stream/*.html`）：各方法异常契约、惰性/单次消费语义。
+- **OpenJDK 回归** `~/git/jdk8u-dev/jdk/test/java/util/stream` + `~/git/jdk/test/jdk/java/util/stream`。
 
-- **正常**：3-arg `of` 恒等 finisher + `IDENTITY_FINISH` 特征；4-arg `of` 应用 finisher 与自定义特征。
-- **组合**：自定义 Collector 走 `filter→map→collect` 全链；访问器逐一校验（`supplier/accumulator/combiner/finisher/characteristics`）。
-- **边界/异常**：`supplier`/`accumulator`/`finisher` 为 null 抛 `NullPointerException`（`expectThrows`）。
-- **自动化**：`CollectorTest.testBlackBox()`。
-- **健壮性**：固定输入、无墙钟/无 Random、无 HashMap/HashSet 迭代顺序断言；不改 `System.*`/`TimeZone`/`Locale` 默认；无文件/端口/网络/线程/`System.exit`；纯 headless（无 `@key`）。
+## 4. 测试用例设计
+
+| 测试点 | 用例方法 |
+|---|---|
+| 工厂方法边界 | testFactories |
+| 惰性求值 / 单次消费 | testLaziness / testSingleUse |
+| 中间操作链 | testIntermediate |
+| 终止操作 + 空流语义 | testTerminal |
+| 并行/串行一致 | testParallelConsistency |
+| null/坏参数 -> NPE/IAE | testNullAndBadArgs |
+| JDK-27 专属方法 | testJava9Plus |
