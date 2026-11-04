@@ -16,10 +16,15 @@
  *    range(from,to) from>to 抛 IAE；copyOf(空 Collection) 抛 IAE。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashSet;
 
 public class EnumSetTest {
     enum Color { RED, GREEN, BLUE, YELLOW }
@@ -152,6 +157,63 @@ public class EnumSetTest {
         check(!set.remove(null), "remove null returns false");
     }
 
+    @SuppressWarnings("unchecked")
+    static <E extends Enum<E>> EnumSet<E> roundTrip(EnumSet<E> s) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(s); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (EnumSet<E>) ois.readObject();
+        }
+    }
+
+    // ---- contract deep-dive (factory edge cases / serialization /
+    //      cross-impl equals / state invariants) -----------------------------
+
+    static void testFactoryEdgeCases() {
+        check(EnumSet.range(Color.RED, Color.RED).equals(EnumSet.of(Color.RED)),
+              "range(from==to) single element");
+        expectThrows(() -> EnumSet.range(null, Color.RED), NullPointerException.class, "range(null from) NPE");
+        expectThrows(() -> EnumSet.range(Color.RED, null), NullPointerException.class, "range(null to) NPE");
+        check(EnumSet.complementOf(EnumSet.noneOf(Color.class)).equals(EnumSet.allOf(Color.class)),
+              "complementOf(noneOf) == allOf");
+        check(EnumSet.complementOf(EnumSet.allOf(Color.class)).isEmpty(),
+              "complementOf(allOf) == noneOf");
+        expectThrows(() -> EnumSet.copyOf((Collection<Color>) null), NullPointerException.class,
+                     "copyOf(null Collection) NPE");
+        expectThrows(() -> EnumSet.allOf(null), NullPointerException.class, "allOf(null) NPE");
+        expectThrows(() -> EnumSet.noneOf(null), NullPointerException.class, "noneOf(null) NPE");
+    }
+
+    static void testSerialization() throws Exception {
+        EnumSet<Color> s = EnumSet.of(Color.RED, Color.GREEN, Color.BLUE);
+        EnumSet<Color> r = roundTrip(s);
+        check(r != s && r.equals(s), "round-trip distinct and equal");
+        r.add(Color.YELLOW);
+        check(r.size() == 4 && s.size() == 3, "round-trip result independent");
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(EnumSet.class);
+        check(osc.getSerialVersionUID() == 1009687484059888093L, "EnumSet serialVersionUID stable");
+    }
+
+    static void testCrossImplEquals() {
+        EnumSet<Color> es = EnumSet.of(Color.RED, Color.GREEN, Color.BLUE);
+        HashSet<Color> hs = new HashSet<>(Arrays.asList(Color.BLUE, Color.GREEN, Color.RED));
+        check(es.equals(hs) && hs.equals(es), "EnumSet/HashSet equals order-independent");
+        check(es.hashCode() == hs.hashCode(), "hashCode equal across implementations");
+        hs.add(Color.YELLOW);
+        check(!es.equals(hs), "!equals different content");
+    }
+
+    static void testStateInvariants() {
+        EnumSet<Color> s = EnumSet.of(Color.RED, Color.GREEN, Color.BLUE);
+        expectThrows(() -> s.add(null), NullPointerException.class, "failed add leaves state");
+        check(s.size() == 3 && s.contains(Color.RED) && s.contains(Color.GREEN) && s.contains(Color.BLUE),
+              "state intact after failed add");
+        s.clear();
+        check(s.isEmpty() && s.size() == 0, "clear empties");
+        s.add(Color.YELLOW);
+        check(s.size() == 1 && s.contains(Color.YELLOW), "reusable after clear");
+    }
+
     static void testBlackBox() {
         EnumSet<Color> set = EnumSet.of(Color.RED, Color.BLUE, Color.GREEN);
         java.util.Spliterator<Color> sp = set.spliterator();
@@ -171,6 +233,10 @@ public class EnumSetTest {
         testCollectionOpsAndClone();
         testNullRejection();
         testBlackBox();
+        testFactoryEdgeCases();
+        testSerialization();
+        testCrossImplEquals();
+        testStateInvariants();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

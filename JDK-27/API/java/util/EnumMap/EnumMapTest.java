@@ -16,9 +16,14 @@
  *    EnumMap(空 Map) 抛 IAE；null value 允许。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 
 public class EnumMapTest {
@@ -138,6 +143,66 @@ public class EnumMapTest {
         check(!copy.containsKey(Color.GREEN), "clone independent of original");
     }
 
+    @SuppressWarnings("unchecked")
+    static <K extends Enum<K>, V> EnumMap<K, V> roundTrip(EnumMap<K, V> m) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(m); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (EnumMap<K, V>) ois.readObject();
+        }
+    }
+
+    // ---- contract deep-dive (constructor matrix / null-key rejection /
+    //      serialization / cross-impl equals) -------------------------------
+
+    static void testConstructorMatrix() {
+        expectThrows(() -> new EnumMap<Color, String>((Class<Color>) null), NullPointerException.class,
+                     "EnumMap(null Class) NPE");
+        expectThrows(() -> new EnumMap<Color, String>(new HashMap<Color, String>()),
+                     IllegalArgumentException.class, "EnumMap(empty Map) IAE");
+        Map<Color, String> nullKey = new HashMap<>();
+        nullKey.put(null, "x");
+        expectThrows(() -> new EnumMap<Color, String>(nullKey), NullPointerException.class,
+                     "EnumMap(Map with null key) NPE");
+    }
+
+    static void testNullKeyRejectionExtended() {
+        EnumMap<Color, String> map = new EnumMap<>(Color.class);
+        expectThrows(() -> map.putIfAbsent(null, "x"), NullPointerException.class, "putIfAbsent(null) NPE");
+        expectThrows(() -> map.computeIfAbsent(null, k -> "x"), NullPointerException.class, "computeIfAbsent(null) NPE");
+        expectThrows(() -> map.compute(null, (k, v) -> "x"), NullPointerException.class, "compute(null) NPE");
+        expectThrows(() -> map.merge(null, "x", (a, b) -> a), NullPointerException.class, "merge(null) NPE");
+        check(!map.containsValue(null), "containsValue(null) returns false");
+        check(map.getOrDefault(null, "D").equals("D"), "getOrDefault(null) returns default");
+    }
+
+    static void testSerialization() throws Exception {
+        EnumMap<Color, String> m = new EnumMap<>(Color.class);
+        m.put(Color.RED, "red");
+        m.put(Color.GREEN, "green");
+        EnumMap<Color, String> r = roundTrip(m);
+        check(r != m && r.equals(m), "round-trip distinct and equal");
+        r.put(Color.BLUE, "blue");
+        check(r.size() == 3 && m.size() == 2, "round-trip result independent");
+        check(new ArrayList<>(r.keySet()).equals(Arrays.asList(Color.RED, Color.GREEN, Color.BLUE)),
+              "round-trip preserves declaration order");
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(EnumMap.class);
+        check(osc.getSerialVersionUID() == 458661240069192865L, "EnumMap serialVersionUID stable");
+    }
+
+    static void testCrossImplEquals() {
+        EnumMap<Color, String> em = new EnumMap<>(Color.class);
+        em.put(Color.RED, "red");
+        em.put(Color.BLUE, "blue");
+        HashMap<Color, String> hm = new HashMap<>();
+        hm.put(Color.BLUE, "blue");
+        hm.put(Color.RED, "red");
+        check(em.equals(hm) && hm.equals(em), "EnumMap/HashMap equals order-independent");
+        check(em.hashCode() == hm.hashCode(), "hashCode equal across implementations");
+        hm.put(Color.GREEN, "green");
+        check(!em.equals(hm), "!equals different content");
+    }
+
     static void testViews() {
         EnumMap<Color, String> map = new EnumMap<>(Color.class);
         map.put(Color.RED, "red");
@@ -191,6 +256,10 @@ public class EnumMapTest {
         testConstructorsAndClone();
         testViews();
         testBlackBox();
+        testConstructorMatrix();
+        testNullKeyRejectionExtended();
+        testSerialization();
+        testCrossImplEquals();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
