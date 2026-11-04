@@ -128,12 +128,41 @@ public class OptionalLongTest {
         check(OptionalLong.empty().toString().equals("OptionalLong.empty"), "toString empty");
     }
 
-    
+    static void testBoundaryEquivalence() {
+        // boundary values round-trip.
+        check(OptionalLong.of(Long.MIN_VALUE).getAsLong() == Long.MIN_VALUE, "of(MIN)");
+        check(OptionalLong.of(Long.MAX_VALUE).getAsLong() == Long.MAX_VALUE, "of(MAX)");
+        check(OptionalLong.of(0L).getAsLong() == 0L, "of(0)");
+        check(OptionalLong.of(-1L).getAsLong() == -1L, "of(-1)");
+
+        // orElseThrow(supplier) on empty uses the supplied exception message.
+        try {
+            OptionalLong.empty().orElseThrow(() -> new IllegalArgumentException("no long"));
+            throw new AssertionError("expected IAE");
+        } catch (IllegalArgumentException expected) {
+            check("no long".equals(expected.getMessage()), "orElseThrow supplier message");
+        }
+
+        // equals/hashCode consistency.
+        check(OptionalLong.of(7L).hashCode() == OptionalLong.of(7L).hashCode(), "hashCode stable");
+        check(OptionalLong.of(7L).equals(OptionalLong.of(7L)), "equals present");
+
+        // stream round-trip recovers the wrapped value.
+        check(OptionalLong.of(7L).stream().findFirst().getAsLong() == 7L, "stream round-trip");
+
+        // ifPresent on empty does not invoke the consumer.
+        final long[] consumed = {-1L};
+        OptionalLong.empty().ifPresent(v -> consumed[0] = v);
+        check(consumed[0] == -1L, "ifPresent empty no-op");
+    }
+
+
     static void testBlackBox() throws Exception {
         testOfGet();
         testOrElse();
         testIfPresentAndStream();
         testEqualsToString();
+        testBoundaryEquivalence();
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();

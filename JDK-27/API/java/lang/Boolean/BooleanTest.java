@@ -114,6 +114,34 @@ public class BooleanTest {
         } finally {
             System.clearProperty("jck.bool.get");
         }
+        testBoundaryEquivalence();
+    }
+
+    static void testBoundaryEquivalence() {
+        // parseBoolean accepts exactly the case-insensitive spellings of "true".
+        for (String s : new String[]{"true", "TRUE", "True", "tRuE"}) {
+            check(Boolean.parseBoolean(s), "parseBoolean(" + s + ")");
+        }
+
+        // Logical combinator truth table.
+        check(Boolean.logicalAnd(true, false) == false, "and(T,F)");
+        check(Boolean.logicalAnd(false, true) == false, "and(F,T)");
+        check(Boolean.logicalAnd(false, false) == false, "and(F,F)");
+        check(Boolean.logicalOr(true, false) == true, "or(T,F)");
+        check(Boolean.logicalOr(false, true) == true, "or(F,T)");
+        check(Boolean.logicalOr(false, false) == false, "or(F,F)");
+        check(Boolean.logicalXor(false, false) == false, "xor(F,F)");
+        check(Boolean.logicalXor(true, true) == false, "xor(T,T)");
+        check(Boolean.logicalXor(false, true) == true, "xor(F,T)");
+        check(Boolean.logicalXor(true, false) == true, "xor(T,F)");
+
+        // compareTo antisymmetry.
+        check(Boolean.FALSE.compareTo(Boolean.TRUE) == -Boolean.TRUE.compareTo(Boolean.FALSE),
+              "compareTo antisymmetry");
+
+        // valueOf(parseBoolean) consistency.
+        check(Boolean.valueOf(Boolean.parseBoolean("true")) == Boolean.TRUE,
+              "valueOf(parseBoolean) consistency");
     }
 
     public static void main(String[] args) {

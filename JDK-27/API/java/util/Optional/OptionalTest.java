@@ -156,13 +156,47 @@ public class OptionalTest {
         check(Optional.empty().toString().equals("Optional.empty"), "toString empty");
     }
 
-    
+    static void testBoundaryEquivalence() {
+        // map with null mapper result yields empty; flatMap with null result throws NPE.
+        check(Optional.of("x").map(s -> null).equals(Optional.empty()), "map null -> empty");
+        expectThrows(NullPointerException.class, () -> Optional.of("x").flatMap(s -> null),
+            "flatMap null result throws NPE");
+
+        // orElseThrow(supplier) on empty uses the supplied exception (message stability).
+        try {
+            Optional.empty().orElseThrow(() -> new IllegalArgumentException("no value"));
+            throw new AssertionError("expected IAE");
+        } catch (IllegalArgumentException expected) {
+            check("no value".equals(expected.getMessage()), "orElseThrow supplier message");
+        }
+
+        // or(null) throws NPE.
+        expectThrows(NullPointerException.class, () -> Optional.of("x").or(null), "or(null) NPE");
+
+        // equals/hashCode consistency.
+        check(Optional.of("x").hashCode() == Optional.of("x").hashCode(), "hashCode stable");
+        check(Optional.of("x").equals(Optional.of("x"))
+                == (Optional.of("x").hashCode() == Optional.of("x").hashCode()),
+              "equals->hashCode consistent");
+
+        // filter on empty stays empty and does not invoke the predicate.
+        final boolean[] invoked = {false};
+        check(Optional.<String>empty().filter(s -> { invoked[0] = true; return true; }).isEmpty(),
+              "filter empty stays empty");
+        check(!invoked[0], "filter predicate not invoked on empty");
+
+        // ofNullable(value) == of(value) for non-null.
+        check(Optional.ofNullable("z").equals(Optional.of("z")), "ofNullable(z) == of(z)");
+    }
+
+
     static void testBlackBox() throws Exception {
         testCreation();
         testGetOrElse();
         testMonadic();
         testOrStreamIfPresentOrElse();
         testIfPresentEqualsToString();
+        testBoundaryEquivalence();
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();

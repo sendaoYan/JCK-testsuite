@@ -127,12 +127,38 @@ public class OptionalDoubleTest {
         check(OptionalDouble.empty().toString().equals("OptionalDouble.empty"), "toString empty");
     }
 
-    
+    static void testBoundaryEquivalence() {
+        // boundary values.
+        check(OptionalDouble.of(0.0).getAsDouble() == 0.0, "of(0.0)");
+        check(OptionalDouble.of(-0.0).getAsDouble() == -0.0, "of(-0.0)");
+        check(OptionalDouble.of(Double.NaN).getAsDouble() != OptionalDouble.of(Double.NaN).getAsDouble(),
+              "getAsDouble NaN != NaN");
+
+        // equals uses Double.compare: NaN equals NaN, +0.0 != -0.0.
+        check(OptionalDouble.of(Double.NaN).equals(OptionalDouble.of(Double.NaN)), "equals NaN==NaN");
+        check(!OptionalDouble.of(0.0).equals(OptionalDouble.of(-0.0)), "equals +0.0 != -0.0");
+
+        // orElseThrow(supplier) on empty uses the supplied exception message.
+        try {
+            OptionalDouble.empty().orElseThrow(() -> new IllegalArgumentException("no double"));
+            throw new AssertionError("expected IAE");
+        } catch (IllegalArgumentException expected) {
+            check("no double".equals(expected.getMessage()), "orElseThrow supplier message");
+        }
+
+        // equals/hashCode consistency and stream round-trip.
+        check(OptionalDouble.of(2.5).hashCode() == OptionalDouble.of(2.5).hashCode(),
+              "hashCode stable");
+        check(OptionalDouble.of(2.5).stream().findFirst().getAsDouble() == 2.5, "stream round-trip");
+    }
+
+
     static void testBlackBox() throws Exception {
         testOfGet();
         testOrElse();
         testIfPresentAndStream();
         testEqualsToString();
+        testBoundaryEquivalence();
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();

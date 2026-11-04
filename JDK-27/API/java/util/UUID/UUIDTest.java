@@ -53,6 +53,7 @@ public class UUIDTest {
         testNameUUID();
         testEqualsHashCode();
         testCompareTo();
+        testBoundaryEquivalence();
     }
 
     static void testRandomUUID() {
@@ -113,6 +114,42 @@ public class UUIDTest {
         check(low.compareTo(high) < 0, "compareTo smaller msb < 0");
         check(high.compareTo(low) > 0, "compareTo larger msb > 0");
         check(low.compareTo(new UUID(0x0000000000000001L, 0L)) == 0, "compareTo equal == 0");
+    }
+
+    static void testBoundaryEquivalence() {
+        // nil UUID round-trip.
+        UUID nil = new UUID(0L, 0L);
+        check(nil.toString().equals("00000000-0000-0000-0000-000000000000"), "nil toString");
+        check(UUID.fromString(nil.toString()).equals(nil), "nil round-trip");
+        check(nil.version() == 0 && nil.variant() == 0, "nil version/variant");
+
+        // version bits are bits 12-15 of the msb.
+        check(new UUID(0x0000000000001000L, 0L).version() == 1, "version 1 from msb");
+        check(new UUID(0x0000000000002000L, 0L).version() == 2, "version 2");
+        check(new UUID(0x0000000000003000L, 0L).version() == 3, "version 3");
+        check(new UUID(0x0000000000004000L, 0L).version() == 4, "version 4");
+        check(new UUID(0x0000000000005000L, 0L).version() == 5, "version 5");
+
+        // variant bits are derived from the two high bits of the lsb.
+        check(new UUID(0, 0x8000000000000000L).variant() == 2, "variant 2 (IETF)");
+        check(new UUID(0, 0xc000000000000000L).variant() == 6, "variant 6 (Microsoft)");
+        check(new UUID(0, 0x0000000000000000L).variant() == 0, "variant 0 (NCS)");
+
+        // compareTo orders by msb then lsb.
+        UUID a = new UUID(1L, 5L);
+        UUID b = new UUID(1L, 9L);
+        check(a.compareTo(b) < 0 && b.compareTo(a) > 0, "compareTo lsb tiebreak");
+        check(a.compareTo(new UUID(1L, 5L)) == 0, "compareTo equal");
+
+        // fromString rejects empty string and missing dashes.
+        assertThrows(IllegalArgumentException.class, () -> UUID.fromString(""), "fromString empty");
+        assertThrows(IllegalArgumentException.class,
+                () -> UUID.fromString("123e4567e89b12d3a456426655440000"), "fromString no dashes");
+
+        // nameUUIDFromBytes of the empty byte array matches the RFC 4122 MD5 vector.
+        check(UUID.nameUUIDFromBytes("".getBytes(StandardCharsets.UTF_8))
+                .equals(UUID.fromString("d41d8cd9-8f00-3204-a980-0998ecf8427e")),
+              "nameUUIDFromBytes('') RFC 4122 vector");
     }
 
     public static void main(String[] args) throws Exception {

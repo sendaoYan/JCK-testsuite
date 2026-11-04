@@ -55,6 +55,7 @@ public class ObjectsTest {
         testIsNull();
         testRequireNonNullElse();
         testIndexChecks();
+        testBoundaryEquivalence();
     }
 
     static void testRequireNonNull() {
@@ -148,6 +149,47 @@ public class ObjectsTest {
         check(Objects.checkIndex(2L, 5L) == 2L, "checkIndex(long) in range");
         assertThrows(IndexOutOfBoundsException.class,
                 () -> Objects.checkIndex(5L, 5L), "checkIndex(long) == length throws");
+    }
+
+    static void testBoundaryEquivalence() {
+        // checkIndex boundaries.
+        check(Objects.checkIndex(0, 1) == 0, "checkIndex(0,1)");
+        assertThrows(IndexOutOfBoundsException.class, () -> Objects.checkIndex(0, 0),
+                "checkIndex(0,0) throws");
+        assertThrows(IndexOutOfBoundsException.class, () -> Objects.checkIndex(-1, 0),
+                "checkIndex(-1,0) throws");
+        assertThrows(IndexOutOfBoundsException.class, () -> Objects.checkIndex(1, 1),
+                "checkIndex(1,1) throws");
+
+        // checkFromToIndex: empty range is valid at any position <= length.
+        check(Objects.checkFromToIndex(0, 0, 0) == 0, "checkFromToIndex(0,0,0)");
+        check(Objects.checkFromToIndex(5, 5, 5) == 5, "checkFromToIndex(5,5,5)");
+        check(Objects.checkFromToIndex(0, 5, 5) == 0, "checkFromToIndex(0,5,5)");
+        assertThrows(IndexOutOfBoundsException.class, () -> Objects.checkFromToIndex(5, 0, 5),
+                "checkFromToIndex(5,0,5) from>to throws");
+
+        // checkFromIndexSize: size 0 valid at length; negative/overflow size invalid.
+        check(Objects.checkFromIndexSize(5, 0, 5) == 5, "checkFromIndexSize(5,0,5)");
+        check(Objects.checkFromIndexSize(0, 5, 5) == 0, "checkFromIndexSize(0,5,5)");
+        assertThrows(IndexOutOfBoundsException.class, () -> Objects.checkFromIndexSize(0, 6, 5),
+                "checkFromIndexSize(0,6,5) overflow throws");
+        assertThrows(IndexOutOfBoundsException.class, () -> Objects.checkFromIndexSize(0, -1, 5),
+                "checkFromIndexSize(0,-1,5) negative size throws");
+
+        // requireNonNullElseGet supplier not called for non-null.
+        final boolean[] called = {false};
+        check("x".equals(Objects.requireNonNullElseGet("x", () -> { called[0] = true; return "y"; })),
+                "requireNonNullElseGet non-null");
+        check(!called[0], "supplier not called when non-null");
+
+        // hash(single) matches Arrays.hashCode of the equivalent varargs array.
+        check(Objects.hash("k") == java.util.Arrays.hashCode(new Object[]{"k"}),
+              "hash == Arrays.hashCode(varargs)");
+        check(Objects.hash((Object[]) null) == 0, "hash(null array) == 0");
+
+        // compare antisymmetry.
+        check(Objects.compare("a", "b", String::compareTo)
+                == -Objects.compare("b", "a", String::compareTo), "compare antisymmetry");
     }
 
     public static void main(String[] args) throws Exception {

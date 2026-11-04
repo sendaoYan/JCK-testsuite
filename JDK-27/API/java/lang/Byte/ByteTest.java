@@ -181,6 +181,33 @@ public class ByteTest {
         check(sum.hashCode() == 50, "hashCode follows value");
     }
 
+    static void testBoundaryEquivalence() {
+        // parse(toString(x)) round-trips at boundary values.
+        byte[] samples = {Byte.MIN_VALUE, (byte) -1, (byte) 0, (byte) 1, Byte.MAX_VALUE};
+        for (byte b : samples) {
+            check(Byte.parseByte(Byte.toString(b)) == b, "round-trip toString/parse " + b);
+        }
+
+        // unsigned full-range coverage.
+        check(Byte.toUnsignedInt((byte) 0) == 0, "toUnsignedInt(0)");
+        check(Byte.toUnsignedInt((byte) 127) == 127, "toUnsignedInt(MAX)");
+        check(Byte.toUnsignedInt((byte) -128) == 128, "toUnsignedInt(MIN)");
+        check(Byte.toUnsignedInt((byte) -1) == 255, "toUnsignedInt(-1)");
+
+        // equals/hashCode consistency.
+        check(Byte.valueOf((byte) 42).equals(Byte.valueOf((byte) 42)), "equals reflexive");
+        check(Byte.valueOf((byte) 42).hashCode() == Byte.valueOf((byte) 42).hashCode(),
+              "hashCode stable");
+
+        // compareTo ordering.
+        check(Byte.valueOf((byte) -1).compareTo(Byte.valueOf((byte) 0)) < 0, "compareTo < 0");
+        check(Byte.valueOf((byte) 0).compareTo(Byte.valueOf((byte) -1)) > 0, "compareTo > 0");
+
+        // radix boundary parsing.
+        check(Byte.parseByte("1111111", 2) == 127, "parseByte(1111111,2) == 127");
+        check(Byte.parseByte("10", 2) == 2, "parseByte(10,2) == 2");
+    }
+
     // ---- Black-box / behavioral ----
     static void testBlackBox() {
         testConstants();
@@ -192,6 +219,7 @@ public class ByteTest {
         testCompare();
         testHashCodeEquals();
         testBoxing();
+        testBoundaryEquivalence();
     }
 
     public static void main(String[] args) {

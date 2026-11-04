@@ -195,6 +195,51 @@ public class StringBuilderTest {
               "StringBuilder.toString not synchronized");
     }
 
+    static void testBoundaryEquivalence() {
+        // reverse is an involution.
+        StringBuilder sb = new StringBuilder("stressed");
+        sb.reverse();
+        check(sb.toString().equals("desserts"), "reverse('stressed')");
+        sb.reverse();
+        check(sb.toString().equals("stressed"), "reverse involution");
+
+        // setLength(0) empties without changing capacity.
+        StringBuilder c = new StringBuilder("abcdef");
+        int cap = c.capacity();
+        c.setLength(0);
+        check(c.length() == 0 && c.capacity() == cap, "setLength(0) preserves capacity");
+
+        // append((CharSequence) null) appends "null".
+        StringBuilder n = new StringBuilder();
+        n.append((CharSequence) null);
+        check(n.toString().equals("null"), "append((CharSequence) null)");
+
+        // insert at boundaries 0 and length.
+        StringBuilder ins = new StringBuilder("ab");
+        ins.insert(0, 'Z');
+        check(ins.toString().equals("Zab"), "insert char at 0");
+        ins.insert(ins.length(), '!');
+        check(ins.toString().equals("Zab!"), "insert char at length");
+
+        // delete(0,0) is a no-op.
+        StringBuilder d = new StringBuilder("abc");
+        d.delete(0, 0);
+        check(d.toString().equals("abc"), "delete(0,0) no-op");
+
+        // appendCodePoint BMP (single UTF-16 unit).
+        StringBuilder bmp = new StringBuilder();
+        bmp.appendCodePoint('A');
+        check(bmp.length() == 1 && bmp.charAt(0) == 'A', "appendCodePoint BMP");
+
+        // capacity auto-grows beyond the initial 16.
+        StringBuilder g = new StringBuilder();
+        for (int i = 0; i < 100; i++) g.append('x');
+        check(g.length() == 100 && g.capacity() >= 100, "auto-grow capacity >= length");
+
+        // toString -> new StringBuilder(String) round-trip.
+        check(new StringBuilder(g.toString()).toString().equals(g.toString()), "toString round-trip");
+    }
+
     // ---------- white-box: structural / reflection ----------
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) {
@@ -242,6 +287,7 @@ public class StringBuilderTest {
         testInsertOverloads();
         testStreams();
         testNotSynchronized();
+        testBoundaryEquivalence();
     }
 
     public static void main(String[] args) throws Exception {

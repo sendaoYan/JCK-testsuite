@@ -266,6 +266,37 @@ public class CharacterTest {
         check(Character.isDigit(0x0660), "isDigit(arabic-indic 0)");
     }
 
+    static void testBoundaryEquivalence() {
+        // forDigit(digit(ch)) round-trips for every radix.
+        for (int r = 2; r <= 36; r++) {
+            char d = Character.forDigit(r - 1, r);
+            check(Character.forDigit(Character.digit(d, r), r) == d,
+                  "digit/forDigit round-trip radix " + r);
+        }
+
+        // charCount boundaries.
+        check(Character.charCount(0) == 1, "charCount(0)");
+        check(Character.charCount(0xffff) == 1, "charCount(0xffff)");
+        check(Character.charCount(0x10000) == 2, "charCount(0x10000)");
+        check(Character.charCount(0x10ffff) == 2, "charCount(0x10ffff)");
+
+        // high/low/toCodePoint round-trip.
+        check(Character.toCodePoint(Character.highSurrogate(0x10400),
+                                    Character.lowSurrogate(0x10400)) == 0x10400,
+              "high/low/toCodePoint round-trip");
+
+        // ASCII case conversion boundary.
+        check(Character.toUpperCase('z') == 'Z' && Character.toLowerCase('Z') == 'z', "ASCII case");
+        check(Character.toUpperCase('a') == 'A' && Character.toLowerCase('A') == 'a', "ASCII case 2");
+
+        // valueOf caches the ASCII range 0..127.
+        check(Character.valueOf((char) 0) == Character.valueOf((char) 0), "valueOf(0) cached");
+        check(Character.valueOf((char) 127) == Character.valueOf((char) 127), "valueOf(127) cached");
+
+        // compare antisymmetry.
+        check(Character.compare('a', 'b') == -Character.compare('b', 'a'), "compare antisymmetry");
+    }
+
     // ---- Black-box / behavioral ----
     static void testBlackBox() {
         testConstants();
@@ -283,6 +314,7 @@ public class CharacterTest {
         testSupplementaryCase();
         testWhitespaceEdge();
         testNumericEdge();
+        testBoundaryEquivalence();
     }
 
     public static void main(String[] args) {

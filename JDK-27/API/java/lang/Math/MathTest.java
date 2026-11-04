@@ -397,6 +397,38 @@ public class MathTest {
               "nextAfter(+Inf,0.0) == MAX_VALUE");
     }
 
+    static void testBoundaryEquivalence() {
+        // floorDiv/floorMod and ceilDiv/ceilMod identities for all sign combinations.
+        int[] xs = {-7, -1, 0, 1, 7};
+        int[] ys = {-3, -1, 1, 3};
+        for (int x : xs) {
+            for (int y : ys) {
+                check(Math.floorDiv(x, y) * y + Math.floorMod(x, y) == x,
+                      "floor identity " + x + "," + y);
+                check(Math.ceilDiv(x, y) * y + Math.ceilMod(x, y) == x,
+                      "ceil identity " + x + "," + y);
+            }
+        }
+
+        // powExact base 0/1/-1 parity boundaries.
+        check(Math.powExact(0, 0) == 1 && Math.powExact(0, 7) == 0, "powExact(0, ...)");
+        check(Math.powExact(1, 100) == 1, "powExact(1,100)");
+        check(Math.powExact(-1, 2) == 1 && Math.powExact(-1, 3) == -1, "powExact(-1, parity)");
+
+        // unsignedPowExact base 0/1.
+        check(Math.unsignedPowExact(1, 100) == 1, "unsignedPowExact(1,100)");
+        check(Math.unsignedPowExact(0, 5) == 0, "unsignedPowExact(0,5)");
+
+        // toIntExact boundary.
+        check(Math.toIntExact(Integer.MIN_VALUE + 0L) == Integer.MIN_VALUE, "toIntExact(MIN)");
+
+        // nextDown(nextUp(x)) involution.
+        check(Math.nextDown(Math.nextUp(2.0)) == 2.0, "nextDown(nextUp(2.0))");
+
+        // copySign round-trip.
+        check(Math.copySign(Math.copySign(1.0, -2.0), 2.0) == 1.0, "copySign round-trip");
+    }
+
     // ---- Black-box / behavioral ----
     static void testBlackBox() {
         testConstants();
@@ -427,6 +459,7 @@ public class MathTest {
         testFma();
         testInverseHyperbolic();
         testNextAfterFloat();
+        testBoundaryEquivalence();
     }
 
     public static void main(String[] args) {

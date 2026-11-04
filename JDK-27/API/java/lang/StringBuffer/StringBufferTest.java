@@ -222,6 +222,51 @@ public class StringBufferTest {
         check(a.equals(b), "StringBuilder and StringBuffer behavior identical");
     }
 
+    static void testBoundaryEquivalence() {
+        // reverse is an involution.
+        StringBuffer sb = new StringBuffer("stressed");
+        sb.reverse();
+        check(sb.toString().equals("desserts"), "reverse('stressed')");
+        sb.reverse();
+        check(sb.toString().equals("stressed"), "reverse involution");
+
+        // setLength(0) empties without changing capacity.
+        StringBuffer c = new StringBuffer("abcdef");
+        int cap = c.capacity();
+        c.setLength(0);
+        check(c.length() == 0 && c.capacity() == cap, "setLength(0) preserves capacity");
+
+        // append((CharSequence) null) appends "null".
+        StringBuffer n = new StringBuffer();
+        n.append((CharSequence) null);
+        check(n.toString().equals("null"), "append((CharSequence) null)");
+
+        // insert at boundaries 0 and length.
+        StringBuffer ins = new StringBuffer("ab");
+        ins.insert(0, 'Z');
+        check(ins.toString().equals("Zab"), "insert char at 0");
+        ins.insert(ins.length(), '!');
+        check(ins.toString().equals("Zab!"), "insert char at length");
+
+        // delete(0,0) is a no-op.
+        StringBuffer d = new StringBuffer("abc");
+        d.delete(0, 0);
+        check(d.toString().equals("abc"), "delete(0,0) no-op");
+
+        // appendCodePoint BMP (single UTF-16 unit).
+        StringBuffer bmp = new StringBuffer();
+        bmp.appendCodePoint('A');
+        check(bmp.length() == 1 && bmp.charAt(0) == 'A', "appendCodePoint BMP");
+
+        // capacity auto-grows beyond the initial 16.
+        StringBuffer g = new StringBuffer();
+        for (int i = 0; i < 100; i++) g.append('x');
+        check(g.length() == 100 && g.capacity() >= 100, "auto-grow capacity >= length");
+
+        // toString -> new StringBuffer(String) round-trip.
+        check(new StringBuffer(g.toString()).toString().equals(g.toString()), "toString round-trip");
+    }
+
     // ---------- white-box: structural / reflection ----------
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) {
@@ -270,6 +315,7 @@ public class StringBufferTest {
         testStreams();
         testSynchronized();
         testBehaviorEquivalence();
+        testBoundaryEquivalence();
     }
 
     public static void main(String[] args) throws Exception {

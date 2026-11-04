@@ -184,6 +184,35 @@ public class ShortTest {
         check(sum.hashCode() == 50, "hashCode follows value");
     }
 
+    static void testBoundaryEquivalence() {
+        // parse(toString(x)) round-trips at boundary values.
+        short[] samples = {Short.MIN_VALUE, (short) -1, (short) 0, (short) 1, Short.MAX_VALUE};
+        for (short s : samples) {
+            check(Short.parseShort(Short.toString(s)) == s, "round-trip toString/parse " + s);
+        }
+
+        // reverseBytes is an involution.
+        check(Short.reverseBytes(Short.reverseBytes((short) 0x1234)) == 0x1234,
+              "reverseBytes involution");
+        check(Short.reverseBytes(Short.reverseBytes(Short.MIN_VALUE)) == Short.MIN_VALUE,
+              "reverseBytes involution MIN");
+
+        // compareTo ordering.
+        check(Short.valueOf((short) 3).compareTo(Short.valueOf((short) 5)) < 0, "compareTo(3,5)");
+        check(Short.valueOf((short) 5).compareTo(Short.valueOf((short) 3)) > 0, "compareTo(5,3)");
+
+        // unsigned full-range coverage.
+        check(Short.toUnsignedInt((short) 0) == 0, "toUnsignedInt(0)");
+        check(Short.toUnsignedInt((short) 32767) == 32767, "toUnsignedInt(MAX)");
+        check(Short.toUnsignedInt(Short.MIN_VALUE) == 32768, "toUnsignedInt(MIN)");
+        check(Short.toUnsignedInt((short) -1) == 65535, "toUnsignedInt(-1)");
+
+        // equals/hashCode consistency.
+        check(Short.valueOf((short) 42).equals(Short.valueOf((short) 42)), "equals reflexive");
+        check(Short.valueOf((short) 42).hashCode() == Short.valueOf((short) 42).hashCode(),
+              "hashCode stable");
+    }
+
     // ---- Black-box / behavioral ----
     static void testBlackBox() {
         testConstants();
@@ -196,6 +225,7 @@ public class ShortTest {
         testReverseBytes();
         testHashCodeEquals();
         testBoxing();
+        testBoundaryEquivalence();
     }
 
     public static void main(String[] args) {

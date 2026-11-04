@@ -51,6 +51,7 @@ public class Base64Test {
         testMime();
         testWrapStream();
         testInvalidDecode();
+        testBoundaryEquivalence();
     }
 
     static void testBasic() {
@@ -102,6 +103,43 @@ public class Base64Test {
         assertThrows(IllegalArgumentException.class,
                 () -> Base64.getDecoder().decode("not valid base64!"),
                 "decode invalid throws IllegalArgumentException");
+    }
+
+    static void testBoundaryEquivalence() {
+        // Encoded length formula 4*ceil(n/3) for n = 0..5.
+        for (int n = 0; n <= 5; n++) {
+            int expected = ((n + 2) / 3) * 4;
+            check(Base64.getEncoder().encode(new byte[n]).length == expected,
+                  "encode length for " + n + " bytes");
+        }
+
+        // withoutPadding drops '=' for non-multiple-of-3 inputs.
+        check(Base64.getEncoder().withoutPadding().encode(new byte[1]).length == 2,
+              "withoutPadding length 1 byte");
+        check(Base64.getEncoder().withoutPadding().encode(new byte[2]).length == 3,
+              "withoutPadding length 2 bytes");
+
+        // Basic alphabet uses +/; URL alphabet uses -/_.
+        byte[] all = {(byte) 0xfb, (byte) 0xef};
+        check(Base64.getEncoder().encodeToString(all).equals("++8="), "basic alphabet ++8=");
+        check(Base64.getUrlEncoder().encodeToString(all).equals("--8="), "url alphabet --8=");
+
+        // MIME wraps at 76 columns with CRLF.
+        byte[] line = new byte[57];   // 76 base64 chars, exactly one line
+        String mime1 = Base64.getMimeEncoder().encodeToString(line);
+        check(!mime1.contains("\r\n"), "MIME single line <= 76 has no CRLF");
+        byte[] wraps = new byte[58];  // 80 base64 chars, forces a wrap
+        String mime2 = Base64.getMimeEncoder().encodeToString(wraps);
+        check(mime2.contains("\r\n"), "MIME wraps after 76 chars");
+
+        // Basic decoder tolerates missing padding.
+        check("hello".equals(new String(Base64.getDecoder().decode("aGVsbG8"),
+                                        StandardCharsets.UTF_8)),
+              "decoder accepts unpadded input");
+
+        // Invalid length (1 mod 4) is rejected.
+        assertThrows(IllegalArgumentException.class, () -> Base64.getDecoder().decode("a"),
+                "decode length 1 mod 4 rejected");
     }
 
     public static void main(String[] args) throws Exception {

@@ -291,6 +291,33 @@ public class StringTest {
         expectIOOBE(() -> "abc".codePointCount(0, 4), "codePointCount(0,4) overflow");
     }
 
+    static void testBoundaryEquivalence() {
+        // Empty-string boundaries.
+        check("".indexOf("") == 0, "indexOf empty needle at 0");
+        check("abc".indexOf("") == 0, "indexOf empty needle returns 0");
+        check("abc".lastIndexOf("") == 3, "lastIndexOf empty needle returns length");
+        check("".substring(0).equals(""), "substring(0) of empty");
+        check("abc".substring(3).equals(""), "substring(length) is empty");
+        check("abc".substring(0, 0).equals(""), "substring(0,0) is empty");
+        check("abc".regionMatches(3, "", 0, 0), "regionMatches empty at end");
+
+        // Ordering antisymmetry.
+        check("abc".compareTo("abd") == -"abd".compareTo("abc"), "compareTo antisymmetry");
+        check("ABC".compareToIgnoreCase("abc") == 0, "compareToIgnoreCase case-insensitive");
+
+        // valueOf of extreme primitives.
+        check(String.valueOf(Integer.MIN_VALUE).equals("-2147483648"), "valueOf(Integer.MIN_VALUE)");
+        check(String.valueOf(Long.MIN_VALUE).equals("-9223372036854775808"), "valueOf(Long.MIN_VALUE)");
+
+        // equals -> hashCode consistency.
+        check("abc".equals("abc") == ("abc".hashCode() == "abc".hashCode()),
+              "equals->hashCode consistent");
+
+        // Locale-independent ASCII case conversion.
+        check("azAZ09".toLowerCase(Locale.ROOT).equals("azaz09"), "toLowerCase ASCII");
+        check("azAZ09".toUpperCase(Locale.ROOT).equals("AZAZ09"), "toUpperCase ASCII");
+    }
+
     // ---------- white-box: structural / reflection ----------
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) {
@@ -350,6 +377,7 @@ public class StringTest {
         testFormattedTranslateEscapes();
         testStripIndent();
         testJoinAndCodePointBounds();
+        testBoundaryEquivalence();
     }
 
     public static void main(String[] args) throws Exception {

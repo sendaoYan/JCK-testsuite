@@ -129,12 +129,41 @@ public class OptionalIntTest {
         check(OptionalInt.empty().toString().equals("OptionalInt.empty"), "toString empty");
     }
 
-    
+    static void testBoundaryEquivalence() {
+        // boundary values round-trip.
+        check(OptionalInt.of(Integer.MIN_VALUE).getAsInt() == Integer.MIN_VALUE, "of(MIN)");
+        check(OptionalInt.of(Integer.MAX_VALUE).getAsInt() == Integer.MAX_VALUE, "of(MAX)");
+        check(OptionalInt.of(0).getAsInt() == 0, "of(0)");
+        check(OptionalInt.of(-1).getAsInt() == -1, "of(-1)");
+
+        // orElseThrow(supplier) on empty uses the supplied exception message.
+        try {
+            OptionalInt.empty().orElseThrow(() -> new IllegalArgumentException("no int"));
+            throw new AssertionError("expected IAE");
+        } catch (IllegalArgumentException expected) {
+            check("no int".equals(expected.getMessage()), "orElseThrow supplier message");
+        }
+
+        // equals/hashCode consistency.
+        check(OptionalInt.of(7).hashCode() == OptionalInt.of(7).hashCode(), "hashCode stable");
+        check(OptionalInt.of(7).equals(OptionalInt.of(7)), "equals present");
+
+        // stream round-trip recovers the wrapped value.
+        check(OptionalInt.of(7).stream().findFirst().getAsInt() == 7, "stream round-trip");
+
+        // ifPresent on empty does not invoke the consumer.
+        final int[] consumed = {-1};
+        OptionalInt.empty().ifPresent(v -> consumed[0] = v);
+        check(consumed[0] == -1, "ifPresent empty no-op");
+    }
+
+
     static void testBlackBox() throws Exception {
         testOfGet();
         testOrElse();
         testIfPresentAndStream();
         testEqualsToString();
+        testBoundaryEquivalence();
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();

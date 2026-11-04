@@ -277,6 +277,39 @@ public class StrictMathTest {
               "getExponent/scalb");
     }
 
+    static void testBoundaryEquivalence() {
+        // floorDiv/floorMod identity for all sign combinations.
+        int[] xs = {-7, -1, 0, 1, 7};
+        int[] ys = {-3, -1, 1, 3};
+        for (int x : xs) {
+            for (int y : ys) {
+                check(StrictMath.floorDiv(x, y) * y + StrictMath.floorMod(x, y) == x,
+                      "floor identity " + x + "," + y);
+                check(StrictMath.ceilDiv(x, y) * y + StrictMath.ceilMod(x, y) == x,
+                      "ceil identity " + x + "," + y);
+            }
+        }
+
+        // nextDown(nextUp(x)) == x for normal values.
+        check(StrictMath.nextDown(StrictMath.nextUp(1.0)) == 1.0, "nextDown(nextUp(1.0))");
+        check(StrictMath.nextUp(StrictMath.nextDown(0.5)) == 0.5, "nextUp(nextDown(0.5))");
+
+        // toDegrees(toRadians(x)) round-trips within tolerance.
+        checkClose(StrictMath.toDegrees(StrictMath.toRadians(123.0)), 123.0, "deg/rad round-trip");
+
+        // scalb(getExponent(x), -e) normalizes the mantissa into [1,2).
+        double m = StrictMath.scalb(12.5, -StrictMath.getExponent(12.5));
+        check(m >= 1.0 && m < 2.0, "scalb/getExponent normalize mantissa");
+
+        // abs then copySign(-1) reconstructs the negative value.
+        check(StrictMath.copySign(StrictMath.abs(-3.0), -1.0) == -3.0,
+              "abs then copySign(-1)");
+
+        // min/max idempotence on equal operands.
+        check(StrictMath.min(7.0, 7.0) == 7.0 && StrictMath.max(7.0, 7.0) == 7.0,
+              "min/max equal");
+    }
+
     // ---- Black-box / behavioral ----
     static void testBlackBox() {
         testConstants();
@@ -294,6 +327,7 @@ public class StrictMathTest {
         testClamp();
         testFmaSignumCopySign();
         testUlpNext();
+        testBoundaryEquivalence();
     }
 
     public static void main(String[] args) {
