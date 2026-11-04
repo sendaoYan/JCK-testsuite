@@ -67,9 +67,34 @@ public class CompositeDataTest {
         check(cd.values().size() == 2, "values size");
     }
 
+    // ---- deepened: method-set lock / reference-impl contract corners ----
+    static void testDeep() throws Exception {
+        Class<?> c = Class.forName("javax.management.openmbean.CompositeData");
+        java.util.Set<String> declared = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) declared.add(m.getName());
+        check(declared.size() == 9, "exactly 9 declared methods");
+        check(!declared.contains("keySet"), "no keySet on CompositeData");
+        check(!java.io.Serializable.class.isAssignableFrom(c), "interface does not extend Serializable");
+        check(c.getInterfaces().length == 0, "no super-interfaces");
+        // contract corners via the reference implementation
+        CompositeType ct = new CompositeType("T", "d",
+                new String[]{"name", "value"}, new String[]{"nd", "vd"},
+                new OpenType[]{SimpleType.STRING, SimpleType.INTEGER});
+        CompositeData cd = new javax.management.openmbean.CompositeDataSupport(ct, new String[]{"name", "value"}, new Object[]{"n", 5});
+        check(cd.getAll(null).length == 0, "getAll(null) treated as empty per javadoc");
+        Object[] all = cd.getAll(new String[]{"value", "name"});
+        check(all[0].equals(5) && all[1].equals("n"), "getAll order follows request");
+        check(!cd.containsKey("nope"), "containsKey absent false");
+        check(!cd.containsValue("x"), "containsValue absent false");
+        check(cd.equals(new javax.management.openmbean.CompositeDataSupport(ct,
+                new String[]{"value", "name"}, new Object[]{5, "n"})), "equals order independent");
+        check(cd.toString().startsWith("javax.management.openmbean.CompositeDataSupport("), "toString prefix");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

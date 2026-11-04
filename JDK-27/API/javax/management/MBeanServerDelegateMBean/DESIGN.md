@@ -16,3 +16,12 @@ MBeanServerDelegateMBean d = JMX.newMBeanProxy(mbs, delegateName, MBeanServerDel
 ## 4. 测试用例设计 + 自动化实现
 - 黑盒：通过 MBeanServer.getAttribute 在 delegate 上读取全部 7 个属性，验证 spec 名为 "Java Management Extensions"、spec 版本 "1.4"，其余非空/含预期值。
 - 白盒：public 接口、含 getMBeanServerId/getSpecificationName/getImplementationVersion 等。
+
+## 深化（2026-11）：接口形状 + 三种到达路径
+
+### 新增覆盖
+1. **接口形状精确**：恰 7 个 getter，全部无参、返回 String、无 checked 异常；MBeanServerDelegate 实现之。
+2. **三路径同值**：接口引用直调；注册为 MBean 后 server.getAttribute 七属性全非空且内省属性名集合==接口 getter 集；MBeanServerInvocationHandler 代理（以本接口为类型）getSpecificationName/getMBeanServerId 路由到真实 delegate。
+
+### 参考来源
+- Oracle javadoc: MBeanServerDelegateMBean。

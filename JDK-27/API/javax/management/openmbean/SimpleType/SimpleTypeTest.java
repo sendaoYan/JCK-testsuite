@@ -96,9 +96,65 @@ public class SimpleTypeTest {
         check(SimpleType.INTEGER.equals(SimpleType.INTEGER) && SimpleType.INTEGER == SimpleType.INTEGER, "singleton identity");
     }
 
+    // ---- deepened: singleton serialization / full toString & hashCode table ----
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        T copy = (T) ois.readObject();
+        ois.close();
+        return copy;
+    }
+
+    static void testDeep() throws Exception {
+        SimpleType<?>[] all = {
+            SimpleType.VOID, SimpleType.BOOLEAN, SimpleType.CHARACTER, SimpleType.BYTE,
+            SimpleType.SHORT, SimpleType.INTEGER, SimpleType.LONG, SimpleType.FLOAT,
+            SimpleType.DOUBLE, SimpleType.STRING, SimpleType.BIGDECIMAL, SimpleType.BIGINTEGER,
+            SimpleType.DATE, SimpleType.OBJECTNAME
+        };
+        String[] cn = {
+            "java.lang.Void", "java.lang.Boolean", "java.lang.Character", "java.lang.Byte",
+            "java.lang.Short", "java.lang.Integer", "java.lang.Long", "java.lang.Float",
+            "java.lang.Double", "java.lang.String", "java.math.BigDecimal", "java.math.BigInteger",
+            "java.util.Date", "javax.management.ObjectName"
+        };
+        // serialization round-trip returns the SAME instance (public readResolve singleton)
+        for (int i = 0; i < all.length; i++)
+            check(roundtrip(all[i]) == all[i], "readResolve singleton " + cn[i]);
+        check(roundtrip(SimpleType.INTEGER).hashCode() == SimpleType.INTEGER.hashCode(), "roundtrip hashCode");
+        // public readResolve declared
+        boolean readResolvePublic = false;
+        for (java.lang.reflect.Method m : SimpleType.class.getMethods())
+            if ("readResolve".equals(m.getName()) && Modifier.isPublic(m.getModifiers()))
+                readResolvePublic = true;
+        check(readResolvePublic, "public readResolve declared");
+        // full toString + hashCode table
+        for (int i = 0; i < all.length; i++) {
+            check(all[i].toString().equals("javax.management.openmbean.SimpleType(name=" + cn[i] + ")"),
+                    "toString exact " + cn[i]);
+            check(all[i].hashCode() == cn[i].hashCode(), "hashCode==className.hashCode " + cn[i]);
+        }
+        java.util.Set<Integer> hashes = new java.util.HashSet<Integer>();
+        for (int i = 0; i < all.length; i++) hashes.add(Integer.valueOf(all[i].hashCode()));
+        check(hashes.size() == 14, "hashCodes pairwise distinct");
+        // extra isValue negatives
+        check(!SimpleType.INTEGER.isValue((short) 5), "INTEGER rejects Short");
+        check(!SimpleType.STRING.isValue(new StringBuilder("x")), "STRING rejects StringBuilder");
+        check(!SimpleType.OBJECTNAME.isValue("d:k=v"), "OBJECTNAME rejects String");
+        check(!SimpleType.VOID.isValue(Void.class), "VOID rejects Void.class");
+        check(!SimpleType.INTEGER.isValue(Number.class), "INTEGER rejects Number.class");
+        check(!roundtrip(SimpleType.INTEGER).equals(SimpleType.STRING), "roundtrip preserves type identity");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

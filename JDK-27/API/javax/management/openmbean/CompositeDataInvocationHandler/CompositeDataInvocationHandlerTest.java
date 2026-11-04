@@ -109,12 +109,67 @@ public class CompositeDataInvocationHandlerTest {
             }, "getter no matching item");
     }
 
+    public interface WrongRet { long getNumber(); }
+    public interface Second { int getNumber(); }
+
+    // ---- deepened: identity / method-set lock / invoke-direct / return-type mismatch ----
+    static void testDeep() throws Exception {
+        Class<?> c = Class.forName("javax.management.openmbean.CompositeDataInvocationHandler");
+        // javap verified (JDK-8 == JDK-27): no setCompositeData mutator, not Serializable
+        boolean hasSetter = false;
+        for (java.lang.reflect.Method m : c.getMethods())
+            if ("setCompositeData".equals(m.getName())) hasSetter = true;
+        check(!hasSetter, "no public setCompositeData");
+        check(!java.io.Serializable.class.isAssignableFrom(c), "not Serializable");
+
+        CompositeType ct = new CompositeType("NamedNumber", "desc",
+                new String[]{"number", "name", "active"},
+                new String[]{"number desc", "name desc", "active desc"},
+                new OpenType[]{SimpleType.INTEGER, SimpleType.STRING, SimpleType.BOOLEAN});
+        CompositeData cd = new CompositeDataSupport(ct,
+                new String[]{"number", "name", "active"}, new Object[]{5, "five", Boolean.TRUE});
+        CompositeDataInvocationHandler handler = new CompositeDataInvocationHandler(cd);
+        check(handler.getCompositeData() == cd, "getCompositeData returns the same instance");
+        // direct invoke returns the raw item value
+        java.lang.reflect.Method m = NamedNumber.class.getMethod("getNumber");
+        try {
+            Object raw = handler.invoke(new Object(), m, null);
+            check(raw.equals(5), "invoke returns raw item value");
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
+        // two interfaces over one handler share the same data
+        Second s = (Second) Proxy.newProxyInstance(
+                Second.class.getClassLoader(), new Class<?>[]{Second.class}, handler);
+        check(s.getNumber() == 5, "second interface same handler");
+        check(!Proxy.newProxyInstance(NamedNumber.class.getClassLoader(),
+                new Class<?>[]{NamedNumber.class}, handler).equals("plain"),
+                "equals(non-proxy) false without exception");
+
+        // getter whose declared return type mismatches the stored item -> ClassCastException at call site
+        checkThrows(ClassCastException.class, null,
+            () -> { try {
+                WrongRet w = (WrongRet) Proxy.newProxyInstance(
+                    WrongRet.class.getClassLoader(), new Class<?>[]{WrongRet.class}, handler);
+                w.getNumber();
+            } catch (Throwable e) { throw sneaky(e); } },
+            "mismatched getter return type");
+        // setter absent: wrap new data in a NEW handler (the only way to change data)
+        CompositeData cd2 = new CompositeDataSupport(ct,
+                new String[]{"number", "name", "active"}, new Object[]{7, "seven", Boolean.FALSE});
+        NamedNumber fresh = (NamedNumber) Proxy.newProxyInstance(
+                NamedNumber.class.getClassLoader(), new Class<?>[]{NamedNumber.class},
+                new CompositeDataInvocationHandler(cd2));
+        check(fresh.getNumber() == 7 && !fresh.isActive(), "fresh handler reads fresh data");
+    }
+
     @SuppressWarnings("unchecked")
     static <E extends Throwable> RuntimeException sneaky(Throwable t) throws E { throw (E) t; }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

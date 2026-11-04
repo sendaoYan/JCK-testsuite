@@ -1,9 +1,12 @@
 /*
  * @test
  * @summary javax.management.MBeanParameterInfo conformance: white-box structure + black-box behavior.
+ *          Deepened: equals participation matrix, hashCode = name+type only,
+ *          null-descriptor default, toString format, serialization.
  * @run main MBeanParameterInfoTest
  */
 
+import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 import javax.management.*;
@@ -51,9 +54,42 @@ public class MBeanParameterInfoTest {
         check(p.toString() != null, "toString non-null");
     }
 
+    // ---- deepened: equals matrix, hashCode scope, toString, serialization ---
+
+    static void testEqualsHashCodeDeep() {
+        MBeanParameterInfo base = new MBeanParameterInfo("name", "java.lang.String", "desc");
+        check(!base.equals(new MBeanParameterInfo("name", "int", "desc")), "type participates in equals");
+        check(!base.equals(new MBeanParameterInfo("name", "java.lang.String", "OTHER")),
+                "description participates in equals");
+        check(!base.equals(new MBeanParameterInfo("name", "java.lang.String", "desc",
+                new ImmutableDescriptor("k=v"))), "descriptor participates in equals");
+        check(base.hashCode() == new MBeanParameterInfo("name", "java.lang.String", "OTHER").hashCode(),
+                "hashCode uses only name and type");
+    }
+
+    static void testNullDescriptorToStringSerialization() throws Exception {
+        MBeanParameterInfo plain = new MBeanParameterInfo("name", "java.lang.String", "desc");
+        check(plain.getDescriptor().getFieldNames().length == 0, "3-arg ctor yields empty descriptor");
+        check(plain.getDescriptor() instanceof ImmutableDescriptor, "default descriptor is ImmutableDescriptor");
+        String s = plain.toString();
+        check(s.contains("name=name") && s.contains("type=java.lang.String") && s.contains("description=desc"),
+                "toString carries name/type/description");
+
+        MBeanParameterInfo original = new MBeanParameterInfo("name", "int", "desc", new ImmutableDescriptor("k=v"));
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(original);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        MBeanParameterInfo read = (MBeanParameterInfo) ois.readObject();
+        check(read.equals(original), "serialization round-trip equals");
+        check("v".equals(read.getDescriptor().getFieldValue("k")), "descriptor survives serialization");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEqualsHashCodeDeep();
+        testNullDescriptorToStringSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

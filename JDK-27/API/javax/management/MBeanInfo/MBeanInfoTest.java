@@ -1,6 +1,9 @@
 /*
  * @test
  * @summary javax.management.MBeanInfo conformance: white-box structure + black-box behavior.
+ *          Deepened: null-array defaulting, defensive array getters (empty shared),
+ *          equals field matrix, shallow clone element sharing, descriptor defaults,
+ *          serialization round-trip.
  * @run main MBeanInfoTest
  */
 
@@ -24,6 +27,7 @@ public class MBeanInfoTest {
         MBeanNotificationInfo[] notifs = { new MBeanNotificationInfo(new String[]{"type"}, "Notif", "notif desc") };
         return new MBeanInfo(className, desc, attrs, ctors, ops, notifs);
     }
+    static MBeanInfo sample() { return build("com.example.Foo", "desc"); }
 
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
@@ -80,9 +84,104 @@ public class MBeanInfoTest {
                 "descriptor ctor preserves descriptor");
     }
 
+    // ---- deepened: null arrays + empty-array sharing -----------------------
+
+    static void testNullArraysAndSharing() {
+        MBeanInfo empty = new MBeanInfo("c", null, null, null, null, null);
+        check(empty.getDescription() == null, "null description retained");
+        check(empty.getAttributes() != null && empty.getAttributes().length == 0, "null attributes -> empty");
+        check(empty.getOperations().length == 0, "null operations -> empty");
+        check(empty.getConstructors().length == 0, "null constructors -> empty");
+        check(empty.getNotifications().length == 0, "null notifications -> empty");
+        // both calls return the same shared instance (nothing to protect defensively)
+        check(empty.getAttributes() == empty.getAttributes(), "empty getAttributes shared instance");
+        check(empty.getOperations() == empty.getOperations(), "empty getOperations shared instance");
+        check(empty.getConstructors() == empty.getConstructors(), "empty getConstructors shared instance");
+        check(empty.getNotifications() == empty.getNotifications(), "empty getNotifications shared instance");
+    }
+
+    // ---- deepened: defensive copies of non-empty array getters -------------
+
+    static void testArrayGetterDefensive() {
+        MBeanInfo info = sample();
+        MBeanAttributeInfo[] a = info.getAttributes(); a[0] = null;
+        check(info.getAttributes()[0] != null, "getAttributes defensive copy");
+        MBeanOperationInfo[] o = info.getOperations(); o[0] = null;
+        check(info.getOperations()[0] != null, "getOperations defensive copy");
+        MBeanConstructorInfo[] c = info.getConstructors(); c[0] = null;
+        check(info.getConstructors()[0] != null, "getConstructors defensive copy");
+        MBeanNotificationInfo[] n = info.getNotifications(); n[0] = null;
+        check(info.getNotifications()[0] != null, "getNotifications defensive copy");
+        check(info.getAttributes() != info.getAttributes(), "fresh array per call when non-empty");
+        // clone is shallow: elements are shared between original and clone
+        MBeanInfo clone = (MBeanInfo) info.clone();
+        check(clone != info && clone.equals(info), "clone distinct but equal");
+        check(clone.getAttributes()[0] == info.getAttributes()[0], "clone shares elements (shallow)");
+    }
+
+    // ---- deepened: equals participation of every field ---------------------
+
+    static void testEqualsFieldParticipation() {
+        MBeanInfo base = sample();
+        check(base.equals(sample()) && base.hashCode() == sample().hashCode(),
+                "identical reconstruction equal + hashCode");
+        MBeanInfo otherDescr = new MBeanInfo("com.example.Foo", "desc",
+                base.getAttributes(), base.getConstructors(),
+                base.getOperations(), base.getNotifications(),
+                new ImmutableDescriptor("extra=1"));
+        check(!base.equals(otherDescr), "descriptor participates in equals");
+        check(!base.equals(new MBeanInfo("com.example.Foo", "desc",
+                new MBeanAttributeInfo[]{new MBeanAttributeInfo("Attr", "long", "attr desc", true, true, false)},
+                base.getConstructors(), base.getOperations(), base.getNotifications())),
+                "attributes participate in equals");
+        check(!base.equals(new MBeanInfo("com.example.Foo", "desc",
+                base.getAttributes(), new MBeanConstructorInfo[0],
+                base.getOperations(), base.getNotifications())),
+                "constructors participate in equals");
+        check(!base.equals(new MBeanInfo("com.example.Foo", "desc",
+                base.getAttributes(), base.getConstructors(),
+                new MBeanOperationInfo[0], base.getNotifications())),
+                "operations participate in equals");
+        check(!base.equals(new MBeanInfo("com.example.Foo", "desc",
+                base.getAttributes(), base.getConstructors(),
+                base.getOperations(), new MBeanNotificationInfo[0])),
+                "notifications participate in equals");
+        MBeanInfo nd1 = new MBeanInfo("c", null, null, null, null, null);
+        check(nd1.equals(new MBeanInfo("c", null, null, null, null, null)), "null description both sides equal");
+        check(!nd1.equals(new MBeanInfo("c", "d", null, null, null, null)), "null vs non-null description differ");
+    }
+
+    // ---- deepened: descriptor defaults + serialization ----------------------
+
+    static void testDescriptorDefaultsAndSerialization() throws Exception {
+        MBeanInfo plain = sample();
+        check(plain.getDescriptor().getFieldNames().length == 0, "6-arg ctor default empty descriptor");
+        check(plain.getDescriptor() instanceof ImmutableDescriptor, "default descriptor is ImmutableDescriptor");
+        check(new MBeanInfo("c", "d", null, null, null, null, null).getDescriptor().getFieldNames().length == 0,
+                "null descriptor -> empty");
+
+        MBeanInfo original = new MBeanInfo("com.example.Foo", "desc",
+                new MBeanAttributeInfo[]{new MBeanAttributeInfo("Count", "int", "count", true, false, false)},
+                new MBeanConstructorInfo[0], new MBeanOperationInfo[0], new MBeanNotificationInfo[0],
+                new ImmutableDescriptor("k=v"));
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(original);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        MBeanInfo read = (MBeanInfo) ois.readObject();
+        check(read.equals(original), "serialization round-trip equals");
+        check("v".equals(read.getDescriptor().getFieldValue("k")), "descriptor survives serialization");
+        check("count".equals(read.getAttributes()[0].getDescription()), "attribute detail survives serialization");
+        check(read.getAttributes()[0] != null && read.getAttributes().length == 1, "arrays usable after round-trip");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNullArraysAndSharing();
+        testArrayGetterDefensive();
+        testEqualsFieldParticipation();
+        testDescriptorDefaultsAndSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

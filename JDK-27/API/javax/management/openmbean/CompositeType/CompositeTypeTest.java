@@ -137,12 +137,104 @@ public class CompositeTypeTest {
                 catch (Exception e) { throw sneaky(e); } }, "null typeName");
     }
 
+    // ---- deepened: unmodifiable keySet / full negative matrix / order-independence / ser ----
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        T copy = (T) ois.readObject();
+        ois.close();
+        return copy;
+    }
+
+    static void testDeep() throws Exception {
+        CompositeType ct = make("MyType");
+        // keySet unmodifiable
+        try {
+            ct.keySet().add("z");
+            check(false, "keySet must be unmodifiable");
+        } catch (UnsupportedOperationException e) {
+            passed++;
+        }
+        // order-independent item set: same set of names in different order equals
+        CompositeType reordered = new CompositeType("MyType", "d",
+                new String[]{"value", "name"}, new String[]{"v d", "n d"},
+                new OpenType[]{SimpleType.INTEGER, SimpleType.STRING});
+        // different descriptions though -> not equal; construct matching descriptions
+        CompositeType reorderedMatch = new CompositeType("MyType", "desc",
+                new String[]{"value", "name"}, new String[]{"value desc", "name desc"},
+                new OpenType[]{SimpleType.INTEGER, SimpleType.STRING});
+        // descriptions do NOT participate in equals (verified both JDKs)
+        check(ct.equals(reordered), "item descriptions do not participate in equals");
+        check(ct.equals(reorderedMatch), "equals with reordered item names");
+        check(ct.hashCode() == reorderedMatch.hashCode(), "hashCode equal with reordered items");
+        check(ct.equals(new CompositeType("MyType", "other desc",
+                new String[]{"name", "value"}, new String[]{"name desc", "value desc"},
+                new OpenType[]{SimpleType.STRING, SimpleType.INTEGER})),
+                "type-level description does not participate in equals");
+        // isValue accepts null item values
+        CompositeDataSupport cdNull = new CompositeDataSupport(ct,
+                new String[]{"name", "value"}, new Object[]{null, null});
+        check(ct.isValue(cdNull), "isValue accepts null item values");
+        check(!ct.isValue(new CompositeDataSupport(
+                new CompositeType("MyType", "d", new String[]{"name", "value"},
+                        new String[]{"d", "d"}, new OpenType[]{SimpleType.STRING, SimpleType.STRING}),
+                new String[]{"name", "value"}, new Object[]{"n", "v"})), "rejects wrong item type");
+        check(!ct.isValue(new CompositeDataSupport(
+                new CompositeType("Other", "d", new String[]{"name", "value"},
+                        new String[]{"d", "d"}, new OpenType[]{SimpleType.STRING, SimpleType.INTEGER}),
+                new String[]{"name", "value"}, new Object[]{"n", 5})), "rejects different typeName");
+        // toString exact
+        check(ct.toString().equals("javax.management.openmbean.CompositeType(name=MyType,"
+                + "items=((itemName=name,itemType=javax.management.openmbean.SimpleType(name=java.lang.String)),"
+                + "(itemName=value,itemType=javax.management.openmbean.SimpleType(name=java.lang.Integer))))"),
+                "toString exact");
+        // serialization round-trip
+        check(roundtrip(ct).equals(ct), "ser roundtrip equals");
+        check(roundtrip(ct).hashCode() == ct.hashCode(), "ser roundtrip hashCode");
+
+        // full negative matrix (messages verified on this JDK)
+        checkThrows(IllegalArgumentException.class, "Argument itemNames[] cannot be null or empty.",
+            () -> { try { new CompositeType("T", "d", (String[]) null, new String[]{"x"},
+                new OpenType[]{SimpleType.STRING}); } catch (Exception e) { throw sneaky(e); } },
+            "null itemNames array");
+        checkThrows(IllegalArgumentException.class, "Argument itemNames[] cannot be null or empty.",
+            () -> { try { new CompositeType("T", "d", new String[0], new String[0], new OpenType[0]); }
+                catch (Exception e) { throw sneaky(e); } },
+            "empty itemNames array (zero-item type not allowed)");
+        checkThrows(IllegalArgumentException.class, "Argument's element itemNames[0] cannot be null.",
+            () -> { try { new CompositeType("T", "d", new String[]{null}, new String[]{"x"},
+                new OpenType[]{SimpleType.STRING}); } catch (Exception e) { throw sneaky(e); } },
+            "null item name element");
+        checkThrows(IllegalArgumentException.class, "Argument's element itemDescriptions[0] cannot be null.",
+            () -> { try { new CompositeType("T", "d", new String[]{"a"}, new String[]{null},
+                new OpenType[]{SimpleType.STRING}); } catch (Exception e) { throw sneaky(e); } },
+            "null item description element");
+        checkThrows(IllegalArgumentException.class, "Argument's element itemTypes[0] cannot be null.",
+            () -> { try { new CompositeType("T", "d", new String[]{"a"}, new String[]{"x"},
+                new OpenType[]{null}); } catch (Exception e) { throw sneaky(e); } },
+            "null item type element");
+        checkThrows(IllegalArgumentException.class, "Argument typeName cannot be null or empty",
+            () -> { try { new CompositeType("", "d", new String[]{"a"}, new String[]{"x"},
+                new OpenType[]{SimpleType.STRING}); } catch (Exception e) { throw sneaky(e); } },
+            "empty typeName");
+        checkThrows(IllegalArgumentException.class, "Argument description cannot be null or empty",
+            () -> { try { new CompositeType("T", null, new String[]{"a"}, new String[]{"x"},
+                new OpenType[]{SimpleType.STRING}); } catch (Exception e) { throw sneaky(e); } },
+            "null description");
+    }
+
     @SuppressWarnings("unchecked")
     static <E extends Throwable> RuntimeException sneaky(Throwable t) throws E { throw (E) t; }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

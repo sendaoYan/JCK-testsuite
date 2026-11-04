@@ -1,12 +1,17 @@
 /*
  * @test
  * @summary javax.management.Descriptor conformance: white-box structure + light behavior.
+ *          Deepened: DescriptorSupport as the mutable reference implementation
+ *          (setField/setFields/removeField round-trip, eager value validation
+ *          ROE(IAE), strict isValid requiring name+descriptorType, getFields
+ *          "n=(v)" format, clone independence) and cross-implementation equals.
  * @run main DescriptorTest
  */
 
 import java.lang.reflect.*;
 import java.util.*;
 import javax.management.*;
+import javax.management.modelmbean.DescriptorSupport;
 
 public class DescriptorTest {
     static int passed;
@@ -84,9 +89,67 @@ public class DescriptorTest {
         check(mutable.getFieldValue("k") == null, "mutable removeField");
     }
 
+    // ---- deepened: mutable contract via DescriptorSupport --------------------
+
+    static void testDescriptorSupportContract() {
+        Descriptor d = new DescriptorSupport();
+        check(d.getFieldNames().length == 0, "fresh mutable descriptor is empty");
+        d.setField("name", "Counter");
+        check("Counter".equals(d.getFieldValue("name")), "setField/getFieldValue round-trip");
+        d.setFields(new String[]{"a", "b"}, new Object[]{1, 2L});
+        check(d.getFieldValue("a").equals(1) && d.getFieldValue("b").equals(2L), "setFields round-trip");
+        check(Arrays.equals(new String[]{"a", "b", "name"}, d.getFieldNames()),
+                "getFieldNames case-insensitive sorted");
+        check(Arrays.equals(new String[]{"a=(1)", "b=(2)", "name=Counter"}, d.getFields()),
+                "getFields format (non-String parenthesized)");
+        d.removeField("a");
+        check(d.getFieldValue("a") == null && d.getFieldNames().length == 2, "removeField removes");
+        Descriptor cl = (Descriptor) d.clone();
+        cl.setField("extra", "v");
+        check(d.getFieldValue("extra") == null, "mutating clone leaves original untouched");
+
+        // eager validation of well-known field values (at set/construction time)
+        try { new DescriptorSupport(new String[]{"visibility=5"}); check(false, "visibility=5 should ROE"); }
+        catch (RuntimeOperationsException ex) { passed++; }
+        try { new DescriptorSupport(new String[]{"log=yes"}); check(false, "log=yes should ROE"); }
+        catch (RuntimeOperationsException ex) { passed++; }
+        try { d.setField("severity", Integer.valueOf(7)); check(false, "severity=7 should ROE"); }
+        catch (RuntimeOperationsException ex) { passed++; }
+        try { new DescriptorSupport().setField(null, "v"); check(false, "setField(null) should ROE"); }
+        catch (RuntimeOperationsException ex) { passed++; }
+        check(new DescriptorSupport("name=n", "descriptorType=mbean", "visibility=4").isValid(),
+                "visibility=4 accepted");
+        check(new DescriptorSupport("name=n", "descriptorType=mbean", "log=true").isValid(),
+                "log=true accepted");
+        // strict isValid: name + descriptorType mandatory
+        check(!new DescriptorSupport().isValid(), "empty descriptor not valid");
+        check(!new DescriptorSupport(new String[]{"name=n"}).isValid(), "missing descriptorType");
+        check(!new DescriptorSupport(new String[]{"descriptorType=mbean"}).isValid(), "missing name");
+        check(new DescriptorSupport("name=n", "descriptorType=mbean").isValid(), "name + descriptorType valid");
+        // unknown field names/values are NOT value-checked
+        check(new DescriptorSupport("name=n", "descriptorType=mbean", "a.b=x").isValid(),
+                "'.' on unknown field not rejected");
+        check(new DescriptorSupport(new String[]{"name", "descriptorType", "k"},
+                new Object[]{"n", "mbean", new Object()}).isValid(),
+                "arbitrary Object value on unknown field not rejected");
+    }
+
+    // ---- deepened: cross-implementation equals -------------------------------
+
+    static void testCrossImplementationEquals() {
+        Descriptor imm = new ImmutableDescriptor("name=n", "descriptorType=mbean");
+        Descriptor mut = new DescriptorSupport(new String[]{"name", "descriptorType"},
+                new Object[]{"n", "mbean"});
+        check(imm.equals(mut), "immutable.equals(mutable) true");
+        check(mut.equals(imm), "mutable.equals(immutable) true");
+        check(imm.hashCode() == mut.hashCode(), "cross-implementation hashCode agreement");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDescriptorSupportContract();
+        testCrossImplementationEquals();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

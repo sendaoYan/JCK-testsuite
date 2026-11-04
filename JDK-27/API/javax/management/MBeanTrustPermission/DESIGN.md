@@ -17,3 +17,14 @@ new MBeanTrustPermission("*").implies(new MBeanTrustPermission("register")); // 
 - 白盒：public/非接口/非抽象、直接父类 `BasicPermission`、构造器与方法形态。
 - 黑盒：名称/动作 canonicalization、`implies` 子集/超集/通配、`equals`/`hashCode`、`newPermissionCollection`（如适用），以及非法参数的精确 `IllegalArgumentException` 消息。
 - 确定性：固定权限名称/动作字符串；消息经探针实测后写入。
+
+## 深化（2026-11）：target/implies/序列化/集合
+
+### 新增覆盖
+1. target 仅 "register" 与 "*"；register→register true、register→* false、*→register true；getActions 恒 ""。
+2. null name → NPE；未知 target → IAE（"MBeanTrustPermission: Unknown target name [bogus]"）；非 null actions → IAE（null actions 合法）。
+3. equals/hashCode/序列化 round-trip。
+4. newPermissionCollection 非空，add "*" 后 implies register。
+
+### 参考来源
+- Oracle javadoc: MBeanTrustPermission。

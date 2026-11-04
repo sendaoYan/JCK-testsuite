@@ -45,9 +45,67 @@ public class CompositeDataViewTest {
         check(view.toCompositeData(ct).equals(expected), "toCompositeData returns value");
     }
 
+    // ---- deepened: custom class impl + MXBean closed loop through a local MBeanServer ----
+    public static class Point implements CompositeDataView {
+        private final int x;
+        private final int y;
+        public Point(int x, int y) { this.x = x; this.y = y; }
+        public int getX() { return x; }
+        public int getY() { return y; }
+        public CompositeData toCompositeData(CompositeType ct) {
+            try {
+                return new CompositeDataSupport(ct,
+                        new String[]{"x", "y"}, new Object[]{Integer.valueOf(x), Integer.valueOf(y)});
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public interface PointMXBean { Point getPoint(); }
+
+    public static class PointBean implements PointMXBean {
+        public Point getPoint() { return new Point(3, 4); }
+    }
+
+    static void testDeep() throws Exception {
+        Class<?> c = Class.forName("javax.management.openmbean.CompositeDataView");
+        check(!java.io.Serializable.class.isAssignableFrom(c), "does not extend Serializable");
+        check(c.getInterfaces().length == 0, "no super-interfaces");
+        check(c.getMethod("toCompositeData", CompositeType.class).getReturnType() == CompositeData.class,
+                "toCompositeData signature");
+
+        // custom class implementation returns a controlled CompositeData
+        CompositeType ct = new CompositeType("CT", "d", new String[]{"x", "y"}, new String[]{"xd", "yd"},
+                new OpenType[]{SimpleType.INTEGER, SimpleType.INTEGER});
+        Point p = new Point(3, 4);
+        CompositeData cd = p.toCompositeData(ct);
+        check(cd.get("x").equals(3) && cd.get("y").equals(4), "custom impl supplies values");
+        check(cd.getCompositeType().equals(ct), "custom impl uses requested type");
+
+        // closed loop: MXBean getter returning a CompositeDataView type is served as CompositeData
+        javax.management.MBeanServer server = javax.management.MBeanServerFactory.newMBeanServer();
+        javax.management.ObjectName on = new javax.management.ObjectName("jck.cdview:type=Point");
+        try {
+            server.registerMBean(new PointBean(), on);
+            Object res = server.getAttribute(on, "Point");
+            check(res instanceof CompositeData, "MXBean attribute converted to CompositeData");
+            CompositeData rcd = (CompositeData) res;
+            check(rcd.get("x").equals(3), "closed loop x");
+            check(rcd.get("y").equals(4), "closed loop y");
+            check(rcd.getCompositeType().getTypeName().equals(Point.class.getName()),
+                    "computed CompositeType typeName is the class name");
+            check(rcd.getCompositeType().getType("x") == SimpleType.INTEGER, "computed item type from getter");
+            check(rcd.getCompositeType().keySet().contains("y"), "computed items from getters");
+        } finally {
+            if (server.isRegistered(on)) server.unregisterMBean(on);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

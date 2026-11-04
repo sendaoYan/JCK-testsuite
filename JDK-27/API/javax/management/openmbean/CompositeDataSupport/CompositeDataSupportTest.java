@@ -130,12 +130,111 @@ public class CompositeDataSupportTest {
             "null compositeType");
     }
 
+    // ---- deepened: Map ctor negatives / length mismatches / unmodifiable values / ser / impl quirk ----
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        T copy = (T) ois.readObject();
+        ois.close();
+        return copy;
+    }
+
+    static void testDeep() throws Exception {
+        CompositeType ct = type();
+        String[] names = {"name", "value"};
+        CompositeDataSupport cd = new CompositeDataSupport(ct, names, new Object[]{"n", 5});
+
+        // mismatched array lengths -> IllegalArgumentException (NOT OpenDataException)
+        checkThrows(IllegalArgumentException.class, "Different lengths: itemNames[2], itemValues[1]",
+            () -> { try { new CompositeDataSupport(ct, names, new Object[]{"x"}); } catch (Exception e) { throw sneaky(e); } },
+            "mismatched array lengths");
+        checkThrows(IllegalArgumentException.class, "Null itemNames or itemValues",
+            () -> { try { new CompositeDataSupport(ct, (String[]) null, new Object[]{"x", 1}); } catch (Exception e) { throw sneaky(e); } },
+            "null names array");
+        checkThrows(IllegalArgumentException.class, "Null itemNames or itemValues",
+            () -> { try { new CompositeDataSupport(ct, names, (Object[]) null); } catch (Exception e) { throw sneaky(e); } },
+            "null values array");
+        // null value for a typed (INTEGER) item is legal too
+        CompositeDataSupport nullInt = new CompositeDataSupport(ct, names, new Object[]{"n", null});
+        check(nullInt.get("value") == null, "null value for INTEGER item stored");
+        // ctor argument order independence
+        CompositeDataSupport reordered = new CompositeDataSupport(ct, new String[]{"value", "name"},
+                new Object[]{5, "n"});
+        check(reordered.equals(cd), "ctor argument order independent");
+        check(reordered.hashCode() == cd.hashCode(), "hashCode order independent");
+        // Map ctor negatives
+        checkThrows(IllegalArgumentException.class, "Null or empty items map",
+            () -> { try { new CompositeDataSupport(ct, (Map<String, ?>) null); } catch (Exception e) { throw sneaky(e); } },
+            "null map");
+        Map<String, Object> nullKeyMap = new HashMap<>();
+        nullKeyMap.put("name", "n");
+        nullKeyMap.put("value", 5);
+        nullKeyMap.put(null, "v");
+        checkThrows(IllegalArgumentException.class, "Null or empty item name",
+            () -> { try { new CompositeDataSupport(ct, nullKeyMap); } catch (Exception e) { throw sneaky(e); } },
+            "map with null key");
+        Map<String, Object> missingMap = new HashMap<>();
+        missingMap.put("name", "n");
+        checkThrows(OpenDataException.class,
+            "Item names do not match CompositeType: names in items but not in CompositeType: []; "
+            + "names in CompositeType but not in items: [value]",
+            () -> { try { new CompositeDataSupport(ct, missingMap); } catch (Exception e) { throw sneaky(e); } },
+            "map missing item");
+        Map<String, Object> wrongMap = new HashMap<>();
+        wrongMap.put("name", "n");
+        wrongMap.put("value", "str");
+        checkThrows(OpenDataException.class,
+            "Argument value of wrong type for item value: value str, "
+            + "type javax.management.openmbean.SimpleType(name=java.lang.Integer)",
+            () -> { try { new CompositeDataSupport(ct, wrongMap); } catch (Exception e) { throw sneaky(e); } },
+            "map wrong value type");
+        // values() unmodifiable
+        try {
+            java.util.Collection raw = cd.values();
+            raw.add("z");
+            check(false, "values must be unmodifiable");
+        } catch (UnsupportedOperationException e) {
+            passed++;
+        }
+        // getAll negatives
+        checkThrows(InvalidKeyException.class,
+            "Argument key=\"zz\" is not an existing item name for this CompositeData instance.",
+            () -> cd.getAll(new String[]{"name", "zz"}), "getAll missing key");
+        checkThrows(IllegalArgumentException.class, "Argument key cannot be a null or empty String.",
+            () -> cd.getAll(new String[]{"name", null}), "getAll null key element");
+        // serialization round-trips (with null value)
+        CompositeDataSupport serNull = roundtrip(new CompositeDataSupport(ct, names, new Object[]{null, 1}));
+        check(serNull.get("name") == null, "ser roundtrip keeps null value");
+        check(roundtrip(cd).equals(cd), "ser roundtrip equals");
+        // reference impl quirk: hand-made CompositeData with identical contents is NOT equal
+        final CompositeType ctF = ct;
+        CompositeData custom = new CompositeData() {
+            public CompositeType getCompositeType() { return ctF; }
+            public Object get(String key) { return "name".equals(key) ? "n" : Integer.valueOf(5); }
+            public Object[] getAll(String[] ks) {
+                Object[] r = new Object[ks.length];
+                for (int i = 0; i < ks.length; i++) r[i] = get(ks[i]);
+                return r;
+            }
+            public boolean containsKey(String key) { return "name".equals(key) || "value".equals(key); }
+            public boolean containsValue(Object v) { return false; }
+            public java.util.Collection<?> values() { return java.util.Collections.emptyList(); }
+        };
+        check(!cd.equals(custom), "reference impl requires CompositeDataSupport class");
+    }
+
     @SuppressWarnings("unchecked")
     static <E extends Throwable> RuntimeException sneaky(Throwable t) throws E { throw (E) t; }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

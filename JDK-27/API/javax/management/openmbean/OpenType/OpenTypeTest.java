@@ -92,9 +92,86 @@ public class OpenTypeTest {
         check(array.toString().contains("ArrayType"), "ArrayType toString");
     }
 
+    // ---- deepened: unmodifiable allowed list / absent methods / serialization round-trips ----
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        T copy = (T) ois.readObject();
+        ois.close();
+        return copy;
+    }
+
+    static void testDeep() throws Exception {
+        // javap verified (JDK-8 == JDK-27): no public isValid / getDisplayName / setDisplayName
+        for (String absent : new String[]{"isValid", "getDisplayName", "setDisplayName"}) {
+            boolean found = false;
+            for (java.lang.reflect.Method m : OpenType.class.getMethods())
+                if (m.getName().equals(absent)) found = true;
+            check(!found, "no public " + absent);
+        }
+        // list unmodifiable; deprecated array mirrors it
+        try {
+            OpenType.ALLOWED_CLASSNAMES_LIST.set(0, "x");
+            check(false, "ALLOWED_CLASSNAMES_LIST must be unmodifiable");
+        } catch (UnsupportedOperationException e) {
+            passed++;
+        }
+        check(Arrays.equals(OpenType.ALLOWED_CLASSNAMES_LIST.toArray(new String[0]), OpenType.ALLOWED_CLASSNAMES),
+                "deprecated array mirrors list");
+        // two declared ctors, protected 3-arg primary
+        check(OpenType.class.getDeclaredConstructors().length == 2, "two declared ctors");
+        // abstract: not instantiable even reflectively
+        java.lang.reflect.Constructor<?> prot =
+                OpenType.class.getDeclaredConstructor(String.class, String.class, String.class);
+        // abstract classes cannot be instantiated; the mechanism differs by JDK:
+        // JDK-8 opens the protected ctor and Constructor.newInstance fails with InstantiationException;
+        // JDK-9+ refuses setAccessible with InaccessibleObjectException (module java.management
+        // does not open the package to the unnamed module) -- either way no instance is produced
+        try {
+            prot.setAccessible(true);
+            try {
+                prot.newInstance("a", "b", "c");
+                check(false, "abstract instantiation must fail");
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                check(e.getCause() instanceof java.lang.InstantiationException, "InstantiationException cause");
+            } catch (java.lang.InstantiationException e) {
+                // Constructor.newInstance throws InstantiationException directly for abstract classes
+                passed++;
+            }
+        } catch (RuntimeException e) {
+            if ("java.lang.reflect.InaccessibleObjectException".equals(e.getClass().getName())) {
+                passed++;
+            } else {
+                throw e;
+            }
+        }
+        // serialization round-trips across concrete subtypes
+        check(roundtrip(SimpleType.STRING) == SimpleType.STRING, "SimpleType ser singleton");
+        check(roundtrip(ArrayType.getArrayType(SimpleType.STRING)).equals(ArrayType.getArrayType(SimpleType.STRING)),
+                "ArrayType ser roundtrip");
+        CompositeType ct = new CompositeType("CT", "d", new String[]{"a"}, new String[]{"da"},
+                new OpenType[]{SimpleType.STRING});
+        check(roundtrip(ct).equals(ct), "CompositeType ser roundtrip");
+        check(roundtrip(new TabularType("TT", "td", ct, new String[]{"a"}))
+                .equals(new TabularType("TT", "td", ct, new String[]{"a"})), "TabularType ser roundtrip");
+        // isValue(null) uniformly false; cross-type equals false
+        OpenType<?> simple = SimpleType.STRING;
+        OpenType<?> array = ArrayType.getArrayType(SimpleType.STRING);
+        TabularType tt = new TabularType("TT", "td", ct, new String[]{"a"});
+        check(!simple.isValue(null) && !array.isValue(null) && !ct.isValue(null) && !tt.isValue(null),
+                "isValue(null) false for all concrete types");
+        check(!simple.equals(array) && !array.equals(ct) && !ct.equals(tt), "cross-type equals false");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

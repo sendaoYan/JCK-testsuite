@@ -102,12 +102,81 @@ public class TabularTypeTest {
             "empty index name");
     }
 
+    // ---- deepened: unmodifiable indexNames / duplicates / structural rowType equality / ser ----
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        T copy = (T) ois.readObject();
+        ois.close();
+        return copy;
+    }
+
+    static void testDeep() throws Exception {
+        CompositeType rt = rowType();
+        TabularType tt = new TabularType("MyTab", "desc", rt, new String[]{"name"});
+        // getIndexNames unmodifiable
+        try {
+            tt.getIndexNames().add("value");
+            check(false, "getIndexNames must be unmodifiable");
+        } catch (UnsupportedOperationException e) {
+            passed++;
+        }
+        // index order preserved as given (not sorted)
+        check(new TabularType("M", "d", rt, new String[]{"value", "name"}).getIndexNames()
+                .equals(Arrays.asList("value", "name")), "multi index order preserved");
+        // duplicate index names are NOT rejected (verified: allowed, list keeps duplicates)
+        TabularType dup = new TabularType("T", "d", rt, new String[]{"name", "name"});
+        check(dup.getIndexNames().equals(Arrays.asList("name", "name")), "duplicate index names allowed");
+        // equals with structurally equal (but distinct) rowType instance
+        TabularType structural = new TabularType("MyTab", "desc",
+                new CompositeType("Row", "row desc",
+                        new String[]{"name", "value"}, new String[]{"name desc", "value desc"},
+                        new OpenType[]{SimpleType.STRING, SimpleType.INTEGER}),
+                new String[]{"name"});
+        check(tt.equals(structural), "equals with structurally equal rowType");
+        check(tt.hashCode() == structural.hashCode(), "hashCode equal with structural rowType");
+        // isValue accepts a table with a structurally equal type
+        TabularDataSupport td = new TabularDataSupport(tt);
+        check(structural.isValue(td), "isValue structurally equal type");
+        // toString exact
+        check(tt.toString().equals("javax.management.openmbean.TabularType(name=MyTab,"
+                + "rowType=javax.management.openmbean.CompositeType(name=Row,"
+                + "items=((itemName=name,itemType=javax.management.openmbean.SimpleType(name=java.lang.String)),"
+                + "(itemName=value,itemType=javax.management.openmbean.SimpleType(name=java.lang.Integer)))),"
+                + "indexNames=(name))"), "toString exact");
+        // serialization round-trip
+        check(roundtrip(tt).equals(tt), "ser roundtrip equals");
+        check(roundtrip(tt).hashCode() == tt.hashCode(), "ser roundtrip hashCode");
+        // additional negatives (messages verified on this JDK)
+        checkThrows(IllegalArgumentException.class, "Argument indexNames[] cannot be null or empty.",
+            () -> { try { new TabularType("T", "d", rt, null); } catch (Exception e) { throw sneaky(e); } },
+            "null indexNames array");
+        checkThrows(IllegalArgumentException.class, "Argument's element indexNames[0] cannot be null.",
+            () -> { try { new TabularType("T", "d", rt, new String[]{null}); } catch (Exception e) { throw sneaky(e); } },
+            "null index name element");
+        checkThrows(IllegalArgumentException.class, "Argument typeName cannot be null or empty",
+            () -> { try { new TabularType(null, "d", rt, new String[]{"name"}); } catch (Exception e) { throw sneaky(e); } },
+            "null typeName");
+        checkThrows(IllegalArgumentException.class, "Argument typeName cannot be null or empty",
+            () -> { try { new TabularType("", "d", rt, new String[]{"name"}); } catch (Exception e) { throw sneaky(e); } },
+            "empty typeName");
+        checkThrows(IllegalArgumentException.class, "Argument description cannot be null or empty",
+            () -> { try { new TabularType("T", null, rt, new String[]{"name"}); } catch (Exception e) { throw sneaky(e); } },
+            "null description");
+    }
+
     @SuppressWarnings("unchecked")
     static <E extends Throwable> RuntimeException sneaky(Throwable t) throws E { throw (E) t; }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,8 @@
 /*
  * @test
  * @summary javax.management.MBeanFeatureInfo conformance: white-box structure + black-box behavior.
+ *          Deepened: null name/description retention, hashCode NPE on null name,
+ *          base-vs-subclass equals asymmetry, default descriptor type, serialization.
  * @run main MBeanFeatureInfoTest
  */
 
@@ -55,9 +57,53 @@ public class MBeanFeatureInfoTest {
         check(info2.equals(new MBeanFeatureInfo("n", "d", desc)), "equals with descriptor");
     }
 
+    // ---- deepened: null semantics, asymmetry, serialization -----------------
+
+    static void testNullSemantics() {
+        MBeanFeatureInfo bothNull = new MBeanFeatureInfo(null, null);
+        check(bothNull.getName() == null && bothNull.getDescription() == null,
+                "null name and description are retained");
+        check(bothNull.equals(new MBeanFeatureInfo(null, null)), "null == null compares equal");
+        check(!bothNull.equals(new MBeanFeatureInfo(null, "d")), "null vs non-null description differ");
+        check(!bothNull.equals(new MBeanFeatureInfo("n", null)), "null vs non-null name differ");
+        try {
+            new MBeanFeatureInfo(null, null).hashCode();
+            check(false, "hashCode with null name should throw NPE");
+        } catch (NullPointerException ex) { passed++; }
+    }
+
+    static void testSubclassEqualsAsymmetry() {
+        // base.equals(subclass) uses instanceof MBeanFeatureInfo -> true when fields match;
+        // subclass.equals(base) requires the subclass type -> false (documented asymmetry)
+        MBeanFeatureInfo base = new MBeanFeatureInfo("a", "b");
+        MBeanAttributeInfo attr = new MBeanAttributeInfo("a", "java.lang.String", "b", true, false, false);
+        check(base.equals(attr), "base.equals(subclass) is true (documented asymmetry)");
+        check(!attr.equals(base), "subclass.equals(base) is false");
+        MBeanParameterInfo param = new MBeanParameterInfo("a", "java.lang.String", "b");
+        check(!attr.equals(param) && !param.equals(attr), "sibling subclasses never equal");
+        MBeanOperationInfo op = new MBeanOperationInfo("a", "b", null, "void", 0);
+        check(!op.equals(attr) && !op.equals(param), "operation vs siblings not equal");
+    }
+
+    static void testDefaultDescriptorAndSerialization() throws Exception {
+        MBeanFeatureInfo plain = new MBeanFeatureInfo("n", "d");
+        check(plain.getDescriptor() instanceof ImmutableDescriptor, "default descriptor is ImmutableDescriptor");
+        MBeanFeatureInfo original = new MBeanFeatureInfo("n", "d", new ImmutableDescriptor("k=v"));
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(original);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        MBeanFeatureInfo read = (MBeanFeatureInfo) ois.readObject();
+        check(read.equals(original), "serialization round-trip equals");
+        check("v".equals(read.getDescriptor().getFieldValue("k")), "descriptor survives serialization");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNullSemantics();
+        testSubclassEqualsAsymmetry();
+        testDefaultDescriptorAndSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
