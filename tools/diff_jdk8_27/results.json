@@ -1,0 +1,1791 @@
+[
+  {
+    "probe": "ArraysProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "binarySearch=1",
+        "copyOf.grow=[1, 2, 3, 0, 0]",
+        "copyOf.shrink=[1, 2]",
+        "copyOfRange.bad=exception=java.lang.IllegalArgumentException",
+        "copyOfRange=[2, 3]",
+        "deepEquals=true",
+        "equals.order=false",
+        "equals=true",
+        "fill=[7, 7, 7]",
+        "hashCode=30817",
+        "sort.null=exception=java.lang.NullPointerException",
+        "sort=[1, 3, 5, 9]"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "binarySearch=1",
+        "copyOf.grow=[1, 2, 3, 0, 0]",
+        "copyOf.shrink=[1, 2]",
+        "copyOfRange.bad=exception=java.lang.IllegalArgumentException",
+        "copyOfRange=[2, 3]",
+        "deepEquals=true",
+        "equals.order=false",
+        "equals=true",
+        "fill=[7, 7, 7]",
+        "hashCode=30817",
+        "sort.null=exception=java.lang.NullPointerException",
+        "sort=[1, 3, 5, 9]"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "BigDecimalConstructProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "ctor.badExp2=exception=java.lang.NumberFormatException",
+        "ctor.badExp=exception=java.lang.NumberFormatException",
+        "ctor.double.0.1=0.1000000000000000055511151231257827021181583404541015625",
+        "ctor.double.1.0=1",
+        "ctor.empty=exception=java.lang.NumberFormatException",
+        "ctor.exp=1E+3",
+        "ctor.expNeg=0.015",
+        "ctor.expPlus=1E+3",
+        "ctor.expZero=0E+5",
+        "ctor.leadingZero.scale=4",
+        "ctor.leadingZero=1.5000",
+        "ctor.long.min=-9223372036854775808",
+        "ctor.negZero.scale=2",
+        "ctor.negZero=0.0",
+        "ctor.null=exception=java.lang.NullPointerException",
+        "ctor.onlyMinus=exception=java.lang.NumberFormatException",
+        "ctor.onlyPlus=exception=java.lang.NumberFormatException",
+        "ctor.plus=1.5"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "ctor.badExp2=exception=java.lang.NumberFormatException",
+        "ctor.badExp=exception=java.lang.NumberFormatException",
+        "ctor.double.0.1=0.1000000000000000055511151231257827021181583404541015625",
+        "ctor.double.1.0=1",
+        "ctor.empty=exception=java.lang.NumberFormatException",
+        "ctor.exp=1E+3",
+        "ctor.expNeg=0.015",
+        "ctor.expPlus=1E+3",
+        "ctor.expZero=0E+5",
+        "ctor.leadingZero.scale=4",
+        "ctor.leadingZero=1.5000",
+        "ctor.long.min=-9223372036854775808",
+        "ctor.negZero.scale=2",
+        "ctor.negZero=0.0",
+        "ctor.null=exception=java.lang.NullPointerException",
+        "ctor.onlyMinus=exception=java.lang.NumberFormatException",
+        "ctor.onlyPlus=exception=java.lang.NumberFormatException",
+        "ctor.plus=1.5"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "BigDecimalProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "abs=1.5",
+        "add=0.3",
+        "compareTo.diffScale=0",
+        "ctor.0.1=0.1000000000000000055511151231257827021181583404541015625",
+        "divide.noScale=exception=java.lang.ArithmeticException",
+        "divide=0.33333",
+        "divideByZero=exception=java.lang.ArithmeticException",
+        "equals.diffScale=false",
+        "movePointLeft=12.345",
+        "movePointRight=123.45",
+        "multiply=1.21",
+        "negate=1.5",
+        "pow=1024",
+        "precision=5",
+        "scale=4",
+        "scaleNegative=-2",
+        "setScale.CEILING.neg=-1.2",
+        "setScale.FLOOR.neg=-1.3",
+        "setScale.HALF_DOWN=1.23",
+        "setScale.HALF_EVEN2=1.22",
+        "setScale.HALF_EVEN=1.24",
+        "setScale.HALF_UP=1.24",
+        "setScale.UP=1.21",
+        "stripTrailingZeros=1.23",
+        "subtract=0.1",
+        "valueOf.0.1=0.1"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "abs=1.5",
+        "add=0.3",
+        "compareTo.diffScale=0",
+        "ctor.0.1=0.1000000000000000055511151231257827021181583404541015625",
+        "divide.noScale=exception=java.lang.ArithmeticException",
+        "divide=0.33333",
+        "divideByZero=exception=java.lang.ArithmeticException",
+        "equals.diffScale=false",
+        "movePointLeft=12.345",
+        "movePointRight=123.45",
+        "multiply=1.21",
+        "negate=1.5",
+        "pow=1024",
+        "precision=5",
+        "scale=4",
+        "scaleNegative=-2",
+        "setScale.CEILING.neg=-1.2",
+        "setScale.FLOOR.neg=-1.3",
+        "setScale.HALF_DOWN=1.23",
+        "setScale.HALF_EVEN2=1.22",
+        "setScale.HALF_EVEN=1.24",
+        "setScale.HALF_UP=1.24",
+        "setScale.UP=1.21",
+        "stripTrailingZeros=1.23",
+        "subtract=0.1",
+        "valueOf.0.1=0.1"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "BigIntegerProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "add=123456789012345678901234567891",
+        "bitLength.0=0",
+        "bitLength.big=9",
+        "bitLength.neg1=0",
+        "ctor.empty=exception=java.lang.NumberFormatException",
+        "ctor.null=exception=java.lang.NullPointerException",
+        "ctor.radix37=exception=java.lang.NumberFormatException",
+        "fatal=exception=java.lang.NumberFormatException",
+        "gcd=6",
+        "isProbablePrime.100=false",
+        "isProbablePrime.97=true",
+        "mod.neg=2",
+        "modInverse.nonCoprime=exception=java.lang.ArithmeticException",
+        "modInverse=4",
+        "multiply=999999999998000000000001",
+        "pow=3486784401",
+        "remainder.neg=-1",
+        "shiftLeft=1267650600228229401496703205376",
+        "shiftRight=1024",
+        "toString.neg=-255",
+        "toString.radix36=73",
+        "valueOf.cache=true"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "add=123456789012345678901234567891",
+        "bitLength.0=0",
+        "bitLength.big=9",
+        "bitLength.neg1=0",
+        "ctor.empty=exception=java.lang.NumberFormatException",
+        "ctor.null=exception=java.lang.NullPointerException",
+        "ctor.radix37=exception=java.lang.NumberFormatException",
+        "fatal=exception=java.lang.NumberFormatException",
+        "gcd=6",
+        "isProbablePrime.100=false",
+        "isProbablePrime.97=true",
+        "mod.neg=2",
+        "modInverse.nonCoprime=exception=java.lang.ArithmeticException",
+        "modInverse=4",
+        "multiply=999999999998000000000001",
+        "pow=3486784401",
+        "remainder.neg=-1",
+        "shiftLeft=1267650600228229401496703205376",
+        "shiftRight=1024",
+        "toString.neg=-255",
+        "toString.radix36=73",
+        "valueOf.cache=true"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "BinarySearchProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "dup=3",
+        "empty=-1",
+        "first=0",
+        "found=3",
+        "last=6",
+        "listFound=2",
+        "listMissing=-3",
+        "missing.after=-8",
+        "missing.before=-1",
+        "missing.mid=-5",
+        "stringFound=1",
+        "stringMissing=-2"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "dup=3",
+        "empty=-1",
+        "first=0",
+        "found=3",
+        "last=6",
+        "listFound=2",
+        "listMissing=-3",
+        "missing.after=-8",
+        "missing.before=-1",
+        "missing.mid=-5",
+        "stringFound=1",
+        "stringMissing=-2"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "BooleanProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "hashCode.true=1231",
+        "parse.TRUE=true",
+        "parse.empty=false",
+        "parse.garbage=false",
+        "parse.null=false",
+        "parse.true=true",
+        "toString.true=true",
+        "valueOf.null=false",
+        "valueOf.same=true"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "hashCode.true=1231",
+        "parse.TRUE=true",
+        "parse.empty=false",
+        "parse.garbage=false",
+        "parse.null=false",
+        "parse.true=true",
+        "toString.true=true",
+        "valueOf.null=false",
+        "valueOf.same=true"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "CalendarProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "epoch.DAY=1",
+        "epoch.DAY_OF_WEEK=5",
+        "epoch.HOUR=0",
+        "epoch.MONTH=0",
+        "epoch.YEAR=1970",
+        "epoch.firstDayOfWeek=1",
+        "epoch.minimalDays=1",
+        "isLeap.1900=false",
+        "isLeap.2024=true",
+        "lenientFalse.compute=exception=java.lang.IllegalArgumentException",
+        "offsetMillis2=1717223400000",
+        "offsetMillis=1717243200000",
+        "offsetZone=19800000"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "epoch.DAY=1",
+        "epoch.DAY_OF_WEEK=5",
+        "epoch.HOUR=0",
+        "epoch.MONTH=0",
+        "epoch.YEAR=1970",
+        "epoch.firstDayOfWeek=1",
+        "epoch.minimalDays=1",
+        "isLeap.1900=false",
+        "isLeap.2024=true",
+        "lenientFalse.compute=exception=java.lang.IllegalArgumentException",
+        "offsetMillis2=1717223400000",
+        "offsetMillis=1717243200000",
+        "offsetZone=19800000"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "CharacterProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "charCount.emoji=2",
+        "digit.A=10",
+        "digit.arabic=1",
+        "digit.romNum=-1",
+        "digit.z=35",
+        "forDigit.10=a",
+        "forDigit.35=z",
+        "forDigit.neg=\u0000",
+        "forDigit.radix37=\u0000",
+        "getType.ascii=1",
+        "getType.emoji=28",
+        "isAlphabetic.greek=true",
+        "isIdeographic.han=true",
+        "isLetter.cherokee=true",
+        "isSpaceChar.nbsp=true",
+        "isSupplementary=true",
+        "isWhitespace.nbsp=false",
+        "isWhitespace.tab=true",
+        "toChars.emoji=\ud83d\ude00",
+        "toLowerCase.tr=i",
+        "toUpperCase.ss=\u00df"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "charCount.emoji=2",
+        "digit.A=10",
+        "digit.arabic=1",
+        "digit.romNum=-1",
+        "digit.z=35",
+        "forDigit.10=a",
+        "forDigit.35=z",
+        "forDigit.neg=\u0000",
+        "forDigit.radix37=\u0000",
+        "getType.ascii=1",
+        "getType.emoji=28",
+        "isAlphabetic.greek=true",
+        "isIdeographic.han=true",
+        "isLetter.cherokee=true",
+        "isSpaceChar.nbsp=true",
+        "isSupplementary=true",
+        "isWhitespace.nbsp=false",
+        "isWhitespace.tab=true",
+        "toChars.emoji=\ud83d\ude00",
+        "toLowerCase.tr=i",
+        "toUpperCase.ss=\u00df"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "CollectionSortProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "sort.nullList=exception=java.lang.NullPointerException",
+        "sort.withNull=exception=java.lang.NullPointerException",
+        "sorted.caseInsensitive=[Apple, apple, banana, cherry]",
+        "sorted.reverse=[4, 3, 2, 1]",
+        "sorted.strings=[Apple, apple, banana, cherry]",
+        "sorted=[-2147483648, -1, -1, 0, 2, 3, 100, 2147483647]",
+        "stable=[1, 1, 1]"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "sort.nullList=exception=java.lang.NullPointerException",
+        "sort.withNull=exception=java.lang.NullPointerException",
+        "sorted.caseInsensitive=[Apple, apple, banana, cherry]",
+        "sorted.reverse=[4, 3, 2, 1]",
+        "sorted.strings=[Apple, apple, banana, cherry]",
+        "sorted=[-2147483648, -1, -1, 0, 2, 3, 100, 2147483647]",
+        "stable=[1, 1, 1]"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "DateProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "after=true",
+        "before=true",
+        "compareTo.equal=0",
+        "compareTo.null=exception=java.lang.NullPointerException",
+        "compareTo=-1",
+        "equals.sameMillis=true",
+        "equals=true",
+        "getTime.epoch=0",
+        "hashCode=0",
+        "toString.2009=Fri Feb 13 23:31:30 GMT 2009",
+        "toString.epoch=Thu Jan 01 00:00:00 GMT 1970"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "after=true",
+        "before=true",
+        "compareTo.equal=0",
+        "compareTo.null=exception=java.lang.NullPointerException",
+        "compareTo=-1",
+        "equals.sameMillis=true",
+        "equals=true",
+        "getTime.epoch=0",
+        "hashCode=0",
+        "toString.2009=Fri Feb 13 23:31:30 GMT 2009",
+        "toString.epoch=Thu Jan 01 00:00:00 GMT 1970"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "DecimalFormatProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "group=1,234,567.89",
+        "halfEven.1.225=1.23",
+        "halfEven.1.235=1.24",
+        "halfUp.1.235=1.24",
+        "multiplier=3",
+        "negParen=(1,234)",
+        "pad=0012.500",
+        "parse.garbage=exception=java.text.ParseException",
+        "parse=1234.56",
+        "percentPattern=12.5%",
+        "posParen=1,234",
+        "round=0.123",
+        "sci=1.23E4",
+        "toPattern=#0000.00"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "group=1,234,567.89",
+        "halfEven.1.225=1.23",
+        "halfEven.1.235=1.24",
+        "halfUp.1.235=1.24",
+        "multiplier=3",
+        "negParen=(1,234)",
+        "pad=0012.500",
+        "parse.garbage=exception=java.text.ParseException",
+        "parse=1234.56",
+        "percentPattern=12.5%",
+        "posParen=1,234",
+        "round=0.123",
+        "sci=1.23E4",
+        "toPattern=#0000.00"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "DoubleParseProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "bitNegZero=-9223372036854775808",
+        "bitPosZero=0",
+        "isNaN=true",
+        "parse.MAX=1.7976931348623157E308",
+        "parse.dSuffix=1.0",
+        "parse.empty=exception=java.lang.NumberFormatException",
+        "parse.fSuffix=1.0",
+        "parse.hex=1.0",
+        "parse.hexNeg=-3.0",
+        "parse.inf=Infinity",
+        "parse.minSubnormal=4.9E-324",
+        "parse.nan=NaN",
+        "parse.negInf=-Infinity",
+        "parse.negZero=-0.0",
+        "parse.null=exception=java.lang.NullPointerException",
+        "parse.overflow=Infinity",
+        "parse.underflow=0.0"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "bitNegZero=-9223372036854775808",
+        "bitPosZero=0",
+        "isNaN=true",
+        "parse.MAX=1.7976931348623157E308",
+        "parse.dSuffix=1.0",
+        "parse.empty=exception=java.lang.NumberFormatException",
+        "parse.fSuffix=1.0",
+        "parse.hex=1.0",
+        "parse.hexNeg=-3.0",
+        "parse.inf=Infinity",
+        "parse.minSubnormal=4.9E-324",
+        "parse.nan=NaN",
+        "parse.negInf=-Infinity",
+        "parse.negZero=-0.0",
+        "parse.null=exception=java.lang.NullPointerException",
+        "parse.overflow=Infinity",
+        "parse.underflow=0.0"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "DoubleToStringProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "toHex.0=0x1.999999999999ap-4",
+        "toHex.10=0x1.5bf0a8b145769p1",
+        "toHex.11=0x1.0p-1",
+        "toHex.12=0x1.0p1",
+        "toHex.13=0x1.e848p19",
+        "toHex.14=0x1.e847fffffffffp19",
+        "toHex.15=0x1.0147ae147ae14p0",
+        "toHex.16=0x1.edd3c07fb4c98p6",
+        "toHex.17=0x1.921fb54442d18p1",
+        "toHex.18=-0x0.0p0",
+        "toHex.19=0x1.12e0be826d695p-31",
+        "toHex.1=0x1.999999999999ap-3",
+        "toHex.2=0x1.3333333333333p-2",
+        "toHex.3=0x1.5555555555555p-2",
+        "toHex.4=0x1.52d02c7e14af6p76",
+        "toHex.5=0x1.82db34012b251p-77",
+        "toHex.6=0x1.0p-1022",
+        "toHex.7=0x0.0000000000001p-1022",
+        "toHex.8=0x1.fffffffffffffp1023",
+        "toHex.9=0x1.921fb54442d18p1",
+        "toString.0=0.1",
+        "toString.10=2.718281828459045",
+        "toString.11=0.5",
+        "toString.12=2.0",
+        "toString.13=1000000.0",
+        "toString.14=999999.9999999999",
+        "toString.15=1.005",
+        "toString.16=123.45678901234567",
+        "toString.17=3.141592653589793",
+        "toString.18=-0.0",
+        "toString.19=5.0E-10",
+        "toString.1=0.2",
+        "toString.2=0.3",
+        "toString.3=0.3333333333333333",
+        "toString.4=9.999999999999999E22",
+        "toString.5=1.0E-23",
+        "toString.6=2.2250738585072014E-308",
+        "toString.7=4.9E-324",
+        "toString.8=1.7976931348623157E308",
+        "toString.9=3.141592653589793",
+        "toString.minNormal=2.2250738585072014E-308",
+        "toString.minValue=4.9E-324",
+        "toString.nan=NaN",
+        "toString.negInf=-Infinity",
+        "toString.posInf=Infinity"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "toHex.0=0x1.999999999999ap-4",
+        "toHex.10=0x1.5bf0a8b145769p1",
+        "toHex.11=0x1.0p-1",
+        "toHex.12=0x1.0p1",
+        "toHex.13=0x1.e848p19",
+        "toHex.14=0x1.e847fffffffffp19",
+        "toHex.15=0x1.0147ae147ae14p0",
+        "toHex.16=0x1.edd3c07fb4c98p6",
+        "toHex.17=0x1.921fb54442d18p1",
+        "toHex.18=-0x0.0p0",
+        "toHex.19=0x1.12e0be826d695p-31",
+        "toHex.1=0x1.999999999999ap-3",
+        "toHex.2=0x1.3333333333333p-2",
+        "toHex.3=0x1.5555555555555p-2",
+        "toHex.4=0x1.52d02c7e14af6p76",
+        "toHex.5=0x1.82db34012b251p-77",
+        "toHex.6=0x1.0p-1022",
+        "toHex.7=0x0.0000000000001p-1022",
+        "toHex.8=0x1.fffffffffffffp1023",
+        "toHex.9=0x1.921fb54442d18p1",
+        "toString.0=0.1",
+        "toString.10=2.718281828459045",
+        "toString.11=0.5",
+        "toString.12=2.0",
+        "toString.13=1000000.0",
+        "toString.14=999999.9999999999",
+        "toString.15=1.005",
+        "toString.16=123.45678901234567",
+        "toString.17=3.141592653589793",
+        "toString.18=-0.0",
+        "toString.19=5.0E-10",
+        "toString.1=0.2",
+        "toString.2=0.3",
+        "toString.3=0.3333333333333333",
+        "toString.4=1.0E23",
+        "toString.5=1.0E-23",
+        "toString.6=2.2250738585072014E-308",
+        "toString.7=4.9E-324",
+        "toString.8=1.7976931348623157E308",
+        "toString.9=3.141592653589793",
+        "toString.minNormal=2.2250738585072014E-308",
+        "toString.minValue=4.9E-324",
+        "toString.nan=NaN",
+        "toString.negInf=-Infinity",
+        "toString.posInf=Infinity"
+      ],
+      "stderr": ""
+    },
+    "category": "divergent",
+    "only_jdk8": [
+      "toString.4=9.999999999999999E22"
+    ],
+    "only_jdk27": [
+      "toString.4=1.0E23"
+    ],
+    "detail": "1 lines only on JDK-8, 1 lines only on JDK-27"
+  },
+  {
+    "probe": "IntegerParseProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "decode.hex=16",
+        "decode.negHex=-16",
+        "decode.octal=8",
+        "parse.MAX=2147483647",
+        "parse.MAXp1=exception=java.lang.NumberFormatException",
+        "parse.MIN=-2147483648",
+        "parse.MINm1=exception=java.lang.NumberFormatException",
+        "parse.arabicDigit=1",
+        "parse.empty=exception=java.lang.NumberFormatException",
+        "parse.hexNegMin=-2147483648",
+        "parse.hexOverflow=exception=java.lang.NumberFormatException",
+        "parse.hexPosMax=2147483647",
+        "parse.minus=-42",
+        "parse.null=exception=java.lang.NumberFormatException",
+        "parse.plus=42",
+        "parse.radix1=exception=java.lang.NumberFormatException",
+        "parse.radix36=35",
+        "parse.radix37=exception=java.lang.NumberFormatException",
+        "parse.spaceLead=exception=java.lang.NumberFormatException",
+        "parse.spaceTrail=exception=java.lang.NumberFormatException",
+        "toHexString.MIN=80000000",
+        "toOctalString.MIN=20000000000",
+        "toString.MIN=-2147483648",
+        "toString.radix36.MAX=zik0zj",
+        "valueOf.cache127=true",
+        "valueOf.cache128=false"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "decode.hex=16",
+        "decode.negHex=-16",
+        "decode.octal=8",
+        "parse.MAX=2147483647",
+        "parse.MAXp1=exception=java.lang.NumberFormatException",
+        "parse.MIN=-2147483648",
+        "parse.MINm1=exception=java.lang.NumberFormatException",
+        "parse.arabicDigit=1",
+        "parse.empty=exception=java.lang.NumberFormatException",
+        "parse.hexNegMin=-2147483648",
+        "parse.hexOverflow=exception=java.lang.NumberFormatException",
+        "parse.hexPosMax=2147483647",
+        "parse.minus=-42",
+        "parse.null=exception=java.lang.NumberFormatException",
+        "parse.plus=42",
+        "parse.radix1=exception=java.lang.NumberFormatException",
+        "parse.radix36=35",
+        "parse.radix37=exception=java.lang.NumberFormatException",
+        "parse.spaceLead=exception=java.lang.NumberFormatException",
+        "parse.spaceTrail=exception=java.lang.NumberFormatException",
+        "toHexString.MIN=80000000",
+        "toOctalString.MIN=20000000000",
+        "toString.MIN=-2147483648",
+        "toString.radix36.MAX=zik0zj",
+        "valueOf.cache127=true",
+        "valueOf.cache128=false"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "LongParseProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "parse.MAX=9223372036854775807",
+        "parse.MAXp1=exception=java.lang.NumberFormatException",
+        "parse.MIN=-9223372036854775808",
+        "parse.MINm1=exception=java.lang.NumberFormatException",
+        "parse.empty=exception=java.lang.NumberFormatException",
+        "parse.hexMin=-9223372036854775808",
+        "parse.hexOverflow=exception=java.lang.NumberFormatException",
+        "parse.null=exception=java.lang.NumberFormatException",
+        "parse.plus=42",
+        "parse.radix36=1679615",
+        "parse.radix37=exception=java.lang.NumberFormatException",
+        "toBinaryString.MIN=1000000000000000000000000000000000000000000000000000000000000000",
+        "toHexString.MIN=8000000000000000",
+        "toOctalString.MIN=1000000000000000000000",
+        "toString.MIN=-9223372036854775808",
+        "toString.radix36.MAX=1y2p0ij32e8e7"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "parse.MAX=9223372036854775807",
+        "parse.MAXp1=exception=java.lang.NumberFormatException",
+        "parse.MIN=-9223372036854775808",
+        "parse.MINm1=exception=java.lang.NumberFormatException",
+        "parse.empty=exception=java.lang.NumberFormatException",
+        "parse.hexMin=-9223372036854775808",
+        "parse.hexOverflow=exception=java.lang.NumberFormatException",
+        "parse.null=exception=java.lang.NumberFormatException",
+        "parse.plus=42",
+        "parse.radix36=1679615",
+        "parse.radix37=exception=java.lang.NumberFormatException",
+        "toBinaryString.MIN=1000000000000000000000000000000000000000000000000000000000000000",
+        "toHexString.MIN=8000000000000000",
+        "toOctalString.MIN=1000000000000000000000",
+        "toString.MIN=-9223372036854775808",
+        "toString.radix36.MAX=1y2p0ij32e8e7"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "MapProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "hash.afterRemove=1",
+        "hash.contains=true",
+        "hash.get=1",
+        "hash.getOrDefault=-1",
+        "hash.nullKey=null",
+        "hash.nullKeyAfter=42",
+        "hash.size=1",
+        "linked.contains=true",
+        "linked.get=1",
+        "linked.getRemoved=null",
+        "linked.keySet=[b, a, c]",
+        "linked.overwrite=10",
+        "linked.removed=2",
+        "linked.size=3",
+        "unmodifiable.put=exception=java.lang.UnsupportedOperationException"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "hash.afterRemove=1",
+        "hash.contains=true",
+        "hash.get=1",
+        "hash.getOrDefault=-1",
+        "hash.nullKey=null",
+        "hash.nullKeyAfter=42",
+        "hash.size=1",
+        "linked.contains=true",
+        "linked.get=1",
+        "linked.getRemoved=null",
+        "linked.keySet=[b, a, c]",
+        "linked.overwrite=10",
+        "linked.removed=2",
+        "linked.size=3",
+        "unmodifiable.put=exception=java.lang.UnsupportedOperationException"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "MathProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "IEEEremainder=1.0",
+        "abs.doubleNeg=3.14",
+        "abs.min=-2147483648",
+        "ceil.neg=-1.0",
+        "copySign=-1.0",
+        "floor.neg=-2.0",
+        "max.nan=NaN",
+        "max.negZero=0.0",
+        "min.nan=NaN",
+        "min.negZero=-0.0",
+        "nextDown.0=-4.9E-324",
+        "nextUp.0=4.9E-324",
+        "pow.2.10=1024.0",
+        "round.longMax=9223372036854775807",
+        "round.negHalf2=-2",
+        "round.negHalf=-1",
+        "round.posHalf=2",
+        "scalb=1024.0",
+        "sqrt.neg=NaN",
+        "ulp.0=4.9E-324",
+        "ulp.max=1.9958403095347198E292"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "IEEEremainder=1.0",
+        "abs.doubleNeg=3.14",
+        "abs.min=-2147483648",
+        "ceil.neg=-1.0",
+        "copySign=-1.0",
+        "floor.neg=-2.0",
+        "max.nan=NaN",
+        "max.negZero=0.0",
+        "min.nan=NaN",
+        "min.negZero=-0.0",
+        "nextDown.0=-4.9E-324",
+        "nextUp.0=4.9E-324",
+        "pow.2.10=1024.0",
+        "round.longMax=9223372036854775807",
+        "round.negHalf2=-2",
+        "round.negHalf=-1",
+        "round.posHalf=2",
+        "scalb=1024.0",
+        "sqrt.neg=NaN",
+        "ulp.0=4.9E-324",
+        "ulp.max=1.99584030953472E292"
+      ],
+      "stderr": ""
+    },
+    "category": "divergent",
+    "only_jdk8": [
+      "ulp.max=1.9958403095347198E292"
+    ],
+    "only_jdk27": [
+      "ulp.max=1.99584030953472E292"
+    ],
+    "detail": "1 lines only on JDK-8, 1 lines only on JDK-27"
+  },
+  {
+    "probe": "NumberFormatProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "currency.neg=($1,234.56)",
+        "currency=$1,234.56",
+        "double=1,234.567",
+        "french=1\u00a0234\u00a0567,89",
+        "german=1.234.567,89",
+        "int=1,234,567",
+        "integer=1,235",
+        "maxFrac=1,234.57",
+        "minFrac=1,234.500",
+        "noGroup=1234567.000",
+        "parseIntOnly=1234",
+        "percent.1=100%",
+        "percent=12%"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "currency.neg=-$1,234.56",
+        "currency=$1,234.56",
+        "double=1,234.567",
+        "french=1\u202f234\u202f567,89",
+        "german=1.234.567,89",
+        "int=1,234,567",
+        "integer=1,235",
+        "maxFrac=1,234.57",
+        "minFrac=1,234.500",
+        "noGroup=1234567.000",
+        "parseIntOnly=1234",
+        "percent.1=100%",
+        "percent=12%"
+      ],
+      "stderr": ""
+    },
+    "category": "divergent",
+    "only_jdk8": [
+      "currency.neg=($1,234.56)",
+      "french=1\u00a0234\u00a0567,89"
+    ],
+    "only_jdk27": [
+      "currency.neg=-$1,234.56",
+      "french=1\u202f234\u202f567,89"
+    ],
+    "detail": "2 lines only on JDK-8, 2 lines only on JDK-27"
+  },
+  {
+    "probe": "PropertiesProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "get.null=exception=java.lang.NullPointerException",
+        "load.a=1",
+        "load.b=2",
+        "load.c:colon=3",
+        "load.d back=slash=null",
+        "load.empty=",
+        "roundtrip.backslash=back\\slash",
+        "roundtrip.colon=colon:value",
+        "roundtrip.equals=equals=value",
+        "roundtrip.leadingSpace= leading",
+        "roundtrip.plain=hello world",
+        "roundtrip.tab=tab\tvalue",
+        "roundtrip.unicode=caf\u00e9",
+        "store.line=backslash=back\\\\slash",
+        "store.line=colon=colon\\:value",
+        "store.line=equals=equals\\=value",
+        "store.line=leadingSpace=\\ leading",
+        "store.line=plain=hello world",
+        "store.line=tab=tab\\tvalue",
+        "store.line=unicode=caf\u00e9"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "get.null=exception=java.lang.NullPointerException",
+        "load.a=1",
+        "load.b=2",
+        "load.c:colon=3",
+        "load.d back=slash=null",
+        "load.empty=",
+        "roundtrip.backslash=back\\slash",
+        "roundtrip.colon=colon:value",
+        "roundtrip.equals=equals=value",
+        "roundtrip.leadingSpace= leading",
+        "roundtrip.plain=hello world",
+        "roundtrip.tab=tab\tvalue",
+        "roundtrip.unicode=caf\u00e9",
+        "store.line=backslash=back\\\\slash",
+        "store.line=colon=colon\\:value",
+        "store.line=equals=equals\\=value",
+        "store.line=leadingSpace=\\ leading",
+        "store.line=plain=hello world",
+        "store.line=tab=tab\\tvalue",
+        "store.line=unicode=caf\u00e9"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "RegexGroupNameProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "duplicateName=exception=java.util.regex.PatternSyntaxException",
+        "group.byIndex=03",
+        "group.day=15",
+        "group.missing=exception=java.lang.IllegalArgumentException",
+        "group.month=03",
+        "group.negIndex=exception=java.lang.IndexOutOfBoundsException",
+        "group.year=2024",
+        "matches=true",
+        "numbered.count=2",
+        "numbered.group0=ab",
+        "numbered.group2=b"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "duplicateName=exception=java.util.regex.PatternSyntaxException",
+        "group.byIndex=03",
+        "group.day=15",
+        "group.missing=exception=java.lang.IllegalArgumentException",
+        "group.month=03",
+        "group.negIndex=exception=java.lang.IndexOutOfBoundsException",
+        "group.year=2024",
+        "matches=true",
+        "numbered.count=2",
+        "numbered.group0=ab",
+        "numbered.group2=b"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "RegexLookbehindProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "boundedLookbehind2=true",
+        "boundedLookbehind=true",
+        "lookahead=true",
+        "lookbehind.mid=true",
+        "lookbehind.nullChar=true",
+        "lookbehind=true",
+        "negLookahead=true",
+        "negLookbehind=true",
+        "unboundedLookbehind=(?<=a+)b",
+        "unboundedLookbehindStar=(?<=a*)b"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "boundedLookbehind2=true",
+        "boundedLookbehind=true",
+        "lookahead=true",
+        "lookbehind.mid=true",
+        "lookbehind.nullChar=true",
+        "lookbehind=true",
+        "negLookahead=true",
+        "negLookbehind=true",
+        "unboundedLookbehind=(?<=a+)b",
+        "unboundedLookbehindStar=(?<=a*)b"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "RegexQuantifierProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "dot.noNewline=false",
+        "dotAll.newline=true",
+        "emptyMatch=true",
+        "exact=true",
+        "greedy=true",
+        "nestedPlus.backtrack=false",
+        "possessive=true",
+        "quantifier.badOrder=exception=java.util.regex.PatternSyntaxException",
+        "quantifier.loneBrace=exception=java.util.regex.PatternSyntaxException",
+        "range=true",
+        "rangeOpen=true",
+        "reluctant=true",
+        "wordBoundary=true"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "dot.noNewline=false",
+        "dotAll.newline=true",
+        "emptyMatch=true",
+        "exact=true",
+        "greedy=true",
+        "nestedPlus.backtrack=false",
+        "possessive=true",
+        "quantifier.badOrder=exception=java.util.regex.PatternSyntaxException",
+        "quantifier.loneBrace=exception=java.util.regex.PatternSyntaxException",
+        "range=true",
+        "rangeOpen=true",
+        "reluctant=true",
+        "wordBoundary=true"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "RegexSplitProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "split.limit2=[a, b,c]",
+        "split.limitNeg=[a, b, ]",
+        "split.nullInput=exception=java.lang.NullPointerException",
+        "split.nullPattern=exception=java.lang.NullPointerException",
+        "split.trailingEmpty=[a, b]",
+        "split.word=[, a, b]",
+        "split.zeroWidth=[a, b]",
+        "split.zeroWidthEmpty=[]"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "split.limit2=[a, b,c]",
+        "split.limitNeg=[a, b, ]",
+        "split.nullInput=exception=java.lang.NullPointerException",
+        "split.nullPattern=exception=java.lang.NullPointerException",
+        "split.trailingEmpty=[a, b]",
+        "split.word=[, a, b]",
+        "split.zeroWidth=[a, b]",
+        "split.zeroWidthEmpty=[]"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "SimpleDateFormatProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "format.day1=1970-01-02 00:00:00.000",
+        "format.epoch=1970-01-01 00:00:00.000",
+        "format.named=Thursday, January 1, 1970",
+        "format.neg=1969-12-31 23:59:59.999",
+        "parse.2digit=-61410009600000",
+        "parse.basic=1710460800000",
+        "parse.garbage=exception=java.text.ParseException",
+        "parse.lenient.rollover=1709251200000",
+        "parse.lenientFalse.bad=exception=java.text.ParseException",
+        "parse.lenientFalse.ok=1710464523004"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "format.day1=1970-01-02 00:00:00.000",
+        "format.epoch=1970-01-01 00:00:00.000",
+        "format.named=Thursday, January 1, 1970",
+        "format.neg=1969-12-31 23:59:59.999",
+        "parse.2digit=-61410009600000",
+        "parse.basic=1710460800000",
+        "parse.garbage=exception=java.text.ParseException",
+        "parse.lenient.rollover=1709251200000",
+        "parse.lenientFalse.bad=exception=java.text.ParseException",
+        "parse.lenientFalse.ok=1710464523004"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "StringFormatProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "fmt.badSpec=exception=java.util.IllegalFormatConversionException",
+        "fmt.badType=exception=java.util.UnknownFormatConversionException",
+        "fmt.float=1.01",
+        "fmt.hex=ff",
+        "fmt.leftString=[hi        ]",
+        "fmt.negHex=ffffffff",
+        "fmt.octal=10",
+        "fmt.pad=00042",
+        "fmt.percent=13%",
+        "fmt.precisionStr=abc",
+        "fmt.scientific=1.234568e+04",
+        "fmt.string=[        hi]",
+        "fmt.unicode=\u20ac"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "fmt.badSpec=exception=java.util.IllegalFormatConversionException",
+        "fmt.badType=exception=java.util.UnknownFormatConversionException",
+        "fmt.float=1.01",
+        "fmt.hex=ff",
+        "fmt.leftString=[hi        ]",
+        "fmt.negHex=ffffffff",
+        "fmt.octal=10",
+        "fmt.pad=00042",
+        "fmt.percent=13%",
+        "fmt.precisionStr=abc",
+        "fmt.scientific=1.234568e+04",
+        "fmt.string=[        hi]",
+        "fmt.unicode=\u20ac"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "StringGetBytesProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "bytes.bad=exception=java.io.UnsupportedEncodingException",
+        "bytes.empty=[]",
+        "bytes.iso=[104, -23, 108, 108, 111]",
+        "bytes.nullName=exception=java.lang.NullPointerException",
+        "bytes.utf16=[-2, -1, 0, 65]",
+        "bytes.utf8=[104, -61, -87, 108, 108, 111]",
+        "newString.bad=exception=java.io.UnsupportedEncodingException",
+        "newString.utf8=h\u00e9"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "bytes.bad=exception=java.io.UnsupportedEncodingException",
+        "bytes.empty=[]",
+        "bytes.iso=[104, -23, 108, 108, 111]",
+        "bytes.nullName=exception=java.lang.NullPointerException",
+        "bytes.utf16=[-2, -1, 0, 65]",
+        "bytes.utf8=[104, -61, -87, 108, 108, 111]",
+        "newString.bad=exception=java.io.UnsupportedEncodingException",
+        "newString.utf8=h\u00e9"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "StringIndexOfProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "endsWith.suffix=true",
+        "idx.char=1",
+        "idx.empty=0",
+        "idx.fromNeg=0",
+        "idx.fromTooBig=-1",
+        "idx.miss=-1",
+        "idxString.missing=-1",
+        "idxString.surrogate=2",
+        "lastIdx.empty=3",
+        "lastIdx.fromNeg=-1",
+        "lastIdx.fromTooBig=2",
+        "lastIdx.miss=-1",
+        "startsWith.offset=true",
+        "startsWith.prefix=true"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "endsWith.suffix=true",
+        "idx.char=1",
+        "idx.empty=0",
+        "idx.fromNeg=0",
+        "idx.fromTooBig=-1",
+        "idx.miss=-1",
+        "idxString.missing=-1",
+        "idxString.surrogate=2",
+        "lastIdx.empty=3",
+        "lastIdx.fromNeg=-1",
+        "lastIdx.fromTooBig=2",
+        "lastIdx.miss=-1",
+        "startsWith.offset=true",
+        "startsWith.prefix=true"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "StringNewApiProbe",
+    "jdk8": {
+      "compile_rc": 1,
+      "compile_msg": "/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringNewApiProbe.java:15: error: cannot find symbol\n            ex(\"isBlank.empty\", () -> emit(\"isBlank.empty\", \"\".isBlank()));\n                                                              ^\n  symbol:   method isBlank()\n  location: class String\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringNewApiProbe.java:16: error: cannot find symbol\n            ex(\"isBlank.space\", () -> emit(\"isBlank.space\", \"  \".isBlank()));\n                                                                ^\n  symbol:   method isBlank()\n  location: class String\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringNewApiProbe.java:17: error: cannot find symbol\n            ex(\"isBlank.text\", () -> emit(\"isBlank.text\", \" x \".isBlank()));\n                                                               ^\n  symbol:   method isBlank()\n  location: class String\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringNewApiProbe.java:18: error: cannot find symbol\n            ex(\"strip\", () -> emit(\"strip\", \"  hi  \".strip()));\n                                                    ^\n  symbol:   method strip()\n  location: class String\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringNewApiProbe.java:19: error: cannot find symbol\n            ex(\"stripLeading\", () -> emit(\"stripLeading\", \"  hi  \".stripLeading()));\n                                                                  ^\n  symbol:   method stripLeading()\n  location: class String\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringNewApiProbe.java:20: error: cannot find symbol\n            ex(\"stripTrailing\", () -> emit(\"stripTrailing\", \"  hi  \".stripTrailing()));\n                                                                    ^\n  symbol:   method stripTrailing()\n  location: class String\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringNewApiProbe.java:21: error: cannot find symbol\n            ex(\"repeat\", () -> emit(\"repeat\", \"ab\".repeat(3)));\n                                                  ^\n  symbol:   method repeat(int)\n  location: class String\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringNewApiProbe.java:22: error: cannot find symbol\n            ex(\"indent\", () -> emit(\"indent\", \"a\\nb\".indent(2)));\n                                                    ^\n  symbol:   method indent(int)\n  location: class String\n8 errors",
+      "run_rc": null,
+      "lines": [],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "  b",
+        "indent=  a",
+        "isBlank.empty=true",
+        "isBlank.space=true",
+        "isBlank.text=false",
+        "repeat=ababab",
+        "strip=hi",
+        "stripLeading=hi",
+        "stripTrailing=  hi"
+      ],
+      "stderr": ""
+    },
+    "category": "spec_added",
+    "detail": "compiles on JDK-27 only"
+  },
+  {
+    "probe": "StringSplitProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "split.empty=[]",
+        "split.emptyStringEmptyRegex=[]",
+        "split.leading=[, a, b]",
+        "split.limit0=[a, b]",
+        "split.limit2=[a, b,c]",
+        "split.limitBig=[a, b, c]",
+        "split.limitNeg=[a, b, ]",
+        "split.nullRegex=exception=java.lang.NullPointerException",
+        "split.regexEmpty=[a, b, c]",
+        "split.simple=[a, b, c]",
+        "split.trailing=[a, b]"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "split.empty=[]",
+        "split.emptyStringEmptyRegex=[]",
+        "split.leading=[, a, b]",
+        "split.limit0=[a, b]",
+        "split.limit2=[a, b,c]",
+        "split.limitBig=[a, b, c]",
+        "split.limitNeg=[a, b, ]",
+        "split.nullRegex=exception=java.lang.NullPointerException",
+        "split.regexEmpty=[a, b, c]",
+        "split.simple=[a, b, c]",
+        "split.trailing=[a, b]"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "StringSubstringProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "charAt.0=a",
+        "charAt.3=exception=java.lang.StringIndexOutOfBoundsException",
+        "charAt.neg=exception=java.lang.StringIndexOutOfBoundsException",
+        "codePointAt=128512",
+        "codePointCount=3",
+        "isEmpty.empty=true",
+        "isEmpty.one=false",
+        "length.surrogate=4",
+        "sub.0.0=",
+        "sub.0.3=abc",
+        "sub.1=bc",
+        "sub.beyond=exception=java.lang.StringIndexOutOfBoundsException",
+        "sub.endBeyond=exception=java.lang.StringIndexOutOfBoundsException",
+        "sub.neg1=exception=java.lang.StringIndexOutOfBoundsException",
+        "sub.startGtEnd=exception=java.lang.StringIndexOutOfBoundsException",
+        "sub.whole=abc"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "charAt.0=a",
+        "charAt.3=exception=java.lang.StringIndexOutOfBoundsException",
+        "charAt.neg=exception=java.lang.StringIndexOutOfBoundsException",
+        "codePointAt=128512",
+        "codePointCount=3",
+        "isEmpty.empty=true",
+        "isEmpty.one=false",
+        "length.surrogate=4",
+        "sub.0.0=",
+        "sub.0.3=abc",
+        "sub.1=bc",
+        "sub.beyond=exception=java.lang.StringIndexOutOfBoundsException",
+        "sub.endBeyond=exception=java.lang.StringIndexOutOfBoundsException",
+        "sub.neg1=exception=java.lang.StringIndexOutOfBoundsException",
+        "sub.startGtEnd=exception=java.lang.StringIndexOutOfBoundsException",
+        "sub.whole=abc"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "StringToLowerCaseProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "lower.US.dotless=i\u0307",
+        "lower.ascii=abcxyz",
+        "lower.az=i",
+        "lower.de.ss=\u00df",
+        "lower.georgian=\u2d00",
+        "lower.lt=i\u0307",
+        "lower.stigma=\u03db",
+        "lower.tr.I=\u0131",
+        "upper.US.dotless=I",
+        "upper.ascii=ABCXYZ",
+        "upper.de.ss=SS",
+        "upper.desz=S",
+        "upper.tr.i=\u0130"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "Note: /data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/StringToLowerCaseProbe.java uses or overrides a deprecated API.\nNote: Recompile with -Xlint:deprecation for details.",
+      "run_rc": 0,
+      "lines": [
+        "lower.US.dotless=i\u0307",
+        "lower.ascii=abcxyz",
+        "lower.az=i",
+        "lower.de.ss=\u00df",
+        "lower.georgian=\u2d00",
+        "lower.lt=i\u0307",
+        "lower.stigma=\u03db",
+        "lower.tr.I=\u0131",
+        "upper.US.dotless=I",
+        "upper.ascii=ABCXYZ",
+        "upper.de.ss=SS",
+        "upper.desz=S",
+        "upper.tr.i=\u0130"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "ThreadRemovedApiProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "Note: /data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/ThreadRemovedApiProbe.java uses or overrides a deprecated API.\nNote: Recompile with -Xlint:deprecation for details.",
+      "run_rc": 0,
+      "lines": [
+        "countStackFrames=returned",
+        "destroy=exception=java.lang.NoSuchMethodError",
+        "resume=returned",
+        "stop=returned",
+        "suspend=returned"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 1,
+      "compile_msg": "/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/ThreadRemovedApiProbe.java:16: error: cannot find symbol\n            ex(\"destroy\", () -> { t.destroy(); emit(\"destroy\", \"returned\"); });\n                                   ^\n  symbol:   method destroy()\n  location: variable t of type Thread\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/ThreadRemovedApiProbe.java:17: error: cannot find symbol\n            ex(\"stop\", () -> { t.stop(); emit(\"stop\", \"returned\"); });\n                                ^\n  symbol:   method stop()\n  location: variable t of type Thread\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/ThreadRemovedApiProbe.java:18: error: cannot find symbol\n            ex(\"suspend\", () -> { t.suspend(); emit(\"suspend\", \"returned\"); });\n                                   ^\n  symbol:   method suspend()\n  location: variable t of type Thread\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/ThreadRemovedApiProbe.java:19: error: cannot find symbol\n            ex(\"resume\", () -> { t.resume(); emit(\"resume\", \"returned\"); });\n                                  ^\n  symbol:   method resume()\n  location: variable t of type Thread\n/data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/ThreadRemovedApiProbe.java:20: error: cannot find symbol\n            ex(\"countStackFrames\", () -> { t.countStackFrames(); emit(\"countStackFrames\", \"returned\"); });\n                                            ^\n  symbol:   method countStackFrames()\n  location: variable t of type Thread\n5 errors",
+      "run_rc": null,
+      "lines": [],
+      "stderr": ""
+    },
+    "category": "spec_removed",
+    "detail": "compiles on JDK-8 only"
+  },
+  {
+    "probe": "TimeZoneProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "availableIds.count=631",
+        "defaultId=GMT",
+        "gmtId=GMT",
+        "hasSameRules=true",
+        "nullZone=exception=java.lang.NullPointerException",
+        "ny.rawOffset=-18000000",
+        "ny.useDaylight=true",
+        "plus530.dstSavings=0",
+        "plus530.rawOffset=19800000",
+        "utcId=UTC"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "availableIds.count=632",
+        "defaultId=GMT",
+        "gmtId=GMT",
+        "hasSameRules=true",
+        "nullZone=exception=java.lang.NullPointerException",
+        "ny.rawOffset=-18000000",
+        "ny.useDaylight=true",
+        "plus530.dstSavings=0",
+        "plus530.rawOffset=19800000",
+        "utcId=UTC"
+      ],
+      "stderr": ""
+    },
+    "category": "divergent",
+    "only_jdk8": [
+      "availableIds.count=631"
+    ],
+    "only_jdk27": [
+      "availableIds.count=632"
+    ],
+    "detail": "1 lines only on JDK-8, 1 lines only on JDK-27"
+  },
+  {
+    "probe": "URIProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "authority=user:pass@example.com:8443",
+        "badIPv6=exception=java.net.URISyntaxException",
+        "badSpace=exception=java.net.URISyntaxException",
+        "fragment=frag",
+        "host=example.com",
+        "opaque.schemeSpecific=user@example.com",
+        "opaque=true",
+        "path=/a/b/c",
+        "port=8443",
+        "query=x=1&y=2",
+        "rawPath=/a/b/c",
+        "rawQuery=x=1&y=2",
+        "relativize=https://example.com/a/b/d",
+        "resolve=https://example.com/a/c/d",
+        "scheme=https",
+        "toASCIIString=https://user:pass@example.com:8443/a/b/c?x=1&y=2#frag",
+        "toString=https://user:pass@example.com:8443/a/b/c?x=1&y=2#frag",
+        "userInfo=user:pass"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "authority=user:pass@example.com:8443",
+        "badIPv6=exception=java.net.URISyntaxException",
+        "badSpace=exception=java.net.URISyntaxException",
+        "fragment=frag",
+        "host=example.com",
+        "opaque.schemeSpecific=user@example.com",
+        "opaque=true",
+        "path=/a/b/c",
+        "port=8443",
+        "query=x=1&y=2",
+        "rawPath=/a/b/c",
+        "rawQuery=x=1&y=2",
+        "relativize=https://example.com/a/b/d",
+        "resolve=https://example.com/a/c/d",
+        "scheme=https",
+        "toASCIIString=https://user:pass@example.com:8443/a/b/c?x=1&y=2#frag",
+        "toString=https://user:pass@example.com:8443/a/b/c?x=1&y=2#frag",
+        "userInfo=user:pass"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  },
+  {
+    "probe": "URLProbe",
+    "jdk8": {
+      "compile_rc": 0,
+      "compile_msg": "",
+      "run_rc": 0,
+      "lines": [
+        "authority=example.com:8443",
+        "badProtocol=exception=java.net.MalformedURLException",
+        "defaultPort=443",
+        "externalForm=https://example.com:8443/a/b?q=1#f",
+        "file.file=/tmp/x y",
+        "file.host=",
+        "file.path=/tmp/x y",
+        "file.protocol=file",
+        "file=/a/b?q=1",
+        "host=example.com",
+        "path=/a/b",
+        "port=8443",
+        "protocol=https",
+        "query=q=1",
+        "ref=f"
+      ],
+      "stderr": ""
+    },
+    "jdk27": {
+      "compile_rc": 0,
+      "compile_msg": "Note: /data/yansendao/git/JCK-testsuite/tools/diff_jdk8_27/probes/URLProbe.java uses or overrides a deprecated API.\nNote: Recompile with -Xlint:deprecation for details.",
+      "run_rc": 0,
+      "lines": [
+        "authority=example.com:8443",
+        "badProtocol=exception=java.net.MalformedURLException",
+        "defaultPort=443",
+        "externalForm=https://example.com:8443/a/b?q=1#f",
+        "file.file=/tmp/x y",
+        "file.host=",
+        "file.path=/tmp/x y",
+        "file.protocol=file",
+        "file=/a/b?q=1",
+        "host=example.com",
+        "path=/a/b",
+        "port=8443",
+        "protocol=https",
+        "query=q=1",
+        "ref=f"
+      ],
+      "stderr": ""
+    },
+    "category": "consistent",
+    "detail": ""
+  }
+]
