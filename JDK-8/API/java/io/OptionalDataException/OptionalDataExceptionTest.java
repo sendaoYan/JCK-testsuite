@@ -1,14 +1,18 @@
 /*
  * @test
- * @summary java.io.OptionalDataException conformance: hierarchy and public fields.
+ * @summary java.io.OptionalDataException conformance (pure black-box): real
+ *          triggers — readObject over primitive block data reports length and
+ *          eof=false; the length field counts unread bytes; a class without
+ *          readObject discards trailing custom data.
  * @run main OptionalDataExceptionTest
  */
 
-import java.io.IOException;
-import java.io.ObjectStreamException;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OptionalDataException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+import java.io.Serializable;
 
 public class OptionalDataExceptionTest {
     static int passed;
@@ -18,21 +22,86 @@ public class OptionalDataExceptionTest {
         passed++;
     }
 
-    static void testOptionalDataException() throws Exception {
-        check(IOException.class.isAssignableFrom(OptionalDataException.class),
-              "extends IOException");
-        check(ObjectStreamException.class.isAssignableFrom(OptionalDataException.class),
-              "extends ObjectStreamException");
-        Field length = OptionalDataException.class.getField("length");
-        check(length.getType() == int.class, "length is int");
-        check(Modifier.isPublic(length.getModifiers()), "length is public");
-        Field eof = OptionalDataException.class.getField("eof");
-        check(eof.getType() == boolean.class, "eof is boolean");
-        check(Modifier.isPublic(eof.getModifiers()), "eof is public");
+    static void testBlackBox() throws Exception {
+        // 1. trigger: readObject where the stream holds only primitive data
+        //    (writeObject wrote an int; the reader expects an object)
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeInt(42);
+        }
+        try (ObjectInputStream ois =
+                 new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            ois.readObject();
+            check(false, "readObject over primitive data must throw");
+        } catch (OptionalDataException ode) {
+            check(!ode.eof, "eof=false: primitive data is present");
+            check(ode.length == 4, "length counts the unread primitive bytes (int = 4): " + ode.length);
+        }
+
+        // 2. length scales with the amount of buffered primitive data
+        bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeLong(1L);
+            oos.writeInt(2);
+        }
+        try (ObjectInputStream ois =
+                 new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            ois.readObject();
+        } catch (OptionalDataException ode) {
+            check(ode.length == 12, "length = 8 (long) + 4 (int): " + ode.length);
+        }
+
+        // 3. the data named by the exception is still readable via primitive reads
+        bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeInt(42);
+        }
+        try (ObjectInputStream ois =
+                 new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            try {
+                ois.readObject();
+            } catch (OptionalDataException expected) {
+                check(ois.readInt() == 42, "primitive recoverable after OptionalDataException");
+            }
+        }
+
+        // 4. contrast: consuming the primitive data first lets the object read proceed
+        bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeInt(42);
+            oos.writeObject("after");
+        }
+        try (ObjectInputStream ois =
+                 new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            check(ois.readInt() == 42, "read the int first");
+            check("after".equals(ois.readObject()), "then the object reads fine");
+        }
+
+        // 5. a custom writeObject appending data for a class with no readObject:
+        //    the deserializer skips the optional data and still delivers the object
+        class WriterOnly implements Serializable {
+            private static final long serialVersionUID = 741L;
+            int v = 7;
+            private void writeObject(ObjectOutputStream out) throws java.io.IOException {
+                out.defaultWriteObject();
+                out.writeInt(999);
+            }
+        }
+        bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(new WriterOnly());
+            oos.writeObject("next");
+        }
+        try (ObjectInputStream ois =
+                 new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            WriterOnly back = (WriterOnly) ois.readObject();
+            check(back.v == 7, "object restored, optional data skipped");
+            check("next".equals(ois.readObject()), "stream positioned after the object");
+        }
     }
 
     public static void main(String[] args) throws Exception {
-        testOptionalDataException();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

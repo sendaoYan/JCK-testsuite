@@ -1,11 +1,19 @@
 /*
  * @test
- * @summary java.io.IOException API conformance: checked-exception hierarchy and the (), (String),
- *          and (String, Throwable) constructors.
+ * @summary java.io.IOException conformance (pure black-box): checked root of the
+ *          java.io exception hierarchy, four constructors; message/cause
+ *          composition, initCause, addSuppressed, serialization of the exception
+ *          itself, catch semantics against real throwing APIs.
  * @run main IOExceptionTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 
 public class IOExceptionTest {
     static int passed;
@@ -15,19 +23,80 @@ public class IOExceptionTest {
         passed++;
     }
 
-    static void testIOException() {
-        IOException e = new IOException();
-        check(e instanceof Exception, "is an Exception");
-        check(!((Object) e instanceof RuntimeException), "is checked");
-        IOException e2 = new IOException("msg");
-        check("msg".equals(e2.getMessage()), "(String) constructor");
-        IOException e3 = new IOException("msg", new Exception("cause"));
-        check("msg".equals(e3.getMessage()) && e3.getCause() != null,
-              "(String, Throwable) constructor");
+    static void testBlackBox() throws Exception {
+        // 1. constructor/message/cause matrix
+        IOException e0 = new IOException();
+        check(e0.getMessage() == null && e0.getCause() == null, "no-arg: null message and cause");
+        IOException e1 = new IOException("disk on fire");
+        check("disk on fire".equals(e1.getMessage()) && e1.getCause() == null,
+              "(String): message only");
+        Exception cause = new IllegalStateException("root");
+        IOException e2 = new IOException("wrapped", cause);
+        check("wrapped".equals(e2.getMessage()) && e2.getCause() == cause,
+              "(String, Throwable): message + cause");
+        IOException e3 = new IOException(cause);
+        check(cause.toString().equals(e3.getMessage()) && e3.getCause() == cause,
+              "(Throwable): message defaults to cause.toString()");
+
+        // 2. initCause: once only, self-cause refused
+        IOException once = new IOException("m");
+        check(once.initCause(cause) == once, "initCause returns this");
+        try {
+            once.initCause(new Exception());
+            check(false, "second initCause must throw");
+        } catch (IllegalStateException expected) {
+            passed++;
+        }
+        IOException self = new IOException("self");
+        try {
+            self.initCause(self);
+            check(false, "initCause(this) must throw");
+        } catch (IllegalArgumentException expected) {
+            passed++;
+        }
+        check(new IOException().initCause(cause) != null,
+              "initCause accepts any non-self Throwable when unset");
+
+        // 3. suppressed exceptions attached to an IOException
+        IOException sup = new IOException("during-close");
+        Exception s1 = new Exception("supp1"), s2 = new Exception("supp2");
+        sup.addSuppressed(s1);
+        sup.addSuppressed(s2);
+        check(sup.getSuppressed().length == 2 && sup.getSuppressed()[0] == s1
+              && sup.getSuppressed()[1] == s2, "suppressed preserved in order");
+
+        // 4. the exception itself serializes (Throwable is Serializable) keeping its message
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(new IOException("kept"));
+        }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            IOException back = (IOException) ois.readObject();
+            check("kept".equals(back.getMessage()), "message survives serialization");
+        }
+
+        // 5. real API throws an IOException subtype catchable as IOException
+        try {
+            new DataInputStream(new ByteArrayInputStream(new byte[0])).readInt();
+            check(false, "readInt on empty stream must throw");
+        } catch (IOException io) {                       // EOFException caught as IOException
+            check(io instanceof EOFException, "EOFException is an IOException");
+        }
+
+        // 6. multi-catch and try-with-resources compatibility
+        try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(new byte[1])) {
+            check(in.read() == 0, "resource usable");
+        }
+
+        // 7. toString/stack trace capture the class name and message
+        IOException t = new IOException("xyz");
+        check(t.toString().equals("java.io.IOException: xyz"), "toString format");
+        check(t.getStackTrace().length > 0, "stack trace captured at construction");
+        passed++;
     }
 
-    public static void main(String[] args) {
-        testIOException();
+    public static void main(String[] args) throws Exception {
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

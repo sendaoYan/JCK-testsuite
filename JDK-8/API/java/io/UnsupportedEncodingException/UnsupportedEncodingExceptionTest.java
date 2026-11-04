@@ -1,11 +1,21 @@
 /*
  * @test
- * @summary java.io.UnsupportedEncodingException API conformance: constructors and inheritance.
+ * @summary java.io.UnsupportedEncodingException conformance (pure black-box):
+ *          constructors; real triggers: String.getBytes, new String(bytes, name),
+ *          InputStreamReader/OutputStreamWriter with an unknown charset name; the
+ *          message is the offending charset name.
  * @run main UnsupportedEncodingExceptionTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 
 public class UnsupportedEncodingExceptionTest {
     static int passed;
@@ -15,15 +25,68 @@ public class UnsupportedEncodingExceptionTest {
         passed++;
     }
 
-    static void testUnsupportedEncodingException() {
-        UnsupportedEncodingException e = new UnsupportedEncodingException("msg");
-        check(e instanceof IOException, "extends IOException");
-        check("msg".equals(e.getMessage()), "message from (String) ctor");
-        check(new UnsupportedEncodingException().getMessage() == null, "no-arg ctor has null message");
+    static void testBlackBox() throws Exception {
+        String bogus = "jck-NoSuchCharset-987654";
+
+        // 1. constructors
+        check(new UnsupportedEncodingException().getMessage() == null, "no-arg message null");
+        check(bogus.equals(new UnsupportedEncodingException(bogus).getMessage()),
+              "(String) message is the charset name by convention");
+
+        // 2. trigger: String.getBytes(charsetName)
+        try {
+            "x".getBytes(bogus);
+            check(false, "getBytes with an unknown charset must throw");
+        } catch (UnsupportedEncodingException uee) {
+            check(bogus.equals(uee.getMessage()), "message names the charset: " + uee.getMessage());
+        }
+
+        // 3. trigger: new String(bytes, charsetName)
+        try {
+            new String(new byte[1], bogus);
+            check(false, "String ctor with an unknown charset must throw");
+        } catch (UnsupportedEncodingException expected) {
+            check(bogus.equals(expected.getMessage()), "message names the charset");
+        }
+
+        // 4. trigger: reader and writer constructors
+        try {
+            new InputStreamReader(new ByteArrayInputStream(new byte[1]), bogus);
+            check(false, "InputStreamReader with an unknown charset must throw");
+        } catch (UnsupportedEncodingException expected) {
+            passed++;
+        }
+        try {
+            new OutputStreamWriter(new ByteArrayOutputStream(), bogus);
+            check(false, "OutputStreamWriter with an unknown charset must throw");
+        } catch (UnsupportedEncodingException expected) {
+            passed++;
+        }
+
+        // 5. contrast: a legal charset name works (by-name API remains supported)
+        byte[] b = "héllo".getBytes("UTF-8");
+        check(new String(b, "UTF-8").equals("héllo"), "valid name round-trips");
+        check(Charset.forName("UTF-8").newDecoder() != null, "Charset path unaffected");
+        check(new String(new byte[]{'o', 'k'}, "US-ASCII").equals("ok"), "US-ASCII path");
+
+        // 6. caught as IOException; serializes keeping its message
+        try {
+            throw new UnsupportedEncodingException("m");
+        } catch (IOException io) {
+            check(io instanceof UnsupportedEncodingException, "catchable as IOException");
+        }
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(new UnsupportedEncodingException("kept"));
+        }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            check("kept".equals(((UnsupportedEncodingException) ois.readObject()).getMessage()),
+                  "message survives serialization");
+        }
     }
 
-    public static void main(String[] args) {
-        testUnsupportedEncodingException();
+    public static void main(String[] args) throws Exception {
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
