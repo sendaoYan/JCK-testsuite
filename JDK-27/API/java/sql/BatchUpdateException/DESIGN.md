@@ -1,32 +1,28 @@
-# java.sql.BatchUpdateException 黑盒行为测试设计
+# java.sql.BatchUpdateException 测试设计案（JDK-8）
 
-## 1. API 功能（类）
-从 `javap -public java.sql.BatchUpdateException` 提取的 public 成员：
+> 完整契约：11 构造器矩阵、int[]/long[] 更新计数**防御性拷贝**、int↔long 互填、null 计数、cause、序列化。
 
-  - `public class java.sql.BatchUpdateException extends java.sql.SQLException {`
-  - `public java.sql.BatchUpdateException(java.lang.String, java.lang.String, int, int[]);`
-  - `public java.sql.BatchUpdateException(java.lang.String, java.lang.String, int[]);`
-  - `public java.sql.BatchUpdateException(java.lang.String, int[]);`
-  - `public java.sql.BatchUpdateException(int[]);`
-  - `public java.sql.BatchUpdateException();`
-  - `public java.sql.BatchUpdateException(java.lang.Throwable);`
-  - `public java.sql.BatchUpdateException(int[], java.lang.Throwable);`
-  - `public java.sql.BatchUpdateException(java.lang.String, int[], java.lang.Throwable);`
-  - `public java.sql.BatchUpdateException(java.lang.String, java.lang.String, int[], java.lang.Throwable);`
-  - `public java.sql.BatchUpdateException(java.lang.String, java.lang.String, int, int[], java.lang.Throwable);`
-  - `public int[] getUpdateCounts();`
-  - `public java.sql.BatchUpdateException(java.lang.String, java.lang.String, int, long[], java.lang.Throwable);`
-  - `public long[] getLargeUpdateCounts();`
+## 1. API 提供功能
+- 构造器（11）：int[] 系 5 个 + long[] 系 1 个（`(String,String,int,long[],Throwable)`）+ 5 个 cause 变体。
+- 访问器：`getUpdateCounts()`（int[] 拷贝）、`getLargeUpdateCounts()`（long[] 拷贝）。
 
-## 2. Java 用户如何使用
-异常/权限：捕获 SQLException 后读 `getMessage`/`getSQLState`/`getErrorCode`，遍历 `iterator()` 或 `getNextException` 取链；SQLWarning 用 `getNextWarning`；BatchUpdateException 取 `getUpdateCounts`；SQLPermission 作安全管理器权限。
+## 2. 使用方式
+批量更新失败时驱动抛此异常；读 `getUpdateCounts()/getLargeUpdateCounts()` 得到失败前成功命令的更新计数。
 
-## 3. 源码实际用法调研（JDK 自身）
-- `~/git/jdk25u-dev/src/java.sql/share/classes/java/sql/*.java`：接口与实现源码（行为权威）。
-- `~/git/jdk25u-dev/test/jdk/java/sql/JavatimeTest.java`：`java.sql.Date/Time/Timestamp` 与 `java.time` 桥接方法的随机往返测试。
-- `~/git/jdk25u-dev/test/jdk/java/sql/testng/util/*`：JDBC 测试工具类对 `Statement`/`ResultSet`/`Connection` 的驱动化组合调用。
+## 3. 参考来源
+- javadoc `java/sql/BatchUpdateException.html`；源码 `~/git/jdk8u-dev/.../java/sql/BatchUpdateException.java`；JCK `api/java_sql/BatchUpdateException`。
 
-## 4. 测试用例设计 + 自动化实现
-- 白盒 `testWhiteBox()`：`Class.forName` + `isInterface`/`isEnum`/修饰符/父类/直接父接口/声明方法数断言。
-- 黑盒 `testBlackBox()`：构造/工厂实例化 → 多步组合操作 → 可观察行为断言（含边界与精确异常类型）。
-- 确定性：不连数据库、不加载真实驱动、不依赖墙钟；固定输入与 Locale/时区无关断言。
+## 4. 测试用例设计
+| 测试点 | 用例方法 |
+|---|---|
+| 11 构造器 + message/SQLState/errorCode/counts 默认值 | testConstructors |
+| 防御性拷贝（构造入参、getter 返回均拷贝） | testDefensiveCopy |
+| int↔long 互填（int[] 构造器填 large、long[] 构造器填 int） | testCrossPopulation |
+| null counts → 两者 null | testCrossPopulation |
+| cause 构造器（message=cause.toString()） | testCauseConstructors |
+| 层次（extends SQLException） | testHierarchy |
+| 序列化 round-trip + serialVersionUID=5977529877145521757L | testSerialization |
+
+## 关键规范细节
+- `getUpdateCounts()` / `getLargeUpdateCounts()` 返回**防御性拷贝**，改返回值不影响内部状态。
+- int[]/long[] 互填**不做溢出校验**（long→int 可能回绕，spec 注明）。

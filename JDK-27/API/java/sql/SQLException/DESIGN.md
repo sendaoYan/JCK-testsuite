@@ -1,32 +1,31 @@
-# java.sql.SQLException 黑盒行为测试设计
+# java.sql.SQLException 测试设计案（JDK-8）
 
-## 1. API 功能（类）
-从 `javap -public java.sql.SQLException` 提取的 public 成员：
+> 完整契约：8 个构造器矩阵、默认值、setNextException 追加语义、Iterable<Throwable> 迭代顺序、序列化。
 
-  - `public class java.sql.SQLException extends java.lang.Exception implements java.lang.Iterable<java.lang.Throwable> {`
-  - `public java.sql.SQLException(java.lang.String, java.lang.String, int);`
-  - `public java.sql.SQLException(java.lang.String, java.lang.String);`
-  - `public java.sql.SQLException(java.lang.String);`
-  - `public java.sql.SQLException();`
-  - `public java.sql.SQLException(java.lang.Throwable);`
-  - `public java.sql.SQLException(java.lang.String, java.lang.Throwable);`
-  - `public java.sql.SQLException(java.lang.String, java.lang.String, java.lang.Throwable);`
-  - `public java.sql.SQLException(java.lang.String, java.lang.String, int, java.lang.Throwable);`
-  - `public java.lang.String getSQLState();`
-  - `public int getErrorCode();`
-  - `public java.sql.SQLException getNextException();`
-  - `public void setNextException(java.sql.SQLException);`
-  - `public java.util.Iterator<java.lang.Throwable> iterator();`
+## 1. API 提供功能
+- 构造器（8）：`()`、`(String)`、`(String,String)`、`(String,String,int)`、`(Throwable)`、`(String,Throwable)`、`(String,String,Throwable)`、`(String,String,int,Throwable)`。
+- 访问器：`getMessage/getSQLState/getErrorCode/getNextException/getCause`。
+- 链：`setNextException(SQLException)`（追加到链尾）。
+- `iterator()`：`Iterable<Throwable>`，顺序 = 自身 → 自身 cause 链 → 下一异常 → 下一异常 cause 链 → …；`remove()` → UOE；耗尽 `next()` → NSEE。
 
-## 2. Java 用户如何使用
-异常/权限：捕获 SQLException 后读 `getMessage`/`getSQLState`/`getErrorCode`，遍历 `iterator()` 或 `getNextException` 取链；SQLWarning 用 `getNextWarning`；BatchUpdateException 取 `getUpdateCounts`；SQLPermission 作安全管理器权限。
+## 2. 使用方式
+抛/接住异常 → 读 SQLState/errorCode → `getNextException` 或 `for(Throwable t : ex)` 遍历整链。
 
-## 3. 源码实际用法调研（JDK 自身）
-- `~/git/jdk25u-dev/src/java.sql/share/classes/java/sql/*.java`：接口与实现源码（行为权威）。
-- `~/git/jdk25u-dev/test/jdk/java/sql/JavatimeTest.java`：`java.sql.Date/Time/Timestamp` 与 `java.time` 桥接方法的随机往返测试。
-- `~/git/jdk25u-dev/test/jdk/java/sql/testng/util/*`：JDBC 测试工具类对 `Statement`/`ResultSet`/`Connection` 的驱动化组合调用。
+## 3. 参考来源
+- javadoc `java/sql/SQLException.html`；源码 `~/git/jdk8u-dev/.../java/sql/SQLException.java`（iterator 顺序、CAS 追加）；JCK `api/java_sql/SQLException`。
 
-## 4. 测试用例设计 + 自动化实现
-- 白盒 `testWhiteBox()`：`Class.forName` + `isInterface`/`isEnum`/修饰符/父类/直接父接口/声明方法数断言。
-- 黑盒 `testBlackBox()`：构造/工厂实例化 → 多步组合操作 → 可观察行为断言（含边界与精确异常类型）。
-- 确定性：不连数据库、不加载真实驱动、不依赖墙钟；固定输入与 Locale/时区无关断言。
+## 4. 测试用例设计
+| 测试点 | 用例方法 |
+|---|---|
+| 8 构造器 + message/SQLState/errorCode 默认值 | testConstructors |
+| cause/next 默认 null | testGettersDefaults |
+| 4 个 cause 构造器（message=cause.toString() 等） | testCauseConstructors |
+| setNextException 追加到链尾 | testSetNextExceptionChain |
+| iterator 顺序 + remove() UOE + 空链 next() NSEE | testIterator |
+| 层次（extends Exception, implements Iterable） | testHierarchy |
+| 序列化 round-trip（含 next 链）+ serialVersionUID=2135244094396331484L | testSerialization |
+
+## 关键规范细节
+- 迭代顺序不是「自身→下一异常」，而是**自身→自身 cause 链→下一异常→下一异常 cause 链→…**。
+- `setNextException` 追加到**链尾**（遍历到 next==null 再 CAS 挂接）。
+- `(Throwable)` / `(String,Throwable)` 构造器把 message 设为 `cause.toString()`（cause 非 null 时）。

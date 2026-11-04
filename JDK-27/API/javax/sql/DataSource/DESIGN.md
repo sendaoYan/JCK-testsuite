@@ -1,26 +1,31 @@
-# javax.sql.DataSource 黑盒行为测试设计
+# javax.sql.DataSource 测试设计案（JDK-8）
 
-## 1. API 功能（接口）
-从 `javap -public javax.sql.DataSource` 提取的 public 成员：
+> 完整契约：接口层次（CommonDataSource + Wrapper）、精确方法集（getConnection × 2 + 继承方法）、
+> 动态代理实现验证每个方法可调用与异常（不真连库）。
 
-  - `public interface javax.sql.DataSource extends javax.sql.CommonDataSource,java.sql.Wrapper {`
-  - `public abstract java.sql.Connection getConnection() throws java.sql.SQLException;`
-  - `public abstract java.sql.Connection getConnection(java.lang.String, java.lang.String) throws java.sql.SQLException;`
-  - `public abstract java.io.PrintWriter getLogWriter() throws java.sql.SQLException;`
-  - `public abstract void setLogWriter(java.io.PrintWriter) throws java.sql.SQLException;`
-  - `public abstract void setLoginTimeout(int) throws java.sql.SQLException;`
-  - `public abstract int getLoginTimeout() throws java.sql.SQLException;`
-  - `public default java.sql.ConnectionBuilder createConnectionBuilder() throws java.sql.SQLException;`
+## 1. API 提供功能
+- 接口 `javax.sql.DataSource extends CommonDataSource, java.sql.Wrapper`。
+- 自身方法（2）：`getConnection()`、`getConnection(String,String)`（均 throws SQLException）。
+- 继承 CommonDataSource：`getLogWriter/setLogWriter/setLoginTimeout/getLoginTimeout/getParentLogger`。
+- 继承 Wrapper：`unwrap/isWrapperFor`。
 
-## 2. Java 用户如何使用
-JDBC 接口：由驱动/连接池供应商实现；用户面向接口编程（`Connection`/`Statement`/`ResultSet`/`DataSource` 等），反射断言其形态并调用默认方法。
+## 2. 使用方式
+`ds.getConnection()` 拿连接；`getLogWriter/getLoginTimeout` 配置；`unwrap(Connection.class)` 解包。
 
-## 3. 源码实际用法调研（JDK 自身）
-- `~/git/jdk25u-dev/src/java.sql/share/classes/java/sql/*.java`：接口与实现源码（行为权威）。
-- `~/git/jdk25u-dev/test/jdk/java/sql/JavatimeTest.java`：`java.sql.Date/Time/Timestamp` 与 `java.time` 桥接方法的随机往返测试。
-- `~/git/jdk25u-dev/test/jdk/java/sql/testng/util/*`：JDBC 测试工具类对 `Statement`/`ResultSet`/`Connection` 的驱动化组合调用。
+## 3. 参考来源
+- javadoc `javax/sql/DataSource.html`、`javax/sql/CommonDataSource.html`；JDK-27 额外有 `createConnectionBuilder()` 默认方法 + CommonDataSource `createShardingKeyBuilder()`。
 
-## 4. 测试用例设计 + 自动化实现
-- 白盒 `testWhiteBox()`：`Class.forName` + `isInterface`/`isEnum`/修饰符/父类/直接父接口/声明方法数断言。
-- 黑盒 `testBlackBox()`：构造/工厂实例化 → 多步组合操作 → 可观察行为断言（含边界与精确异常类型）。
-- 确定性：不连数据库、不加载真实驱动、不依赖墙钟；固定输入与 Locale/时区无关断言。
+## 4. 测试用例设计
+| 测试点 | 用例方法 |
+|---|---|
+| 接口层次（CommonDataSource + Wrapper） | testHierarchy |
+| 精确方法集（2 个 getConnection 重载 + 继承方法） | testMethodSet |
+| 动态代理实现：getConnection 返回假连接、getParentLogger 抛 SQLFeatureNotSupportedException、unwrap 抛 SQLException | testProxyInvocation |
+
+## 关键规范细节
+- `getParentLogger()` 声明 throws `SQLFeatureNotSupportedException`；`unwrap(非包装类型)` 抛 SQLException。
+- JDK-27 侧额外断言 `createConnectionBuilder()`/`createShardingKeyBuilder()` 为 default 且返回类型正确。
+
+## JDK-27 差异
+- DataSource 额外重声明 `getLogWriter/setLogWriter/setLoginTimeout/getLoginTimeout`（getMethods 覆盖）。
+- 新增默认方法 `createConnectionBuilder()`（返回 ConnectionBuilder）；CommonDataSource 新增默认方法 `createShardingKeyBuilder()`（返回 ShardingKeyBuilder）：testJdk27DefaultMethods 断言其为 default 且返回类型正确。

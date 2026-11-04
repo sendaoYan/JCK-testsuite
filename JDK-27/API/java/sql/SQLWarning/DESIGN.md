@@ -1,29 +1,27 @@
-# java.sql.SQLWarning 黑盒行为测试设计
+# java.sql.SQLWarning 测试设计案（JDK-8）
 
-## 1. API 功能（类）
-从 `javap -public java.sql.SQLWarning` 提取的 public 成员：
+> 完整契约：继承 SQLException 的 8 构造器 + setNextWarning 链 + getNextWarning 对非 warning 链抛 Error + 序列化。
 
-  - `public class java.sql.SQLWarning extends java.sql.SQLException {`
-  - `public java.sql.SQLWarning(java.lang.String, java.lang.String, int);`
-  - `public java.sql.SQLWarning(java.lang.String, java.lang.String);`
-  - `public java.sql.SQLWarning(java.lang.String);`
-  - `public java.sql.SQLWarning();`
-  - `public java.sql.SQLWarning(java.lang.Throwable);`
-  - `public java.sql.SQLWarning(java.lang.String, java.lang.Throwable);`
-  - `public java.sql.SQLWarning(java.lang.String, java.lang.String, java.lang.Throwable);`
-  - `public java.sql.SQLWarning(java.lang.String, java.lang.String, int, java.lang.Throwable);`
-  - `public java.sql.SQLWarning getNextWarning();`
-  - `public void setNextWarning(java.sql.SQLWarning);`
+## 1. API 提供功能
+- 构造器（8）：同 SQLException。
+- `getNextWarning()/setNextWarning(SQLWarning)`：别名 `getNextException/setNextException`。
+- 继承 `Iterable<Throwable>` 与 `getSQLState/getErrorCode/getCause`。
 
-## 2. Java 用户如何使用
-异常/权限：捕获 SQLException 后读 `getMessage`/`getSQLState`/`getErrorCode`，遍历 `iterator()` 或 `getNextException` 取链；SQLWarning 用 `getNextWarning`；BatchUpdateException 取 `getUpdateCounts`；SQLPermission 作安全管理器权限。
+## 2. 使用方式
+从 Connection/Statement/ResultSet 取 warning → `getNextWarning` 遍历。
 
-## 3. 源码实际用法调研（JDK 自身）
-- `~/git/jdk25u-dev/src/java.sql/share/classes/java/sql/*.java`：接口与实现源码（行为权威）。
-- `~/git/jdk25u-dev/test/jdk/java/sql/JavatimeTest.java`：`java.sql.Date/Time/Timestamp` 与 `java.time` 桥接方法的随机往返测试。
-- `~/git/jdk25u-dev/test/jdk/java/sql/testng/util/*`：JDBC 测试工具类对 `Statement`/`ResultSet`/`Connection` 的驱动化组合调用。
+## 3. 参考来源
+- javadoc `java/sql/SQLWarning.html`；源码 `~/git/jdk8u-dev/.../java/sql/SQLWarning.java`；JCK `api/java_sql/SQLWarning`。
 
-## 4. 测试用例设计 + 自动化实现
-- 白盒 `testWhiteBox()`：`Class.forName` + `isInterface`/`isEnum`/修饰符/父类/直接父接口/声明方法数断言。
-- 黑盒 `testBlackBox()`：构造/工厂实例化 → 多步组合操作 → 可观察行为断言（含边界与精确异常类型）。
-- 确定性：不连数据库、不加载真实驱动、不依赖墙钟；固定输入与 Locale/时区无关断言。
+## 4. 测试用例设计
+| 测试点 | 用例方法 |
+|---|---|
+| 8 构造器 + 默认值 | testConstructors |
+| setNextWarning 追加到链尾 + getNextException 别名 | testChain |
+| getNextWarning 对链中非 SQLWarning → Error | testGetNextWarningErrorOnNonWarning |
+| iterator 遍历 warning 链 | testIterator |
+| 层次（extends SQLException） | testHierarchy |
+| 序列化 round-trip + serialVersionUID=3917336774604784856L | testSerialization |
+
+## 关键规范细节
+- `getNextWarning()` 强转 `(SQLWarning)getNextException()`；若链里混入普通 SQLException 会抛 `Error`（不是 SQLException）。

@@ -1,54 +1,70 @@
 /*
  * @test
- * @summary java.sql.DriverPropertyInfo conformance: white-box structure + black-box behavior.
+ * @summary java.sql.DriverPropertyInfo API conformance: full contract coverage.
+ *          constructor (name,value) field initialization, public-field defaults
+ *          (description null, required false, choices null), field mutability,
+ *          and null name/value acceptance.
  * @run main DriverPropertyInfoTest
  */
+
 public class DriverPropertyInfoTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    interface Throwing { void run() throws Throwable; }
-    static void checkThrows(Class<? extends Throwable> t, String label, Throwing r) {
-        try { r.run(); } catch (Throwable x) { check(t.isInstance(x), label + " throws " + t.getSimpleName()); return; }
-        throw new AssertionError(label + ": expected " + t.getSimpleName());
-    }
 
-    // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.sql.DriverPropertyInfo");
         check(c != null, "loads");
-        check(c.isInterface() == false, "isInterface");
-        check(c.isEnum() == false, "isEnum");
-        check(!c.isAnnotation(), "not annotation");
+        check(!c.isInterface() && !c.isEnum() && !c.isAnnotation(), "class kind");
         check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(c.getInterfaces().length == 0, "no direct superinterface");
-        check(c.getDeclaredMethods().length == 0, "declared method count 0");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        java.sql.DriverPropertyInfo p = new java.sql.DriverPropertyInfo("user", "scott");
-        check("user".equals(p.name), "name");
-        check("scott".equals(p.value), "value from constructor");
-        check(p.description == null, "description default null");
-        check(!p.required, "required default false");
-        check(p.choices == null, "choices default null");
-        p.required = true;
-        p.value = "tiger";
-        p.description = "the user name";
-        p.choices = new String[]{"a", "b"};
-        check(p.required, "required set");
-        check("tiger".equals(p.value), "value set");
-        check("the user name".equals(p.description), "description set");
-        check(p.choices.length == 2, "choices set");
+        check(c.getSuperclass() == java.lang.Object.class, "superclass");
+        check(c.getInterfaces().length == 0, "no direct interface");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testConstructor();
+        testDefaults();
+        testMutability();
+        testNullArgs();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testConstructor() {
+        java.sql.DriverPropertyInfo p = new java.sql.DriverPropertyInfo("user", "sa");
+        check("user".equals(p.name), "name");
+        check("sa".equals(p.value), "value");
+        check(p.description == null, "description null");
+        check(!p.required, "required false");
+        check(p.choices == null, "choices null");
+    }
+
+    static void testDefaults() {
+        java.sql.DriverPropertyInfo p = new java.sql.DriverPropertyInfo("x", "y");
+        check(p.name != null, "name non-null");
+        check(!p.required, "required defaults false");
+    }
+
+    static void testMutability() {
+        java.sql.DriverPropertyInfo p = new java.sql.DriverPropertyInfo("a", "b");
+        p.name = "renamed";
+        p.value = "revalued";
+        p.description = "a description";
+        p.required = true;
+        p.choices = new String[]{"one", "two"};
+        check("renamed".equals(p.name), "name mutable");
+        check("revalued".equals(p.value), "value mutable");
+        check("a description".equals(p.description), "description mutable");
+        check(p.required, "required mutable");
+        check(p.choices.length == 2 && "two".equals(p.choices[1]), "choices mutable");
+    }
+
+    static void testNullArgs() {
+        java.sql.DriverPropertyInfo p = new java.sql.DriverPropertyInfo(null, null);
+        check(p.name == null, "null name accepted");
+        check(p.value == null, "null value accepted");
     }
 }
