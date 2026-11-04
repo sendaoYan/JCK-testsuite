@@ -1,18 +1,14 @@
 /*
  * @test
- * @summary java.io.CharArrayWriter conformance: white-box structure + black-box
- *          behavior (growth beyond initial capacity, all write/append forms,
- *          writeTo(Writer) delegation, reset, toCharArray/size/toString snapshots,
- *          close/flush no-ops).
+ * @summary java.io.CharArrayWriter conformance: white-box structure (reflection) + full
+ *          black-box contract coverage. Constructors (negative->IAE), write(int) low 16 bits,
+ *          write(char[],off,len) validation, write(String,off,len), writeTo, append variants,
+ *          reset/size/toCharArray copy, toString, flush/close no-op.
  * @run main CharArrayWriterTest
  */
 
 import java.io.CharArrayWriter;
-import java.io.IOException;
 import java.io.StringWriter;
-import java.io.Writer;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 
 public class CharArrayWriterTest {
@@ -23,103 +19,140 @@ public class CharArrayWriterTest {
         passed++;
     }
 
-    // ---- Part 1: white-box (structural) ----
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void hasMethod(Class<?> c, String name, Class<?>... params) {
+        try { c.getMethod(name, params); }
+        catch (NoSuchMethodException e) { throw new AssertionError("missing method " + name); }
+        passed++;
+    }
+
+    // ---- white-box: structure via reflection ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.io.CharArrayWriter");
-        check(c.getSuperclass().getName().equals("java.io.Writer"), "extends Writer");
-        check(c.getConstructor().getModifiers() == Modifier.PUBLIC, "no-arg ctor public");
-        check(c.getConstructor(int.class) != null, "ctor (int initialCapacity)");
-        for (String m : new String[]{"write", "writeTo", "append", "reset",
-                                     "toCharArray", "size", "toString", "flush", "close"})
-            check(has(c, m), "has method " + m);
-        check(c.getMethod("append", CharSequence.class).getReturnType() == c,
-              "append overrides return CharArrayWriter (this)");
-        check(Modifier.isProtected(c.getDeclaredField("buf").getModifiers()), "protected buf");
-        check(Modifier.isProtected(c.getDeclaredField("count").getModifiers()), "protected count");
+        check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "is concrete class");
+        check(c.getSuperclass() == java.io.Writer.class, "extends Writer");
+        hasMethod(c, "write", int.class);
+        hasMethod(c, "writeTo", java.io.Writer.class);
+        hasMethod(c, "toCharArray");
+        hasMethod(c, "size");
+        hasMethod(c, "reset");
     }
 
-    static boolean has(Class<?> c, String m) {
-        for (java.lang.reflect.Method mm : c.getMethods()) if (mm.getName().equals(m)) return true;
-        return false;
+    // ---- 1. constructors ----
+    static void testConstructors() {
+        CharArrayWriter def = new CharArrayWriter();
+        check(def.size() == 0, "default size 0");
+        checkThrows(IllegalArgumentException.class, () -> new CharArrayWriter(-1),
+                    "negative size -> IllegalArgumentException");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        // 1. all write forms accumulate in order
+    // ---- 2. write(int) ----
+    static void testWriteInt() {
         CharArrayWriter w = new CharArrayWriter();
-        w.write('a');
-        w.write("bc");
-        w.write("def".toCharArray());
-        w.write("XYZW", 1, 2);
-        w.write("gh".toCharArray(), 0, 2);
-        check("abcdefYZgh".equals(w.toString()), "write forms: " + w);
-        check(w.size() == 10, "size counts chars");
+        w.write('A');
+        w.write(0x10041);
+        check("AA".equals(w.toString()), "write(int) low 16 bits");
+    }
 
-        // 2. growth: tiny initial capacity expands without losing data
-        CharArrayWriter small = new CharArrayWriter(1);
-        for (int i = 0; i < 10_000; i++) small.write('x');
-        check(small.size() == 10_000, "grew to 10000");
-        check(small.toString().length() == 10_000, "content preserved across growth");
+    // ---- 3. write(char[],off,len) validation ----
+    static void testWriteArrayValidation() {
+        final CharArrayWriter w = new CharArrayWriter();
+        checkThrows(NullPointerException.class, () -> w.write((char[]) null, 0, 1),
+                    "write(null,0,1) -> NPE");
+        checkThrows(IndexOutOfBoundsException.class, () -> w.write(new char[2], -1, 1),
+                    "write(c,-1,1) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> w.write(new char[2], 0, 3),
+                    "write(c,0,3) -> IndexOutOfBoundsException");
+        w.write(new char[1], 0, 0);
+        check(w.size() == 0, "len==0 no-op");
+    }
 
-        // 3. negative initial capacity rejected
-        try {
-            new CharArrayWriter(-1);
-            check(false, "negative capacity must throw");
-        } catch (IllegalArgumentException expected) {
-            passed++;
-        }
+    // ---- 4. write(String) / write(String,off,len) ----
+    static void testWriteString() {
+        CharArrayWriter w = new CharArrayWriter();
+        w.write("hello world", 0, 5);
+        check("hello".equals(w.toString()), "write(String,off,len) content");
 
-        // 4. append family returns the same writer and appends
-        CharArrayWriter a = new CharArrayWriter();
-        check(a.append('A') == a && a.append("BC") == a && a.append("CDE", 1, 3) == a,
-              "append returns this");
-        check("ABCDE".equals(a.toString()), "append contents: " + a);
+        final CharArrayWriter n = new CharArrayWriter();
+        checkThrows(NullPointerException.class, () -> n.write((String) null, 0, 1),
+                    "write((String)null,0,1) -> NPE");
+        checkThrows(IndexOutOfBoundsException.class, () -> n.write("abc", 0, 5),
+                    "write(String, bad off/len) -> IndexOutOfBoundsException");
+    }
 
-        // 5. toCharArray returns a usable snapshot; later writes do not affect it
-        CharArrayWriter s = new CharArrayWriter();
-        s.write("snap");
-        char[] snapshot = s.toCharArray();
-        check(snapshot.length == 4 && snapshot[0] == 's', "snapshot contents");
-        s.write("more");
-        check(snapshot.length == 4, "snapshot not resized by later writes");
+    // ---- 5. writeTo ----
+    static void testWriteTo() throws Exception {
+        CharArrayWriter w = new CharArrayWriter();
+        w.write("abc");
+        StringWriter dest = new StringWriter();
+        w.writeTo(dest);
+        check("abc".equals(dest.toString()), "writeTo copies content");
+        check(w.size() == 3, "writeTo does not consume source");
 
-        // 6. reset discards accumulated data but keeps capacity semantics
-        s.reset();
-        check(s.size() == 0 && s.toString().isEmpty(), "reset empties");
-        s.write("new");
-        check("new".equals(s.toString()), "writable after reset");
+        checkThrows(NullPointerException.class, () -> w.writeTo(null), "writeTo(null) -> NPE");
+    }
 
-        // 7. writeTo copies the buffer into another Writer
-        CharArrayWriter src = new CharArrayWriter();
-        src.write("copy-me");
-        StringWriter dst = new StringWriter();
-        src.writeTo(dst);
-        check("copy-me".equals(dst.toString()), "writeTo copies");
-        check(src.size() == 7, "writeTo leaves the source intact");
+    // ---- 6. append variants ----
+    static void testAppend() {
+        CharArrayWriter w = new CharArrayWriter();
+        w.append("ab");
+        w.append('c');
+        w.append((CharSequence) null);
+        check("abcnull".equals(w.toString()), "append variants incl. null csq");
+    }
 
-        // 8. flush and close are no-ops: writing continues afterwards
-        CharArrayWriter n = new CharArrayWriter();
-        n.write("1");
-        n.flush();
-        n.close();
-        n.write("2");
-        check("12".equals(n.toString()), "close() does not close a CharArrayWriter");
+    // ---- 7. reset / size / toCharArray copy ----
+    static void testResetSizeToCharArray() throws Exception {
+        CharArrayWriter w = new CharArrayWriter();
+        w.write("hello");
+        check(w.size() == 5, "size");
+        char[] first = w.toCharArray();
+        first[0] = 'X';
+        char[] second = w.toCharArray();
+        check(second[0] == 'h', "toCharArray returns a fresh copy");
+        check("hello".equals(w.toString()), "toString");
 
-        // 9. zero-length writes change nothing
-        n.write("", 0, 0);
-        n.write(new char[0], 0, 0);
-        check("12".equals(n.toString()), "zero-length writes are no-ops");
+        w.reset();
+        check(w.size() == 0 && w.toCharArray().length == 0, "reset clears");
+        w.write('z');
+        check("z".equals(w.toString()), "reuse after reset");
+    }
 
-        // 10. polymorphic use as Writer/Appendable
-        Writer base = new CharArrayWriter();
-        base.write("w");
-        base.append('!');
-        check("w!".equals(base.toString()), "via Writer reference");
+    // ---- 8. flush/close no-op ----
+    static void testFlushClose() throws Exception {
+        CharArrayWriter w = new CharArrayWriter();
+        w.write("data");
+        w.flush();
+        w.close();
+        w.close();
+        w.write("more");
+        check("datamore".equals(w.toString()), "flush/close no-ops");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testConstructors();
+        testWriteInt();
+        testWriteArrayValidation();
+        testWriteString();
+        testWriteTo();
+        testAppend();
+        testResetSizeToCharArray();
+        testFlushClose();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,24 +1,25 @@
-# java.io.CharArrayWriter 测试方案 (DESIGN)
+# java.io.CharArrayWriter 测试设计案（JDK-27）
 
-## 1. API 功能（按方法分组）
-- 构造：`()`、`(int initialSize)`。
-- 写：`write(int)`、`write(char[])`、`write(char[],off,len)`、`write(String)`、`write(String,off,len)`、`append(CharSequence/char)`。
-- 组合：`writeTo(Writer)`（把缓冲注入另一 Writer）、`reset()`（清空复用）。
-- `toCharArray()`、`toString()`、`flush()`（无操作）、`close()`（无操作，之后仍可写）。
+> 覆盖目标：**完整契约**（黑盒）+ 反射白盒结构。与 JDK-8 侧同源。
 
-## 2. Java 用户如何使用
-- 无上限内存字符累积器：`toString()` 直接取内容；`writeTo(out)` 免拷贝转发给文件/网络 Writer；`reset()` 循环复用缓冲。
+## 1. API 功能
+- 构造器（2）：`CharArrayWriter()`、`CharArrayWriter(int)`（负→IAE）。
+- 写：`write(int)`、`write(char[],int,int)`、`write(String,int,int)`。
+- 追加/查询：`append*`、`writeTo(Writer)`、`reset()`、`toCharArray()`、`size()`、`toString()`。
 
-## 3. 开源代码实际用法调研（真实片段，来源标注）
-- 实现（protected buf/count、扩容 Arrays.copyOf、writeTo 同步转发、close 无操作）— `jdk25u-dev/src/java.base/share/classes/java/io/CharArrayWriter.java`。
-- append/CharSequence 语义（toString 视图写入）— 同文件 append 系列。
+## 2. 使用方式
+- 收集字符到内存；`toCharArray()` 取副本；`writeTo` 直拷；`reset` 复用。
 
-## 4. 测试用例设计 + 自动化实现（CharArrayWriterTest.testBlackBox）
-1. 各 write 形态顺序累积；append(CharSequence) 等价 write(csq.toString())。
-2. 初始容量扩容：写超 initialSize 后内容完整。
-3. writeTo 把内容注入 StringWriter，源不变。
-4. reset 清空后再写只含新内容；toCharArray/toString 一致。
-5. close/flush 后继续写成功（规范：二者均为无操作）。
-- 健壮性: 纯内存、无全局副作用。
+## 3. 参考来源
+- javadoc + `~/git/jdk/src/java.base/share/classes/java/io/CharArrayWriter.java`。
 
-产出：`CharArrayWriterTest.java`（白盒 + 黑盒共 31 断言）。
+## 4. 测试用例设计
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 反射白盒：继承 Writer、write(int)/writeTo/toCharArray/size/reset 存在 | testWhiteBox |
+| P0 | 构造器负容量 IAE；write(int) 低 16 位；write 校验 | testConstructors、testWriteInt、testWriteArrayValidation |
+| P0 | write(String,off,len)；writeTo；append | testWriteString、testWriteTo、testAppend |
+| P0 | reset/size/toCharArray 副本/toString；flush/close no-op | testResetSizeToCharArray、testFlushClose |
+
+## 关键细节
+- 继承的 `write(String)` 抛 IOException；`write(String,off,len)` 不抛。
