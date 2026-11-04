@@ -235,7 +235,27 @@ public class PatternTest {
         check(Pattern.compile("\\bword\\b").matcher("a word here").find(), "word boundary");
     }
 
-    
+    static void testBoundaryEscapesGroups() {
+        // empty regex splits between every character; limit 0 drops the trailing empty
+        checkEq(Pattern.compile("").split("abc", 0), "a", "b", "c");
+        checkEq(Pattern.compile("").split("abc", -1), "a", "b", "c", "");
+        checkEq(Pattern.compile(":").split(""), "");
+        check(Pattern.matches("", ""), "empty regex matches empty");
+        check(!Pattern.matches("", "a"), "empty regex does not match non-empty");
+        // backreference and escapes
+        check(Pattern.compile("(a)\\1").matcher("aa").matches(), "backreference (a)\\1 matches aa");
+        check(!Pattern.compile("(a)\\1").matcher("ab").matches(), "backreference rejects ab");
+        check(Pattern.compile("\\Qa+b\\E").matcher("a+b").matches(), "\\Q...\\E literal escape");
+        check(Pattern.compile("\\Afoo").matcher("foo").find(), "\\A anchors to start");
+        check(!Pattern.compile("foo\\z").matcher("foo\n").matches(), "\\z matches absolute end");
+        // duplicate named group is a compile-time error
+        expectThrows(() -> Pattern.compile("(?<n>a)(?<n>b)"),
+                     java.util.regex.PatternSyntaxException.class, "duplicate named group rejected");
+        expectThrows(() -> Pattern.compile("("), java.util.regex.PatternSyntaxException.class,
+                     "unmatched paren rejected");
+    }
+
+
     static void testBlackBox() throws Exception {
         testCompileFlags();
         testMatchesConvenience();
@@ -247,6 +267,7 @@ public class PatternTest {
         testNamedGroups();
         testPredicatesAndStream();
         testEdgePatterns();
+        testBoundaryEscapesGroups();
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();

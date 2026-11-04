@@ -283,6 +283,27 @@ public class LongTest {
         check(Long.min(1L, 2L) == 1L, "min(1,2)");
     }
 
+    static void testRadixExtremesAndWrap() {
+        check(Long.parseLong("10", Character.MIN_RADIX) == 2L, "parseLong at MIN_RADIX");
+        check(Long.parseLong("z", Character.MAX_RADIX) == 35L, "parseLong z at MAX_RADIX");
+        check(Long.parseLong(Long.toString(Long.MAX_VALUE, Character.MAX_RADIX),
+                             Character.MAX_RADIX) == Long.MAX_VALUE, "MAX round-trip radix 36");
+        check(Long.parseLong(Long.toString(Long.MIN_VALUE, Character.MIN_RADIX),
+                             Character.MIN_RADIX) == Long.MIN_VALUE, "MIN round-trip radix 2");
+        check(Long.toString(Long.MAX_VALUE, Character.MAX_RADIX).equals("1y2p0ij32e8e7"),
+              "MAX in base 36");
+        check(Long.toString(2L, Character.MIN_RADIX).equals("10"), "toString 2 at MIN_RADIX");
+        check(Long.toString(35L, Character.MAX_RADIX).equals("z"), "toString 35 at MAX_RADIX");
+        check(Long.valueOf(Long.MAX_VALUE) != Long.valueOf(Long.MAX_VALUE), "valueOf(MAX) not cached");
+        check(Long.valueOf(Long.MIN_VALUE) != Long.valueOf(Long.MIN_VALUE), "valueOf(MIN) not cached");
+        check(Long.parseLong("+9223372036854775807") == Long.MAX_VALUE, "parseLong(+MAX)");
+        expectNFE(() -> Long.parseLong("+9223372036854775808"), "parseLong(+MAX+1) overflow");
+        check(Long.reverse(Long.MIN_VALUE) == 1L, "reverse(MIN) == 1");
+        check(Long.reverse(Long.MAX_VALUE) == -2L, "reverse(MAX) == -2");
+        check(Long.reverseBytes(Long.MAX_VALUE) == 0xffffffffffffff7fL, "reverseBytes(MAX)");
+        check(Long.reverseBytes(Long.MIN_VALUE) == 0x80L, "reverseBytes(MIN)");
+    }
+
     // ---- White-box / structural ----
     static void testWhiteBox() {
         try {
@@ -341,6 +362,7 @@ public class LongTest {
         testBitOps();
         testUnsignedOps();
         testSumMaxMin();
+        testRadixExtremesAndWrap();
         testBoxing();
     }
 

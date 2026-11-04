@@ -131,6 +131,8 @@ public class RoundingModeTest {
     static void exceptions() {
         expectIllegalArgument(() -> RoundingMode.valueOf("BOGUS"), "valueOf unknown name");
         expectIllegalArgument(() -> RoundingMode.valueOf("up"), "valueOf lowercase name");
+        expectIllegalArgument(() -> RoundingMode.valueOf(""), "valueOf empty name");
+        expectNullPointer(() -> RoundingMode.valueOf((String) null), "valueOf null name");
         expectIllegalArgument(() -> RoundingMode.valueOf(-1), "valueOf negative int");
         expectIllegalArgument(() -> RoundingMode.valueOf(8), "valueOf int above 7");
         expectArithmetic(() -> new BigDecimal("1.1").round(new MathContext(1, RoundingMode.UNNECESSARY)),
@@ -151,6 +153,15 @@ public class RoundingModeTest {
             r.run();
             throw new AssertionError("expected ArithmeticException: " + msg);
         } catch (ArithmeticException expected) {
+            passed++;
+        }
+    }
+
+    static void expectNullPointer(Runnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError("expected NullPointerException: " + msg);
+        } catch (NullPointerException expected) {
             passed++;
         }
     }

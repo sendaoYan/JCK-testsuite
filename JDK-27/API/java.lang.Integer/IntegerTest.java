@@ -326,6 +326,36 @@ public class IntegerTest {
         check(Integer.min(Integer.MIN_VALUE, Integer.MAX_VALUE) == Integer.MIN_VALUE, "min");
     }
 
+    static void testRadixExtremesAndWrap() {
+        // radix equivalence classes: MIN_RADIX == 2, MAX_RADIX == 36
+        check(Integer.parseInt("10", Character.MIN_RADIX) == 2, "parseInt at MIN_RADIX");
+        check(Integer.parseInt("z", Character.MAX_RADIX) == 35, "parseInt z at MAX_RADIX");
+        check(Integer.parseInt("+z", Character.MAX_RADIX) == 35, "parseInt +z at MAX_RADIX");
+        check(Integer.parseInt(Integer.toString(Integer.MAX_VALUE, Character.MAX_RADIX),
+                              Character.MAX_RADIX) == Integer.MAX_VALUE, "MAX round-trip radix 36");
+        check(Integer.parseInt(Integer.toString(Integer.MIN_VALUE, Character.MIN_RADIX),
+                              Character.MIN_RADIX) == Integer.MIN_VALUE, "MIN round-trip radix 2");
+        check(Integer.toString(Integer.MAX_VALUE, Character.MAX_RADIX).equals("zik0zj"),
+              "MAX in base 36");
+        check(Integer.toString(2, Character.MIN_RADIX).equals("10"), "toString 2 at MIN_RADIX");
+        check(Integer.toString(35, Character.MAX_RADIX).equals("z"), "toString 35 at MAX_RADIX");
+        // valueOf(int) cache ends at 127/-128; the extremes are never cached
+        check(Integer.valueOf(Integer.MAX_VALUE) != Integer.valueOf(Integer.MAX_VALUE),
+              "valueOf(MAX) not cached");
+        check(Integer.valueOf(Integer.MIN_VALUE) != Integer.valueOf(Integer.MIN_VALUE),
+              "valueOf(MIN) not cached");
+        check(Integer.valueOf(Integer.MIN_VALUE).equals(Integer.valueOf(Integer.MIN_VALUE)),
+              "valueOf(MIN) equals by value");
+        // leading plus on the extreme values
+        check(Integer.parseInt("+2147483647") == Integer.MAX_VALUE, "parseInt(+MAX)");
+        expectNFE(() -> Integer.parseInt("+2147483648"), "parseInt(+MAX+1) overflow");
+        // reverse/reverseBytes at the extremes
+        check(Integer.reverse(Integer.MIN_VALUE) == 1, "reverse(MIN) == 1");
+        check(Integer.reverse(Integer.MAX_VALUE) == -2, "reverse(MAX) == -2");
+        check(Integer.reverseBytes(Integer.MAX_VALUE) == 0xffffff7f, "reverseBytes(MAX)");
+        check(Integer.reverseBytes(Integer.MIN_VALUE) == 0x80, "reverseBytes(MIN)");
+    }
+
     // ---- White-box / structural ----
     static void testWhiteBox() {
         try {
@@ -384,6 +414,7 @@ public class IntegerTest {
         testBitOps();
         testUnsignedOps();
         testSumMaxMin();
+        testRadixExtremesAndWrap();
         testBoxing();
     }
 

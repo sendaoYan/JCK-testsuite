@@ -216,6 +216,45 @@ public class ArraysTest {
               "deepHashCode stable");
     }
 
+    static void testSortSearchBoundaries() {
+        // empty arrays
+        int[] empty = {};
+        Arrays.sort(empty);
+        check(empty.length == 0, "sort empty int[]");
+        check(Arrays.binarySearch(empty, 1) == -1, "binarySearch empty -1");
+        // single element
+        int[] single = {5};
+        Arrays.sort(single);
+        check(Arrays.binarySearch(single, 5) == 0, "binarySearch single found");
+        check(Arrays.binarySearch(single, 3) == -1, "binarySearch single miss");
+        // sorted / reverse / duplicates
+        int[] dups = {3, 1, 3, 2, 1};
+        Arrays.sort(dups);
+        check(Arrays.equals(dups, new int[]{1, 1, 2, 3, 3}), "sort duplicates");
+        int dupIdx = Arrays.binarySearch(dups, 3);
+        check(dupIdx >= 0 && dups[dupIdx] == 3, "binarySearch duplicate hit");
+        // null element in Object[] sort throws NPE; nullsFirst sorts deterministically
+        String[] withNull = {"b", null, "a"};
+        expect(NullPointerException.class, () -> Arrays.sort(withNull), "sort Object[] with null NPE");
+        Arrays.sort(withNull, Comparator.nullsFirst(Comparator.naturalOrder()));
+        check(Arrays.equals(withNull, new String[]{null, "a", "b"}), "sort nullsFirst");
+        // compare boundaries: empty vs empty / empty vs non-empty / non-empty vs empty
+        check(Arrays.compare(new int[]{}, new int[]{}) == 0, "compare empty==empty");
+        check(Arrays.compare(new int[]{}, new int[]{1}) < 0, "compare empty < non-empty");
+        check(Arrays.compare(new int[]{1}, new int[]{}) > 0, "compare non-empty > empty");
+        check(Arrays.compare(new int[]{Integer.MIN_VALUE}, new int[]{Integer.MAX_VALUE}) < 0,
+              "compare MIN_VALUE < MAX_VALUE");
+        // equals / mismatch empty
+        check(Arrays.equals(new int[]{}, new int[]{}), "equals empty arrays");
+        check(Arrays.mismatch(new int[]{}, new int[]{}) == -1, "mismatch empty==empty -1");
+        check(Arrays.mismatch(new int[]{}, new int[]{1}) == 0, "mismatch empty vs non-empty 0");
+        // copyOf empty / copyOfRange empty
+        check(Arrays.copyOf(new int[]{}, 3).length == 3, "copyOf empty pads");
+        check(Arrays.copyOfRange(new int[]{1, 2, 3}, 1, 1).length == 0, "copyOfRange empty range");
+        // binarySearch with fromIndex == toIndex (empty range)
+        check(Arrays.binarySearch(new int[]{1, 3, 5}, 1, 1, 2) == -2, "binarySearch empty range");
+    }
+
     static void testBlackBox() {
         // parallelPrefix (full array + range) for int/long/double/Object
         int[] ia = {1, 2, 3, 4, 5};
@@ -290,6 +329,7 @@ public class ArraysTest {
         testSetAllStream();
         testAsList();
         testToStringHash();
+        testSortSearchBoundaries();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }

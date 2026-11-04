@@ -59,6 +59,7 @@ public class InstantTest {
         testSaturatingPlus();
         testComparison();
         testConversions();
+        testBoundaries();
         testErrors();
     }
 
@@ -131,6 +132,26 @@ public class InstantTest {
         check(odt.toInstant().equals(i), "atOffset roundtrip instant");
         ZonedDateTime zdt = i.atZone(ZoneOffset.ofHours(-5));
         check(zdt.getHour() == 5 && zdt.toInstant().equals(i), "atZone preserves instant");
+    }
+
+    static void testBoundaries() {
+        check(Instant.MAX.getEpochSecond() == 31556889864403199L && Instant.MAX.getNano() == 999_999_999,
+              "MAX constant epoch second/nano");
+        check(Instant.MIN.getEpochSecond() == -31557014167219200L, "MIN constant epoch second");
+        check(Instant.EPOCH.toEpochMilli() == 0L, "EPOCH toEpochMilli == 0");
+        check(Instant.parse("1970-01-01T00:00:00Z").equals(Instant.EPOCH), "parse epoch == EPOCH");
+        check(Instant.parse("1970-01-01T00:00:00.000000001Z").getNano() == 1, "parse 1 ns");
+        check(Instant.MAX.plus(Duration.ZERO).equals(Instant.MAX), "MAX plus ZERO stays MAX");
+        check(Instant.MIN.plus(Duration.ZERO).equals(Instant.MIN), "MIN plus ZERO stays MIN");
+        check(Instant.MAX.plusSaturating(Duration.ofSeconds(1)).equals(Instant.MAX), "MAX plusSaturating saturates");
+        check(Instant.MIN.plusSaturating(Duration.ofSeconds(-1)).equals(Instant.MIN), "MIN plusSaturating saturates");
+        check(Instant.ofEpochSecond(0, 1).compareTo(Instant.ofEpochSecond(0, 0)) > 0,
+              "nano ordering in compareTo");
+        check(Instant.ofEpochSecond(1, 999_999_999).toEpochMilli() == 1999L, "toEpochMilli truncates nanos");
+        expectThrows(DateTimeException.class, () -> Instant.ofEpochSecond(Long.MIN_VALUE),
+                "ofEpochSecond(Long.MIN_VALUE) exceeds range");
+        expectThrows(ArithmeticException.class, () -> Instant.MAX.plus(Duration.ofSeconds(Long.MAX_VALUE)),
+                "plus(Duration overflow)");
     }
 
     static void testErrors() {

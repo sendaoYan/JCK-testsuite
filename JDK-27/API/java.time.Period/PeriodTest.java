@@ -55,6 +55,7 @@ public class PeriodTest {
         testNormalization();
         testAddSubtract();
         testComparisonAndUnits();
+        testBoundaries();
         testErrors();
     }
 
@@ -123,6 +124,25 @@ public class PeriodTest {
         check(units.size() == 3 && units.get(0) == ChronoUnit.YEARS
                 && units.get(1) == ChronoUnit.MONTHS && units.get(2) == ChronoUnit.DAYS,
                 "getUnits [YEARS, MONTHS, DAYS]");
+    }
+
+    static void testBoundaries() {
+        check(Period.of(0, 0, 0).equals(Period.ZERO), "of(0,0,0) == ZERO");
+        check(Period.ofDays(0).equals(Period.ZERO), "ofDays(0) == ZERO");
+        check(Period.ZERO.isZero() && !Period.ZERO.isNegative(), "ZERO not negative");
+        check(Period.of(1, 2, 3).multipliedBy(0).equals(Period.ZERO), "multipliedBy(0) == ZERO");
+        check(Period.of(1, 2, 3).multipliedBy(-1).equals(Period.of(-1, -2, -3)), "multipliedBy(-1) == negated");
+        check(Period.ofYears(Integer.MAX_VALUE).getYears() == Integer.MAX_VALUE, "ofYears(Integer.MAX_VALUE)");
+        check(Period.between(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 1)).equals(Period.ZERO),
+              "between identical dates == ZERO");
+        check(Period.parse("P0D").equals(Period.ZERO), "parse P0D == ZERO");
+        check(Period.parse("P0Y0M0D").equals(Period.ZERO), "parse P0Y0M0D == ZERO");
+        check(Period.ZERO.addTo(LocalDate.of(2024, 5, 5)).equals(LocalDate.of(2024, 5, 5)),
+              "ZERO.addTo identity");
+        expectThrows(ArithmeticException.class, () -> Period.ofYears(Integer.MAX_VALUE).plusYears(1),
+                "plusYears overflow");
+        expectThrows(java.time.temporal.UnsupportedTemporalTypeException.class,
+                () -> Period.ZERO.get(ChronoUnit.SECONDS), "get unsupported unit");
     }
 
     static void testErrors() {

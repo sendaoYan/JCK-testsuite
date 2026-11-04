@@ -130,6 +130,22 @@ public class MessageFormatTest {
         check(!a.equals(new MessageFormat("{0}", US)), "different pattern not equal");
     }
 
+    static void testBoundaryValues() {
+        check("".equals(new MessageFormat("").format(new Object[]{})), "empty pattern formats empty");
+        expectThrows(() -> new MessageFormat("{"), IllegalArgumentException.class, "unmatched open brace");
+        expectThrows(() -> new MessageFormat("{0"), IllegalArgumentException.class, "unclosed placeholder");
+        check("a {1}".equals(MessageFormat.format("{0} {1}", "a")), "missing arg leaves placeholder");
+        check("0".equals(MessageFormat.format("{0,number,0}", 0)), "format 0");
+        check("2147483647".equals(MessageFormat.format("{0,number,0}", Integer.MAX_VALUE)),
+              "format Integer.MAX_VALUE");
+        check("-2147483648".equals(MessageFormat.format("{0,number,0}", Integer.MIN_VALUE)),
+              "format Integer.MIN_VALUE");
+        check("9223372036854775807".equals(MessageFormat.format("{0,number,0}", Long.MAX_VALUE)),
+              "format Long.MAX_VALUE");
+        Object[] emptyParsed = new MessageFormat("{0}", US).parse("", new ParsePosition(0));
+        check(emptyParsed.length == 1, "parse empty string yields one (empty) element");
+    }
+
     static void testBlackBox() {
         MessageFormat mf = new MessageFormat("{0} {1} {2}", US);
         NumberFormat nf = NumberFormat.getIntegerInstance(US);
@@ -171,6 +187,7 @@ public class MessageFormatTest {
         testParse();
         testPatternAndLocale();
         testIteratorEqualsClone();
+        testBoundaryValues();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }

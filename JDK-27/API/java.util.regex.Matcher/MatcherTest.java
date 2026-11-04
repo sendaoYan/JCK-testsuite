@@ -293,6 +293,25 @@ public class MatcherTest {
         check(m.toString().startsWith("java.util.regex.Matcher["), "toString prefix");
     }
 
+    static void testBoundaryEmptyAndEscapes() {
+        Matcher m = Pattern.compile("a*").matcher("");
+        check(m.matches() && m.group().equals("") && m.start() == 0 && m.end() == 0,
+              "a* matches empty with zero-width group");
+        Matcher le = Pattern.compile("").matcher("abc");
+        check(le.lookingAt() && le.group().equals(""), "empty pattern lookingAt zero-width");
+        check(Pattern.compile("x*").matcher("abc").replaceAll("").equals("abc"),
+              "empty replacement over zero-width matches");
+        Matcher r = Pattern.compile("a").matcher("aba");
+        check(r.replaceAll("").equals("b"), "replaceAll empty removes matches");
+        check(Matcher.quoteReplacement("\\").equals("\\\\"), "quoteReplacement single backslash");
+        Matcher e = Pattern.compile("a*").matcher("abc");
+        e.region(0, 0);
+        check(e.regionStart() == 0 && e.regionEnd() == 0, "region(0,0) empty region");
+        check(e.matches(), "a* matches empty region");
+        Matcher backref = Pattern.compile("(\\d)\\1").matcher("11");
+        check(backref.matches(), "backreference matcher");
+    }
+
     
     static void testBlackBox() throws Exception {
         testFindLoop();
@@ -308,6 +327,7 @@ public class MatcherTest {
         testQuoteReplacement();
         testResultsAndToMatchResult();
         testHasMatchAndToString();
+        testBoundaryEmptyAndEscapes();
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();

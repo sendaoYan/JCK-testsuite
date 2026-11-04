@@ -10,6 +10,7 @@ import java.text.AttributedCharacterIterator;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.ParseException;
+import java.text.ParsePosition;
 import java.util.Currency;
 import java.util.Locale;
 
@@ -109,6 +110,30 @@ public class DecimalFormatTest {
         check("3".equals(df.format(2.5)), "HALF_UP 2.5 -> 3");
         df.setRoundingMode(RoundingMode.DOWN);
         check("2".equals(df.format(2.9)), "DOWN 2.9 -> 2");
+    }
+
+    static void testBoundaryValues() {
+        DecimalFormat df = new DecimalFormat("0.00", SYM);
+        check("0.00".equals(df.format(0.0)), "format 0.0");
+        check("-0.00".equals(df.format(-0.0)), "format -0.0 preserves sign");
+        check("NaN".equals(df.format(Double.NaN)), "format NaN");
+        check("\u221e".equals(df.format(Double.POSITIVE_INFINITY)), "format Infinity symbol");
+        check("-\u221e".equals(df.format(Double.NEGATIVE_INFINITY)), "format -Infinity symbol");
+        check(df.parse("1.7976931348623157E308", new ParsePosition(0)).doubleValue() == Double.MAX_VALUE,
+              "parse MAX_VALUE");
+        check(df.parse("", new ParsePosition(0)) == null, "parse empty string returns null");
+        // empty pattern is accepted and falls back to the default pattern
+        DecimalFormat empty = new DecimalFormat("");
+        check("1.5".equals(empty.format(1.5)), "empty pattern falls back to default");
+        // illegal pattern with two decimal separators
+        expectThrows(() -> new DecimalFormat("#.##.##"), IllegalArgumentException.class,
+                     "illegal pattern rejected");
+        expectThrows(() -> new DecimalFormat("0.00", SYM).applyPattern("#.##.##"),
+                     IllegalArgumentException.class, "applyPattern illegal rejected");
+        // MAX/MIN round-trip through scientific pattern is deterministic
+        DecimalFormat sci = new DecimalFormat("0.###E0", SYM);
+        check("1.798E308".equals(sci.format(Double.MAX_VALUE)), "scientific format MAX_VALUE");
+        check("4.9E-324".equals(sci.format(Double.MIN_VALUE)), "scientific format MIN_VALUE");
     }
 
     static void testSymbolsAndPatternMutation() {
@@ -217,6 +242,7 @@ public class DecimalFormatTest {
         testRoundingModes();
         testSymbolsAndPatternMutation();
         testEqualsCloneHashCode();
+        testBoundaryValues();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }

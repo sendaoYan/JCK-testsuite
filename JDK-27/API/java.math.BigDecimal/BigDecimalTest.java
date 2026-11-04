@@ -122,6 +122,8 @@ public class BigDecimalTest {
         comparisonEquals();
         conversions();
         boundariesAndExceptions();
+        roundingModeEnumeration();
+        boundaryConversions();
     }
 
     static void construction() {
@@ -339,6 +341,61 @@ public class BigDecimalTest {
         } catch (NumberFormatException expected) {
             passed++;
         }
+    }
+
+    static void roundingModeEnumeration() {
+        // all 8 RoundingMode values applied to the tie 2.5 and -2.5 at precision 1
+        String[] pos = {"3", "2", "3", "2", "3", "2", "2", null};
+        String[] neg = {"-3", "-2", "-2", "-3", "-3", "-2", "-2", null};
+        RoundingMode[] modes = RoundingMode.values();
+        check(modes.length == 8, "8 rounding modes");
+        for (int i = 0; i < 8; i++) {
+            RoundingMode m = modes[i];
+            MathContext mc = new MathContext(1, m);
+            if (m == RoundingMode.UNNECESSARY) {
+                expectArithmetic(() -> new BigDecimal("2.5").round(mc), "UNNECESSARY tie throws");
+                expectArithmetic(() -> new BigDecimal("-2.5").round(mc), "UNNECESSARY tie throws (neg)");
+            } else {
+                check(new BigDecimal("2.5").round(mc).toString().equals(pos[i]),
+                      "round 2.5 mode " + m);
+                check(new BigDecimal("-2.5").round(mc).toString().equals(neg[i]),
+                      "round -2.5 mode " + m);
+            }
+        }
+        check(new BigDecimal("2.5").setScale(0, RoundingMode.HALF_DOWN).equals(new BigDecimal("2")),
+              "HALF_DOWN 2.5 -> 2");
+        check(new BigDecimal("2.6").setScale(0, RoundingMode.HALF_DOWN).equals(new BigDecimal("3")),
+              "HALF_DOWN 2.6 -> 3");
+        check(new BigDecimal("-2.5").setScale(0, RoundingMode.HALF_DOWN).equals(new BigDecimal("-2")),
+              "HALF_DOWN -2.5 -> -2");
+        expectArithmetic(() -> new BigDecimal("1.55").setScale(1, RoundingMode.UNNECESSARY),
+              "setScale UNNECESSARY inexact");
+        check(new BigDecimal("1.50").setScale(1, RoundingMode.UNNECESSARY).equals(new BigDecimal("1.5")),
+              "setScale UNNECESSARY exact");
+    }
+
+    static void boundaryConversions() {
+        expectNumberFormat(() -> BigDecimal.valueOf(Double.NaN), "valueOf(NaN)");
+        expectNumberFormat(() -> BigDecimal.valueOf(Double.POSITIVE_INFINITY), "valueOf(+Inf)");
+        expectNumberFormat(() -> new BigDecimal(Double.NaN), "new BigDecimal(double NaN)");
+        expectNumberFormat(() -> new BigDecimal(Double.NEGATIVE_INFINITY), "new BigDecimal(double -Inf)");
+        check(BigDecimal.valueOf(-0.0).signum() == 0 && BigDecimal.valueOf(-0.0).toString().equals("0.0"),
+              "valueOf(-0.0) normalized to 0.0");
+        check(BigDecimal.valueOf(Long.MAX_VALUE).longValue() == Long.MAX_VALUE, "valueOf(Long.MAX)");
+        check(BigDecimal.valueOf(Long.MIN_VALUE).longValue() == Long.MIN_VALUE, "valueOf(Long.MIN)");
+        check(new BigDecimal("4294967296").intValue() == 0, "intValue wraps 2^32 -> 0");
+        check(new BigDecimal("18446744073709551616").longValue() == 0, "longValue wraps 2^64 -> 0");
+        check(new BigDecimal("2147483647").intValueExact() == Integer.MAX_VALUE, "intValueExact MAX");
+        check(new BigDecimal("-2147483648").intValueExact() == Integer.MIN_VALUE, "intValueExact MIN");
+        check(new BigDecimal("9223372036854775807").longValueExact() == Long.MAX_VALUE, "longValueExact MAX");
+        check(new BigDecimal("-9223372036854775808").longValueExact() == Long.MIN_VALUE, "longValueExact MIN");
+        check(new BigDecimal("127").byteValueExact() == 127, "byteValueExact 127");
+        expectArithmetic(() -> new BigDecimal("128").byteValueExact(), "byteValueExact 128 overflow");
+        expectArithmetic(() -> new BigDecimal("32768").shortValueExact(), "shortValueExact 32768 overflow");
+        check(new BigDecimal("5").pow(0).equals(BigDecimal.ONE), "pow(0) == 1");
+        check(new BigDecimal("5").pow(1).equals(new BigDecimal("5")), "pow(1) == self");
+        check(BigDecimal.ZERO.ulp().equals(BigDecimal.ONE), "ZERO ulp == 1");
+        check(new BigDecimal("-1.0").ulp().equals(new BigDecimal("0.1")), "ulp of -1.0 == 0.1");
     }
 
     public static void main(String[] args) throws Exception {

@@ -108,6 +108,7 @@ public class BigIntegerTest {
         comparisonAndHash();
         conversions();
         boundariesAndExceptions();
+        boundariesExtra();
     }
 
     static void construction() {
@@ -332,6 +333,34 @@ public class BigIntegerTest {
         } catch (NumberFormatException expected) {
             passed++;
         }
+    }
+
+    static void boundariesExtra() {
+        check(BigInteger.valueOf(Long.MAX_VALUE).longValue() == Long.MAX_VALUE, "valueOf(Long.MAX)");
+        check(BigInteger.valueOf(Long.MIN_VALUE).longValue() == Long.MIN_VALUE, "valueOf(Long.MIN)");
+        expectNumberFormat(() -> new BigInteger(new byte[]{}), "empty byte[] ctor");
+        check(new BigInteger(0, new byte[]{}).signum() == 0, "(0, empty magnitude) == 0");
+        check(new BigInteger(-1, new byte[]{0, 0}).signum() == 0, "(-1, zero magnitude) normalized to 0");
+        expectArithmetic(() -> BigInteger.probablePrime(1, new Random(1L)), "probablePrime bitLength < 2");
+        expectArithmetic(() -> BigInteger.ONE.divideAndRemainder(BigInteger.ZERO), "divideAndRemainder by zero");
+        expectArithmetic(() -> BigInteger.ONE.remainder(BigInteger.ZERO), "remainder by zero");
+        expectArithmetic(() -> BigInteger.valueOf(5).pow(-1), "pow negative exponent");
+        expectArithmetic(() -> BigInteger.ONE.testBit(-1), "testBit negative index");
+        expectArithmetic(() -> BigInteger.ONE.setBit(-1), "setBit negative index");
+        expectArithmetic(() -> BigInteger.ONE.clearBit(-1), "clearBit negative index");
+        expectArithmetic(() -> BigInteger.ONE.flipBit(-1), "flipBit negative index");
+        expectArithmetic(() -> BigInteger.valueOf(3).modInverse(BigInteger.ZERO), "modInverse zero modulus");
+        expectArithmetic(() -> BigInteger.valueOf(3).modInverse(BigInteger.valueOf(-11)), "modInverse negative modulus");
+        check(BigInteger.ZERO.gcd(BigInteger.ZERO).equals(BigInteger.ZERO), "gcd(0,0) == 0");
+        check(BigInteger.valueOf(5).shiftLeft(-1).equals(BigInteger.valueOf(5).shiftRight(1)),
+              "shiftLeft(-1) == shiftRight(1)");
+        check(BigInteger.valueOf(5).shiftRight(-1).equals(BigInteger.valueOf(5).shiftLeft(1)),
+              "shiftRight(-1) == shiftLeft(1)");
+        check(BigInteger.valueOf(255).toString(37).equals("255"), "toString invalid radix defaults to 10");
+        check(new BigInteger("2147483647").intValueExact() == Integer.MAX_VALUE, "intValueExact MAX");
+        check(new BigInteger("-2147483648").intValueExact() == Integer.MIN_VALUE, "intValueExact MIN");
+        check(new BigInteger("9223372036854775807").longValueExact() == Long.MAX_VALUE, "longValueExact MAX");
+        check(new BigInteger("-9223372036854775808").longValueExact() == Long.MIN_VALUE, "longValueExact MIN");
     }
 
     public static void main(String[] args) throws Exception {

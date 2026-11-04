@@ -119,6 +119,14 @@ public class MathContextTest {
               "UNLIMITED toString");
         check(new MathContext(9, RoundingMode.HALF_UP).toString()
               .equals("precision=9 roundingMode=HALF_UP"), "toString format");
+        check(new MathContext(7, RoundingMode.HALF_EVEN).equals(MathContext.DECIMAL32),
+              "DECIMAL32 equals new MathContext(7, HALF_EVEN)");
+        check(MathContext.DECIMAL64.toString().equals("precision=16 roundingMode=HALF_EVEN"),
+              "DECIMAL64 toString");
+        check(MathContext.DECIMAL128.toString().equals("precision=34 roundingMode=HALF_EVEN"),
+              "DECIMAL128 toString");
+        check(MathContext.UNLIMITED.equals(new MathContext(0, RoundingMode.HALF_UP)),
+              "UNLIMITED equals new MathContext(0, HALF_UP)");
         // round-trip: parse toString() of arbitrary context
         MathContext orig = new MathContext(5, RoundingMode.DOWN);
         MathContext copy = new MathContext(orig.toString());

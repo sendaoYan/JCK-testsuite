@@ -178,6 +178,29 @@ public class DoubleTest {
         check(Double.compare(Double.max(-0.0, 0.0), 0.0) == 0, "max(-0.0,0.0) == +0.0");
     }
 
+    static void testBoundaryParseAndFormat() {
+        check(Double.parseDouble("1.7976931348623157E308") == Double.MAX_VALUE, "parseDouble(MAX)");
+        check(Double.parseDouble("4.9E-324") == Double.MIN_VALUE, "parseDouble(MIN_VALUE)");
+        check(Double.parseDouble("1e309") == Double.POSITIVE_INFINITY, "parseDouble overflow -> +Inf");
+        check(Double.parseDouble("-1e309") == Double.NEGATIVE_INFINITY, "parseDouble overflow -> -Inf");
+        check(Double.parseDouble("1e-400") == 0.0, "parseDouble underflow -> 0.0");
+        check(Double.parseDouble("0x1.0p-1022") == Double.MIN_NORMAL, "parseDouble hex MIN_NORMAL");
+        check(Double.parseDouble("0x1.0p1024") == Double.POSITIVE_INFINITY, "parseDouble hex overflow");
+        check(Double.valueOf("+1.5") == 1.5, "valueOf(+1.5) leading plus");
+        check(Double.valueOf(Double.MAX_VALUE).doubleValue() == Double.MAX_VALUE, "valueOf(MAX)");
+        check(Double.toString(Double.MAX_VALUE).equals("1.7976931348623157E308"), "toString(MAX)");
+        check(Double.toString(Double.MIN_VALUE).equals("4.9E-324"), "toString(MIN_VALUE)");
+        check(Double.compare(Double.MAX_VALUE, Double.POSITIVE_INFINITY) < 0, "compare(MAX, Inf) < 0");
+        check(Double.compare(Double.NEGATIVE_INFINITY, Double.MIN_VALUE) < 0, "compare(-Inf, MIN) < 0");
+        check(Double.compare(Double.MIN_VALUE, 0.0) > 0, "compare(MIN_VALUE, 0.0) > 0");
+        check(Double.sum(Double.MAX_VALUE, Double.MAX_VALUE) == Double.POSITIVE_INFINITY,
+              "sum(MAX, MAX) overflows to +Inf");
+        check(Double.doubleToLongBits(Double.MAX_VALUE) == 0x7fefffffffffffffL, "bits(MAX)");
+        check(Double.doubleToLongBits(Double.MIN_VALUE) == 0x1L, "bits(MIN_VALUE)");
+        check(Double.valueOf("-0.0").doubleValue() == 0.0 && Double.compare(-0.0, 0.0) < 0,
+              "valueOf(-0.0) preserves sign");
+    }
+
     static void testBoxing() {
         Double boxed = 1.5;
         check(boxed.doubleValue() == 1.5, "unboxing recovers double");
@@ -197,6 +220,7 @@ public class DoubleTest {
         testCompareEquals();
         testHashCodeToString();
         testSumMaxMin();
+        testBoundaryParseAndFormat();
         testBoxing();
     }
 

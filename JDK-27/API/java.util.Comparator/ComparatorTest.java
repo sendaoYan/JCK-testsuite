@@ -39,6 +39,7 @@ public class ComparatorTest {
         testNulls();
         testMinMax();
         testThenComparingVariants();
+        testBoundaries();
     }
 
     static void testNaturalAndReverse() {
@@ -90,6 +91,27 @@ public class ComparatorTest {
         Comparator<double[]> byFirstD = Comparator.comparingDouble(a -> a[0]);
         double[] dx = {1.0}, dy = {2.0};
         check(byFirstD.compare(dx, dy) < 0, "comparingDouble");
+    }
+
+    static void testBoundaries() {
+        Comparator<Integer> natural = Comparator.naturalOrder();
+        check(natural.compare(Integer.MIN_VALUE, Integer.MAX_VALUE) < 0, "natural MIN < MAX");
+        check(natural.compare(Integer.MAX_VALUE, Integer.MIN_VALUE) > 0, "natural MAX > MIN");
+        check(natural.compare(Integer.MIN_VALUE, Integer.MIN_VALUE) == 0, "natural MIN == MIN");
+        check(natural.reversed().compare(Integer.MIN_VALUE, Integer.MAX_VALUE) > 0, "reversed MIN > MAX");
+        Comparator<Integer> byInt = Comparator.comparingInt(x -> x);
+        check(byInt.compare(Integer.MIN_VALUE, Integer.MAX_VALUE) < 0, "comparingInt MIN < MAX");
+        check(byInt.compare(-1, 1) < 0 && byInt.compare(1, -1) > 0, "comparingInt sign boundary");
+        check(byInt.reversed().compare(1, 2) > 0, "reversed of comparingInt");
+        Comparator<String> nullsFirst = Comparator.nullsFirst(Comparator.naturalOrder());
+        check(nullsFirst.compare(null, null) == 0, "nullsFirst(null, null) == 0");
+        Comparator<String> nullsLast = Comparator.nullsLast(Comparator.naturalOrder());
+        check(nullsLast.compare(null, null) == 0, "nullsLast(null, null) == 0");
+        check(nullsFirst.compare(null, "a") < 0 && nullsLast.compare(null, "a") > 0, "nulls ordering");
+        Comparator<String> byLen = Comparator.comparingInt(String::length);
+        check(byLen.thenComparing(Comparator.naturalOrder()).compare("a", "b") < 0,
+              "thenComparing equal key falls to secondary");
+        check(byLen.reversed().reversed().compare("a", "bbb") < 0, "double reversed restores order");
     }
 
     public static void main(String[] args) throws Exception {

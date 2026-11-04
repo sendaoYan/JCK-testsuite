@@ -180,6 +180,29 @@ public class FloatTest {
         check(Float.compare(Float.max(-0.0f, 0.0f), 0.0f) == 0, "max(-0.0,0.0) == +0.0");
     }
 
+    static void testBoundaryParseAndFormat() {
+        check(Float.parseFloat("3.4028235E38") == Float.MAX_VALUE, "parseFloat(MAX)");
+        check(Float.parseFloat("1.4E-45") == Float.MIN_VALUE, "parseFloat(MIN_VALUE)");
+        check(Float.parseFloat("3.5E38") == Float.POSITIVE_INFINITY, "parseFloat overflow -> +Inf");
+        check(Float.parseFloat("-3.5E38") == Float.NEGATIVE_INFINITY, "parseFloat overflow -> -Inf");
+        check(Float.parseFloat("1e-50") == 0.0f, "parseFloat underflow -> 0.0");
+        check(Float.parseFloat("0x1.0p-126") == Float.MIN_NORMAL, "parseFloat hex MIN_NORMAL");
+        check(Float.parseFloat("0x1.0p128") == Float.POSITIVE_INFINITY, "parseFloat hex overflow");
+        check(Float.valueOf("+1.5") == 1.5f, "valueOf(+1.5) leading plus");
+        check(Float.valueOf(Float.MAX_VALUE).floatValue() == Float.MAX_VALUE, "valueOf(MAX)");
+        check(Float.toString(Float.MAX_VALUE).equals("3.4028235E38"), "toString(MAX)");
+        check(Float.toString(Float.MIN_VALUE).equals("1.4E-45"), "toString(MIN_VALUE)");
+        check(Float.compare(Float.MAX_VALUE, Float.POSITIVE_INFINITY) < 0, "compare(MAX, Inf) < 0");
+        check(Float.compare(Float.NEGATIVE_INFINITY, Float.MIN_VALUE) < 0, "compare(-Inf, MIN) < 0");
+        check(Float.compare(Float.MIN_VALUE, 0.0f) > 0, "compare(MIN_VALUE, 0.0) > 0");
+        check(Float.sum(Float.MAX_VALUE, Float.MAX_VALUE) == Float.POSITIVE_INFINITY,
+              "sum(MAX, MAX) overflows to +Inf");
+        check(Float.floatToIntBits(Float.MAX_VALUE) == 0x7f7fffff, "bits(MAX)");
+        check(Float.floatToIntBits(Float.MIN_VALUE) == 0x1, "bits(MIN_VALUE)");
+        check(Float.floatToIntBits(-0.0f) == 0x80000000 && Float.compare(-0.0f, 0.0f) < 0,
+              "valueOf(-0.0) preserves sign");
+    }
+
     static void testFloat16() {
         check(Float.float16ToFloat((short) 0x3C00) == 1.0f, "float16ToFloat(0x3C00)==1.0");
         check(Float.float16ToFloat((short) 0x0000) == 0.0f, "float16ToFloat(0x0000)==0.0");
@@ -211,6 +234,7 @@ public class FloatTest {
         testCompareEquals();
         testHashCodeToString();
         testSumMaxMin();
+        testBoundaryParseAndFormat();
         testFloat16();
         testBoxing();
     }

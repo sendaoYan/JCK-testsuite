@@ -256,6 +256,65 @@ public class CollectionsTest {
         check(lifo.peek() == 1, "asLifoQueue peek returns next");
     }
 
+    static void testSortSearchBoundaries() {
+        // empty list
+        List<Integer> empty = new ArrayList<>();
+        Collections.sort(empty);
+        check(empty.isEmpty(), "sort empty list no-op");
+        check(Collections.binarySearch(empty, 1) == -1, "binarySearch empty -1");
+        // single element
+        List<Integer> single = new ArrayList<>(Arrays.asList(5));
+        Collections.sort(single);
+        check(Collections.binarySearch(single, 5) == 0, "binarySearch single found");
+        check(Collections.binarySearch(single, 3) == -1, "binarySearch single miss");
+        // already sorted is stable; reverse sorted is sorted
+        List<Integer> sorted = new ArrayList<>(Arrays.asList(1, 2, 3, 4));
+        List<Integer> sortedCopy = new ArrayList<>(sorted);
+        Collections.sort(sortedCopy);
+        check(sortedCopy.equals(sorted), "sort already sorted is stable");
+        List<Integer> reversed = new ArrayList<>(Arrays.asList(4, 3, 2, 1));
+        Collections.sort(reversed);
+        check(reversed.equals(Arrays.asList(1, 2, 3, 4)), "sort reverse-sorted");
+        // duplicates
+        List<Integer> dups = new ArrayList<>(Arrays.asList(2, 1, 2, 1, 2));
+        Collections.sort(dups);
+        check(dups.equals(Arrays.asList(1, 1, 2, 2, 2)), "sort with duplicates");
+        int dupIdx = Collections.binarySearch(dups, 2);
+        check(dupIdx >= 0 && dups.get(dupIdx) == 2, "binarySearch duplicate returns a hit");
+        // null element: natural sort throws NPE, nullsFirst sorts deterministically
+        List<String> withNull = new ArrayList<>(Arrays.asList("b", null, "a"));
+        expect(NullPointerException.class, () -> Collections.sort(withNull), "sort with null NPE");
+        Collections.sort(withNull, Comparator.nullsFirst(Comparator.naturalOrder()));
+        check(withNull.equals(Arrays.asList(null, "a", "b")), "sort nullsFirst");
+        // min/max over single and duplicates
+        check(Collections.min(single) == 5 && Collections.max(single) == 5, "min/max single");
+        check(Collections.min(dups) == 1 && Collections.max(dups) == 2, "min/max duplicates");
+        // reverse/rotate/swap/fill/copy boundary sizes
+        List<Integer> one = new ArrayList<>(Arrays.asList(7));
+        Collections.reverse(one);
+        check(one.equals(Arrays.asList(7)), "reverse single no-op");
+        Collections.rotate(one, 0);
+        check(one.equals(Arrays.asList(7)), "rotate by 0 no-op");
+        Collections.rotate(one, 1);
+        check(one.equals(Arrays.asList(7)), "rotate single by 1 no-op");
+        Collections.swap(one, 0, 0);
+        check(one.equals(Arrays.asList(7)), "swap same index no-op");
+        List<Integer> toFill = new ArrayList<>(Arrays.asList(1, 2));
+        Collections.fill(toFill, 9);
+        check(toFill.equals(Arrays.asList(9, 9)), "fill overwrites");
+        // nCopies(0) / frequency / disjoint on empty
+        check(Collections.nCopies(0, "x").isEmpty(), "nCopies(0) empty");
+        check(Collections.frequency(empty, 1) == 0, "frequency on empty 0");
+        check(Collections.disjoint(empty, Arrays.asList(1)), "disjoint with empty");
+        // indexOfSubList / lastIndexOfSubList boundaries
+        List<Integer> src = Arrays.asList(1, 2, 3, 2, 3, 4);
+        check(Collections.indexOfSubList(src, src) == 0, "indexOfSubList source==target");
+        check(Collections.lastIndexOfSubList(src, src) == 0, "lastIndexOfSubList source==target");
+        check(Collections.indexOfSubList(src, Arrays.asList(5)) == -1, "indexOfSubList absent -1");
+        check(Collections.indexOfSubList(src, Arrays.asList(1, 2, 3, 2, 3, 4, 5)) == -1,
+              "indexOfSubList target longer -1");
+    }
+
     static void testBlackBox() {
         // ---- checked* wrappers enforce runtime type checks ----
         Collection<String> cc = Collections.checkedCollection(new ArrayList<>(), String.class);
@@ -433,6 +492,7 @@ public class CollectionsTest {
         testUnmodifiable();
         testEmptySingleton();
         testEnumerationListNewSetAsLifo();
+        testSortSearchBoundaries();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }

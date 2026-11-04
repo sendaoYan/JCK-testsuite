@@ -55,6 +55,7 @@ public class DurationTest {
         testGettersAndParts();
         testArithmeticImmutability();
         testComparison();
+        testBoundaries();
         testErrors();
     }
 
@@ -127,6 +128,34 @@ public class DurationTest {
         check(Duration.ZERO.isZero() && !a.isZero(), "isZero");
         check(a.isPositive() && !b.isNegative(), "isPositive");
         check(Duration.ofSeconds(-5).isNegative(), "isNegative");
+    }
+
+    static void testBoundaries() {
+        check(Duration.ZERO.getSeconds() == 0 && Duration.ZERO.getNano() == 0, "ZERO components");
+        check(Duration.ZERO.isZero() && !Duration.ZERO.isPositive() && !Duration.ZERO.isNegative(),
+              "ZERO is neither positive nor negative");
+        check(Duration.ofSeconds(Long.MAX_VALUE).getSeconds() == Long.MAX_VALUE,
+              "ofSeconds(Long.MAX_VALUE) no overflow");
+        check(Duration.ofSeconds(Long.MIN_VALUE).getSeconds() == Long.MIN_VALUE,
+              "ofSeconds(Long.MIN_VALUE)");
+        check(Duration.ofMillis(Long.MAX_VALUE).getSeconds() == Long.MAX_VALUE / 1000,
+              "ofMillis(Long.MAX_VALUE) truncates");
+        check(Duration.ofNanos(Long.MAX_VALUE).getNano() == Long.MAX_VALUE % 1_000_000_000,
+              "ofNanos(Long.MAX_VALUE) normalizes");
+        check(Duration.ofSeconds(10).multipliedBy(0).equals(Duration.ZERO), "multipliedBy(0) == ZERO");
+        check(Duration.ofSeconds(10).multipliedBy(-1).equals(Duration.ofSeconds(-10)), "multipliedBy(-1) == negated");
+        check(Duration.ofSeconds(10).dividedBy(-2).equals(Duration.ofSeconds(-5)),
+              "dividedBy negative divisor");
+        check(Duration.between(Instant.ofEpochSecond(5), Instant.ofEpochSecond(5)).equals(Duration.ZERO),
+              "between identical instants == ZERO");
+        check(Duration.parse("PT0S").equals(Duration.ZERO), "parse PT0S == ZERO");
+        check(Duration.parse("P0D").equals(Duration.ZERO), "parse P0D == ZERO");
+        expectThrows(ArithmeticException.class, () -> Duration.ofSeconds(Long.MAX_VALUE).toNanos(),
+                "toNanos overflow");
+        expectThrows(ArithmeticException.class, () -> Duration.ofSeconds(Long.MAX_VALUE).toMillis(),
+                "toMillis overflow");
+        expectThrows(ArithmeticException.class, () -> Duration.ofSeconds(10).dividedBy(0),
+                "dividedBy(0)");
     }
 
     static void testErrors() {
