@@ -1,0 +1,29 @@
+super public class MonitorException
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // monitorexit on an object whose monitor is not held.
+    public static Method exitWithoutEnter:"(Ljava/lang/Object;)V"
+        stack 1 locals 1
+    {
+        aload_0;
+        monitorexit;
+        return;
+    }
+
+    // monitorenter on null.
+    public static Method enterNull:"()V"
+        stack 1 locals 0
+    {
+        aconst_null;
+        monitorenter;
+        return;
+    }
+}

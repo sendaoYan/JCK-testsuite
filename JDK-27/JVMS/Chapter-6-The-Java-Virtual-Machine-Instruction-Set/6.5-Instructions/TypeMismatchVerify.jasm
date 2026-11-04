@@ -1,0 +1,21 @@
+super public class TypeMismatchVerify
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // Declared to return int, but lload_0 leaves a long on the stack where
+    // iadd expects two ints: verification must reject with VerifyError.
+    public static Method bad:"(J)I"
+        stack 2 locals 2
+    {
+        lload_0;
+        iadd;
+        ireturn;
+    }
+}

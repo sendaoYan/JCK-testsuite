@@ -1,0 +1,35 @@
+super public class InvokeSpecialStatic extends Parent
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method Parent."<init>":"()V";
+        return;
+    }
+
+    // Overrides who(): dynamic dispatch would return 99, but invokespecial
+    // resolves directly to Parent.who() and must return 1.
+    public Method who:"()I"
+        stack 1 locals 1
+    {
+        bipush 99;
+        ireturn;
+    }
+
+    public static Method callSuper:"(LInvokeSpecialStatic;)I"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method Parent.who:"()I";
+        ireturn;
+    }
+
+    public static Method callStatic:"()I"
+        stack 1 locals 0
+    {
+        invokestatic Method Parent.helper:"()I";
+        ireturn;
+    }
+}

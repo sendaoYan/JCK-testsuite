@@ -1,0 +1,46 @@
+super public class ArrayStoreOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method anewarrayNeg:"(I)[Ljava/lang/Object;"
+        stack 1 locals 1
+    {
+        iload_0;
+        anewarray class java/lang/Object;
+        areturn;
+    }
+
+    public static Method multiNeg:"(II)[[I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        multianewarray class "[[I", 2;
+        areturn;
+    }
+
+    public static Method arrayLengthNull:"()I"
+        stack 1 locals 0
+    {
+        aconst_null;
+        arraylength;
+        ireturn;
+    }
+
+    public static Method aastoreObj:"([Ljava/lang/Object;Ljava/lang/Object;)V"
+        stack 3 locals 2
+    {
+        aload_0;
+        iconst_0;
+        aload_1;
+        aastore;
+        return;
+    }
+}

@@ -1,0 +1,165 @@
+super public class LoadStoreOps
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method iconstM1:"()I"
+        stack 1 locals 0
+    {
+        iconst_m1;
+        ireturn;
+    }
+
+    public static Method iconstSum:"()I"
+        stack 6 locals 0
+    {
+        iconst_0;
+        iconst_1;
+        iconst_2;
+        iconst_3;
+        iconst_4;
+        iconst_5;
+        iadd;
+        iadd;
+        iadd;
+        iadd;
+        iadd;
+        ireturn;
+    }
+
+    public static Method aconstNull:"()Ljava/lang/Object;"
+        stack 1 locals 0
+    {
+        aconst_null;
+        areturn;
+    }
+
+    public static Method lconst0:"()J"
+        stack 2 locals 0
+    {
+        lconst_0;
+        lreturn;
+    }
+
+    public static Method lconst1:"()J"
+        stack 2 locals 0
+    {
+        lconst_1;
+        lreturn;
+    }
+
+    public static Method fconstSum:"()F"
+        stack 3 locals 0
+    {
+        fconst_0;
+        fconst_1;
+        fconst_2;
+        fadd;
+        fadd;
+        freturn;
+    }
+
+    public static Method dconstSum:"()D"
+        stack 4 locals 0
+    {
+        dconst_0;
+        dconst_1;
+        dadd;
+        dreturn;
+    }
+
+    public static Method iloadStore:"(I)I"
+        stack 1 locals 2
+    {
+        iload_0;
+        istore_1;
+        iload_1;
+        ireturn;
+    }
+
+    public static Method lloadStore:"(J)J"
+        stack 2 locals 4
+    {
+        lload_0;
+        lstore_2;
+        lload_2;
+        lreturn;
+    }
+
+    public static Method floadStore:"(F)F"
+        stack 1 locals 2
+    {
+        fload_0;
+        fstore_1;
+        fload_1;
+        freturn;
+    }
+
+    public static Method dloadStore:"(D)D"
+        stack 2 locals 4
+    {
+        dload_0;
+        dstore_2;
+        dload_2;
+        dreturn;
+    }
+
+    public static Method aloadStore:"(Ljava/lang/Object;)Ljava/lang/Object;"
+        stack 1 locals 2
+    {
+        aload_0;
+        astore_1;
+        aload_1;
+        areturn;
+    }
+
+    public static Method wideStoreLoad:"(I)I"
+        stack 1 locals 301
+    {
+        iload_0;
+        istore 300;
+        iload 300;
+        ireturn;
+    }
+
+    public static Method ldcW:"()I"
+        stack 1 locals 0
+    {
+        ldc_w int 40000;
+        ireturn;
+    }
+
+    public static Method bipushMin:"()I"
+        stack 1 locals 0
+    {
+        bipush -128;
+        ireturn;
+    }
+
+    public static Method bipushMax:"()I"
+        stack 1 locals 0
+    {
+        bipush 127;
+        ireturn;
+    }
+
+    public static Method sipushMin:"()I"
+        stack 1 locals 0
+    {
+        sipush -32768;
+        ireturn;
+    }
+
+    public static Method sipushMax:"()I"
+        stack 1 locals 0
+    {
+        sipush 32767;
+        ireturn;
+    }
+}

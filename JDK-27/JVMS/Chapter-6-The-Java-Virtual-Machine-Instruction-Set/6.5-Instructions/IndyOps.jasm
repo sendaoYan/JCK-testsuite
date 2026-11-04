@@ -1,0 +1,18 @@
+super public class IndyOps
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method call:"()Ljava/lang/String;"
+        stack 1 locals 0
+    {
+        invokedynamic InvokeDynamic REF_invokeStatic:Method IndyBootstrap.bsm:"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;":"call":"()Ljava/lang/String;" { };
+        areturn;
+    }
+}

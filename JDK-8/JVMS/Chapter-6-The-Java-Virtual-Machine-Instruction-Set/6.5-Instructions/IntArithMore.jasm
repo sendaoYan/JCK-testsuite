@@ -1,0 +1,77 @@
+super public class IntArithMore
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method isub:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        isub;
+        ireturn;
+    }
+
+    public static Method imul:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        imul;
+        ireturn;
+    }
+
+    // Integer.MIN_VALUE / -1 overflows to MIN_VALUE (does not throw).
+    public static Method idivMinOverflow:"()I"
+        stack 2 locals 0
+    {
+        ldc int 2147483647;
+        iconst_1;
+        iadd;
+        iconst_m1;
+        idiv;
+        ireturn;
+    }
+
+    public static Method land:"(JJ)J"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        land;
+        lreturn;
+    }
+
+    public static Method lor:"(JJ)J"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        lor;
+        lreturn;
+    }
+
+    public static Method lxor:"(JJ)J"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        lxor;
+        lreturn;
+    }
+
+    public static Method lshr:"(JI)J"
+        stack 3 locals 3
+    {
+        lload_0;
+        iload_2;
+        lshr;
+        lreturn;
+    }
+}

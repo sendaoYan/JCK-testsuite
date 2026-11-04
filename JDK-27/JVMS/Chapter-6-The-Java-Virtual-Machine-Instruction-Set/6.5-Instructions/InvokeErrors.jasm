@@ -1,0 +1,60 @@
+super public class InvokeErrors
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // invokeinterface whose InterfaceMethodref names a class, not an interface.
+    public static Method invokeIfaceOnClass:"(LTarget;)I"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokeinterface InterfaceMethod Target.f:"()I", 1;
+        ireturn;
+    }
+
+    public static Method newBogus:"()LAbs;"
+        stack 2 locals 0
+    {
+        new class Bogus;
+        dup;
+        invokespecial Method Bogus."<init>":"()V";
+        areturn;
+    }
+
+    // invokevirtual on an abstract method that the receiver does not implement.
+    public static Method invokeAbstract:"(LAbs;)I"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokevirtual Method Abs.g:"()I";
+        ireturn;
+    }
+
+    // invokestatic to a method that does not exist in java/lang/String.
+    public static Method noSuchMethod:"()I"
+        stack 1 locals 0
+    {
+        invokestatic Method java/lang/String.zzzNonexistent:"()Ljava/lang/String;";
+        pop;
+        iconst_0;
+        ireturn;
+    }
+}
+
+super public class Bogus extends Abs
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method Abs."<init>":"()V";
+        return;
+    }
+}

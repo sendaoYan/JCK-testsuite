@@ -1,0 +1,75 @@
+super public class BranchEdgeOps
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // ifle: branch when value <= 0
+    public static Method ifle:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        ifle L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    // ifgt: branch when value > 0
+    public static Method ifgt:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        ifgt L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    // if_icmple: branch when a <= b
+    public static Method ifIcmple:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmple L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    // if_icmpgt: branch when a > b
+    public static Method ifIcmpgt:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmpgt L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    // goto_w: unconditional branch with a 4-byte offset
+    public static Method gotoW:"()I"
+        stack 1 locals 1
+    {
+        goto_w L1;
+    L1: stack_frame_type same;
+        bipush 7;
+        ireturn;
+    }
+}

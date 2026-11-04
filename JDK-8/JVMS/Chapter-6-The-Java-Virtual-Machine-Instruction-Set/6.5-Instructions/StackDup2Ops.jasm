@@ -1,0 +1,66 @@
+super public class StackDup2Ops
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // dup2 on two category-1 values: [1,2] -> [1,2,1,2], sum 6
+    public static Method dup2TwoInt:"()I"
+        stack 4 locals 0
+    {
+        iconst_1;
+        iconst_2;
+        dup2;
+        iadd;
+        iadd;
+        iadd;
+        ireturn;
+    }
+
+    // dup2 on a category-2 value: [1L] -> [1L,1L], sum 2
+    public static Method dup2Long:"()J"
+        stack 4 locals 0
+    {
+        lconst_1;
+        dup2;
+        ladd;
+        lreturn;
+    }
+
+    // dup2_x1 (form 1, all category-1): [1,2,3] -> [2,3,1,2,3], sum 11
+    public static Method dup2x1:"()I"
+        stack 5 locals 0
+    {
+        iconst_1;
+        iconst_2;
+        iconst_3;
+        dup2_x1;
+        iadd;
+        iadd;
+        iadd;
+        iadd;
+        ireturn;
+    }
+
+    // dup2_x2 (form 1, all category-1): [1,2,3,4] -> [3,4,1,2,3,4], sum 17
+    public static Method dup2x2:"()I"
+        stack 6 locals 0
+    {
+        iconst_1;
+        iconst_2;
+        iconst_3;
+        iconst_4;
+        dup2_x2;
+        iadd;
+        iadd;
+        iadd;
+        iadd;
+        iadd;
+        ireturn;
+    }
+}

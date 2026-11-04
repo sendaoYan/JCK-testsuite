@@ -1,0 +1,68 @@
+super public class ArrayWideOps
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method laload:"([JI)J"
+        stack 2 locals 2
+    {
+        aload_0;
+        iload_1;
+        laload;
+        lreturn;
+    }
+
+    public static Method lastore:"([JIJ)V"
+        stack 4 locals 4
+    {
+        aload_0;
+        iload_1;
+        lload_2;
+        lastore;
+        return;
+    }
+
+    public static Method faload:"([FI)F"
+        stack 2 locals 2
+    {
+        aload_0;
+        iload_1;
+        faload;
+        freturn;
+    }
+
+    public static Method fastore:"([FIF)V"
+        stack 3 locals 3
+    {
+        aload_0;
+        iload_1;
+        fload_2;
+        fastore;
+        return;
+    }
+
+    public static Method daload:"([DI)D"
+        stack 3 locals 2
+    {
+        aload_0;
+        iload_1;
+        daload;
+        dreturn;
+    }
+
+    public static Method dastore:"([DID)V"
+        stack 4 locals 4
+    {
+        aload_0;
+        iload_1;
+        dload_2;
+        dastore;
+        return;
+    }
+}

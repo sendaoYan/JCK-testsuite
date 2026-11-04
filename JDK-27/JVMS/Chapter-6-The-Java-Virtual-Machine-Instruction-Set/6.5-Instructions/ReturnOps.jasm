@@ -1,0 +1,52 @@
+super public class ReturnOps
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method retInt:"()I"
+        stack 1 locals 0
+    {
+        bipush 42;
+        ireturn;
+    }
+
+    public static Method retLong:"()J"
+        stack 2 locals 0
+    {
+        ldc2_w long 99;
+        lreturn;
+    }
+
+    public static Method retFloat:"()F"
+        stack 1 locals 0
+    {
+        ldc float 1.5f;
+        freturn;
+    }
+
+    public static Method retDouble:"()D"
+        stack 2 locals 0
+    {
+        ldc2_w double 2.5d;
+        dreturn;
+    }
+
+    public static Method retRef:"()Ljava/lang/String;"
+        stack 1 locals 0
+    {
+        ldc String "x";
+        areturn;
+    }
+
+    public static Method retVoid:"(I)V"
+        stack 0 locals 1
+    {
+        return;
+    }
+}

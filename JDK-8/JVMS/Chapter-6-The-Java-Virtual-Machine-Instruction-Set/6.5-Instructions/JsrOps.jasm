@@ -1,0 +1,33 @@
+super public class JsrOps
+    version 50:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method jsr:"()I"
+        stack 2 locals 2
+    {
+        jsr Lsub;
+        bipush 7;
+        ireturn;
+    Lsub: stack_frame_type full;
+        astore_1;
+        ret 1;
+    }
+
+    public static Method jsrW:"()I"
+        stack 2 locals 2
+    {
+        jsr_w Lsub;
+        bipush 9;
+        ireturn;
+    Lsub: stack_frame_type full;
+        astore_1;
+        ret 1;
+    }
+}
