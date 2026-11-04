@@ -22,3 +22,14 @@ MemorySegment arr = MemorySegment.ofArray(new int[]{1,2,3});
 白盒：接口 + NULL + 关键方法签名。
 黑盒：NULL 属性；分配 + fill + 多类型 set/get/getAtIndex；asSlice；setString/getString；asReadOnly/asByteBuffer；copy/copyFrom/mismatch/asOverlappingSlice；ofArray + toArray 往返。
 对应 `MemorySegmentTest.java` 白盒 + 黑盒部分。
+
+## 5. 原生互操作深化（MemorySegmentNativeTest）
+
+实证结论（jdk-27.0.1.0.2+1）：
+- **只读段写入的精确异常**：`ro.set(...)` 抛 `IllegalArgumentException`（"Attempt to write a read-only segment"），**不是** UnsupportedOperationException；而 C 侧通过只读段**读**完全合法。
+- C 返回的裸指针段 byteSize==0；`strchr` 命中 ⇒ 非空段且相对同段偏移可断言（非 ASLR 依赖），未命中 ⇒ `equals(MemorySegment.NULL)`。
+- `MemorySegment.NULL` 传给 C 即 NULL 指针（`jck_is_null`==1），address()==0、byteSize()==0。
+- 堆段（`ofArray(long[])`/`ofArray(byte[])`）作 ADDRESS 实参 ⇒ `IllegalArgumentException`。
+- C 的指针算术以 Java 传入的段基址为准：`asSlice(8)` 传给 C 只影响偏移 8 处；`getAtIndex/setAtIndex` 与 C `p[i]` 一致。
+
+`MemorySegmentNativeTest.java`（27 断言）：Long.MIN/MAX 双向往返；asSlice 偏移语义（写偏移 8 不动偏移 0）；索引访问与 C p[i] 一致 + setAtIndex 对 C 可见；只读段 C 可读/Java 写 IAE；NULL 段三元组；堆段两种数组 IAE；C 字符串互操作（NUL 终结符物化、strlen 一致、strchr 偏移/NULL）。C 源（`jck_read_long`/`jck_write_long`/`jck_read_int_at`/`jck_is_null`）内嵌运行时编译进 scratch，不入库。

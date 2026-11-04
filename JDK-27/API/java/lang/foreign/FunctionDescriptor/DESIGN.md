@@ -18,3 +18,14 @@ MethodHandle mh = Linker.nativeLinker().downcallHandle(addr, fd);
 白盒：接口 + 各操作协变返回 `FunctionDescriptor` + `toMethodType` 返回 `MethodType`。
 黑盒：`of`/`ofVoid` 构造后 `returnLayout`/`argumentLayouts`/`toMethodType` 精确断言；append/insert/changeReturn/dropReturn 的组合链路及其 `toMethodType`。
 对应 `FunctionDescriptorTest.java` 白盒 + 黑盒部分。
+
+## 5. 原生链接对应关系深化（FunctionDescriptorNativeTest）
+
+实证结论（jdk-27.0.1.0.2+1）：
+- **fd ↔ handle 类型对应**：bound `downcallHandle(sym, fd)` 的 type() **精确等于** `fd.toMethodType()`；unbound `downcallHandle(fd)` 的 type() 等于前者首部插入 `MemorySegment`（目标地址）。`(ADDRESS,JAVA_INT)→JAVA_LONG` 映射 `(MemorySegment,int)→long`。
+- `insertArgumentLayouts` 后布局**按位置**映射到 C 参数（不"移位"既有实参语义）；越界索引（-1、>N）⇒ IAE。
+- `changeReturnLayout` 改变 handle 返回类型（C int 返回按描述符加宽为 long，Integer.MAX_VALUE 无损）；`dropReturnLayout`/`ofVoid` 得到 void handle，可调用丢弃 C 返回值；`dropReturnLayout` 保留全部参数布局。
+- 实参个数不足在**调用时**抛 `WrongMethodTypeException`（链接不校验 arity）。
+- JDK-27 的 FunctionDescriptor **无** `withCallConv` 等属性 API（javap 实证），调用约定差异全部收敛到 `Linker.Option`。
+
+`FunctionDescriptorNativeTest.java`（27 断言）：toMethodType 三向对应 + bound/unbound 真调（含 NULL 实参分支）；append（jck_sum2→jck_sum3 真调精确值）；insert 中部/首部真调 + 越界 IAE；changeReturn 加宽真调；dropReturn/ofVoid 真调；调用 arity WrongMethodTypeException。C 源（`jck_sum2`/`jck_sum3`/`jck_widen`/`jck_void3`/`jck_ptr_and_int`）内嵌运行时编译进 scratch，不入库。
