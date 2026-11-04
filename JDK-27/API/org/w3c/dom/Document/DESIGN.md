@@ -1,13 +1,13 @@
-# org.w3c.dom.Document — 设计案
+# Document — 设计案
 
 ## 1. API 功能
-org.w3c.dom.Document 接口。实例/声明方法：getDoctype, getImplementation, getDocumentElement, createElement, createDocumentFragment, createTextNode, createComment, createCDATASection, createProcessingInstruction, createAttribute, createEntityReference, getElementsByTagName, importNode, createElementNS, createAttributeNS, getElementsByTagNameNS, getElementById, getInputEncoding, getXmlEncoding, getXmlStandalone, setXmlStandalone, getXmlVersion, setXmlVersion, getStrictErrorChecking, setStrictErrorChecking, getDocumentURI, setDocumentURI, adoptNode, getDomConfig, normalizeDocument, renameNode。
+DOM Document 接口（通过 DocumentBuilder 产出实例）。createElement/createElementNS/createTextNode/createComment/createCDATASection/createProcessingInstruction/createAttribute(NS)/createDocumentFragment/createEntityReference；appendChild 建树；getElementsByTagName(NS)；importNode/adoptNode；getDocumentElement/getDoctype/getImplementation/getXmlVersion 等。
 
 ## 2. Java 用户如何使用
-匿名实现 `new org.w3c.dom.Document() {...}` 逐方法调用；断言常量精确值。
+newDocument() 或 parse() 后 createElement/appendChild 建树遍历。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（org.w3c.dom.Document）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 DocumentTest 白盒结构 + 黑盒行为。
+JDK test/jdk/org/w3c/dom 用 DOM 建树、导入/收养节点断言 ownerDocument。
 
 ## 4. 测试用例设计 + 自动化实现
-黑盒（`DocumentTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+黑盒：createElement null/空/数字开头/空格→INVALID_CHARACTER_ERR；createElementNS(null,prefix)→NAMESPACE_ERR、空 ns→无命名空间；createAttribute(null)/createProcessingInstruction(null target)→INVALID_CHARACTER_ERR；appendChild(null)→NPE；树父子关系与 ownerDocument；getElementsByTagName(NS) 数量与通配；importNode/adoptNode 改 ownerDocument；parsed 文档 getXmlVersion/getXmlStandalone/getDoctype/getImplementation.hasFeature。

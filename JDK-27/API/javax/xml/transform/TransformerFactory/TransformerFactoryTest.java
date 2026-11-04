@@ -1,112 +1,112 @@
 /*
  * @test
- * @summary javax.xml.transform.TransformerFactory conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.transform.TransformerFactory conformance: factory boundary, precise exceptions, null semantics, transformer/templates production.
  * @run main TransformerFactoryTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.transform.ErrorListener;
+import javax.xml.transform.Templates;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.TransformerFactoryConfigurationError;
+import javax.xml.transform.URIResolver;
+import javax.xml.transform.stream.StreamSource;
+
+import java.io.StringReader;
 
 public class TransformerFactoryTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
+
+    interface Thrower { void run() throws Exception; }
+
+    static boolean isFce(Thrower t) {
+        try { t.run(); return false; }
+        catch (TransformerFactoryConfigurationError e) { return true; }
+        catch (Exception e) { return false; }
     }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
+    static boolean isNpe(Thrower t) {
+        try { t.run(); return false; }
+        catch (NullPointerException e) { return true; }
+        catch (Exception e) { return false; }
     }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
+    static boolean isIae(Thrower t) {
+        try { t.run(); return false; }
+        catch (IllegalArgumentException e) { return true; }
+        catch (Exception e) { return false; }
     }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.transform.TransformerFactory");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasMethod(c, "getAssociatedStylesheet"), "method getAssociatedStylesheet");
-        check(hasMethod(c, "getAttribute"), "method getAttribute");
-        check(hasMethod(c, "getErrorListener"), "method getErrorListener");
-        check(hasMethod(c, "getFeature"), "method getFeature");
-        check(hasMethod(c, "getURIResolver"), "method getURIResolver");
-        check(hasMethod(c, "newDefaultInstance"), "method newDefaultInstance");
-        check(hasMethod(c, "newInstance"), "method newInstance");
-        check(hasMethod(c, "newTemplates"), "method newTemplates");
-        check(hasMethod(c, "newTransformer"), "method newTransformer");
-        check(hasMethod(c, "setAttribute"), "method setAttribute");
-        check(hasMethod(c, "setErrorListener"), "method setErrorListener");
-        check(hasMethod(c, "setFeature"), "method setFeature");
-        check(hasMethod(c, "setURIResolver"), "method setURIResolver");
-
-        javax.xml.transform.TransformerFactory f = javax.xml.transform.TransformerFactory.newInstance();
-        javax.xml.transform.Transformer t = f.newTransformer();
-        check(t != null, "newTransformer");
-        java.io.StringWriter out = new java.io.StringWriter();
-        t.transform(new javax.xml.transform.stream.StreamSource(new java.io.StringReader("<a><b>c</b></a>")), new javax.xml.transform.stream.StreamResult(out));
-        check(out.toString().contains("c"), "transform output");
-    
+    static boolean isTce(Thrower t) {
+        try { t.run(); return false; }
+        catch (TransformerConfigurationException e) { return true; }
+        catch (Exception e) { return false; }
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        javax.xml.transform.TransformerFactory f = javax.xml.transform.TransformerFactory.newInstance();
-        check(f != null, "newInstance");
-        javax.xml.transform.Transformer t = f.newTransformer();
-        check(t != null, "newTransformer()");
-        // identity transform of a fixed DOM
-        javax.xml.parsers.DocumentBuilder db = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder();
-        org.w3c.dom.Document d = db.parse(new java.io.ByteArrayInputStream("<r>v</r>".getBytes("UTF-8")));
-        java.io.StringWriter sw = new java.io.StringWriter();
-        t.transform(new javax.xml.transform.dom.DOMSource(d), new javax.xml.transform.stream.StreamResult(sw));
-        check(sw.toString().contains("<r>v</r>"), "identity transform preserves content");
-        // URI resolver + error listener round-trip
-        f.setURIResolver(null); check(f.getURIResolver() == null, "URIResolver null round-trip");
-        javax.xml.transform.ErrorListener el = new javax.xml.transform.ErrorListener() {
-            public void warning(javax.xml.transform.TransformerException e) {}
-            public void error(javax.xml.transform.TransformerException e) {}
-            public void fatalError(javax.xml.transform.TransformerException e) {}
-        };
-        f.setErrorListener(el); check(f.getErrorListener() == el, "ErrorListener round-trip");
-        // attribute round-trip
-        boolean aok = false;
-        try { f.setAttribute("x", "y"); }
-        catch (IllegalArgumentException e) { aok = true; }
-        check(aok, "setAttribute(unknown name) -> IllegalArgumentException");
-        // feature
-        check(f.getFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING) == true
-              || f.getFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING) == false, "feature queryable");
-        check(javax.xml.transform.TransformerFactory.newDefaultInstance() != null, "newDefaultInstance");
-        // Templates from identity stylesheet
-        javax.xml.transform.Templates tmpl = f.newTemplates(new javax.xml.transform.stream.StreamSource(new java.io.StringReader(
-            "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'><xsl:template match='/'><out/></xsl:template></xsl:stylesheet>")));
-        check(tmpl != null, "newTemplates");
-        sw = new java.io.StringWriter();
-        tmpl.newTransformer().transform(new javax.xml.transform.stream.StreamSource(new java.io.StringReader("<r/>")), new javax.xml.transform.stream.StreamResult(sw));
-        check(sw.toString().contains("<out"), "template produces out element");
-
-    }
+    static final String XSL =
+        "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\">" +
+        "<xsl:template match=\"/\"><xsl:copy-of select=\".\"/></xsl:template></xsl:stylesheet>";
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        // ---- factory boundary ----
+        TransformerFactory f = TransformerFactory.newInstance();
+        check(f != null, "newInstance non-null");
+        ClassLoader cl = TransformerFactory.class.getClassLoader();
+        TransformerFactory f2 = TransformerFactory.newInstance(
+                "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl", cl);
+        check(f2 != null, "newInstance(className, loader) non-null");
+
+        // ---- precise factory exceptions ----
+        check(isFce(() -> TransformerFactory.newInstance("no.such.Factory", cl)),
+              "bogus impl class -> TransformerFactoryConfigurationError");
+        check(isFce(() -> TransformerFactory.newInstance(null, null)),
+              "null impl class -> TransformerFactoryConfigurationError");
+
+        // ---- null semantics ----
+        check(isNpe(() -> f.setAttribute(null, "v")), "setAttribute(null,..) -> NPE");
+        check(isNpe(() -> f.getAttribute(null)), "getAttribute(null) -> NPE");
+        check(isIae(() -> f.setErrorListener(null)), "setErrorListener(null) -> IAE");
+
+        // ---- feature ----
+        check(isTce(() -> f.setFeature("http://no.such/feature", true)), "setFeature(unknown) -> TransformerConfigurationException");
+        check(!f.getFeature("http://no.such/feature"), "getFeature(unknown) -> false");
+
+        // ---- listeners / resolver round-trip ----
+        final boolean[] warned = {false};
+        ErrorListener el = new ErrorListener() {
+            public void warning(javax.xml.transform.TransformerException e) { warned[0] = true; }
+            public void error(javax.xml.transform.TransformerException e) { }
+            public void fatalError(javax.xml.transform.TransformerException e) { }
+        };
+        f.setErrorListener(el);
+        check(f.getErrorListener() == el, "setErrorListener/getErrorListener round-trip");
+        URIResolver ur = new URIResolver() {
+            public javax.xml.transform.Source resolve(String href, String base) { return null; }
+        };
+        f.setURIResolver(ur);
+        check(f.getURIResolver() == ur, "setURIResolver/getURIResolver round-trip");
+
+        // ---- transformer production ----
+        Transformer tr = f.newTransformer();
+        check(tr != null, "newTransformer non-null");
+        Transformer tr2 = f.newTransformer();
+        check(tr2 != null && tr2 != tr, "newTransformer returns fresh transformer");
+
+        // ---- templates production ----
+        Templates templates = f.newTemplates(new StreamSource(new StringReader(XSL)));
+        check(templates != null, "newTemplates non-null");
+        Transformer tr3 = templates.newTransformer();
+        check(tr3 != null, "Templates.newTransformer non-null");
+        // non-stylesheet source -> TransformerConfigurationException
+        check(isTce(() -> f.newTemplates(new StreamSource(new StringReader("<not-a-stylesheet/>")))),
+              "newTemplates(non-stylesheet) -> TransformerConfigurationException");
+
+        // ---- JDK-19+ factory methods ----
+        check(TransformerFactory.newDefaultInstance() != null, "newDefaultInstance non-null");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

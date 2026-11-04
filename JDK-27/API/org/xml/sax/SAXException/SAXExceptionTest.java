@@ -1,77 +1,56 @@
 /*
  * @test
- * @summary org.xml.sax.SAXException conformance: white-box structure + black-box behavior.
+ * @summary org.xml.sax.SAXException conformance: hierarchy, all constructors, nested-exception preservation, getMessage/getException/getCause/toString.
  * @run main SAXExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import org.xml.sax.SAXException;
 
 public class SAXExceptionTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
 
+    public static void main(String[] args) {
+        // ---- hierarchy ----
+        check(Exception.class.isAssignableFrom(SAXException.class), "extends Exception");
+        check(!RuntimeException.class.isAssignableFrom(SAXException.class), "is a checked exception");
 
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
+        // ---- no-arg constructor ----
+        SAXException e0 = new SAXException();
+        check(e0.getMessage() == null, "no-arg getMessage null");
+        check(e0.getException() == null, "no-arg getException null");
+        check(e0.getCause() == null, "no-arg getCause null");
+        check(e0.toString().contains("SAXException"), "no-arg toString is class name");
 
-        Class<?> c = Class.forName("org.xml.sax.SAXException");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
-        check(c.getSuperclass().getName().equals("java.lang.Exception"), "superclass java.lang.Exception");
-        check(hasMethod(c, "getCause"), "method getCause");
-        check(hasMethod(c, "getException"), "method getException");
-        check(hasMethod(c, "getMessage"), "method getMessage");
-        check(hasMethod(c, "toString"), "method toString");
+        // ---- message constructor ----
+        SAXException e1 = new SAXException("boom");
+        check("boom".equals(e1.getMessage()), "message constructor getMessage");
+        check(e1.getException() == null, "message constructor getException null");
+        check(e1.getCause() == null, "message constructor getCause null");
+        check(e1.toString().contains("boom"), "message toString includes message");
 
-        org.xml.sax.SAXException e = new org.xml.sax.SAXException("m", new Exception("c"));
-        check("m".equals(e.getMessage()), "msg");
-        check("c".equals(e.getException().getMessage()), "getException");
-    
-    }
+        // ---- exception constructor (wraps) ----
+        IllegalStateException cause = new IllegalStateException("root");
+        SAXException e2 = new SAXException(cause);
+        check(e2.getException() == cause, "exception constructor getException == original");
+        check(e2.getCause() == cause, "getCause == original (wrapped)");
+        check(cause.toString().equals(e2.getMessage()), "exception constructor message is cause toString (JDK-27)");
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
+        // ---- message + exception constructor ----
+        SAXException e3 = new SAXException("wrapped", cause);
+        check(e3.getException() == cause, "message+exception getException == original");
+        check(e3.getCause() == cause, "message+exception getCause == original");
+        check("wrapped".equals(e3.getMessage()), "message+exception getMessage preserves custom message");
+        check(e3.toString().contains("wrapped"), "message+exception toString includes message");
 
-        org.xml.sax.SAXException e = new org.xml.sax.SAXException("m");
-        check("m".equals(e.getMessage()) && e.getException() == null, "message ctor");
-        java.lang.Exception c = new java.io.IOException("io");
-        org.xml.sax.SAXException e2 = new org.xml.sax.SAXException(c);
-        check(e2.getException() == c && e2.getCause() == c, "exception ctor");
-        org.xml.sax.SAXException e3 = new org.xml.sax.SAXException("m", c);
-        check("m".equals(e3.getMessage()) && e3.getException() == c, "message + exception");
-        org.xml.sax.SAXException e4 = new org.xml.sax.SAXException();
-        check(e4.getMessage() == null && e4.getException() == null, "no-arg");
-        check(e.toString().startsWith("org.xml.sax.SAXException"), "toString prefix");
-        check(e instanceof java.lang.Exception, "is Exception");
+        // ---- null message constructor ----
+        SAXException e4 = new SAXException((String) null);
+        check(e4.getMessage() == null, "null message getMessage null");
 
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

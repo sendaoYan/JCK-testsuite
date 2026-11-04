@@ -1,99 +1,108 @@
 /*
  * @test
- * @summary javax.xml.datatype.DatatypeFactory conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.datatype.DatatypeFactory conformance: factory boundary, Duration/XMLGregorianCalendar production, precise null/invalid exceptions.
  * @run main DatatypeFactoryTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.datatype.DatatypeConfigurationException;
+import javax.xml.datatype.DatatypeFactory;
+import javax.xml.datatype.Duration;
+import javax.xml.datatype.XMLGregorianCalendar;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.GregorianCalendar;
 
 public class DatatypeFactoryTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
+
+    interface Thrower { void run() throws Exception; }
+
+    static boolean isNpe(Thrower t) {
+        try { t.run(); return false; }
+        catch (NullPointerException e) { return true; }
+        catch (Exception e) { return false; }
     }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.datatype.DatatypeFactory");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasMethod(c, "newDefaultInstance"), "method newDefaultInstance");
-        check(hasMethod(c, "newDuration"), "method newDuration");
-        check(hasMethod(c, "newDurationDayTime"), "method newDurationDayTime");
-        check(hasMethod(c, "newDurationYearMonth"), "method newDurationYearMonth");
-        check(hasMethod(c, "newInstance"), "method newInstance");
-        check(hasMethod(c, "newXMLGregorianCalendar"), "method newXMLGregorianCalendar");
-        check(hasMethod(c, "newXMLGregorianCalendarDate"), "method newXMLGregorianCalendarDate");
-        check(hasMethod(c, "newXMLGregorianCalendarTime"), "method newXMLGregorianCalendarTime");
-        check(hasField(c, "DATATYPEFACTORY_IMPLEMENTATION_CLASS"), "field DATATYPEFACTORY_IMPLEMENTATION_CLASS");
-        check(hasField(c, "DATATYPEFACTORY_PROPERTY"), "field DATATYPEFACTORY_PROPERTY");
-
-        javax.xml.datatype.DatatypeFactory df = javax.xml.datatype.DatatypeFactory.newInstance();
-        javax.xml.datatype.Duration d = df.newDuration("P1Y2M3DT4H5M6S");
-        check(d.getYears() == 1, "duration years");
-        javax.xml.datatype.XMLGregorianCalendar x = df.newXMLGregorianCalendar("2001-02-03T04:05:06Z");
-        check(x.getYear() == 2001, "year");
-        check(df.newDurationYearMonth("P1Y").getYears() == 1, "yearMonth");
-        check(df.newDurationDayTime("P1DT1H").getDays() == 1, "dayTime");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        javax.xml.datatype.DatatypeFactory f = javax.xml.datatype.DatatypeFactory.newInstance();
-        check(f != null, "newInstance");
-        javax.xml.datatype.Duration d = f.newDuration("P1Y2M3DT4H5M6S");
-        check(d.getYears() == 1 && d.getMonths() == 2 && d.getDays() == 3, "newDuration(String) fields");
-        check(d.getHours() == 4 && d.getMinutes() == 5 && d.getSeconds() == 6, "duration time fields");
-        check(d.getSign() == 1, "positive duration sign");
-        check("P1Y2M3DT4H5M6S".equals(d.toString()), "duration toString round-trip");
-        javax.xml.datatype.Duration dm = f.newDuration(-1L);
-        check(dm.getSign() == -1, "negative duration sign");
-        javax.xml.datatype.Duration dym = f.newDurationYearMonth("P1Y2M");
-        check(dym.getYears() == 1 && dym.getMonths() == 2 && dym.getDays() == 0, "year-month duration");
-        javax.xml.datatype.Duration ddt = f.newDurationDayTime("P3DT4H");
-        check(ddt.getDays() == 3 && ddt.getHours() == 4 && ddt.getMonths() == 0, "day-time duration");
-        javax.xml.datatype.XMLGregorianCalendar c = f.newXMLGregorianCalendar("2019-03-04T05:06:07Z");
-        check(c.getYear() == 2019 && c.getMonth() == 3 && c.getDay() == 4, "calendar date fields");
-        check(c.getHour() == 5 && c.getMinute() == 6 && c.getSecond() == 7 && c.getTimezone() == 0, "calendar time fields");
-        check("2019-03-04T05:06:07Z".equals(c.toXMLFormat()), "calendar XML format round-trip");
-        javax.xml.datatype.XMLGregorianCalendar c2 = f.newXMLGregorianCalendar(2020, 2, 29, 12, 30, 45, 0, 60);
-        check(c2.getYear() == 2020 && c2.getMonth() == 2 && c2.getDay() == 29 && c2.getTimezone() == 60, "int ctor");
-        check(c.getXMLSchemaType().equals(javax.xml.datatype.DatatypeConstants.DATETIME), "datetime type");
-        check(f.newXMLGregorianCalendarDate(2020, 3, 15, 0).getXMLSchemaType().equals(javax.xml.datatype.DatatypeConstants.DATE), "date type");
-        check(f.newXMLGregorianCalendarTime(1, 2, 3, 0).getXMLSchemaType().equals(javax.xml.datatype.DatatypeConstants.TIME), "time type");
-        check(javax.xml.datatype.DatatypeFactory.newDefaultInstance() != null, "newDefaultInstance");
-
+    static boolean isIae(Thrower t) {
+        try { t.run(); return false; }
+        catch (IllegalArgumentException e) { return true; }
+        catch (Exception e) { return false; }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        // ---- factory boundary ----
+        DatatypeFactory f = DatatypeFactory.newInstance();
+        check(f != null, "newInstance non-null");
+        ClassLoader cl = DatatypeFactory.class.getClassLoader();
+        DatatypeFactory f2 = DatatypeFactory.newInstance(
+                "com.sun.org.apache.xerces.internal.jaxp.datatype.DatatypeFactoryImpl", cl);
+        check(f2 != null, "newInstance(className, loader) non-null");
+
+        // ---- newDuration(String) ----
+        Duration d = f.newDuration("P1Y2M3DT4H5M6S");
+        check(d.getYears() == 1 && d.getMonths() == 2 && d.getDays() == 3
+              && d.getHours() == 4 && d.getMinutes() == 5 && d.getSeconds() == 6,
+              "newDuration lexically parses all fields");
+        check(d.getSign() == 1, "positive duration sign");
+        check(isNpe(() -> f.newDuration((String) null)), "newDuration(null) -> NPE");
+        check(isIae(() -> f.newDuration("not-a-duration")), "newDuration(invalid) -> IAE");
+
+        // ---- newDuration(long) ----
+        Duration dl = f.newDuration(5000L);
+        check(dl.getSeconds() == 5, "newDuration(long) millis -> seconds");
+
+        // ---- dayTime / yearMonth duration ----
+        Duration dt = f.newDurationDayTime("P3DT4H");
+        check(dt.getDays() == 3 && dt.getHours() == 4 && dt.getYears() == 0 && dt.getMonths() == 0,
+              "newDurationDayTime restricts to day/time fields");
+        Duration ym = f.newDurationYearMonth("P1Y2M");
+        check(ym.getYears() == 1 && ym.getMonths() == 2 && ym.getDays() == 0,
+              "newDurationYearMonth restricts to year/month fields");
+        check(isIae(() -> f.newDurationDayTime("bad")), "newDurationDayTime(invalid) -> IAE");
+        check(isIae(() -> f.newDurationYearMonth("bad")), "newDurationYearMonth(invalid) -> IAE");
+
+        // ---- newDuration BigInteger overloads ----
+        Duration big = f.newDuration(true, BigInteger.ONE, BigInteger.valueOf(2),
+                BigInteger.valueOf(3), BigInteger.valueOf(4), BigInteger.valueOf(5),
+                new BigDecimal("6.5"));
+        check(big.getYears() == 1 && big.getMonths() == 2 && big.getDays() == 3
+              && big.getHours() == 4 && big.getMinutes() == 5 && big.getSign() == 1,
+              "newDuration BigInteger overload parses fields");
+
+        // ---- newXMLGregorianCalendar ----
+        XMLGregorianCalendar c = f.newXMLGregorianCalendar();
+        check(c != null, "newXMLGregorianCalendar() non-null");
+        XMLGregorianCalendar c2 = f.newXMLGregorianCalendar("2001-10-26T21:32:52Z");
+        check(c2.getYear() == 2001 && c2.getMonth() == 10 && c2.getDay() == 26
+              && c2.getHour() == 21 && c2.getMinute() == 32 && c2.getSecond() == 52
+              && c2.getTimezone() == 0, "newXMLGregorianCalendar(String) parses fields");
+        GregorianCalendar gc = new GregorianCalendar(2001, 9, 26, 21, 32, 52); // month is 0-based
+        gc.clear(java.util.Calendar.MILLISECOND);
+        XMLGregorianCalendar c3 = f.newXMLGregorianCalendar(gc);
+        check(c3.getYear() == 2001 && c3.getMonth() == 10 && c3.getDay() == 26,
+              "newXMLGregorianCalendar(GregorianCalendar)");
+        check(isNpe(() -> f.newXMLGregorianCalendar((String) null)), "newXMLGregorianCalendar(null) -> NPE");
+        check(isIae(() -> f.newXMLGregorianCalendar("not-a-date")), "newXMLGregorianCalendar(invalid) -> IAE");
+        check(isNpe(() -> f.newXMLGregorianCalendar((GregorianCalendar) null)), "newXMLGregorianCalendar(null gc) -> NPE");
+
+        // ---- convenience date/time factories ----
+        XMLGregorianCalendar date = f.newXMLGregorianCalendarDate(2001, 10, 26, 0);
+        check(date.getYear() == 2001 && date.getMonth() == 10 && date.getDay() == 26 && date.getTimezone() == 0,
+              "newXMLGregorianCalendarDate");
+        XMLGregorianCalendar time = f.newXMLGregorianCalendarTime(21, 32, 52, 0);
+        check(time.getHour() == 21 && time.getMinute() == 32 && time.getSecond() == 52,
+              "newXMLGregorianCalendarTime");
+        check(isIae(() -> f.newXMLGregorianCalendarDate(2001, 13, 26, 0)), "newXMLGregorianCalendarDate(month 13) -> IAE");
+        check(isIae(() -> f.newXMLGregorianCalendarTime(10, 60, 0, 0)), "newXMLGregorianCalendarTime(minute 60) -> IAE");
+
+        // ---- JDK-19+ factory methods ----
+        check(DatatypeFactory.newDefaultInstance() != null, "newDefaultInstance non-null");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

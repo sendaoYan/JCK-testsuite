@@ -1,13 +1,13 @@
-# org.xml.sax.SAXException — 设计案
+# SAXException — 设计案
 
 ## 1. API 功能
-org.xml.sax.SAXException 类。实例/声明方法：getMessage, getException, getCause, toString。
+SAX 异常，Exception 子类。()/(String)/(Exception)/(String,Exception) 构造；getMessage/getException/getCause/toString。
 
 ## 2. Java 用户如何使用
-new(...) → getMessage/getException/getCause/toString。
+包装底层异常并读 getException/getCause。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（org.xml.sax.SAXException）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 SAXExceptionTest 白盒结构 + 黑盒行为。
+JDK test/jdk/org/xml/sax 校验嵌套异常透传与消息。
 
 ## 4. 测试用例设计 + 自动化实现
-黑盒（`SAXExceptionTest.testBlackBox()`）覆盖：四种构造 + cause。
+黑盒：继承链（checked）；四构造；getMessage/getException/getCause/toString；嵌套异常对象透传 getException==cause 且 getCause==cause；null message。

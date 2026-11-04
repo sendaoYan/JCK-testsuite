@@ -1,12 +1,15 @@
 /*
  * @test
- * @summary org.w3c.dom.Document conformance: interface extends Node.
+ * @summary org.w3c.dom.Document conformance: create* factory null/char semantics, tree construction, namespace, import/adopt, document-level queries.
  * @run main DocumentTest
  */
 
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 public class DocumentTest {
     static int passed;
@@ -16,164 +19,109 @@ public class DocumentTest {
         passed++;
     }
 
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
+    interface Thrower { void run() throws Exception; }
 
-        check(Document.class.isInterface(), "Document is an interface");
-        check(Node.class.isAssignableFrom(Document.class), "extends Node");
-        check(Document.class.getMethod("getDocumentElement") != null,
-              "getDocumentElement()");
-        check(Document.class.getMethod("createElement", String.class)
-                .getReturnType() == Element.class, "createElement(String) returns Element");
-    
+    static boolean domCode(Thrower t, short code) {
+        try { t.run(); return false; }
+        catch (DOMException e) { return e.code == code; }
+        catch (Exception e) { return false; }
+    }
+    static boolean isNpe(Thrower t) {
+        try { t.run(); return false; }
+        catch (NullPointerException e) { return true; }
+        catch (Exception e) { return false; }
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        org.w3c.dom.Document a = new org.w3c.dom.Document(){
-            public org.w3c.dom.DocumentType getDoctype() { return null; }
-            public org.w3c.dom.DOMImplementation getImplementation() { return null; }
-            public org.w3c.dom.Element getDocumentElement() { return null; }
-            public org.w3c.dom.Element createElement(java.lang.String p0) { return null; }
-            public org.w3c.dom.DocumentFragment createDocumentFragment() { return null; }
-            public org.w3c.dom.Text createTextNode(java.lang.String p0) { return null; }
-            public org.w3c.dom.Comment createComment(java.lang.String p0) { return null; }
-            public org.w3c.dom.CDATASection createCDATASection(java.lang.String p0) { return null; }
-            public org.w3c.dom.ProcessingInstruction createProcessingInstruction(java.lang.String p0, java.lang.String p1) { return null; }
-            public org.w3c.dom.Attr createAttribute(java.lang.String p0) { return null; }
-            public org.w3c.dom.EntityReference createEntityReference(java.lang.String p0) { return null; }
-            public org.w3c.dom.NodeList getElementsByTagName(java.lang.String p0) { return null; }
-            public org.w3c.dom.Node importNode(org.w3c.dom.Node p0, boolean p1) { return null; }
-            public org.w3c.dom.Element createElementNS(java.lang.String p0, java.lang.String p1) { return null; }
-            public org.w3c.dom.Attr createAttributeNS(java.lang.String p0, java.lang.String p1) { return null; }
-            public org.w3c.dom.NodeList getElementsByTagNameNS(java.lang.String p0, java.lang.String p1) { return null; }
-            public org.w3c.dom.Element getElementById(java.lang.String p0) { return null; }
-            public java.lang.String getInputEncoding() { return "s"; }
-            public java.lang.String getXmlEncoding() { return "s"; }
-            public boolean getXmlStandalone() { return true; }
-            public void setXmlStandalone(boolean p0) { }
-            public java.lang.String getXmlVersion() { return "s"; }
-            public void setXmlVersion(java.lang.String p0) { }
-            public boolean getStrictErrorChecking() { return true; }
-            public void setStrictErrorChecking(boolean p0) { }
-            public java.lang.String getDocumentURI() { return "s"; }
-            public void setDocumentURI(java.lang.String p0) { }
-            public org.w3c.dom.Node adoptNode(org.w3c.dom.Node p0) { return null; }
-            public org.w3c.dom.DOMConfiguration getDomConfig() { return null; }
-            public void normalizeDocument() { }
-            public org.w3c.dom.Node renameNode(org.w3c.dom.Node p0, java.lang.String p1, java.lang.String p2) { return null; }
-            public java.lang.String getNodeName() { return "s"; }
-            public java.lang.String getNodeValue() { return "s"; }
-            public void setNodeValue(java.lang.String p0) { }
-            public short getNodeType() { return (short)2; }
-            public org.w3c.dom.Node getParentNode() { return null; }
-            public org.w3c.dom.NodeList getChildNodes() { return null; }
-            public org.w3c.dom.Node getFirstChild() { return null; }
-            public org.w3c.dom.Node getLastChild() { return null; }
-            public org.w3c.dom.Node getPreviousSibling() { return null; }
-            public org.w3c.dom.Node getNextSibling() { return null; }
-            public org.w3c.dom.NamedNodeMap getAttributes() { return null; }
-            public org.w3c.dom.Document getOwnerDocument() { return null; }
-            public org.w3c.dom.Node insertBefore(org.w3c.dom.Node p0, org.w3c.dom.Node p1) { return null; }
-            public org.w3c.dom.Node replaceChild(org.w3c.dom.Node p0, org.w3c.dom.Node p1) { return null; }
-            public org.w3c.dom.Node removeChild(org.w3c.dom.Node p0) { return null; }
-            public org.w3c.dom.Node appendChild(org.w3c.dom.Node p0) { return null; }
-            public boolean hasChildNodes() { return true; }
-            public org.w3c.dom.Node cloneNode(boolean p0) { return null; }
-            public void normalize() { }
-            public boolean isSupported(java.lang.String p0, java.lang.String p1) { return true; }
-            public java.lang.String getNamespaceURI() { return "s"; }
-            public java.lang.String getPrefix() { return "s"; }
-            public void setPrefix(java.lang.String p0) { }
-            public java.lang.String getLocalName() { return "s"; }
-            public boolean hasAttributes() { return true; }
-            public java.lang.String getBaseURI() { return "s"; }
-            public short compareDocumentPosition(org.w3c.dom.Node p0) { return (short)2; }
-            public java.lang.String getTextContent() { return "s"; }
-            public void setTextContent(java.lang.String p0) { }
-            public boolean isSameNode(org.w3c.dom.Node p0) { return true; }
-            public java.lang.String lookupPrefix(java.lang.String p0) { return "s"; }
-            public boolean isDefaultNamespace(java.lang.String p0) { return true; }
-            public java.lang.String lookupNamespaceURI(java.lang.String p0) { return "s"; }
-            public boolean isEqualNode(org.w3c.dom.Node p0) { return true; }
-            public java.lang.Object getFeature(java.lang.String p0, java.lang.String p1) { return null; }
-            public java.lang.Object setUserData(java.lang.String p0, java.lang.Object p1, org.w3c.dom.UserDataHandler p2) { return null; }
-            public java.lang.Object getUserData(java.lang.String p0) { return null; }
-        };
-        check(a != null, "anon impl of Document");
-        check(a.getDoctype() == null, "getDoctype() returns fixed default");
-        check(a.getImplementation() == null, "getImplementation() returns fixed default");
-        check(a.getDocumentElement() == null, "getDocumentElement() returns fixed default");
-        check(a.createElement("s") == null, "createElement() returns fixed default");
-        check(a.createDocumentFragment() == null, "createDocumentFragment() returns fixed default");
-        check(a.createTextNode("s") == null, "createTextNode() returns fixed default");
-        check(a.createComment("s") == null, "createComment() returns fixed default");
-        check(a.createCDATASection("s") == null, "createCDATASection() returns fixed default");
-        check(a.createProcessingInstruction("s", "s") == null, "createProcessingInstruction() returns fixed default");
-        check(a.createAttribute("s") == null, "createAttribute() returns fixed default");
-        check(a.createEntityReference("s") == null, "createEntityReference() returns fixed default");
-        check(a.getElementsByTagName("s") == null, "getElementsByTagName() returns fixed default");
-        check(a.importNode((org.w3c.dom.Node) null, true) == null, "importNode() returns fixed default");
-        check(a.createElementNS("s", "s") == null, "createElementNS() returns fixed default");
-        check(a.createAttributeNS("s", "s") == null, "createAttributeNS() returns fixed default");
-        check(a.getElementsByTagNameNS("s", "s") == null, "getElementsByTagNameNS() returns fixed default");
-        check(a.getElementById("s") == null, "getElementById() returns fixed default");
-        check("s".equals(a.getInputEncoding()), "getInputEncoding() returns fixed default");
-        check("s".equals(a.getXmlEncoding()), "getXmlEncoding() returns fixed default");
-        check(a.getXmlStandalone() == true, "getXmlStandalone() returns fixed default");
-        a.setXmlStandalone(true);
-        check("s".equals(a.getXmlVersion()), "getXmlVersion() returns fixed default");
-        a.setXmlVersion("s");
-        check(a.getStrictErrorChecking() == true, "getStrictErrorChecking() returns fixed default");
-        a.setStrictErrorChecking(true);
-        check("s".equals(a.getDocumentURI()), "getDocumentURI() returns fixed default");
-        a.setDocumentURI("s");
-        check(a.adoptNode((org.w3c.dom.Node) null) == null, "adoptNode() returns fixed default");
-        check(a.getDomConfig() == null, "getDomConfig() returns fixed default");
-        a.normalizeDocument();
-        check(a.renameNode((org.w3c.dom.Node) null, "s", "s") == null, "renameNode() returns fixed default");
-        check("s".equals(a.getNodeName()), "getNodeName() returns fixed default");
-        check("s".equals(a.getNodeValue()), "getNodeValue() returns fixed default");
-        a.setNodeValue("s");
-        check(a.getNodeType() == (short)2, "getNodeType() returns fixed default");
-        check(a.getParentNode() == null, "getParentNode() returns fixed default");
-        check(a.getChildNodes() == null, "getChildNodes() returns fixed default");
-        check(a.getFirstChild() == null, "getFirstChild() returns fixed default");
-        check(a.getLastChild() == null, "getLastChild() returns fixed default");
-        check(a.getPreviousSibling() == null, "getPreviousSibling() returns fixed default");
-        check(a.getNextSibling() == null, "getNextSibling() returns fixed default");
-        check(a.getAttributes() == null, "getAttributes() returns fixed default");
-        check(a.getOwnerDocument() == null, "getOwnerDocument() returns fixed default");
-        check(a.insertBefore((org.w3c.dom.Node) null, (org.w3c.dom.Node) null) == null, "insertBefore() returns fixed default");
-        check(a.replaceChild((org.w3c.dom.Node) null, (org.w3c.dom.Node) null) == null, "replaceChild() returns fixed default");
-        check(a.removeChild((org.w3c.dom.Node) null) == null, "removeChild() returns fixed default");
-        check(a.appendChild((org.w3c.dom.Node) null) == null, "appendChild() returns fixed default");
-        check(a.hasChildNodes() == true, "hasChildNodes() returns fixed default");
-        check(a.cloneNode(true) == null, "cloneNode() returns fixed default");
-        a.normalize();
-        check(a.isSupported("s", "s") == true, "isSupported() returns fixed default");
-        check("s".equals(a.getNamespaceURI()), "getNamespaceURI() returns fixed default");
-        check("s".equals(a.getPrefix()), "getPrefix() returns fixed default");
-        a.setPrefix("s");
-        check("s".equals(a.getLocalName()), "getLocalName() returns fixed default");
-        check(a.hasAttributes() == true, "hasAttributes() returns fixed default");
-        check("s".equals(a.getBaseURI()), "getBaseURI() returns fixed default");
-        check(a.compareDocumentPosition((org.w3c.dom.Node) null) == (short)2, "compareDocumentPosition() returns fixed default");
-        check("s".equals(a.getTextContent()), "getTextContent() returns fixed default");
-        a.setTextContent("s");
-        check(a.isSameNode((org.w3c.dom.Node) null) == true, "isSameNode() returns fixed default");
-        check("s".equals(a.lookupPrefix("s")), "lookupPrefix() returns fixed default");
-        check(a.isDefaultNamespace("s") == true, "isDefaultNamespace() returns fixed default");
-        check("s".equals(a.lookupNamespaceURI("s")), "lookupNamespaceURI() returns fixed default");
-        check(a.isEqualNode((org.w3c.dom.Node) null) == true, "isEqualNode() returns fixed default");
-        check(a.getFeature("s", "s") == null, "getFeature() returns fixed default");
-        check(a.setUserData("s", (java.lang.Object) null, (org.w3c.dom.UserDataHandler) null) == null, "setUserData() returns fixed default");
-        check(a.getUserData("s") == null, "getUserData() returns fixed default");
+    static Document newDoc() throws Exception {
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setNamespaceAware(true);
+        return f.newDocumentBuilder().newDocument();
+    }
+
+    static Document parsedDoc() throws Exception {
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setNamespaceAware(true);
+        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><root/>";
+        return f.newDocumentBuilder().parse(new java.io.ByteArrayInputStream(xml.getBytes("UTF-8")));
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Document d = newDoc();
+
+        // ---- createElement precise exceptions ----
+        check(domCode(() -> d.createElement(null), DOMException.INVALID_CHARACTER_ERR), "createElement(null) -> INVALID_CHARACTER_ERR");
+        check(domCode(() -> d.createElement(""), DOMException.INVALID_CHARACTER_ERR), "createElement(\"\") -> INVALID_CHARACTER_ERR");
+        check(domCode(() -> d.createElement("1abc"), DOMException.INVALID_CHARACTER_ERR), "createElement(name starting digit) -> INVALID_CHARACTER_ERR");
+        check(domCode(() -> d.createElement("a b"), DOMException.INVALID_CHARACTER_ERR), "createElement(space) -> INVALID_CHARACTER_ERR");
+        Element root = d.createElement("root");
+        check(root != null && "root".equals(root.getTagName()), "createElement returns named element");
+        check(root.getOwnerDocument() == d, "created element owned by its creating document");
+
+        // ---- namespace factory ----
+        check(domCode(() -> d.createElementNS(null, "p:x"), DOMException.NAMESPACE_ERR), "createElementNS(null uri, prefixed name) -> NAMESPACE_ERR");
+        Element ns = d.createElementNS("urn:test", "t:item");
+        check("urn:test".equals(ns.getNamespaceURI()), "createElementNS namespace uri");
+        check("item".equals(ns.getLocalName()), "createElementNS local name");
+        check("t:item".equals(ns.getNodeName()), "createElementNS qualified node name");
+        Element noNs = d.createElementNS("", "plain");
+        check(noNs.getNamespaceURI() == null, "createElementNS empty uri -> no namespace");
+        check(domCode(() -> d.createAttribute(null), DOMException.INVALID_CHARACTER_ERR), "createAttribute(null) -> INVALID_CHARACTER_ERR");
+        check(d.createAttributeNS("urn:test", "t:a") != null, "createAttributeNS");
+
+        // ---- other node factories ----
+        check("text".equals(d.createTextNode("text").getData()), "createTextNode");
+        check("c".equals(d.createComment("c").getData()), "createComment");
+        check(d.createCDATASection("cdata") != null, "createCDATASection");
+        check(d.createDocumentFragment() != null, "createDocumentFragment");
+        check("target".equals(d.createProcessingInstruction("target", "data").getTarget()), "createProcessingInstruction target");
+        check(d.createEntityReference("ref") != null, "createEntityReference");
+        check(domCode(() -> d.createProcessingInstruction(null, "d"), DOMException.INVALID_CHARACTER_ERR), "createProcessingInstruction(null target) -> INVALID_CHARACTER_ERR");
+
+        // ---- append to build tree ----
+        d.appendChild(root);
+        check(d.getDocumentElement() == root, "getDocumentElement returns appended root");
+        check(root.getOwnerDocument() == d, "appendChild sets ownerDocument");
+        Element child = d.createElement("child");
+        root.appendChild(child);
+        check(root.getFirstChild() == child && root.getLastChild() == child, "first/last child");
+        check(root.getChildNodes().getLength() == 1, "childNodes count");
+        check(root.hasChildNodes(), "hasChildNodes true");
+        check(!d.hasChildNodes() || d.getChildNodes().getLength() == 1, "document has root as single child");
+
+        // ---- appendChild(null) -> NPE on the JDK impl ----
+        check(isNpe(() -> d.appendChild(null)), "appendChild(null) -> NPE");
+
+        // ---- getElementsByTagName / NS ----
+        Element b1 = d.createElement("book"); root.appendChild(b1);
+        Element b2 = d.createElement("book"); root.appendChild(b2);
+        NodeList books = d.getElementsByTagName("book");
+        check(books.getLength() == 2, "getElementsByTagName count");
+        check(books.item(0) == b1 && books.item(1) == b2, "getElementsByTagName document order");
+        check(d.getElementsByTagName("*").getLength() >= 3, "getElementsByTagName(*) wildcard");
+        root.appendChild(ns);
+        Element nsb = d.createElementNS("urn:test", "t:book"); root.appendChild(nsb);
+        check(d.getElementsByTagNameNS("urn:test", "book").getLength() == 1, "getElementsByTagNameNS");
+        check(d.getElementsByTagNameNS("urn:test", "*").getLength() == 2, "getElementsByTagNameNS wildcard (item+book)");
+
+        // ---- importNode / adoptNode ----
+        Document d2 = newDoc();
+        Element imported = (Element) d2.importNode(root, true);
+        check(imported.getOwnerDocument() == d2, "importNode sets ownerDocument");
+        check("root".equals(imported.getNodeName()), "importNode deep preserves name");
+        check(imported.getChildNodes().getLength() == root.getChildNodes().getLength(), "importNode deep copies children");
+        Element moved = d.createElement("moved");
+        Node adopted = d2.adoptNode(moved);
+        check(adopted.getOwnerDocument() == d2, "adoptNode changes ownerDocument");
+        check(moved.getOwnerDocument() == d2, "adoptNode mutates original ownerDocument");
+
+        // ---- document-level queries on parsed document ----
+        Document pd = parsedDoc();
+        check("1.0".equals(pd.getXmlVersion()), "parsed getXmlVersion 1.0");
+        check(!pd.getXmlStandalone(), "parsed getXmlStandalone default false");
+        check(pd.getDoctype() == null, "getDoctype null for doc without DTD");
+        check(pd.getImplementation() != null, "getImplementation non-null");
+        check(pd.getImplementation().hasFeature("Core", "3.0"), "getImplementation hasFeature Core 3.0");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

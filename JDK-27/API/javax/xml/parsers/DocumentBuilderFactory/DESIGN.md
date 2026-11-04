@@ -1,21 +1,13 @@
-# javax.xml.parsers.DocumentBuilderFactory — 设计案
+# DocumentBuilderFactory — 设计案
 
 ## 1. API 功能
-JAXP DOM 解析器工厂抽象类。静态工厂入口 `newInstance()/newDefaultInstance()/newNSInstance()/newDefaultNSInstance()`（后两者命名空间感知）+ 按 `(factoryClassName, ClassLoader)` 实例化；核心操作 `newDocumentBuilder()`；配置开关 `set/isNamespaceAware/Validating/Coalescing/IgnoringComments/IgnoringElementContentWhitespace/ExpandEntityReferences/XIncludeAware`；`set/getSchema` 挂 Schema；`set/getFeature`（SAX 特性透传，`ParserConfigurationException`）、`set/getAttribute`（非法键 `IllegalArgumentException`）。
+DOM 解析器工厂抽象类，产出 DocumentBuilder。核心：newInstance()/newInstance(className,loader) 工厂；setNamespaceAware/setValidating/setXIncludeAware/setSchema 等配置开关与对应 is* 查询；抽象 setAttribute/getAttribute、setFeature/getFeature。
 
 ## 2. Java 用户如何使用
-```java
-DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-f.setNamespaceAware(true);
-DocumentBuilder b = f.newDocumentBuilder();
-Document d = b.parse(new ByteArrayInputStream(xml.getBytes()));
-```
-组合链路：`newInstance → 配置开关 → newDocumentBuilder → parse`；`newNSInstance()` 直接得到命名空间感知工厂；`setFeature("http://xml.org/sax/features/namespaces", true) → getFeature` 往返。
+DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(内嵌 XML 字符串) → Document 遍历。配置项 setNamespaceAware(true) 后解析命名空间文档。
 
 ## 3. 开源代码实际用法调研
-- JDK `test/jdk/javax/xml/jaxp`（如 `common/8020430/JAXP15RegTest.java`）：`DocumentBuilderFactory.newInstance()` 后设置 `setNamespaceAware` 再解析；验证特性与属性透传。
-- Spring `XmlDocumentBuilder` 系列：`DocumentBuilderFactory.newInstance()` + `setNamespaceAware(true)` + `setFeature(disallow-doctype-decl)` 防御 XXE，是最普遍的 JAXP 用法。
-- 本仓库既有白盒断言：工厂为 abstract class，构造器 protected，方法齐全。
+JDK test/jdk/javax/xml/jaxp 大量使用 newInstance→newDocumentBuilder→parse(InputSource) 解析内联 XML 断言 DOM 结构；Spring DomUtils/DocumentLoader 组合解析后 getElementsByTagName 提取 Bean。
 
 ## 4. 测试用例设计 + 自动化实现
-黑盒（`DocumentBuilderFactoryTest.testBlackBox()`）：默认开关全读（namespaceAware/validating/coalescing/ignoringComments/ignoringElementContentWhitespace/expandEntityReferences/xIncludeAware 初始值）+ 全部 setter 往返；SAX namespaces feature 往返；三个未知键异常（getFeature→ParserConfigurationException、setAttribute/getAttribute→IllegalArgumentException）；四种工厂入口的命名空间感知差异；`newDocumentBuilder` 产出且继承 validating 配置。
+黑盒：newInstance 非空；显式 impl 类名加载；bogus/null 类名→FactoryConfigurationError；默认配置（namespaceAware/validating/xIncludeAware=false、schema=null）；全量 setter 往返；setAttribute/getAttribute 的 null→IAE/NPE 与 unknown→IAE；setFeature/getFeature unknown→ParserConfigurationException 与 null→NPE；newDocumentBuilder 非空且每次新建。JDK-27 追加 newDefaultInstance/newNSInstance/newDefaultNSInstance。

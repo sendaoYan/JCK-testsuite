@@ -1,13 +1,13 @@
-# javax.xml.datatype.DatatypeFactory — 设计案
+# DatatypeFactory — 设计案
 
 ## 1. API 功能
-javax.xml.datatype.DatatypeFactory 抽象类。常量：DATATYPEFACTORY_PROPERTY（共 1 个）。 静态入口：newDefaultInstance, newInstance。 实例/声明方法：newDuration, newDurationDayTime, newDurationYearMonth, newXMLGregorianCalendar, newXMLGregorianCalendarDate, newXMLGregorianCalendarTime。
+XML Schema 数据类型工厂。newInstance()；newDuration(多重重载)/newDurationDayTime/newDurationYearMonth；newXMLGregorianCalendar(多重重载)/newXMLGregorianCalendarDate/Time；常量 DATATYPEFACTORY_PROPERTY/IMPLEMENTATION_CLASS。
 
 ## 2. Java 用户如何使用
-newInstance → newDuration(String/YearMonth/DayTime) → getField 精确；newXMLGregorianCalendar(String/int) → getters/toXMLFormat 往返。
+DatatypeFactory.newInstance() 后 newDuration("P1Y2M3DT4H5M6S")、newXMLGregorianCalendar("2001-10-26T21:32:52+08:00") 读字段。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（javax.xml.datatype.DatatypeFactory）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 DatatypeFactoryTest 白盒结构 + 黑盒行为。
+JDK test/jdk/javax/xml/datatype 大量表驱动校验 lexical 解析与非法输入。
 
 ## 4. 测试用例设计 + 自动化实现
-黑盒（`DatatypeFactoryTest.testBlackBox()`）覆盖：三种 duration 变体 + 负号、三种 calendar 构造、类型 QName、newDefaultInstance。
+黑盒：newInstance 非空；newDuration(String) 解析六字段、null→NPE、invalid→IAE；newDuration(long) 毫秒→秒；dayTime/yearMonth 字段约束与 invalid→IAE；BigInteger 重载；newXMLGregorianCalendar 各重载与 null→NPE/invalid→IAE；date/time 便捷工厂与 month13/minute60→IAE。JDK-27 追加 newDefaultInstance。

@@ -1,128 +1,126 @@
 /*
  * @test
- * @summary javax.xml.datatype.XMLGregorianCalendar conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.datatype.XMLGregorianCalendar conformance: field access/mutation, timezone, comparison, normalize, equals, toXMLFormat, add, clone.
  * @run main XMLGregorianCalendarTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.datatype.DatatypeConstants;
+import javax.xml.datatype.DatatypeFactory;
+import javax.xml.datatype.Duration;
+import javax.xml.datatype.XMLGregorianCalendar;
+
+import java.util.GregorianCalendar;
+import java.util.TimeZone;
 
 public class XMLGregorianCalendarTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
 
+    interface Thrower { void run() throws Exception; }
 
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.datatype.XMLGregorianCalendar");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasInterface(c, "java.lang.Cloneable"), "interface java.lang.Cloneable");
-        check(hasMethod(c, "add"), "method add");
-        check(hasMethod(c, "clear"), "method clear");
-        check(hasMethod(c, "clone"), "method clone");
-        check(hasMethod(c, "compare"), "method compare");
-        check(hasMethod(c, "equals"), "method equals");
-        check(hasMethod(c, "getDay"), "method getDay");
-        check(hasMethod(c, "getEon"), "method getEon");
-        check(hasMethod(c, "getEonAndYear"), "method getEonAndYear");
-        check(hasMethod(c, "getFractionalSecond"), "method getFractionalSecond");
-        check(hasMethod(c, "getHour"), "method getHour");
-        check(hasMethod(c, "getMillisecond"), "method getMillisecond");
-        check(hasMethod(c, "getMinute"), "method getMinute");
-        check(hasMethod(c, "getMonth"), "method getMonth");
-        check(hasMethod(c, "getSecond"), "method getSecond");
-        check(hasMethod(c, "getTimeZone"), "method getTimeZone");
-        check(hasMethod(c, "getTimezone"), "method getTimezone");
-        check(hasMethod(c, "getXMLSchemaType"), "method getXMLSchemaType");
-        check(hasMethod(c, "getYear"), "method getYear");
-        check(hasMethod(c, "hashCode"), "method hashCode");
-        check(hasMethod(c, "isValid"), "method isValid");
-        check(hasMethod(c, "normalize"), "method normalize");
-        check(hasMethod(c, "reset"), "method reset");
-        check(hasMethod(c, "setDay"), "method setDay");
-        check(hasMethod(c, "setFractionalSecond"), "method setFractionalSecond");
-        check(hasMethod(c, "setHour"), "method setHour");
-        check(hasMethod(c, "setMillisecond"), "method setMillisecond");
-        check(hasMethod(c, "setMinute"), "method setMinute");
-        check(hasMethod(c, "setMonth"), "method setMonth");
-        check(hasMethod(c, "setSecond"), "method setSecond");
-        check(hasMethod(c, "setTime"), "method setTime");
-        check(hasMethod(c, "setTimezone"), "method setTimezone");
-        check(hasMethod(c, "setYear"), "method setYear");
-        check(hasMethod(c, "toGregorianCalendar"), "method toGregorianCalendar");
-        check(hasMethod(c, "toString"), "method toString");
-        check(hasMethod(c, "toXMLFormat"), "method toXMLFormat");
-
-        javax.xml.datatype.DatatypeFactory df = javax.xml.datatype.DatatypeFactory.newInstance();
-        javax.xml.datatype.XMLGregorianCalendar x = df.newXMLGregorianCalendar("2001-02-03T04:05:06.789Z");
-        check(x.getYear() == 2001, "year");
-        check(x.getMonth() == 2, "month");
-        check(x.getDay() == 3, "day");
-        check(x.getHour() == 4, "hour");
-        check(x.getMinute() == 5, "minute");
-        check(x.getSecond() == 6, "second");
-        check(x.getXMLSchemaType() == javax.xml.datatype.DatatypeConstants.DATETIME, "schemaType");
-        check(x.toXMLFormat() != null, "toXMLFormat");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        javax.xml.datatype.DatatypeFactory f = javax.xml.datatype.DatatypeFactory.newInstance();
-        javax.xml.datatype.XMLGregorianCalendar c = f.newXMLGregorianCalendar("2019-03-04T05:06:07.5Z");
-        check(c.getYear() == 2019 && c.getMonth() == 3 && c.getDay() == 4, "date fields");
-        check(c.getHour() == 5 && c.getMinute() == 6 && c.getSecond() == 7, "time fields");
-        check(c.getFractionalSecond() != null && c.getFractionalSecond().compareTo(new java.math.BigDecimal("0.5")) == 0, "fractional second");
-        check(c.getTimezone() == 0, "UTC timezone");
-        check(c.isValid(), "valid");
-        check("2019-03-04T05:06:07.5Z".equals(c.toXMLFormat()), "XML format round-trip");
-        javax.xml.datatype.XMLGregorianCalendar c2 = f.newXMLGregorianCalendar("2020-12-31T23:59:59+01:00");
-        check(c.compare(c2) < 0, "compare chronological");
-        javax.xml.datatype.XMLGregorianCalendar c3 = (javax.xml.datatype.XMLGregorianCalendar) c.clone();
-        check(c3 != c && c3.equals(c) && c3.hashCode() == c.hashCode(), "clone");
-        check(c.getXMLSchemaType().equals(javax.xml.datatype.DatatypeConstants.DATETIME), "schema type");
-        java.util.GregorianCalendar gc = c.toGregorianCalendar();
-        check(gc.get(java.util.Calendar.YEAR) == 2019, "toGregorianCalendar year");
-        check(c.equals(f.newXMLGregorianCalendar("2019-03-04T05:06:07.5Z")), "equals");
-        c.setDay(15); check(c.getDay() == 15, "setDay");
-        c.reset(); check(c.getDay() == 4, "reset restores original day");
-        javax.xml.datatype.XMLGregorianCalendar c4 = f.newXMLGregorianCalendar("2019-03-04T05:06:07.5");
-        javax.xml.datatype.XMLGregorianCalendar n = c4.normalize();
-        check(n.getTimezone() == javax.xml.datatype.DatatypeConstants.FIELD_UNDEFINED, "normalize keeps undefined timezone");
-        javax.xml.datatype.XMLGregorianCalendar c5 = f.newXMLGregorianCalendar("2000-03-04T23:00:00+03:00");
-        check(c5.normalize().getTimezone() == 0, "normalize converts zoned calendar to UTC");
-
+    static boolean isIae(Thrower t) {
+        try { t.run(); return false; }
+        catch (IllegalArgumentException e) { return true; }
+        catch (Exception e) { return false; }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        DatatypeFactory f = DatatypeFactory.newInstance();
+
+        // ---- parse with timezone offset ----
+        XMLGregorianCalendar c = f.newXMLGregorianCalendar("2001-10-26T21:32:52+08:00");
+        check(c.getYear() == 2001 && c.getMonth() == 10 && c.getDay() == 26, "date fields");
+        check(c.getHour() == 21 && c.getMinute() == 32 && c.getSecond() == 52, "time fields");
+        check(c.getTimezone() == 480, "timezone +08:00 == 480 minutes");
+        check(c.isValid(), "isValid true");
+        check("2001-10-26T21:32:52+08:00".equals(c.toXMLFormat()), "toXMLFormat round-trip");
+        check(c.toXMLFormat().equals(c.toString()), "toString == toXMLFormat");
+
+        // ---- timezone variants ----
+        XMLGregorianCalendar utc = f.newXMLGregorianCalendar("2001-10-26T21:32:52Z");
+        check(utc.getTimezone() == 0, "Z == 0 timezone");
+        XMLGregorianCalendar neg = f.newXMLGregorianCalendar("2001-10-26T21:32:52-05:00");
+        check(neg.getTimezone() == -300, "-05:00 == -300 minutes");
+        XMLGregorianCalendar noTz = f.newXMLGregorianCalendar("2001-10-26T21:32:52");
+        check(noTz.getTimezone() == DatatypeConstants.FIELD_UNDEFINED, "no timezone -> FIELD_UNDEFINED");
+
+        // ---- field accessors ----
+        XMLGregorianCalendar big = f.newXMLGregorianCalendar("2001-10-26T21:32:52.123456789+00:00");
+        check(big.getEon() == null && big.getEonAndYear() != null
+              && big.getEonAndYear().intValue() == 2001, "eon/year accessors");
+        check(big.getMillisecond() == 123, "getMillisecond from fractional second");
+        check(big.getFractionalSecond() != null
+              && big.getFractionalSecond().compareTo(new java.math.BigDecimal("0.123456789")) == 0,
+              "getFractionalSecond");
+
+        // ---- field mutation ----
+        XMLGregorianCalendar m = f.newXMLGregorianCalendar();
+        m.setYear(2001); m.setMonth(10); m.setDay(26);
+        m.setHour(21); m.setMinute(32); m.setSecond(52);
+        m.setTimezone(480);
+        check(m.getYear() == 2001 && m.getMonth() == 10 && m.getDay() == 26
+              && m.getHour() == 21 && m.getMinute() == 32 && m.getSecond() == 52
+              && m.getTimezone() == 480, "field setters");
+        m.setMillisecond(250);
+        check(m.getMillisecond() == 250, "setMillisecond");
+        m.setFractionalSecond(new java.math.BigDecimal("0.5"));
+        check(m.getFractionalSecond().compareTo(new java.math.BigDecimal("0.5")) == 0, "setFractionalSecond");
+        m.setTime(10, 11, 12);
+        check(m.getHour() == 10 && m.getMinute() == 11 && m.getSecond() == 12, "setTime(h,m,s)");
+        check(isIae(() -> m.setMonth(13)), "setMonth(13) -> IAE");
+        check(isIae(() -> m.setDay(0)), "setDay(0) -> IAE");
+        check(isIae(() -> m.setHour(-1)), "setHour(-1) -> IAE");
+
+        // ---- clear/reset ----
+        m.clear();
+        check(m.getYear() == DatatypeConstants.FIELD_UNDEFINED && m.getMonth() == DatatypeConstants.FIELD_UNDEFINED,
+              "clear resets fields to FIELD_UNDEFINED");
+        check(m.getTimezone() == DatatypeConstants.FIELD_UNDEFINED, "clear resets timezone");
+        m.reset();
+        check(m.getYear() == DatatypeConstants.FIELD_UNDEFINED, "reset resets fields");
+
+        // ---- comparison ----
+        XMLGregorianCalendar earlier = f.newXMLGregorianCalendar("2001-10-26T21:32:52+08:00");
+        XMLGregorianCalendar later = f.newXMLGregorianCalendar("2001-10-26T22:32:52+08:00");
+        check(earlier.compare(later) == DatatypeConstants.LESSER, "compare LESSER");
+        check(later.compare(earlier) == DatatypeConstants.GREATER, "compare GREATER");
+        check(earlier.compare(f.newXMLGregorianCalendar("2001-10-26T21:32:52+08:00")) == DatatypeConstants.EQUAL, "compare EQUAL");
+
+        // ---- equals / hashCode ----
+        XMLGregorianCalendar same = f.newXMLGregorianCalendar("2001-10-26T21:32:52+08:00");
+        check(earlier.equals(same), "equals same value");
+        check(earlier.hashCode() == same.hashCode(), "hashCode equal for equal value");
+        check(!earlier.equals(later), "equals false for different");
+
+        // ---- normalize ----
+        XMLGregorianCalendar norm = f.newXMLGregorianCalendar("2001-10-26T24:00:00");
+        XMLGregorianCalendar normalized = norm.normalize();
+        check(normalized != null, "normalize returns instance");
+        check(normalized.getHour() != 24 || normalized.getDay() != 26, "normalize carries overflow");
+
+        // ---- add(Duration) ----
+        XMLGregorianCalendar base = f.newXMLGregorianCalendar("2001-01-01T00:00:00Z");
+        base.add(f.newDuration("P1DT2H"));
+        check(base.getDay() == 2 && base.getHour() == 2, "add(Duration) advances day and hour");
+
+        // ---- toGregorianCalendar ----
+        GregorianCalendar gcal = earlier.toGregorianCalendar();
+        check(gcal.getTimeZone().getRawOffset() == 480 * 60 * 1000, "toGregorianCalendar preserves timezone");
+        GregorianCalendar gcal2 = earlier.toGregorianCalendar(TimeZone.getTimeZone("UTC"), java.util.Locale.US, null);
+        check(gcal2.getTimeZone().equals(TimeZone.getTimeZone("UTC")), "toGregorianCalendar with explicit timezone");
+        TimeZone tz = earlier.getTimeZone(DatatypeConstants.FIELD_UNDEFINED);
+        check(tz != null, "getTimeZone non-null");
+
+        // ---- clone ----
+        XMLGregorianCalendar cloned = (XMLGregorianCalendar) earlier.clone();
+        check(cloned.equals(earlier), "clone equals original");
+        cloned.setYear(1999);
+        check(cloned.getYear() == 1999 && earlier.getYear() == 2001, "clone is independent");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

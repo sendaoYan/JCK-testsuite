@@ -1,78 +1,65 @@
 /*
  * @test
- * @summary org.xml.sax.SAXParseException conformance: white-box structure + black-box behavior.
+ * @summary org.xml.sax.SAXParseException conformance: hierarchy, all constructors, line/column/systemId/publicId accessors, toString.
  * @run main SAXParseExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import org.xml.sax.Locator;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 public class SAXParseExceptionTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
+
+    static Locator loc(final String pub, final String sys, final int line, final int col) {
+        return new Locator() {
+            public String getPublicId() { return pub; }
+            public String getSystemId() { return sys; }
+            public int getLineNumber() { return line; }
+            public int getColumnNumber() { return col; }
+        };
     }
 
+    public static void main(String[] args) {
+        // ---- hierarchy ----
+        check(SAXException.class.isAssignableFrom(SAXParseException.class), "extends SAXException");
 
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
+        // ---- (String, Locator) ----
+        SAXParseException e1 = new SAXParseException("msg", loc("PUB", "SYS", 12, 34));
+        check("msg".equals(e1.getMessage()), "message preserved");
+        check("PUB".equals(e1.getPublicId()), "publicId from locator");
+        check("SYS".equals(e1.getSystemId()), "systemId from locator");
+        check(e1.getLineNumber() == 12, "lineNumber from locator");
+        check(e1.getColumnNumber() == 34, "columnNumber from locator");
+        check(e1.getException() == null, "no wrapped exception");
+        check(e1.toString().contains("msg"), "toString includes message");
 
-        Class<?> c = Class.forName("org.xml.sax.SAXParseException");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
-        check(c.getSuperclass().getName().equals("org.xml.sax.SAXException"), "superclass org.xml.sax.SAXException");
-        check(hasMethod(c, "getColumnNumber"), "method getColumnNumber");
-        check(hasMethod(c, "getLineNumber"), "method getLineNumber");
-        check(hasMethod(c, "getPublicId"), "method getPublicId");
-        check(hasMethod(c, "getSystemId"), "method getSystemId");
-        check(hasMethod(c, "toString"), "method toString");
+        // ---- (String, Locator, Exception) ----
+        IllegalStateException cause = new IllegalStateException("root");
+        SAXParseException e2 = new SAXParseException("msg2", loc("P", "S", 5, 6), cause);
+        check(e2.getException() == cause, "wrapped exception preserved");
+        check(e2.getCause() == cause, "getCause == wrapped");
+        check(e2.getLineNumber() == 5 && e2.getColumnNumber() == 6, "position from locator + exception");
 
-        org.xml.sax.SAXParseException e = new org.xml.sax.SAXParseException("m", "pub", "sys", 5, 6);
-        check("m".equals(e.getMessage()), "msg");
-        check("pub".equals(e.getPublicId()), "publicId");
-        check("sys".equals(e.getSystemId()), "systemId");
-        check(e.getLineNumber() == 5, "line");
-        check(e.getColumnNumber() == 6, "column");
-    
-    }
+        // ---- (String, String, String, int, int) ----
+        SAXParseException e3 = new SAXParseException("msg3", "PUB3", "SYS3", 7, 8);
+        check("PUB3".equals(e3.getPublicId()), "publicId from string args");
+        check("SYS3".equals(e3.getSystemId()), "systemId from string args");
+        check(e3.getLineNumber() == 7 && e3.getColumnNumber() == 8, "line/column from int args");
+        check("msg3".equals(e3.getMessage()), "message from string args");
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
+        // ---- (String, String, String, int, int, Exception) ----
+        SAXParseException e4 = new SAXParseException("msg4", "PUB4", "SYS4", 9, 10, cause);
+        check(e4.getException() == cause, "wrapped exception from 6-arg ctor");
+        check(e4.getSystemId().equals("SYS4") && e4.getLineNumber() == 9 && e4.getColumnNumber() == 10, "6-arg position");
+        check(e4.toString().contains("msg4"), "6-arg toString includes message");
+        check(e4.toString().contains("SYS4"), "toString includes systemId");
 
-        org.xml.sax.SAXParseException e = new org.xml.sax.SAXParseException("m", "pub", "sys", 10, 5);
-        check("m".equals(e.getMessage()), "message");
-        check("pub".equals(e.getPublicId()) && "sys".equals(e.getSystemId()), "ids");
-        check(e.getLineNumber() == 10 && e.getColumnNumber() == 5, "line/column");
-        check(e.toString().startsWith("org.xml.sax.SAXParseException"), "toString prefix");
-        org.xml.sax.SAXParseException e2 = new org.xml.sax.SAXParseException("m2", "pub", "sys", 1, 2, new RuntimeException("c"));
-        check("m2".equals(e2.getMessage()) && e2.getCause() != null, "6-arg ctor");
-        check(e instanceof org.xml.sax.SAXException, "subclass of SAXException");
-
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

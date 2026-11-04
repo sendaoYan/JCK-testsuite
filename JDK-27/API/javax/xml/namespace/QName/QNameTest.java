@@ -1,92 +1,70 @@
 /*
  * @test
- * @summary javax.xml.namespace.QName conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.namespace.QName conformance: constructors, null semantics, accessors, equals/hashCode, valueOf, toString, Serializable.
  * @run main QNameTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.namespace.QName;
+
+import java.io.Serializable;
 
 public class QNameTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
 
+    interface Thrower { void run() throws Exception; }
 
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.namespace.QName");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasInterface(c, "java.io.Serializable"), "interface java.io.Serializable");
-        check(hasMethod(c, "equals"), "method equals");
-        check(hasMethod(c, "getLocalPart"), "method getLocalPart");
-        check(hasMethod(c, "getNamespaceURI"), "method getNamespaceURI");
-        check(hasMethod(c, "getPrefix"), "method getPrefix");
-        check(hasMethod(c, "hashCode"), "method hashCode");
-        check(hasMethod(c, "toString"), "method toString");
-        check(hasMethod(c, "valueOf"), "method valueOf");
-
-        javax.xml.namespace.QName q = new javax.xml.namespace.QName("http://ns", "local", "p");
-        check("http://ns".equals(q.getNamespaceURI()), "ns");
-        check("local".equals(q.getLocalPart()), "local");
-        check("p".equals(q.getPrefix()), "prefix");
-        check(q.equals(new javax.xml.namespace.QName("http://ns", "local")), "equals");
-        check(q.hashCode() == new javax.xml.namespace.QName("http://ns", "local").hashCode(), "hashCode");
-        check("{http://ns}local".equals(q.toString()), "toString");
-        check(javax.xml.namespace.QName.valueOf("{http://ns}local").equals(new javax.xml.namespace.QName("http://ns", "local")), "valueOf");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        javax.xml.namespace.QName q = new javax.xml.namespace.QName("http://ns", "local", "p");
-        check("http://ns".equals(q.getNamespaceURI()) && "local".equals(q.getLocalPart()) && "p".equals(q.getPrefix()), "3-arg ctor");
-        javax.xml.namespace.QName q2 = new javax.xml.namespace.QName("http://ns", "local");
-        check("http://ns".equals(q2.getNamespaceURI()) && q2.getPrefix().equals(javax.xml.XMLConstants.DEFAULT_NS_PREFIX), "2-arg ctor prefix empty");
-        check(q.equals(q2), "equals ignores prefix");
-        check(q.hashCode() == q2.hashCode(), "hashCode consistent");
-        javax.xml.namespace.QName q3 = new javax.xml.namespace.QName("local");
-        check(q3.getNamespaceURI().equals(javax.xml.XMLConstants.NULL_NS_URI), "1-arg ctor null ns");
-        check("{http://ns}local".equals(q.toString()), "toString with ns");
-        check("local".equals(q3.toString()), "toString without ns");
-        javax.xml.namespace.QName v = javax.xml.namespace.QName.valueOf("{http://ns}local");
-        check("http://ns".equals(v.getNamespaceURI()) && "local".equals(v.getLocalPart()), "valueOf");
-        check(!q.equals(null) && !q.equals("str"), "equals non-QName false");
-        boolean ok = false;
-        try { new javax.xml.namespace.QName("http://ns", (String) null); }
-        catch (IllegalArgumentException e) { ok = true; }
-        check(ok, "null local part -> IllegalArgumentException");
-
+    static boolean isIae(Thrower t) {
+        try { t.run(); return false; }
+        catch (IllegalArgumentException e) { return true; }
+        catch (Exception e) { return false; }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        // ---- 3-arg constructor ----
+        QName q = new QName("urn:x", "local", "pre");
+        check("urn:x".equals(q.getNamespaceURI()), "getNamespaceURI");
+        check("local".equals(q.getLocalPart()), "getLocalPart");
+        check("pre".equals(q.getPrefix()), "getPrefix");
+        check("{urn:x}local".equals(q.toString()), "3-arg toString");
+
+        // ---- 2-arg constructor (no prefix) ----
+        QName q2 = new QName("urn:x", "local");
+        check("".equals(q2.getPrefix()), "no-prefix constructor prefix empty");
+        check("{urn:x}local".equals(q2.toString()), "2-arg toString");
+
+        // ---- 1-arg constructor (local part only) ----
+        QName q3 = new QName("local");
+        check("".equals(q3.getNamespaceURI()), "local-only namespace empty");
+        check("local".equals(q3.getLocalPart()), "local-only local part");
+        check("local".equals(q3.toString()), "local-only toString");
+
+        // ---- null semantics ----
+        QName nullNs = new QName(null, "local");
+        check("".equals(nullNs.getNamespaceURI()), "null namespace -> empty string");
+        check(isIae(() -> new QName("urn:x", null)), "null localPart -> IAE");
+        check(isIae(() -> new QName((String) null)), "null local-only -> IAE");
+
+        // ---- equals / hashCode (prefix is ignored) ----
+        check(q.equals(q2), "equals ignores prefix");
+        check(q.hashCode() == q2.hashCode(), "hashCode ignores prefix");
+        check(!q.equals(q3), "equals false for different local/ns");
+        check(q.equals(new QName("urn:x", "local", "other")), "equals across different prefixes");
+
+        // ---- valueOf ----
+        QName v = QName.valueOf("{urn:x}local");
+        check("urn:x".equals(v.getNamespaceURI()) && "local".equals(v.getLocalPart()), "valueOf with ns");
+        QName v2 = QName.valueOf("plain");
+        check("plain".equals(v2.getLocalPart()) && "".equals(v2.getNamespaceURI()), "valueOf without braces");
+        check(isIae(() -> QName.valueOf(null)), "valueOf(null) -> IAE");
+
+        // ---- Serializable ----
+        check(q instanceof Serializable, "QName is Serializable");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

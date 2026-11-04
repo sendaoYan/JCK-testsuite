@@ -1,13 +1,13 @@
-# javax.xml.datatype.DatatypeConstants — 设计案
+# DatatypeConstants — 设计案
 
 ## 1. API 功能
-javax.xml.datatype.DatatypeConstants 类。常量：JANUARY, FEBRUARY, MARCH, APRIL, MAY, JUNE, JULY, AUGUST, SEPTEMBER, OCTOBER, NOVEMBER, DECEMBER, LESSER, EQUAL, GREATER, INDETERMINATE, FIELD_UNDEFINED, MAX_TIMEZONE_OFFSET, MIN_TIMEZONE_OFFSET（共 19 个）。
+XML Schema 数据类型常量。月份 1..12；比较 LESSER/EQUAL/GREATER/INDETERMINATE；FIELD_UNDEFINED；Field 单例 YEARS..SECONDS；schema QName 常量；MAX/MIN_TIMEZONE_OFFSET。
 
 ## 2. Java 用户如何使用
-常量精确断言。
+DatatypeConstants.JANUARY 等作字面量；compare 返回与 DatatypeConstants.LESSER 比较。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（javax.xml.datatype.DatatypeConstants）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 DatatypeConstantsTest 白盒结构 + 黑盒行为。
+JDK test/jdk/javax/xml/datatype 引用这些常量校验值。
 
 ## 4. 测试用例设计 + 自动化实现
-黑盒（`DatatypeConstantsTest.testBlackBox()`）覆盖：月份、比较、FIELD_UNDEFINED、时区偏移、Field、5 个 QName。
+黑盒：12 个月份值；比较常量 -1/0/1/2；FIELD_UNDEFINED==Integer.MIN_VALUE；schema QName 精确值（DATETIME/…/DURATION_DAYTIME=dayTimeDuration 等）；时区上下限 ±840；Field 单例身份与 toString。

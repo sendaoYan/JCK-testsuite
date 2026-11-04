@@ -1,13 +1,13 @@
-# javax.xml.xpath.XPath — 设计案
+# XPath — 设计案
 
 ## 1. API 功能
-javax.xml.xpath.XPath 接口。实例/声明方法：reset, setXPathVariableResolver, getXPathVariableResolver, setXPathFunctionResolver, getXPathFunctionResolver, setNamespaceContext, getNamespaceContext, compile, evaluate, evaluateExpression。
+XPath 求值接口。compile(expr)→XPathExpression；evaluate(expr, item/InputSource, returnType) 返回 String/Double/Boolean/NodeList/Node；set/get NamespaceContext、XPathVariableResolver、XPathFunctionResolver；reset()。
 
 ## 2. Java 用户如何使用
-匿名实现 `new javax.xml.xpath.XPath() {...}` 逐方法调用；断言常量精确值。
+newXPath() 后 evaluate(expr, Document, XPathConstants.STRING/NUMBER/BOOLEAN/NODESET/NODE) 分类型求值。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（javax.xml.xpath.XPath）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 XPathTest 白盒结构 + 黑盒行为。
+JDK test/jdk/javax/xml/jaxp 用 XPath 对 Document 求值断言节点集与字符串。
 
 ## 4. 测试用例设计 + 自动化实现
-黑盒（`XPathTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+黑盒：compile 合法/非法→XPathExpressionException/null→NPE；对 Document 五种返回类型（STRING/NUMBER/BOOLEAN/NODESET/NODE）断言值；evaluate(String,Object) 默认 String；InputSource 重载；非法表达式→XPathExpressionException；namespace context 前缀求值；variable resolver 被调用；function resolver 往返；reset 后可用。

@@ -1,13 +1,13 @@
-# org.w3c.dom.Node — 设计案
+# Node — 设计案
 
 ## 1. API 功能
-org.w3c.dom.Node 接口。常量：ELEMENT_NODE, ATTRIBUTE_NODE, TEXT_NODE, CDATA_SECTION_NODE, ENTITY_REFERENCE_NODE, ENTITY_NODE, PROCESSING_INSTRUCTION_NODE, COMMENT_NODE, DOCUMENT_NODE, DOCUMENT_TYPE_NODE, DOCUMENT_FRAGMENT_NODE, NOTATION_NODE, DOCUMENT_POSITION_DISCONNECTED, DOCUMENT_POSITION_PRECEDING, DOCUMENT_POSITION_FOLLOWING, DOCUMENT_POSITION_CONTAINS, DOCUMENT_POSITION_CONTAINED_BY, DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC（共 18 个）。 实例/声明方法：getNodeName, getNodeValue, setNodeValue, getNodeType, getParentNode, getChildNodes, getFirstChild, getLastChild, getPreviousSibling, getNextSibling, getAttributes, getOwnerDocument, insertBefore, replaceChild, removeChild, appendChild, hasChildNodes, cloneNode, normalize, isSupported, getNamespaceURI, getPrefix, setPrefix, getLocalName, hasAttributes, getBaseURI, compareDocumentPosition, getTextContent, setTextContent, isSameNode, lookupPrefix, isDefaultNamespace, lookupNamespaceURI, isEqualNode, getFeature, setUserData, getUserData。
+DOM Node 接口（通过 Document 实例化各节点类型）。节点类型常量；getNodeName/getNodeValue/setNodeValue/getNodeType；树操作 appendChild/insertBefore/replaceChild/removeChild；cloneNode/normalize/getTextContent/setTextContent；compareDocumentPosition/isSameNode/isEqualNode；命名空间 getNamespaceURI/getPrefix/getLocalName/lookupNamespaceURI/lookupPrefix/isDefaultNamespace。
 
 ## 2. Java 用户如何使用
-匿名实现 `new org.w3c.dom.Node() {...}` 逐方法调用；断言常量精确值。
+Document.createElement 建树后调用 Node 的树操作/克隆/规范化/文本内容/位置比较。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（org.w3c.dom.Node）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 NodeTest 白盒结构 + 黑盒行为。
+JDK test/jdk/org/w3c/dom 与 JCK 校验节点类型、树操作、clone/normalize/textContent、compareDocumentPosition。
 
 ## 4. 测试用例设计 + 自动化实现
-黑盒（`NodeTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+黑盒：12 个节点类型常量值；各节点类型 nodeName/nodeValue；setNodeValue 对 element 无操作；树操作返回旧/被插入/被移除节点与父子兄弟关系；removeChild(非子)→NOT_FOUND_ERR、appendChild(null)→NPE；childNodes 活对象；cloneNode 浅/深；normalize 合并文本；getTextContent/setTextContent；compareDocumentPosition 的 CONTAINED_BY/CONTAINS/FOLLOWING 位；isSameNode/isEqualNode；命名空间直接属性与 setPrefix；parsed 文档 lookupNamespaceURI/lookupPrefix/isDefaultNamespace。

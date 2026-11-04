@@ -1,68 +1,65 @@
 /*
  * @test
- * @summary javax.xml.namespace.NamespaceContext conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.namespace.NamespaceContext conformance: interface contract via a custom implementation (prefix/uri/prefixes).
  * @run main NamespaceContextTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.namespace.NamespaceContext;
+
+import java.util.Arrays;
+import java.util.Iterator;
 
 public class NamespaceContextTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
+
+    // deterministic fixed mapping: prefix "p" <-> namespace "urn:p"
+    static class FixedContext implements NamespaceContext {
+        public String getNamespaceURI(String prefix) {
+            if (prefix == null) throw new IllegalArgumentException("prefix null");
+            if ("p".equals(prefix)) return "urn:p";
+            if ("xml".equals(prefix)) return javax.xml.XMLConstants.XML_NS_URI;
+            return javax.xml.XMLConstants.NULL_NS_URI;
         }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
+        public String getPrefix(String uri) {
+            if (uri == null) throw new IllegalArgumentException("uri null");
+            if ("urn:p".equals(uri)) return "p";
+            if (javax.xml.XMLConstants.XML_NS_URI.equals(uri)) return "xml";
+            return null;
         }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.namespace.NamespaceContext");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(c.isInterface(), "is interface");
-        check(c.getSuperclass() == null, "no superclass");
-        check(hasMethod(c, "getNamespaceURI"), "method getNamespaceURI");
-        check(hasMethod(c, "getPrefix"), "method getPrefix");
-        check(hasMethod(c, "getPrefixes"), "method getPrefixes");
-    
+        public Iterator getPrefixes(String uri) {
+            if (uri == null) throw new IllegalArgumentException("uri null");
+            if ("urn:p".equals(uri)) return Arrays.asList("p").iterator();
+            return Arrays.asList(new String[0]).iterator();
+        }
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        javax.xml.namespace.NamespaceContext a = new javax.xml.namespace.NamespaceContext(){
-            public java.lang.String getNamespaceURI(java.lang.String p0) { return "s"; }
-            public java.lang.String getPrefix(java.lang.String p0) { return "s"; }
-            public java.util.Iterator<java.lang.String> getPrefixes(java.lang.String p0) { return null; }
-        };
-        check(a != null, "anon impl of NamespaceContext");
-        check("s".equals(a.getNamespaceURI("s")), "getNamespaceURI() returns fixed default");
-        check("s".equals(a.getPrefix("s")), "getPrefix() returns fixed default");
-        check(a.getPrefixes("s") == null, "getPrefixes() returns fixed default");
-    }
+    public static void main(String[] args) {
+        NamespaceContext nc = new FixedContext();
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        check("urn:p".equals(nc.getNamespaceURI("p")), "getNamespaceURI resolves prefix");
+        check(javax.xml.XMLConstants.NULL_NS_URI.equals(nc.getNamespaceURI("unknown")), "unknown prefix -> NULL_NS_URI");
+        check(javax.xml.XMLConstants.XML_NS_URI.equals(nc.getNamespaceURI("xml")), "xml prefix -> XML_NS_URI");
+        check("p".equals(nc.getPrefix("urn:p")), "getPrefix resolves namespace");
+        check(nc.getPrefix("urn:unknown") == null, "getPrefix unknown -> null");
+
+        Iterator prefixes = nc.getPrefixes("urn:p");
+        check(prefixes.hasNext() && "p".equals(prefixes.next()), "getPrefixes returns matching prefix");
+        Iterator none = nc.getPrefixes("urn:unknown");
+        check(!none.hasNext(), "getPrefixes unknown -> empty");
+
+        // null args -> IllegalArgumentException
+        boolean npe1 = false;
+        try { nc.getNamespaceURI(null); } catch (IllegalArgumentException e) { npe1 = true; }
+        check(npe1, "getNamespaceURI(null) -> IAE");
+        boolean npe2 = false;
+        try { nc.getPrefix(null); } catch (IllegalArgumentException e) { npe2 = true; }
+        check(npe2, "getPrefix(null) -> IAE");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

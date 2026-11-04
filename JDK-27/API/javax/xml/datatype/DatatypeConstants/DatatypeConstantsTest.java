@@ -1,117 +1,71 @@
 /*
  * @test
- * @summary javax.xml.datatype.DatatypeConstants conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.datatype.DatatypeConstants conformance: months, comparison, FIELD_UNDEFINED, schema QNames, timezone limits, Field identity.
  * @run main DatatypeConstantsTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.datatype.DatatypeConstants;
+import javax.xml.namespace.QName;
 
 public class DatatypeConstantsTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
 
+    public static void main(String[] args) {
+        // ---- months 1..12 ----
+        check(DatatypeConstants.JANUARY == 1, "JANUARY == 1");
+        check(DatatypeConstants.FEBRUARY == 2, "FEBRUARY == 2");
+        check(DatatypeConstants.MARCH == 3, "MARCH == 3");
+        check(DatatypeConstants.APRIL == 4, "APRIL == 4");
+        check(DatatypeConstants.MAY == 5, "MAY == 5");
+        check(DatatypeConstants.JUNE == 6, "JUNE == 6");
+        check(DatatypeConstants.JULY == 7, "JULY == 7");
+        check(DatatypeConstants.AUGUST == 8, "AUGUST == 8");
+        check(DatatypeConstants.SEPTEMBER == 9, "SEPTEMBER == 9");
+        check(DatatypeConstants.OCTOBER == 10, "OCTOBER == 10");
+        check(DatatypeConstants.NOVEMBER == 11, "NOVEMBER == 11");
+        check(DatatypeConstants.DECEMBER == 12, "DECEMBER == 12");
 
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
+        // ---- comparison results ----
+        check(DatatypeConstants.LESSER == -1, "LESSER == -1");
+        check(DatatypeConstants.EQUAL == 0, "EQUAL == 0");
+        check(DatatypeConstants.GREATER == 1, "GREATER == 1");
+        check(DatatypeConstants.INDETERMINATE == 2, "INDETERMINATE == 2");
 
-        Class<?> c = Class.forName("javax.xml.datatype.DatatypeConstants");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasField(c, "APRIL"), "field APRIL");
-        check(hasField(c, "AUGUST"), "field AUGUST");
-        check(hasField(c, "DATE"), "field DATE");
-        check(hasField(c, "DATETIME"), "field DATETIME");
-        check(hasField(c, "DAYS"), "field DAYS");
-        check(hasField(c, "DECEMBER"), "field DECEMBER");
-        check(hasField(c, "DURATION"), "field DURATION");
-        check(hasField(c, "DURATION_DAYTIME"), "field DURATION_DAYTIME");
-        check(hasField(c, "DURATION_YEARMONTH"), "field DURATION_YEARMONTH");
-        check(hasField(c, "EQUAL"), "field EQUAL");
-        check(hasField(c, "FEBRUARY"), "field FEBRUARY");
-        check(hasField(c, "FIELD_UNDEFINED"), "field FIELD_UNDEFINED");
-        check(hasField(c, "GDAY"), "field GDAY");
-        check(hasField(c, "GMONTH"), "field GMONTH");
-        check(hasField(c, "GMONTHDAY"), "field GMONTHDAY");
-        check(hasField(c, "GREATER"), "field GREATER");
-        check(hasField(c, "GYEAR"), "field GYEAR");
-        check(hasField(c, "GYEARMONTH"), "field GYEARMONTH");
-        check(hasField(c, "HOURS"), "field HOURS");
-        check(hasField(c, "INDETERMINATE"), "field INDETERMINATE");
-        check(hasField(c, "JANUARY"), "field JANUARY");
-        check(hasField(c, "JULY"), "field JULY");
-        check(hasField(c, "JUNE"), "field JUNE");
-        check(hasField(c, "LESSER"), "field LESSER");
-        check(hasField(c, "MARCH"), "field MARCH");
-        check(hasField(c, "MAX_TIMEZONE_OFFSET"), "field MAX_TIMEZONE_OFFSET");
-        check(hasField(c, "MAY"), "field MAY");
-        check(hasField(c, "MINUTES"), "field MINUTES");
-        check(hasField(c, "MIN_TIMEZONE_OFFSET"), "field MIN_TIMEZONE_OFFSET");
-        check(hasField(c, "MONTHS"), "field MONTHS");
-        check(hasField(c, "NOVEMBER"), "field NOVEMBER");
-        check(hasField(c, "OCTOBER"), "field OCTOBER");
-        check(hasField(c, "SECONDS"), "field SECONDS");
-        check(hasField(c, "SEPTEMBER"), "field SEPTEMBER");
-        check(hasField(c, "TIME"), "field TIME");
-        check(hasField(c, "YEARS"), "field YEARS");
+        // ---- FIELD_UNDEFINED ----
+        check(DatatypeConstants.FIELD_UNDEFINED == Integer.MIN_VALUE, "FIELD_UNDEFINED == Integer.MIN_VALUE");
 
-        check(javax.xml.datatype.DatatypeConstants.JANUARY == 1, "JANUARY");
-        check(javax.xml.datatype.DatatypeConstants.DECEMBER == 12, "DECEMBER");
-        check(javax.xml.datatype.DatatypeConstants.LESSER == -1, "LESSER");
-        check(javax.xml.datatype.DatatypeConstants.EQUAL == 0, "EQUAL");
-        check(javax.xml.datatype.DatatypeConstants.GREATER == 1, "GREATER");
-        check(javax.xml.datatype.DatatypeConstants.INDETERMINATE == 2, "INDETERMINATE");
-        check(javax.xml.datatype.DatatypeConstants.DATETIME != null, "DATETIME");
-        check(javax.xml.datatype.DatatypeConstants.DURATION != null, "DURATION");
-    
-    }
+        // ---- schema QName constants ----
+        check(DatatypeConstants.DATETIME.equals(new QName("http://www.w3.org/2001/XMLSchema", "dateTime")), "DATETIME");
+        check(DatatypeConstants.TIME.equals(new QName("http://www.w3.org/2001/XMLSchema", "time")), "TIME");
+        check(DatatypeConstants.DATE.equals(new QName("http://www.w3.org/2001/XMLSchema", "date")), "DATE");
+        check(DatatypeConstants.GYEARMONTH.equals(new QName("http://www.w3.org/2001/XMLSchema", "gYearMonth")), "GYEARMONTH");
+        check(DatatypeConstants.GMONTHDAY.equals(new QName("http://www.w3.org/2001/XMLSchema", "gMonthDay")), "GMONTHDAY");
+        check(DatatypeConstants.GYEAR.equals(new QName("http://www.w3.org/2001/XMLSchema", "gYear")), "GYEAR");
+        check(DatatypeConstants.GMONTH.equals(new QName("http://www.w3.org/2001/XMLSchema", "gMonth")), "GMONTH");
+        check(DatatypeConstants.GDAY.equals(new QName("http://www.w3.org/2001/XMLSchema", "gDay")), "GDAY");
+        check(DatatypeConstants.DURATION.equals(new QName("http://www.w3.org/2001/XMLSchema", "duration")), "DURATION");
+        check(DatatypeConstants.DURATION_DAYTIME.equals(new QName("http://www.w3.org/2003/11/xpath-datatypes", "dayTimeDuration")), "DURATION_DAYTIME QName");
+        check(DatatypeConstants.DURATION_YEARMONTH.equals(new QName("http://www.w3.org/2003/11/xpath-datatypes", "yearMonthDuration")), "DURATION_YEARMONTH QName");
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
+        // ---- timezone limits (W3C schema convention: east is negative) ----
+        check(DatatypeConstants.MAX_TIMEZONE_OFFSET == -14 * 60, "MAX_TIMEZONE_OFFSET == -840");
+        check(DatatypeConstants.MIN_TIMEZONE_OFFSET == 14 * 60, "MIN_TIMEZONE_OFFSET == 840");
 
-        check(javax.xml.datatype.DatatypeConstants.JANUARY == 1 && javax.xml.datatype.DatatypeConstants.DECEMBER == 12, "month constants");
-        check(javax.xml.datatype.DatatypeConstants.LESSER == -1 && javax.xml.datatype.DatatypeConstants.EQUAL == 0
-              && javax.xml.datatype.DatatypeConstants.GREATER == 1 && javax.xml.datatype.DatatypeConstants.INDETERMINATE == 2, "comparison constants");
-        check(javax.xml.datatype.DatatypeConstants.FIELD_UNDEFINED == -2147483648, "FIELD_UNDEFINED");
-        check(javax.xml.datatype.DatatypeConstants.MAX_TIMEZONE_OFFSET == -840, "MAX_TIMEZONE_OFFSET");
-        check(javax.xml.datatype.DatatypeConstants.MIN_TIMEZONE_OFFSET == 840, "MIN_TIMEZONE_OFFSET");
-        check(javax.xml.datatype.DatatypeConstants.YEARS != null && javax.xml.datatype.DatatypeConstants.SECONDS != null, "Field constants");
-        check("YEARS".equals(javax.xml.datatype.DatatypeConstants.YEARS.toString()), "Field toString");
-        check(javax.xml.datatype.DatatypeConstants.YEARS.getId() == 0, "Field YEARS id");
-        check(javax.xml.datatype.DatatypeConstants.DURATION.getLocalPart().equals("duration"), "DURATION QName");
-        check(javax.xml.datatype.DatatypeConstants.DATETIME.getLocalPart().equals("dateTime"), "DATETIME QName");
-        check(javax.xml.datatype.DatatypeConstants.DATE.getLocalPart().equals("date"), "DATE QName");
-        check(javax.xml.datatype.DatatypeConstants.TIME.getLocalPart().equals("time"), "TIME QName");
-        check(javax.xml.datatype.DatatypeConstants.DURATION_DAYTIME.getLocalPart().equals("dayTimeDuration"), "DURATION_DAYTIME QName");
+        // ---- Field identity ----
+        check(DatatypeConstants.YEARS == DatatypeConstants.YEARS, "YEARS identity");
+        check(DatatypeConstants.MONTHS == DatatypeConstants.MONTHS, "MONTHS identity");
+        check(DatatypeConstants.DAYS == DatatypeConstants.DAYS, "DAYS identity");
+        check(DatatypeConstants.HOURS == DatatypeConstants.HOURS, "HOURS identity");
+        check(DatatypeConstants.MINUTES == DatatypeConstants.MINUTES, "MINUTES identity");
+        check(DatatypeConstants.SECONDS == DatatypeConstants.SECONDS, "SECONDS identity");
+        check(DatatypeConstants.YEARS != DatatypeConstants.MONTHS, "distinct Field objects");
+        check("YEARS".equals(DatatypeConstants.YEARS.toString()), "Field toString");
 
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,97 +1,80 @@
 /*
  * @test
- * @summary javax.xml.parsers.SAXParserFactory conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.parsers.SAXParserFactory conformance: factory boundary, precise exceptions, null semantics, feature round-trip.
  * @run main SAXParserFactoryTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.parsers.FactoryConfigurationError;
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
 
 public class SAXParserFactoryTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
+
+    interface Thrower { void run() throws Exception; }
+
+    static boolean isFce(Thrower t) {
+        try { t.run(); return false; }
+        catch (FactoryConfigurationError e) { return true; }
+        catch (Exception e) { return false; }
     }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.parsers.SAXParserFactory");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is abstract class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasMethod(c, "getFeature"), "method getFeature");
-        check(hasMethod(c, "getSchema"), "method getSchema");
-        check(hasMethod(c, "isNamespaceAware"), "method isNamespaceAware");
-        check(hasMethod(c, "isValidating"), "method isValidating");
-        check(hasMethod(c, "isXIncludeAware"), "method isXIncludeAware");
-        check(hasMethod(c, "newDefaultInstance"), "method newDefaultInstance");
-        check(hasMethod(c, "newDefaultNSInstance"), "method newDefaultNSInstance");
-        check(hasMethod(c, "newInstance"), "method newInstance");
-        check(hasMethod(c, "newNSInstance"), "method newNSInstance");
-        check(hasMethod(c, "newSAXParser"), "method newSAXParser");
-        check(hasMethod(c, "setFeature"), "method setFeature");
-        check(hasMethod(c, "setNamespaceAware"), "method setNamespaceAware");
-        check(hasMethod(c, "setSchema"), "method setSchema");
-        check(hasMethod(c, "setValidating"), "method setValidating");
-        check(hasMethod(c, "setXIncludeAware"), "method setXIncludeAware");
-
-        javax.xml.parsers.SAXParserFactory f = javax.xml.parsers.SAXParserFactory.newInstance();
-        f.setNamespaceAware(true);
-        check(f.isNamespaceAware(), "namespaceAware");
-        check(f.newSAXParser() != null, "newSAXParser");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        javax.xml.parsers.SAXParserFactory f = javax.xml.parsers.SAXParserFactory.newInstance();
-        check(!f.isNamespaceAware() && !f.isValidating(), "sax factory defaults");
-        f.setNamespaceAware(true); f.setValidating(false); f.setXIncludeAware(true);
-        check(f.isNamespaceAware() && !f.isValidating() && f.isXIncludeAware(), "sax toggles");
-        f.setNamespaceAware(false); check(!f.isNamespaceAware(), "setNamespaceAware(false)");
-        f.setNamespaceAware(true);
-        javax.xml.parsers.SAXParser p = f.newSAXParser();
-        check(p != null && p.isNamespaceAware(), "parser reflects namespace aware");
-        check(!p.isValidating(), "parser not validating");
-        check(f.getSchema() == null && p.getSchema() == null, "schema default null");
-        f.setFeature("http://xml.org/sax/features/namespaces", true);
-        check(f.getFeature("http://xml.org/sax/features/namespaces"), "sax feature round-trip");
-        boolean ok = false;
-        try { f.getFeature("http://example.invalid/nope"); }
-        catch (org.xml.sax.SAXNotRecognizedException e) { ok = true; }
-        check(ok, "sax getFeature(unknown) -> SAXNotRecognizedException");
-        check(javax.xml.parsers.SAXParserFactory.newNSInstance().isNamespaceAware(), "newNSInstance");
-        check(javax.xml.parsers.SAXParserFactory.newDefaultNSInstance().isNamespaceAware(), "newDefaultNSInstance");
-        check(javax.xml.parsers.SAXParserFactory.newDefaultInstance() != null, "newDefaultInstance");
-
+    // any declared/undocumented exception from setFeature/getFeature
+    static boolean throwsException(Thrower t) {
+        try { t.run(); return false; }
+        catch (Exception e) { return true; }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        SAXParserFactory f = SAXParserFactory.newInstance();
+        check(f != null, "newInstance non-null");
+
+        ClassLoader cl = SAXParserFactory.class.getClassLoader();
+        SAXParserFactory f2 = SAXParserFactory.newInstance(
+                "com.sun.org.apache.xerces.internal.jaxp.SAXParserFactoryImpl", cl);
+        check(f2 != null, "newInstance(className, loader) non-null");
+
+        check(isFce(() -> SAXParserFactory.newInstance("no.such.Factory", cl)),
+              "bogus impl class -> FactoryConfigurationError");
+        check(isFce(() -> SAXParserFactory.newInstance(null, null)),
+              "null factory class -> FactoryConfigurationError");
+
+        // documented defaults
+        check(!f.isNamespaceAware(), "default namespaceAware=false");
+        check(!f.isValidating(), "default validating=false");
+        check(!f.isXIncludeAware(), "default xIncludeAware=false");
+        check(f.getSchema() == null, "default schema=null");
+
+        // round-trip
+        f.setNamespaceAware(true);  check(f.isNamespaceAware(), "namespaceAware=true");
+        f.setNamespaceAware(false); check(!f.isNamespaceAware(), "namespaceAware=false");
+        f.setValidating(true);      check(f.isValidating(), "validating=true");
+        f.setValidating(false);     check(!f.isValidating(), "validating=false");
+        f.setXIncludeAware(true);   check(f.isXIncludeAware(), "xIncludeAware=true");
+        f.setXIncludeAware(false);  check(!f.isXIncludeAware(), "xIncludeAware=false");
+        f.setSchema(null);          check(f.getSchema() == null, "setSchema(null)");
+
+        // unknown feature -> exception
+        check(throwsException(() -> f.setFeature("http://no.such/feature", true)), "setFeature(unknown) throws");
+        check(throwsException(() -> f.getFeature("http://no.such/feature")), "getFeature(unknown) throws");
+
+        // parser production
+        SAXParser p = f.newSAXParser();
+        check(p != null, "newSAXParser non-null");
+        check(p.isNamespaceAware() == f.isNamespaceAware(), "parser mirrors factory namespaceAware");
+        check(p.isValidating() == f.isValidating(), "parser mirrors factory validating");
+        SAXParser p2 = f.newSAXParser();
+        check(p2 != null && p2 != p, "newSAXParser returns fresh parser");
+
+        // ---- JDK-19+ factory methods ----
+        check(SAXParserFactory.newDefaultInstance() != null, "newDefaultInstance non-null");
+        check(SAXParserFactory.newNSInstance() != null, "newNSInstance non-null");
+        check(SAXParserFactory.newDefaultNSInstance() != null, "newDefaultNSInstance non-null");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

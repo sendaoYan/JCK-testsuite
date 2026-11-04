@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary org.w3c.dom.DOMException conformance: superclass, constructor, code field.
+ * @summary org.w3c.dom.DOMException conformance: exception hierarchy, constructor, code field, full error-code constant matrix.
  * @run main DOMExceptionTest
  */
 
@@ -14,22 +14,12 @@ public class DOMExceptionTest {
         passed++;
     }
 
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
+    public static void main(String[] args) {
+        // ---- exception hierarchy ----
+        check(RuntimeException.class.isAssignableFrom(DOMException.class), "extends RuntimeException");
+        check(Exception.class.isAssignableFrom(DOMException.class), "is an Exception");
 
-        check(RuntimeException.class.isAssignableFrom(DOMException.class),
-              "extends RuntimeException");
-        check(DOMException.INDEX_SIZE_ERR == 1, "INDEX_SIZE_ERR == 1");
-        check(DOMException.WRONG_DOCUMENT_ERR == 4, "WRONG_DOCUMENT_ERR == 4");
-
-        DOMException e = new DOMException(DOMException.NAMESPACE_ERR, "ns");
-        check(e.code == DOMException.NAMESPACE_ERR, "code field");
-        check("ns".equals(e.getMessage()), "message");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
+        // ---- full error-code constant matrix (DOM Level 3) ----
         check(DOMException.INDEX_SIZE_ERR == 1, "INDEX_SIZE_ERR == 1");
         check(DOMException.DOMSTRING_SIZE_ERR == 2, "DOMSTRING_SIZE_ERR == 2");
         check(DOMException.HIERARCHY_REQUEST_ERR == 3, "HIERARCHY_REQUEST_ERR == 3");
@@ -47,15 +37,21 @@ public class DOMExceptionTest {
         check(DOMException.INVALID_ACCESS_ERR == 15, "INVALID_ACCESS_ERR == 15");
         check(DOMException.VALIDATION_ERR == 16, "VALIDATION_ERR == 16");
         check(DOMException.TYPE_MISMATCH_ERR == 17, "TYPE_MISMATCH_ERR == 17");
-        org.w3c.dom.DOMException e = new org.w3c.dom.DOMException((short) 3, "msg");
-        check(e.code == (short) 3, "code field set");
-        check("msg".equals(e.getMessage()), "message ctor");
-        check(e instanceof RuntimeException, "is RuntimeException");
-    }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        // ---- constructor + public code field ----
+        DOMException e = new DOMException(DOMException.NAMESPACE_ERR, "ns message");
+        check(e.code == DOMException.NAMESPACE_ERR, "code field populated from constructor");
+        check("ns message".equals(e.getMessage()), "message preserved");
+        check(e.getCause() == null, "no cause by default");
+
+        DOMException e2 = new DOMException(DOMException.NOT_FOUND_ERR, null);
+        check(e2.code == DOMException.NOT_FOUND_ERR, "code with null message");
+        check(e2.getMessage() == null, "null message preserved");
+
+        // ---- code is a mutable public field ----
+        e2.code = DOMException.WRONG_DOCUMENT_ERR;
+        check(e2.code == DOMException.WRONG_DOCUMENT_ERR, "code field is public and mutable");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
