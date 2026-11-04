@@ -7,6 +7,8 @@
 
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 public class SetTest {
@@ -53,9 +55,37 @@ public class SetTest {
         check(lazy.equals(Set.of(0, 2)), "ofLazy filter");
     }
 
+    static void testBasicContract() {
+        Set<String> s = new HashSet<>();
+        check(s.isEmpty(), "new set empty");
+        check(s.add("a") && !s.add("a"), "add true then false for duplicate");
+        check(s.size() == 1, "size excludes duplicate");
+        check(s.contains("a") && !s.contains("z"), "contains");
+        check(s.remove("a") && s.isEmpty(), "remove true and empties");
+
+        Set<String> u = new HashSet<>(List.of("a", "b"));
+        check(u.addAll(new HashSet<>(List.of("b", "c"))), "addAll returns true");
+        check(u.equals(new HashSet<>(List.of("a", "b", "c"))), "addAll union");
+        check(!u.addAll(new HashSet<>(List.of("a"))), "addAll all-present returns false");
+        check(u.containsAll(List.of("a", "c")), "containsAll");
+        check(u.removeAll(List.of("a", "b")), "removeAll returns true");
+        check(u.equals(new HashSet<>(List.of("c"))), "removeAll difference");
+
+        Set<String> r = new HashSet<>(List.of("a", "b", "c"));
+        check(r.retainAll(List.of("a", "c")), "retainAll returns true");
+        check(r.equals(new HashSet<>(List.of("a", "c"))), "retainAll intersection");
+
+        Iterator<String> it = u.iterator();
+        check("c".equals(it.next()) && !it.hasNext(), "iterator covers all");
+        check(u.toArray().length == 1, "toArray length");
+        u.clear();
+        check(u.isEmpty(), "clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testBasicContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

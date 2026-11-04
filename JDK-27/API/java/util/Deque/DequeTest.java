@@ -63,6 +63,8 @@ public class DequeTest {
         d.offerFirst("x");
         d.offerLast("y");
         check("x".equals(d.getFirst()) && "y".equals(d.getLast()), "offerFirst/offerLast");
+        expectThrows(() -> d.addFirst(null), NullPointerException.class, "addFirst(null) NPE");
+        expectThrows(() -> d.offerLast(null), NullPointerException.class, "offerLast(null) NPE");
 
         // 2. remove/poll head+tail
         check("x".equals(d.removeFirst()), "removeFirst");

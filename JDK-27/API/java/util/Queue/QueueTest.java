@@ -49,6 +49,8 @@ public class QueueTest {
         check(q.peek() == null && q.poll() == null, "empty peek/poll null");
         expectThrows(q::element, NoSuchElementException.class, "empty element");
         expectThrows(q::remove, NoSuchElementException.class, "empty remove");
+        expectThrows(() -> q.offer(null), NullPointerException.class, "offer(null) NPE");
+        expectThrows(() -> q.add(null), NullPointerException.class, "add(null) NPE");
     }
 
     public static void main(String[] args) throws Exception {

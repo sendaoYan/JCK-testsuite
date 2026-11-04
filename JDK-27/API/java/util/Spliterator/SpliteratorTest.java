@@ -68,6 +68,13 @@ public class SpliteratorTest {
         Spliterator<String> sp3 = new ArrayList<>(Arrays.asList("x", "y")).spliterator();
         sp3.forEachRemaining(remaining::add);
         check(remaining.equals(Arrays.asList("x", "y")), "forEachRemaining");
+
+        Spliterator<String> exhausted = new ArrayList<>(Arrays.asList("q")).spliterator();
+        exhausted.tryAdvance(x -> { });
+        check(!exhausted.tryAdvance(x -> {
+            throw new AssertionError("consumer must not run when exhausted");
+        }), "tryAdvance exhausted false");
+        check(new ArrayList<String>().spliterator().estimateSize() == 0, "empty estimateSize 0");
     }
 
     public static void main(String[] args) throws Exception {

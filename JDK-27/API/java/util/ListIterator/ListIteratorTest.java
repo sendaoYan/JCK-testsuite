@@ -88,6 +88,18 @@ public class ListIteratorTest {
         ListIterator<String> mid = l.listIterator(1);
         check(mid.nextIndex() == 1, "listIterator(index) starts at index");
         check(mid.next().equals("b"), "listIterator(index) next");
+
+        // 7. IllegalStateException when there is no last-returned element
+        ListIterator<String> it4 = l.listIterator();
+        expectThrows(() -> it4.set("z"), IllegalStateException.class, "set before next ISE");
+        expectThrows(it4::remove, IllegalStateException.class, "remove before next ISE");
+        it4.next();
+        it4.add("x");
+        expectThrows(() -> it4.set("z"), IllegalStateException.class, "set after add ISE");
+        expectThrows(it4::remove, IllegalStateException.class, "remove after add ISE");
+        it4.previous();
+        it4.remove();
+        expectThrows(it4::remove, IllegalStateException.class, "double remove ISE");
     }
 
     public static void main(String[] args) throws Exception {
