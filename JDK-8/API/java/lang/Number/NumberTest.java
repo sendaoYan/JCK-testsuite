@@ -81,12 +81,61 @@ public class NumberTest {
         check(BigDecimal.ONE.floatValue() == 1.0f, "BigDecimal.ONE.floatValue");
     }
 
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Number");
+            check(!c.isInterface(), "Number is not an interface");
+            check(Modifier.isAbstract(c.getModifiers()), "Number is abstract");
+            check(c.getSuperclass() == Object.class, "Number extends Object");
+            check(java.io.Serializable.class.isAssignableFrom(c), "Number implements Serializable");
+            check(Modifier.isAbstract(c.getMethod("intValue").getModifiers()),
+                  "intValue() is abstract");
+            check(Modifier.isAbstract(c.getMethod("doubleValue").getModifiers()),
+                  "doubleValue() is abstract");
+            check(c.getMethod("intValue").getReturnType() == int.class,
+                  "intValue() returns int");
+            check(c.getMethod("doubleValue").getReturnType() == double.class,
+                  "doubleValue() returns double");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testFloatSpecialValues() {
+        Number nan = Float.valueOf(Float.NaN);
+        check(Float.isNaN(nan.floatValue()), "Float NaN.floatValue");
+        check(nan.intValue() == 0 && nan.longValue() == 0L, "(int/long) Float NaN == 0");
+        check(nan.byteValue() == 0 && nan.shortValue() == 0, "(byte/short) Float NaN == 0");
+
+        Number posInf = Float.valueOf(Float.POSITIVE_INFINITY);
+        check(posInf.intValue() == Integer.MAX_VALUE, "(int) Float +Inf == MAX_VALUE");
+        check(posInf.longValue() == Long.MAX_VALUE, "(long) Float +Inf == MAX_VALUE");
+
+        Number negInf = Float.valueOf(Float.NEGATIVE_INFINITY);
+        check(negInf.intValue() == Integer.MIN_VALUE, "(int) Float -Inf == MIN_VALUE");
+        check(negInf.longValue() == Long.MIN_VALUE, "(long) Float -Inf == MIN_VALUE");
+    }
+
+    static void testAtomicAndFractional() {
+        check(new AtomicInteger(0x12345678).intValue() == 0x12345678, "AtomicInteger.intValue");
+        check(new AtomicInteger(0x12345678).longValue() == 0x12345678L, "AtomicInteger.longValue");
+        check(new AtomicLong(0x1234567890abcdefL).intValue() == (int) 0x90abcdef,
+              "AtomicLong.intValue truncates");
+        // Fractional double narrows toward zero when truncated to int/long.
+        check(Double.valueOf(3.99).intValue() == 3, "Double.intValue truncates toward zero");
+        check(Double.valueOf(-3.99).intValue() == -3, "negative Double.intValue truncates");
+    }
+
     public static void main(String[] args) {
+        testWhiteBox();
         testHierarchy();
         testIntegerConversions();
         testLongNarrowing();
         testDoubleSpecialValues();
         testBigIntegerBigDecimal();
+        testFloatSpecialValues();
+        testAtomicAndFractional();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

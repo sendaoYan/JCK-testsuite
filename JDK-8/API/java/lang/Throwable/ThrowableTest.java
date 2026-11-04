@@ -6,6 +6,8 @@
  * @run main ThrowableTest
  */
 
+import java.lang.reflect.Modifier;
+
 public class ThrowableTest {
     static int passed;
 
@@ -16,6 +18,13 @@ public class ThrowableTest {
 
     static class Custom extends Throwable {
         Custom(String m) { super(m); }
+    }
+
+    // Exposes the protected (String, Throwable, boolean, boolean) constructor.
+    static class SuppressionThrowable extends Throwable {
+        SuppressionThrowable(String m, Throwable c, boolean enableSuppression, boolean writableStackTrace) {
+            super(m, c, enableSuppression, writableStackTrace);
+        }
     }
 
     static void testConstructors() {
@@ -131,13 +140,73 @@ public class ThrowableTest {
         check(bos.toString().contains("Throwable: x"), "printStackTrace writes to stream");
     }
 
-    public static void main(String[] args) {
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Throwable");
+        check(!c.isInterface(), "Throwable is a class");
+        check(c.getSuperclass() == Object.class, "Throwable extends Object");
+        check(!Modifier.isFinal(c.getModifiers()), "Throwable is subclassable");
+        check(java.io.Serializable.class.isAssignableFrom(c), "Throwable is Serializable");
+        check(c.getConstructor() != null && c.getConstructor(String.class) != null
+              && c.getConstructor(String.class, Throwable.class) != null
+              && c.getConstructor(Throwable.class) != null, "four public constructors present");
+        // Serialization stability marker.
+        java.lang.reflect.Field f = c.getDeclaredField("serialVersionUID");
+        f.setAccessible(true);
+        check(((Long) f.get(null)).longValue() == -3042686055658047285L,
+              "serialVersionUID stable across JDK-8");
+    }
+
+    // ---- Part 2b: protected (String, Throwable, boolean, boolean) ctor ----
+    static void testBlackBox() {
+        Exception cause = new Exception("cause");
+
+        SuppressionThrowable e = new SuppressionThrowable("m", cause, false, false);
+        check("m".equals(e.getMessage()) && e.getCause() == cause, "4-arg ctor sets message and cause");
+        e.addSuppressed(new Exception("s"));
+        check(e.getSuppressed().length == 0, "enableSuppression=false -> addSuppressed is a no-op");
+        e.setStackTrace(new StackTraceElement[]{ new StackTraceElement("C", "m", "F.java", 1) });
+        check(e.getStackTrace().length == 0, "writableStackTrace=false -> stack trace stays empty");
+
+        SuppressionThrowable e2 = new SuppressionThrowable("m2", cause, true, true);
+        e2.addSuppressed(new Exception("s2"));
+        check(e2.getSuppressed().length == 1, "enableSuppression=true -> addSuppressed records");
+        check(e2.getStackTrace().length > 0, "writableStackTrace=true -> stack trace filled");
+    }
+
+    // ---- Part 3: serialization round-trip ----
+    static void testSerialization() throws Exception {
+        Custom original = new Custom("boom");
+        Exception cause = new Exception("cause");
+        original.initCause(cause);
+        original.addSuppressed(new Exception("suppressed"));
+
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(original);
+        oos.close();
+
+        java.io.ObjectInputStream ois =
+            new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()));
+        Custom copy = (Custom) ois.readObject();
+        check("boom".equals(copy.getMessage()), "serialization preserves message");
+        check(copy.getCause() != null && "cause".equals(copy.getCause().getMessage()),
+              "serialization preserves cause");
+        check(copy.getSuppressed().length == 1
+              && "suppressed".equals(copy.getSuppressed()[0].getMessage()),
+              "serialization preserves suppressed");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testConstructors();
         testInitCause();
         testSuppressed();
         testStackTrace();
         testToStringAndMessage();
         testPrintStackTrace();
+        testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

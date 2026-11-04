@@ -7,6 +7,8 @@
  * @run main EnumTest
  */
 
+import java.lang.reflect.Modifier;
+
 public class EnumTest {
     enum Suit { CLUBS, DIAMONDS, HEARTS, SPADES }
 
@@ -25,6 +27,21 @@ public class EnumTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.lang.Enum");
+        check(Modifier.isAbstract(c.getModifiers()), "Enum is abstract");
+        check(c.getSuperclass() == Object.class, "Enum extends Object");
+        check(Comparable.class.isAssignableFrom(c), "Enum implements Comparable");
+        check(java.io.Serializable.class.isAssignableFrom(c), "Enum implements Serializable");
+        check(Modifier.isFinal(c.getMethod("name").getModifiers()), "name() final");
+        check(Modifier.isFinal(c.getMethod("ordinal").getModifiers()), "ordinal() final");
+        check(Modifier.isFinal(c.getMethod("equals", Object.class).getModifiers()), "equals final");
+        check(Modifier.isFinal(c.getMethod("hashCode").getModifiers()), "hashCode final");
+        check(Modifier.isFinal(c.getMethod("compareTo", Enum.class).getModifiers()),
+              "compareTo final");
     }
 
     static void testValuesAndValueOf() {
@@ -93,7 +110,8 @@ public class EnumTest {
         check(Op.values().length == 3, "Op.values().length == 3");
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
         testValuesAndValueOf();
         testOrdinalName();
         testCompareEqualsHashCode();

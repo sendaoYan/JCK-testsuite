@@ -26,6 +26,28 @@ public class MathTest {
         }
     }
 
+    // ---- White-box / structural ----
+    static void testWhiteBox() {
+        try {
+            Class<?> c = Class.forName("java.lang.Math");
+            check(!c.isInterface(), "Math is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Math is final");
+            check(c.getSuperclass() == Object.class, "Math extends Object directly");
+            check(java.lang.reflect.Modifier.isStatic(c.getField("E").getModifiers())
+                  && java.lang.reflect.Modifier.isFinal(c.getField("E").getModifiers()),
+                  "E is public static final");
+            check(java.lang.reflect.Modifier.isStatic(c.getField("PI").getModifiers())
+                  && java.lang.reflect.Modifier.isFinal(c.getField("PI").getModifiers()),
+                  "PI is public static final");
+            check(java.lang.reflect.Modifier.isStatic(
+                  c.getMethod("sin", double.class).getModifiers()), "sin(double) is static");
+            check(c.getMethod("sqrt", double.class).getReturnType() == double.class,
+                  "sqrt(double) returns double");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
     static void testConstants() {
         check(Math.E == java.lang.Math.E && Math.PI == java.lang.Math.PI, "E and PI accessible");
         check(Math.PI > 3.14 && Math.PI < 3.15, "PI ~ 3.14159");
@@ -86,6 +108,10 @@ public class MathTest {
         check(Math.floorDiv(-7L, 3L) == -3L && Math.floorMod(-7L, 3L) == 2L, "floorDiv/Mod long");
         expectArithmeticException(() -> Math.floorDiv(1, 0), "floorDiv by zero");
         expectArithmeticException(() -> Math.floorMod(1, 0), "floorMod by zero");
+        // JDK-8 documents the special case rather than throwing (JDK 9+ throws).
+        check(Math.floorDiv(Integer.MIN_VALUE, -1) == Integer.MIN_VALUE,
+              "floorDiv(MIN,-1) == MIN_VALUE in JDK-8");
+        check(Math.floorMod(Integer.MIN_VALUE, -1) == 0, "floorMod(MIN,-1) == 0 in JDK-8");
     }
 
     static void testRounding() {
@@ -199,6 +225,7 @@ public class MathTest {
     }
 
     public static void main(String[] args) {
+        testWhiteBox();
         testConstants();
         testAbs();
         testMinMax();
