@@ -118,7 +118,7 @@ def coverage(jdk):
     for root, _dirs, files in os.walk(base):
         for f in files:
             if f.endswith("Test.java"):
-                out.add(os.path.relpath(root, base))
+                out.add(os.path.relpath(root, base).replace(os.sep, "."))
     return out
 
 

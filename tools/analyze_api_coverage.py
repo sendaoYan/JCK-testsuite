@@ -187,9 +187,14 @@ def main():
     print(f"outputs in {OUT}/")
 
 
+def dir_for(fqcn):
+    """Map a dotted fqcn to its nested test directory under APIROOT."""
+    return os.path.join(APIROOT, fqcn.replace(".", os.sep))
+
+
 def has_blackbox(fqcn):
     """True if the class's Test.java contains a testBlackBox method (behavioral)."""
-    d = os.path.join(APIROOT, fqcn)
+    d = dir_for(fqcn)
     if not os.path.isdir(d):
         return False
     for fn in os.listdir(d):
@@ -208,7 +213,7 @@ def has_blackbox(fqcn):
 def reflective_names_from_source(fqcn):
     """Extract identifier-looking string literals from a class's Test.java (white-box reflection)."""
     names = set()
-    d = os.path.join(APIROOT, fqcn)
+    d = dir_for(fqcn)
     if not os.path.isdir(d):
         return names
     for fn in os.listdir(d):
