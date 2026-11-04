@@ -1,28 +1,240 @@
 /*
  * @test
- * @summary java.text.NumberFormat API conformance: integer format/parse under Locale.US.
+ * @summary java.text.NumberFormat API conformance: full contract coverage.
+ *          factories (number/integer/currency/percent), deterministic format
+ *          under Locale.US, grouping on/off, integer/fraction digit setters,
+ *          parse types (Long/Double) + ParseException, parseIntegerOnly,
+ *          currency USD/EUR, rounding mode defaults and HALF_UP/HALF_EVEN,
+ *          equals/hashCode/clone, protected constructor via subclass, parseObject,
+ *          default max fraction digits per factory, negative/prefix parse, and
+ *          serialization round-trip.
  * @run main NumberFormatTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.math.RoundingMode;
+import java.text.FieldPosition;
 import java.text.NumberFormat;
+import java.text.ParseException;
+import java.text.ParsePosition;
+import java.util.Currency;
 import java.util.Locale;
 
 public class NumberFormatTest {
     static int passed;
+    static final Locale US = Locale.US;
 
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
+    static void check(boolean c, String m) {
+        if (!c) throw new AssertionError(m);
         passed++;
     }
 
-    static void testNumberFormat() throws Exception {
-        NumberFormat nf = NumberFormat.getIntegerInstance(Locale.US);
-        check("42".equals(nf.format(42)), "format 42");
-        check(nf.parse("42").intValue() == 42, "parse 42");
+    interface ThrowingRunnable { void run() throws Exception; }
+
+    static void expectThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String m) {
+        try {
+            r.run();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            if (x instanceof AssertionError) throw (AssertionError) x;
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.text.NumberFormat");
+        check(!c.isInterface() && !c.isEnum() && !c.isAnnotation(), "concrete abstract class");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "abstract");
+        check("java.text.Format".equals(c.getSuperclass().getName()), "extends Format");
+        check(c.getField("INTEGER_FIELD").getInt(null) == 0, "INTEGER_FIELD=0");
+        check(c.getField("FRACTION_FIELD").getInt(null) == 1, "FRACTION_FIELD=1");
+        check(NumberFormat.getInstance() instanceof NumberFormat, "getInstance() non-null");
+        check(NumberFormat.getNumberInstance() instanceof NumberFormat, "getNumberInstance() non-null");
+        check(NumberFormat.getIntegerInstance() instanceof NumberFormat, "getIntegerInstance() non-null");
+        check(NumberFormat.getCurrencyInstance() instanceof NumberFormat, "getCurrencyInstance() non-null");
+        check(NumberFormat.getPercentInstance() instanceof NumberFormat, "getPercentInstance() non-null");
+        check(NumberFormat.getAvailableLocales().length > 0, "getAvailableLocales non-empty");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testFactoryFormats() {
+        NumberFormat nf = NumberFormat.getNumberInstance(US);
+        check("1,234,567.891".equals(nf.format(1234567.891)), "number instance grouping");
+        check("0.5".equals(nf.format(0.5)), "number instance decimal");
+        check("-1,234,567.891".equals(nf.format(-1234567.891)), "number instance negative");
+
+        NumberFormat integer = NumberFormat.getIntegerInstance(US);
+        check("1,234,568".equals(integer.format(1234567.891)), "integer instance rounds");
+
+        NumberFormat currency = NumberFormat.getCurrencyInstance(US);
+        check("$1,234.50".equals(currency.format(1234.5)), "currency instance USD");
+
+        NumberFormat percent = NumberFormat.getPercentInstance(US);
+        check("50%".equals(percent.format(0.5)), "percent instance");
+
+        expectThrows(NullPointerException.class, () -> NumberFormat.getNumberInstance(null),
+                     "getNumberInstance(null) -> NPE");
+    }
+
+    static void testGroupingAndDigits() {
+        NumberFormat nf = NumberFormat.getNumberInstance(US);
+        check(nf.isGroupingUsed(), "grouping default true");
+        nf.setGroupingUsed(false);
+        check(!nf.isGroupingUsed(), "setGroupingUsed(false)");
+        check("1234567.891".equals(nf.format(1234567.891)), "no grouping");
+
+        NumberFormat digits = NumberFormat.getNumberInstance(US);
+        digits.setMinimumIntegerDigits(2);
+        digits.setMinimumFractionDigits(3);
+        digits.setMaximumFractionDigits(3);
+        check("05.500".equals(digits.format(5.5)), "min integer + fixed fraction");
+        check(digits.getMinimumIntegerDigits() == 2, "getMinimumIntegerDigits");
+        check(digits.getMaximumFractionDigits() == 3, "getMaximumFractionDigits");
+
+        NumberFormat rounded = NumberFormat.getNumberInstance(US);
+        rounded.setMaximumFractionDigits(2);
+        check("1,234.57".equals(rounded.format(1234.567)), "max fraction rounds");
+
+        NumberFormat mi = NumberFormat.getNumberInstance(US);
+        mi.setMaximumIntegerDigits(4);
+        check(mi.getMaximumIntegerDigits() == 4, "setMaximumIntegerDigits/getMaximumIntegerDigits");
+    }
+
+    static void testParse() throws Exception {
+        NumberFormat nf = NumberFormat.getNumberInstance(US);
+        check(nf.parse("1,234.5").doubleValue() == 1234.5, "parse decimal");
+        check(nf.parse("42").getClass() == Long.class, "parse integer -> Long");
+        check(nf.parse("3.5").getClass() == Double.class, "parse decimal -> Double");
+
+        NumberFormat io = NumberFormat.getNumberInstance(US);
+        check(!io.isParseIntegerOnly(), "parseIntegerOnly default false");
+        io.setParseIntegerOnly(true);
+        check(io.isParseIntegerOnly(), "setParseIntegerOnly(true)");
+        check(io.parse("1.9").longValue() == 1L, "parse integer-only truncates");
+
+        expectThrows(ParseException.class, () -> nf.parse("garbage"), "parse garbage throws ParseException");
+        expectThrows(NullPointerException.class, () -> nf.parse((String) null), "parse(null) -> NPE");
+
+        ParsePosition pneg = new ParsePosition(0);
+        Number nn = nf.parse("-12.5", pneg);
+        check(nn != null && nn.doubleValue() == -12.5 && pneg.getIndex() == 5, "parse negative");
+
+        ParsePosition ppre = new ParsePosition(0);
+        Number pre = nf.parse("123.45xyz", ppre);
+        check(pre != null && pre.doubleValue() == 123.45 && ppre.getIndex() == 6,
+              "parse prefix stops at non-numeric");
+        check(ppre.getErrorIndex() == -1, "successful parse no error");
+
+        ParsePosition pgrp = new ParsePosition(0);
+        Number g = NumberFormat.getNumberInstance(US).parse("1,234,567", pgrp);
+        check(g != null && g.longValue() == 1234567L && pgrp.getIndex() == 9, "parse grouped");
+    }
+
+    static void testCurrencyAndRounding() {
+        NumberFormat currency = NumberFormat.getCurrencyInstance(US);
+        currency.setCurrency(Currency.getInstance("USD"));
+        check(Currency.getInstance("USD").equals(currency.getCurrency()), "setCurrency/getCurrency USD");
+        check("$1,234.50".equals(currency.format(1234.5)), "USD format");
+        currency.setCurrency(Currency.getInstance("EUR"));
+        check(Currency.getInstance("EUR").equals(currency.getCurrency()), "setCurrency/getCurrency EUR");
+        check("EUR1,234.50".equals(currency.format(1234.5)), "EUR format JDK-8 uses symbol for US");
+
+        NumberFormat nf = NumberFormat.getNumberInstance(US);
+        check(RoundingMode.HALF_EVEN == nf.getRoundingMode(), "default rounding HALF_EVEN");
+        nf.setMaximumFractionDigits(0);
+        nf.setRoundingMode(RoundingMode.HALF_UP);
+        check(RoundingMode.HALF_UP == nf.getRoundingMode(), "setRoundingMode HALF_UP");
+        check("3".equals(nf.format(2.5)), "HALF_UP 2.5 -> 3");
+        check("2".equals(nf.format(2.4)), "HALF_UP 2.4 -> 2");
+
+        NumberFormat even = NumberFormat.getNumberInstance(US);
+        even.setMaximumFractionDigits(0);
+        check("2".equals(even.format(2.5)), "HALF_EVEN 2.5 -> 2");
+        check("4".equals(even.format(3.5)), "HALF_EVEN 3.5 -> 4");
+        check("-2".equals(even.format(-2.5)), "HALF_EVEN -2.5 -> -2");
+    }
+
+    static void testEqualsCloneHashCode() {
+        NumberFormat a = NumberFormat.getNumberInstance(US);
+        NumberFormat b = (NumberFormat) a.clone();
+        check(a.equals(b) && b.equals(a), "clone equals");
+        check(a.hashCode() == b.hashCode(), "clone hashCode");
+        check(a.equals(a), "reflexive equals");
+        check(!a.equals(NumberFormat.getCurrencyInstance(US)), "number != currency");
+    }
+
+    static void testDefaultMaxFractionDigits() {
+        check(NumberFormat.getNumberInstance(US).getMaximumFractionDigits() == 3,
+              "number instance default max fraction 3");
+        check(NumberFormat.getCurrencyInstance(US).getMaximumFractionDigits() == 2,
+              "currency instance default max fraction 2");
+        check(NumberFormat.getIntegerInstance(US).getMaximumFractionDigits() == 0,
+              "integer instance default max fraction 0");
+        check(NumberFormat.getPercentInstance(US).getMaximumFractionDigits() == 0,
+              "percent instance default max fraction 0");
+    }
+
+    // Minimal concrete subclass to exercise the protected NumberFormat() constructor.
+    static class MinimalNumberFormat extends NumberFormat {
+        public StringBuffer format(double number, StringBuffer toAppendTo, FieldPosition pos) {
+            return toAppendTo.append("d:").append(number);
+        }
+        public StringBuffer format(long number, StringBuffer toAppendTo, FieldPosition pos) {
+            return toAppendTo.append("l:").append(number);
+        }
+        public Number parse(String source, ParsePosition parsePosition) {
+            parsePosition.setIndex(source.length());
+            return Long.valueOf(42L);
+        }
+    }
+
+    static void testSubclassAndParseObject() {
+        MinimalNumberFormat mnf = new MinimalNumberFormat();
+        check(mnf != null, "protected constructor via subclass");
+        check("d:1.5".equals(mnf.format(1.5)), "subclass format(double)");
+        check("l:7".equals(mnf.format(7L)), "subclass format(long)");
+
+        ParsePosition pp = new ParsePosition(0);
+        Object n = mnf.parseObject("garbage", pp);
+        check(n instanceof Long && ((Long) n).longValue() == 42L, "subclass parseObject returns Number");
+        check(pp.getIndex() == "garbage".length(), "subclass parseObject advances position");
+
+        NumberFormat nf = NumberFormat.getNumberInstance(US);
+        ParsePosition pp2 = new ParsePosition(0);
+        Object v = nf.parseObject("42", pp2);
+        check(v instanceof Number && ((Number) v).longValue() == 42L, "parseObject on real NumberFormat");
+        check(pp2.getIndex() == 2, "real parseObject position");
+    }
+
+    static void testSerialization() throws Exception {
+        NumberFormat nf = NumberFormat.getNumberInstance(US);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(nf);
+        oos.close();
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        NumberFormat r = (NumberFormat) ois.readObject();
+        check("1,234,567.891".equals(r.format(1234567.891)), "round-trip still formats");
+        check(nf.equals(r), "round-trip equals");
     }
 
     public static void main(String[] args) throws Exception {
-        testNumberFormat();
+        testWhiteBox();
+        testFactoryFormats();
+        testGroupingAndDigits();
+        testParse();
+        testCurrencyAndRounding();
+        testEqualsCloneHashCode();
+        testDefaultMaxFractionDigits();
+        testSubclassAndParseObject();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
