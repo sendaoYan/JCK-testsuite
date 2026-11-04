@@ -52,6 +52,26 @@ public class AWTPermissionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testContract() {
+        // AWTPermission: BasicPermission semantics
+        java.awt.AWTPermission p1 = new java.awt.AWTPermission("listenToAllAWTEvents");
+        check(p1.getName().equals("listenToAllAWTEvents"), "getName");
+        check(p1.getActions().equals(""), "getActions empty string");
+        check(p1.equals(new java.awt.AWTPermission("listenToAllAWTEvents")), "equals same name");
+        check(p1.hashCode() == new java.awt.AWTPermission("listenToAllAWTEvents").hashCode(), "hashCode");
+        check(p1.implies(p1), "implies self");
+        check(new java.awt.AWTPermission("*").implies(p1), "wildcard implies specific");
+        check(!p1.implies(new java.awt.AWTPermission("*")), "specific does not imply wildcard");
+        check(!p1.implies(new java.awt.AWTPermission("other")), "unrelated not implied");
+        check(!p1.equals(null), "equals(null)");
+        boolean npe = false;
+        try { new java.awt.AWTPermission(null); } catch (java.lang.NullPointerException e) { npe = true; }
+        check(npe, "null name -> NPE");
+        check(new java.awt.AWTPermission("a.b.c").getName().equals("a.b.c"), "dotted name accepted");
+
     }
 }

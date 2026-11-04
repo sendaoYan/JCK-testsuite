@@ -30,3 +30,9 @@ g2.draw(shape);
 - `equals/hashCode`（含 dash 差异）。
 - `createStrokedShape`：矩形描边边界扩宽、直线描边非空。
 断言 58 项，字段精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：默认 CAP_SQUARE；全参读回；防御拷贝；6 条 IAE 消息逐字；phase 超周期接受（偏离注释）；createStrokedShape 包围盒 (9,9,52,52)/(8,54)；非 Serializable。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

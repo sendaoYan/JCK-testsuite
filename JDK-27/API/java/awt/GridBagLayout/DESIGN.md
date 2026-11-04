@@ -29,3 +29,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 两行组件 `HORIZONTAL`+`BOTH` 精确 bounds + `location()` 反查 → `testBlackBox`。
 - `anchor=NORTHWEST` 保持 preferred 尺寸并居中 → `testBlackBox`。
 - `preferredLayoutSize` 计算 → `testBlackBox`。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：四字段可变；两格权重像素级；单格垂直居中；getConstraints 副本；布局信息三元组；默认约束居中；字符串 IAE；alignment/maxdim。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

@@ -25,3 +25,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - `preferredLayoutSize`（用 pref）与 `minimumLayoutSize`（用 min）精确计算 → `testBlackBox`。
 - `layoutContainer` 不换行时两组件精确 bounds → `testBlackBox`。
 - 容器宽度不足时第二组件换行到下行的精确 bounds → `testBlackBox`。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：常量；默认值；居中/左/右像素级；换行；prefdim；(20,20) 打包；非 LM2；remove no-op。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

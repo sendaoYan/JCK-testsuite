@@ -30,3 +30,9 @@ g2.drawImage(img, 0, 0, null);
 - `createContext` 非空 + `dispose`。
 - 非法 rule/alpha 抛 `IllegalArgumentException`。
 断言 64 项，字段精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：规则数组乱序映射；alpha 1.0 常量族；getInstance 同实例缓存+equals 语义；IAE 消息；createContext；非 Serializable。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

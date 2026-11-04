@@ -13,3 +13,9 @@ AWT 事件模型根类（抽象），继承 java.util.EventObject；提供事件
 ## 4. 测试用例设计 + 自动化实现
 白盒：抽象 public、继承 EventObject、protected id/consumed、掩码常量类型。黑盒：子类实例化→getID/getSource/paramString 空串/toString；consume 对低层 id 生效、语义 id 构造即 consumed；setSource 改源；掩码为 2 的幂且 RESERVED_ID_MAX==1999。
 对应 `AWTEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：RESERVED_ID_MAX；掩码表；consume 未知 ID 无效；KeyEvent consume 有效；setSource(null) 接受；ctor null IAE 消息精确；旧 Event 构造器 target 作 source；protected id/consumed。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

@@ -21,3 +21,9 @@ int t = image.getTransparency(); // OPAQUE / BITMASK / TRANSLUCENT
 - 接口白盒（getTransparency 返回 int）。
 - 匿名实现返回 OPAQUE/TRANSLUCENT 回读。
 headless-safe。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：三常量精确；Color 两分支；BufferedImage 两类型；ColorModel 委托。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

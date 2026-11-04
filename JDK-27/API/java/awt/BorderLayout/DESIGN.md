@@ -28,3 +28,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - `getLayoutComponent`/`getConstraints` 查询 → `testBlackBox`。
 - `preferredLayoutSize`（用 pref）与 `minimumLayoutSize`（用 min）精确计算 → `testBlackBox`。
 - `removeLayoutComponent` 后布局移除 → `testBlackBox`。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：五区域像素级；hgap/vgap 变体；N/S 钳制；prefdim (30,40)/(50,90)；未挂载 (0,0)；null=CENTER；IAE 消息逐字；null 移除 NPE；alignment。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

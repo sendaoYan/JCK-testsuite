@@ -26,3 +26,9 @@ int type = ks.getKeyEventType(); // KEY_PRESSED/KEY_TYPED/KEY_RELEASED
 - `getAWTKeyStrokeForEvent` 对 KEY_PRESSED/KEY_TYPED 的映射。
 - equals/hashCode 契约 + 异类/null。
 headless-safe。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：缓存同实例；65 合并；解析矩阵；大小写敏感 IAE；负 keyCode -1 读回；ForEvent 三态；equals/hashCode；toString 精确；序列化往返。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

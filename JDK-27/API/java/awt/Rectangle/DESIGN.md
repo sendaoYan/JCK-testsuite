@@ -35,3 +35,9 @@ r.grow(2, 2);
 - `equals`/`hashCode` 契约 + `toString` 精确格式。
 - 组合链：`setBounds`→`translate`→`grow(-n)` 收缩→`add` 扩大→`contains`。
 断言 105 项，全部纯数学精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：add(Point) 就地扩；贴合矩形交为零宽空矩形；相离为负尺寸；union 空矩形被忽略（观察）；contains/intersects 双精度排他；grow 负收缩；outcode 掩码；setBounds(Rectangle) 拷贝；reshape 别名；序列化；equals 跨实现。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

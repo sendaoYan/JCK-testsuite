@@ -28,3 +28,9 @@ GraphicsConfiguration best = dev.getBestConfiguration(tpl);
 - 白盒 `testWhiteBox()`：类型为 public abstract class、非接口、implements Serializable、extends Object；无参构造存在；两个抽象方法签名（参数/返回类型/abstract 修饰符）；三个 `public static final int` 常量。
 - 黑盒 `testBlackBox()`：仅断言常量契约（REQUIRED=1/PREFERRED=2/UNNECESSARY=3 且两两不同）；不实例化。
 断言 19 项，白盒 15 + 黑盒 4。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：三常量；抽象；Serializable；子类行为（空数组 null、null gc false）。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

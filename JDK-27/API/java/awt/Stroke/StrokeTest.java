@@ -41,6 +41,22 @@ public class StrokeTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    static void testContract() {
+        check(java.awt.Stroke.class.isInterface(), "Stroke is an interface");
+        java.awt.Stroke[] strokes = {new java.awt.BasicStroke(), new java.awt.BasicStroke(5f)};
+        for (java.awt.Stroke s : strokes) {
+            java.awt.Shape out = s.createStrokedShape(new java.awt.geom.Line2D.Double(0, 0, 100, 0));
+            check(out != null && out.getBounds2D().getWidth() > 0, "createStrokedShape returns non-empty shape");
+        }
+        // stroked bounds grow with width: width 1 vs 5
+        java.awt.geom.Line2D.Double line = new java.awt.geom.Line2D.Double(50, 50, 150, 50);
+        double w1 = new java.awt.BasicStroke(1f).createStrokedShape(line).getBounds2D().getHeight();
+        double w5 = new java.awt.BasicStroke(5f).createStrokedShape(line).getBounds2D().getHeight();
+        check(w5 > w1 && w1 > 0, "stroke height grows with width: " + w1 + " -> " + w5);
+    }
+
 }

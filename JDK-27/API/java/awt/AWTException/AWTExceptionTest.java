@@ -45,6 +45,29 @@ public class AWTExceptionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    static void testContract() {
+        java.awt.AWTException ex = new java.awt.AWTException("why");
+        check(ex.getMessage().equals("why"), "AWTException message preserved");
+        check(ex instanceof java.lang.Exception, "AWTException checked Exception");
+        check(ex instanceof java.io.Serializable, "Exception is Serializable");
+        check(ex.getCause() == null, "no cause");
+        java.awt.AWTException empty = new java.awt.AWTException("");
+        check(empty.getMessage().equals(""), "empty message");
+        check(ex.toString().startsWith("java.awt.AWTException"), "toString class-prefixed: " + ex);
+        // declaring code must handle it: verify via a throwing method
+        try {
+            throwIfTrue(true);
+            check(false, "unreachable");
+        } catch (java.awt.AWTException e) {
+            check(e.getMessage().equals("expected"), "caught declared AWTException");
+        }
+    }
+    static void throwIfTrue(boolean b) throws java.awt.AWTException {
+        if (b) throw new java.awt.AWTException("expected");
+    }
+
 }

@@ -28,3 +28,9 @@ g2.fill(shape);
 - `getTransparency` OPAQUE/TRANSLUCENT 两分支。
 - `createContext` 非空 + `getRaster` 尺寸 + `dispose` 可调用。
 断言 34 项，几何/字段精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：cyclic 往返；端点读回；transparency 两分支；createContext；getRaster ≥2；非 Serializable。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

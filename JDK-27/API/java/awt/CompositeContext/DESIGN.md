@@ -27,3 +27,9 @@ ctx.dispose();
 - `Clear` compose：输出透明黑。
 - 各上下文 `dispose` 可调用。
 断言 11 项，像素为固定整数（TYPE_INT_ARGB 全内存操作，headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：同 Composite 联测：SRC_OVER 透明底出 0xFF804020 精确像素；dispose；接口方法存在。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

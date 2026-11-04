@@ -34,3 +34,9 @@ public void paint(Graphics g) {
 - `setXORMode`→`setPaintMode` 保留颜色。
 - `dispose` 可调用。
 断言 72 项，像素断言为固定整数（TYPE_INT_ARGB 全内存操作，headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：逐像素断言（端点/邻点）；fillRect [x,x+w) 排他；clearRect 用背景；copyArea；clip 交集与清空；hitClip 内外；translate；create() 独立性；XOR 双画复位；dispose×2。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

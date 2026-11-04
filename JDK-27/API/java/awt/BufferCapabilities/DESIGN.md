@@ -24,3 +24,9 @@ BufferCapabilities.FlipContents fc = bc.getFlipContents();
 - isFullScreenRequired/isMultiBufferAvailable 恒 false。
 - `clone()` 浅拷贝（共享组件引用、容器不同、状态一致）。
 headless-safe。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：null caps IAE 精确；isPageFlipping 分支；FlipContents 恒等；toString 小写；clone；无 equals。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

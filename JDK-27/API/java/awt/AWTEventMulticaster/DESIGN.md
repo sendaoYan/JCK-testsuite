@@ -13,3 +13,9 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、实现 ComponentListener/ActionListener 等、protected 构造器、add/remove 静态。黑盒：add/remove 的 null 与恒等规则；链式分派到达两/三个监听器；remove 拆分；getListeners 计数与按类型过滤；两接口哑对象经不同接口注册与分派。
 对应 `AWTEventMulticasterTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：null 组合；分发计数；重复监听 2→1→null；中段摘除；Component 族接口；instanceof 全接口；同一异常对象传播。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

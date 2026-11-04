@@ -67,6 +67,83 @@ public class AWTEventMulticasterTest {
         check(hasMethod(c, "add"), "method add");
         check(hasMethod(c, "remove"), "method remove");
         check(hasMethod(c, "getListeners"), "method getListeners");
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- Part 3: contract deepening ----
+    static class Counting implements java.awt.event.ActionListener {
+        int count; String tag;
+        Counting(String t) { tag = t; }
+        public void actionPerformed(java.awt.event.ActionEvent e) { count++; }
+    }
+    static void testContract() {
+        // add dispatches to both listeners in order
+        Counting a = new Counting("a"), b = new Counting("b");
+        java.awt.event.ActionListener chain = java.awt.AWTEventMulticaster.add(a, b);
+        check(chain != null, "add returns multicaster");
+        java.awt.event.ActionEvent evt = new java.awt.event.ActionEvent("src",
+                java.awt.event.ActionEvent.ACTION_PERFORMED, "cmd");
+        chain.actionPerformed(evt);
+        check(a.count == 1 && b.count == 1, "multicast dispatches to both");
+        chain.actionPerformed(evt);
+        check(a.count == 2 && b.count == 2, "second dispatch also to both");
+        // add(null, null) -> null
+        check(java.awt.AWTEventMulticaster.add((java.awt.event.ActionListener) null, null) == null,
+              "add(null,null) -> null");
+        // add(null, l) == l ; add(l, null) == l
+        check(java.awt.AWTEventMulticaster.add((java.awt.event.ActionListener) null, b) == b, "add(null,l)==l");
+        check(java.awt.AWTEventMulticaster.add(a, null) == a, "add(l,null)==l");
+        // remove semantics
+        java.awt.event.ActionListener rem = java.awt.AWTEventMulticaster.remove(chain, a);
+        check(rem == b, "remove one leaves the other listener directly");
+        rem.actionPerformed(evt);
+        check(b.count == 3 && a.count == 2, "removed listener no longer notified");
+        // remove from single listener not in chain -> returns same
+        Counting c = new Counting("c");
+        check(java.awt.AWTEventMulticaster.remove(c, a) == c, "remove absent listener -> same");
+        // remove(null, l) -> null ; remove(l, null) -> l
+        check(java.awt.AWTEventMulticaster.remove((java.awt.event.ActionListener) null, a) == null, "remove(null,l) -> null");
+        check(java.awt.AWTEventMulticaster.remove(a, null) == a, "remove(l,null) -> l");
+        // duplicate listener added twice, removed once still receives once
+        Counting dup = new Counting("dup");
+        java.awt.event.ActionListener twice = java.awt.AWTEventMulticaster.add(dup, dup);
+        twice.actionPerformed(evt);
+        check(dup.count == 2, "duplicate add notifies twice");
+        java.awt.event.ActionListener once = java.awt.AWTEventMulticaster.remove(twice, dup);
+        check(once != null, "remove one duplicate leaves registered (non-null)");
+        once.actionPerformed(evt);
+        check(dup.count == 3, "one duplicate removal leaves single registration");
+        check(java.awt.AWTEventMulticaster.remove(once, dup) == null, "second removal empties chain");
+        // three-deep chain removal of middle
+        Counting l1 = new Counting("1"), l2 = new Counting("2"), l3 = new Counting("3");
+        java.awt.event.ActionListener three = java.awt.AWTEventMulticaster.add(
+                java.awt.AWTEventMulticaster.add(l1, l2), l3);
+        java.awt.event.ActionListener two = java.awt.AWTEventMulticaster.remove(three, l2);
+        two.actionPerformed(evt);
+        check(l1.count == 1 && l2.count == 0 && l3.count == 1, "middle removal keeps outer two");
+        // works for other listener types (ComponentListener family)
+        java.awt.event.ComponentListener cl1 = new java.awt.event.ComponentAdapter() { };
+        java.awt.event.ComponentListener cl2 = new java.awt.event.ComponentAdapter() { };
+        java.awt.event.ComponentListener clChain = java.awt.AWTEventMulticaster.add(cl1, cl2);
+        check(clChain != null, "component listener add");
+        check(java.awt.AWTEventMulticaster.remove(clChain, cl1) == cl2, "component listener remove");
+        // multicaster implements all AWT listener interfaces
+        check(chain instanceof java.awt.event.ActionListener, "chain is ActionListener");
+        check(chain instanceof java.awt.event.ComponentListener, "chain is ComponentListener");
+        check(chain instanceof java.awt.event.KeyListener, "chain is KeyListener");
+        check(chain instanceof java.awt.event.MouseListener, "chain is MouseListener");
+        check(chain instanceof java.awt.event.MouseMotionListener, "chain is MouseMotionListener");
+        check(chain instanceof java.awt.event.WindowListener, "chain is WindowListener");
+        // exception propagation: listener throwing propagates to caller
+        final java.lang.RuntimeException bomb = new java.lang.RuntimeException("bomb");
+        java.awt.event.ActionListener thrower = new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { throw bomb; }
+        };
+        java.awt.event.ActionListener withThrower = java.awt.AWTEventMulticaster.add(thrower, b);
+        boolean propagated = false;
+        try { withThrower.actionPerformed(evt); } catch (java.lang.RuntimeException re) { propagated = re == bomb; }
+        check(propagated, "listener exception propagates with same object");
+    }
+
 }

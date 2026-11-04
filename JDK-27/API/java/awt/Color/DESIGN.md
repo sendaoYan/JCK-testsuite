@@ -32,3 +32,9 @@ float[] hsb = Color.RGBtoHSB(255, 0, 0, null);
 - 组件数组（`getRGBComponents` 等）长度与分量；`getColorSpace` sRGB；`getTransparency` 三分支。
 - 组合链：`decode` → 分量 → `equals` → `getRGB`。
 断言 97 项，纯数学精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：常量表精确值；float 0.5f→128；packed 0x89ABCDEF,false→getRGB 0xFFABCDEF；brighter/darker 精确；范围不变量；HSB 往返；decode+NFE；IAE 矩阵(300/-1/1.5f/-0.1f)；属性系统色；equals 含 alpha；hashCode==getRGB；序列化保 alpha；toString 精确。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

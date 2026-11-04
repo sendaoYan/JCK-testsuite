@@ -21,3 +21,9 @@ a.setValue(50); int v = a.getValue();
 - 常量精确值；接口白盒（成员方法存在）。
 - 极简内存实现：`orientation` 回读、`min/max/value` 状态机、`unit/block/visible` 回读、`unit<=block` 组合链。
 headless-safe（不依赖真实 Scrollbar）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：三方向常量；最小实现全套往返；方向常量两两不同。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

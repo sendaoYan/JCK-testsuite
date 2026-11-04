@@ -45,6 +45,23 @@ public class AWTErrorTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    static void testContract() {
+        java.awt.AWTError err = new java.awt.AWTError("boom");
+        check(err.getMessage().equals("boom"), "AWTError message preserved");
+        check(err instanceof java.lang.Error, "AWTError extends Error");
+        check(err instanceof java.io.Serializable, "Error is Serializable");
+        check(err.getCause() == null, "no cause");
+        check(err.getStackTrace() != null, "stack trace accessible");
+        java.awt.AWTError empty = new java.awt.AWTError("");
+        check(empty.getMessage().equals(""), "empty message preserved");
+        boolean iae = false;
+        try { new java.awt.AWTError(null); } catch (java.lang.NullPointerException e) { iae = true; }
+        check(!iae, "null message tolerated (Throwable)");
+        check(err.toString().startsWith("java.awt.AWTError"), "toString class-prefixed: " + err);
+    }
+
 }

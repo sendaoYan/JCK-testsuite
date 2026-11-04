@@ -31,3 +31,9 @@ int y = baseline + fm.getAscent();
 - `getLineMetrics`/`getStringBounds`/`getMaxCharBounds` 关系与非负/正宽。
 - `toString` 含 ascent/height。
 断言 51 项，只断关系不断精确像素（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：关系式四组；空串 0；NPE 三处；越界一处；字号单调；charWidth(int/char) 等价。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

@@ -26,3 +26,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 常量精确值（RELATIVE=-1、BOTH=1、CENTER=10、ABOVE_BASELINE_LEADING=ABOVE_BASELINE+0x100 等）→ `testBlackBox`。
 - 11 参构造全字段回读 → `testBlackBox`。
 - `clone` 独立对象 + insets 深拷贝 + 修改副本不影响原对象 → `testBlackBox`。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：默认值全套；全部常量精确；全参读回；clone 深拷贝；无 equals（反射+行为双锁）；序列化字段级；sUID。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

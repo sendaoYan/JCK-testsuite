@@ -43,3 +43,9 @@ int px = bi.getRGB(15, 15);
 - drawString/drawGlyphVector 产生非黑像素（>0）。
 - drawImage 三形态 + drawRenderedImage 像素红；fill3DRect/draw3DRect 着色。
 断言 87 项，白盒 30 + 黑盒 57。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：三 setter 恒等；hints 三接口语义；背景往返；draw/fill Shape 像素；rotate 映射 (12,10)→(10,12)；scale 边界；clip 交集像素；hit 双分支；FRC 非空；drawString 出像素。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

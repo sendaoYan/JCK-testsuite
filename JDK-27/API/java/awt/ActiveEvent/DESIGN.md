@@ -19,3 +19,9 @@ ActiveEvent e = new ActiveEvent() { public void dispatch() { doWork(); } };
 - 接口白盒：单抽象方法、返回 void。
 - 匿名实现：`dispatch()` 前后翻转标志、可重复调用、计数。
 headless-safe。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：接口方法；最小实现 dispatch 计数；可重复调用。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

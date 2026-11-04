@@ -26,3 +26,9 @@ PathIterator it = s.getPathIterator(null);
 - 以 `Rectangle` 为 `Shape`：`getBounds`/`getBounds2D`、`contains`（double/Point2D/矩形重载）、`intersects`（double/Rectangle2D）、`getPathIterator`（`WIND_NON_ZERO`、首段 `SEG_MOVETO`）。
 - 以 `Polygon` 为 `Shape`：`getBounds`、`contains`、`getPathIterator`（`WIND_EVEN_ODD`）。
 断言 27 项，几何精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：接口方法存在；跨实现 contains/intersects 一致；Polygon contains；段数相同（矩形 6 段）。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

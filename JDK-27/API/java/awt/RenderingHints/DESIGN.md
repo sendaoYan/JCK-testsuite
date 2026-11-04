@@ -33,3 +33,9 @@ g2.setRenderingHints(hints);
 - `clone` 独立。
 - `toString`（空 `{}`、非空非空串）。
 断言 61 项，集合断言排序后确定（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：键值唯一性；toString 精确；表语义全套；视图不可加但同步；equals/hashCode 对 Map 拷贝；clone 隔离。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

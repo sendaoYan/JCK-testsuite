@@ -30,3 +30,9 @@ Insets copy = (Insets) insets.clone();
 - `clone`：返回 `Insets`、独立对象、值相等、修改副本不影响原对象。
 - 组合链：构造 → `set` → `clone` → 比较 → 修改副本 → 验证原对象不变。
 断言 26 项，纯值对象精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：字段顺序；set() 重置；equals/hashCode=577；clone 独立；负值序列化往返；sUID；toString 精确。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

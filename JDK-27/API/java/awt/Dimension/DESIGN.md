@@ -32,3 +32,9 @@ d.setSize(10.7, -3.9);   // -> (11, -3) 向上取整
 - `toString` 精确格式 `java.awt.Dimension[width=5,height=6]`。
 - 组合链：构造→resize→读回→比较→toString 反映突变。
 断言约 28 项，全部纯数学精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：ceil 边界(10.2→11,-3.7→-3)；getSize 独立性；equals/hashCode；负尺寸合法；sUID；toString 精确。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

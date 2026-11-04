@@ -29,3 +29,9 @@ double d = p.distance(0, 0);   // 3-4-5 三角
 - `equals`（相等/交换/null/异类/自反）+ hashCode 契约。
 - `toString` 精确格式 `java.awt.Point[x=3,y=4]`。
 断言约 32 项，纯数学精确值（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：double 取整语义(-3.6,-4.4)→(-4,-4)；equals(Point2D.Double) 对称；getDeclaredMethod 无 hashCode；3-4-5 距离精确；序列化往返（含极值）；sUID 精确；toString 精确。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

@@ -30,3 +30,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - `preferredLayoutSize/minimumLayoutSize` 取 max → `testBlackBox`。
 - 带间隙的卡片 bounds 与 preferred 计算 → `testBlackBox`。
 - `removeLayoutComponent` 移除卡片 → `testBlackBox`。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：insets 矩形；可见性翻转全套；show no-op；prefdim/maxdim；单卡；wrong parent IAE；remove no-op。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。

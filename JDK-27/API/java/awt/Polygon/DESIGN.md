@@ -32,3 +32,9 @@ Rectangle b = poly.getBounds();
 - `reset`/`invalidate`。
 - `getPathIterator`：`WIND_EVEN_ODD`、首段 `SEG_MOVETO`、后续 `SEG_LINETO`、段数（MOVETO+2*LINETO+CLOSE）、带 `AffineTransform` 的坐标变换。
 断言 67 项，几何精确断言（headless-safe）。
+
+
+## 5. 深化补充（testContract，JDK-8+JDK-27 双侧对齐）
+本任务在保留原有断言基础上追加契约级深化：
+testContract：构造器数组拷贝；容量 20 点→32；越界/负数异常精确；contains 边界锁定((5,0)=true,(0,0)=true,(10,10)=false)；bounds 缓存；translate/reset；getBounds2D；序列化。
+全部为 headless（env -u DISPLAY）实测锁定值，双端 JDK 行为一致。
