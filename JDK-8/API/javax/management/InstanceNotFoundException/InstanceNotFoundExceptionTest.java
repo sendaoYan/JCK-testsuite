@@ -1,19 +1,26 @@
 /*
  * @test
- * @summary javax.management.InstanceNotFoundException conformance: exception hierarchy and construction.
+ * @summary javax.management.InstanceNotFoundException conformance: full
+ *          contract coverage. message construction, no-arg ctor, and
+ *          OperationsException/JMException hierarchy.
  * @run main InstanceNotFoundExceptionTest
  */
+
+import javax.management.InstanceNotFoundException;
 
 public class InstanceNotFoundExceptionTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
     public static void main(String[] args) throws Exception {
-        javax.management.InstanceNotFoundException x = new javax.management.InstanceNotFoundException("msg");
-        Class<?> c = x.getClass();
-        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
-        check(Class.forName("javax.management.OperationsException").isAssignableFrom(c), "extends javax.management.OperationsException");
-        check(x.toString() != null, "toString non-null");
-        x.getMessage(); x.getCause(); x.getStackTrace();
+        InstanceNotFoundException x = new InstanceNotFoundException("name");
+        check("name".equals(x.getMessage()), "message");
+        check(x instanceof javax.management.OperationsException, "extends OperationsException");
+        check(x instanceof javax.management.JMException, "extends JMException");
+        check(x instanceof Exception, "extends Exception");
+
+        InstanceNotFoundException noArg = new InstanceNotFoundException();
+        check(noArg.getMessage() == null, "no-arg message null");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

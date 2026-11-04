@@ -1,19 +1,29 @@
 /*
  * @test
- * @summary javax.management.BadAttributeValueExpException conformance: exception hierarchy and construction.
+ * @summary javax.management.BadAttributeValueExpException conformance: full
+ *          contract coverage. value-derived toString, null value handling,
+ *          getMessage stays null (value is not the message), and Exception
+ *          hierarchy.
  * @run main BadAttributeValueExpExceptionTest
  */
+
+import javax.management.BadAttributeValueExpException;
 
 public class BadAttributeValueExpExceptionTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
     public static void main(String[] args) throws Exception {
-        javax.management.BadAttributeValueExpException x = new javax.management.BadAttributeValueExpException("msg");
-        Class<?> c = x.getClass();
-        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
-        check(Class.forName("java.lang.Exception").isAssignableFrom(c), "extends java.lang.Exception");
-        check(x.toString() != null, "toString non-null");
-        x.getMessage(); x.getCause(); x.getStackTrace();
+        BadAttributeValueExpException x = new BadAttributeValueExpException("msg");
+        check(x instanceof Exception, "extends Exception");
+        check("BadAttributeValueException: msg".equals(x.toString()), "toString value-derived");
+        check(x.getMessage() == null, "getMessage null (value not message)");
+
+        BadAttributeValueExpException n = new BadAttributeValueExpException(null);
+        check(n.toString().endsWith("null"), "null value toString");
+
+        BadAttributeValueExpException num = new BadAttributeValueExpException(Integer.valueOf(42));
+        check(num.toString().endsWith("42"), "numeric value toString");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

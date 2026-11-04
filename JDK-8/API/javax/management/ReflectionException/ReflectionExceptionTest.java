@@ -1,19 +1,28 @@
 /*
  * @test
- * @summary javax.management.ReflectionException conformance: exception hierarchy and construction.
+ * @summary javax.management.ReflectionException conformance: full contract
+ *          coverage. target Exception wrapping (getTargetException/getCause),
+ *          both constructors, and JMException hierarchy.
  * @run main ReflectionExceptionTest
  */
+
+import javax.management.ReflectionException;
 
 public class ReflectionExceptionTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
     public static void main(String[] args) throws Exception {
-        javax.management.ReflectionException x = new javax.management.ReflectionException(new java.lang.Exception("cause"));
-        Class<?> c = x.getClass();
-        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
-        check(Class.forName("javax.management.JMException").isAssignableFrom(c), "extends javax.management.JMException");
-        check(x.toString() != null, "toString non-null");
-        x.getMessage(); x.getCause(); x.getStackTrace();
+        Exception target = new NoSuchMethodException("nope");
+        ReflectionException x = new ReflectionException(target);
+        check(x.getTargetException() == target, "getTargetException");
+        check(x.getCause() == target, "getCause is target");
+        check(x.getMessage() == null, "no-arg message null");
+        check(x instanceof javax.management.JMException, "extends JMException");
+
+        ReflectionException y = new ReflectionException(target, "detail");
+        check("detail".equals(y.getMessage()), "message ctor");
+        check(y.getTargetException() == target, "message ctor target");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

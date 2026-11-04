@@ -1,19 +1,29 @@
 /*
  * @test
- * @summary javax.management.MBeanRegistrationException conformance: exception hierarchy and construction.
+ * @summary javax.management.MBeanRegistrationException conformance: full
+ *          contract coverage. target Exception wrapping (getTargetException/
+ *          getCause), both constructors, and MBeanException hierarchy.
  * @run main MBeanRegistrationExceptionTest
  */
+
+import javax.management.MBeanRegistrationException;
 
 public class MBeanRegistrationExceptionTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
     public static void main(String[] args) throws Exception {
-        javax.management.MBeanRegistrationException x = new javax.management.MBeanRegistrationException(new java.lang.Exception("cause"));
-        Class<?> c = x.getClass();
-        check(java.lang.Throwable.class.isAssignableFrom(c), "is a Throwable");
-        check(Class.forName("javax.management.MBeanException").isAssignableFrom(c), "extends javax.management.MBeanException");
-        check(x.toString() != null, "toString non-null");
-        x.getMessage(); x.getCause(); x.getStackTrace();
+        Exception target = new IllegalStateException("boom");
+        MBeanRegistrationException x = new MBeanRegistrationException(target);
+        check(x.getTargetException() == target, "getTargetException");
+        check(x.getCause() == target, "getCause is target");
+        check(x.getMessage() == null, "no-arg message null");
+        check(x instanceof javax.management.MBeanException, "extends MBeanException");
+        check(x instanceof javax.management.JMException, "extends JMException");
+
+        MBeanRegistrationException y = new MBeanRegistrationException(target, "detail");
+        check("detail".equals(y.getMessage()), "message ctor");
+        check(y.getTargetException() == target, "message ctor target");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
