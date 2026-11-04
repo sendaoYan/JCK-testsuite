@@ -38,3 +38,24 @@
 ## 注意事项
 
 - 用 TreeMap（自然序，拒 null key）为载体；断言顺序确定。
+
+
+## 5. 契约级深化追加（2026-11，12→53 断言）
+
+新增方法：testIterationOrderIsKeyOrder / testRangeBoundariesExact / testViewLivenessAndCME /
+testEmptyMapRangeViews / testSortedMapEquality。
+
+| 维度 | 锁定内容 |
+|---|---|
+| 迭代序契约 | keySet/values/entrySet 迭代序与 toString 均严格按键序（"{1=v1, ...}"）|
+| 区间边界精确 | headMap(to) 不含 to；tailMap(from) 含 from；subMap [from,to)；firstKey/lastKey/size 逐项精确；subMap(k,k) 空；越界界值（headMap(99)/tailMap(0)）整图/空 |
+| comparator 同一性 | comparator() 返回构造传入的同一实例（==）；headMap/tailMap/subMap 视图共享同一 comparator 实例 |
+| 视图联动 + CME | 父 put/删反映子图；范围内 put 改值不改 size、范围外 put 对子图不可见；子图迭代器在父结构修改后抛 CME；subMap.clear 只清范围 |
+| 空 map 视图 | 空 map 的三个区间视图均空且为活视图（经视图 put 可达父，界值 put IAE）|
+| equals | 与 HashMap 同 entrySet 相等；subMap 视图与独立构造同内容 map equals；comparator 方向不影响 equals |
+
+### 易错规范细节（实测锁定）
+
+- **reverse comparator 下 subMap(from,to) 的界值按 comparator 序解释**：`new TreeMap<>(reverseOrder()).subMap(1,2)` 抛 IAE（fromKey>toKey 按 comparator 判定），合法写法是 subMap(2,1)。
+- 空 map 上 `subMap(3,3).firstKey()` 仍抛 NSEE（视图空不豁免）。
+- 父 map 的**值替换**（put 已有键）不改变子图 size 也不触发子图迭代器 CME（非结构修改）；结构性 put（新键）才触发 CME。

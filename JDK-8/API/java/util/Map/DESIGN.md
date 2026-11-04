@@ -43,3 +43,25 @@
 ## 注意事项
 
 - 用 HashMap（允许 null）为载体；不锁定迭代顺序。
+
+
+## 5. 契约级深化追加（2026-11，42→151 断言）
+
+新增方法：testEqualsHashCodeFormula / testEntryContract / testDefaultMethodImplementationPaths /
+testPresentNullValueBranches / testViewSemantics / testIterationAndInvariants。
+
+| 维度 | 锁定内容 |
+|---|---|
+| equals/hashCode 公式 | hashCode = Σ entry.hashCode() = Σ (k.hashCode() ^ v.hashCode())；{"a"=1,"b"=2} == 192（97^1 + 98^2，各 96）；null key/value 贡献 0；跨实现 HashMap/TreeMap/LinkedHashMap 相等且同 hash；equals 以 entrySet 相等为判据 |
+| Map.Entry 契约 | live entry setValue 返回旧值并反写；entry.hashCode 公式 97^5==100（"k"=2→"k"=5 后 107^2==105 场景）；与 SimpleEntry/SimpleImmutableEntry 跨实现互等；SimpleImmutableEntry.setValue UOE |
+| 默认方法实现路径 | ProbeMap 直 implements Map（无父类覆盖），锁定接口 default：putIfAbsent present 不调 put、computeIfAbsent present（含 null 值）跳过函数、computeIfPresent absent/null 值零副作用、merge absent 不调函数、getOrDefault present-null 返回 null（非默认值）、replaceAll/forEach 走 entrySet |
+| present-null-value 分支 | putIfAbsent 覆盖 null 返回 null；computeIfAbsent 视 null 为 absent 重新计算；computeIfPresent 忽略 null 值 entry；compute 收到 v==null 且 null 结果删 entry；merge 视 null 为 absent 直取 value；remove(k,null) 删 present-null；replace(k,null,v) 匹配成功；异常原样透传（assertSame）且映射不变 |
+| 视图语义 | keySet/values/entrySet size 联动、remove/clear 透传、add UOE、跨实现视图 equals |
+| 状态不变量 | clear 后逐视图空、LinkedHashMap 插入序 toString 锁定 "{b=2, a=1, c=3}" |
+
+### 易错规范细节（实测锁定）
+
+- `getOrDefault` 对 **present-null** 返回 null 而非 default（get!=null || containsKey 短路语义）。
+- `merge(k, null, fn)` 与 `merge(k, v, null)` 均先抛 NPE（先查参数再查映射）。
+- `remove(k, null)` 会删除「现值为 null」的映射（Objects.equals(null,null)=true 且 containsKey 消歧）。
+- `computeIfAbsent` 对现值为 null 的 entry **调用**函数并覆盖；`computeIfPresent` 则**忽略**同一 entry——两者对 null 现值语义相反。

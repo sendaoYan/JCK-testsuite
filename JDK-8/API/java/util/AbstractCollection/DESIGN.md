@@ -44,3 +44,28 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；不依赖迭代顺序（用 contains 而非位置断言）。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法与探针
+- `Rec`（记录型探针，仅 iterator()+size()，带 iterator 创建数/iterator.remove 计数）→
+  `testDefaultDispatchRecording`：contains 扫描迭代器；remove(Object) 委托 iterator.remove
+  （计数=1，miss 不调用）；removeAll/retainAll 的删除全部经 iterator.remove；
+  clear 逐元素经 iterator.remove（计数==size）；contains(null)/remove(null) 走 == 分支；
+  toString 对 null 渲染 "[x, null]"；removeIf 默认实现驱动 iterator.remove。
+- `Fixed`（迭代器 remove 抛 UOE 的只读探针）→ `testUoePropagationFromIterator`：
+  remove/clear/removeIf **透传底层 UOE 且集合不变**，查询不受影响。
+- `CountedNoAdd`（add 恒 false 计数探针）→ `testAddAllDelegation`：addAll 逐元素委托 add
+  （计数==参数长度）、恒 false 时 addAll 返回 false、空参数零调用。
+- `testArrayStoreException` — Integer 元素 × String[] → ASE（store 时抛）。
+- `testEqualsIsIdentityByDefault` — 骨架不覆写 equals：同内容两实例不等、自反成立。
+
+### 负例精确异常表
+| 操作 | 异常 |
+|---|---|
+| 默认 add（未覆写） | UnsupportedOperationException |
+| 迭代器不支持 remove 时 remove/clear/removeIf | UnsupportedOperationException 透传 |
+| toArray 组件类型不符 | ArrayStoreException |
+| addAll/containsAll/removeAll/retainAll(null) | NullPointerException |

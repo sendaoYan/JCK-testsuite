@@ -52,3 +52,24 @@
 ## 注意事项
 
 确定性；无墙钟/随机/全局副作用；headless-safe 不加 `@key`。
+
+## 第 2 轮深化（2026-11，契约覆盖，48→174 断言）
+
+新增方法：testHashFormulas、testEqualsMore、testDeepEqualsMore、testToStringMore、
+testRequireNonNullMore、testCompareRawDelegate、testNullPredicates、
+testCompareTransitivityMatrix、testHashOnContainers、testEqualsIdentitySemantics。
+
+### 本轮锁定的易错规范细节（先探测后断言，jdk8u372 实测）
+
+- **hash 公式手工锁定**：`hash("a","b")=4066`、`hash("b","a")=4096`（顺序敏感）、`hash("a")=128`、
+  `hash((Object)null)=31`、`hash(list)=31+list.hashCode()`（varargs 单元素包装）。
+- **hash 对数组元素非 deep**：`hash((Object)arr)=31*1+arr.hashCode()`（身份 hashCode，非 Arrays.deepHashCode）。
+- **requireNonNull(null) 的 message 为 null**（显式 new NPE() 路径，无 helpful message）。
+- **compare 原样透传**：返回 `c.compare(a,b)` 的原值（不只符号）；反对称 + 传递性矩阵（4 词全组合）。
+- **equals 对数组是身份语义**：`equals(new int[]{1}, new int[]{1})=false`、同引用 true（deepEquals 才逐元素）。
+- **isNull/nonNull 可作 Predicate**：方法引用 + `removeIf(Objects::isNull)` 过滤链路。
+- **hash((Object[])null)==0**（null varargs 数组本身）。
+
+## 注意事项（第 2 轮）
+
+全部固定输入；无 Locale/TimeZone/墙钟依赖。

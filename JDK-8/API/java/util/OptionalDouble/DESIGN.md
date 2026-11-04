@@ -41,3 +41,21 @@
 ## 注意事项
 
 确定性输入；无墙钟/随机/全局副作用；headless-safe 不加 `@key`。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| getAsDouble NSEE 消息 "No value present" | testExceptionMessages |
+| hashCode 公式：empty→0、of(0.0)→0、of(-0.0)→Integer.MIN_VALUE、of(1.0)→1072693248、NaN→Double.hashCode(NaN) | testHashCodeFormula |
+| equals 跨类型 + Double.compare 语义（NaN 自反、±0 互斥、对称） | testEqualsCrossType |
+| toString 精确："OptionalDouble[-0.0]"/"[NaN]"/"[Infinity]"/"[-Infinity]"/"[1.5E300]" | testToStringExact |
+| orElse 特殊值按位透传（NaN、-0.0 判 1/x） | testOrElseSpecialValues |
+| 回调异常同一实例透传且容器不变 | testCallbackExceptionRelay |
+| API 面锁定：无 map/flatMap/ofNullable/isNaN/isInfinite/getAsInt（JDK-8 无 isEmpty/stream/ifPresentOrElse/orElseThrow()） | testSurfaceLock |
+
+### 易错细节
+
+- equals 用 `Double.compare`：NaN equals NaN、+0.0 ≠ -0.0；而 hashCode 用 Double.hashCode（位模式），
+  与 equals 语义一致（不同 hash ⇒ 必不等）。
+- `of(-0.0).hashCode() == Integer.MIN_VALUE`（高位字符号位）；`of(1.0).hashCode() == 0x3FF00000`。

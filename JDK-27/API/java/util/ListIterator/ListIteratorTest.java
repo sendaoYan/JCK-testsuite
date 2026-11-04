@@ -102,9 +102,125 @@ public class ListIteratorTest {
         expectThrows(it4::remove, IllegalStateException.class, "double remove ISE");
     }
 
+
+    // ---- deepened II: 交替遍历 / add 可见性矩阵 / set-remove 状态机 /
+    //      forEachRemaining / 越界 / CME -------------------------------------------
+
+    static void testAlternatingTraversal() {
+        List<String> l = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        ListIterator<String> it = l.listIterator();
+        check(it.next().equals("a") && it.previous().equals("a"), "next then previous returns same");
+        check(it.next().equals("a") && it.next().equals("b"), "forward again");
+        check(it.previous().equals("b") && it.next().equals("b"), "back-and-forth at middle");
+        check(it.next().equals("c") && !it.hasNext(), "reach end");
+        check(it.previous().equals("c") && it.previous().equals("b") && it.previous().equals("a"),
+              "walk fully back");
+        check(!it.hasPrevious(), "back at start");
+    }
+
+    static void testAddVisibilityMatrix() {
+        List<String> l = new ArrayList<>(Arrays.asList("a", "c"));
+        ListIterator<String> it = l.listIterator(1);
+        it.add("B");
+        check(l.equals(Arrays.asList("a", "B", "c")), "add inserted at cursor");
+        check(it.nextIndex() == 2 && it.previousIndex() == 1, "cursor shifted right by add");
+        check(it.next().equals("c"), "next skips the inserted element");
+        check(it.previous().equals("c") && it.previous().equals("B"),
+              "previous walks back over inserted element");
+        it.set("Z");
+        check(l.equals(Arrays.asList("a", "Z", "c")), "set after previous over inserted");
+        ListIterator<String> head = l.listIterator();
+        head.add("0");
+        check(l.get(0).equals("0"), "add at head");
+        ListIterator<String> tail = l.listIterator(l.size());
+        tail.add("9");
+        check(l.get(l.size() - 1).equals("9"), "add at tail");
+    }
+
+    static void testSetRemoveStateMatrix() {
+        List<String> l = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        ListIterator<String> it = l.listIterator();
+        it.next();
+        it.set("A");
+        check(l.get(0).equals("A"), "set visible immediately");
+        it.remove();
+        check(l.equals(Arrays.asList("b", "c")), "remove deletes last-returned");
+        check(it.nextIndex() == 0, "cursor moved back after remove");
+        it.next();
+        it.previous();
+        it.remove();
+        check(l.equals(Arrays.asList("c")), "remove after previous");
+        it.next();
+        it.set(null);
+        check(l.get(0) == null, "set to null");
+        it.set("back");
+        check(l.get(0).equals("back"), "set back from null");
+    }
+
+    static void testForEachRemaining() {
+        List<String> l = new ArrayList<>(Arrays.asList("a", "b", "c", "d"));
+        ListIterator<String> it = l.listIterator(1);
+        StringBuilder sb = new StringBuilder();
+        it.forEachRemaining(sb::append);
+        check(sb.toString().equals("bcd"), "forEachRemaining from cursor 1");
+        check(!it.hasNext(), "exhausted after forEachRemaining");
+        check(it.previous().equals("d"), "previous still works after forEachRemaining");
+    }
+
+    static void testIndexConstructorBounds() {
+        List<String> l = new ArrayList<>(Arrays.asList("a", "b"));
+        check(l.listIterator(0).nextIndex() == 0, "listIterator(0)");
+        check(l.listIterator(l.size()).previousIndex() == l.size() - 1, "listIterator(size) at tail");
+        expectThrows(() -> l.listIterator(-1), IndexOutOfBoundsException.class, "listIterator(-1) IOOBE");
+        expectThrows(() -> l.listIterator(3), IndexOutOfBoundsException.class, "listIterator(size+1) IOOBE");
+    }
+
+    static void testConcurrentModification() {
+        List<String> l = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        ListIterator<String> it = l.listIterator();
+        it.next();
+        l.add("d");
+        expectThrows(it::next, java.util.ConcurrentModificationException.class,
+                "listIterator next after structural mod CME");
+        List<String> l2 = new ArrayList<>(Arrays.asList("a", "b"));
+        ListIterator<String> it2 = l2.listIterator();
+        it2.next();
+        l2.remove(0);
+        expectThrows(it2::previous, java.util.ConcurrentModificationException.class,
+                "listIterator previous after structural mod CME");
+        List<String> l3 = new ArrayList<>(Arrays.asList("a", "b"));
+        ListIterator<String> it3 = l3.listIterator();
+        it3.next();
+        it3.add("X");
+        expectThrows(it3::remove, IllegalStateException.class, "remove right after add ISE");
+        it3.previous();
+        it3.remove();
+        check(l3.equals(Arrays.asList("a", "b")), "own-modification path leaves consistent state");
+    }
+
+    static void testOnLinkedListToo() {
+        // same contract on a different implementation
+        List<String> l = new java.util.LinkedList<>(Arrays.asList("x", "y", "z"));
+        ListIterator<String> it = l.listIterator(1);
+        check(it.next().equals("y"), "LinkedList LI next");
+        it.set("Y");
+        check(l.get(1).equals("Y"), "LinkedList LI set");
+        it.add("M");
+        check(l.equals(Arrays.asList("x", "Y", "M", "z")), "LinkedList LI add");
+        expectThrows(() -> { new java.util.LinkedList<String>().listIterator().previous(); },
+                NoSuchElementException.class, "empty LinkedList previous NSEE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testAlternatingTraversal();
+        testAddVisibilityMatrix();
+        testSetRemoveStateMatrix();
+        testForEachRemaining();
+        testIndexConstructorBounds();
+        testConcurrentModification();
+        testOnLinkedListToo();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

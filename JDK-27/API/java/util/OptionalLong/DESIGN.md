@@ -31,3 +31,14 @@
 - **边界/异常**：空 `getAsLong`/`orElseThrow()` 抛 `NoSuchElementException`；空 `stream()` 0 元素、present 1 元素。
 - **自动化**：`OptionalLongTest.testBlackBox()` 内 `testOfGet/testOrElse/testIfPresentAndStream/testEqualsToString`。
 - **健壮性（多运行/并跑/跨平台一致）**：固定 long 输入、无墙钟/无 Random；`toString` 为确定值 `OptionalLong[10]`/`OptionalLong.empty`；无全局副作用/文件/网络/线程。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| getAsLong/orElseThrow() NSEE 消息 "No value present" | testExceptionMessages |
+| hashCode 公式：empty→0、of(v)→Long.hashCode(v) | testHashCodeFormula |
+| equals 跨类型矩阵 | testEqualsCrossType |
+| toString 精确（MIN/MAX/0/负/empty） | testToStringExact |
+| 回调异常同一实例透传且容器不变 | testCallbackExceptionRelay |
+| ifPresentOrElse null 矩阵 + stream（sum/max/findAny） + orElseThrow()==getAsLong() | testJ9PlusDeep |

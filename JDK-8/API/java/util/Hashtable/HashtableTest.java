@@ -16,6 +16,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ConcurrentModificationException;
+import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Hashtable;
@@ -304,6 +305,201 @@ public class HashtableTest {
               "merge null value on absent key inserts nothing");
     }
 
+    // ---- compute/merge full branch matrix -----------------------------------
+
+    static void checkPropagatesSame(RuntimeException marker, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": nothing was thrown");
+        } catch (Throwable t) {
+            if (t == marker) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected same " + marker.getClass().getSimpleName()
+                    + " instance but got " + t.getClass().getName(), t);
+        }
+    }
+
+    static void testComputeMergeMatrix() {
+        Hashtable<String, Integer> t = new Hashtable<>();
+        t.put("a", 1);
+
+        // putIfAbsent: present keeps and returns existing; absent inserts
+        check(t.putIfAbsent("a", 9) == 1 && t.get("a") == 1, "putIfAbsent present keeps");
+        check(t.putIfAbsent("b", 2) == null && t.get("b") == 2, "putIfAbsent absent inserts");
+
+        // remove(k, v): only removes when currently mapped to v
+        check(!t.remove("a", 99), "remove(k,v) mismatched value false");
+        check(t.get("a") == 1, "remove(k,v) mismatch leaves entry");
+        check(t.remove("a", 1) && !t.containsKey("a"), "remove(k,v) matched removes");
+
+        // replace(K,V): returns old; absent returns null without inserting
+        check(t.replace("b", 20) == 2 && t.get("b") == 20, "replace(K,V) returns old");
+        check(t.replace("z", 5) == null && !t.containsKey("z"), "replace(K,V) absent no insert");
+
+        // replace(K,old,new): conditional on exact old value
+        check(!t.replace("b", 2, 21) && t.get("b") == 20, "replace(K,old,new) mismatch no-op");
+        check(t.replace("b", 20, 21) && t.get("b") == 21, "replace(K,old,new) match replaces");
+        check(!t.replace("z", 1, 2) && !t.containsKey("z"), "replace(K,old,new) absent false");
+
+        // getOrDefault both branches
+        check(t.getOrDefault("b", -1) == 21 && t.getOrDefault("z", -1) == -1, "getOrDefault");
+
+        // computeIfAbsent: absent inserts; present does NOT invoke fn; null result leaves no entry
+        t.clear();
+        t.put("a", 1);
+        check(t.computeIfAbsent("b", k -> 2) == 2 && t.get("b") == 2, "computeIfAbsent absent inserts");
+        final int[] called = {0};
+        check(t.computeIfAbsent("a", k -> { called[0]++; return 5; }) == 1,
+              "computeIfAbsent present returns existing");
+        check(called[0] == 0, "computeIfAbsent present does not invoke fn");
+        check(t.computeIfAbsent("c", k -> null) == null, "computeIfAbsent null result null");
+        check(!t.containsKey("c"), "computeIfAbsent null result leaves no entry");
+        RuntimeException boom = new RuntimeException("boom");
+        checkPropagatesSame(boom, () -> t.computeIfAbsent("d", k -> { throw boom; }),
+                "computeIfAbsent propagates fn exception");
+        check(!t.containsKey("d") && t.size() == 2, "state intact after computeIfAbsent exception");
+
+        // null key rejected before the mapping function runs
+        called[0] = 0;
+        checkThrows(NullPointerException.class, () -> t.computeIfAbsent(null, k -> { called[0]++; return 1; }),
+                    "computeIfAbsent(null key) NPE");
+        check(called[0] == 0, "computeIfAbsent null key does not invoke fn");
+
+        // computeIfPresent: present computes; absent does NOT invoke fn; null result removes
+        check(t.computeIfPresent("a", (k, v) -> v + 10) == 11 && t.get("a") == 11,
+              "computeIfPresent present computes");
+        called[0] = 0;
+        check(t.computeIfPresent("zz", (k, v) -> { called[0]++; return 1; }) == null,
+              "computeIfPresent absent returns null");
+        check(called[0] == 0, "computeIfPresent absent does not invoke fn");
+        check(t.computeIfPresent("a", (k, v) -> null) == null && !t.containsKey("a"),
+              "computeIfPresent null result removes");
+        checkPropagatesSame(boom, () -> t.computeIfPresent("b", (k, v) -> { throw boom; }),
+                "computeIfPresent propagates fn exception");
+        check(t.get("b") == 2, "entry unchanged after computeIfPresent exception");
+
+        // compute: absent inserts (v==null); present recomputes; null result removes
+        check(t.compute("a", (k, v) -> v == null ? 100 : v + 1) == 100 && t.get("a") == 100,
+              "compute absent inserts");
+        check(t.compute("a", (k, v) -> v + 1) == 101, "compute present recomputes");
+        check(t.compute("a", (k, v) -> null) == null && !t.containsKey("a"), "compute null removes");
+        checkPropagatesSame(boom, () -> t.compute("b", (k, v) -> { throw boom; }),
+                "compute propagates fn exception");
+        check(t.get("b") == 2, "entry unchanged after compute exception");
+
+        // merge: absent puts value without invoking fn; present remaps; null result removes
+        t.clear();
+        called[0] = 0;
+        check(t.merge("a", 1, (x, y) -> { called[0]++; return 5; }) == 1 && called[0] == 0,
+              "merge absent puts value without fn");
+        check(t.merge("a", 2, Integer::sum) == 3, "merge present remaps");
+        check(t.merge("a", 4, (x, y) -> null) == null && !t.containsKey("a"),
+              "merge null result removes");
+        t.put("b", 1);
+        checkPropagatesSame(boom, () -> t.merge("b", 1, (x, y) -> { throw boom; }),
+                "merge propagates fn exception");
+        check(t.get("b") == 1, "entry unchanged after merge exception");
+        checkThrows(NullPointerException.class, () -> t.merge("b", 1, null), "merge null fn NPE");
+        checkThrows(NullPointerException.class, () -> t.merge(null, 1, (x, y) -> x),
+                    "merge null key NPE");
+
+        // Hashtable-specific: containsValue(null) rejected, unlike HashMap
+        expectNPE(() -> t.containsValue(null), "containsValue(null) NPE");
+    }
+
+    // ---- Dictionary inheritance dispatch ------------------------------------
+
+    static void testDictionaryDispatch() {
+        Hashtable<String, Integer> ht = new Hashtable<>();
+        Dictionary<String, Integer> d = ht;
+        check(d.isEmpty() && d.size() == 0, "Dictionary isEmpty/size on empty");
+        check(d.put("k", 1) == null, "Dictionary.put");
+        check(d.get("k") == 1, "Dictionary.get");
+        check(d.size() == 1 && !d.isEmpty(), "Dictionary size reflects put");
+        int keys = 0;
+        for (Enumeration<String> e = d.keys(); e.hasMoreElements(); ) {
+            check("k".equals(e.nextElement()), "Dictionary.keys element");
+            keys++;
+        }
+        int vals = 0;
+        for (Enumeration<Integer> e = d.elements(); e.hasMoreElements(); ) {
+            check(e.nextElement() == 1, "Dictionary.elements element");
+            vals++;
+        }
+        check(keys == 1 && vals == 1, "Dictionary enumeration counts");
+        check(d.remove("k") == 1 && d.size() == 0, "Dictionary.remove reflects");
+
+        Hashtable<String, Integer> empty = new Hashtable<>();
+        check(!empty.keys().hasMoreElements() && !empty.elements().hasMoreElements(),
+              "empty keys()/elements() hasMoreElements false");
+    }
+
+    // ---- view iterator write channels + fail-fast ---------------------------
+
+    static void testViewIteratorsExtended() {
+        // values() iterator.remove deletes the underlying mapping
+        Hashtable<String, Integer> t = new Hashtable<>();
+        t.put("a", 1);
+        t.put("b", 2);
+        t.put("c", 3);
+        java.util.Iterator<Integer> vi = t.values().iterator();
+        vi.next();
+        vi.remove();
+        check(t.size() == 2, "values iterator.remove reflects");
+
+        // entrySet() iterator.remove
+        java.util.Iterator<Map.Entry<String, Integer>> ei = t.entrySet().iterator();
+        ei.next();
+        ei.remove();
+        check(t.size() == 1, "entrySet iterator.remove reflects");
+
+        // keySet() iterator.remove then continue without CME
+        java.util.Iterator<String> ki = t.keySet().iterator();
+        String first = ki.next();
+        ki.remove();
+        check(t.size() == 0, "keySet iterator.remove drains");
+
+        // values() iterator CME after structural modification
+        Hashtable<String, Integer> fv = new Hashtable<>();
+        fv.put("a", 1);
+        fv.put("b", 2);
+        java.util.Iterator<Integer> vit = fv.values().iterator();
+        vit.next();
+        fv.put("c", 3);
+        checkThrows(ConcurrentModificationException.class, vit::next, "values iterator CME");
+
+        // entrySet() iterator CME after structural modification
+        Hashtable<String, Integer> fe = new Hashtable<>();
+        fe.put("a", 1);
+        fe.put("b", 2);
+        java.util.Iterator<Map.Entry<String, Integer>> eit = fe.entrySet().iterator();
+        eit.next();
+        fe.remove("b");
+        checkThrows(ConcurrentModificationException.class, eit::next, "entrySet iterator CME");
+
+        // entry.setValue during iteration is non-structural: no CME
+        Hashtable<String, Integer> sv = new Hashtable<>();
+        sv.put("a", 1);
+        sv.put("b", 2);
+        int bumped = 0;
+        for (Map.Entry<String, Integer> e : sv.entrySet()) {
+            e.setValue(e.getValue() + 10);
+            bumped++;
+        }
+        check(bumped == 2 && sv.get("a") == 11 && sv.get("b") == 12,
+              "entry.setValue mid-iteration no CME and writes back");
+    }
+
+    // ---- Map.hashCode formula lock -------------------------------------------
+
+    static void testHashCodeFormula() {
+        // Map.hashCode = sum over entries of (key.hashCode() ^ value.hashCode())
+        Hashtable<String, Integer> t = new Hashtable<>();
+        t.put("a", 1);
+        t.put("b", 2);
+        check(t.hashCode() == 192, "Hashtable{a=1,b=2}.hashCode == 192");
+    }
+
     public static void main(String[] args) throws Exception {
         testPutGetRemove();
         testNullRejection();
@@ -318,6 +514,10 @@ public class HashtableTest {
         testSerialization();
         testCrossImplEquals();
         testStateInvariants();
+        testComputeMergeMatrix();
+        testDictionaryDispatch();
+        testViewIteratorsExtended();
+        testHashCodeFormula();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

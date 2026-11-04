@@ -206,6 +206,186 @@ public class IdentityHashMapTest {
         check(r.get(rk).equals("replaced"), "replace(K,old,new) updated value");
     }
 
+    // ---- JDK-21+ override: remove(K,V) uses identity -------------------------
+
+    static void checkPropagatesSame(RuntimeException marker, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": nothing was thrown");
+        } catch (Throwable t) {
+            if (t == marker) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected same " + marker.getClass().getSimpleName()
+                    + " instance but got " + t.getClass().getName(), t);
+        }
+    }
+
+    static void testRemoveIdentityOverride() {
+        // JDK-21+ declares remove(Object,Object) with identity (==) value
+        // comparison; JDK-8 inherited the Map default and used equals. Lock the
+        // identity behavior and the structural fact of the override itself.
+        try {
+            IdentityHashMap.class.getDeclaredMethod("remove", Object.class, Object.class);
+            passed++;
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError("JDK-27 IdentityHashMap must declare remove(Object,Object)");
+        }
+        try {
+            IdentityHashMap.class.getDeclaredMethod("replace", Object.class, Object.class, Object.class);
+            passed++;
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError("JDK-27 IdentityHashMap must declare replace(K,V,V)");
+        }
+
+        IdentityHashMap<String, String> m = new IdentityHashMap<>();
+        String k = new String("k");
+        String v = new String("val");
+        m.put(k, v);
+        check(!m.remove(k, new String("val")), "remove(k, equal-but-distinct value) false (identity)");
+        check(m.size() == 1, "remove(k,v) identity mismatch keeps entry");
+        check(!m.remove(k, "other"), "remove(k,v) different value false");
+        check(m.remove(k, v), "remove(k, identical value) true");
+        check(m.isEmpty(), "remove(k,v) removed entry");
+    }
+
+    // ---- compute/merge matrix under identity key semantics -------------------
+
+    static void testComputeMergeIdentity() {
+        IdentityHashMap<String, Integer> m = new IdentityHashMap<>();
+        String a = new String("a");
+        m.put(a, 1);
+
+        // same-reference key: present branches never invoke the function
+        final int[] called = {0};
+        check(m.computeIfAbsent(a, k -> { called[0]++; return 5; }) == 1,
+              "computeIfAbsent same-ref key returns existing");
+        check(called[0] == 0, "computeIfAbsent present does not invoke fn");
+        check(m.computeIfAbsent(a, k -> null) == 1, "computeIfAbsent same-ref null-result still existing");
+
+        // equal-but-distinct key: looked up by identity -> treated absent -> inserts a second mapping
+        check(m.computeIfAbsent(new String("a"), k -> 42) == 42,
+              "computeIfAbsent equal-distinct key inserts");
+        check(m.size() == 2 && m.get(a) == 1, "two mappings for equal keys");
+        check(m.get(new String("a")) == null, "neither mapping found via equal-distinct get");
+
+        // putIfAbsent same split
+        String b = new String("b");
+        check(m.putIfAbsent(a, 9) == 1, "putIfAbsent same-ref present returns existing");
+        check(m.putIfAbsent(b, 2) == null && m.size() == 3, "putIfAbsent new key inserts");
+
+        // compute / computeIfPresent / merge on the same reference
+        check(m.compute(a, (k, v) -> v + 1) == 2, "compute same-ref recomputes");
+        check(m.compute(a, (k, v) -> null) == null && !m.containsKey(a), "compute null removes");
+        check(m.computeIfPresent(new String("a"), (k, v) -> 99) == null,
+              "computeIfPresent equal-distinct key treated absent");
+        check(m.size() == 2, "unreachable equal-key mapping still occupies a slot");
+
+        check(m.merge(b, 10, Integer::sum) == 12, "merge same-ref remaps");
+        check(m.merge(b, 10, (x, y) -> null) == null && !m.containsKey(b), "merge null removes");
+        m.put(b, 3);
+
+        // exceptions propagate as the same instance and leave state intact
+        RuntimeException boom = new RuntimeException("boom");
+        checkPropagatesSame(boom, () -> m.computeIfAbsent(new String("z"), k -> { throw boom; }),
+                "computeIfAbsent propagates fn exception");
+        checkPropagatesSame(boom, () -> m.computeIfPresent(b, (k, v) -> { throw boom; }),
+                "computeIfPresent propagates fn exception");
+        check(m.get(b) == 3, "entry unchanged after computeIfPresent exception");
+        checkPropagatesSame(boom, () -> m.compute(new String("y"), (k, v) -> { throw boom; }),
+                "compute propagates fn exception");
+        check(m.size() == 2, "size intact after exceptions");
+
+        // null keys participate normally in identity semantics
+        m.put(null, 7);
+        check(m.computeIfAbsent(null, k -> 99) == 7, "computeIfAbsent null key present");
+        check(m.compute(null, (k, v) -> v + 1) == 8, "compute null key updates");
+
+        // null remapping functions rejected
+        checkThrows(NullPointerException.class, () -> m.computeIfAbsent("k", null),
+                    "computeIfAbsent null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.computeIfPresent("k", null),
+                    "computeIfPresent null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.compute("k", null), "compute null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.merge("k", 1, null), "merge null fn NPE");
+    }
+
+    // ---- IdentityHashMap vs HashMap equals contract divergence ---------------
+
+    static void testEqualsVsHashMap() {
+        String shared = new String("k");
+        IdentityHashMap<String, String> ih = new IdentityHashMap<>();
+        ih.put(shared, new String("v"));
+        java.util.HashMap<String, String> hm = new java.util.HashMap<>();
+        hm.put(shared, new String("v"));
+        check(!ih.equals(hm), "IdentityHashMap.equals(HashMap) false (identity-based)");
+        // deliberate Map-contract violation (documented): the asymmetry is the
+        // observable contract — HashMap looks its own keys up in the other map
+        // and finds them because the key reference is shared.
+        check(hm.equals(ih), "HashMap.equals(IdentityHashMap) true with shared key refs (asymmetric)");
+        java.util.HashMap<String, String> hm2 = new java.util.HashMap<>();
+        hm2.put(new String("k"), new String("v"));
+        check(!hm2.equals(ih), "HashMap with distinct key refs not equal");
+
+        // two identity maps with the very same key/value references ARE equal
+        IdentityHashMap<String, String> a = new IdentityHashMap<>();
+        a.put(shared, "v");
+        IdentityHashMap<String, String> b = new IdentityHashMap<>();
+        b.put(shared, "v");
+        check(a.equals(b) && a.hashCode() == b.hashCode(), "same references equal + same hashCode");
+        check(a.hashCode() == a.hashCode(), "hashCode stable across calls");
+    }
+
+    // ---- views: fail-fast + write channels + toString ------------------------
+
+    static void testViewsAndFailFast() {
+        // fail-fast iterator: structural modification -> CME
+        IdentityHashMap<String, Integer> m = new IdentityHashMap<>();
+        m.put("a", 1);
+        m.put("b", 2);
+        java.util.Iterator<String> it = m.keySet().iterator();
+        it.next();
+        m.put("c", 3);
+        checkThrows(java.util.ConcurrentModificationException.class, it::next,
+                    "identity map iterator CME after put");
+
+        // keySet iterator.remove reflects into the map
+        IdentityHashMap<String, Integer> kr = new IdentityHashMap<>();
+        kr.put("a", 1);
+        kr.put("b", 2);
+        java.util.Iterator<String> ki = kr.keySet().iterator();
+        ki.next();
+        ki.remove();
+        check(kr.size() == 1, "keySet iterator.remove reflects");
+
+        // values iterator.remove reflects
+        java.util.Iterator<Integer> vi = kr.values().iterator();
+        vi.next();
+        vi.remove();
+        check(kr.isEmpty(), "values iterator.remove drains");
+
+        // entry.setValue writes back
+        IdentityHashMap<String, Integer> sv = new IdentityHashMap<>();
+        sv.put("k", 1);
+        Map.Entry<String, Integer> e = sv.entrySet().iterator().next();
+        check(e.setValue(5) == 1, "entry.setValue returns old");
+        check(sv.get("k") == 5, "entry.setValue writes back");
+
+        // getOrDefault uses identity lookup
+        IdentityHashMap<String, Integer> gd = new IdentityHashMap<>();
+        gd.put("k", 1);
+        check(gd.getOrDefault("k", -1) == 1 && gd.getOrDefault(new String("k"), -1) == -1,
+              "getOrDefault identity lookup");
+
+        // toString is well-formed for a simple map (single entry: "{k=1}")
+        IdentityHashMap<String, Integer> ts = new IdentityHashMap<>();
+        ts.put("k", 1);
+        check(ts.toString().equals("{k=1}"), "toString {k=1}");
+
+        // views reject add
+        checkThrows(UnsupportedOperationException.class, () -> m.keySet().add("x"),
+                    "keySet.add UOE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testKeyIdentity();
@@ -215,6 +395,10 @@ public class IdentityHashMapTest {
         testBlackBox();
         testConstructorMatrix();
         testSerialization();
+        testRemoveIdentityOverride();
+        testComputeMergeIdentity();
+        testEqualsVsHashMap();
+        testViewsAndFailFast();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

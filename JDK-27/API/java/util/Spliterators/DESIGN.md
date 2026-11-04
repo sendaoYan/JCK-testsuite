@@ -25,3 +25,22 @@
   - 集合 spliterator 大小与特征。
   - unknownSize 的 estimateSize==Long.MAX_VALUE 与遍历。
   - `iterator(spliterator)` 转换与耗尽。
+
+## 契约深化（第二轮，追加）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | ranged 大小/特征 16464/from==to 空 | testArrayRanged |
+| P0 | ranged 越界矩阵 AIOOBE + null 数组/集合 NPE | testArrayRangedErrors |
+| P0 | int/long/double 原生数组工厂内容 | testPrimitiveArraySpliterators |
+| P0 | empty* 家族特征 16448、tryAdvance false | testEmptyPrimitiveSpliterators |
+| P0 | OfInt 适配工厂内容 + unknownSize est=Long.MAX_VALUE | testPrimitiveIteratorSpliterators |
+| P0 | iterator 桥接 remove→UOE、耗尽 next→NSEE | testIteratorBridge |
+| P0 | unknownSize/集合 trySplit SUBSIZED 尺寸守恒 | testCollectionAndUnknownSize |
+
+### 易错规范细节（实测锁定）
+
+- `from > to` 抛 **ArrayIndexOutOfBoundsException**（非 IAE）；null 源 → NPE（裸 null 需 cast 消歧义）。
+- unknownSize estimateSize == **Long.MAX_VALUE**；可用 trySplit 时两侧 SUBSIZED 且尺寸相加守恒。
+- `iterator(sp)` 桥接不支持 remove（UOE）；耗尽后 next 抛 NSEE。
+- 与 JDK-8 的 API 面完全一致（无 27 新方法差异），断言可双侧复用。

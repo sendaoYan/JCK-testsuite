@@ -246,9 +246,152 @@ public class OptionalTest {
         testBoundaryEquivalence();
         testNullMatrix();
     }
+
+    // ============ contract deepening (appended) ============
+
+    // NSEE message text is part of the observable contract surface.
+    static void testExceptionMessages() {
+        try {
+            Optional.empty().get();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty get() NSEE message");
+        }
+        try {
+            Optional.empty().orElseThrow();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty orElseThrow() NSEE message");
+        }
+    }
+
+    // hashCode() == (value == null) ? 0 : value.hashCode(); empty holds null -> 0.
+    static void testHashCodeFormula() {
+        check(Optional.empty().hashCode() == 0, "empty hashCode == 0");
+        check(Optional.of(1).hashCode() == 1, "of(1) hashCode == 1 (Integer.hashCode)");
+        check(Optional.of("a").hashCode() == "a".hashCode(), "of(x) hashCode == x.hashCode()");
+        check(Optional.ofNullable(null).hashCode() == 0, "ofNullable(null) hashCode == 0");
+        java.util.List<String> val = java.util.Arrays.asList("k");
+        check(Optional.of(val).hashCode() == val.hashCode(), "hashCode delegates to value");
+        java.util.ArrayList<String> dyn = new java.util.ArrayList<>();
+        Optional<java.util.ArrayList<String>> opt = Optional.of(dyn);
+        int before = opt.hashCode();
+        dyn.add("element");
+        check(opt.hashCode() != before, "hashCode tracks live value state");
+    }
+
+    // equals compares held values with equals(); boxed types with equal values differ.
+    static void testEqualsCrossType() {
+        check(!Optional.of(1).equals(Optional.of(1L)), "Integer 1 != Long 1");
+        check(!Optional.of(1L).equals(Optional.of(1)), "Long 1 != Integer 1 (symmetric)");
+        check(!Optional.of(1).equals(Optional.of("1")), "Integer 1 != String \"1\"");
+        check(!Optional.of(1).equals(null), "equals(null) false");
+        check(Optional.empty().equals(Optional.ofNullable(null)), "empty equals ofNullable(null)");
+        check(Optional.ofNullable(null).equals(Optional.empty()), "ofNullable(null) equals empty");
+        check(!Optional.of(new int[] {1}).equals(Optional.of(new int[] {1})),
+              "array identity: Optional of arrays not equal");
+        Optional<Number> widened = Optional.<Integer>of(1).map(x -> (Number) x);
+        check(widened.equals(Optional.of(1)), "widened Optional<Number> equals Optional<Integer>(1)");
+    }
+
+    static void testToStringDeep() {
+        Object custom = new Object() {
+            @Override public String toString() { return "TOSTR"; }
+        };
+        check(Optional.of(custom).toString().equals("Optional[TOSTR]"),
+              "toString uses held value's toString");
+        check(Optional.of("x").toString().equals(Optional.of("x").toString()),
+              "toString idempotent");
+    }
+
+    // Callback exceptions are relayed as the same instance; no wrapping, no state change.
+    static void testCallbackExceptionRelay() {
+        final RuntimeException relay = new RuntimeException("relay");
+        try { Optional.of("x").filter(s -> { throw relay; }); }
+        catch (RuntimeException caught) { check(caught == relay, "filter relays predicate exception unchanged"); }
+        try { Optional.of("x").map(s -> { throw relay; }); }
+        catch (RuntimeException caught) { check(caught == relay, "map relays mapper exception unchanged"); }
+        try { Optional.of("x").flatMap(s -> { throw relay; }); }
+        catch (RuntimeException caught) { check(caught == relay, "flatMap relays mapper exception unchanged"); }
+        try { Optional.of("x").ifPresent(s -> { throw relay; }); }
+        catch (RuntimeException caught) { check(caught == relay, "ifPresent relays consumer exception unchanged"); }
+        try { Optional.empty().orElseGet(() -> { throw relay; }); }
+        catch (RuntimeException caught) { check(caught == relay, "orElseGet relays supplier exception unchanged"); }
+        Optional<String> keep = Optional.of("keep");
+        try { keep.map(s -> { throw relay; }); } catch (RuntimeException ignored) { }
+        check("keep".equals(keep.get()), "container unchanged after relayed exception");
+    }
+
+    // Functor/monad laws on fixed inputs.
+    static void testMonadicLaws() {
+        Optional<String> m = Optional.of("abc");
+        java.util.function.Function<String, String> f = s -> s + "1";
+        java.util.function.Function<String, String> g = s -> s + "2";
+        check(m.map(f).map(g).equals(m.map(f.andThen(g))), "map composition law");
+        check(m.map(x -> x).equals(m), "map identity law");
+        check(m.flatMap(s -> Optional.of(s).map(f)).equals(m.map(f)), "flatMap/map fusion law");
+        check(m.filter(s -> s.length() > 0).filter(s -> s.startsWith("a"))
+              .equals(m.filter(s -> s.length() > 0 && s.startsWith("a"))),
+              "filter conjunction law");
+        check(m.filter(s -> true).equals(m), "filter true law");
+        Optional<String> e = Optional.empty();
+        check(e.map(f).map(g).equals(Optional.empty()), "map composition law on empty");
+        check(e.filter(s -> true).equals(Optional.empty()), "filter true law on empty");
+        check(m.get().equals(m.get()), "get stable across invocations");
+    }
+
+    // JDK-9+ method contracts beyond the surface checks above.
+    static void testJ9PlusDeep() {
+        // or(): supplier result null -> NPE; supplier not consulted when present
+        expectThrows(NullPointerException.class, () -> Optional.empty().or(() -> null),
+            "or supplier returns null NPE");
+        expectThrows(NullPointerException.class, () -> Optional.empty().or(null),
+            "or(null) empty NPE");
+        final AtomicBoolean called = new AtomicBoolean(false);
+        Optional.of("x").or(() -> { called.set(true); return Optional.of("z"); });
+        check(!called.get(), "or supplier not invoked when present");
+        check(Optional.<String>empty().or(() -> Optional.empty()).isEmpty(),
+              "or returning empty keeps it empty");
+
+        // ifPresentOrElse(null, ...) null matrix: NPE only on the branch actually taken
+        expectThrows(NullPointerException.class, () -> Optional.of("x").ifPresentOrElse(null, () -> { }),
+            "ifPresentOrElse(null action, present) NPE");
+        expectThrows(NullPointerException.class, () -> Optional.<String>empty().ifPresentOrElse(v -> { }, null),
+            "ifPresentOrElse(null emptyAction, empty) NPE");
+        Optional.of("x").ifPresentOrElse(v -> { }, null);
+        passed++; // null emptyAction with present value: documented no-op
+        Optional.<String>empty().ifPresentOrElse(null, () -> { });
+        passed++; // null action with empty: documented no-op
+
+        // stream(): exactly the held value as a one-element Stream
+        check(Optional.of("s").stream().toArray()[0].equals("s"), "stream yields held value");
+        check(java.util.Arrays.equals(
+                    java.util.stream.Stream.of("x").toArray(),
+                    Optional.of("x").stream().toArray()),
+              "stream content equals Stream.of(value)");
+        check(Optional.<String>empty().stream().findAny().isEmpty(), "empty stream no element");
+        check(Optional.of(2).stream().mapToInt(Integer::intValue).sum() == 2,
+              "stream pipelines further");
+
+        // orElseThrow() vs get(): same NSEE on empty, same value on present
+        check(Optional.of("v").orElseThrow().equals(Optional.of("v").get()),
+              "orElseThrow() == get() on present");
+    }
+
+    static void testContractDeepening() throws Exception {
+        testExceptionMessages();
+        testHashCodeFormula();
+        testEqualsCrossType();
+        testToStringDeep();
+        testCallbackExceptionRelay();
+        testMonadicLaws();
+        testJ9PlusDeep();
+    }
+
 public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeepening();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

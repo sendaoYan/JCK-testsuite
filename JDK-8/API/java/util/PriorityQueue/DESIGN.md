@@ -50,3 +50,34 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 契约深化追加（第二版）
+
+新增 test 方法：testNullComparatorConstructors / testComparatorPlumbing / testCaseInsensitiveOrder /
+testNonComparableJdk8 / testRemovePositions / testInterleavedOfferPoll / testIteratorRemove /
+testSerializationWithComparator / testNonSerializableComparator / testSpliterator /
+testEmptyToArray / testIaeMessageless / testWrongTypeQueries / testToStringBrackets /
+testHashCodeIdentity / testElementIdempotent。
+
+### 覆盖点
+
+- **null Comparator 构造**：`new PriorityQueue((Comparator)null)` 与 `(8, null)` 均**不抛 NPE**，
+  语义为自然序（comparator()==null）——非直觉契约，实测锁定。
+- Comparator 管道：PQ(Comparator)/PQ(SortedSet)/PQ(PriorityQueue) 三构造均保留**同一比较器实例**（==）；
+  自然序 TreeSet 构造 comparator()==null。
+- **非 Comparable 元素的惰性 CCE（JDK-8 专属）**：首个 offer 不比较（无父节点）成功入队；
+  第二个 offer 比较时 CCE；两元素集合构造 CCE。**JDK-27 为首个 offer 立即 CCE（版本差异）。**
+- remove 位置矩阵：删头（min）→ 次小浮现；删 max → peek 不变；删中间；全排干。
+- offer/poll 交错重建堆（5→poll→3,1→poll 1,3）；iterator.remove 受支持且堆仍正确排干。
+- 序列化带比较器：String.CASE_INSENSITIVE_ORDER round-trip 后 `comparator()==同一实例`（readResolve
+  共享静态）；**不可序列化 Comparator → ObjectOutputStream 直接抛 NotSerializableException**。
+- Spliterator：特征位 **0x4140 = SIZED|SUBSIZED|NONNULL**（无 ORDERED/SORTED——堆无序契约）、
+  trySplit 尺寸和守恒 + multiset 并集。
+- 空 toArray(T[])：复用数组且 [0]=null 终止符；PQ(0)/PQ(-3) IAE **无 detail message**（getMessage()==null）。
+- 错误类型查询 contains(42)/remove(42) 返 false 不抛 CCE；toString 只断括号+含元素（迭代序无契约）；
+  hashCode==identityHashCode；element() 幂等不删。
+
+### 易错规范细节（已锁入断言）
+
+- CASE_INSENSITIVE_ORDER 下大小写不同串相等——并列元素只断言 multiset，不断言先后。
+- toString/迭代顺序是堆数组序（无契约），凡序断言一律走 poll 序列。

@@ -11,11 +11,14 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.Enumeration;
 import java.util.InvalidPropertiesFormatException;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
@@ -352,6 +355,158 @@ public class PropertiesTest {
         check(osc.getSerialVersionUID() == 4112578634029874840L, "Properties serialVersionUID stable");
     }
 
+    // ---- appended: ISO-8859-1 unicode (backslash-u) escaping, list(), parse edges, view channels,
+    //      and the JDK-22+ surface (Properties(int), storeToXML Charset) ----
+
+    static void testUnicodeEscapingRoundTrip() throws Exception {
+        // store(OutputStream) escapes all chars >0x7F as backslash-uXXXX and round-trips
+        Properties cn = new Properties();
+        cn.setProperty("k中", "值123");
+        cn.setProperty("plain", "ascii");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        cn.store(bos, null);
+        String stored = bos.toString("ISO-8859-1");
+        check(stored.contains("\\u4E2D"), "store(OutputStream) escapes key char as \\u4E2D");
+        check(stored.contains("\\u503C"), "store(OutputStream) escapes value char as \\u503C");
+        check(!stored.contains("中"), "no raw non-ASCII byte in ISO-8859-1 view");
+        check(stored.contains("plain=ascii"), "ascii entry stored literally");
+        Properties back = new Properties();
+        back.load(new ByteArrayInputStream(bos.toByteArray()));
+        check(back.equals(cn), "store/load(InputStream) non-ASCII round-trip equals");
+        check("值123".equals(back.getProperty("k中")), "escaped key/value restored exactly");
+
+        // store(Writer) does NOT escape non-ASCII: raw chars flow through
+        StringWriter sw = new StringWriter();
+        cn.store(sw, null);
+        check(sw.toString().contains("k中=值123"), "store(Writer) keeps raw non-ASCII");
+        Properties back2 = new Properties();
+        back2.load(new StringReader(sw.toString()));
+        check(back2.equals(cn), "store/load(Reader) non-ASCII round-trip equals");
+
+        // control characters in key/value round-trip through escapes
+        Properties ctl = new Properties();
+        ctl.setProperty("tab\tkey", "line1\nline2");
+        StringWriter sw2 = new StringWriter();
+        ctl.store(sw2, null);
+        check(!sw2.toString().contains("\n\tkey"), "tab in key escaped");
+        check(!sw2.toString().contains("line1\n"), "newline in value escaped");
+        Properties back3 = new Properties();
+        back3.load(new StringReader(sw2.toString()));
+        check("line1\nline2".equals(back3.getProperty("tab\tkey")), "control chars round-trip");
+
+        // load decodes backslash-uXXXX escapes in the document
+        Properties u = new Properties();
+        u.load(new StringReader("k=\\u4E2D\\u6587"));
+        check("中文".equals(u.getProperty("k")), "load decodes \\uXXXX escapes");
+
+        // multi-line store comment: every comment line gets its own '#'
+        Properties mc = new Properties();
+        mc.setProperty("a", "b");
+        StringWriter sw3 = new StringWriter();
+        mc.store(sw3, "line1\nline2");
+        check(sw3.toString().contains("#line1\n#line2"), "multiline comment prefixed per line");
+    }
+
+    static void testList() {
+        Properties p = new Properties();
+        p.setProperty("short", "v");
+        p.setProperty("longkey.name.here",
+                      "0123456789012345678901234567890123456789012345678901234567890123456789");
+        StringWriter sw = new StringWriter();
+        p.list(new PrintWriter(sw));
+        String out = sw.toString();
+        check(out.startsWith("-- listing properties --"), "list header line");
+        check(out.contains("short=v"), "list prints key=value");
+        check(out.contains("longkey.name.here=0123456789012345678901234567890123456..."),
+              "list truncates long value to 37 chars + ...");
+        check(!out.contains("67890123456789\n"), "list omits the truncated tail");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        p.list(new PrintStream(bos));
+        check(new String(bos.toByteArray()).contains("short=v"), "list(PrintStream) prints key=value");
+        // defaults entries ARE listed too (order not specified: assert by membership)
+        Properties defs = new Properties();
+        defs.setProperty("dk", "DV");
+        Properties withDefs = new Properties(defs);
+        withDefs.setProperty("own", "OV");
+        StringWriter sw2 = new StringWriter();
+        withDefs.list(new PrintWriter(sw2));
+        String out2 = sw2.toString();
+        check(out2.contains("own=OV"), "list includes own entries");
+        check(out2.contains("dk=DV"), "list includes default entries");
+        // non-String values (or keys) make list() fail with ClassCastException
+        // (list casts through the raw table; both JDK-8 and JDK-27 behave alike)
+        Properties mixed = new Properties();
+        mixed.setProperty("s", "ok");
+        mixed.put("n", Integer.valueOf(1));
+        checkThrows(ClassCastException.class,
+                    () -> mixed.list(new PrintWriter(new StringWriter())),
+                    "list non-String value CCE");
+        Properties mk = new Properties();
+        mk.put(Integer.valueOf(2), "v");
+        checkThrows(ClassCastException.class,
+                    () -> mk.list(new PrintWriter(new StringWriter())),
+                    "list non-String key CCE");
+    }
+
+    static void testLoadParseEdges() throws Exception {
+        Properties p = new Properties();
+        p.load(new StringReader(
+            "novalue\n"
+          + "k =  v  \n"
+          + "trail=after\\ \n"
+          + "  ind=x\n"
+          + "#c\n!b\n\n"
+          + "eq\\=k=v\n"
+          + "empty=\n"));
+        check("".equals(p.getProperty("novalue")), "key-only line -> empty value");
+        check("v  ".equals(p.getProperty("k")), "value keeps trailing spaces, drops leading");
+        check("after ".equals(p.getProperty("trail")), "escaped trailing space preserved");
+        check("x".equals(p.getProperty("ind")), "leading whitespace before key skipped");
+        check("v".equals(p.getProperty("eq=k")), "escaped '=' allowed inside key");
+        check("".equals(p.getProperty("empty")), "explicit empty value");
+        check(p.size() == 6, "parse edge count: " + p.size());
+
+        checkThrows(IllegalArgumentException.class,
+                    () -> new Properties().load(new StringReader("k=\\u4E")),
+                    "truncated \\u escape IAE");
+    }
+
+    static void testHashtableViewChannels() {
+        Properties p = new Properties();
+        p.setProperty("a", "1");
+        p.setProperty("b", "2");
+        check(p.keySet().remove("a"), "keySet.remove succeeds");
+        check(p.getProperty("a") == null && p.size() == 1, "keySet.remove drops property");
+        for (Map.Entry<Object, Object> e : p.entrySet()) {
+            if ("b".equals(e.getKey())) e.setValue("22");
+        }
+        check("22".equals(p.getProperty("b")), "entrySet.setValue updates property");
+        p.compute("c", (k, v) -> Integer.valueOf(3));
+        check(p.getProperty("c") == null, "getProperty blind to non-String compute result");
+        check(Integer.valueOf(3).equals(p.get("c")), "get sees raw compute result");
+        final int[] n = {0};
+        p.forEach((k, v) -> n[0]++);
+        check(n[0] == p.size(), "forEach visits every raw entry");
+    }
+
+    static void testVersionSurface() throws Exception {
+        // JDK 22+ adds Properties(int initialCapacity)
+        Properties pc = new Properties(16);
+        pc.setProperty("x", "y");
+        check("y".equals(pc.getProperty("x")), "Properties(int) usable");
+        checkThrows(IllegalArgumentException.class,
+                    () -> new Properties(-1), "Properties(-1) IAE via Hashtable");
+        // JDK 22+ adds storeToXML(OutputStream, String, Charset)
+        Properties p = new Properties();
+        p.setProperty("键", "值");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        p.storeToXML(bos, null, java.nio.charset.StandardCharsets.UTF_8);
+        Properties back = new Properties();
+        back.loadFromXML(new ByteArrayInputStream(bos.toByteArray()));
+        check("值".equals(back.getProperty("键")), "storeToXML(Charset) non-ASCII round-trip");
+        check(bos.toString("UTF-8").contains("<?xml"), "XML prolog present");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
@@ -364,6 +519,11 @@ public class PropertiesTest {
         testStoreErrors();
         testStoreToXMLContract();
         testSerialization();
+        testUnicodeEscapingRoundTrip();
+        testList();
+        testLoadParseEdges();
+        testHashtableViewChannels();
+        testVersionSurface();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

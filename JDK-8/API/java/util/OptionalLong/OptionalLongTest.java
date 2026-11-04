@@ -107,12 +107,106 @@ public class OptionalLongTest {
         check(OptionalLong.empty().toString().equals("OptionalLong.empty"), "toString empty");
     }
 
-    public static void main(String[] args) {
+    // ============ contract deepening (appended) ============
+
+    // NSEE message text is observable contract surface.
+    static void testExceptionMessages() {
+        try {
+            OptionalLong.empty().getAsLong();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty getAsLong NSEE message");
+        }
+    }
+
+    // hashCode() == (isPresent) ? Long.hashCode(value) : 0.
+    static void testHashCodeFormula() {
+        check(OptionalLong.empty().hashCode() == 0, "empty hashCode == 0");
+        check(OptionalLong.of(10L).hashCode() == Long.hashCode(10L), "of(10) hashCode == Long.hashCode(10)");
+        check(OptionalLong.of(-1L).hashCode() == Long.hashCode(-1L), "of(-1) hashCode");
+        check(OptionalLong.of(Long.MIN_VALUE).hashCode() == Long.hashCode(Long.MIN_VALUE),
+              "of(MIN_VALUE) hashCode == Long.hashCode(MIN_VALUE)");
+        check(OptionalLong.of(Long.MAX_VALUE).hashCode() == Long.hashCode(Long.MAX_VALUE),
+              "of(MAX_VALUE) hashCode == Long.hashCode(MAX_VALUE)");
+    }
+
+    // equals only compares against OptionalLong.
+    static void testEqualsCrossType() {
+        check(!OptionalLong.of(5L).equals(null), "equals(null) false");
+        check(!OptionalLong.of(5L).equals(Long.valueOf(5L)), "not equal to plain Long");
+        check(!OptionalLong.of(5L).equals(java.util.Optional.of(5L)), "not equal to Optional<Long>");
+        check(!OptionalLong.of(5L).equals(java.util.OptionalInt.of(5)), "not equal to OptionalInt");
+        check(OptionalLong.of(5L).equals(OptionalLong.of(5L)), "equal values equal");
+        check(!OptionalLong.of(5L).equals(OptionalLong.of(6L)), "different values not equal");
+        check(!OptionalLong.empty().equals(java.util.Optional.empty()), "not equal to Optional.empty");
+    }
+
+    // toString is exactly "OptionalLong[<v>]" / "OptionalLong.empty".
+    static void testToStringExact() {
+        check(OptionalLong.of(Long.MIN_VALUE).toString()
+              .equals("OptionalLong[-9223372036854775808]"), "toString MIN_VALUE");
+        check(OptionalLong.of(Long.MAX_VALUE).toString()
+              .equals("OptionalLong[9223372036854775807]"), "toString MAX_VALUE");
+        check(OptionalLong.of(0L).toString().equals("OptionalLong[0]"), "toString 0");
+        check(OptionalLong.of(-1L).toString().equals("OptionalLong[-1]"), "toString negative");
+        check(OptionalLong.empty().toString().equals("OptionalLong.empty"), "toString empty");
+    }
+
+    // Callback exceptions relay the same instance; the container is unaffected.
+    static void testCallbackExceptionRelay() {
+        final RuntimeException relay = new RuntimeException("relay");
+        try {
+            OptionalLong.of(10L).ifPresent(v -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "ifPresent relays consumer exception unchanged");
+        }
+        try {
+            OptionalLong.empty().orElseGet(() -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "orElseGet relays supplier exception unchanged");
+        }
+        OptionalLong keep = OptionalLong.of(11L);
+        try { keep.ifPresent(v -> { throw relay; }); } catch (RuntimeException ignored) { }
+        check(keep.getAsLong() == 11L, "container unchanged after relayed exception");
+    }
+
+    // API surface lock: no map/flatMap/ofNullable; JDK-9+ additions absent on Java 8.
+    static void testSurfaceLock() throws Exception {
+        Class<?> c = OptionalLong.class;
+        for (String absent : new String[] {"map", "flatMap", "ofNullable", "isEmpty", "stream"}) {
+            try {
+                c.getMethod(absent);
+                throw new AssertionError(absent + " should not exist");
+            } catch (NoSuchMethodException expected) { passed++; }
+        }
+        try {
+            c.getMethod("ifPresentOrElse", java.util.function.LongConsumer.class, Runnable.class);
+            throw new AssertionError("ifPresentOrElse should not exist on Java 8");
+        } catch (NoSuchMethodException expected) { passed++; }
+        try {
+            c.getMethod("orElseThrow");
+            throw new AssertionError("no-arg orElseThrow should not exist on Java 8");
+        } catch (NoSuchMethodException expected) { passed++; }
+        c.getMethod("of", long.class);
+        c.getMethod("getAsLong");
+        c.getMethod("orElseGet", java.util.function.LongSupplier.class);
+        passed++; // Java 8 surface complete
+    }
+
+    public static void main(String[] args) throws Exception {
         testOfGet();
         testBoundaries();
         testOrElse();
         testIfPresent();
         testEqualsHashCodeToString();
+        testExceptionMessages();
+        testHashCodeFormula();
+        testEqualsCrossType();
+        testToStringExact();
+        testCallbackExceptionRelay();
+        testSurfaceLock();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

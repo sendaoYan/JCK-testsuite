@@ -168,6 +168,122 @@ public class StackTest {
         check(!s.empty() && s.peek().equals("z"), "reusable after clear");
     }
 
+    // ---- deepened contract coverage II ---------------------------------------
+
+    static void testPushIdentityAndLifo() {
+        // push returns the very same reference that was pushed
+        Object o1 = new Object(), o2 = new Object();
+        Stack<Object> s = new Stack<>();
+        check(s.push(o1) == o1 && s.push(o2) == o2, "push returns identical reference");
+        check(s.peek() == o2, "peek top identity");
+        // full LIFO drain order
+        Stack<String> st = new Stack<>();
+        st.push("a"); st.push("b"); st.push("c");
+        StringBuilder sb = new StringBuilder();
+        while (!st.empty()) sb.append(st.pop());
+        check(sb.toString().equals("cba"), "drain order is exact LIFO (c,b,a)");
+        checkThrows(EmptyStackException.class, st::peek, "peek empty EmptyStackException");
+        checkThrows(EmptyStackException.class, new Stack<String>()::pop, "pop empty EmptyStackException");
+        // refilling after empty works
+        check(st.push("r").equals("r") && st.pop().equals("r"), "refill after drain");
+    }
+
+    static void testEqualsHashCodeListContract() {
+        // Stack extends Vector: equals/hashCode follow the List formula
+        check(new Stack<String>().hashCode() == 1, "empty stack hashCode 1");
+        Stack<String> s1 = new Stack<>();
+        s1.push("a");
+        check(s1.hashCode() == 128, "stack [a] hashCode 128 (31*1+97)");
+        s1.push("b");
+        check(s1.hashCode() == 4066, "stack [a,b] hashCode 4066 (31*128+98)");
+        java.util.List<String> al = new java.util.ArrayList<>(java.util.Arrays.asList("a", "b"));
+        check(s1.equals(al) && al.equals(s1), "Stack equals ArrayList bottom-to-top");
+        check(s1.hashCode() == al.hashCode(), "Stack/List same hashCode");
+        Stack<String> s2 = new Stack<>();
+        s2.push("a"); s2.push("b");
+        check(s1.equals(s2) && s1.hashCode() == s2.hashCode(), "equal stacks");
+        s2.push("c");
+        check(!s1.equals(s2), "different depth not equal");
+    }
+
+    static void testInheritedVectorLegacyOps() {
+        Stack<String> s = new Stack<>();
+        s.addElement("a");          // legacy add: appends = push
+        s.addElement("b");
+        check(s.peek().equals("b") && s.size() == 2, "addElement behaves as push");
+        s.insertElementAt("bottom", 0);
+        check(s.get(0).equals("bottom") && s.peek().equals("b"), "insertElementAt grows bottom, top unchanged");
+        check(s.firstElement().equals("bottom") && s.lastElement().equals("b"),
+              "firstElement=bottom, lastElement=top");
+        s.setElementAt("B", s.size() - 1);
+        check(s.peek().equals("B"), "setElementAt at top changes peek");
+        check(s.elementAt(s.size() - 1).equals("B"), "elementAt top");
+        check(s.removeElement("bottom"), "removeElement removes interior/bottom");
+        check(s.size() == 2, "size after removeElement");
+        // enumeration is bottom-to-top
+        StringBuilder sb = new StringBuilder();
+        java.util.Enumeration<String> e = s.elements();
+        while (e.hasMoreElements()) sb.append(e.nextElement());
+        check(sb.toString().equals("aB"), "elements() bottom-to-top");
+        // middle insert does not change pop target (pop takes last element)
+        s.add(0, "floor");
+        check(s.pop().equals("B"), "pop still takes last element after bottom insert");
+    }
+
+    static void testSubListAndIterator() {
+        Stack<Integer> s = new Stack<>();
+        s.push(1); s.push(2); s.push(3); s.push(4);
+        java.util.List<Integer> sub = s.subList(1, 3);
+        check(sub.equals(java.util.Arrays.asList(2, 3)), "subList is bottom-to-top segment");
+        sub.set(0, 20);
+        check(s.get(1) == 20, "subList set reflects into stack");
+        sub.remove(0);
+        check(s.size() == 3 && s.peek() == 4, "subList remove shrinks stack, top intact");
+        // iterator follows Vector fail-fast
+        Iterator<Integer> it = s.iterator();
+        it.next();
+        s.push(9);
+        checkThrows(java.util.ConcurrentModificationException.class, it::next,
+                    "Stack iterator CME after push");
+        // iterator.remove passes through
+        Stack<Integer> s2 = new Stack<>();
+        s2.push(1); s2.push(2);
+        Iterator<Integer> it2 = s2.iterator();
+        it2.next();
+        it2.remove();
+        check(s2.size() == 1 && s2.peek() == 2, "iterator.remove removes bottom element");
+    }
+
+    static void testToArrayAndBulk() {
+        Stack<String> s = new Stack<>();
+        s.push("a"); s.push("b");
+        check(java.util.Arrays.equals(s.toArray(), new Object[]{"a", "b"}), "toArray bottom-to-top");
+        check(java.util.Arrays.equals(s.toArray(new String[2]), new String[]{"a", "b"}),
+              "toArray(T[]) exact");
+        String[] big = new String[5];
+        String[] r = s.toArray(big);
+        check(r == big && big[2] == null, "toArray(roomy) reuses and null-terminates");
+        check(s.containsAll(java.util.Arrays.asList("a")), "containsAll");
+        check(s.removeAll(java.util.Arrays.asList("a")), "removeAll bottom element");
+        check(s.size() == 1 && s.peek().equals("b"), "removeAll keeps top");
+        s.clear();
+        check(s.empty(), "clear empties stack");
+    }
+
+    static void testCloneShallow() {
+        StringBuilder shared = new StringBuilder("m");
+        Stack<StringBuilder> s = new Stack<>();
+        s.push(shared);
+        @SuppressWarnings("unchecked")
+        Stack<StringBuilder> clone = (Stack<StringBuilder>) s.clone();
+        clone.peek().append("ut");
+        check(s.peek().toString().equals("mut"), "clone is shallow: top element shared");
+        clone.push(new StringBuilder("other"));
+        check(s.size() == 1, "clone structurally independent");
+        check(clone.pop().toString().equals("other") && clone.pop().toString().equals("mut"),
+              "clone drain order preserved (top first)");
+    }
+
     public static void main(String[] args) throws Exception {
         testPushPop();
         testPeekSearch();
@@ -177,6 +293,12 @@ public class StackTest {
         testClone();
         testSerialization();
         testStateInvariants();
+        testPushIdentityAndLifo();
+        testEqualsHashCodeListContract();
+        testInheritedVectorLegacyOps();
+        testSubListAndIterator();
+        testToArrayAndBulk();
+        testCloneShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -35,3 +35,25 @@
 ## 注意事项
 
 - 用 HashSet（允许 null，无序）为载体；断言**不锁定迭代顺序**。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法
+- `testEqualsHashCodeContract` — 跨实现相等矩阵：HashSet/LinkedHashSet/TreeSet 同内容两两互等且
+  hashCode 相等；**hashCode = Σ元素hash（"a","b","c"→294、Integer{1,2,3}→6 手算锁定）**；
+  null 元素贡献 0；空集 hashCode==0 且互等；Set 永不 equals List。
+- `testNullElementSemantics` — HashSet 允许 null（add/contains/remove 全通、二次 add false）；
+  TreeSet 自然序 add(null) → NPE。
+- `testToArrayContract` — 复用（==）+ null 终止、恰好、太小新分配、toArray(null) NPE。
+- `testBulkEdgeSemantics` — 空参/不相交/无变化均返回 false；equals 匹配（不同 String 实例）。
+- `testIteratorWriteChannel` — iterator.remove 删最后返回元素；连续第二次 ISE；耗尽 next NSEE。
+
+### 负例精确异常表
+| 操作 | 异常 |
+|---|---|
+| TreeSet 自然序 add(null) | NullPointerException |
+| toArray(null) | NullPointerException |
+| iterator 连续第二次 remove | IllegalStateException |
+| 迭代器耗尽后 next | NoSuchElementException |

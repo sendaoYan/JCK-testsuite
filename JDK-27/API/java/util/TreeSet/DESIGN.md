@@ -45,3 +45,30 @@
 ## 注意事项
 
 - 白盒反射只断言公开结构；serialVersionUID 与 JDK-8 相同。
+
+## 契约深化补充（第二轮：CASE_INSENSITIVE/含边界视图/视图活态+CME/双重 descending/comparator 序列化/nullsFirst/双向 poll/精确特征位/addAll 排序/Sequenced 方法）
+
+新增方法（只追加）：
+
+| 测试点 | 用例方法 |
+|---|---|
+| String.CASE_INSENSITIVE_ORDER：'A'/'a' 重复拒绝、迭代序、大小写无关 contains/remove | testCaseInsensitiveComparator |
+| 含边界布尔四重载视图精确端点 + 越界 add IAE | testInclusiveBoundViews |
+| 视图活态（父增删可见、comparator 同实例、父修改后视图迭代器 CME、嵌套视图写透传） | testViewLivenessAndCme |
+| descendingSet().descendingSet() 等价且活 | testDescendingTwice |
+| comparator 序列化（CASE_INSENSITIVE/nullsFirst 保行为；不可序列化 → NotSerializableException） | testComparatorSerialization |
+| nullsFirst/nullsFirst 全行为 | testNullsFirstOrdering |
+| pollFirst/pollLast 耗尽与交错剥离 | testPollDrainSequences |
+| 中删/ removeIf / stream 保序 | testOrderAfterMiddleRemoval |
+| spliterator 精确特征位 0x55 + getComparator 契约 + trySplit 有序拼接 | testSpliteratorDeep |
+| hashCode 锁 + addAll 排序 + clone 保 comparator | testHashCodeLockAndAddAllSorting |
+| JDK 21+ SequencedSet：getFirst/getLast==first/last、removeFirst/removeLast==poll 语义、reversed()==descendingSet 内容、空集四方法 NSEE（addFirst/addLast UOE 已在 testBlackBox 断言） | testSequencedMethods |
+
+负例精确异常表（新锁定）：
+- 自然序 add/contains/remove(null) → NPE；nullsFirst 比较器下 null 合法
+- 视图越界 add → IllegalArgumentException；父修改后视图迭代器 → CME；subSet(from>to) → IAE
+- TreeSet.addFirst/addLast → UnsupportedOperationException（排序集不可插首位）
+- 空集 getFirst/getLast/removeFirst/removeLast → NoSuchElementException
+- Comparator 不可序列化 → writeObject NotSerializableException
+
+JDK-8 vs JDK-27 差异：JDK 21+ TreeSet 继承 SequencedSet 方法（addFirst/addLast 恒 UOE、getFirst/removeFirst/reversed 可用）——27 侧断言、8 侧无此 API；其余契约双侧一致。

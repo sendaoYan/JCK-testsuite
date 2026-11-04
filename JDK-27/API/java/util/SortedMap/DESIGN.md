@@ -26,3 +26,18 @@
 | reversed | 逆序视图 |
 
 共 6 组场景、约 12 个 check（`testBlackBox()`）。
+
+
+## 5. 契约级深化追加（2026-11，16→78 断言）
+
+新增方法：testIterationOrderIsKeyOrder / testRangeBoundariesExact / testViewLivenessAndCME /
+testEmptyMapRangeViews / testSortedMapEquality / testSequencedDefaults（JDK-21+）。
+
+与 JDK-8 侧同源的五个契约块（迭代序/区间边界/comparator 同一性/视图联动 CME/空图视图/equals）
+之外，SequencedMap 默认方法锁定：
+
+| 维度 | 锁定内容 |
+|---|---|
+| putFirst/putLast | SortedMap default **恒抛 UOE**（位置插入与排序不变量冲突）；TreeMap 载体验证；失败后 map 不变 |
+| reversed() | 返回活降序视图（DescendingSubMap）：put/remove 双向传导；reversed().reversed() 恢复原序；keySet 降序 |
+| firstEntry/lastEntry/pollFirstEntry/pollLastEntry | SequencedMap default 经 firstKey/lastKey 工作；poll 删除首/末；空图全部 null |

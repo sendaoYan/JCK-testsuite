@@ -39,3 +39,24 @@
 ## 注意事项
 
 - 用 TreeMap（自然序，拒 null key）为载体；断言顺序确定。
+
+
+## 5. 契约级深化追加（2026-11，23→120 断言）
+
+新增方法：testNearestMatrix / testEntrySnapshotsImmutable / testPollSequence / testDescendingMirror /
+testInclusiveBoundsExact / testNavigableKeySetView。
+
+| 维度 | 锁定内容 |
+|---|---|
+| 四方法全矩阵 | keys {10,20,30} × probes {5,10,15,20,25,30,35}：lower(<)/floor(<=)/ceiling(>=)/higher(>) 28 格精确值（含 null） |
+| entry 快照不可变 | firstEntry/lastEntry/pollFirst/pollLast/floor/ceiling/lower/higher Entry 的 setValue 全部 UOE；poll 类快照在抛 UOE 前**已删除** entry |
+| poll 序列 | 连续 pollFirstEntry 排干、firstKey 推进；返回当前值；空图 null |
+| descending 镜像 | desc.floor(4)=5 / desc.ceiling(4)=3 / desc.lower(4)=5 / desc.higher(4)=3（reversed comparator 下四方法语义翻转）；desc.descendingMap().equals(原)；desc.subMap/headMap/tailMap 界值按降序解释（subMap(3,true,1,true)=[3,1]）；双向写传导；空 desc null |
+| inclusive 四重载 | subMap/headMap/tailMap 的 inclusive 布尔 × 存在/不存在界值 firstKey/lastKey/size 精确；越界 put IAE（subMap 上界、排他 fromKey）；inclusive 界内 put 合法 |
+| navigableKeySet | 升序迭代、add UOE、remove/pollFirst/pollLast 透传删 entry；descendingKeySet 降序且 remove 透传；descendingKeySet 迭代器父修改后 CME |
+
+### 易错规范细节（实测锁定）
+
+- `pollFirstEntry().setValue(x)` 抛 UOE，但 **entry 已被删除**（poll 先删再返回快照）——断言必须先 expectThrows 再验 size。
+- descendingMap 的 floor/ceiling/lower/higher 与直觉相反：floor 变成「原序中 ≥ probe 的最小」。
+- headMap(k, **true**).put(k, v) 合法（inclusive 含界值写入）；headMap(k).put(k, v)（排他）抛 IAE。

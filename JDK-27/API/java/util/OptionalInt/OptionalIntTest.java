@@ -194,9 +194,117 @@ public class OptionalIntTest {
         testBoundaryEquivalence();
         testNullMatrix();
     }
+
+    // ===================== 契约深化（追加） =====================
+
+    // NSEE 消息文本属于可观察契约面。
+    static void testExceptionMessages() {
+        try {
+            OptionalInt.empty().getAsInt();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty getAsInt NSEE message");
+        }
+        try {
+            OptionalInt.empty().orElseThrow();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty orElseThrow() NSEE message");
+        }
+    }
+
+    // hashCode() == (isPresent) ? Integer.hashCode(value) : 0。
+    static void testHashCodeFormula() {
+        check(OptionalInt.empty().hashCode() == 0, "empty hashCode == 0");
+        check(OptionalInt.of(5).hashCode() == 5, "of(5) hashCode == 5");
+        check(OptionalInt.of(-42).hashCode() == -42, "of(-42) hashCode == -42");
+        check(OptionalInt.of(Integer.MIN_VALUE).hashCode() == Integer.MIN_VALUE,
+              "of(MIN_VALUE) hashCode == Integer.hashCode(MIN_VALUE)");
+        check(OptionalInt.of(Integer.MAX_VALUE).hashCode() == Integer.MAX_VALUE,
+              "of(MAX_VALUE) hashCode == Integer.hashCode(MAX_VALUE)");
+    }
+
+    // equals 只与 OptionalInt 比较，绝不与其它 Optional 形态或包装类相等。
+    static void testEqualsCrossType() {
+        check(!OptionalInt.of(5).equals(null), "equals(null) false");
+        check(!OptionalInt.of(5).equals(Integer.valueOf(5)), "not equal to plain Integer");
+        check(!OptionalInt.of(5).equals(java.util.Optional.of(5)), "not equal to Optional<Integer>");
+        check(!OptionalInt.of(5).equals(java.util.OptionalLong.of(5)), "not equal to OptionalLong");
+        check(OptionalInt.of(5).equals(OptionalInt.of(5)), "equal values equal");
+        check(!OptionalInt.of(5).equals(OptionalInt.empty())
+              && !OptionalInt.empty().equals(OptionalInt.of(5)),
+              "empty/present never equal, symmetric");
+        check(!OptionalInt.empty().equals(java.util.OptionalDouble.empty()), "empty flavors not equal");
+    }
+
+    // toString 恒为 "OptionalInt[<v>]" / "OptionalInt.empty"。
+    static void testToStringExact() {
+        check(OptionalInt.of(Integer.MIN_VALUE).toString().equals("OptionalInt[-2147483648]"),
+              "toString MIN_VALUE");
+        check(OptionalInt.of(Integer.MAX_VALUE).toString().equals("OptionalInt[2147483647]"),
+              "toString MAX_VALUE");
+        check(OptionalInt.of(0).toString().equals("OptionalInt[0]"), "toString 0");
+        check(OptionalInt.of(-1).toString().equals("OptionalInt[-1]"), "toString negative");
+        check(OptionalInt.empty().toString().equals("OptionalInt.empty"), "toString empty");
+    }
+
+    // 回调异常按同一实例透传；容器状态不被破坏。
+    static void testCallbackExceptionRelay() {
+        final RuntimeException relay = new RuntimeException("relay");
+        try {
+            OptionalInt.of(5).ifPresent(v -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "ifPresent relays consumer exception unchanged");
+        }
+        try {
+            OptionalInt.empty().orElseGet(() -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "orElseGet relays supplier exception unchanged");
+        }
+        OptionalInt keep = OptionalInt.of(9);
+        try { keep.ifPresent(v -> { throw relay; }); } catch (RuntimeException ignored) { }
+        check(keep.getAsInt() == 9, "container unchanged after relayed exception");
+    }
+
+    // JDK-9+ 新方法的 null 矩阵与流语义补全。
+    static void testJ9PlusDeep() {
+        // ifPresentOrElse null 矩阵：只对实际走到的分支做非空检查
+        expectThrows(NullPointerException.class,
+            () -> OptionalInt.of(5).ifPresentOrElse(null, () -> { }),
+            "ifPresentOrElse(null action, present) NPE");
+        expectThrows(NullPointerException.class,
+            () -> OptionalInt.empty().ifPresentOrElse(v -> { }, null),
+            "ifPresentOrElse(null emptyAction, empty) NPE");
+        OptionalInt.of(5).ifPresentOrElse(v -> { }, null);
+        passed++; // null emptyAction with present value: no-op
+        OptionalInt.empty().ifPresentOrElse(null, () -> { });
+        passed++; // null action with empty: no-op
+
+        // stream: 恰一个元素、可继续接流水线
+        check(OptionalInt.of(7).stream().sum() == 7, "stream sum");
+        check(OptionalInt.of(7).stream().max().getAsInt() == 7, "stream max");
+        check(OptionalInt.empty().stream().findAny().isEmpty(), "empty stream no element");
+        check(OptionalInt.of(3).stream().limit(1).count() == 1, "stream limit");
+        // orElseThrow() 与 getAsInt 同值同异常
+        check(OptionalInt.of(4).orElseThrow() == OptionalInt.of(4).getAsInt(),
+              "orElseThrow() == getAsInt() on present");
+    }
+
+    static void testContractDeepening() throws Exception {
+        testExceptionMessages();
+        testHashCodeFormula();
+        testEqualsCrossType();
+        testToStringExact();
+        testCallbackExceptionRelay();
+        testJ9PlusDeep();
+    }
+
 public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeepening();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

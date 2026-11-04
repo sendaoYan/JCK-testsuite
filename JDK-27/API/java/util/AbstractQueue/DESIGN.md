@@ -30,3 +30,25 @@ offer/peek/poll 的“返回哨兵版”。链路：new 子类 -> add -> element
 | 集成 | toString 经 iterator 输出 "[m, n]" |
 
 共 5 组场景、约 12 个 check（`testBlackBox()`）。
+
+## 契约深化追加（第二版）
+
+新增 test 方法：testDispatchCounters / testAddFullExactMessage / testClearPollLoop /
+testAddAllSemantics / testAddAllPartialFailure / testInheritedCollectionOps /
+testEqualsHashCodeIdentity。
+
+### 覆盖点
+
+与 JDK-8 侧完全同构（行为双侧实测一致）：
+
+- 分派计数器：add→1 次 offer、element→1 次 peek、remove→1 次 poll（1:1 累计）。
+- add 满抛 ISE，message 恰为 **"Queue full"**。
+- clear 为 poll 循环：2 元素 clear 恰 poll 3 次（n+哨兵）。
+- addAll：空集合 false 零 offer；逐元素经 add；addAll(self) IAE；null 元素**不预检**——
+  NPE 由底层队列中继、null 前元素已入队（NullRejecting 载体 + 部分应用断言）；
+  有界 addAll 部分失败保留先前元素。
+- 继承 contains/remove(Object)/containsAll/toString；身份 equals/hashCode。
+
+### 易错规范细节
+
+- JDK-27 与 JDK-8 在 AbstractQueue 公开行为上无差异（javap 双侧比对确认方法集相同）。

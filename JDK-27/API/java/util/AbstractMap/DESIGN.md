@@ -34,3 +34,18 @@ entrySet -> equals/hashCode -> toString -> clone。
 | clone | protected clone 浅拷贝、副本独立（不共享底层存储） |
 
 共 7 组场景、约 22 个 check（`testBlackBox()`）。
+
+## 深化追加（契约级，第二轮，JDK-27）
+
+新增 testMinimalSubclassContract / testReadOnlyEntrySetClearUoe /
+testSimpleEntryCrossTypeAndSerialization（SimpleEntry 细节另见子目录）：
+
+- **最小子类契约**：只实现 entrySet() 的 AbstractMap 子类——size/isEmpty/get/containsKey/
+  containsValue/remove/toString 全部经 entrySet 继承实现且与后备 HashMap 互通；inherited
+  remove 经迭代器删除并返回旧值；默认 put/putAll → UOE；默认 clear 委托 entrySet().clear()
+  （unmodifiable entrySet 时 → UOE 且 map 完好）。
+- **equals/hashCode 契约**：最小子类与同内容 HashMap 互相 equals、hashCode 相等；
+  equals(null)/equals(non-Map) false。
+- **Map.Entry 跨类型 equals**：SimpleEntry 与 SimpleImmutableEntry 同 k/v 互相 equals、与
+  HashMap entry 视图 equals；hashCode 公式 k.hashCode()^v.hashCode()==106 字面量锁定；
+  两类 entry 均可序列化且 round-trip 类还原。

@@ -23,6 +23,7 @@ import java.util.ConcurrentModificationException;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Vector;
 
 public class VectorTest {
@@ -246,6 +247,153 @@ public class VectorTest {
         check(v.isEmpty() && !v.contains("z"), "clear removes all");
     }
 
+    // ---- deepened contract coverage II ---------------------------------------
+
+    static void testHashCodeFormula() {
+        check(new Vector<String>().hashCode() == 1, "hashCode of empty vector is 1");
+        check(new Vector<>(Arrays.asList("a")).hashCode() == 128, "hashCode [a] = 128");
+        check(new Vector<>(Arrays.asList("a", "b")).hashCode() == 4066, "hashCode [a,b] = 4066");
+        check(new Vector<>(Arrays.asList("a", "b", null)).hashCode() == 126046,
+              "hashCode [a,b,null] = 126046 (AbstractList algorithm)");
+        check(new Vector<String>().capacity() == 10, "default capacity exactly 10");
+        check(new Vector<String>(7).capacity() == 7, "Vector(7) capacity 7");
+    }
+
+    static void testEnumerationContract() {
+        // empty enumeration: nextElement throws NoSuchElementException
+        checkThrows(NoSuchElementException.class,
+                    new Vector<String>().elements()::nextElement, "empty enumeration next NSEE");
+        // Vector's legacy Enumeration is NOT fail-fast (unlike its Iterator)
+        Vector<String> v = new Vector<>(Arrays.asList("a", "b", "c"));
+        Enumeration<String> e = v.elements();
+        check(e.nextElement().equals("a"), "first element");
+        v.add("d");
+        check(e.hasMoreElements(), "enumeration still reports more after structural add (not fail-fast)");
+        // contrast: the iterator IS fail-fast for the same modification
+        Vector<String> v2 = new Vector<>(Arrays.asList("a", "b", "c"));
+        Iterator<String> it = v2.iterator();
+        it.next();
+        v2.add("d");
+        checkThrows(ConcurrentModificationException.class, it::next, "iterator CME for same change");
+        // asIterator-style loop via enumeration over live vector copy of contents
+        Vector<Integer> vi = new Vector<>(Arrays.asList(1, 2, 3));
+        Enumeration<Integer> en = vi.elements();
+        int sum = 0;
+        while (en.hasMoreElements()) sum += en.nextElement();
+        check(sum == 6, "enumeration sums all elements");
+    }
+
+    static void testElementAtBounds() {
+        Vector<String> v = new Vector<>(Arrays.asList("a", "b"));
+        checkThrows(ArrayIndexOutOfBoundsException.class, () -> v.elementAt(2), "elementAt(size) AIOOBE");
+        checkThrows(ArrayIndexOutOfBoundsException.class, () -> v.elementAt(-1), "elementAt(-1) AIOOBE");
+        checkThrows(ArrayIndexOutOfBoundsException.class, () -> v.insertElementAt("z", 3),
+                    "insertElementAt(size+1) AIOOBE");
+        checkThrows(ArrayIndexOutOfBoundsException.class, () -> v.removeElementAt(2),
+                    "removeElementAt(size) AIOOBE");
+        checkThrows(ArrayIndexOutOfBoundsException.class, () -> v.setElementAt("z", 2),
+                    "setElementAt(size) AIOOBE");
+        check(v.equals(Arrays.asList("a", "b")), "failed legacy ops leave vector intact");
+        v.insertElementAt("z", 2); // at size == append
+        check(v.equals(Arrays.asList("a", "b", "z")), "insertElementAt(size) appends");
+        v.setElementAt("Z", 2);
+        check(v.get(2).equals("Z"), "setElementAt replaces in place");
+        checkThrows(NoSuchElementException.class, new Vector<String>()::firstElement,
+                    "firstElement empty NSEE");
+        checkThrows(NoSuchElementException.class, new Vector<String>()::lastElement,
+                    "lastElement empty NSEE");
+    }
+
+    static void testIndexOfFromIndex() {
+        Vector<String> v = new Vector<>(Arrays.asList("a", "b", "a", "b", "a"));
+        check(v.indexOf("a", 1) == 2, "indexOf from index skips earlier");
+        check(v.indexOf("a", 4) == 4, "indexOf from last position");
+        check(v.indexOf("a", 5) == -1, "indexOf from size returns -1");
+        check(v.indexOf("z", 0) == -1, "indexOf absent -1");
+        check(v.lastIndexOf("a", 3) == 2, "lastIndexOf bounded above by 3");
+        check(v.lastIndexOf("a", 1) == 0, "lastIndexOf scans backward from bound");
+        check(v.lastIndexOf("a", 0) == 0, "lastIndexOf at 0");
+        check(v.lastIndexOf("a") == 4, "lastIndexOf unbounded");
+        // null search
+        Vector<String> vn = new Vector<>(Arrays.asList("x", null, "y"));
+        check(vn.indexOf(null, 1) == 1, "indexOf(null, from)");
+        check(vn.lastIndexOf(null, 2) == 1, "lastIndexOf(null, bound)");
+        // fromIndex > size tolerated for indexOf (returns -1)
+        check(v.indexOf("a", 100) == -1, "indexOf fromIndex > size yields -1");
+    }
+
+    static void testListIteratorContract() {
+        Vector<String> v = new Vector<>(Arrays.asList("a", "b", "c"));
+        java.util.ListIterator<String> li = v.listIterator(1);
+        check(li.previous().equals("a"), "previous from index 1");
+        check(li.next().equals("a") && li.next().equals("b"), "forward pair");
+        li.set("B");
+        check(v.get(1).equals("B"), "listIterator set reflected");
+        li.add("X");
+        check(v.equals(Arrays.asList("a", "B", "X", "c")), "listIterator add");
+        check(li.previousIndex() == 2 && li.nextIndex() == 3, "cursor after add");
+        checkThrows(IllegalStateException.class, () -> li.set("y"), "set after add ISE");
+        // iterator remove passes through
+        Iterator<String> it = v.iterator();
+        it.next();
+        it.remove();
+        check(v.equals(Arrays.asList("B", "X", "c")), "iterator.remove");
+        // forEachRemaining
+        StringBuilder sb = new StringBuilder();
+        v.listIterator(1).forEachRemaining(sb::append);
+        check(sb.toString().equals("Xc"), "forEachRemaining from index 1");
+        // fail-fast for listIterator
+        java.util.ListIterator<String> li2 = v.listIterator();
+        li2.next();
+        v.addElement("n");
+        checkThrows(ConcurrentModificationException.class, li2::next, "listIterator CME after addElement");
+    }
+
+    static void testSubListContract() {
+        Vector<Integer> v = new Vector<>(Arrays.asList(1, 2, 3, 4));
+        List<Integer> sub = v.subList(1, 3);
+        check(sub.hashCode() == Arrays.asList(2, 3).hashCode(), "subList hashCode own content");
+        check(sub.equals(Arrays.asList(2, 3)) && Arrays.asList(2, 3).equals(sub), "subList equals segment");
+        sub.remove(0);
+        check(v.equals(Arrays.asList(1, 3, 4)), "subList remove shrinks parent");
+        check(v.subList(0, 0).isEmpty(), "empty subList view");
+        check(v.subList(v.size(), v.size()).isEmpty(), "tail empty subList (size,size)");
+        checkThrows(IllegalArgumentException.class, () -> v.subList(2, 1), "subList(from>to) IAE");
+        checkThrows(IndexOutOfBoundsException.class, () -> v.subList(-1, 2),
+                    "subList(-1,2) IOOBE");
+        checkThrows(IndexOutOfBoundsException.class, () -> v.subList(0, 5),
+                    "subList(0,size+1) IOOBE");
+    }
+
+    static void testNegativeIncrementAndLegacy() {
+        // negative capacityIncrement is accepted (grows by doubling when increment <= 0)
+        Vector<String> v = new Vector<>(2, -1);
+        check(v.capacity() == 2, "Vector(2,-1) initial capacity 2");
+        v.add("a"); v.add("b"); v.add("c");
+        check(v.size() == 3 && v.capacity() >= 3, "grows despite negative increment");
+        v.removeElement("c");
+        check(v.equals(Arrays.asList("a", "b")), "removeElement(Object) returns removed state");
+        check(!v.removeElement("zz"), "removeElement absent returns false");
+        check(v.removeElement("a"), "removeElement present returns true");
+        // removeAllElements resets
+        v.addElement("q");
+        v.removeAllElements();
+        check(v.isEmpty(), "removeAllElements empties");
+    }
+
+    static void testNullQueriesAndBulk() {
+        Vector<String> v = new Vector<>(Arrays.asList("a", null, "b"));
+        check(v.containsAll(Arrays.asList("a", null)), "containsAll with null");
+        check(v.removeAll(Arrays.asList((String) null)), "removeAll(null element)");
+        check(v.equals(Arrays.asList("a", "b")), "null removed by removeAll");
+        check(v.retainAll(Arrays.asList("b")), "retainAll true when changed");
+        check(v.equals(Arrays.asList("b")), "retainAll keeps b");
+        check(!v.retainAll(Arrays.asList("b")), "retainAll false when unchanged");
+        v.insertElementAt(null, 0);
+        check(v.firstElement() == null, "firstElement null element");
+        check(v.lastElement().equals("b"), "lastElement");
+    }
+
     public static void main(String[] args) throws Exception {
         testBasics();
         testLegacy();
@@ -262,6 +410,14 @@ public class VectorTest {
         testSerialization();
         testCrossImplEquals();
         testStateInvariants();
+        testHashCodeFormula();
+        testEnumerationContract();
+        testElementAtBounds();
+        testIndexOfFromIndex();
+        testListIteratorContract();
+        testSubListContract();
+        testNegativeIncrementAndLegacy();
+        testNullQueriesAndBulk();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

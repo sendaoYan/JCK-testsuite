@@ -49,3 +49,28 @@
 ## 注意事项
 
 纯内存；无全局副作用；headless-safe 不加 `@key`。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| 精确异常消息：set(-1)="bitIndex < 0: -1"、set(5,2)/flip(5,2)="fromIndex: 5 > toIndex: 2"、nextSetBit(-1)="fromIndex < 0: -1"、previousSetBit(-2)="fromIndex < -1: -2" | testExceptionMessages |
+| and/or/xor/andNot/intersects(null) → NPE | testNullNpe |
+| size()：默认 64、BitSet(0)→0、BitSet(63)→64、BitSet(65)→128、%64==0 且 ≥length | testSize |
+| toByteArray 小端精确：{0,3,8}→[0x09,0x01]；bit9→第二字节 0x02；toLongArray {0,64}→[1,1] | testByteArrayExact |
+| valueOf(ByteBuffer.wrap(data,1,2)) 只读切片小端；valueOf(LongBuffer)==valueOf(long[])；空 buffer→空集 | testByteBufferValueOf |
+| toString 精确："{0, 3, 5}"/"{7}"/"{1000}"/"{}" | testToStringExact |
+| equals/hashCode：空集 hash==1234（文档值）、{0,3,5} hash==1275、不同容量同内容等、清空回 1234 | testEqualsHashCodeDeep |
+| 范围边界：from==to 四方法均合法空区间；get 超长全 0；clear 区间不含 toIndex | testRangeEdgeCases |
+| 跨字边界：flip(63,65)、bits 63/64/127、previous/next 跨字、512 位基数 74=stream count、length==512 | testCrossWordBoundaries |
+| 逻辑运算不修改参数；and 收缩 length（超参数长的位被清）；clear() 清所有远位 | testLogicalOperandUnmodified |
+| 超长探针：empty nextClearBit(100)==100、previousClearBit(100)==100、nextSetBit(length)==-1 | testBeyondLengthProbes |
+| 序列化深往返：稀疏高位（0,63,64,511）equals+hash 保持、可继续修改 | testSerializationDeep |
+
+### 易错细节
+
+- **空集 hashCode() == 1234**（javadoc 文档值）；{0,3,5} 稳定为 1275。
+- `BitSet(0).size() == 0`（零容量合法退化）；`BitSet(63).size() == 64`。
+- 小端序：bit 0 → 字节最低位；bit 64 → 第二个 long 的 bit 0。
+- `previousSetBit(-2)` 的消息是 `"fromIndex < -1: -2"`（下界是 -1 而非 0）。
+- `and` 后 length 收缩到参数长度（超出参数 words 的位被清 0）。

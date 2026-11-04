@@ -183,6 +183,116 @@ public class SplittableRandomTest {
         check(java.util.Arrays.equals(da, db), "doubles deterministic");
     }
 
+    // ===================== 契约深化：IAE 精确消息/首值序列锁/split 确定性/无 setSeed/8 侧无 nextGaussian|nextBytes =====================
+
+    static void testIaeMessages() {
+        // 双侧一致的消息（JDK-8 与 JDK-27 相同文本）
+        try {
+            new SplittableRandom(1L).nextInt(0);
+            check(false, "nextInt(0) should throw");
+        } catch (IllegalArgumentException e) {
+            check("bound must be positive".equals(e.getMessage()), "nextInt(0) message exact");
+        }
+        try {
+            new SplittableRandom(1L).nextInt(5, 5);
+            check(false, "nextInt(5,5) should throw");
+        } catch (IllegalArgumentException e) {
+            check("bound must be greater than origin".equals(e.getMessage()),
+                  "nextInt(origin==bound) message exact");
+        }
+        try {
+            new SplittableRandom(1L).nextLong(-1);
+            check(false, "nextLong(-1) should throw");
+        } catch (IllegalArgumentException e) {
+            check("bound must be positive".equals(e.getMessage()), "nextLong(-1) message exact");
+        }
+        try {
+            new SplittableRandom(1L).ints(-1L);
+            check(false, "ints(-1) should throw");
+        } catch (IllegalArgumentException e) {
+            check("size must be non-negative".equals(e.getMessage()), "ints(-1) message exact");
+        }
+        // JDK-8 特有消息（JDK-27 走 RandomGenerator 默认实现，文本不同，见 testJdk8OnlySurface）
+        try {
+            new SplittableRandom(1L).nextDouble(0.0);
+            check(false, "nextDouble(0.0) should throw");
+        } catch (IllegalArgumentException e) {
+            check("bound must be positive".equals(e.getMessage()),
+                  "nextDouble(0.0) message exact on JDK-8");
+        }
+    }
+
+    static void testFirstValuesLocked() {
+        // 固定 seed 42 的 nextInt() 前 5 个值精确锁（JDK-8 与 JDK-27 实测完全一致）
+        int[] expected = {-491277234, 909395113, -1877322334, -1024560952, -1540993733};
+        SplittableRandom r = new SplittableRandom(42L);
+        for (int i = 0; i < expected.length; i++)
+            check(r.nextInt() == expected[i], "SR(42) nextInt #" + i + " locked value");
+        // 第二个同 seed 实例完全复现
+        SplittableRandom r2 = new SplittableRandom(42L);
+        boolean same = true;
+        for (int i = 0; i < expected.length; i++) if (r2.nextInt() != expected[i]) same = false;
+        check(same, "SR(42) reproduces locked sequence");
+        // nextLong/nextDouble/nextBoolean 同 seed 双实例 5 值全等
+        SplittableRandom la = new SplittableRandom(7L), lb = new SplittableRandom(7L);
+        boolean lsame = true;
+        for (int i = 0; i < 5; i++) if (la.nextLong() != lb.nextLong()) lsame = false;
+        check(lsame, "SR(7) nextLong deterministic across instances");
+        SplittableRandom da = new SplittableRandom(8L), db = new SplittableRandom(8L);
+        boolean dsame = true;
+        for (int i = 0; i < 5; i++) if (da.nextDouble() != db.nextDouble()) dsame = false;
+        check(dsame, "SR(8) nextDouble deterministic across instances");
+        SplittableRandom ba = new SplittableRandom(9L), bb = new SplittableRandom(9L);
+        boolean bsame = true;
+        for (int i = 0; i < 5; i++) if (ba.nextBoolean() != bb.nextBoolean()) bsame = false;
+        check(bsame, "SR(9) nextBoolean deterministic across instances");
+    }
+
+    static void testSplitContracts() {
+        // 同 seed 双亲实例各 split() 一次：子实例序列确定（SplitMix 派生）
+        SplittableRandom p1 = new SplittableRandom(1L), p2 = new SplittableRandom(1L);
+        check(p1.split().nextLong() == p2.split().nextLong(),
+              "split() children deterministic from equal seeds");
+        // 子实例继续可用且值域合法
+        SplittableRandom child = new SplittableRandom(3L).split();
+        for (int i = 0; i < 5; i++) {
+            int v = child.nextInt(100);
+            check(v >= 0 && v < 100, "split child nextInt(100) in range #" + i);
+        }
+        // 子实例不受父实例后续取值影响（独立性 smoke）
+        SplittableRandom parent = new SplittableRandom(4L);
+        SplittableRandom c1 = parent.split();
+        long first = c1.nextLong();
+        parent.nextLong();   // 推进父状态
+        check(c1.nextLong() != first || c1.nextLong() != first,
+              "child sequence continues after parent advances");
+    }
+
+    static void testSurfaceContract() {
+        // 种子只能经构造传入：SplittableRandom 没有 setSeed
+        try {
+            SplittableRandom.class.getMethod("setSeed", long.class);
+            check(false, "setSeed must not exist");
+        } catch (NoSuchMethodException expected) {
+            check(true, "no setSeed: seed only via constructor");
+        }
+        // JDK-8 面：nextGaussian / nextBytes 不存在（JDK-17 起经 RandomGenerator 提供）
+        try {
+            SplittableRandom.class.getMethod("nextGaussian");
+            check(false, "nextGaussian must be absent on JDK-8");
+        } catch (NoSuchMethodException expected) {
+            check(true, "nextGaussian absent on JDK-8 (RandomGenerator is JDK-17+)");
+        }
+        try {
+            SplittableRandom.class.getMethod("nextBytes", byte[].class);
+            check(false, "nextBytes must be absent on JDK-8");
+        } catch (NoSuchMethodException expected) {
+            check(true, "nextBytes absent on JDK-8 (RandomGenerator is JDK-17+)");
+        }
+        check(java.lang.reflect.Modifier.isFinal(SplittableRandom.class.getModifiers()),
+              "class is final");
+    }
+
     public static void main(String[] args) {
         testDeterminism();
         testBoundAndSplit();
@@ -192,6 +302,10 @@ public class SplittableRandomTest {
         testNextBoolean();
         testSplitIndependence();
         testStreams();
+        testIaeMessages();
+        testFirstValuesLocked();
+        testSplitContracts();
+        testSurfaceContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

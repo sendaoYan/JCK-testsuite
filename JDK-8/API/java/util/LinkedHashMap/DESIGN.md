@@ -54,3 +54,27 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 深化追加（契约级，第二轮，JDK-8）
+
+新增 testComputeMergeMatrix / testViewWriteChannels / testAccessOrderFineGrained /
+testHashCodeFormula / testSerializationAccessOrder：
+
+- **compute-merge 全分支矩阵**：putIfAbsent（present 保旧返回旧值/absent 插入）、remove(k,v)
+  （值不匹配 false 不动条目/匹配才删）、replace(K,V)（absent 返回 null 且不插入）、
+  replace(K,old,new)（旧值精确匹配）、getOrDefault 双分支；computeIfAbsent（absent 插入、
+  present **不调函数**（计数器证明）、函数返回 null 不落 entry 且 containsKey false）、
+  computeIfPresent（present 计算、absent 不调函数、返回 null 删 entry）、compute（absent 插入
+  v==null/present 重算/返回 null 删）、merge（absent 直接放 value 不调函数/present remap/
+  返回 null 删）；**每个映射函数异常分支：同一异常实例原样透传（assertSame 语义）且条目不变**；
+  null remappingFunction / merge null value → NPE。
+- **视图写通道 + fail-fast**：keySet/values/entrySet 三个视图的 iterator.remove 透传删映射、
+  entry.setValue 反写并返回旧值；三个视图 add → UOE；迭代中结构性 put → CME；
+  **iterator.remove 是迭代中唯一合法结构修改**（之后继续 next 不抛）；entry.setValue 属非结构
+  修改（迭代中 setValue 后继续 next 不抛 CME）。
+- **访问序细粒度**：putIfAbsent(present)/getOrDefault/merge(present)/compute(present) 均记录
+  访问（重排）；containsKey/containsValue **不**记录访问。
+- **hashCode 公式锁定**：Map.hashCode = Σ (k.hashCode ^ v.hashCode)；{a=1,b=2} == 192 字面量
+  锁定；null value 贡献 k.hashCode ^ 0。
+- **序列化保序 accessOrder**：accessOrder=true 序列化 round-trip 后 get 仍会重排 → 标志位被
+  序列化保留。

@@ -37,3 +37,23 @@
 ## 注意事项
 
 - 用 `AbstractMap.SimpleEntry`（允许 null 键值、实现 equals/hashCode）为载体。
+
+## 5. 契约级深化追加（2026-11，14→55 断言）
+
+新增方法：testLiveEntryContract / testSimpleEntryFamily / testEntrySetIterationEntries /
+testComparingNullHostility。
+
+| 维度 | 锁定内容 |
+|---|---|
+| live entry 契约 | entrySet 迭代所得 entry：setValue 返回旧值并反写底层 Map；与独立构造的 SimpleEntry/SimpleImmutableEntry 跨实现 equals 互为对称 |
+| hashCode 公式 | key.hashCode() ^ value.hashCode()；"a"=5 → 97^5==100；null key/value 各贡献 0；双 null hash 0 |
+| equals 矩阵 | 同键同值 true（跨实现）；异键/异值 false；vs null false；vs 非 Entry 对象 false；自反 true |
+| SimpleEntry 家族 | 拷贝构造 equal 且 setValue 后独立；SimpleImmutableEntry.setValue UOE 且值不变；两 wrapper 均容 null 键值；toString 恰为 "k=1" 形式 |
+| 快照语义 | 拷贝构造捕获即时值，live entry 后续 setValue 不影响快照 |
+| comparing null 敌意 | comparingByValue() 自然序遇 null value NPE；配 nullsFirst/nullsLast 比较器则按 null 排序不抛；comparingByValue 排序对相等值稳定 |
+
+### 易错规范细节（实测锁定）
+
+- live entry（HashMap entrySet 迭代器返回）与 `new SimpleEntry<>(k,v)` **equals 为 true**：Entry.equals 与实现类无关，仅看键值。
+- `SimpleImmutableEntry.setValue` 抛 UOE 但 `getValue` 不变——不可变语义完整。
+- 自然序 comparingByKey/comparingByValue 对 null 元素抛 NPE 是比较器契约，不是 Entry 契约；换 null 容忍比较器即可排序。

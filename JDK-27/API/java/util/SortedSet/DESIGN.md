@@ -26,3 +26,32 @@
 | spliterator | 可用 |
 
 共 6 组场景、约 10 个 check（`testBlackBox()`）。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法
+- `testRangeMatrix` — 边界矩阵（同 8 侧）：headSet 排他/tailSet 包含、from==to 合法空区间、
+  界外键、视图再取视图越界 IAE、subSet(from>to) IAE。
+- `testViewMutationRules` — 视图写规则矩阵：越界 add IAE、透传/size 联动、
+  tailSet.add(已存在 from) false、视图 clear 只清区间。
+- `testIterationOrder` — 升序迭代/toArray、reverseOrder 降序、comparator() 同实例（==）、
+  空集 first/last NSEE。
+- `testSpliteratorContract` — ORDERED|SORTED|DISTINCT + SIZED；getComparator()==set.comparator()。
+- `testSequencedDefaults`（JDK-21+）— getFirst/getLast==first/last；removeFirst/removeLast 删除并返回
+  端点且作用底层；**addFirst/addLast → UOE（会破坏排序序）**；reversed() 为活视图（父增删可见、
+  视图删透传）、reversed().reversed() 恢复升序；空集 getFirst/getLast/removeFirst/removeLast → NSEE。
+
+### 负例精确异常表
+| 操作 | 异常 |
+|---|---|
+| 空 first()/last()/getFirst()/getLast() | NoSuchElementException |
+| 空 removeFirst()/removeLast()（TreeSet 可变） | NoSuchElementException |
+| addFirst/addLast（TreeSet） | UnsupportedOperationException |
+| add(null)（自然序） | NullPointerException |
+| subSet(from>to) / 视图 add 越界 | IllegalArgumentException |
+
+### JDK-8 vs JDK-27 差异（本类）
+- 27 侧 SortedSet extends **SequencedSet**（JDK-21+）：新增 default addFirst/addLast（TreeSet 上 UOE）、
+  getFirst/getLast/removeFirst/removeLast、reversed()；8 侧无这些方法。

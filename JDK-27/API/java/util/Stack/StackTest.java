@@ -187,6 +187,92 @@ public class StackTest {
         testSearch();
         testInheritedVector();
     }
+
+    // ---- deepened II: push 引用同一性 / equals-hashCode 公式 / Vector legacy /
+    //      subList+迭代器 CME / SequencedCollection 继承（栈顶=last）-------------------
+
+    static void testPushIdentityAndLifo() {
+        Object o1 = new Object(), o2 = new Object();
+        Stack<Object> s = new Stack<>();
+        check(s.push(o1) == o1 && s.push(o2) == o2, "push returns identical reference");
+        Stack<String> st = new Stack<>();
+        st.push("a"); st.push("b"); st.push("c");
+        StringBuilder sb = new StringBuilder();
+        while (!st.empty()) sb.append(st.pop());
+        check(sb.toString().equals("cba"), "drain order is exact LIFO (c,b,a)");
+        expect(EmptyStackException.class, st::peek, "peek empty EmptyStackException");
+        expect(EmptyStackException.class, new Stack<String>()::pop, "pop empty EmptyStackException");
+        check(st.push("r").equals("r") && st.pop().equals("r"), "refill after drain");
+    }
+
+    static void testEqualsHashCodeListContract() {
+        check(new Stack<String>().hashCode() == 1, "empty stack hashCode 1");
+        Stack<String> s1 = new Stack<>();
+        s1.push("a");
+        check(s1.hashCode() == 128, "stack [a] hashCode 128");
+        s1.push("b");
+        check(s1.hashCode() == 4066, "stack [a,b] hashCode 4066");
+        java.util.List<String> al = new java.util.ArrayList<>(java.util.Arrays.asList("a", "b"));
+        check(s1.equals(al) && al.equals(s1), "Stack equals ArrayList bottom-to-top");
+        check(s1.hashCode() == al.hashCode(), "Stack/List same hashCode");
+    }
+
+    static void testInheritedVectorLegacyOps() {
+        Stack<String> s = new Stack<>();
+        s.addElement("a");
+        s.addElement("b");
+        check(s.peek().equals("b") && s.size() == 2, "addElement behaves as push");
+        s.insertElementAt("bottom", 0);
+        check(s.get(0).equals("bottom") && s.peek().equals("b"), "insertElementAt grows bottom, top unchanged");
+        check(s.firstElement().equals("bottom") && s.lastElement().equals("b"),
+              "firstElement=bottom, lastElement=top");
+        s.setElementAt("B", s.size() - 1);
+        check(s.peek().equals("B"), "setElementAt at top changes peek");
+        s.add(0, "floor");
+        check(s.pop().equals("B"), "pop still takes last element after bottom insert");
+        StringBuilder sb = new StringBuilder();
+        java.util.Enumeration<String> e = s.elements();
+        while (e.hasMoreElements()) sb.append(e.nextElement());
+        check(sb.toString().equals("floorbottoma"), "elements() enumerates bottom-to-top ([floor,bottom,a])");
+    }
+
+    static void testSubListAndIterator() {
+        Stack<Integer> s = new Stack<>();
+        s.push(1); s.push(2); s.push(3); s.push(4);
+        java.util.List<Integer> sub = s.subList(1, 3);
+        check(sub.equals(java.util.Arrays.asList(2, 3)), "subList is bottom-to-top segment");
+        sub.set(0, 20);
+        check(s.get(1) == 20, "subList set reflects into stack");
+        sub.remove(0);
+        check(s.size() == 3 && s.peek() == 4, "subList remove shrinks stack, top intact");
+        java.util.Iterator<Integer> it = s.iterator();
+        it.next();
+        s.push(9);
+        expect(java.util.ConcurrentModificationException.class, it::next, "Stack iterator CME after push");
+        Stack<Integer> s2 = new Stack<>();
+        s2.push(1); s2.push(2);
+        java.util.Iterator<Integer> it2 = s2.iterator();
+        it2.next();
+        it2.remove();
+        check(s2.size() == 1 && s2.peek() == 2, "iterator.remove removes bottom element");
+    }
+
+    static void testSequencedDefaultsInherited() {
+        // Stack is a Vector: SequencedCollection first == stack bottom, last == stack top
+        Stack<String> s = new Stack<>();
+        s.push("a"); s.push("b"); s.push("c");
+        check(s.getFirst().equals("a"), "getFirst is stack bottom");
+        check(s.getLast().equals("c"), "getLast is stack top");
+        s.addLast("d");
+        check(s.peek().equals("d"), "addLast equivalent to push");
+        check(s.removeLast().equals("d"), "removeLast equivalent to pop");
+        check(s.reversed().equals(java.util.Arrays.asList("c", "b", "a")),
+              "reversed() is top-to-bottom List");
+        expect(java.util.NoSuchElementException.class, new Stack<String>()::getLast,
+               "empty getLast NSEE (Sequenced default)");
+        check(s.size() == 3 && s.peek().equals("c"), "state intact after sequenced ops");
+    }
+
 public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
@@ -194,6 +280,11 @@ public static void main(String[] args) throws Exception {
         testNullAllowance();
         testClone();
         testSerialization();
+        testPushIdentityAndLifo();
+        testEqualsHashCodeListContract();
+        testInheritedVectorLegacyOps();
+        testSubListAndIterator();
+        testSequencedDefaultsInherited();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

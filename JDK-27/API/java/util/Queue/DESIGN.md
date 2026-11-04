@@ -24,3 +24,23 @@ FIFO 队列接口。继承 Collection。
 | 空队列 | peek/poll 返回 null、element/remove 抛 NSEE |
 
 共 4 组场景、约 10 个 check（`testBlackBox()`）。
+
+## 契约深化追加（第二版）
+
+新增 test 方法：testSixMethodTwoStateTable / testFifoDiscipline / testCrossCarrierNullSemantics /
+testRemoveObjectSemantics / testInterfaceShape。
+
+### 覆盖点
+
+- 六方法两态表（add/offer/remove/poll/element/peek × 空/非空）：返回值、异常、size 副作用逐格断言；
+  空态 poll/peek 反复调用稳定 null。
+- FIFO 纪律：交错 offer/poll 仍先进先出；排干后再入队可用。
+- 跨载体 null 语义：ArrayDeque 拒 null（NPE）vs LinkedList 容 null（contains(null) true；
+  poll 返回 null 有歧义——空 vs null 元素，分两态断言）。
+- remove(Object)：头/中/尾/缺失 false/重复只删首现；containsAll 子集判定。
+- 接口形状：Queue 仍**无 default 方法**；**JDK-21+ Queue 未加入 SequencedCollection**
+  （isAssignableFrom 为 false——与 List/Deque 不同，锁入断言）。
+
+### 易错规范细节
+
+- `element()`/`remove()` 空态抛 NoSuchElementException，`peek()`/`poll()` 空态返回 null。

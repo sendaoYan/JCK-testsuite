@@ -41,3 +41,14 @@ if (s.empty()) { ... }               // 判空
 - 边界/异常：空栈 `pop/peek` → `EmptyStackException`；`search` 缺失 → -1。
 
 健壮性：固定输入、无墙钟/随机；顺序结构无迭代顺序依赖；无全局副作用；headless，无 `@key`。
+
+## 深化批次 II（契约级追加）
+
+- **push 引用同一性**：`push(o) == o`；完整 LIFO 排干序列（c,b,a）；空 pop/peek→EmptyStackException；排干后可重灌。
+- **equals/hashCode 走 List 公式**：[a]=128、[a,b]=4066；与 ArrayList 同内容互相 equals。
+- **Vector legacy 继承**：addElement≡push、insertElementAt 底部不影响 peek、firstElement=栈底/lastElement=栈顶、
+  setElementAt(顶) 改变 peek、底部 add(0,e) 后 pop 仍取最后元素。
+- **subList=底部起的段**：set/remove 透传且不影响栈顶；Iterator CME（push 后）；iterator.remove 删栈底。
+- **clone 浅拷贝**：元素共享（StringBuilder 突变互见）。
+- **JDK-27 追加**：SequencedCollection 继承语义——getFirst=栈底、getLast=栈顶、addLast≡push、
+  removeLast≡pop、reversed()=顶到底 List；空表 getLast→NSEE。

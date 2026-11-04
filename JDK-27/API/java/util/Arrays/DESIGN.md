@@ -51,3 +51,25 @@ int sum = Arrays.stream(a).sum();        // 流聚合
 
 健壮性：固定输入、无墙钟/随机；对象排序稳定性按规范断言（JDK 保证稳定）；`compare/compareUnsigned`
 按确定符号断言；无全局副作用；headless，无 `@key`。
+
+## 第 2 轮深化（2026-11，契约覆盖，94→213 断言）
+
+新增方法：testSortAllPrimitiveTypes、testSortStability、testBinarySearchAllTypes、
+testStreamRangeViolations、testNullArrayContracts、testCopyFillAllTypes、
+testEqualsFloatingSemantics、testCompareMismatchJDK9、testAsListDeepContract、
+testSpliteratorCharacteristics。
+
+### 本轮锁定的易错规范细节（先探测后断言，jdk-27.0.1 实测）
+
+- **null 数组契约矩阵**：`equals(null,null)=true`、`equals(null,arr)=false`、`hashCode(null)=0`、
+  `toString(null)="null"`。
+- **equals 浮点语义**：NaN==NaN true、+0.0!=-0.0。
+- **JDK-9+ compare/mismatch 家族**：`compare` 字典序 + 长度差（短前缀为小）；`mismatch` 首个不同下标、无不同返回 -1；ranged `equals(a,1,3,b,1,3)`；`compare(a,from,to,cmp)` / `mismatch(a,f,t,cmp)` 对象版；`compareUnsigned`（byte/short/int/long：0xFF 系统性>0x7F 系）；带 Comparator 的 null → NPE。
+- **`compare(double[])` 字典序用原始比较**：+0.0>-0.0、NaN>+Inf（与 equals 的 Double.compare 语义同为全序但方向锁定）。
+- **asList 深契约**：iterator `remove` 未 next 先调抛 **UnsupportedOperationException（JDK-27）**——与 JDK-8 相反（8 抛 ISE），版本差异双侧锁定；`set` 联动、add/remove UOE。
+- **spliterator 特征**：`0x4450`（ORDERED|SIZED|IMMUTABLE|SUBSIZED，无 NONNULL）。
+- **stream range 违规**：from>to IAE、负 from/超长 to AIOOBE。
+
+## 第 2 轮健壮性
+
+- 全部固定输入；无随机、无墙钟。

@@ -179,7 +179,157 @@ public class OptionalTest {
         check(Optional.empty().toString().equals("Optional.empty"), "toString empty");
     }
 
-    public static void main(String[] args) {
+    // ============ contract deepening (appended) ============
+
+    // NSEE message text is part of the observable contract surface.
+    static void testExceptionMessages() {
+        try {
+            Optional.empty().get();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty get() NSEE message");
+        }
+    }
+
+    // hashCode() == (value == null) ? 0 : value.hashCode(); empty holds null -> 0.
+    static void testHashCodeFormula() {
+        check(Optional.empty().hashCode() == 0, "empty hashCode == 0");
+        check(Optional.of(1).hashCode() == 1, "of(1) hashCode == 1 (Integer.hashCode)");
+        check(Optional.of("a").hashCode() == "a".hashCode(), "of(x) hashCode == x.hashCode()");
+        java.util.List<String> val = java.util.Arrays.asList("k");
+        check(Optional.of(val).hashCode() == val.hashCode(), "hashCode delegates to value");
+        check(Optional.ofNullable(null).hashCode() == 0, "ofNullable(null) hashCode == 0");
+        // mutating the held value is reflected (Optional holds a reference, not a snapshot)
+        java.util.ArrayList<String> dyn = new java.util.ArrayList<>();
+        Optional<java.util.ArrayList<String>> opt = Optional.of(dyn);
+        int before = opt.hashCode();
+        dyn.add("element");
+        check(opt.hashCode() != before, "hashCode tracks live value state");
+    }
+
+    // equals compares the held values with equals(), across boxed types it is false.
+    static void testEqualsCrossType() {
+        check(!Optional.of(1).equals(Optional.of(1L)), "Integer 1 != Long 1");
+        check(!Optional.of(1L).equals(Optional.of(1)), "Long 1 != Integer 1 (symmetric)");
+        check(!Optional.of(1).equals(Optional.of("1")), "Integer 1 != String \"1\"");
+        check(!Optional.of(1).equals(null), "equals(null) false");
+        check(Optional.empty().equals(Optional.ofNullable(null)), "empty equals ofNullable(null)");
+        check(Optional.ofNullable(null).equals(Optional.empty()), "ofNullable(null) equals empty");
+        check(!Optional.of(new int[] {1}).equals(Optional.of(new int[] {1})),
+              "array identity: equals on arrays is identity, so Optional of arrays not equal");
+        Optional<Number> widened = Optional.<Integer>of(1).map(x -> (Number) x);
+        check(widened.equals(Optional.of(1)), "widened Optional<Number> equals Optional<Integer>(1)");
+    }
+
+    static void testToStringDeep() {
+        Object custom = new Object() {
+            @Override public String toString() { return "TOSTR"; }
+        };
+        check(Optional.of(custom).toString().equals("Optional[TOSTR]"),
+              "toString uses held value's toString");
+        check(Optional.of("x").toString().equals(Optional.of("x").toString()),
+              "toString idempotent");
+        check(Optional.empty().toString().equals(Optional.<String>empty().toString()),
+              "empty toString stable across generics");
+    }
+
+    // Callback exceptions are relayed as the same instance; no wrapping.
+    static void testCallbackExceptionRelay() {
+        final RuntimeException relay = new RuntimeException("relay");
+        try {
+            Optional.of("x").filter(s -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "filter relays predicate exception unchanged");
+        }
+        try {
+            Optional.of("x").map(s -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "map relays mapper exception unchanged");
+        }
+        try {
+            Optional.of("x").flatMap(s -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "flatMap relays mapper exception unchanged");
+        }
+        try {
+            Optional.of("x").ifPresent(s -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "ifPresent relays consumer exception unchanged");
+        }
+        try {
+            Optional.empty().orElseGet(() -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "orElseGet relays supplier exception unchanged");
+        }
+        // a throwing callback must not corrupt the container
+        Optional<String> keep = Optional.of("keep");
+        try { keep.map(s -> { throw relay; }); } catch (RuntimeException ignored) { }
+        check("keep".equals(keep.get()), "container unchanged after relayed exception");
+    }
+
+    // Functor/monad laws on a fixed input.
+    static void testMonadicLaws() {
+        Optional<String> m = Optional.of("abc");
+        java.util.function.Function<String, String> f = s -> s + "1";
+        java.util.function.Function<String, String> g = s -> s + "2";
+        check(m.map(f).map(g).equals(m.map(f.andThen(g))), "map composition law");
+        check(m.map(x -> x).equals(m), "map identity law");
+        check(m.flatMap(s -> Optional.of(s).map(f)).equals(m.map(f)), "flatMap/map fusion law");
+        check(m.filter(s -> s.length() > 0).filter(s -> s.startsWith("a"))
+              .equals(m.filter(s -> s.length() > 0 && s.startsWith("a"))),
+              "filter conjunction law");
+        check(m.filter(s -> true).equals(m), "filter true law");
+        java.util.function.Function<String, Optional<String>> mf = s -> Optional.of(s + "!");
+        check(m.flatMap(mf).equals(Optional.of("abc!")), "flatMap flattens");
+        // laws also hold on empty
+        Optional<String> e = Optional.empty();
+        check(e.map(f).map(g).equals(Optional.empty()), "map composition law on empty");
+        check(e.filter(s -> true).equals(Optional.empty()), "filter true law on empty");
+        check(e.flatMap(mf).equals(Optional.empty()), "flatMap law on empty");
+        // two gets on the same instance return equal values (stable content)
+        check(m.get().equals(m.get()), "get stable across invocations");
+    }
+
+    // get() may be called repeatedly; the value is never consumed.
+    static void testRepeatedAccess() {
+        Optional<String> opt = Optional.of("v");
+        check(opt.get().equals(opt.get()) && opt.get().equals(opt.get()),
+              "get is repeatable, value not consumed");
+        check(opt.isPresent() && opt.isPresent(), "isPresent repeatable");
+    }
+
+    // Java 8 API surface lock: the JDK-9+ additions must be absent here.
+    static void testSurfaceLock() throws Exception {
+        Class<?> c = Optional.class;
+        try { c.getMethod("isEmpty"); throw new AssertionError("isEmpty should not exist on Java 8"); }
+        catch (NoSuchMethodException expected) { passed++; }
+        try { c.getMethod("ifPresentOrElse", Consumer.class, Runnable.class); throw new AssertionError("ifPresentOrElse should not exist"); }
+        catch (NoSuchMethodException expected) { passed++; }
+        try { c.getMethod("or", Supplier.class); throw new AssertionError("or should not exist"); }
+        catch (NoSuchMethodException expected) { passed++; }
+        try { c.getMethod("stream"); throw new AssertionError("stream should not exist"); }
+        catch (NoSuchMethodException expected) { passed++; }
+        try { c.getMethod("orElseThrow"); throw new AssertionError("no-arg orElseThrow should not exist"); }
+        catch (NoSuchMethodException expected) { passed++; }
+        // the Java 8 surface itself is fully present
+        c.getMethod("get");
+        c.getMethod("isPresent");
+        c.getMethod("ifPresent", Consumer.class);
+        c.getMethod("filter", Predicate.class);
+        c.getMethod("map", Function.class);
+        c.getMethod("flatMap", Function.class);
+        c.getMethod("orElse", Object.class);
+        c.getMethod("orElseGet", Supplier.class);
+        c.getMethod("orElseThrow", Supplier.class);
+        passed++; // Java 8 surface complete
+    }
+
+    public static void main(String[] args) throws Exception {
         testCreation();
         testGetIsPresent();
         testOrElse();
@@ -188,6 +338,14 @@ public class OptionalTest {
         testMap();
         testFlatMap();
         testEqualsHashCodeToString();
+        testExceptionMessages();
+        testHashCodeFormula();
+        testEqualsCrossType();
+        testToStringDeep();
+        testCallbackExceptionRelay();
+        testMonadicLaws();
+        testRepeatedAccess();
+        testSurfaceLock();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

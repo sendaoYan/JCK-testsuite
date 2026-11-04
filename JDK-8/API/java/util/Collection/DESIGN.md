@@ -38,3 +38,34 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；用 ArrayList（有序）为载体断言顺序。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法
+- `testEqualsContract` — 跨实现 equals：ArrayList==LinkedList==Arrays.asList（含 hashCode 相等）；
+  List 与 Set 同元素**永不** equals；顺序敏感。
+- `testToArrayContract` — toArray(T[]) 全契约：够长**复用同一数组（==）**并在 size 处置 null、
+  恰好、太小新分配、`toArray(null)` NPE、raw 类型下 String[] 收 Integer → **ArrayStoreException**。
+- `testBulkReturnSemantics` — addAll/removeAll/retainAll 返回值（空/不相交/超集均 false）+ equals
+  匹配语义（new String("a") 命中）。
+- `testNullAndExceptionSemantics` — forEach/removeIf/addAll/containsAll 传 null → NPE；
+  removeIf 谓词异常**原对象透传**，ArrayList 两段式实现下列表保持不变（8u/27 实测一致）。
+- `testSpliteratorContract` — ArrayList spliterator ORDERED|SIZED|SUBSIZED、getExactSizeIfKnown
+  精确、tryAdvance 顺序消费并递减、trySplit 前缀+后缀按序并集==原列表、HashSet DISTINCT。
+- `testDefaultDispatchProbe` — 记录型最小实现（仅 iterator()+size()，add 保持骨架默认）：证明
+  contains/remove/removeAll/retainAll/clear/removeIf 全部经 iterator（计数器锁定 remove 次数）、
+  toString 对 null 元素渲染 "[x, null]"、默认 add UOE、未覆写 equals 时保持恒等语义。
+
+### 负例精确异常表
+| 操作 | 异常 |
+|---|---|
+| toArray((T[])null) | NullPointerException |
+| raw.toArray(new String[5])（元素为 Integer） | ArrayStoreException |
+| forEach(null)/removeIf(null)/addAll(null)/containsAll(null) | NullPointerException |
+| 骨架默认 add（未覆写） | UnsupportedOperationException |
+| 迭代器 remove 无前置 next | IllegalStateException |
+
+### 本侧版本说明
+- JDK-8 侧无 toArray(IntFunction)（JDK-11+）；removeIf/spliterator/stream 为接口默认（javap 不带 default 仅为显示差异）。

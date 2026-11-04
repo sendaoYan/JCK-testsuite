@@ -286,6 +286,155 @@ public class LinkedListTest {
         for (int i = 1; i <= 5; i++) check(!list.contains(i), "clear removed " + i);
     }
 
+    // ---- deepened contract coverage II ---------------------------------------
+
+    static void testHashCodeFormula() {
+        check(new LinkedList<String>().hashCode() == 1, "hashCode of empty list is 1");
+        check(new LinkedList<>(Arrays.asList("a")).hashCode() == 128, "hashCode [a] = 31*1+97 = 128");
+        check(new LinkedList<>(Arrays.asList("a", "b")).hashCode() == 4066,
+              "hashCode [a,b] = 31*128+98 = 4066");
+        check(new LinkedList<>(Arrays.asList("a", "b", null)).hashCode() == 126046,
+              "hashCode [a,b,null] = 31*4066+0 = 126046");
+        check(new LinkedList<>(Arrays.asList((String) null)).hashCode() == 31, "hashCode [null] = 31");
+        // identical to ArrayList's hashCode for equal content
+        check(new LinkedList<>(Arrays.asList("x", "y")).hashCode()
+              == new ArrayList<>(Arrays.asList("x", "y")).hashCode(), "hashCode matches ArrayList");
+    }
+
+    static void testDequeTwelveMethodMatrix() {
+        // empty state: peek/poll forms return null, get/remove forms throw NSEE
+        LinkedList<String> e = new LinkedList<>();
+        check(e.peekFirst() == null && e.peekLast() == null, "empty peekFirst/peekLast null");
+        check(e.pollFirst() == null && e.pollLast() == null, "empty pollFirst/pollLast null");
+        checkThrows(NoSuchElementException.class, e::getFirst, "empty getFirst NSEE");
+        checkThrows(NoSuchElementException.class, e::getLast, "empty getLast NSEE");
+        checkThrows(NoSuchElementException.class, e::removeFirst, "empty removeFirst NSEE");
+        checkThrows(NoSuchElementException.class, e::removeLast, "empty removeLast NSEE");
+        // non-empty state: every method pair operates on its own end
+        LinkedList<String> d = new LinkedList<>();
+        // rebuild a known state
+        d.clear();
+        d.addFirst("m");
+        d.addFirst("f");
+        d.addLast("l");
+        check(d.peekFirst().equals("f") && d.peekLast().equals("l"), "peekFirst/peekLast non-empty");
+        check(d.getFirst().equals("f") && d.getLast().equals("l"), "getFirst/getLast non-empty");
+        check(d.removeFirst().equals("f"), "removeFirst takes front");
+        check(d.getLast().equals("l"), "removeFirst does not touch back");
+        check(d.removeLast().equals("l"), "removeLast takes back");
+        check(d.equals(Arrays.asList("m")), "only middle remains");
+        check(d.offerFirst("F") && d.offerLast("L"), "offerFirst/offerLast return true");
+        check(d.equals(Arrays.asList("F", "m", "L")), "offerFirst/offerLast place ends");
+        check(d.peek().equals("F"), "Queue peek is head (=first)");
+        check(d.poll().equals("F"), "Queue poll is head (=first)");
+    }
+
+    static void testQueueDequeAliases() {
+        // Queue/Deque method equivalence on identical states
+        LinkedList<String> a = new LinkedList<>(Arrays.asList("1", "2", "3"));
+        LinkedList<String> b = new LinkedList<>(Arrays.asList("1", "2", "3"));
+        check(a.add("4") && b.size() == 3, "add returns true before alias check");
+        b.addLast("4");
+        check(a.equals(b), "add(e) equivalent to addLast(e)");
+        check(a.remove().equals(b.removeFirst()) && a.equals(b), "remove() equivalent to removeFirst()");
+        check(a.element().equals(b.getFirst()), "element() equivalent to getFirst()");
+        check(a.peek().equals(b.peekFirst()), "peek() equivalent to peekFirst()");
+        check(a.poll().equals(b.pollFirst()) && a.equals(b), "poll() equivalent to pollFirst()");
+        a.push("p");
+        b.addFirst("p");
+        check(a.equals(b), "push(e) equivalent to addFirst(e)");
+        check(a.pop().equals(b.removeFirst()) && a.equals(b), "pop() equivalent to removeFirst()");
+    }
+
+    static void testListIteratorStateMachine() {
+        // add() clears the last-returned marker: set/remove right after add -> ISE
+        LinkedList<String> l = new LinkedList<>(Arrays.asList("a", "b"));
+        ListIterator<String> li = l.listIterator();
+        li.next();
+        li.add("X");
+        checkThrows(IllegalStateException.class, () -> li.set("Y"), "set after add ISE");
+        checkThrows(IllegalStateException.class, () -> li.remove(), "remove after add ISE");
+        // after previous(), set replaces what previous() returned
+        li.previous(); // "X"
+        li.set("Z");
+        check(l.equals(Arrays.asList("a", "Z", "b")), "set after previous replaces element");
+        // remove after previous removes that element
+        ListIterator<String> li2 = l.listIterator();
+        li2.next();
+        li2.next(); // "Z"
+        li2.previous(); // "Z"
+        li2.remove();
+        check(l.equals(Arrays.asList("a", "b")), "remove after previous");
+        // nextIndex/previousIndex full matrix
+        ListIterator<String> li3 = l.listIterator();
+        check(li3.nextIndex() == 0 && li3.previousIndex() == -1, "fresh iterator indices");
+        li3.next();
+        check(li3.nextIndex() == 1 && li3.previousIndex() == 0, "indices after next");
+        li3.previous();
+        check(li3.nextIndex() == 0 && li3.previousIndex() == -1, "indices back at start");
+        li3.add("w");
+        check(li3.nextIndex() == 1 && li3.previousIndex() == 0, "add shifts cursor: nextIndex+1");
+        check(l.equals(Arrays.asList("w", "a", "b")), "add at cursor 0 inserts at front");
+        // forEachRemaining from the middle
+        StringBuilder sb = new StringBuilder();
+        l.listIterator(1).forEachRemaining(sb::append);
+        check(sb.toString().equals("ab"), "listIterator forEachRemaining from index 1");
+    }
+
+    static void testDescendingIteratorContract() {
+        LinkedList<String> l = new LinkedList<>(Arrays.asList("a", "b", "c"));
+        Iterator<String> d = l.descendingIterator();
+        d.next(); // c
+        d.remove();
+        check(l.equals(Arrays.asList("a", "b")), "descendingIterator.remove removes visited tail");
+        checkThrows(IllegalStateException.class, d::remove, "descending remove twice ISE");
+        StringBuilder sb = new StringBuilder();
+        l.descendingIterator().forEachRemaining(sb::append);
+        check(sb.toString().equals("ba"), "descendingIterator forEachRemaining order");
+        checkThrows(NoSuchElementException.class,
+                    new LinkedList<String>().descendingIterator()::next,
+                    "empty descendingIterator next NSEE");
+    }
+
+    static void testSubListContract() {
+        LinkedList<Integer> parent = new LinkedList<>(Arrays.asList(1, 2, 3, 4, 5));
+        List<Integer> sub = parent.subList(1, 4);
+        List<Integer> seg = new ArrayList<>(Arrays.asList(2, 3, 4));
+        check(sub.equals(seg) && sub.hashCode() == seg.hashCode(), "subList equals/hashCode on own content");
+        sub.add(0, 99);
+        check(parent.equals(Arrays.asList(1, 99, 2, 3, 4, 5)), "subList.add(0,e) inserts in parent");
+        sub.remove(sub.size() - 1);
+        check(parent.equals(Arrays.asList(1, 99, 2, 3, 5)), "subList.remove(index) shrinks parent");
+        // parent structural change invalidates the subList
+        LinkedList<Integer> p2 = new LinkedList<>(Arrays.asList(1, 2, 3));
+        List<Integer> s2 = p2.subList(0, 2);
+        p2.removeFirst();
+        checkThrows(java.util.ConcurrentModificationException.class, () -> s2.get(0),
+                    "subList.get after parent removeFirst CME");
+        checkThrows(java.util.ConcurrentModificationException.class, () -> s2.iterator().next(),
+                    "subList iterator after parent mod CME");
+        // addAll in the middle
+        LinkedList<Integer> mid = new LinkedList<>(Arrays.asList(1, 5));
+        mid.addAll(1, Arrays.asList(2, 3, 4));
+        check(mid.equals(Arrays.asList(1, 2, 3, 4, 5)), "addAll(index,c) inserts in middle");
+        mid.addAll(0, Arrays.asList(0));
+        check(mid.get(0) == 0 && mid.size() == 6, "addAll at head");
+        mid.addAll(mid.size(), Arrays.asList(6));
+        check(mid.getLast() == 6, "addAll at tail");
+    }
+
+    static void testIteratorRemoveOnlyLegalModification() {
+        LinkedList<Integer> l = new LinkedList<>(Arrays.asList(1, 2, 3, 4, 5, 6));
+        Iterator<Integer> it = l.iterator();
+        int kept = 0;
+        while (it.hasNext()) {
+            int v = it.next();
+            if (v % 3 != 0) it.remove(); else kept++;
+        }
+        check(kept == 2 && l.equals(Arrays.asList(3, 6)), "filter via iterator.remove keeps multiples of 3");
+        check(l.getFirst() == 3 && l.getLast() == 6, "deque ends after filtering");
+    }
+
     public static void main(String[] args) throws Exception {
         testDeque();
         testListOps();
@@ -303,6 +452,13 @@ public class LinkedListTest {
         testClone();
         testSerialization();
         testStateInvariants();
+        testHashCodeFormula();
+        testDequeTwelveMethodMatrix();
+        testQueueDequeAliases();
+        testListIteratorStateMachine();
+        testDescendingIteratorContract();
+        testSubListContract();
+        testIteratorRemoveOnlyLegalModification();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

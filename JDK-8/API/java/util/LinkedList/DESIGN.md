@@ -56,3 +56,15 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 深化批次 II（契约级追加）
+
+- **hashCode 公式锁定**（同 ArrayList：128/4066/126046）。
+- **Deque 12 方法头尾矩阵**：空态 peek/poll 族返回 null、get/remove 族抛 NSEE；非空态各方法只作用于对应端。
+- **Queue/Deque 别名等价**：add≡addLast、remove≡removeFirst、element≡getFirst、peek≡peekFirst、
+  poll≡pollFirst、push≡addFirst、pop≡removeFirst（平行状态对照断言）。
+- **ListIterator 状态机**：add 后 set/remove→ISE；previous 后 set/remove 合法作用于刚返回元素；
+  nextIndex/previousIndex 全矩阵（含 add 后游标 +1）。
+- **descendingIterator**：逆序遍历、remove 删除已访问尾元素、双 remove ISE、空迭代器 NSEE、forEachRemaining。
+- **subList 契约**：equals/hashCode 按自身内容；add/remove 透传；父 removeFirst 后子表 CME；addAll 头/中/尾。
+- **iterator.remove 过滤范式**：迭代中删除非 3 倍数剩 [3,6]。

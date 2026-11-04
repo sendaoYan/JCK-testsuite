@@ -6,7 +6,11 @@
  * @run main ComparatorTest
  */
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.List;
+import java.util.TreeSet;
 
 public class ComparatorTest {
     static int passed;
@@ -158,9 +162,250 @@ public class ComparatorTest {
         check(byLen.reversed().reversed().compare("a", "bbb") < 0, "double reversed restores order");
     }
 
+    // ---- deepened contract coverage, round 2 (empirically locked on jdk-27.0.1) --
+
+    static void testSgnContract() {
+        Comparator<Integer> natural = Comparator.naturalOrder();
+        Comparator<Integer> reversed = Comparator.reverseOrder();
+        Integer[] vals = {-2, 0, 2};
+        for (Comparator<Integer> c : new Comparator[]{natural, reversed, natural.reversed()}) {
+            for (Integer a : vals) for (Integer b : vals)
+                check(Integer.signum(c.compare(a, b)) == -Integer.signum(c.compare(b, a)),
+                      "sgn antisymmetry c(" + a + "," + b + ")");
+            check(c.compare(0, 0) == 0, "sgn(x,x) == 0");
+        }
+        for (Comparator<Integer> c : new Comparator[]{natural, reversed}) {
+            for (Integer a : vals) for (Integer b : vals) for (Integer d : vals)
+                check(!(c.compare(a, b) > 0 && c.compare(b, d) > 0) || c.compare(a, d) > 0,
+                      "sgn transitivity c(" + a + "," + b + "," + d + ")");
+        }
+        for (Integer a : vals) for (Integer b : vals)
+            check(Integer.signum(natural.compare(a, b)) == -Integer.signum(reversed.compare(a, b)),
+                  "natural/reverse inversion c(" + a + "," + b + ")");
+    }
+
+    static void testThenComparingChain() {
+        Comparator<String> c3 = Comparator.comparing((String s) -> s.charAt(0))
+            .thenComparingInt(String::length)
+            .thenComparing(Comparator.naturalOrder());
+        List<String> list = new ArrayList<>(Arrays.asList("b2", "a2", "c1", "a1"));
+        list.sort(c3);
+        check(list.equals(Arrays.asList("a1", "a2", "b2", "c1")),
+              "3-level chain sorts [b2,a2,c1,a1] -> [a1,a2,b2,c1]");
+        check(c3.compare("b", "a") > 0, "chain primary level dominates");
+        check(c3.compare("ax", "ay") < 0, "chain third level breaks full tie");
+        check(c3.compare("a1", "a2") < 0 && c3.compare("a2", "a1") > 0, "chain last level antisymmetric");
+        check(c3.compare("a", "b") < 0, "chain orders a before b");
+        check(c3.reversed().compare("a", "b") > 0, "chain.reversed() sign flip");
+        check(c3.reversed().reversed().compare("a", "b") < 0, "chain double reversed restores");
+        Comparator<Integer> nat = Comparator.naturalOrder();
+        Comparator<Integer> rev2 = nat.reversed();
+        check(nat.compare(1, 2) < 0 && rev2.compare(1, 2) > 0,
+              "reversed() leaves original comparator unchanged");
+    }
+
+    static class Pair {
+        final int k;
+        final String tag;
+        Pair(int k, String tag) { this.k = k; this.tag = tag; }
+    }
+
+    static void testSortStabilityUnderComparator() {
+        List<Pair> ps = new ArrayList<>(Arrays.asList(
+            new Pair(2, "a"), new Pair(1, "a"), new Pair(2, "b"),
+            new Pair(1, "b"), new Pair(2, "c")));
+        ps.sort(Comparator.comparingInt(p -> p.k));
+        check(ps.get(0).k == 1 && ps.get(0).tag.equals("a") && ps.get(1).tag.equals("b"),
+              "stable sort keeps 1a before 1b");
+        check(ps.get(2).tag.equals("a") && ps.get(3).tag.equals("b") && ps.get(4).tag.equals("c"),
+              "stable sort keeps 2a,2b,2c encounter order");
+        check(Comparator.comparingInt((Pair p) -> p.k).compare(new Pair(1, "x"), new Pair(1, "y")) == 0,
+              "comparator returns 0 for equal keys regardless of identity");
+    }
+
+    static void testNullsCompositions() {
+        Comparator<String> nfRev = Comparator.nullsFirst(Comparator.reverseOrder());
+        check(nfRev.compare("a", "b") > 0, "nullsFirst delegates to reverseOrder");
+        check(nfRev.compare(null, "z") < 0, "nullsFirst(reverse) null still first");
+        TreeSet<String> ts = new TreeSet<>(nfRev);
+        ts.add("b"); ts.add("a"); ts.add(null);
+        check(ts.toString().equals("[null, b, a]"),
+              "TreeSet(nullsFirst(reverseOrder)) iterates [null, b, a]");
+        check(ts.size() == 3 && ts.contains(null) && ts.contains("a"),
+              "TreeSet null-tolerant membership");
+        check(ts.first() == null, "TreeSet nullsFirst first() == null");
+        check("a".equals(ts.last()), "TreeSet reverse natural last() == smallest");
+        Comparator<String> nfNat = Comparator.nullsFirst(Comparator.<String>naturalOrder());
+        check(nfNat.reversed().compare(null, "a") > 0, "nullsFirst(natural).reversed() null moves last");
+        check(nfNat.reversed().compare("a", "b") > 0, "nullsFirst(natural).reversed() delegates reversed");
+        Comparator<String> nlEq = Comparator.nullsLast((String x, String y) -> 0);
+        check(nlEq.reversed().compare(null, "a") < 0, "nullsLast(equals).reversed() null first");
+        check(nlEq.reversed().compare("a", "b") == 0, "nullsLast(equals).reversed() non-null still equal");
+        Comparator<String> nested = Comparator.nullsFirst(Comparator.nullsLast(Comparator.naturalOrder()));
+        check(nested.compare(null, "a") < 0, "nested nullsFirst(nullsLast) null first");
+        check(nested.compare("a", "b") < 0, "nested null wrappers delegate innermost");
+    }
+
+    static void testExceptionPropagation() {
+        IllegalStateException boom = new IllegalStateException("boom");
+        Comparator<String> throwingKey = Comparator.comparing((String s) -> { throw boom; });
+        try {
+            throwingKey.compare("a", "b");
+            throw new AssertionError("expected ISE from key extractor");
+        } catch (IllegalStateException e) {
+            check(e == boom, "comparing propagates the same exception instance");
+        }
+        Comparator<String> withThrowingSecondary =
+            Comparator.comparingInt(String::length)
+                      .thenComparing((String x, String y) -> { throw boom; });
+        try {
+            withThrowingSecondary.compare("ab", "cd");
+            throw new AssertionError("expected ISE from secondary comparator");
+        } catch (IllegalStateException e) {
+            check(e == boom, "thenComparing propagates secondary comparator exception");
+        }
+        check(withThrowingSecondary.compare("ab", "zzz") < 0,
+              "secondary comparator skipped when primary decides");
+        expectThrows(NullPointerException.class,
+            () -> Comparator.comparing((String s) -> s.charAt(0))
+                            .thenComparing((String s) -> (String) null)
+                            .compare("ax", "ay"),
+            "thenComparing keyExtractor returns null NPE");
+        // both-null short-circuits to 0 without invoking the delegate
+        Comparator<String> nfThrow =
+            Comparator.nullsFirst((String x, String y) -> { throw boom; });
+        check(nfThrow.compare(null, null) == 0,
+              "nullsFirst(null,null) == 0 without invoking delegate");
+    }
+
+    static void testEqualsContract() {
+        Comparator<String> c = Comparator.comparing(String::length);
+        check(c.equals(c), "comparator equals itself");
+        check(!c.equals(null), "comparator.equals(null) false");
+        check(!c.equals(Comparator.comparing(String::length)),
+              "comparing(fn) instances use identity equals");
+        check(!Comparator.nullsFirst(Comparator.naturalOrder())
+                        .equals(Comparator.nullsFirst(Comparator.naturalOrder())),
+              "nullsFirst(cmp) instances use identity equals");
+        check(Comparator.naturalOrder().equals(Comparator.naturalOrder()),
+              "naturalOrder instances are equal");
+        check(Comparator.reverseOrder().equals(Comparator.reverseOrder()),
+              "reverseOrder instances are equal");
+        check(Comparator.naturalOrder().reversed().equals(Comparator.reverseOrder()),
+              "naturalOrder().reversed() equals reverseOrder()");
+        check(Comparator.reverseOrder().reversed().equals(Comparator.naturalOrder()),
+              "reverseOrder().reversed() equals naturalOrder()");
+        check(!Comparator.<String>naturalOrder().equals(Comparator.comparing(String::length)),
+              "naturalOrder not equal to comparing instance");
+    }
+
+    static void testPrimitiveSpecializationBoundaries() {
+        Comparator<long[]> byLong = Comparator.comparingLong(a -> a[0]);
+        check(byLong.compare(new long[]{Long.MIN_VALUE}, new long[]{Long.MAX_VALUE}) < 0,
+              "comparingLong MIN < MAX");
+        check(byLong.compare(new long[]{Long.MAX_VALUE}, new long[]{Long.MIN_VALUE}) > 0,
+              "comparingLong MAX > MIN");
+        check(byLong.compare(new long[]{-1L}, new long[]{-1L}) == 0, "comparingLong equal == 0");
+        Comparator<int[]> byInt = Comparator.comparingInt(a -> a[0]);
+        check(byInt.compare(new int[]{Integer.MIN_VALUE}, new int[]{Integer.MAX_VALUE}) < 0,
+              "comparingInt MIN < MAX");
+        check(byInt.compare(new int[]{7}, new int[]{7}) == 0, "comparingInt equal == 0");
+        check(Comparator.comparing(String::length).reversed().compare("a", "bbb") > 0,
+              "comparing(fn).reversed() sign flip");
+        check(Comparator.comparing(String::length).reversed().reversed().compare("a", "bbb") < 0,
+              "comparing(fn).reversed().reversed() restores order");
+        Comparator<double[]> byD = Comparator.comparingDouble(a -> a[0]);
+        check(byD.compare(new double[]{Double.NaN}, new double[]{Double.POSITIVE_INFINITY}) > 0,
+              "comparingDouble NaN > +Inf");
+        check(byD.compare(new double[]{-0.0}, new double[]{0.0}) < 0,
+              "comparingDouble -0.0 < +0.0");
+    }
+
+    // JDK 21+ default methods min/max (empirically locked)
+    static void testMinMaxContract() {
+        Comparator<Integer> natural = Comparator.naturalOrder();
+        // equal arguments: the FIRST argument is returned (identity, not just equals)
+        String x1 = new String("x");
+        String x2 = new String("x");
+        Comparator<String> natStr = Comparator.naturalOrder();
+        check(natStr.max(x1, x2) == x1, "max equal args returns first argument (identity)");
+        check(natStr.min(x1, x2) == x1, "min equal args returns first argument (identity)");
+        check(natStr.max(x2, x1) == x2, "max equal args reversed order returns first argument");
+        check(natStr.min(x2, x1) == x2, "min equal args reversed order returns first argument");
+        // reversed comparator: min picks the larger, max the smaller
+        Comparator<Integer> rev = Comparator.reverseOrder();
+        check(rev.min(1, 2) == 2, "reverseOrder min returns larger");
+        check(rev.max(1, 2) == 1, "reverseOrder max returns smaller");
+        // comparator that considers everything equal -> both return first arg
+        Comparator<String> allEq = (a, b) -> 0;
+        String p = new String("p");
+        String q = new String("p");
+        check(allEq.max(p, q) == p && allEq.min(q, p) == q,
+              "all-equal comparator min/max return first argument");
+        // null args are passed through to compare -> NPE
+        expectThrows(NullPointerException.class, () -> natStr.max(null, "a"),
+                "max(null, a) NPE");
+        expectThrows(NullPointerException.class, () -> natStr.min("a", null),
+                "min(a, null) NPE");
+        // chained comparators compose with min/max
+        Comparator<String> byLen = Comparator.comparingInt(String::length);
+        check(byLen.max("a", "bbb").equals("bbb"), "max by length");
+        check(byLen.min("a", "bbb").equals("a"), "min by length");
+        check(byLen.max("aa", "bb") == "aa", "max equal keys returns first argument");
+    }
+
+    // JDK 8 missing on this side: thenComparing primitive-specialization null checks
+    static void testThenComparingPrimitiveNulls() {
+        Comparator<String> byLen = Comparator.comparingInt(String::length);
+        expectThrows(NullPointerException.class, () -> byLen.thenComparingInt(null),
+                "thenComparingInt(null) NPE");
+        expectThrows(NullPointerException.class, () -> byLen.thenComparingLong(null),
+                "thenComparingLong(null) NPE");
+        expectThrows(NullPointerException.class, () -> byLen.thenComparingDouble(null),
+                "thenComparingDouble(null) NPE");
+        expectThrows(NullPointerException.class,
+                () -> byLen.thenComparing(String::length, null),
+                "thenComparing(fn, null cmp) NPE");
+        expectThrows(NullPointerException.class, () -> Comparator.comparingInt(null),
+                "comparingInt(null) NPE");
+        expectThrows(NullPointerException.class, () -> Comparator.comparingLong(null),
+                "comparingLong(null) NPE");
+        expectThrows(NullPointerException.class, () -> Comparator.comparingDouble(null),
+                "comparingDouble(null) NPE");
+    }
+
+    static void testDefaultMethodReflection() throws Exception {
+        Class<?> c = Class.forName("java.util.Comparator");
+        c.getMethod("min", Object.class, Object.class);
+        c.getMethod("max", Object.class, Object.class);
+        c.getMethod("thenComparing", java.util.function.Function.class, Comparator.class);
+        c.getMethod("thenComparingInt", java.util.function.ToIntFunction.class);
+        c.getMethod("thenComparingLong", java.util.function.ToLongFunction.class);
+        c.getMethod("thenComparingDouble", java.util.function.ToDoubleFunction.class);
+        c.getMethod("comparingLong", java.util.function.ToLongFunction.class);
+        c.getMethod("comparingDouble", java.util.function.ToDoubleFunction.class);
+        check(!java.lang.reflect.Modifier.isAbstract(
+                  c.getMethod("min", Object.class, Object.class).getModifiers()),
+              "min/max are default (non-abstract) interface methods");
+        check(!java.lang.reflect.Modifier.isAbstract(
+                  c.getMethod("reversed").getModifiers()),
+              "reversed is a default interface method");
+        passed++;
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSgnContract();
+        testThenComparingChain();
+        testSortStabilityUnderComparator();
+        testNullsCompositions();
+        testExceptionPropagation();
+        testEqualsContract();
+        testPrimitiveSpecializationBoundaries();
+        testMinMaxContract();
+        testThenComparingPrimitiveNulls();
+        testDefaultMethodReflection();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

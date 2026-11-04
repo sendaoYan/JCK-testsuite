@@ -338,6 +338,187 @@ public class PriorityQueueTest {
         for (int i = 1; i <= 5; i++) check(!q.contains(i), "clear removed " + i);
     }
 
+    // ---- contract deep-dive: comparator plumbing / eager CCE / remove -------
+    // ---- positions / iterator remove / serialization / spliterator ----------
+
+    static class NonSerializableComparator implements Comparator<String> {
+        public int compare(String a, String b) { return a.compareTo(b); }
+    }
+
+    static void testNullComparatorConstructors() {
+        // A null comparator means natural ordering (NOT an NPE) for both
+        // Comparator-taking constructors.
+        PriorityQueue<Integer> q1 = new PriorityQueue<>((Comparator<Integer>) null);
+        q1.add(3);
+        q1.add(1);
+        q1.add(2);
+        check(q1.comparator() == null, "PQ(null Comparator) uses natural order");
+        check(q1.poll() == 1 && q1.poll() == 2 && q1.poll() == 3,
+                "PQ(null Comparator) poll ascending");
+        PriorityQueue<Integer> q2 = new PriorityQueue<>(8, (Comparator<Integer>) null);
+        q2.add(3);
+        q2.add(1);
+        check(q2.comparator() == null && q2.peek() == 1,
+                "PQ(int, null Comparator) natural order usable");
+    }
+
+    static void testComparatorPlumbing() {
+        Comparator<Integer> rev = Comparator.reverseOrder();
+        check(new PriorityQueue<>(rev).comparator() == rev,
+                "PQ(Comparator) keeps the very same comparator instance");
+        TreeSet<Integer> ts = new TreeSet<>(rev);
+        ts.add(1);
+        ts.add(2);
+        check(new PriorityQueue<>(ts).comparator() == rev, "PQ(SortedSet) inherits its comparator");
+        PriorityQueue<Integer> fromPq = new PriorityQueue<>(new PriorityQueue<>(rev));
+        check(fromPq.comparator() == rev, "PQ(PriorityQueue) inherits its comparator");
+        TreeSet<Integer> natural = new TreeSet<>(Arrays.asList(2, 1));
+        check(new PriorityQueue<>(natural).comparator() == null,
+                "PQ(SortedSet natural) comparator null");
+    }
+
+    static void testCaseInsensitiveOrder() {
+        PriorityQueue<String> q = new PriorityQueue<>(String.CASE_INSENSITIVE_ORDER);
+        q.add("banana");
+        q.add("Apple");
+        q.add("cherry");
+        check(q.poll().equals("Apple"), "CASE_INSENSITIVE: 'Apple' sorts before 'banana'");
+        check(q.poll().equals("banana"), "CASE_INSENSITIVE poll 2");
+        check(q.poll().equals("cherry"), "CASE_INSENSITIVE poll 3");
+        // Case-equal elements are tied; only assert that both eventually appear.
+        q.add("B");
+        q.add("a");
+        List<String> drained = new ArrayList<>();
+        drained.add(q.poll());
+        drained.add(q.poll());
+        java.util.Collections.sort(drained);
+        check(drained.equals(Arrays.asList("B", "a")), "case-equal pair both drained");
+    }
+
+    static void testNonComparableEager() {
+        // JDK 21+ contract: element is cast to Comparable at insertion time, so
+        // the FIRST non-Comparable offer already throws CCE.
+        PriorityQueue<Object> q = new PriorityQueue<>();
+        checkThrows(ClassCastException.class, () -> q.offer(new Object()),
+                "first non-Comparable offer CCE (eager check)");
+        check(q.isEmpty(), "nothing retained after CCE");
+        checkThrows(ClassCastException.class,
+                () -> new PriorityQueue<Object>(Arrays.asList(new Object(), new Object())),
+                "collection constructor with non-Comparables CCE (heapify compares)");
+    }
+
+    static void testRemovePositions() {
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(q.remove(Integer.valueOf(1)), "remove head (min)");
+        check(q.peek() == 2 && q.size() == 4, "next min surfaces after head remove");
+        check(q.remove(Integer.valueOf(5)), "remove max");
+        check(q.peek() == 2 && q.size() == 3, "peek unchanged after tail remove");
+        check(q.remove(Integer.valueOf(3)), "remove middle");
+        check(q.poll() == 2 && q.poll() == 4, "remaining drain in order");
+        check(q.isEmpty(), "all removed");
+        check(!q.remove(Integer.valueOf(9)), "remove absent false");
+    }
+
+    static void testInterleavedOfferPoll() {
+        PriorityQueue<Integer> q = new PriorityQueue<>();
+        check(q.offer(5) && q.poll() == 5, "offer then immediate poll");
+        check(q.isEmpty(), "empty after interleave step");
+        q.offer(3);
+        q.offer(1);
+        check(q.poll() == 1, "heap rebuilt: min first");
+        check(q.poll() == 3, "then the rest");
+        q.offer(9);
+        q.offer(2);
+        q.offer(7);
+        check(q.poll() == 2 && q.poll() == 7 && q.poll() == 9, "full drain after interleave");
+    }
+
+    static void testIteratorRemove() {
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(1, 2, 3, 4, 5));
+        Iterator<Integer> it = q.iterator();
+        check(it.next() == 1, "iterator yields root first (heap order)");
+        it.remove();
+        check(q.size() == 4 && !q.contains(1), "iterator.remove supported");
+        check(q.poll() == 2 && q.poll() == 3 && q.poll() == 4 && q.poll() == 5,
+                "heap consistent after iterator remove");
+    }
+
+    static void testSerializationWithComparator() throws Exception {
+        PriorityQueue<String> q = new PriorityQueue<>(String.CASE_INSENSITIVE_ORDER);
+        q.add("b");
+        q.add("A");
+        PriorityQueue<String> r = roundTrip(q);
+        check(r.comparator() == String.CASE_INSENSITIVE_ORDER,
+                "serializable comparator comes back as the same shared instance");
+        check(r.poll().equals("A") && r.poll().equals("b"), "round-trip comparator still orders");
+    }
+
+    static void testNonSerializableComparator() throws Exception {
+        PriorityQueue<String> q = new PriorityQueue<>(new NonSerializableComparator());
+        q.add("x");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            checkThrows(java.io.NotSerializableException.class, () -> oos.writeObject(q),
+                    "non-serializable comparator fails serialization");
+        }
+    }
+
+    static void testEmptyToArray() {
+        PriorityQueue<Integer> empty = new PriorityQueue<>();
+        check(empty.toArray().length == 0, "empty toArray length 0");
+        Integer[] reusable = new Integer[]{7};
+        Integer[] ret = empty.toArray(reusable);
+        check(ret == reusable, "empty toArray(T[]) reuses array");
+        check(ret[0] == null, "empty toArray(T[]) writes null terminator at index 0");
+    }
+
+    static void testIaeMessageless() {
+        try {
+            new PriorityQueue<Integer>(0);
+            check(false, "PQ(0) should throw");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() == null, "PQ(0) IAE carries no detail message");
+            passed++;
+        }
+        try {
+            new PriorityQueue<Integer>(-3);
+            check(false, "PQ(-3) should throw");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() == null, "PQ(-3) IAE carries no detail message");
+            passed++;
+        }
+    }
+
+    static void testWrongTypeQueries() {
+        PriorityQueue<String> q = new PriorityQueue<>(Arrays.asList("a", "b"));
+        check(!q.contains(42), "contains of wrong type false (no CCE)");
+        check(!q.remove(42), "remove of wrong type false (no CCE)");
+        check(q.size() == 2, "state intact after wrong-type queries");
+    }
+
+    static void testToStringBrackets() {
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(1, 2, 3));
+        String s = q.toString();
+        check(s.startsWith("[") && s.endsWith("]"), "toString bracketed");
+        check(s.contains("1") && s.contains("2") && s.contains("3"),
+                "toString contains every element");
+        check("[]".equals(new PriorityQueue<>().toString()), "empty toString []");
+    }
+
+    static void testHashCodeIdentity() {
+        // AbstractQueue does not override hashCode: identity hashCode.
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(1, 2));
+        check(q.hashCode() == System.identityHashCode(q),
+                "hashCode is Object identity hashCode (not overridden)");
+    }
+
+    static void testElementIdempotent() {
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(2, 1, 3));
+        check(q.element() == 1 && q.element() == 1, "element idempotent");
+        check(q.size() == 3, "element never removes");
+        check(q.add(0) && q.peek() == 0, "add/offer always true for unbounded PQ, heap reorders");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testNaturalOrder();
@@ -356,6 +537,21 @@ public class PriorityQueueTest {
         testToArrayContract();
         testSerialization();
         testStateInvariants();
+        testNullComparatorConstructors();
+        testComparatorPlumbing();
+        testCaseInsensitiveOrder();
+        testNonComparableEager();
+        testRemovePositions();
+        testInterleavedOfferPoll();
+        testIteratorRemove();
+        testSerializationWithComparator();
+        testNonSerializableComparator();
+        testEmptyToArray();
+        testIaeMessageless();
+        testWrongTypeQueries();
+        testToStringBrackets();
+        testHashCodeIdentity();
+        testElementIdempotent();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

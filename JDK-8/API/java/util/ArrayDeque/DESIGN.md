@@ -57,3 +57,32 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 契约深化追加（第二版）
+
+新增 test 方法：testFailFastMatrix / testEqualsHashCodeIdentity / testToString / testBulkOperations /
+testForEachOrder / testSpliterator / testIteratorRemoveSemantics / testWrapAroundSerialization /
+testMixedGrowth / testToArrayExactSize / testDuplicateRemoval / testCloneSharesElements /
+testAddAllContract。
+
+### 覆盖点
+
+- **fail-fast 完整矩阵（probe 锁定）**：升序迭代器仅在**尾部**修改（addLast/removeLast）后 CME，
+  降序迭代器仅在**头部**修改（addFirst/removeFirst）后 CME；对端修改两向均存活
+  （栅栏语义：asc 栅 tail、desc 栅 head）。8 格全断言。
+- **身份 equals/hashCode**：AbstractCollection 不覆写 equals/hashCode——同内容两个实例不 equals、
+  `hashCode() == System.identityHashCode()`、与同内容 List 互不 equals。
+- toString 精确锁定："[1, 2, 3]"/"[]"。
+- 批量契约：containsAll/removeAll/retainAll/removeIf（顺序保持 + 返回值语义）。
+- Spliterator：特征位 **0x4150 = ORDERED|SIZED|SUBSIZED|NONNULL**（getExactSizeIfKnown==size）、
+  forEachRemaining 保序、trySplit 前缀+后缀并集==原序、tryAdvance 有/耗尽两态。
+- 迭代器 remove 状态机：未 next ISE、双 remove ISE、删当前；descendingIterator.remove 删尾侧已访问元素。
+- **环形缓冲序列化**：构造 wrap 状态（加 6 → 头排 4 → 尾加 4）后 round-trip 逻辑序 [4..9] 精确保留。
+- 混合增长：300 addFirst + 300 addLast → size 600、头 299/尾 1299、双端排干逐值断言。
+- toArray 精确长度数组复用（无终止符写入）；重复元素 remove 只删首现；clone 浅拷贝（元素同实例
+  `==`、结构独立）；addAll 追加保序 + 中途 null NPE 时**前面的元素已加入**（部分应用契约）。
+
+### 易错规范细节（已锁入断言）
+
+- equals 是身份语义：**不要**断言跨实例相等或 hashCode 相等。
+- addAll 含 null：NPE 在 null 处抛出，之前元素已生效（AbstractCollection 逐个 add）。

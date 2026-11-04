@@ -46,3 +46,17 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；无 serialVersionUID（非 Serializable）。
+
+## 深化追加（契约级，第二轮，JDK-8）
+
+新增 testComputeMergeMatrix / testIterationAndCme / testEqualsHashMap：
+
+- **compute-merge 全分支矩阵**：putIfAbsent/remove(k,v)/replace 两形态/getOrDefault/
+  computeIfAbsent（absent 插入/present 不调函数/返回 null 不落 entry）/computeIfPresent
+  （absent 不调函数/返回 null 删）/compute/merge（absent 放 value 不调函数/present remap/
+  返回 null 删）全分支 + **异常同实例透传且条目不变** + null fn/null merge value NPE。
+- **迭代与 fail-fast**：迭代内容恰好等于键集合（无序比较）；entrySet/keySet/values 迭代器
+  remove 透传；迭代中 put → CME；iterator.remove 后继续迭代合法。
+- **跨实现 equals**：与 HashMap 同内容互相 equals 且 hashCode 相等（WeakHashMap key 用
+  equals 语义，与 IdentityHashMap 相反）；含 null key 的内容同样相等。
+- GC 依赖行为仍按第一轮约定不断言。

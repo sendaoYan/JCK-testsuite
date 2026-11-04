@@ -226,6 +226,189 @@ public class EnumSetTest {
               "spliterator iterates in declaration order");
     }
 
+    // ---- contract deep-dive II: of() arities+null / copyOf typing / addAll typing /
+    //      empty enum / iterator channels / cross-type equals / varargs aliasing /
+    //      batch returns / spliterator exact bits / huge enum / serialization deep ----
+
+    enum Size { S, M }
+    enum Empty {}
+    enum Big {
+        B00,B01,B02,B03,B04,B05,B06,B07,B08,B09,B10,B11,B12,B13,B14,B15,B16,B17,B18,B19,
+        B20,B21,B22,B23,B24,B25,B26,B27,B28,B29,B30,B31,B32,B33,B34,B35,B36,B37,B38,B39,
+        B40,B41,B42,B43,B44,B45,B46,B47,B48,B49,B50,B51,B52,B53,B54,B55,B56,B57,B58,B59,
+        B60,B61,B62,B63,B64,B65,B66,B67,B68,B69
+    }
+
+    static void testOfAritiesAndNull() {
+        check(EnumSet.of(Color.RED).size() == 1, "of(E) single");
+        check(EnumSet.of(Color.RED, Color.GREEN).size() == 2, "of(E,E)");
+        check(EnumSet.of(Color.RED, Color.GREEN, Color.BLUE).size() == 3, "of(E,E,E)");
+        check(EnumSet.of(Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW).size() == 4, "of(E,E,E,E)");
+        check(EnumSet.of(Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.RED).size() == 4,
+              "of(E,E,E,E,E) five-arg overload dedups");
+        expectThrows(() -> EnumSet.of(null), NullPointerException.class, "of(null) NPE");
+        expectThrows(() -> EnumSet.of(Color.RED, (Color[]) null),
+                     NullPointerException.class, "of(e, null rest array) NPE");
+        expectThrows(() -> EnumSet.of(Color.RED, new Color[]{Color.BLUE, null}),
+                     NullPointerException.class, "of(e, rest containing null) NPE");
+    }
+
+    static void testCopyOfTyping() {
+        @SuppressWarnings("unchecked")
+        Collection<Color> bad = (Collection<Color>) (Collection<?>) Arrays.asList("not-a-color");
+        expectThrows(() -> EnumSet.copyOf(bad), ClassCastException.class,
+                     "copyOf(Collection of wrong type) CCE");
+        expectThrows(() -> EnumSet.copyOf(Arrays.asList(Color.RED, null)),
+                     NullPointerException.class, "copyOf(Collection containing null) NPE");
+        EnumSet<Color> fromHashSet = EnumSet.copyOf(new HashSet<>(Arrays.asList(Color.BLUE, Color.RED)));
+        check(fromHashSet.equals(EnumSet.of(Color.RED, Color.BLUE)),
+              "copyOf(HashSet) infers enum type from elements");
+        check(new ArrayList<>(fromHashSet).equals(Arrays.asList(Color.RED, Color.BLUE)),
+              "copyOf result iterates in declaration order");
+        EnumSet<Color> copy = EnumSet.copyOf(EnumSet.range(Color.GREEN, Color.YELLOW));
+        check(copy.add(Color.RED) && copy.equals(EnumSet.allOf(Color.class)),
+              "copyOf(EnumSet) copy is independent");
+    }
+
+    static void testAddAllTyping() {
+        EnumSet<Color> s = EnumSet.noneOf(Color.class);
+        check(s.addAll(Arrays.asList(Color.RED, Color.BLUE)), "addAll(plain List) true");
+        check(s.equals(EnumSet.of(Color.RED, Color.BLUE)), "addAll(plain List) adds elements");
+        @SuppressWarnings("unchecked")
+        Collection<Color> bad = (Collection<Color>) (Collection<?>) Arrays.asList("x");
+        expectThrows(() -> EnumSet.noneOf(Color.class).addAll(bad), ClassCastException.class,
+                     "addAll(wrong element type) CCE");
+        expectThrows(() -> EnumSet.noneOf(Color.class).addAll(Arrays.asList(Color.RED, null)),
+                     NullPointerException.class, "addAll(collection containing null) NPE");
+    }
+
+    static void testEmptyEnumUniverse() {
+        EnumSet<Empty> none = EnumSet.noneOf(Empty.class);
+        check(none.isEmpty() && none.size() == 0, "noneOf(empty enum) empty");
+        check(!none.iterator().hasNext(), "empty-universe iterator hasNext false");
+        check(EnumSet.allOf(Empty.class).isEmpty(), "allOf(empty enum) empty");
+        check(none.clone().isEmpty(), "clone of empty-universe set empty");
+        expectThrows(() -> EnumSet.copyOf(new ArrayList<Empty>()),
+                     IllegalArgumentException.class, "copyOf(empty) IAE");
+    }
+
+    static void testIteratorChannels() {
+        EnumSet<Color> s = EnumSet.of(Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW);
+        java.util.Iterator<Color> it = s.iterator();
+        check(it.next() == Color.RED, "iterator starts at lowest ordinal");
+        it.remove();
+        check(!s.contains(Color.RED) && s.size() == 3, "iterator.remove removes");
+        check(it.next() == Color.GREEN, "iteration continues in ordinal order after remove");
+        expectThrows(() -> s.iterator().remove(), IllegalStateException.class,
+                     "fresh iterator remove before next ISE");
+        java.util.List<Color> rest = new ArrayList<>();
+        it.forEachRemaining(rest::add);
+        check(rest.equals(Arrays.asList(Color.BLUE, Color.YELLOW)),
+              "forEachRemaining visits remaining in ordinal order");
+
+        // EnumSet iterators are NOT fail-fast: they snapshot the membership mask at
+        // creation, so a structural add during iteration neither throws CME nor is
+        // observed by the ongoing iterator (verified identical on JDK-8 and JDK-27).
+        EnumSet<Color> mod = EnumSet.of(Color.RED, Color.GREEN);
+        java.util.Iterator<Color> it2 = mod.iterator();
+        it2.next();
+        mod.add(Color.BLUE);
+        java.util.List<Color> remaining = new ArrayList<>();
+        it2.forEachRemaining(remaining::add);
+        check(remaining.equals(Arrays.asList(Color.GREEN)),
+              "iterator unaffected by concurrent add (no CME, new element not visible)");
+        java.util.List<Color> fresh = new ArrayList<>();
+        for (Color c : mod) fresh.add(c);
+        check(fresh.equals(Arrays.asList(Color.RED, Color.GREEN, Color.BLUE)),
+              "fresh iterator sees the element added during previous iteration");
+    }
+
+    static void testCrossTypeEquals() {
+        check(!EnumSet.of(Color.RED).equals(EnumSet.of(Size.S)),
+              "EnumSets of different enum types are not equal (same size)");
+        check(EnumSet.of(Color.RED, Color.GREEN).equals(EnumSet.of(Color.GREEN, Color.RED)),
+              "equals independent of iteration/insert order");
+    }
+
+    static void testVarargsNotAliased() {
+        Color[] rest = {Color.GREEN, Color.BLUE};
+        EnumSet<Color> s = EnumSet.of(Color.RED, rest);
+        rest[0] = Color.YELLOW;
+        check(s.equals(EnumSet.of(Color.RED, Color.GREEN, Color.BLUE)),
+              "of() does not alias the caller's varargs array");
+    }
+
+    static void testBatchReturnValues() {
+        EnumSet<Color> s = EnumSet.of(Color.RED, Color.GREEN);
+        check(!s.addAll(Arrays.asList(Color.RED)), "addAll(all duplicates) false");
+        check(!s.removeAll(Arrays.asList(Color.BLUE)), "removeAll(no match) false");
+        check(!s.retainAll(EnumSet.allOf(Color.class)), "retainAll(superset) false");
+        check(!s.removeIf(c -> c == Color.BLUE), "removeIf(no match) false");
+        check(s.containsAll(new ArrayList<Color>()), "containsAll(empty) true");
+        check(!s.containsAll(EnumSet.allOf(Color.class)), "containsAll(bigger) false");
+        expectThrows(() -> s.containsAll(null), NullPointerException.class, "containsAll(null) NPE");
+        expectThrows(() -> s.addAll(null), NullPointerException.class, "addAll(null) NPE");
+        expectThrows(() -> s.removeAll(null), NullPointerException.class, "removeAll(null) NPE");
+        expectThrows(() -> s.retainAll(null), NullPointerException.class, "retainAll(null) NPE");
+    }
+
+    static void testSpliteratorExact() {
+        EnumSet<Color> s = EnumSet.of(Color.RED, Color.GREEN, Color.BLUE);
+        java.util.Spliterator<Color> sp = s.spliterator();
+        // JDK 9+ EnumSet spliterator reports ORDERED|SORTED|NONNULL in addition to
+        // SIZED|SUBSIZED|DISTINCT (0x4155). The JDK-8 variant locks the narrower
+        // 0x4041 mask instead -- this is a documented JDK-8 vs JDK-27 difference.
+        check(sp.characteristics() == (java.util.Spliterator.ORDERED
+                | java.util.Spliterator.DISTINCT | java.util.Spliterator.SORTED
+                | java.util.Spliterator.SIZED | java.util.Spliterator.NONNULL
+                | java.util.Spliterator.SUBSIZED),
+              "JDK-27 EnumSet spliterator exact characteristics ORDERED|DISTINCT|SORTED|SIZED|NONNULL|SUBSIZED (0x4155)");
+        check(sp.getExactSizeIfKnown() == 3, "getExactSizeIfKnown == size");
+        check(sp.hasCharacteristics(java.util.Spliterator.SORTED), "SORTED reported");
+        check(sp.getComparator() == null,
+              "SORTED with null comparator means natural (declaration) order");
+        java.util.List<Color> gathered = new ArrayList<>();
+        sp.forEachRemaining(gathered::add);
+        check(gathered.equals(Arrays.asList(Color.RED, Color.GREEN, Color.BLUE)),
+              "spliterator visits elements in declaration order");
+    }
+
+    static void testHugeEnumUniverse() {
+        // > 64 constants exercises the non-Regular EnumSet implementation
+        EnumSet<Big> range = EnumSet.range(Big.B05, Big.B66);
+        check(range.size() == 62, "huge-universe range size inclusive both ends");
+        check(range.contains(Big.B05) && range.contains(Big.B66), "range endpoints present");
+        check(!range.contains(Big.B04) && !range.contains(Big.B67), "range excludes neighbors");
+        java.util.List<Big> seq = new ArrayList<>();
+        java.util.Iterator<Big> it = range.iterator();
+        while (it.hasNext()) seq.add(it.next());
+        check(seq.size() == 62 && seq.get(0) == Big.B05 && seq.get(61) == Big.B66,
+              "huge-universe iteration follows declaration order endpoints");
+        it = range.iterator();
+        it.next();
+        it.remove();
+        check(!range.contains(Big.B05) && range.size() == 61, "huge-universe iterator.remove");
+        EnumSet<Big> comp = EnumSet.complementOf(range);
+        check(comp.size() == 9, "huge-universe complementOf size");
+        check(comp.contains(Big.B00) && comp.contains(Big.B69), "complement contains outside elements");
+        check(EnumSet.complementOf(comp).equals(range), "double complement restores");
+    }
+
+    static void testSerializationDeep() throws Exception {
+        EnumSet<Color> s = EnumSet.of(Color.YELLOW, Color.RED);
+        EnumSet<Color> r = roundTrip(s);
+        check(new ArrayList<>(r).equals(Arrays.asList(Color.RED, Color.YELLOW)),
+              "round-trip iterates in declaration order regardless of fill order");
+        r.add(Color.GREEN);
+        check(r.equals(EnumSet.of(Color.RED, Color.GREEN, Color.YELLOW)),
+              "round-trip result still ordinal-ordered after add");
+        EnumSet<Color> empty = roundTrip(EnumSet.noneOf(Color.class));
+        check(empty.isEmpty() && empty.add(Color.BLUE), "round-trip of empty set usable");
+        EnumSet<Big> big = EnumSet.range(Big.B00, Big.B69);
+        EnumSet<Big> bigBack = roundTrip(big);
+        check(bigBack.equals(big) && bigBack.size() == 70, "huge-universe set round-trip");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testFactories();
@@ -237,6 +420,17 @@ public class EnumSetTest {
         testSerialization();
         testCrossImplEquals();
         testStateInvariants();
+        testOfAritiesAndNull();
+        testCopyOfTyping();
+        testAddAllTyping();
+        testEmptyEnumUniverse();
+        testIteratorChannels();
+        testCrossTypeEquals();
+        testVarargsNotAliased();
+        testBatchReturnValues();
+        testSpliteratorExact();
+        testHugeEnumUniverse();
+        testSerializationDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

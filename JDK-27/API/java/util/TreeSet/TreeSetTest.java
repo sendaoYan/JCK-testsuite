@@ -437,6 +437,243 @@ public class TreeSetTest {
         for (int i = 1; i <= 5; i++) check(!s.contains(i), "clear removed " + i);
     }
 
+    // ---- contract deep-dive II: CASE_INSENSITIVE ordering / inclusive-bound views /
+    //      view liveness+CME / descending twice / comparator serialization /
+    //      nullsFirst / poll drain / spliterator exact bits / addAll sorting /
+    //      SequencedSet methods ------------------------------------------------------
+
+    static void testCaseInsensitiveComparator() {
+        TreeSet<String> ci = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        check(ci.comparator() == String.CASE_INSENSITIVE_ORDER,
+              "comparator() returns the CASE_INSENSITIVE_ORDER instance");
+        check(String.CASE_INSENSITIVE_ORDER.compare("A", "a") == 0,
+              "CASE_INSENSITIVE_ORDER compares 'A' and 'a' as equal");
+        ci.add("b");
+        ci.add("C");
+        ci.add("A");
+        check(new ArrayList<>(ci).equals(Arrays.asList("A", "b", "C")),
+              "case-insensitive iteration order A,b,C");
+        check(!ci.add("a"), "'a' is a duplicate of 'A' under CASE_INSENSITIVE_ORDER");
+        check(ci.size() == 3, "duplicate rejected by comparator equality");
+        check(ci.first().equals("A") && ci.last().equals("C"), "first/last under comparator");
+        check(ci.contains("B"), "contains('B') matches stored 'b'");
+        check(ci.remove("c"), "remove('c') removes stored 'C'");
+    }
+
+    static void testInclusiveBoundViews() {
+        TreeSet<Integer> s = filled(10);
+        SortedSet<Integer> head = s.headSet(4, true);
+        check(head.size() == 4 && head.last() == 4, "headSet(to, true) includes bound");
+        check(head.first() == 1, "headSet view first");
+        check(new ArrayList<>(head).equals(Arrays.asList(1, 2, 3, 4)), "headSet inclusive content");
+        check(s.headSet(4, false).size() == 3, "headSet(to, false) excludes bound");
+        check(s.headSet(4, false).last() == 3, "headSet exclusive last is below bound");
+
+        SortedSet<Integer> tail = s.tailSet(8, false);
+        check(tail.size() == 2 && tail.first() == 9, "tailSet(from, false) excludes bound");
+        check(s.tailSet(8, true).size() == 3 && s.tailSet(8, true).first() == 8,
+              "tailSet(from, true) includes bound");
+
+        NavigableSet<Integer> sub = s.subSet(3, true, 7, true);
+        check(new ArrayList<>(sub).equals(Arrays.asList(3, 4, 5, 6, 7)),
+              "subSet inclusive both bounds content");
+        check(sub.first() == 3 && sub.last() == 7, "subSet inclusive endpoints");
+
+        checkThrows(IllegalArgumentException.class, () -> tail.add(8),
+                    "tailSet(from,false) rejects add(from)");
+        checkThrows(IllegalArgumentException.class, () -> head.add(5),
+                    "headSet(to,true) rejects add(to+1)");
+    }
+
+    static void testViewLivenessAndCme() {
+        // sparse set (odd numbers) so in-range insertions are possible
+        TreeSet<Integer> s = new TreeSet<>(Arrays.asList(1, 3, 5, 7, 9));
+        SortedSet<Integer> sub = s.subSet(2, 8); // {3,5,7}
+        check(sub.size() == 3, "subSet initial size");
+        s.add(4); // parent inserts element inside the view range
+        check(sub.contains(4) && sub.size() == 4, "view sees parent insertion inside range");
+        s.remove(4);
+        check(!sub.contains(4) && sub.size() == 3, "view sees parent removal");
+        check(sub.comparator() == s.comparator(), "view comparator same instance as parent");
+
+        Iterator<Integer> it = sub.iterator();
+        it.next();
+        s.add(50); // parent structural modification outside the range
+        checkThrows(java.util.ConcurrentModificationException.class, it::next,
+                    "view iterator throws CME after parent modification");
+
+        // nested views
+        SortedSet<Integer> inner = sub.subSet(4, 6); // {5}
+        check(inner.size() == 1 && inner.first() == 5,
+              "nested subSet bounds relative to parent view");
+        inner.remove(5);
+        check(!s.contains(5), "nested view remove propagates to original set");
+    }
+
+    static void testDescendingTwice() {
+        TreeSet<Integer> s = filled(5);
+        NavigableSet<Integer> d2 = s.descendingSet().descendingSet();
+        check(d2.equals(s), "descending twice returns equivalent set");
+        check(d2.first() == 1 && d2.last() == 5, "descending twice restores orientation");
+        check(new ArrayList<>(d2).equals(Arrays.asList(1, 2, 3, 4, 5)),
+              "descending twice iteration ascending");
+        d2.add(6);
+        check(s.contains(6), "double-descending view is still live");
+    }
+
+    static class LengthComparator implements Comparator<String> {
+        @Override public int compare(String a, String b) { return a.length() - b.length(); }
+    }
+
+    static void testComparatorSerialization() throws Exception {
+        // serializable comparator survives round-trip with behavior intact
+        TreeSet<String> ci = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        ci.add("b");
+        ci.add("A");
+        TreeSet<String> back = roundTrip(ci);
+        check(back.comparator() == String.CASE_INSENSITIVE_ORDER,
+              "round-trip preserves comparator instance");
+        check(new ArrayList<>(back).equals(Arrays.asList("A", "b")), "round-trip order under comparator");
+        check(!back.add("a"), "comparator semantics survive round-trip ('a' duplicate of 'A')");
+
+        // null-tolerant comparator serializes; null handling survives
+        TreeSet<Integer> nf = new TreeSet<>(Comparator.nullsFirst(Comparator.naturalOrder()));
+        nf.add(5);
+        nf.add(null);
+        TreeSet<Integer> nfBack = roundTrip(nf);
+        check(nfBack.contains(null) && nfBack.first() == null,
+              "nullsFirst comparator round-trip keeps null first");
+
+        // non-serializable comparator: ObjectOutputStream throws NotSerializableException
+        TreeSet<String> bad = new TreeSet<>(new LengthComparator());
+        bad.add("xx");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            checkThrows(java.io.NotSerializableException.class, () -> oos.writeObject(bad),
+                        "writeObject with non-Serializable comparator throws NotSerializableException");
+        }
+    }
+
+    static void testNullsFirstOrdering() {
+        TreeSet<Integer> nf = new TreeSet<>(Comparator.nullsFirst(Comparator.naturalOrder()));
+        nf.add(5);
+        nf.add(null);
+        nf.add(1);
+        check(new ArrayList<>(nf).equals(Arrays.asList(null, 1, 5)), "nullsFirst puts null first");
+        check(nf.contains(null), "contains(null) with null-tolerant comparator");
+        check(nf.first() == null, "first() is null with nullsFirst");
+        check(nf.remove(null), "remove(null) removes null element");
+        check(nf.size() == 2 && !nf.contains(null), "size after null removal");
+        check(nf.pollFirst() == 1, "pollFirst after null removal returns smallest real element");
+        TreeSet<Integer> nl = new TreeSet<>(Comparator.nullsLast(Comparator.naturalOrder()));
+        nl.add(1);
+        nl.add(null);
+        check(nl.last() == null, "nullsLast puts null last");
+        check(nl.first() == 1, "nullsLast keeps real elements first");
+    }
+
+    static void testPollDrainSequences() {
+        TreeSet<Integer> s = filled(5);
+        List<Integer> ascending = new ArrayList<>();
+        while (!s.isEmpty()) ascending.add(s.pollFirst());
+        check(ascending.equals(Arrays.asList(1, 2, 3, 4, 5)), "pollFirst drains ascending");
+        check(s.isEmpty() && s.pollFirst() == null, "drained set pollFirst null");
+
+        TreeSet<Integer> s2 = filled(5);
+        List<Integer> descending = new ArrayList<>();
+        while (!s2.isEmpty()) descending.add(s2.pollLast());
+        check(descending.equals(Arrays.asList(5, 4, 3, 2, 1)), "pollLast drains descending");
+        check(s2.isEmpty() && s2.pollLast() == null, "drained set pollLast null");
+
+        // interleaved: pollFirst/pollLast peel from both ends
+        TreeSet<Integer> s3 = filled(4);
+        check(s3.pollFirst() == 1 && s3.pollLast() == 4 && s3.pollFirst() == 2 && s3.pollLast() == 3,
+              "interleaved pollFirst/pollLast peel from both ends");
+    }
+
+    static void testOrderAfterMiddleRemoval() {
+        TreeSet<Integer> s = filled(7);
+        s.remove(4);
+        check(new ArrayList<>(s).equals(Arrays.asList(1, 2, 3, 5, 6, 7)),
+              "iteration still ascending after middle removal");
+        s.add(4);
+        check(new ArrayList<>(s).equals(Arrays.asList(1, 2, 3, 4, 5, 6, 7)),
+              "re-insertion restores position in order");
+        check(s.removeIf(x -> x % 2 == 0), "removeIf removes evens");
+        check(new ArrayList<>(s).equals(Arrays.asList(1, 3, 5, 7)), "order maintained after removeIf");
+        List<Integer> viaStream = s.stream().collect(java.util.stream.Collectors.toList());
+        check(viaStream.equals(Arrays.asList(1, 3, 5, 7)), "stream iterates in sorted order");
+    }
+
+    static void testSpliteratorDeep() {
+        TreeSet<Integer> s = filled(64);
+        java.util.Spliterator<Integer> sp = s.spliterator();
+        check(sp.characteristics() == (java.util.Spliterator.ORDERED
+                | java.util.Spliterator.DISTINCT | java.util.Spliterator.SORTED
+                | java.util.Spliterator.SIZED),
+              "TreeSet spliterator exact characteristics ORDERED|DISTINCT|SORTED|SIZED (0x55)");
+        check(sp.getExactSizeIfKnown() == 64, "getExactSizeIfKnown == size");
+        check(sp.getComparator() == null, "SORTED spliterator getComparator null for natural order");
+
+        java.util.Spliterator<Integer> front = sp.trySplit();
+        check(front != null, "trySplit non-null");
+        List<Integer> a = new ArrayList<>(), b = new ArrayList<>();
+        front.forEachRemaining(a::add);
+        sp.forEachRemaining(b::add);
+        check(a.size() + b.size() == 64, "split halves sizes sum");
+        for (int i = 1; i < a.size(); i++) check(a.get(i - 1) < a.get(i), "split front half sorted");
+        for (int i = 1; i < b.size(); i++) check(b.get(i - 1) < b.get(i), "split back half sorted");
+        List<Integer> merged = new ArrayList<>(a);
+        merged.addAll(b);
+        check(merged.equals(new ArrayList<>(s)), "split halves in order reproduce the set");
+
+        TreeSet<Integer> rev = new TreeSet<>(Comparator.reverseOrder());
+        for (int i = 1; i <= 8; i++) rev.add(i);
+        check(rev.spliterator().getComparator() == rev.comparator(),
+              "getComparator() == comparator() for explicit comparator");
+    }
+
+    static void testHashCodeLockAndAddAllSorting() {
+        TreeSet<Integer> ts = filled(3);
+        check(ts.hashCode() == 6, "Set hashCode formula sum: {1,2,3} == 6");
+        check(!ts.equals(Arrays.asList(1, 2, 3)), "TreeSet.equals(List) false");
+
+        TreeSet<Integer> fromUnsorted = new TreeSet<>();
+        check(fromUnsorted.addAll(Arrays.asList(5, 1, 4, 2, 3)), "addAll unsorted input true");
+        check(new ArrayList<>(fromUnsorted).equals(Arrays.asList(1, 2, 3, 4, 5)),
+              "addAll sorts regardless of input order");
+        check(!fromUnsorted.addAll(Arrays.asList(2, 3)), "addAll all-duplicates false");
+
+        TreeSet<Integer> cloneRev = new TreeSet<>(Comparator.reverseOrder());
+        cloneRev.addAll(Arrays.asList(1, 2, 3));
+        @SuppressWarnings("unchecked")
+        TreeSet<Integer> cloned = (TreeSet<Integer>) cloneRev.clone();
+        check(cloned.comparator() == Comparator.<Integer>reverseOrder(),
+              "clone keeps comparator");
+        check(new ArrayList<>(cloned).equals(Arrays.asList(3, 2, 1)), "clone keeps comparator order");
+    }
+
+    static void testSequencedMethods() {
+        // JDK 21+: TreeSet inherits SequencedSet methods
+        TreeSet<Integer> s = filled(5);
+        check(s.getFirst() == 1 && s.getFirst().equals(s.first()), "getFirst == first (smallest)");
+        check(s.getLast() == 5 && s.getLast().equals(s.last()), "getLast == last (largest)");
+        check(s.removeFirst() == 1, "removeFirst removes and returns smallest");
+        check(s.removeLast() == 5, "removeLast removes and returns largest");
+        check(new ArrayList<>(s).equals(Arrays.asList(2, 3, 4)), "remaining after removeFirst/Last");
+        check(new ArrayList<>(s.reversed()).equals(Arrays.asList(4, 3, 2)),
+              "reversed() view descending");
+        check(new ArrayList<>(s.reversed()).equals(new ArrayList<>(s.descendingSet())),
+              "reversed() content equals descendingSet()");
+
+        TreeSet<Integer> empty = new TreeSet<>();
+        checkThrows(NoSuchElementException.class, empty::getFirst, "empty getFirst NSEE");
+        checkThrows(NoSuchElementException.class, empty::getLast, "empty getLast NSEE");
+        checkThrows(NoSuchElementException.class, empty::removeFirst, "empty removeFirst NSEE");
+        checkThrows(NoSuchElementException.class, empty::removeLast, "empty removeLast NSEE");
+        // addFirst/addLast throwing UOE on a sorted set is asserted in testBlackBox above
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testNaturalOrder();
@@ -457,6 +694,17 @@ public class TreeSetTest {
         testClone();
         testSerialization();
         testStateInvariants();
+        testCaseInsensitiveComparator();
+        testInclusiveBoundViews();
+        testViewLivenessAndCme();
+        testDescendingTwice();
+        testComparatorSerialization();
+        testNullsFirstOrdering();
+        testPollDrainSequences();
+        testOrderAfterMiddleRemoval();
+        testSpliteratorDeep();
+        testHashCodeLockAndAddAllSorting();
+        testSequencedMethods();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

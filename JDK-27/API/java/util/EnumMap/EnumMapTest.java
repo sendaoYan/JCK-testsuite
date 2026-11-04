@@ -248,6 +248,224 @@ public class EnumMapTest {
         check(!a.equals(b), "different content not equal");
     }
 
+    // ---- compute/merge full branch matrix -----------------------------------
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void checkPropagatesSame(RuntimeException marker, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": nothing was thrown");
+        } catch (Throwable t) {
+            if (t == marker) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected same " + marker.getClass().getSimpleName()
+                    + " instance but got " + t.getClass().getName(), t);
+        }
+    }
+
+    static void testComputeMergeMatrix() {
+        EnumMap<Color, Integer> m = new EnumMap<>(Color.class);
+        m.put(Color.RED, 1);
+
+        // putIfAbsent / conditional remove / replace both forms / getOrDefault
+        check(m.putIfAbsent(Color.RED, 9) == 1 && m.get(Color.RED) == 1, "putIfAbsent present keeps");
+        check(m.putIfAbsent(Color.GREEN, 2) == null && m.get(Color.GREEN) == 2,
+              "putIfAbsent absent inserts");
+        check(!m.remove(Color.RED, 99), "remove(k,v) mismatched value false");
+        check(m.remove(Color.RED, 1) && !m.containsKey(Color.RED), "remove(k,v) matched removes");
+        check(m.replace(Color.GREEN, 20) == 2 && m.get(Color.GREEN) == 20, "replace(K,V) returns old");
+        check(m.replace(Color.BLUE, 5) == null && !m.containsKey(Color.BLUE),
+              "replace(K,V) absent no insert");
+        check(!m.replace(Color.GREEN, 2, 21) && m.get(Color.GREEN) == 20,
+              "replace(K,old,new) mismatch no-op");
+        check(m.replace(Color.GREEN, 20, 21) && m.get(Color.GREEN) == 21,
+              "replace(K,old,new) match replaces");
+        check(m.getOrDefault(Color.GREEN, -1) == 21 && m.getOrDefault(Color.BLUE, -1) == -1,
+              "getOrDefault");
+
+        // computeIfAbsent
+        m.clear();
+        m.put(Color.RED, 1);
+        check(m.computeIfAbsent(Color.GREEN, k -> 2) == 2 && m.get(Color.GREEN) == 2,
+              "computeIfAbsent absent inserts");
+        final int[] called = {0};
+        check(m.computeIfAbsent(Color.RED, k -> { called[0]++; return 5; }) == 1,
+              "computeIfAbsent present returns existing");
+        check(called[0] == 0, "computeIfAbsent present does not invoke fn");
+        check(m.computeIfAbsent(Color.BLUE, k -> null) == null, "computeIfAbsent null result null");
+        check(!m.containsKey(Color.BLUE), "computeIfAbsent null result leaves no entry");
+        RuntimeException boom = new RuntimeException("boom");
+        checkPropagatesSame(boom, () -> m.computeIfAbsent(Color.BLUE, k -> { throw boom; }),
+                "computeIfAbsent propagates fn exception");
+        check(!m.containsKey(Color.BLUE) && m.size() == 2, "state intact after exception");
+
+        // computeIfPresent
+        check(m.computeIfPresent(Color.RED, (k, v) -> v + 10) == 11 && m.get(Color.RED) == 11,
+              "computeIfPresent present computes");
+        called[0] = 0;
+        check(m.computeIfPresent(Color.BLUE, (k, v) -> { called[0]++; return 1; }) == null,
+              "computeIfPresent absent returns null");
+        check(called[0] == 0, "computeIfPresent absent does not invoke fn");
+        check(m.computeIfPresent(Color.RED, (k, v) -> null) == null && !m.containsKey(Color.RED),
+              "computeIfPresent null result removes");
+        checkPropagatesSame(boom, () -> m.computeIfPresent(Color.GREEN, (k, v) -> { throw boom; }),
+                "computeIfPresent propagates fn exception");
+        check(m.get(Color.GREEN) == 2, "entry unchanged after computeIfPresent exception");
+
+        // compute
+        check(m.compute(Color.RED, (k, v) -> v == null ? 100 : v + 1) == 100,
+              "compute absent inserts");
+        check(m.compute(Color.RED, (k, v) -> v + 1) == 101, "compute present recomputes");
+        check(m.compute(Color.RED, (k, v) -> null) == null && !m.containsKey(Color.RED),
+              "compute null removes");
+        checkPropagatesSame(boom, () -> m.compute(Color.GREEN, (k, v) -> { throw boom; }),
+                "compute propagates fn exception");
+        check(m.get(Color.GREEN) == 2, "entry unchanged after compute exception");
+
+        // merge
+        m.clear();
+        called[0] = 0;
+        check(m.merge(Color.RED, 1, (x, y) -> { called[0]++; return 5; }) == 1 && called[0] == 0,
+              "merge absent puts value without fn");
+        check(m.merge(Color.RED, 2, Integer::sum) == 3, "merge present remaps");
+        check(m.merge(Color.RED, 4, (x, y) -> null) == null && !m.containsKey(Color.RED),
+              "merge null result removes");
+        m.put(Color.GREEN, 1);
+        checkPropagatesSame(boom, () -> m.merge(Color.GREEN, 1, (x, y) -> { throw boom; }),
+                "merge propagates fn exception");
+        check(m.get(Color.GREEN) == 1, "entry unchanged after merge exception");
+        checkThrows(NullPointerException.class, () -> m.merge(Color.BLUE, null, Integer::sum),
+                    "merge null value NPE");
+        checkThrows(NullPointerException.class, () -> m.computeIfAbsent(Color.BLUE, null),
+                    "computeIfAbsent null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.computeIfPresent(Color.BLUE, null),
+                    "computeIfPresent null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.compute(Color.BLUE, null),
+                    "compute null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.merge(Color.BLUE, 1, null),
+                    "merge null fn NPE");
+    }
+
+    // ---- branches specific to keys mapped to null ----------------------------
+
+    static void testMappedToNullBranches() {
+        EnumMap<Color, String> m = new EnumMap<>(Color.class);
+        m.put(Color.RED, null);
+
+        // get()==null but containsKey: computeIfAbsent still applies the function
+        check(m.computeIfAbsent(Color.RED, k -> "x").equals("x"), "computeIfAbsent mapped-to-null calls fn");
+        check(m.get(Color.RED).equals("x"), "mapped-to-null replaced by fn result");
+
+        // remove(k, null) removes when the current value is null
+        m.put(Color.GREEN, null);
+        check(m.remove(Color.GREEN, null) && !m.containsKey(Color.GREEN),
+              "remove(k, null) removes null-valued entry");
+        check(m.containsValue(null) == false, "no null value remains");
+
+        // replace(k, null, v) succeeds when mapped to null
+        m.put(Color.BLUE, null);
+        check(m.replace(Color.BLUE, null, "b"), "replace(k, null, v) on null value");
+        check(m.get(Color.BLUE).equals("b"), "replaced from null");
+
+        // merge treats a null-valued entry as absent: value inserted, fn not invoked
+        m.put(Color.RED, null);
+        final int[] called = {0};
+        check("5".equals(m.merge(Color.RED, "5", (x, y) -> { called[0]++; return "fn"; })),
+              "merge on mapped-to-null puts value");
+        check(called[0] == 0, "merge on mapped-to-null does not invoke fn");
+        check(m.get(Color.RED).equals("5"), "merge value stored");
+
+        // non-matching old value leaves entry untouched
+        check(!m.replace(Color.RED, "zz", "y") && m.get(Color.RED).equals("5"),
+              "replace mismatch on mapped value no-op");
+        // null-value queries
+        check(m.containsValue(null) == false, "containsValue(null) false without null values");
+        m.put(Color.GREEN, null);
+        check(m.containsValue(null), "containsValue(null) true with null value");
+    }
+
+    // ---- wrong key type ------------------------------------------------------
+
+    static void testWrongKeyType() {
+        EnumMap<Color, String> m = new EnumMap<>(Color.class);
+        m.put(Color.RED, "r");
+        @SuppressWarnings("rawtypes")
+        Map raw = m;
+        checkThrows(ClassCastException.class, () -> raw.put(new Object(), "x"),
+                    "put(wrong key type) CCE");
+        check(m.size() == 1, "failed put leaves state");
+        check(raw.get(new Object()) == null, "get(wrong key type) null");
+        check(!raw.containsKey(new Object()), "containsKey(wrong key type) false");
+    }
+
+    // ---- iterators are index-based (NOT fail-fast) ---------------------------
+
+    static void testIteratorsNotFailFast() {
+        EnumMap<Color, String> m = new EnumMap<>(Color.class);
+        m.put(Color.RED, "r");
+        m.put(Color.GREEN, "g");
+        java.util.Iterator<Color> it = m.keySet().iterator();
+        check(Color.RED == it.next(), "first key");
+        m.put(Color.BLUE, "b"); // higher-ordinal insertion mid-iteration
+        check(Color.GREEN == it.next(), "second key after structural add");
+        check(Color.BLUE == it.next(), "later-ordinal add is seen by in-flight iterator");
+        check(!it.hasNext(), "iterator exhausted");
+    }
+
+    // ---- bulk operations on views --------------------------------------------
+
+    static void testBulkViewOps() {
+        EnumMap<Color, String> m = new EnumMap<>(Color.class);
+        m.put(Color.RED, "r");
+        m.put(Color.GREEN, "g");
+        m.put(Color.BLUE, "b");
+        check(m.keySet().containsAll(Arrays.asList(Color.RED, Color.BLUE)), "keySet containsAll");
+        check(m.keySet().retainAll(Arrays.asList(Color.RED, Color.GREEN)),
+              "keySet retainAll modified");
+        check(m.size() == 2 && !m.containsKey(Color.BLUE), "retainAll reflected");
+        check(new ArrayList<>(m.keySet()).equals(Arrays.asList(Color.RED, Color.GREEN)),
+              "declaration order kept after retainAll");
+
+        HashMap<Color, String> src = new HashMap<>();
+        src.put(Color.BLUE, "bb");
+        m.putAll(src);
+        check(m.size() == 3 && m.get(Color.BLUE).equals("bb"), "putAll from HashMap");
+
+        m.keySet().removeAll(Arrays.asList(Color.RED));
+        check(m.size() == 2 && !m.containsKey(Color.RED), "keySet removeAll reflected");
+    }
+
+    // ---- empty map serialization + order after round-trip ---------------------
+
+    static void testEmptyAndRoundTripOrder() throws Exception {
+        EnumMap<Color, String> e = new EnumMap<>(Color.class);
+        EnumMap<Color, String> back = roundTrip(e);
+        check(back.isEmpty() && back.equals(e), "empty EnumMap round-trip");
+        back.put(Color.GREEN, "g");
+        check(back.size() == 1, "deserialized empty map usable");
+
+        EnumMap<Color, String> m = new EnumMap<>(Color.class);
+        m.put(Color.BLUE, "blue");
+        m.put(Color.RED, "red");
+        EnumMap<Color, String> r = roundTrip(m);
+        check(new ArrayList<>(r.keySet()).equals(Arrays.asList(Color.RED, Color.BLUE)),
+              "round-trip iterates in ordinal order regardless of insertion order");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testOrderAndOps();
@@ -260,6 +478,12 @@ public class EnumMapTest {
         testNullKeyRejectionExtended();
         testSerialization();
         testCrossImplEquals();
+        testComputeMergeMatrix();
+        testMappedToNullBranches();
+        testWrongKeyType();
+        testIteratorsNotFailFast();
+        testBulkViewOps();
+        testEmptyAndRoundTripOrder();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

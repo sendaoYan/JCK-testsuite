@@ -49,3 +49,24 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 契约深化补充（第二轮：构造消息/批量返回值/hashCode 公式/增长/精确特征位/深度序列化）
+
+新增方法（只追加，不动既有内容）：
+
+| 测试点 | 用例方法 |
+|---|---|
+| 构造器异常消息精确锁定（"Illegal initial capacity"/"Illegal load factor" 前缀）+ 从 SortedSet/HashSet 拷贝 | testCtorExceptionMessages |
+| 批量操作返回值契约：addAll(empty)/removeAll(无命中)/retainAll(超集)/removeIf(无命中) 均 false；containsAll(empty) true；addAll(self) false；四个批量方法 null 参数 NPE | testBatchOpReturnContracts |
+| Set.hashCode 公式手算锁定：{1,2,3}=6、{'a','b'}=195、{null,'a'}=97、空集 0；Set.equals(List) 恒 false | testHashCodeFormulaLock |
+| 100 元素增长后全 contains、forEach 恰好 N 次、stream count/collect、parallelStream collect 多重集相等、forEachRemaining 只访问剩余 | testIterationAndGrowth |
+| spliterator 精确特征位 == SIZED\|DISTINCT（0x41）、trySplit 两半多重集并集==原集、tryAdvance 耗尽后 false | testSpliteratorDeep |
+| 空集 round-trip 可用、自定义 Serializable 元素类 round-trip 后 equals/contains 命中等值实例 | testSerializationDeep |
+
+负例精确异常表（新锁定）：
+- `new HashSet(-1)` → IAE，消息前缀 "Illegal initial capacity"
+- `new HashSet(1, 0f)` → IAE，消息前缀 "Illegal load factor"
+- `addAll/containsAll/removeAll/retainAll(null)` → NPE
+- Set 与任意 List equals → false（不抛异常）
+
+JDK-8 vs JDK-27：双侧 spliterator 特征位一致（HashSet 0x41）；无版本差异。

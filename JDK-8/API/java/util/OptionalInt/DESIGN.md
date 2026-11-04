@@ -40,3 +40,20 @@
 ## 注意事项
 
 确定性输入；无墙钟/随机/全局副作用；headless-safe 不加 `@key`。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| getAsInt NSEE 消息 "No value present" | testExceptionMessages |
+| hashCode 公式：empty→0、of(v)→Integer.hashCode(v)（含 MIN/MAX） | testHashCodeFormula |
+| equals 跨类型：≠null/Integer/Optional/OptionalLong/OptionalDouble.empty | testEqualsCrossType |
+| toString 精确："OptionalInt[-2147483648]"/"[2147483647]"/"[0]"/".empty" | testToStringExact |
+| 回调异常同一实例透传（ifPresent/orElseGet）且容器不变 | testCallbackExceptionRelay |
+| API 面锁定：无 map/flatMap/ofNullable；JDK-8 无 isEmpty/ifPresentOrElse/stream/orElseThrow() | testSurfaceLock |
+
+### 易错细节
+
+- 特化 Optional 无 `map/flatMap/filter/ofNullable`（与 `Optional<T>` 的面差异，反射锁定）。
+- `of(v).hashCode() == v`（Integer.hashCode 即原值）；empty→0。
+- equals 只认 OptionalInt：`OptionalInt.of(5).equals(Integer.valueOf(5))==false`。

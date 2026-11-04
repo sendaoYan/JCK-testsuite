@@ -31,3 +31,20 @@
 - **边界/异常**：空 `getAsDouble`/`orElseThrow()` 抛 `NoSuchElementException`；空 `stream()` 0 元素、present 1 元素。
 - **自动化**：`OptionalDoubleTest.testBlackBox()` 内 `testOfGet/testOrElse/testIfPresentAndStream/testEqualsToString`。
 - **健壮性（多运行/并跑/跨平台一致）**：固定 double 输入（2.5 可精确表示）、无墙钟/无 Random；`toString` 为确定值 `OptionalDouble[2.5]`/`OptionalDouble.empty`；无全局副作用/文件/网络/线程；不测超越函数。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| getAsDouble/orElseThrow() NSEE 消息 "No value present" | testExceptionMessages |
+| hashCode 公式：empty→0、of(0.0)→0、of(-0.0)→Integer.MIN_VALUE、of(1.0)→1072693248、NaN→Double.hashCode(NaN) | testHashCodeFormula |
+| equals 跨类型 + Double.compare 语义（NaN 自反、±0 互斥对称、±Inf） | testEqualsCrossType |
+| toString 精确（含 -0.0 保留符号、NaN、±Inf、科学计数 1.5E300） | testToStringExact |
+| orElse 特殊值按位透传（NaN、-0.0 判 1/x） | testOrElseSpecialValues |
+| 回调异常同一实例透传且容器不变 | testCallbackExceptionRelay |
+| ifPresentOrElse null 矩阵 + stream（sum/NaN 载送/findAny）+ orElseThrow()==getAsDouble() | testJ9PlusDeep |
+
+### 易错细节
+
+- equals 用 `Double.compare`（NaN 自反、+0≠-0）；hashCode 用 Double.hashCode 位模式——二者一致。
+- `of(-0.0).hashCode() == Integer.MIN_VALUE`；`of(1.0).hashCode() == 0x3FF00000`。

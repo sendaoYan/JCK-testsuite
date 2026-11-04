@@ -25,3 +25,18 @@
 | ofLazy | 惰性求值 |
 
 共 5 组场景、约 14 个 check（`testBlackBox()`）。
+
+
+## 5. 契约级深化追加（2026-11，38→191 断言）
+
+新增方法：testImmutableFactories（JDK-9+ 工厂）/ testEqualsHashCodeFormula / testEntryContract /
+testDefaultMethodImplementationPaths / testPresentNullValueBranches / testViewSemantics /
+testIterationAndInvariants（与 JDK-8 侧同源，另有 27 侧白盒 testWhiteBox/ofLazy 保留）。
+
+| 维度 | 锁定内容 |
+|---|---|
+| Map.of 全家 | of() ~ of(k,v,...)、ofEntries、entry、copyOf；全部 mutator（put/putIfAbsent/remove/clear/compute/merge/replaceAll）UOE；null key/value NPE；重复键 IAE；copyOf(null) NPE |
+| of 迭代序 | **不保证参数序**（哈希探针布局，实测 Map.of("a",1,"b",2,"c",3) 序为 [c,b,a]）——只断言内容集合相等，不断言顺序（与 List.of 不同！） |
+| equals/hashCode 公式 | {"a"=1,"b"=2,"c"=3} hash == 288（96×3）；与 LinkedHashMap 同内容 equals；Map.entry("a",1).hashCode()==96、与 SimpleEntry 互等 |
+| copyOf 独立性 | 原 HashMap 后续修改不传导到 copy；copy 含 null value → NPE |
+| present-null-value 分支 / 默认方法路径 / 视图 | 同 JDK-8 侧（ProbeMap 探针 + 全分支矩阵） |

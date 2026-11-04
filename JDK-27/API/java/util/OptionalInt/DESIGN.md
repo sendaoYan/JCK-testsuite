@@ -31,3 +31,16 @@
 - **边界/异常**：空 `getAsInt`/`orElseThrow()` 抛 `NoSuchElementException`；`orElseGet` supplier 在 present 时不执行；空 `stream()` 0 元素、present 1 元素。
 - **自动化**：`OptionalIntTest.testBlackBox()` 内 `testOfGet/testOrElse/testIfPresentAndStream/testEqualsToString`。
 - **健壮性（多运行/并跑/跨平台一致）**：固定 int 输入、无墙钟/无 Random；`toString` 为确定值 `OptionalInt[5]`/`OptionalInt.empty`；无全局副作用/文件/网络/线程；不硬编码平台字符。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| getAsInt/orElseThrow() NSEE 消息 "No value present" | testExceptionMessages |
+| hashCode 公式：empty→0、of(v)→Integer.hashCode(v)（含 MIN/MAX） | testHashCodeFormula |
+| equals 跨类型：≠null/Integer/Optional/OptionalLong/OptionalDouble.empty | testEqualsCrossType |
+| toString 精确（MIN/MAX/0/负数/empty） | testToStringExact |
+| 回调异常同一实例透传（ifPresent/orElseGet）且容器不变 | testCallbackExceptionRelay |
+| ifPresentOrElse null 矩阵（仅实际分支检查非空） | testJ9PlusDeep |
+| stream()：sum/max/findAny/limit 流水线 | testJ9PlusDeep |
+| orElseThrow() == getAsInt()（present 同值） | testJ9PlusDeep |

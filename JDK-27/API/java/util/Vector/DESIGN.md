@@ -51,3 +51,16 @@ ArrayList / ArrayDeque。
 
 健壮性：固定输入、无墙钟/随机；容量断言取确定性精确值（3→8）；顺序结构无迭代顺序依赖；无全局副作用；
 headless，无 `@key`。
+
+## 深化批次 II（契约级追加）
+
+- **Enumeration 契约与 Iterator 对照**：`elements()` 空表 nextElement→NSEE；**Vector 的 Enumeration 不是
+  fail-fast**（结构 add 后仍可继续），而同一修改使 Iterator 抛 CME——两者行为差异是规范明确的。
+- **legacy 越界矩阵**：elementAt(±)/insertElementAt(size+1)/removeElementAt(size)/setElementAt(size)→
+  **ArrayIndexOutOfBoundsException**；firstElement/lastElement 空表→NSEE；失败操作不改状态。
+- **indexOf(obj, fromIndex)/lastIndexOf(obj, index)**：跳过前缀、fromIndex≥size 返回 -1、null 检索、反向界。
+- **subList 越界**：from<0 或 to>size→IOOBE（Vector 实现为 IndexOutOfBoundsException 基类）、from>to→IAE。
+- **capacity 契约**：默认 10、Vector(7)=7；负 capacityIncrement 合法（按倍增扩容，仅断言 capacity>=size）。
+- **hashCode 公式**（AbstractList 算法：128/4066/126046）。
+- **JDK-27 追加**：Enumeration.asIterator() 适配；SequencedCollection 默认方法继承（getFirst/getLast/
+  addFirst/addLast/removeFirst/removeLast/reversed，reversed 视图写透传）。

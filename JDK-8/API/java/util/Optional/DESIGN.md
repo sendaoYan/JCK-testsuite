@@ -55,3 +55,24 @@
 
 - 确定性：固定字符串输入；equals/hashCode/toString 为确定值；无墙钟/随机/文件/网络/线程/全局副作用。
 - headless-safe：不加 `@key`。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| empty get() NSEE 消息恒为 "No value present" | testExceptionMessages |
+| hashCode 公式：empty→0、of(x)→x.hashCode()（of(1)→1）；持有可变对象时 hash 跟随状态 | testHashCodeFormula |
+| equals 跨类型矩阵：Integer 1 ≠ Long 1（对称）、数组元素恒不等、empty==ofNullable(null) | testEqualsCrossType |
+| toString 用持有值的 toString（自定义对象 "Optional[TOSTR]"）、幂等 | testToStringDeep |
+| 回调异常同一实例透传（filter/map/flatMap/ifPresent/orElseGet，`==` 断言）且容器不变 | testCallbackExceptionRelay |
+| 单子律：map 复合/恒等、flatMap-map 融合、filter 合取、empty 上的对应律 | testMonadicLaws |
+| get/isPresent 可重复调用（值不被消费） | testRepeatedAccess |
+| JDK-8 API 面锁定：isEmpty/ifPresentOrElse/or/stream/orElseThrow() 反射断言不存在 | testSurfaceLock |
+
+### 本轮锁定的易错规范细节
+
+- `empty get()`/异常消息精确为 `"No value present"`（双侧一致）。
+- `Optional.empty().hashCode() == 0`（内部持有 null）；`of(1).hashCode() == 1`。
+- `Optional.of(new int[]{1}) != Optional.of(new int[]{1})`：数组 equals 是同一性。
+- 回调抛出的异常**不**被包装，原对象透传（assertSame）；异常后容器内容不变。
+- JDK-8 无 `isEmpty/ifPresentOrElse/or/stream/orElseThrow()`（NoSuchMethodException 锁定）；JDK-27 侧行为断言见 27 侧文件。

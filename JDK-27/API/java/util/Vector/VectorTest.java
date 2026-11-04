@@ -32,6 +32,7 @@ import java.util.ConcurrentModificationException;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Vector;
 
 public class VectorTest {
@@ -310,6 +311,113 @@ public class VectorTest {
         check(gathered.equals(Arrays.asList(1, 2, 3, 4)), "spliterator order");
     }
 
+    // ---- deepened II: hashCode 公式 / Enumeration 契约与 Iterator 对照 /
+    //      legacy 越界矩阵 / indexOf(from) / 负 increment / SequencedCollection 继承 --
+
+    static void testHashCodeFormula() {
+        check(new Vector<String>().hashCode() == 1, "hashCode of empty vector is 1");
+        check(new Vector<>(Arrays.asList("a")).hashCode() == 128, "hashCode [a] = 128");
+        check(new Vector<>(Arrays.asList("a", "b")).hashCode() == 4066, "hashCode [a,b] = 4066");
+        check(new Vector<>(Arrays.asList("a", "b", null)).hashCode() == 126046, "hashCode [a,b,null] = 126046");
+        check(new Vector<String>().capacity() == 10, "default capacity exactly 10");
+    }
+
+    static void testEnumerationContract() {
+        expect(NoSuchElementException.class, new Vector<String>().elements()::nextElement,
+               "empty enumeration next NSEE");
+        // Vector's legacy Enumeration is NOT fail-fast; its Iterator IS
+        Vector<String> v = new Vector<>(Arrays.asList("a", "b", "c"));
+        Enumeration<String> e = v.elements();
+        check(e.nextElement().equals("a"), "first element");
+        v.add("d");
+        check(e.hasMoreElements(), "enumeration still usable after add (not fail-fast)");
+        Vector<String> v2 = new Vector<>(Arrays.asList("a", "b", "c"));
+        Iterator<String> it = v2.iterator();
+        it.next();
+        v2.add("d");
+        expect(ConcurrentModificationException.class, it::next, "iterator CME for same change");
+        // Enumeration.asIterator() (JDK 9+) adapts enumeration to Iterator
+        Vector<Integer> vi = new Vector<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> adapted = vi.elements().asIterator();
+        StringBuilder sb = new StringBuilder();
+        adapted.forEachRemaining(x -> sb.append(x));
+        check(sb.toString().equals("123"), "Enumeration.asIterator order");
+    }
+
+    static void testElementAtBounds() {
+        Vector<String> v = new Vector<>(Arrays.asList("a", "b"));
+        expect(ArrayIndexOutOfBoundsException.class, () -> v.elementAt(2), "elementAt(size) AIOOBE");
+        expect(ArrayIndexOutOfBoundsException.class, () -> v.elementAt(-1), "elementAt(-1) AIOOBE");
+        expect(ArrayIndexOutOfBoundsException.class, () -> v.insertElementAt("z", 3),
+               "insertElementAt(size+1) AIOOBE");
+        expect(ArrayIndexOutOfBoundsException.class, () -> v.removeElementAt(2),
+               "removeElementAt(size) AIOOBE");
+        expect(ArrayIndexOutOfBoundsException.class, () -> v.setElementAt("z", 2),
+               "setElementAt(size) AIOOBE");
+        check(v.equals(Arrays.asList("a", "b")), "failed legacy ops leave vector intact");
+        v.insertElementAt("z", 2);
+        check(v.equals(Arrays.asList("a", "b", "z")), "insertElementAt(size) appends");
+        v.setElementAt("Z", 2);
+        check(v.get(2).equals("Z"), "setElementAt replaces in place");
+        expect(NoSuchElementException.class, new Vector<String>()::firstElement, "firstElement empty NSEE");
+        expect(NoSuchElementException.class, new Vector<String>()::lastElement, "lastElement empty NSEE");
+    }
+
+    static void testIndexOfFromIndex() {
+        Vector<String> v = new Vector<>(Arrays.asList("a", "b", "a", "b", "a"));
+        check(v.indexOf("a", 1) == 2, "indexOf from index skips earlier");
+        check(v.indexOf("a", 4) == 4, "indexOf from last position");
+        check(v.indexOf("a", 5) == -1, "indexOf from size returns -1");
+        check(v.indexOf("a", 100) == -1, "indexOf fromIndex > size yields -1");
+        check(v.lastIndexOf("a", 3) == 2, "lastIndexOf bounded above by 3");
+        check(v.lastIndexOf("a", 1) == 0, "lastIndexOf scans backward from bound");
+        check(v.lastIndexOf("a") == 4, "lastIndexOf unbounded");
+        Vector<String> vn = new Vector<>(Arrays.asList("x", null, "y"));
+        check(vn.indexOf(null, 1) == 1, "indexOf(null, from)");
+        check(vn.lastIndexOf(null, 2) == 1, "lastIndexOf(null, bound)");
+    }
+
+    static void testSubListContract() {
+        Vector<Integer> v = new Vector<>(Arrays.asList(1, 2, 3, 4));
+        List<Integer> sub = v.subList(1, 3);
+        check(sub.hashCode() == Arrays.asList(2, 3).hashCode(), "subList hashCode own content");
+        check(sub.equals(Arrays.asList(2, 3)) && Arrays.asList(2, 3).equals(sub), "subList equals segment");
+        sub.remove(0);
+        check(v.equals(Arrays.asList(1, 3, 4)), "subList remove shrinks parent");
+        check(v.subList(0, 0).isEmpty(), "empty subList view");
+        check(v.subList(v.size(), v.size()).isEmpty(), "tail empty subList (size,size)");
+        expect(IllegalArgumentException.class, () -> v.subList(2, 1), "subList(from>to) IAE");
+        expect(IndexOutOfBoundsException.class, () -> v.subList(-1, 2), "subList(-1,2) IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> v.subList(0, 5), "subList(0,size+1) IOOBE");
+    }
+
+    static void testNegativeIncrementAndLegacy() {
+        Vector<String> v = new Vector<>(2, -1);
+        check(v.capacity() == 2, "Vector(2,-1) initial capacity 2");
+        v.add("a"); v.add("b"); v.add("c");
+        check(v.size() == 3 && v.capacity() >= 3, "grows despite negative increment");
+        check(!v.removeElement("zz"), "removeElement absent returns false");
+        check(v.removeElement("a"), "removeElement present returns true");
+        check(v.equals(Arrays.asList("b", "c")), "removeElement removed first match");
+    }
+
+    static void testSequencedDefaultsInherited() {
+        // Vector does not override List's SequencedCollection defaults; inherited behavior
+        Vector<String> v = new Vector<>(Arrays.asList("a", "b", "c"));
+        check(v.getFirst().equals("a") && v.getLast().equals("c"), "getFirst/getLast inherited");
+        v.addFirst("0");
+        v.addLast("d");
+        check(v.equals(Arrays.asList("0", "a", "b", "c", "d")), "addFirst/addLast inherited");
+        check(v.removeFirst().equals("0") && v.removeLast().equals("d"), "removeFirst/removeLast inherited");
+        check(v.reversed().equals(Arrays.asList("c", "b", "a")), "reversed() inherited view");
+        // reversed() is live
+        List<String> rev = v.reversed();
+        rev.set(0, "C");
+        check(v.get(2).equals("C"), "reversed() write passes through");
+        expect(NoSuchElementException.class, new Vector<String>()::getFirst, "empty getFirst NSEE");
+        expect(NoSuchElementException.class, new Vector<String>()::removeLast, "empty removeLast NSEE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testCapacity();
@@ -325,6 +433,13 @@ public class VectorTest {
         testNullAllowance();
         testSerialization();
         testCrossImplEquals();
+        testHashCodeFormula();
+        testEnumerationContract();
+        testElementAtBounds();
+        testIndexOfFromIndex();
+        testSubListContract();
+        testNegativeIncrementAndLegacy();
+        testSequencedDefaultsInherited();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

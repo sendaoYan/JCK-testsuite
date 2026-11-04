@@ -39,3 +39,27 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；用 contains 而非迭代顺序断言。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法
+- `RecSet`（记录 iterator() 创建数与 remove(Object) 委托数的探针）→
+  `testRemoveAllOptimization`：**this>arg 时骨架迭代参数、对参数每个元素调 this.remove**
+  （委托数==arg.size、this.iterator() 从未创建）；**this<=arg 时走 this 迭代器删**
+  （this.remove 零调用、迭代器创建）；等大小走迭代器分支；不相交/空参/空 this 全返回 false。
+- `testCrossImplEquals` — 探针与 HashSet/LinkedHashSet/TreeSet 同内容互等（对称），
+  hashCode 相等且==Σ元素hash（97+98 锁定）；null 元素贡献 0；空集 0 且互等；Set 永不 equals List。
+- `testInheritedOps` — retainAll（继承自 AbstractCollection，走迭代器、从不调 this.remove）、
+  toArray 复用+null 终止、clear 经迭代器、contains 扫描。
+
+### 负例精确异常表（本类无新增抛异常路径；行为断言为主）
+| 操作 | 行为 |
+|---|---|
+| removeAll(空参/不相交/空 this) | false，无元素变化 |
+| retainAll 经迭代器路径 | this.remove(Object) 不被调用（计数=0） |
+
+### 关键规范细节（易错，已锁入断言）
+- AbstractSet.removeAll 的 size 分支选择以 `size() > c.size()` 为界（**等大小时走迭代器分支**）。
+- hashCode = Σ元素hash；equals = size 相等且互相 containsAll（跨实现成立）。

@@ -23,3 +23,20 @@
   - 同种子序列一致、nextInt/nextLong 确定性。
   - `nextInt(bound)`、`nextInt(origin,bound)`、`nextLong(bound)`、`nextDouble` 范围。
   - split 子序列确定、父序列不受 split 影响、嵌套 split。
+
+## 契约深化（第二轮，追加）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | IAE 精确消息（含 27 侧 nextDouble(0.0) = "bound must be finite and positive"） | testIaeMessages |
+| P0 | 固定 seed=42 的 nextInt() 前 5 值精确锁（与 JDK-8 逐值一致） | testFirstValuesLocked |
+| P0 | nextLong/nextDouble/nextBoolean 同 seed 双实例 5 值全等 | testFirstValuesLocked |
+| P0 | split() 子实例确定性 + 子实例可用 | testSplitContracts |
+| P0 | 无 setSeed；nextBytes/nextGaussian（RandomGenerator 新面）确定性 | testJdk27Surface |
+
+### 易错规范细节（实测锁定）
+
+- SR(42) nextInt 前 5 值与 JDK-8 **逐值一致**（跨大版本确定性）。
+- nextDouble(0.0) 消息两侧不同：27 走 RandomGenerator 默认实现。
+- JDK-27 的 nextInt(int)/nextLong(long) 等不再在类上声明（继承 RandomGenerator 默认/覆写），javap 只列声明方法。
+- nextBytes 固定 seed 确定性；nextGaussian 固定 seed 双实例序列全等。

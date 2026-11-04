@@ -193,9 +193,112 @@ public class OptionalLongTest {
         testBoundaryEquivalence();
         testNullMatrix();
     }
+
+    // ===================== 契约深化（追加） =====================
+
+    // NSEE 消息文本属于可观察契约面。
+    static void testExceptionMessages() {
+        try {
+            OptionalLong.empty().getAsLong();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty getAsLong NSEE message");
+        }
+        try {
+            OptionalLong.empty().orElseThrow();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty orElseThrow() NSEE message");
+        }
+    }
+
+    // hashCode() == (isPresent) ? Long.hashCode(value) : 0。
+    static void testHashCodeFormula() {
+        check(OptionalLong.empty().hashCode() == 0, "empty hashCode == 0");
+        check(OptionalLong.of(10L).hashCode() == Long.hashCode(10L), "of(10) hashCode == Long.hashCode(10)");
+        check(OptionalLong.of(-1L).hashCode() == Long.hashCode(-1L), "of(-1) hashCode");
+        check(OptionalLong.of(Long.MIN_VALUE).hashCode() == Long.hashCode(Long.MIN_VALUE),
+              "of(MIN_VALUE) hashCode == Long.hashCode(MIN_VALUE)");
+        check(OptionalLong.of(Long.MAX_VALUE).hashCode() == Long.hashCode(Long.MAX_VALUE),
+              "of(MAX_VALUE) hashCode == Long.hashCode(MAX_VALUE)");
+    }
+
+    // equals 只与 OptionalLong 比较。
+    static void testEqualsCrossType() {
+        check(!OptionalLong.of(5L).equals(null), "equals(null) false");
+        check(!OptionalLong.of(5L).equals(Long.valueOf(5L)), "not equal to plain Long");
+        check(!OptionalLong.of(5L).equals(java.util.Optional.of(5L)), "not equal to Optional<Long>");
+        check(!OptionalLong.of(5L).equals(java.util.OptionalInt.of(5)), "not equal to OptionalInt");
+        check(OptionalLong.of(5L).equals(OptionalLong.of(5L)), "equal values equal");
+        check(!OptionalLong.of(5L).equals(OptionalLong.of(6L)), "different values not equal");
+        check(!OptionalLong.empty().equals(java.util.Optional.empty()), "not equal to Optional.empty");
+        check(!OptionalLong.empty().equals(java.util.OptionalDouble.empty()), "empty flavors not equal");
+    }
+
+    // toString 恒为 "OptionalLong[<v>]" / "OptionalLong.empty"。
+    static void testToStringExact() {
+        check(OptionalLong.of(Long.MIN_VALUE).toString()
+              .equals("OptionalLong[-9223372036854775808]"), "toString MIN_VALUE");
+        check(OptionalLong.of(Long.MAX_VALUE).toString()
+              .equals("OptionalLong[9223372036854775807]"), "toString MAX_VALUE");
+        check(OptionalLong.of(0L).toString().equals("OptionalLong[0]"), "toString 0");
+        check(OptionalLong.of(-1L).toString().equals("OptionalLong[-1]"), "toString negative");
+        check(OptionalLong.empty().toString().equals("OptionalLong.empty"), "toString empty");
+    }
+
+    // 回调异常按同一实例透传；容器状态不被破坏。
+    static void testCallbackExceptionRelay() {
+        final RuntimeException relay = new RuntimeException("relay");
+        try {
+            OptionalLong.of(10L).ifPresent(v -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "ifPresent relays consumer exception unchanged");
+        }
+        try {
+            OptionalLong.empty().orElseGet(() -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "orElseGet relays supplier exception unchanged");
+        }
+        OptionalLong keep = OptionalLong.of(11L);
+        try { keep.ifPresent(v -> { throw relay; }); } catch (RuntimeException ignored) { }
+        check(keep.getAsLong() == 11L, "container unchanged after relayed exception");
+    }
+
+    // JDK-9+ 新方法的 null 矩阵与流语义补全。
+    static void testJ9PlusDeep() {
+        expectThrows(NullPointerException.class,
+            () -> OptionalLong.of(5L).ifPresentOrElse(null, () -> { }),
+            "ifPresentOrElse(null action, present) NPE");
+        expectThrows(NullPointerException.class,
+            () -> OptionalLong.empty().ifPresentOrElse(v -> { }, null),
+            "ifPresentOrElse(null emptyAction, empty) NPE");
+        OptionalLong.of(5L).ifPresentOrElse(v -> { }, null);
+        passed++; // null emptyAction with present value: no-op
+        OptionalLong.empty().ifPresentOrElse(null, () -> { });
+        passed++; // null action with empty: no-op
+
+        check(OptionalLong.of(7L).stream().sum() == 7L, "stream sum");
+        check(OptionalLong.of(7L).stream().max().getAsLong() == 7L, "stream max");
+        check(OptionalLong.empty().stream().findAny().isEmpty(), "empty stream no element");
+        check(OptionalLong.of(4L).orElseThrow() == OptionalLong.of(4L).getAsLong(),
+              "orElseThrow() == getAsLong() on present");
+    }
+
+    static void testContractDeepening() throws Exception {
+        testExceptionMessages();
+        testHashCodeFormula();
+        testEqualsCrossType();
+        testToStringExact();
+        testCallbackExceptionRelay();
+        testJ9PlusDeep();
+    }
+
 public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeepening();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

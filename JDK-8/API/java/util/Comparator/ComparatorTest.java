@@ -8,7 +8,11 @@
  * @run main ComparatorTest
  */
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.List;
+import java.util.TreeSet;
 import java.util.function.Function;
 
 public class ComparatorTest {
@@ -160,12 +164,197 @@ public class ComparatorTest {
         check(nlNullCmp.compare("a", "b") == 0, "nullsLast(null) non-null all equal");
     }
 
+    // ---- deepened contract coverage, round 2 (empirically locked on jdk8u372) --
+
+    static void testSgnContract() {
+        Comparator<Integer> natural = Comparator.naturalOrder();
+        Comparator<Integer> reversed = Comparator.reverseOrder();
+        Integer[] vals = {-2, 0, 2};
+        for (Comparator<Integer> c : new Comparator[]{natural, reversed, natural.reversed()}) {
+            for (Integer a : vals) for (Integer b : vals)
+                check(Integer.signum(c.compare(a, b)) == -Integer.signum(c.compare(b, a)),
+                      "sgn antisymmetry c(" + a + "," + b + ")");
+            check(c.compare(0, 0) == 0, "sgn(x,x) == 0");
+        }
+        // transitivity of the >-relation induced by the comparator
+        for (Comparator<Integer> c : new Comparator[]{natural, reversed}) {
+            for (Integer a : vals) for (Integer b : vals) for (Integer d : vals)
+                check(!(c.compare(a, b) > 0 && c.compare(b, d) > 0) || c.compare(a, d) > 0,
+                      "sgn transitivity c(" + a + "," + b + "," + d + ")");
+        }
+        // naturalOrder and reverseOrder are exact inversions of each other
+        for (Integer a : vals) for (Integer b : vals)
+            check(Integer.signum(natural.compare(a, b)) == -Integer.signum(reversed.compare(a, b)),
+                  "natural/reverse inversion c(" + a + "," + b + ")");
+    }
+
+    static void testThenComparingChain() {
+        // 3-level chain: first char, then length, then natural order
+        Comparator<String> c3 = Comparator.comparing((String s) -> s.charAt(0))
+            .thenComparingInt(String::length)
+            .thenComparing(Comparator.naturalOrder());
+        List<String> list = new ArrayList<>(Arrays.asList("b2", "a2", "c1", "a1"));
+        list.sort(c3);
+        check(list.equals(Arrays.asList("a1", "a2", "b2", "c1")),
+              "3-level chain sorts [b2,a2,c1,a1] -> [a1,a2,b2,c1]");
+        check(c3.compare("b", "a") > 0, "chain primary level dominates");
+        check(c3.compare("ax", "ay") < 0, "chain third level breaks full tie");
+        check(c3.compare("a1", "a2") < 0 && c3.compare("a2", "a1") > 0, "chain last level antisymmetric");
+        // comparing().reversed() flips the sign of the whole chain
+        check(c3.compare("a", "b") < 0, "chain orders a before b");
+        Comparator<String> c3r = c3.reversed();
+        check(c3r.compare("a", "b") > 0, "chain.reversed() sign flip");
+        check(c3.reversed().reversed().compare("a", "b") < 0, "chain double reversed restores");
+        // reversed() does not mutate the original comparator
+        Comparator<Integer> nat = Comparator.naturalOrder();
+        Comparator<Integer> rev2 = nat.reversed();
+        check(nat.compare(1, 2) < 0 && rev2.compare(1, 2) > 0,
+              "reversed() leaves original comparator unchanged");
+    }
+
+    static class Pair {
+        final int k;
+        final String tag;
+        Pair(int k, String tag) { this.k = k; this.tag = tag; }
+    }
+
+    static void testSortStabilityUnderComparator() {
+        // List.sort(TimSort) is stable: equal keys keep encounter order
+        List<Pair> ps = new ArrayList<>(Arrays.asList(
+            new Pair(2, "a"), new Pair(1, "a"), new Pair(2, "b"),
+            new Pair(1, "b"), new Pair(2, "c")));
+        ps.sort(Comparator.comparingInt(p -> p.k));
+        check(ps.get(0).k == 1 && ps.get(0).tag.equals("a") && ps.get(1).tag.equals("b"),
+              "stable sort keeps 1a before 1b");
+        check(ps.get(2).tag.equals("a") && ps.get(3).tag.equals("b") && ps.get(4).tag.equals("c"),
+              "stable sort keeps 2a,2b,2c encounter order");
+        // keys equal under comparator -> comparator itself returns 0
+        check(Comparator.comparingInt((Pair p) -> p.k).compare(new Pair(1, "x"), new Pair(1, "y")) == 0,
+              "comparator returns 0 for equal keys regardless of identity");
+    }
+
+    static void testNullsCompositions() {
+        Comparator<String> nfRev = Comparator.nullsFirst(Comparator.reverseOrder());
+        check(nfRev.compare("a", "b") > 0, "nullsFirst delegates to reverseOrder");
+        check(nfRev.compare(null, "z") < 0, "nullsFirst(reverse) null still first");
+        TreeSet<String> ts = new TreeSet<>(nfRev);
+        ts.add("b"); ts.add("a"); ts.add(null);
+        check(ts.toString().equals("[null, b, a]"),
+              "TreeSet(nullsFirst(reverseOrder)) iterates [null, b, a]");
+        check(ts.size() == 3 && ts.contains(null) && ts.contains("a"),
+              "TreeSet null-tolerant membership");
+        check(ts.first() == null, "TreeSet nullsFirst first() == null");
+        check("a".equals(ts.last()), "TreeSet reverse natural last() == smallest");
+        // reversed() of a null-wrapped comparator flips the null ordering too
+        Comparator<String> nfNat = Comparator.nullsFirst(Comparator.<String>naturalOrder());
+        check(nfNat.reversed().compare(null, "a") > 0, "nullsFirst(natural).reversed() null moves last");
+        check(nfNat.reversed().compare("a", "b") > 0, "nullsFirst(natural).reversed() delegates reversed");
+        // nullsLast over an all-equal comparator, then reversed: non-nulls stay equal, null first
+        Comparator<String> nlEq = Comparator.nullsLast((String x, String y) -> 0);
+        check(nlEq.reversed().compare(null, "a") < 0, "nullsLast(equals).reversed() null first");
+        check(nlEq.reversed().compare("a", "b") == 0, "nullsLast(equals).reversed() non-null still equal");
+        // nesting null wrappers
+        Comparator<String> nested = Comparator.nullsFirst(Comparator.nullsLast(Comparator.naturalOrder()));
+        check(nested.compare(null, "a") < 0, "nested nullsFirst(nullsLast) null first");
+        check(nested.compare("a", "b") < 0, "nested null wrappers delegate innermost");
+    }
+
+    static void testExceptionPropagation() {
+        // exception thrown by the key extractor propagates as the SAME instance
+        IllegalStateException boom = new IllegalStateException("boom");
+        Comparator<String> throwingKey = Comparator.comparing((String s) -> { throw boom; });
+        try {
+            throwingKey.compare("a", "b");
+            throw new AssertionError("expected ISE from key extractor");
+        } catch (IllegalStateException e) {
+            check(e == boom, "comparing propagates the same exception instance");
+        }
+        // throwing secondary comparator is only reached on a primary tie
+        Comparator<String> withThrowingSecondary =
+            Comparator.comparingInt(String::length)
+                      .thenComparing((String x, String y) -> { throw boom; });
+        try {
+            withThrowingSecondary.compare("ab", "cd");  // equal lengths -> tie -> secondary
+            throw new AssertionError("expected ISE from secondary comparator");
+        } catch (IllegalStateException e) {
+            check(e == boom, "thenComparing propagates secondary comparator exception");
+        }
+        check(withThrowingSecondary.compare("ab", "zzz") < 0,
+              "secondary comparator skipped when primary decides");
+        // thenComparing key extractor returning null with natural key -> NPE
+        expectThrows(NullPointerException.class,
+            () -> Comparator.comparing((String s) -> s.charAt(0))
+                            .thenComparing((String s) -> (String) null)
+                            .compare("ax", "ay"),
+            "thenComparing keyExtractor returns null NPE");
+        // both-null short-circuits to 0 without invoking the delegate
+        Comparator<String> nfThrow =
+            Comparator.nullsFirst((String x, String y) -> { throw boom; });
+        check(nfThrow.compare(null, null) == 0,
+              "nullsFirst(null,null) == 0 without invoking delegate");
+    }
+
+    static void testEqualsContract() {
+        Comparator<String> c = Comparator.comparing(String::length);
+        check(c.equals(c), "comparator equals itself");
+        check(!c.equals(null), "comparator.equals(null) false");
+        // combinators use identity equality: distinct instances are not equal
+        check(!c.equals(Comparator.comparing(String::length)),
+              "comparing(fn) instances use identity equals");
+        check(!Comparator.nullsFirst(Comparator.naturalOrder())
+                        .equals(Comparator.nullsFirst(Comparator.naturalOrder())),
+              "nullsFirst(cmp) instances use identity equals");
+        // naturalOrder/reverseOrder are cached singletons
+        check(Comparator.naturalOrder().equals(Comparator.naturalOrder()),
+              "naturalOrder instances are equal");
+        check(Comparator.reverseOrder().equals(Comparator.reverseOrder()),
+              "reverseOrder instances are equal");
+        check(Comparator.naturalOrder().reversed().equals(Comparator.reverseOrder()),
+              "naturalOrder().reversed() equals reverseOrder()");
+        check(Comparator.reverseOrder().reversed().equals(Comparator.naturalOrder()),
+              "reverseOrder().reversed() equals naturalOrder()");
+        // equals across unrelated comparator types is false
+        check(!Comparator.<String>naturalOrder().equals(Comparator.comparing(String::length)),
+              "naturalOrder not equal to comparing instance");
+    }
+
+    static void testPrimitiveSpecializationBoundaries() {
+        Comparator<long[]> byLong = Comparator.comparingLong(a -> a[0]);
+        check(byLong.compare(new long[]{Long.MIN_VALUE}, new long[]{Long.MAX_VALUE}) < 0,
+              "comparingLong MIN < MAX");
+        check(byLong.compare(new long[]{Long.MAX_VALUE}, new long[]{Long.MIN_VALUE}) > 0,
+              "comparingLong MAX > MIN");
+        check(byLong.compare(new long[]{-1L}, new long[]{-1L}) == 0, "comparingLong equal == 0");
+        Comparator<int[]> byInt = Comparator.comparingInt(a -> a[0]);
+        check(byInt.compare(new int[]{Integer.MIN_VALUE}, new int[]{Integer.MAX_VALUE}) < 0,
+              "comparingInt MIN < MAX");
+        check(byInt.compare(new int[]{7}, new int[]{7}) == 0, "comparingInt equal == 0");
+        // comparing(fn).reversed() sign flip and restoration
+        check(Comparator.comparing(String::length).reversed().compare("a", "bbb") > 0,
+              "comparing(fn).reversed() sign flip");
+        check(Comparator.comparing(String::length).reversed().reversed().compare("a", "bbb") < 0,
+              "comparing(fn).reversed().reversed() restores order");
+        // comparingDouble total order: NaN greatest
+        Comparator<double[]> byD = Comparator.comparingDouble(a -> a[0]);
+        check(byD.compare(new double[]{Double.NaN}, new double[]{Double.POSITIVE_INFINITY}) > 0,
+              "comparingDouble NaN > +Inf");
+        check(byD.compare(new double[]{-0.0}, new double[]{0.0}) < 0,
+              "comparingDouble -0.0 < +0.0");
+    }
+
     public static void main(String[] args) {
         testNaturalAndReverse();
         testComparing();
         testComparingPrimitives();
         testThenComparing();
         testNullsFirstLast();
+        testSgnContract();
+        testThenComparingChain();
+        testSortStabilityUnderComparator();
+        testNullsCompositions();
+        testExceptionPropagation();
+        testEqualsContract();
+        testPrimitiveSpecializationBoundaries();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

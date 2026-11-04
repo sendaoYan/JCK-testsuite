@@ -116,12 +116,132 @@ public class OptionalDoubleTest {
         check(OptionalDouble.empty().toString().equals("OptionalDouble.empty"), "toString empty");
     }
 
-    public static void main(String[] args) {
+    // ============ contract deepening (appended) ============
+
+    // NSEE message text is observable contract surface.
+    static void testExceptionMessages() {
+        try {
+            OptionalDouble.empty().getAsDouble();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty getAsDouble NSEE message");
+        }
+    }
+
+    // hashCode() == (isPresent) ? Double.hashCode(value) : 0; the full bit-pattern formula.
+    static void testHashCodeFormula() {
+        check(OptionalDouble.empty().hashCode() == 0, "empty hashCode == 0");
+        check(OptionalDouble.of(0.0).hashCode() == 0, "of(0.0) hashCode == 0");
+        // Double.hashCode(-0.0) == Integer.MIN_VALUE (sign bit only in high word)
+        check(OptionalDouble.of(-0.0).hashCode() == Integer.MIN_VALUE, "of(-0.0) hashCode == MIN_VALUE");
+        // Double.hashCode(1.0) == 0x3FF00000
+        check(OptionalDouble.of(1.0).hashCode() == 1072693248, "of(1.0) hashCode == 1072693248");
+        check(OptionalDouble.of(Double.NaN).hashCode() == Double.hashCode(Double.NaN),
+              "of(NaN) hashCode == Double.hashCode(NaN)");
+        check(OptionalDouble.of(Double.NaN).hashCode() == OptionalDouble.of(Double.NaN).hashCode(),
+              "NaN hashCode stable");
+        // +0.0 and -0.0 are not equal and hash differently
+        check(OptionalDouble.of(0.0).hashCode() != OptionalDouble.of(-0.0).hashCode(),
+              "hashCode distinguishes +0.0 from -0.0");
+        check(OptionalDouble.of(2.5).hashCode() == Double.hashCode(2.5), "delegates to Double.hashCode");
+    }
+
+    // equals only compares against OptionalDouble; NaN equals NaN, +0.0 != -0.0.
+    static void testEqualsCrossType() {
+        check(!OptionalDouble.of(2.5).equals(null), "equals(null) false");
+        check(!OptionalDouble.of(2.5).equals(Double.valueOf(2.5)), "not equal to plain Double");
+        check(!OptionalDouble.of(2.5).equals(java.util.Optional.of(2.5)), "not equal to Optional<Double>");
+        check(!OptionalDouble.empty().equals(java.util.Optional.empty()), "not equal to Optional.empty");
+        check(!OptionalDouble.of(1.0).equals(OptionalDouble.of(2.0)), "different values not equal");
+        // Double.compare semantics (already partially covered): NaN reflexive, +0/-0 distinct
+        check(OptionalDouble.of(Double.NaN).equals(OptionalDouble.of(Double.NaN)), "NaN equals NaN");
+        check(!OptionalDouble.of(0.0).equals(OptionalDouble.of(-0.0)), "+0.0 != -0.0");
+        check(!OptionalDouble.of(-0.0).equals(OptionalDouble.of(0.0)), "-0.0 != +0.0 symmetric");
+        check(OptionalDouble.of(Double.POSITIVE_INFINITY).equals(OptionalDouble.of(Double.POSITIVE_INFINITY)),
+              "+Inf equals");
+    }
+
+    // toString is exactly "OptionalDouble[<d>]" / "OptionalDouble.empty" (Double.toString form).
+    static void testToStringExact() {
+        check(OptionalDouble.of(0.0).toString().equals("OptionalDouble[0.0]"), "toString 0.0");
+        check(OptionalDouble.of(-0.0).toString().equals("OptionalDouble[-0.0]"), "toString -0.0 keeps sign");
+        check(OptionalDouble.of(Double.NaN).toString().equals("OptionalDouble[NaN]"), "toString NaN");
+        check(OptionalDouble.of(Double.POSITIVE_INFINITY).toString()
+              .equals("OptionalDouble[Infinity]"), "toString +Inf");
+        check(OptionalDouble.of(Double.NEGATIVE_INFINITY).toString()
+              .equals("OptionalDouble[-Infinity]"), "toString -Inf");
+        check(OptionalDouble.of(1.5e300).toString()
+              .equals("OptionalDouble[1.5E300]"), "toString scientific form matches Double.toString");
+        check(OptionalDouble.empty().toString().equals("OptionalDouble.empty"), "toString empty");
+    }
+
+    // orElse with special values passes them through verbatim.
+    static void testOrElseSpecialValues() {
+        check(Double.isNaN(OptionalDouble.empty().orElse(Double.NaN)), "orElse NaN passthrough");
+        check(Double.valueOf(OptionalDouble.empty().orElse(-0.0)).equals(-0.0)
+              && 1 / OptionalDouble.empty().orElse(-0.0) == Double.NEGATIVE_INFINITY,
+              "orElse -0.0 bit pattern preserved");
+        check(OptionalDouble.of(2.5).orElse(9.0) == 2.5, "present ignores orElse");
+        check(OptionalDouble.of(2.5).orElse(Double.NaN) == 2.5, "present ignores orElse NaN");
+    }
+
+    // Callback exceptions relay the same instance; the container is unaffected.
+    static void testCallbackExceptionRelay() {
+        final RuntimeException relay = new RuntimeException("relay");
+        try {
+            OptionalDouble.of(2.5).ifPresent(v -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "ifPresent relays consumer exception unchanged");
+        }
+        try {
+            OptionalDouble.empty().orElseGet(() -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "orElseGet relays supplier exception unchanged");
+        }
+        OptionalDouble keep = OptionalDouble.of(3.5);
+        try { keep.ifPresent(v -> { throw relay; }); } catch (RuntimeException ignored) { }
+        check(keep.getAsDouble() == 3.5, "container unchanged after relayed exception");
+    }
+
+    // API surface lock: no map/flatMap/ofNullable/isNaN/isInfinite; JDK-9+ additions absent on Java 8.
+    static void testSurfaceLock() throws Exception {
+        Class<?> c = OptionalDouble.class;
+        for (String absent : new String[] {"map", "flatMap", "ofNullable", "isEmpty",
+                                           "stream", "isNaN", "isInfinite", "getAsInt"}) {
+            try {
+                c.getMethod(absent);
+                throw new AssertionError(absent + " should not exist");
+            } catch (NoSuchMethodException expected) { passed++; }
+        }
+        try {
+            c.getMethod("ifPresentOrElse", java.util.function.DoubleConsumer.class, Runnable.class);
+            throw new AssertionError("ifPresentOrElse should not exist on Java 8");
+        } catch (NoSuchMethodException expected) { passed++; }
+        try {
+            c.getMethod("orElseThrow");
+            throw new AssertionError("no-arg orElseThrow should not exist on Java 8");
+        } catch (NoSuchMethodException expected) { passed++; }
+        c.getMethod("of", double.class);
+        c.getMethod("getAsDouble");
+        c.getMethod("orElseGet", java.util.function.DoubleSupplier.class);
+        passed++; // Java 8 surface complete
+    }
+
+    public static void main(String[] args) throws Exception {
         testOfGet();
         testBoundaries();
         testOrElse();
         testIfPresent();
         testEqualsHashCodeToString();
+        testExceptionMessages();
+        testHashCodeFormula();
+        testEqualsCrossType();
+        testToStringExact();
+        testOrElseSpecialValues();
+        testCallbackExceptionRelay();
+        testSurfaceLock();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

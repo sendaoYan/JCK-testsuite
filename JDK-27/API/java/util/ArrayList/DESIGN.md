@@ -60,3 +60,16 @@ list.removeIf(s -> s.isEmpty());                      // 过滤
 
 健壮性（并入实现）：确定性固定输入、无墙钟/无随机；`subList`/迭代断言不依赖集合迭代顺序（ArrayList
 为顺序结构）；无全局副作用；纯 headless，无 `@key`。
+
+## 深化批次 II（契约级追加，仅追加不删既有断言）
+
+- **hashCode 公式锁定**：`List.hashCode = 1; 31*r+hash(e)`——`[]`=1、`[a]`=128、`[a,b]`=4066、
+  `[a,b,null]`=126046、`[null]`=31（null 贡献 0）。
+- **跨实现 equals 全对称**：ArrayList/LinkedList/Vector/Stack/Arrays.asList 同内容 equals 且 hashCode 相同。
+- **toArray(T[]) 身份契约**：数组够长→返回**同一实例**（`ret == a`）且 `a[size]` 置 null；空列表配大数组→`a[0]` 置 null。
+- **clone 浅拷贝**：元素共享（StringBuilder 突变互见）、结构独立、null 元素保留。
+- **迭代器状态机**：未 next 先 remove→ISE；双 remove→ISE；`iterator.remove()` 是迭代中唯一合法结构修改；
+  forEachRemaining 只访问剩余并耗尽 hasNext；空迭代器 next→NSEE。
+- **subList 活视图**：add/remove/set/iterator.remove 全部透传父表；subList equals/hashCode 按自身内容计算；
+  父结构修改后子表 get/size/iterator/add 全部 CME；子表自身的修改不失效自己。
+- **越界矩阵**：add(-1)/add(size+1)/addAll(-1)/addAll(size+1)→IOOBE，失败操作不留痕。

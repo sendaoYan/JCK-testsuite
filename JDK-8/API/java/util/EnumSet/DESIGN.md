@@ -56,3 +56,30 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 契约深化补充（第二轮：of 重载与 null/copyOf 类型边界/addAll 类型边界/空枚举/迭代器通道/跨类型 equals/varargs 别名/批量返回值/精确特征位/巨型枚举/深度序列化）
+
+新增方法（只追加）：
+
+| 测试点 | 用例方法 |
+|---|---|
+| of(E)~of(E,E,E,E,E) 全重载 + of(null)/of(e,null 数组)/of(e,{...,null}) NPE | testOfAritiesAndNull |
+| copyOf(Collection) 类型边界：错误元素类型 CCE、含 null NPE、从 HashSet 推断枚举类型、结果声明序 | testCopyOfTyping |
+| addAll 类型边界：普通 List 可加、错误类型 CCE、含 null NPE | testAddAllTyping |
+| 空枚举宇宙：noneOf/allOf(空枚举) 空、迭代器空、copyOf(空) IAE | testEmptyEnumUniverse |
+| 迭代器通道：从最小 ordinal 起、remove 保序、fresh remove ISE、forEachRemaining 剩余声明序；**EnumSet 迭代器非 fail-fast**（快照掩码：并发 add 不抛 CME 且不可见，双侧一致） | testIteratorChannels |
+| 跨枚举类型 equals false | testCrossTypeEquals |
+| of(first, rest...) 不别名调用方数组 | testVarargsNotAliased |
+| 批量返回值：全重复 addAll/无命中 removeAll/超集 retainAll/无命中 removeIf false；containsAll(empty) true；null NPE×4 | testBatchReturnValues |
+| **JDK-8 精确特征位 == SIZED\|SUBSIZED\|DISTINCT（0x4041）**；无 SORTED → getComparator() 抛 IllegalStateException | testSpliteratorExact |
+| >64 常量（Jumbo/HugeEnumSet 路径）：range 端点、声明序迭代、iterator.remove、complementOf 双补还原 | testHugeEnumUniverse |
+| 序列化：声明序保持、round-trip 后 add 仍按序、空集/巨型枚举 round-trip | testSerializationDeep |
+
+负例精确异常表（新锁定）：
+- add(null)/of(null)/range(任一 null)/allOf(null)/noneOf(null)/complementOf(null)/copyOf(null) → NPE
+- contains(null)/remove(null) → false（不抛）
+- copyOf(空 Collection) → IAE；copyOf/copyOf 非枚举元素 → CCE；addAll 错误类型 → CCE、含 null → NPE
+- range(from>to) → IAE
+- spliterator.getComparator()（JDK-8 无 SORTED）→ IllegalStateException
+
+JDK-8 vs JDK-27 差异（已各自锁定）：EnumSet.spliterator() 特征位 JDK-8 为 0x4041（SIZED|SUBSIZED|DISTINCT，无 ORDERED/SORTED/NONNULL，getComparator 抛 ISE），JDK 9+ 扩为 0x4155（加 ORDERED|SORTED|NONNULL，getComparator 返回 null）；其余契约双侧一致（迭代器均非 fail-fast、掩码快照语义相同）。

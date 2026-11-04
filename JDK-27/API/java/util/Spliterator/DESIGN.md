@@ -23,3 +23,21 @@
   - estimateSize/getExactSizeIfKnown、ORDERED/SIZED 特征。
   - tryAdvance 遍历顺序、trySplit 保持总大小、forEachRemaining。
   - 非 SORTED 时 getComparator 抛 IllegalStateException。
+
+## 契约深化（第二轮，追加）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 8 个特征常量精确值（javap -constants 双侧锁定，JDK-8 与 27 完全一致） | testConstantValues |
+| P0 | ArrayList/HashSet/LinkedHashSet/TreeSet 特性位精确值（16464/65/16465/85） | testImplCharacteristics |
+| P0 | SORTED 下 getComparator == 构造比较器实例 / 自然序 null | testSortedGetComparator |
+| P0 | trySplit 前半/后半精确内容（mid=size>>>1）+ 8 元素对半 | testTrySplitHalves |
+| P0 | 默认方法分派：forEachRemaining 循环调 tryAdvance（计数器）；getExactSizeIfKnown 非 SIZED 返 -1 | testDefaultMethodDelegation |
+| P1 | 非 SIZED spliterator estimateSize==Long.MAX_VALUE | testUnsizedEstimates |
+
+### 易错规范细节（实测锁定）
+
+- **TreeSet 特性位 = 85 = ORDERED|DISTINCT|SORTED|SIZED**（有序天然含 ORDERED）。
+- ArrayList trySplit 返回前缀、原实例变后缀，切分点 `mid = (lo+hi)>>>1`。
+- 耗尽后的 forEachRemaining 是 no-op；hasCharacteristics(0) 恒 true。
+- 特性位与常量值与 JDK-8 **完全一致**（无版本差异）。

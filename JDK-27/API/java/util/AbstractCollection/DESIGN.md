@@ -33,3 +33,26 @@ UnsupportedOperationException，需自行覆写才可写。
 | 只读子类 | 默认 add 抛 UnsupportedOperationException |
 
 共 7 组场景、约 22 个 check（`testBlackBox()`）。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法与探针
+- `Rec`（计数探针）→ `testDefaultDispatchRecording`：contains/remove/removeAll/retainAll/clear/
+  removeIf 的骨架分派全部经 iterator（计数器锁定）；null 元素 == 分支；toString "[x, null]"。
+- `Fixed`（只读迭代器探针）→ `testUoePropagationFromIterator`：UOE 透传且集合不变。
+- `CountedNoAdd` → `testAddAllDelegation`：addAll 逐元素委托 add、空参数零调用。
+- `testArrayStoreException` — Integer × String[] → ASE。
+- `testEqualsIsIdentityByDefault` — 骨架保持恒等 equals。
+
+### 负例精确异常表
+| 操作 | 异常 |
+|---|---|
+| 默认 add（未覆写） | UnsupportedOperationException |
+| 迭代器无 remove 时 remove/clear/removeIf | UnsupportedOperationException 透传 |
+| toArray 组件类型不符 | ArrayStoreException |
+| addAll/containsAll/removeAll/retainAll(null) | NullPointerException |
+
+### JDK-8 vs JDK-27 差异（本类）
+- 行为两侧实测一致（含 clear 逐元素经 iterator.remove 的调用模式）。

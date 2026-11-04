@@ -22,3 +22,21 @@
 | 首末 | getFirst/getLast/addFirst |
 
 共 3 组场景、约 8 个 check（`testBlackBox()`）。
+
+## 契约深化（第二轮，追加）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | addFirst/addLast 对既有元素**重定位**（不复制不报错） | testRelocation |
+| P0 | null 容忍：LinkedHashSet addFirst(null) 接受（HashSet 家族） | testNullTolerance |
+| P0 | 空语义矩阵：get/getLast/removeFirst/removeLast → NSEE | testEmptySemantics |
+| P0 | reversed() 活视图：rev.add 落**原集合尾端**（add 无位置语义）、view removeFirst 删原 last、view addFirst(既有) 重定位到原尾 | testReversedLiveView |
+| P0 | TreeSet 载体：读/删可用，addFirst/addLast → UOE（序约束） | testTreeSetCarrier |
+| P0 | 实现者矩阵：LinkedHashSet/TreeSet 是；HashSet/Set.of/unmodifiableSet 包装不是 | testWhoImplements |
+
+### 易错规范细节（实测锁定）
+
+- **Set.add 无位置语义**：`reversed().add(x)` 落在原集合**尾端**（≠ List 的首端）；`reversed().addFirst(x)` == 原 `addLast(x)`。
+- Set 接口**不**继承 SequencedSet：HashSet/Set.of 即使有插入序也不实现；只有 LinkedHashSet/TreeSet 实现。
+- LinkedHashSet 容忍 null（addFirst(null) 合法）。
+- TreeSet addFirst/addLast 违反排序约束 → **UOE**（不是 ISE）。

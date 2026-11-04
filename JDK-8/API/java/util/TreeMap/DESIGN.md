@@ -69,3 +69,28 @@
 - TreeMap 迭代有序（升序/降序），故可断言顺序；跨实现 equals 断言只依赖内容相等。
 - 序列化断言只锁定官方稳定 serialVersionUID（JDK-8 与 JDK-27 相同）。
 - 不碰图形/网络/文件/全局状态；无 GC 依赖（本类无弱引用回收测试点）。
+
+
+## 5. 契约级深化追加（2026-11，115→245 断言）
+
+新增方法：testSerializationWithComparator / testIteratorRemovePattern / testSubMapParentCMEAndBounds /
+testPresentNullValueBranches / testNearestFullMatrix / testInclusiveBoundEndpoints /
+testValuesOrderAndDescendingMirror / testNullTolerantComparatorOps。
+
+| 维度 | 锁定内容 |
+|---|---|
+| comparator 序列化 | String.CASE_INSENSITIVE_ORDER round-trip 保序且 readResolve 复原共享实例（comparator()==同一实例）；reverseOrder 同；**不可序列化 Comparator → ObjectOutputStream 抛 NotSerializableException**（整图不可写） |
+| 迭代器 remove 模式 | 未 next 先 remove ISE；next/remove 交替按升序排干；连续两次 remove 第二次 ISE；自身 remove 后继续 next 合法（不 CME） |
+| subMap 视图细节 | 视图迭代器 remove 删父图键；父结构 put → 视图迭代器 CME；界值 put IAE（[3,8) 拒 8 与 2）；范围内 put 落父图；父删反映视图 size |
+| present-null-value 全分支 | putIfAbsent 覆盖 null 返 null；getOrDefault 返 null 非 default；computeIfAbsent **调用**函数（计数器）；computeIfPresent 忽略；compute 见 null v 且 null 结果删 entry；merge 跳过函数直取 value；remove(k,null) 删；replace(k,null,v) true；异常 relays 同一对象且映射不变 |
+| 四方法 28 格矩阵 | keys {10,20,30} × probes {5..35}：lower/floor/ceiling/higher 精确（entry 形态键值双验） |
+| inclusive 界点 | headMap/tailMap/subMap × (true,false) firstKey/lastKey/size 精确；不存在界值按比较语义（tailMap(15) 空、headMap(15) 止于 10） |
+| 迭代序/降序镜像 | values 与 toString 键序；desc 四方法翻转（floor(4)=5/ceiling(4)=3）；desc.descendingMap().equals(原)；desc.keySet=[5,3,1] |
+| null 容忍 comparator | nullsFirst/nullsLast 下 null key 合法且排首/尾；containsKey/get/remove(null) 可用；higher/lower(null probe) 工作 |
+
+### 易错规范细节（实测锁定）
+
+- `CASE_INSENSITIVE_ORDER` 下 put("BANANA") 会**覆盖** "banana"（同一 entry），get 两者都返回新值。
+- filled(10) 上 `tailMap(15,true)` 为空——firstKey 抛 NSEE（不存在 >15 的键）；不存在界值不制造键。
+- present 键 computeIfAbsent(5, throwing) **不抛**（函数被跳过）——异常透传要用 absent 键验证。
+- 视图 size 是惰性按范围计算的：子图先前删过键后 size 断言要按当前内容算。

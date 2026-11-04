@@ -46,3 +46,26 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 契约深化补充（第二轮：重插入移尾/写通道/fail-fast/toArray 保序/equals+hashCode 锁/批量返回值/stream+精确特征位/含 null 序列化）
+
+新增方法（只追加）：
+
+| 测试点 | 用例方法 |
+|---|---|
+| remove+reinsert 把元素移到末尾；重复 add 不重排 | testReinsertMovesToEnd |
+| 迭代器写通道：iterator.remove 保序、ISE、空迭代器 NSEE、外部 clear 后 next CME | testIteratorWriteChannels |
+| fail-fast：add/remove/clear 后 next 抛 CME；iterator.remove 是唯一合法删除 | testFailFast |
+| toArray 契约保序：复用==、精确长度、尾部 null 终止符、插入序内容 | testToArrayOrder |
+| hashCode 公式锁（{1,2,3}=6、含 null 97、空 0）+ 跨实现 equals（HashSet/TreeSet）+ Set.equals(List) false | testEqualsHashCodeDeep |
+| 批量操作返回值契约（空集/无命中/超集均 false；containsAll(empty) true；null NPE×4） | testBatchOpReturnContracts |
+| stream 保 encounter order、spliterator 精确特征位 ORDERED\|DISTINCT\|SIZED\|SUBSIZED（0x4051）、trySplit 前后两半按序拼接==原序列 | testStreamAndSpliterator |
+| 含 null 元素序列化保序（null 位置不变）、空集 round-trip 可用 | testSerializationWithNull |
+
+负例精确异常表（新锁定）：
+- 迭代中外部 add/remove/clear → 下一次 next() ConcurrentModificationException
+- iterator.remove() 未 next（或连续两次）→ IllegalStateException
+- 空集迭代器 next() → NoSuchElementException
+- addAll/containsAll/removeAll/retainAll(null) → NPE
+
+JDK-8 vs JDK-27：JDK-8 侧无 SequencedSet 方法（addFirst/addLast/getFirst/getLast/removeFirst/removeLast/reversed 为 JDK 21+ API，在 27 侧断言）；其余契约一致。

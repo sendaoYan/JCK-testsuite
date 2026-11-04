@@ -40,3 +40,14 @@
 ## 注意事项
 
 确定性输入；无墙钟/随机/全局副作用；headless-safe 不加 `@key`。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| getAsLong NSEE 消息 "No value present" | testExceptionMessages |
+| hashCode 公式：empty→0、of(v)→Long.hashCode(v)（含 MIN/MAX） | testHashCodeFormula |
+| equals 跨类型：≠null/Long/Optional/OptionalInt | testEqualsCrossType |
+| toString 精确："OptionalLong[-9223372036854775808]"/"[9223372036854775807]" | testToStringExact |
+| 回调异常同一实例透传且容器不变 | testCallbackExceptionRelay |
+| API 面锁定：无 map/flatMap/ofNullable/isEmpty/stream/ifPresentOrElse/orElseThrow()（JDK-8 面） | testSurfaceLock |

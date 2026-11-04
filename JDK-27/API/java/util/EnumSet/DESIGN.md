@@ -36,3 +36,29 @@
 - 组合：集合运算 + complementOf 还原 + clone 独立性。
 - 边界/异常：add(null) 抛 NPE；contains/remove(null) 返回 false；range 反向抛 IAE；copyOf(空集合) 抛 IAE；of 重复静默去重。
 - 健壮性：确定性（固定枚举）；无全局副作用；无文件/网络；跨平台。headless-safe。
+
+## 契约深化补充（第二轮：of 重载与 null/copyOf 类型边界/addAll 类型边界/空枚举/迭代器通道/跨类型 equals/varargs 别名/批量返回值/精确特征位/巨型枚举/深度序列化）
+
+新增方法（只追加）：
+
+| 测试点 | 用例方法 |
+|---|---|
+| of(E)~of(E,E,E,E,E) 全重载 + of(null)/of(e,null 数组)/of(e,{...,null}) NPE | testOfAritiesAndNull |
+| copyOf(Collection) 类型边界：错误元素类型 CCE、含 null NPE、从 HashSet 推断、声明序结果 | testCopyOfTyping |
+| addAll 类型边界（普通 List/错误类型 CCE/含 null NPE） | testAddAllTyping |
+| 空枚举宇宙（noneOf/allOf 空、copyOf(空) IAE） | testEmptyEnumUniverse |
+| 迭代器通道 + **EnumSet 迭代器非 fail-fast**（并发 add 不抛 CME 且不可见，双侧一致） | testIteratorChannels |
+| 跨枚举类型 equals false | testCrossTypeEquals |
+| of 不别名 varargs 数组 | testVarargsNotAliased |
+| 批量返回值契约 + null NPE×4 | testBatchReturnValues |
+| **JDK-27 精确特征位 == ORDERED\|DISTINCT\|SORTED\|SIZED\|NONNULL\|SUBSIZED（0x4155）**；getComparator()==null（自然序） | testSpliteratorExact |
+| >64 常量（Jumbo/HugeEnumSet 路径）：range/声明序迭代/complementOf 双补还原 | testHugeEnumUniverse |
+| 序列化声明序保持/空集/巨型枚举 round-trip | testSerializationDeep |
+
+负例精确异常表（新锁定）：
+- add(null)/of(null)/range(null,*)/allOf(null)/noneOf(null)/complementOf(null)/copyOf(null) → NPE
+- contains(null)/remove(null) → false（不抛）
+- copyOf(空 Collection) → IAE；copyOf/addAll 非枚举元素 → CCE；addAll 含 null → NPE
+- range(from>to) → IAE
+
+JDK-8 vs JDK-27 差异（已各自锁定）：EnumSet.spliterator() 特征位 JDK-8 为 0x4041（getComparator 抛 IllegalStateException），JDK 9+ 扩为 0x4155（含 SORTED，getComparator()==null）；JDK-27 另有 covariant `Spliterator<E> spliterator()` 声明；其余契约双侧一致。

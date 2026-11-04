@@ -56,3 +56,25 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；不锁定未排序数组的 binarySearch 结果（契约未定义）。
+
+## 第 2 轮深化（2026-11，契约覆盖，48→190 断言）
+
+新增方法：testSortAllPrimitiveTypes、testSortStability、testBinarySearchAllTypes、
+testStreamRanges、testParallelPrefixSetAll、testNullArrayContracts、testHashCodeFormula、
+testCopyOfAllTypes、testFillAllTypes、testEqualsFloatingSemantics、testAsListDeepContract、
+testSpliteratorCharacteristics。
+
+### 本轮锁定的易错规范细节（先探测后断言，jdk8u372 实测）
+
+- **null 数组契约矩阵**：`equals(null,null)=true`、`equals(null,arr)=false`、`hashCode(null)=0`、
+  `toString(null)="null"`；`asList(null)`/`stream(null,0,0)` 等 NPE。
+- **hashCode 公式**：`result=1; result=31*result+hash(e)`：`{1,2}`→994、`asList("a","b")`→4066 手工锁定。
+- **equals 浮点语义**：`double[]` NaN==NaN true、+0.0!=-0.0（`Double.compare` 语义，非 `==`）。
+- **sort 稳定性**：`sort(T[], cmp)` 相等键保持相遇顺序（TimSort 保证）；全原始类型 sort+binarySearch 一致性。
+- **stream range 违规 AIOOBE**：`stream(a, 1, 0)` IAE（from>to）、`stream(a, -1, 2)` / `stream(a, 0, 6)` AIOOBE。
+- **asList 深契约**：set↔数组双向联动；iterator `remove` **未 next 先调抛 IllegalStateException（JDK-8）**——与 JDK-27 相反（27 抛 UOE），版本差异双侧锁定；`listIterator.set` 在 next 后可用。
+- **spliterator 特征**：`0x4450`（ORDERED|SIZED|IMMUTABLE|SUBSIZED，**无 NONNULL**）对 int[] 与 String[] 一致。
+
+## 注意事项（第 2 轮）
+
+- 所有断言固定输入；parallelPrefix/parallelSetAll 用确定性生成函数。

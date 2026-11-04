@@ -34,3 +34,28 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；用 ArrayList（有序）为载体断言顺序。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法
+- `testIteratorDefaults` — Bare 探针（只实现 hasNext/next）：默认 remove → UOE（next 前后均）；
+  默认 forEachRemaining 以 hasNext/next 逐个消费（顺序锁定）、耗尽后 no-op、
+  **有剩余元素时 forEachRemaining(null) → NPE**、空迭代器 next → NSEE。
+- `testHasNextStability` — hasNext 幂等（连续调用不推进状态、结果一致）。
+- `testRemoveLifecycle` — 末次 next 后 remove 合法、连续第二次 remove ISE、
+  删尽后 next NSEE、单元素删除后耗尽。
+- `testConsumerExceptionRelay` — forEachRemaining 的 action 抛出的**原异常对象**透传
+  （ArrayList 迭代器与接口默认实现两路径）。
+- `testUnsupportedRemoveFlavors` — Arrays.asList（定长）迭代器 remove → UOE。
+
+### 负例精确异常表
+| 操作 | 异常 |
+|---|---|
+| remove() 无前置 next / 连续第二次 remove | IllegalStateException |
+| next() 耗尽后 | NoSuchElementException |
+| 默认 remove（实现未提供） | UnsupportedOperationException |
+| forEachRemaining(null)（且有剩余） | NullPointerException |
+| Arrays.asList 迭代器 remove | UnsupportedOperationException |
+| action 抛出的 RuntimeException | 原样透传（非包装） |

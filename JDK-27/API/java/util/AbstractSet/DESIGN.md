@@ -30,3 +30,23 @@
 | toArray | 迭代序 |
 
 共 6 组场景、约 14 个 check（`testBlackBox()`）。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法
+- `RecSet` 探针 → `testRemoveAllOptimization`：this>arg 走 this.remove（委托数==arg.size、
+  零迭代器）；this<=arg 走迭代器（this.remove 零调用）；等大小走迭代器分支；
+  不相交/空参/空 this 返回 false。
+- `testCrossImplEquals` — 探针与 HashSet/LinkedHashSet/TreeSet/**Set.of** 同内容互等（对称）；
+  hashCode==Σ元素hash（97+98）；null 贡献 0；空集 0 互等；Set 永不 equals List。
+- `testInheritedOps` — retainAll 走迭代器从不调 this.remove、toArray 复用+null 终止、
+  clear 经迭代器、contains 扫描。
+
+### 关键规范细节（易错，已锁入断言）
+- removeAll 分支界为 `size() > c.size()`（等大小走迭代器分支）。
+- Set.of 完整参与 Set equals/hashCode 契约。
+
+### JDK-8 vs JDK-27 差异（本类）
+- 27 侧 equals 矩阵额外纳入 Set.of；其余行为两侧实测一致。

@@ -59,3 +59,33 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；`shuffle` 只断言元素集合不变（不锁定随机顺序）。
+
+## 第 2 轮深化（2026-11，契约覆盖，63→302 断言）
+
+新增方法：testBinarySearchInsertionFormula、testRotateBoundaries、testNCopiesContract、
+testEmptyIteratorContract、testEmptySortedNavigable、testSingletonContracts、
+testUnmodifiableSortedNavigable、testSynchronizedFamilies、testReverseOrderContract、
+testShuffleDeterminism、testMinMaxNullArgs、testDisjointNullArgs、testNewSetFromMapContract、
+testAsLifoQueueContract、testEnumerationListEdges、testSerializationRoundTrip、
+testCheckedMoreWrappers、testMutatorNullArgs。
+
+### 本轮锁定的易错规范细节（先探测后断言，jdk8u372 实测）
+
+- **`binarySearch` 插入公式**：未命中返回 `-(insertionPoint)-1`；命中返回下标。边界（小于全部/大于全部/中间）逐一锁定。
+- **`rotate` 折叠**：`rotate(l, k)` 等价 `rotate(l, k mod size)`；k=0/±size 为恒等；size=1 恒等；`rotate(l, n)` == `reverse(l)`；`rotate(l, -k)` == `rotate(l, size-k)`。
+- **`nCopies`**：`nCopies(-1, x)` 抛 IAE（消息 `List length = -1`）；`nCopies(0, null)` 合法且空；equals/hashCode 与等值 `ArrayList` 一致。
+- **`emptyIterator().remove()` 抛 IllegalStateException**（不是 UOE）；`emptyListIterator().set/add` 抛 ISE；`emptyEnumeration().hasMoreElements()` 恒 false。
+- **`emptyNavigableSet.pollFirst/pollLast()` 抛 UOE**（javadoc 明示 quirk）；`emptyNavigableMap.pollFirstEntry/pollLastEntry` 同样 UOE（本侧无 NavigableMap 变体，锁在 Set 侧）。
+- **`singleton*` 恒等性弱化**：JDK-8 上 `emptyList() == emptyList()` 恒真（单例）；`singleton` 系每次新实例但 equals 恒等；`singletonList(null)` 合法。
+- **`unmodifiableMap` 默认方法全 UOE**：`putIfAbsent/compute/computeIfAbsent/computeIfPresent/merge/remove(k,v)/replace*/replaceAll` 均拒绝；序列化往返后仍 UOE（不可变性随序列化保留）。
+- **`reverseOrder(null)` 不抛 NPE**（javadoc 声称 IAE 但实现回退自然逆序）——按实测行为断言。
+- **`min/max(list, null comparator)` 不抛 NPE**：实现静默替换为自然序 → 断言 min==最小/max==最大。
+- **`disjoint(x, null)` 任意组合（含空集合）抛 NPE**：`isEmpty()` 短路仍会解引用 c1。
+- **`shuffle(list, null rnd)`**：size≤1 或空列表**不抛**（rnd 未被咨询）；size≥2 抛 NPE。
+- **`newSetFromMap`**：非空 map → IAE；null → NPE；map↔set 双向 live 联动。
+- **`asLifoQueue(null)` 不抛**（JDK-8；与 JDK-27 相反——27 抛 NPE）。
+- **序列化往返**：unmodifiableList/CheckedList 内容与不可变性均保留。
+
+## 注意事项（第 2 轮）
+
+- 线程 smoke：`synchronizedList` 2 线程 × 1000 次 add，`CountDownLatch` 有界 await（≤5s）；固定输入。

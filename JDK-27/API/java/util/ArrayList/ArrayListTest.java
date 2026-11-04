@@ -315,6 +315,168 @@ public class ArrayListTest {
         check(osc.getSerialVersionUID() == 8683452581122892189L, "ArrayList serialVersionUID stable");
     }
 
+    // ---- deepened II: hashCode 公式锁定 / 跨实现 equals / toArray 身份 / 浅 clone /
+    //      迭代器状态机 / subList 活视图 + CME / 越界矩阵 / reversed 视图 ----------
+
+    static void testHashCodeFormula() {
+        check(new ArrayList<String>().hashCode() == 1, "hashCode of empty list is 1");
+        check(new ArrayList<>(Arrays.asList("a")).hashCode() == 128, "hashCode [a] = 31*1+97 = 128");
+        check(new ArrayList<>(Arrays.asList("a", "b")).hashCode() == 4066, "hashCode [a,b] = 31*128+98 = 4066");
+        check(new ArrayList<>(Arrays.asList("a", "b", null)).hashCode() == 126046,
+              "hashCode [a,b,null] = 31*4066+0 = 126046");
+        check(new ArrayList<>(Arrays.asList((String) null)).hashCode() == 31, "hashCode [null] = 31");
+        check(List.of("a", "b").hashCode() == 4066, "List.of hashCode same formula as ArrayList");
+    }
+
+    static void testCrossImplEquals() {
+        List<String> al = new ArrayList<>(Arrays.asList("a", "b", null));
+        java.util.LinkedList<String> ll = new java.util.LinkedList<>(Arrays.asList("a", "b", null));
+        java.util.Vector<String> vec = new java.util.Vector<>(Arrays.asList("a", "b", null));
+        java.util.Stack<String> st = new java.util.Stack<>();
+        st.addAll(Arrays.asList("a", "b", null));
+        List<String> asList = Arrays.asList("a", "b", null);
+        List<String> ofList = List.of("a", "b");
+        check(al.equals(ll) && ll.equals(al), "ArrayList equals LinkedList");
+        check(al.equals(vec) && vec.equals(al), "ArrayList equals Vector");
+        check(al.equals(st) && st.equals(al), "ArrayList equals Stack");
+        check(al.equals(asList) && asList.equals(al), "ArrayList equals Arrays.asList");
+        int h = al.hashCode();
+        check(ll.hashCode() == h && vec.hashCode() == h && st.hashCode() == h && asList.hashCode() == h,
+              "all List impls mutually equal with same hashCode (incl null element)");
+        check(!ofList.equals(Arrays.asList("a", "b", null)), "List.of([a,b]) differs from [a,b,null]");
+        List<String> al2 = new ArrayList<>(Arrays.asList("a", "b"));
+        check(al2.equals(ofList) && ofList.equals(al2) && al2.hashCode() == ofList.hashCode(),
+              "ArrayList equals List.of same content");
+        check(!Arrays.asList(1, 2).equals(java.util.List.of(1L, 2)), "1 vs 1L not equal");
+    }
+
+    static void testToArrayContract() {
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a", "b"));
+        String[] big = new String[10];
+        String[] ret = list.toArray(big);
+        check(ret == big, "toArray(T[]) returns the given array when it fits (identity)");
+        check(big[0].equals("a") && big[1].equals("b"), "toArray(T[]) fills from index 0");
+        check(big[2] == null, "toArray(T[]) null-terminates just past last element");
+        String[] exact = list.toArray(new String[0]);
+        check(exact.length == 2, "toArray(T[0]) exact length");
+        Object[] oa = list.toArray();
+        check(oa instanceof Object[] && !(oa instanceof String[]), "toArray() is Object[]");
+        String[] roomy = new String[3];
+        String[] r2 = new ArrayList<String>().toArray(roomy);
+        check(r2 == roomy && roomy[0] == null, "toArray(roomy) on empty list nulls index 0");
+    }
+
+    static void testCloneShallow() {
+        StringBuilder shared = new StringBuilder("mut");
+        ArrayList<StringBuilder> src = new ArrayList<>();
+        src.add(shared);
+        src.add(null);
+        @SuppressWarnings("unchecked")
+        ArrayList<StringBuilder> clone = (ArrayList<StringBuilder>) src.clone();
+        check(clone != src && clone.getClass() == src.getClass(), "clone same class, distinct object");
+        clone.get(0).append("ated");
+        check(src.get(0).toString().equals("mutated"), "clone is shallow: element mutation shared");
+        clone.add(new StringBuilder("extra"));
+        check(src.size() == 2, "clone structurally independent");
+        check(clone.get(1) == null, "clone keeps null element");
+        clone.remove(0);
+        check(src.size() == 2 && src.get(0) == shared, "removal in clone does not touch source");
+    }
+
+    static void testIteratorEdges() {
+        expect(IllegalStateException.class,
+                () -> new ArrayList<>(Arrays.asList("a")).iterator().remove(),
+                "iterator.remove before next ISE");
+        ArrayList<String> l = new ArrayList<>(Arrays.asList("a", "b"));
+        Iterator<String> it = l.iterator();
+        it.next();
+        it.remove();
+        expect(IllegalStateException.class, it::remove, "second remove without next ISE");
+        ArrayList<Integer> nums = new ArrayList<>(Arrays.asList(1, 2, 3, 4));
+        Iterator<Integer> ni = nums.iterator();
+        int sum = 0;
+        while (ni.hasNext()) {
+            int v = ni.next();
+            if (v % 2 == 0) ni.remove();
+            else sum += v;
+        }
+        check(sum == 4 && nums.equals(Arrays.asList(1, 3)), "iterate-and-remove evens leaves odds");
+        ArrayList<String> fr = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        Iterator<String> fi = fr.iterator();
+        fi.next();
+        StringBuilder sb = new StringBuilder();
+        fi.forEachRemaining(sb::append);
+        check(sb.toString().equals("bc"), "forEachRemaining visits remaining elements only");
+        check(!fi.hasNext(), "forEachRemaining exhausts iterator");
+        ArrayList<String> rf = new ArrayList<>(Arrays.asList("a", "b"));
+        check(!rf.removeIf(x -> false), "removeIf nothing matched returns false");
+        check(rf.removeIf(x -> true) && rf.isEmpty(), "removeIf all matched returns true and empties");
+        expect(NoSuchElementException.class,
+                new ArrayList<String>().iterator()::next, "empty iterator next NSEE");
+    }
+
+    static void testSubListLiveness() {
+        ArrayList<Integer> parent = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
+        List<Integer> sub = parent.subList(1, 4);
+        sub.add(99);
+        check(parent.equals(Arrays.asList(1, 2, 3, 4, 99, 5)), "subList.add grows parent in place");
+        sub.remove(Integer.valueOf(99));
+        check(parent.size() == 5, "subList.remove(Object) shrinks parent");
+        sub.set(0, 20);
+        check(parent.get(1) == 20, "subList.set reflected at parent index");
+        java.util.Iterator<Integer> sit = sub.iterator();
+        sit.next();
+        sit.remove();
+        check(parent.equals(Arrays.asList(1, 3, 4, 5)), "subList.iterator.remove removes from parent");
+        List<Integer> seg = new ArrayList<>(Arrays.asList(2, 3, 4));
+        List<Integer> segView = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5)).subList(1, 4);
+        check(segView.equals(seg) && seg.equals(segView), "subList equals plain List of same content");
+        check(segView.hashCode() == seg.hashCode(), "subList hashCode equals plain List hashCode");
+        ArrayList<Integer> p2 = new ArrayList<>(Arrays.asList(1, 2, 3));
+        List<Integer> s2 = p2.subList(0, 2);
+        p2.add(4);
+        expect(ConcurrentModificationException.class, () -> s2.get(0), "subList.get after parent mod CME");
+        expect(ConcurrentModificationException.class, () -> s2.size(), "subList.size after parent mod CME");
+        expect(ConcurrentModificationException.class, () -> s2.iterator(), "subList.iterator after parent mod CME");
+        expect(ConcurrentModificationException.class, () -> s2.add(9), "subList.add after parent mod CME");
+        List<Integer> s3 = new ArrayList<>(Arrays.asList(1, 2, 3)).subList(0, 3);
+        s3.add(4);
+        check(s3.size() == 4, "subList stays usable after its own structural change");
+    }
+
+    static void testIndexedBounds() {
+        ArrayList<String> l = new ArrayList<>(Arrays.asList("a", "b"));
+        expect(IndexOutOfBoundsException.class, () -> l.add(-1, "x"), "add(-1,e) IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> l.add(3, "x"), "add(size+1,e) IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> l.addAll(3, Arrays.asList("c")), "addAll(size+1,c) IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> l.addAll(-1, Arrays.asList("c")), "addAll(-1,c) IOOBE");
+        check(l.equals(Arrays.asList("a", "b")), "failed indexed ops leave list intact");
+        l.add(2, "c");
+        check(l.equals(Arrays.asList("a", "b", "c")), "add(size,e) appends");
+        l.addAll(0, Arrays.asList("z"));
+        check(l.equals(Arrays.asList("z", "a", "b", "c")), "addAll(0,c) prepends");
+    }
+
+    static void testReversedView() {
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        List<String> rev = list.reversed();
+        check(rev.equals(Arrays.asList("c", "b", "a")), "reversed() order");
+        check(rev.size() == list.size() && rev.hashCode() == Arrays.asList("c", "b", "a").hashCode(),
+              "reversed() is a List with standard hashCode");
+        // reversed() is a live view: writes pass through both ways
+        rev.set(0, "C");
+        check(list.get(2).equals("C"), "reversed set passes through to backing list");
+        list.add("d");
+        check(rev.getFirst().equals("d"), "backing-list append visible at reversed head");
+        rev.addFirst("top");
+        check(list.getLast().equals("top"), "reversed addFirst appends at backing tail");
+        check(rev.reversed().equals(list), "reversed().reversed() equals original");
+        // iteration order of reversed(): after the mutations above rev is [top, d, C, b, a]
+        StringBuilder sb = new StringBuilder();
+        for (String s : rev) sb.append(s);
+        check(sb.toString().equals("topdCba"), "reversed iteration order exact ([top,d,C,b,a])");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testConstruction();
@@ -330,6 +492,14 @@ public class ArrayListTest {
         testConstructorMatrix();
         testNullArgs();
         testSerialization();
+        testHashCodeFormula();
+        testCrossImplEquals();
+        testToArrayContract();
+        testCloneShallow();
+        testIteratorEdges();
+        testSubListLiveness();
+        testIndexedBounds();
+        testReversedView();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

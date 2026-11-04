@@ -42,3 +42,29 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；使用 LinkedList 与自定义有界队列作为实现载体。
+
+## 契约深化追加（第二版）
+
+新增 test 方法：testDispatchCounters / testAddFullExactMessage / testClearPollLoop /
+testAddAllSemantics / testAddAllPartialFailure / testInheritedCollectionOps /
+testEqualsHashCodeIdentity / testWhiteBoxStructure。
+
+### 覆盖点
+
+- **分派计数器探针**（Counting 子类）：add→恰一次 offer；element→恰一次 peek；remove→恰一次 poll；
+  逐次调用计数 1:1 累计证明默认实现路径。
+- **add 满抛 ISE 且 message 恰为 "Queue full"**（精确消息锁定）。
+- **clear 是 poll 循环**：2 个元素 clear 恰好 poll 3 次（n 个元素 + 1 次返回 null 的哨兵探测）。
+- addAll 语义：空集合 false 且零次 offer；正常路径逐元素经 add（offer 计数==元素数）；
+  addAll(self) IAE；**AbstractQueue.addAll 自身不预检 null 元素**——NPE 由底层队列的 add/offer
+  中继抛出，且**null 之前的元素已完成入队（部分应用）**（LinkedList 载体不抛、ArrayDeque 载体
+  NPE+部分入队，双探针对照锁定）。
+- 有界队列 addAll 部分失败：ISE 后先前元素保留（size==1）。
+- 继承自 AbstractCollection 的 contains/remove(Object)/containsAll/toString "[m, n]"/"[]"。
+- 身份 equals/hashCode（不覆写）。
+- 白盒：add/remove/element/clear/addAll 恰为 AbstractQueue 声明且非抽象的五个公共方法。
+
+### 易错规范细节（已锁入断言）
+
+- javadoc 说 addAll 对 null 元素 NPE，实际是**委托给 add 的中继**——用 null 容忍/拒绝双载体对照锁定。
+- "Queue full" 是规范规定的消息文本，非实现细节。

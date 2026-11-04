@@ -29,3 +29,26 @@
 - 组合：SequencedSet 首尾操作 + reversed 视图 + addFirst 重定位。
 - 边界/异常：add 重复返回 false；null 允许并保持位置。
 - 健壮性：确定性（固定字符串）；无全局副作用；无文件/网络；跨平台。headless-safe。
+
+## 契约深化补充（第二轮：重插入移尾/写通道/fail-fast/toArray 保序/equals+hashCode 锁/批量返回值/stream+精确特征位/含 null 序列化/SequencedSet 边界）
+
+新增方法（只追加）：
+
+| 测试点 | 用例方法 |
+|---|---|
+| remove+reinsert 移尾；重复 add 不重排 | testReinsertMovesToEnd |
+| 迭代器写通道（iterator.remove 保序、ISE、空迭代器 NSEE、外部 clear 后 CME） | testIteratorWriteChannels |
+| fail-fast（add/remove/clear 后 next CME；iterator.remove 合法） | testFailFast |
+| toArray 保序契约（复用==、精确长度、null 终止符） | testToArrayOrder |
+| hashCode 公式锁 + 跨实现 equals（HashSet/TreeSet）+ Set.equals(List) false | testEqualsHashCodeDeep |
+| 批量操作返回值契约 + null NPE×4 | testBatchOpReturnContracts |
+| stream 保序、spliterator 精确特征位 0x4051、trySplit 按序拼接==原序列 | testStreamAndSpliterator |
+| 含 null 序列化保序、空集 round-trip | testSerializationWithNull |
+| SequencedSet 边界：空集 getFirst/getLast/removeFirst/removeLast → NoSuchElementException；addFirst(null) 合法且居首；reversed() 活视图（removeFirst 删原末位、add 追加原末位、reversed().reversed() 复原、从 reversed 构造拷贝倒序） | testSequencedEdgeCases |
+
+负例精确异常表（新锁定）：
+- 迭代中外部结构修改 → next() CME；iterator.remove 未 next → ISE；空迭代器 next → NSEE
+- 空集 getFirst/getLast/removeFirst/removeLast → NoSuchElementException（SequencedSet 契约）
+- addAll/containsAll/removeAll/retainAll(null) → NPE
+
+JDK-8 vs JDK-27 差异：JDK 21+ LinkedHashSet 实现 SequencedSet（addFirst 重定位既有元素、reversed 活视图、newLinkedHashSet(int) 工厂）——27 侧断言、8 侧无此 API；其余契约双侧一致。

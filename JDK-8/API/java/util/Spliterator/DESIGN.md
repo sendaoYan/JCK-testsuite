@@ -42,3 +42,21 @@
 
 - ArrayList spliterator 是 ORDERED|SIZED；用 `Spliterators.spliteratorUnknownSize(it, 0)`
   构造**非 SIZED** spliterator，锁 `getExactSizeIfKnown == -1`。
+
+## 契约深化（第二轮，追加）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 8 个特征常量精确值（javap -constants 双侧锁定） | testConstantValues |
+| P0 | ArrayList/HashSet/LinkedHashSet/TreeSet 特性位精确值（16464/65/16465/85） | testImplCharacteristics |
+| P0 | SORTED 下 getComparator == 构造比较器实例 / 自然序 null | testSortedGetComparator |
+| P0 | trySplit 前半/后半精确内容（mid=size>>>1）+ 8 元素对半 | testTrySplitHalves |
+| P0 | 默认方法分派：forEachRemaining 循环调 tryAdvance（计数器）；getExactSizeIfKnown 非 SIZED 返 -1 | testDefaultMethodDelegation |
+| P1 | 非 SIZED spliterator estimateSize==Long.MAX_VALUE | testUnsizedEstimates |
+
+### 易错规范细节（实测锁定）
+
+- **TreeSet 特性位 = 85 = ORDERED|DISTINCT|SORTED|SIZED**（有序天然含 ORDERED；只写 DISTINCT|SORTED|SIZED=69 是错的）。
+- ArrayList trySplit 契约：返回**前缀**、原实例变**后缀**，切分点 `mid = (lo+hi)>>>1`：5 元素切 [a,b]/[c,d,e]，8 元素切 4/4。
+- 耗尽后的 forEachRemaining 是 **no-op**（不抛、不调 consumer）。
+- hasCharacteristics(0) 恒 true。

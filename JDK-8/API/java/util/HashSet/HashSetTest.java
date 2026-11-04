@@ -240,6 +240,155 @@ public class HashSetTest {
         for (int i = 1; i <= 5; i++) check(!s.contains(i), "clear removed " + i);
     }
 
+    // ---- contract deep-dive II: ctor messages / batch return values / hashCode
+    //      formula / iteration / spliterator exact bits / serialization deep ------
+
+    static String iaeMessage(ThrowingRunnable r) {
+        try {
+            r.run();
+        } catch (IllegalArgumentException e) {
+            return e.getMessage();
+        } catch (Throwable t) {
+            throw new AssertionError("expected IllegalArgumentException but got " + t, t);
+        }
+        throw new AssertionError("expected IllegalArgumentException");
+    }
+
+    static void testCtorExceptionMessages() {
+        String m1 = iaeMessage(() -> new HashSet<String>(-1));
+        check(m1 != null && m1.startsWith("Illegal initial capacity"),
+              "HashSet(-1) message 'Illegal initial capacity': " + m1);
+        String m2 = iaeMessage(() -> new HashSet<String>(1, 0f));
+        check(m2 != null && m2.startsWith("Illegal load factor"),
+              "HashSet(1,0f) message 'Illegal load factor': " + m2);
+        HashSet<String> fromSet = new HashSet<>(new TreeSet<>(Arrays.asList("a", "b")));
+        check(fromSet.equals(new HashSet<>(Arrays.asList("a", "b"))),
+              "HashSet(Collection from SortedSet) copies content");
+        HashSet<String> fromSet2 = new HashSet<>(new HashSet<>(Arrays.asList("x")));
+        check(fromSet2.contains("x"), "HashSet(Collection from HashSet) copies content");
+    }
+
+    static void testBatchOpReturnContracts() {
+        HashSet<String> s = new HashSet<>(Arrays.asList("a", "b"));
+        check(!s.addAll(new ArrayList<String>()), "addAll(empty) returns false");
+        check(!s.removeAll(Arrays.asList("z")), "removeAll(no match) returns false");
+        check(!s.retainAll(Arrays.asList("a", "b", "c")), "retainAll(superset) returns false");
+        check(!s.removeIf(x -> x.equals("zz")), "removeIf(no match) returns false");
+        check(s.containsAll(new ArrayList<String>()), "containsAll(empty) returns true");
+        check(!s.addAll(s), "addAll(self) returns false");
+        check(s.size() == 2, "no-op batch operations leave size unchanged");
+        checkThrows(NullPointerException.class, () -> s.addAll(null), "addAll(null) NPE");
+        checkThrows(NullPointerException.class, () -> s.containsAll(null), "containsAll(null) NPE");
+        checkThrows(NullPointerException.class, () -> s.removeAll(null), "removeAll(null) NPE");
+        checkThrows(NullPointerException.class, () -> s.retainAll(null), "retainAll(null) NPE");
+        HashSet<String> empty = new HashSet<>();
+        empty.clear();
+        check(empty.isEmpty(), "clear() on empty set is a no-op");
+    }
+
+    static void testHashCodeFormulaLock() {
+        // Set.hashCode == sum of element hashCodes (AbstractSet)
+        check(new HashSet<Integer>(Arrays.asList(1, 2, 3)).hashCode() == 6,
+              "hashCode {1,2,3} == 1+2+3 == 6");
+        check(new HashSet<String>(Arrays.asList("a", "b")).hashCode() == 97 + 98,
+              "hashCode {'a','b'} == 97+98 == 195");
+        check(new HashSet<String>(Arrays.asList(null, "a")).hashCode() == 0 + 97,
+              "hashCode {null,'a'} == 0+97 == 97 (null hashes as 0)");
+        check(new HashSet<String>().hashCode() == 0, "empty set hashCode == 0");
+        HashSet<Integer> hs = new HashSet<>(Arrays.asList(1, 2, 3));
+        check(hs.hashCode() == new TreeSet<>(Arrays.asList(1, 2, 3)).hashCode(),
+              "Set hashCode formula identical across implementations");
+        check(!new HashSet<>(Arrays.asList("a")).equals(Arrays.asList("a")),
+              "Set.equals(List) is false (Set equals only Sets)");
+        check(!hs.equals(Arrays.asList(1, 2, 3)), "HashSet.equals(List) false");
+    }
+
+    static void testIterationAndGrowth() {
+        HashSet<Integer> s = new HashSet<>();
+        for (int i = 0; i < 100; i++) s.add(i);
+        check(s.size() == 100, "size after 100 adds");
+        int containsAll = 0;
+        for (int i = 0; i < 100; i++) if (s.contains(i)) containsAll++;
+        check(containsAll == 100, "all 100 elements found after rehash-free growth");
+
+        final int[] forEachCount = {0};
+        s.forEach(x -> forEachCount[0]++);
+        check(forEachCount[0] == 100, "forEach visits every element exactly once");
+
+        check(s.stream().count() == 100, "stream().count() == size");
+        HashSet<Integer> filtered = new HashSet<>(s.stream().filter(x -> x < 10)
+                .collect(java.util.stream.Collectors.toSet()));
+        check(filtered.size() == 10, "stream filter toSet size");
+        check(filtered.equals(new HashSet<>(Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7, 8, 9))),
+              "stream filter content multiset");
+
+        java.util.Set<Integer> viaParallel = s.parallelStream()
+                .collect(java.util.stream.Collectors.toSet());
+        check(viaParallel.equals(s), "parallelStream collect multiset equals original");
+
+        Iterator<Integer> it = s.iterator();
+        Integer taken = it.next();
+        List<Integer> rest = new ArrayList<>();
+        it.forEachRemaining(rest::add);
+        check(rest.size() == 99, "forEachRemaining visits only remaining 99");
+        check(!rest.contains(taken), "forEachRemaining skips element already consumed by next()");
+        HashSet<Integer> union = new HashSet<>(rest);
+        union.add(taken);
+        check(union.equals(s), "remaining + consumed covers exactly the original multiset");
+    }
+
+    static void testSpliteratorDeep() {
+        HashSet<Integer> s = new HashSet<>();
+        for (int i = 0; i < 64; i++) s.add(i);
+        Spliterator<Integer> sp = s.spliterator();
+        check(sp.characteristics() == (Spliterator.SIZED | Spliterator.DISTINCT),
+              "HashSet spliterator exact characteristics == SIZED|DISTINCT (0x41)");
+        check(sp.getExactSizeIfKnown() == 64, "getExactSizeIfKnown == size");
+
+        Spliterator<Integer> front = sp.trySplit();
+        check(front != null, "trySplit returns non-null for 64 elements");
+        List<Integer> a = new ArrayList<>(), b = new ArrayList<>();
+        front.forEachRemaining(a::add);
+        sp.forEachRemaining(b::add);
+        check(a.size() + b.size() == 64, "split halves sizes sum to original size");
+        a.addAll(b);
+        Collections.sort(a);
+        List<Integer> expect = new ArrayList<>();
+        for (int i = 0; i < 64; i++) expect.add(i);
+        check(a.equals(expect), "split halves multiset union == original multiset");
+
+        Spliterator<Integer> single = new HashSet<>(Arrays.asList(7)).spliterator();
+        final boolean[] advanced = {false};
+        check(single.tryAdvance(x -> advanced[0] = x == 7), "tryAdvance returns true and visits element");
+        check(advanced[0], "tryAdvance consumer saw the element");
+        check(!single.tryAdvance(x -> { }), "second tryAdvance returns false when exhausted");
+        check(single.hasCharacteristics(Spliterator.SIZED | Spliterator.DISTINCT),
+              "characteristics unchanged after draining");
+    }
+
+    static void testSerializationDeep() throws Exception {
+        HashSet<String> empty = roundTrip(new HashSet<String>());
+        check(empty.isEmpty(), "empty set round-trip stays empty");
+        check(empty.add("a") && empty.contains("a"), "deserialized empty set usable");
+
+        // custom serializable element class: content equality survives round-trip
+        HashSet<Box> boxes = new HashSet<>();
+        boxes.add(new Box(1));
+        boxes.add(new Box(2));
+        HashSet<Box> back = roundTrip(boxes);
+        check(back.equals(boxes) && back.size() == 2, "custom Serializable elements round-trip");
+        check(back.contains(new Box(1)) && back.contains(new Box(2)),
+              "deserialized set finds equal-but-distinct element instances");
+    }
+
+    static class Box implements java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        final int v;
+        Box(int v) { this.v = v; }
+        @Override public boolean equals(Object o) { return o instanceof Box && ((Box) o).v == v; }
+        @Override public int hashCode() { return v; }
+    }
+
     public static void main(String[] args) throws Exception {
         testAddContains();
         testEqualsHashCode();
@@ -253,6 +402,12 @@ public class HashSetTest {
         testSerialization();
         testSpliterator();
         testStateInvariants();
+        testCtorExceptionMessages();
+        testBatchOpReturnContracts();
+        testHashCodeFormulaLock();
+        testIterationAndGrowth();
+        testSpliteratorDeep();
+        testSerializationDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

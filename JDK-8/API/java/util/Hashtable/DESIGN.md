@@ -61,3 +61,18 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 深化追加（契约级，第二轮，JDK-8）
+
+新增 testComputeMergeMatrix / testDictionaryDispatch / testViewIteratorsExtended /
+testHashCodeFormula：
+
+- **compute-merge 全分支矩阵**：putIfAbsent/remove(k,v)/replace 两形态/getOrDefault/
+  computeIfAbsent/computeIfPresent/compute/merge 全分支（含 present 不调函数计数器、函数返回
+  null 的删/不插语义、**异常同实例透传且状态不变**）；Hashtable 特有：computeIfAbsent(null key)
+  在函数执行前抛 NPE（计数器证明函数未被调用）；containsValue(null) NPE；merge(null key) NPE。
+- **Dictionary 继承分派**：以 Dictionary 引用调用 size/isEmpty/put/get/remove/keys/elements 全部
+  正确分派且修改互通；空表 keys()/elements() hasMoreElements==false。
+- **视图迭代器扩展**：values/entrySet 迭代器 remove 透传；values/entrySet 迭代器结构修改后
+  next → CME；迭代中 entry.setValue 非结构修改不抛 CME 且逐条反写。
+- **hashCode 公式锁定**：{a=1,b=2}.hashCode == 192（Σ k^v 公式）。

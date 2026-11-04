@@ -43,3 +43,15 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；不测试 fail-fast（需正确维护 modCount 的自定义子类，已由 ArrayList/List 覆盖）。
+
+## 深化批次 II（契约级追加）
+
+- **继承 iterator 走 get() 证明**：只实现 get/size 的子类，for-each 恰好驱动 size() 次 get()；
+  未 next 先 remove→ISE；空表 next→NSEE（get 抛 IOOBE 被捕获转换）；forEachRemaining。
+- **add(E) 分派证明**：只实现 add(int,E) 的子类上 `add(e)` 返回 true 且恰好调用一次 add(int,E)；
+  addAll 逐元素分派（计数器断言）。
+- **iterator.remove 分派**：未实现 remove(int) 的子类上迭代器 remove 落到 UOE；实现了则透传删除。
+- **hashCode 公式**（4066/126046）并与其他实现一致。
+- **subList 写通道**：add/remove(Object)/remove(int)/set/iterator.remove 全透传；空段视图；越界 IOOBE/IAE。
+- **JDK-27 追加**：SequencedCollection 默认在最小子类上的分派——getFirst/getLast 走 get 可用、
+  addFirst 落到未实现的 add(int,E)→UOE、空表 getFirst/getLast→NSEE、reversed() 视图。

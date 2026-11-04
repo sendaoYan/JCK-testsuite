@@ -30,3 +30,14 @@
 | listIterator(index) | 从指定位置开始 |
 
 共 6 组场景、约 16 个 check（`testBlackBox()`）。
+
+## 深化批次 II（契约级追加）
+
+- **交替遍历**：next/previous 交替返回同一元素；完全走回起点后 hasPrevious=false。
+- **add 可见性矩阵**：add 后 nextIndex+1；新元素对 next() 不可见、对 previous() 可见；
+  其后 set 替换该新元素；头部/尾部 add。
+- **set/remove 状态机**：set 立即可见；remove 后游标左移；previous 后 remove 删刚返回元素；
+  set(null)/set 回填。
+- **forEachRemaining**：从游标起访问剩余并耗尽，之后 previous 仍可用。
+- **构造越界**：listIterator(-1)/(size+1) IOOBE；listIterator(size) 的 previousIndex=size-1。
+- **CME**：结构修改后 next 和 previous 均抛；自身 add 后 remove→ISE（先 previous 再 remove 合法）。

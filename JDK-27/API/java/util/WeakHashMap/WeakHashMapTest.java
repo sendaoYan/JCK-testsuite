@@ -168,6 +168,168 @@ public class WeakHashMapTest {
         check(src.get("a") == 10 && src.get("b") == 20, "replaceAll transforms values");
     }
 
+    // ---- compute/merge full branch matrix -----------------------------------
+
+    static void checkPropagatesSame(RuntimeException marker, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": nothing was thrown");
+        } catch (Throwable t) {
+            if (t == marker) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected same " + marker.getClass().getSimpleName()
+                    + " instance but got " + t.getClass().getName(), t);
+        }
+    }
+
+    static void testComputeMergeMatrix() {
+        WeakHashMap<String, Integer> m = new WeakHashMap<>();
+        m.put("a", 1);
+
+        // putIfAbsent / conditional remove / replace both forms / getOrDefault
+        check(m.putIfAbsent("a", 9) == 1 && m.get("a") == 1, "putIfAbsent present keeps");
+        check(m.putIfAbsent("b", 2) == null && m.get("b") == 2, "putIfAbsent absent inserts");
+        check(!m.remove("a", 99), "remove(k,v) mismatched value false");
+        check(m.remove("a", 1) && !m.containsKey("a"), "remove(k,v) matched removes");
+        check(m.replace("b", 20) == 2 && m.get("b") == 20, "replace(K,V) returns old");
+        check(m.replace("z", 5) == null && !m.containsKey("z"), "replace(K,V) absent no insert");
+        check(!m.replace("b", 2, 21) && m.get("b") == 20, "replace(K,old,new) mismatch no-op");
+        check(m.replace("b", 20, 21) && m.get("b") == 21, "replace(K,old,new) match replaces");
+        check(m.getOrDefault("b", -1) == 21 && m.getOrDefault("z", -1) == -1, "getOrDefault");
+
+        // computeIfAbsent
+        m.clear();
+        m.put("a", 1);
+        check(m.computeIfAbsent("b", k -> 2) == 2 && m.get("b") == 2, "computeIfAbsent absent inserts");
+        final int[] called = {0};
+        check(m.computeIfAbsent("a", k -> { called[0]++; return 5; }) == 1,
+              "computeIfAbsent present returns existing");
+        check(called[0] == 0, "computeIfAbsent present does not invoke fn");
+        check(m.computeIfAbsent("c", k -> null) == null, "computeIfAbsent null result null");
+        check(!m.containsKey("c"), "computeIfAbsent null result leaves no entry");
+        RuntimeException boom = new RuntimeException("boom");
+        checkPropagatesSame(boom, () -> m.computeIfAbsent("d", k -> { throw boom; }),
+                "computeIfAbsent propagates fn exception");
+        check(!m.containsKey("d") && m.size() == 2, "state intact after computeIfAbsent exception");
+
+        // computeIfPresent
+        check(m.computeIfPresent("a", (k, v) -> v + 10) == 11 && m.get("a") == 11,
+              "computeIfPresent present computes");
+        called[0] = 0;
+        check(m.computeIfPresent("zz", (k, v) -> { called[0]++; return 1; }) == null,
+              "computeIfPresent absent returns null");
+        check(called[0] == 0, "computeIfPresent absent does not invoke fn");
+        check(m.computeIfPresent("a", (k, v) -> null) == null && !m.containsKey("a"),
+              "computeIfPresent null result removes");
+        checkPropagatesSame(boom, () -> m.computeIfPresent("b", (k, v) -> { throw boom; }),
+                "computeIfPresent propagates fn exception");
+        check(m.get("b") == 2, "entry unchanged after computeIfPresent exception");
+
+        // compute
+        check(m.compute("a", (k, v) -> v == null ? 100 : v + 1) == 100 && m.get("a") == 100,
+              "compute absent inserts");
+        check(m.compute("a", (k, v) -> v + 1) == 101, "compute present recomputes");
+        check(m.compute("a", (k, v) -> null) == null && !m.containsKey("a"), "compute null removes");
+        checkPropagatesSame(boom, () -> m.compute("b", (k, v) -> { throw boom; }),
+                "compute propagates fn exception");
+        check(m.get("b") == 2, "entry unchanged after compute exception");
+
+        // merge
+        m.clear();
+        called[0] = 0;
+        check(m.merge("a", 1, (x, y) -> { called[0]++; return 5; }) == 1 && called[0] == 0,
+              "merge absent puts value without fn");
+        check(m.merge("a", 2, Integer::sum) == 3, "merge present remaps");
+        check(m.merge("a", 4, (x, y) -> null) == null && !m.containsKey("a"),
+              "merge null result removes");
+        m.put("b", 1);
+        checkPropagatesSame(boom, () -> m.merge("b", 1, (x, y) -> { throw boom; }),
+                "merge propagates fn exception");
+        check(m.get("b") == 1, "entry unchanged after merge exception");
+        checkThrows(NullPointerException.class, () -> m.merge("b", null, Integer::sum),
+                    "merge null value NPE");
+        checkThrows(NullPointerException.class, () -> m.computeIfAbsent("k", null),
+                    "computeIfAbsent null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.computeIfPresent("k", null),
+                    "computeIfPresent null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.compute("k", null), "compute null fn NPE");
+        checkThrows(NullPointerException.class, () -> m.merge("k", 1, null), "merge null fn NPE");
+    }
+
+    // ---- iteration content, iterator write channels, fail-fast ---------------
+
+    static void testIterationAndCme() {
+        WeakHashMap<String, Integer> m = new WeakHashMap<>();
+        m.put("a", 1);
+        m.put("b", 2);
+        m.put("c", 3);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (java.util.Iterator<String> it = m.keySet().iterator(); it.hasNext(); )
+            seen.add(it.next());
+        check(seen.equals(new java.util.HashSet<>(java.util.Arrays.asList("a", "b", "c"))),
+              "iteration visits exactly the keys (order-free)");
+
+        // entrySet iterator.remove reflects
+        java.util.Iterator<Map.Entry<String, Integer>> ei = m.entrySet().iterator();
+        ei.next();
+        ei.remove();
+        check(m.size() == 2, "entrySet iterator.remove reflects");
+
+        // keySet iterator.remove reflects
+        java.util.Iterator<String> ki = m.keySet().iterator();
+        ki.next();
+        ki.remove();
+        check(m.size() == 1, "keySet iterator.remove reflects");
+
+        // values iterator.remove reflects
+        java.util.Iterator<Integer> vi = m.values().iterator();
+        vi.next();
+        vi.remove();
+        check(m.isEmpty(), "values iterator.remove drains");
+
+        // fail-fast: structural modification during iteration -> CME
+        WeakHashMap<String, Integer> ff = new WeakHashMap<>();
+        ff.put("a", 1);
+        ff.put("b", 2);
+        java.util.Iterator<String> it = ff.keySet().iterator();
+        it.next();
+        ff.put("c", 3);
+        checkThrows(java.util.ConcurrentModificationException.class, it::next,
+                    "iterator CME after put");
+
+        // iterator.remove() then keep iterating is legal
+        WeakHashMap<String, Integer> legal = new WeakHashMap<>();
+        legal.put("a", 1);
+        legal.put("b", 2);
+        legal.put("c", 3);
+        java.util.Iterator<String> lit = legal.keySet().iterator();
+        lit.next();
+        lit.remove();
+        check(lit.hasNext(), "iteration continues after iterator.remove");
+    }
+
+    // ---- cross-implementation equality (equals-based keys) --------------------
+
+    static void testEqualsHashMap() {
+        WeakHashMap<String, Integer> wh = new WeakHashMap<>();
+        wh.put("a", 1);
+        wh.put("b", 2);
+        java.util.HashMap<String, Integer> hm = new java.util.HashMap<>();
+        hm.put("b", 2);
+        hm.put("a", 1);
+        check(wh.equals(hm) && hm.equals(wh), "WeakHashMap/HashMap equals symmetric");
+        check(wh.hashCode() == hm.hashCode(), "hashCode equal across implementations");
+
+        // null-key content equality also holds
+        WeakHashMap<String, Integer> wn = new WeakHashMap<>();
+        wn.put(null, 1);
+        wn.put("b", 2);
+        java.util.HashMap<String, Integer> hn = new java.util.HashMap<>();
+        hn.put(null, 1);
+        hn.put("b", 2);
+        check(wn.equals(hn) && wn.hashCode() == hn.hashCode(), "null-key content equals HashMap");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBasicContract();
@@ -176,6 +338,9 @@ public class WeakHashMapTest {
         testBlackBox();
         testConstructorMatrix();
         testStructuralFacts();
+        testComputeMergeMatrix();
+        testIterationAndCme();
+        testEqualsHashMap();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

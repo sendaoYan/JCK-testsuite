@@ -23,6 +23,10 @@
  *    singleton/empty 的写操作抛 UnsupportedOperationException。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,9 +37,11 @@ import java.util.Deque;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.NavigableSet;
@@ -50,6 +56,8 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class CollectionsTest {
     static int passed;
@@ -482,6 +490,362 @@ public class CollectionsTest {
         expect(UnsupportedOperationException.class, () -> usqs.add(3), "unmodifiableSequencedSet.add UOE");
     }
 
+    // ---- deepened contract coverage, round 2 (empirically locked on jdk-27.0.1) --
+
+    static void testBinarySearchInsertionFormula() {
+        List<Integer> list = Arrays.asList(2, 4, 6, 8, 10);
+        for (int i = 0; i < list.size(); i++)
+            check(Collections.binarySearch(list, list.get(i)) == i,
+                  "binarySearch hit at own index " + i);
+        check(Collections.binarySearch(list, 1) == -1, "miss before first -> -1");
+        check(Collections.binarySearch(list, 3) == -2, "miss gap after idx0 -> -2");
+        check(Collections.binarySearch(list, 5) == -3, "miss gap after idx1 -> -3");
+        check(Collections.binarySearch(list, 7) == -4, "miss gap after idx2 -> -4");
+        check(Collections.binarySearch(list, 9) == -5, "miss gap after idx3 -> -5");
+        check(Collections.binarySearch(list, 11) == -6, "miss after last -> -(size+1)");
+        List<Integer> desc = Arrays.asList(5, 4, 2, 1);
+        check(Collections.binarySearch(desc, 4, Comparator.reverseOrder()) == 1,
+              "comparator binarySearch hit");
+        check(Collections.binarySearch(desc, 3, Comparator.reverseOrder()) == -3,
+              "comparator binarySearch gap -> -3");
+        check(Collections.binarySearch(desc, 6, Comparator.reverseOrder()) == -1,
+              "comparator binarySearch before first -> -1");
+        check(Collections.binarySearch(desc, 0, Comparator.reverseOrder()) == -5,
+              "comparator binarySearch after last -> -(size+1)");
+        expect(NullPointerException.class,
+               () -> Collections.binarySearch(Arrays.asList("a", "b"), null),
+               "binarySearch(null key) NPE");
+        List<Integer> nat = Arrays.asList(1, 2, 3);
+        check(Collections.binarySearch(nat, 2, null) == 1,
+              "binarySearch(list, key, null comparator) natural ordering");
+        check(Collections.binarySearch(nat, 0, Comparator.<Integer>naturalOrder()) == -1,
+              "binarySearch explicit comparator miss");
+        expect(NullPointerException.class, () -> Collections.binarySearch(null, 1),
+               "binarySearch(null list) NPE");
+    }
+
+    static void testRotateNCopiesBoundaries() {
+        List<Integer> r = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
+        Collections.rotate(r, 7);                    // 7 mod 5 == 2
+        check(r.equals(Arrays.asList(4, 5, 1, 2, 3)), "rotate k>size folds mod size");
+        Collections.rotate(r, -7);
+        check(r.equals(Arrays.asList(1, 2, 3, 4, 5)), "rotate -k>size restores");
+        Collections.rotate(r, 0);
+        check(r.equals(Arrays.asList(1, 2, 3, 4, 5)), "rotate by 0 no-op");
+        List<Integer> empty = new ArrayList<>();
+        Collections.rotate(empty, 2);
+        check(empty.isEmpty(), "rotate empty list no-op");
+        List<Integer> one = new ArrayList<>(Arrays.asList(9));
+        Collections.rotate(one, 4);
+        check(one.equals(Arrays.asList(9)), "rotate singleton no-op");
+
+        List<String> three = Collections.nCopies(3, "x");
+        check(three.get(0).equals("x") && three.get(2).equals("x"), "nCopies get");
+        check(three.indexOf("x") == 0 && three.lastIndexOf("x") == 2, "nCopies indexOf/lastIndexOf");
+        check(three.containsAll(Arrays.asList("x", "x")), "nCopies containsAll");
+        check(three.equals(Arrays.asList("x", "x", "x")), "nCopies equals same content");
+        check(!three.equals(Arrays.asList("x", "x")), "nCopies !equals smaller list");
+        check(three.hashCode() == 31 * (31 * (31 * 1 + "x".hashCode()) + "x".hashCode()) + "x".hashCode(),
+              "nCopies hashCode follows List.hashCode formula");
+        check(Collections.nCopies(2, "a").hashCode() == 4065, "nCopies hashCode hand-computed 4065");
+        check(Collections.nCopies(0, "x").equals(Collections.emptyList()), "nCopies(0) equals emptyList");
+        check(Collections.nCopies(2, null).get(0) == null, "nCopies null element allowed");
+        final List<String> nc = Collections.nCopies(3, "x");
+        expect(IndexOutOfBoundsException.class, () -> nc.get(3), "nCopies.get(size) IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> nc.get(-1), "nCopies.get(-1) IOOBE");
+        try {
+            Collections.nCopies(-1, "x");
+            throw new AssertionError("nCopies(-1): expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            check("List length = -1".equals(e.getMessage()), "nCopies(-1) message exact");
+        }
+        expect(UnsupportedOperationException.class, () -> nc.set(0, "y"), "nCopies.set UOE");
+    }
+
+    static void testEmptyIteratorsEnumerations() {
+        Iterator<Object> it = Collections.emptyIterator();
+        expect(NoSuchElementException.class, () -> it.next(), "emptyIterator.next NSEE");
+        expect(IllegalStateException.class, () -> it.remove(),
+               "emptyIterator.remove ISE (no preceding next)");
+        check(!it.hasNext(), "emptyIterator hasNext false after NSEE");
+
+        ListIterator<Object> li = Collections.emptyListIterator();
+        check(li.nextIndex() == 0 && li.previousIndex() == -1, "emptyListIterator indices");
+        expect(NoSuchElementException.class, () -> li.next(), "emptyListIterator.next NSEE");
+        expect(NoSuchElementException.class, () -> li.previous(), "emptyListIterator.previous NSEE");
+        expect(UnsupportedOperationException.class, () -> li.add(new Object()), "emptyListIterator.add UOE");
+        expect(IllegalStateException.class, () -> li.set(new Object()), "emptyListIterator.set ISE");
+        expect(IllegalStateException.class, () -> li.remove(), "emptyListIterator.remove ISE");
+
+        Enumeration<Object> en = Collections.emptyEnumeration();
+        check(!en.hasMoreElements(), "emptyEnumeration hasMoreElements false");
+        expect(NoSuchElementException.class, () -> en.nextElement(),
+               "emptyEnumeration.nextElement NSEE");
+
+        expect(NoSuchElementException.class, () -> Collections.emptySortedSet().first(),
+               "emptySortedSet.first NSEE");
+        expect(NoSuchElementException.class, () -> Collections.emptySortedSet().last(),
+               "emptySortedSet.last NSEE");
+        expect(NoSuchElementException.class, () -> Collections.emptySortedMap().firstKey(),
+               "emptySortedMap.firstKey NSEE");
+        expect(UnsupportedOperationException.class, () -> Collections.emptyNavigableSet().pollFirst(),
+               "emptyNavigableSet.pollFirst UOE (documented quirk)");
+        expect(UnsupportedOperationException.class, () -> Collections.emptyNavigableSet().pollLast(),
+               "emptyNavigableSet.pollLast UOE (documented quirk)");
+        expect(UnsupportedOperationException.class, () -> Collections.emptyNavigableMap().pollFirstEntry(),
+               "emptyNavigableMap.pollFirstEntry UOE (quirk)");
+        check(Collections.emptyNavigableMap().floorKey("x") == null,
+              "emptyNavigableMap.floorKey null");
+        check(Collections.emptyNavigableMap().descendingMap().isEmpty(),
+              "emptyNavigableMap.descendingMap empty");
+        check(Collections.emptySet().equals(Collections.emptyNavigableSet())
+              && Collections.emptyNavigableSet().equals(Collections.emptySet()),
+              "emptyNavigableSet equals emptySet symmetric");
+    }
+
+    static void testSingletonHashCodeFormulas() {
+        check(Collections.singleton("x").hashCode() == "x".hashCode(),
+              "singleton hashCode = element hash");
+        check(Collections.singleton("x").equals(new HashSet<>(Arrays.asList("x")))
+              && new HashSet<>(Arrays.asList("x")).equals(Collections.singleton("x")),
+              "singleton equals HashSet symmetric");
+        expect(UnsupportedOperationException.class, () -> Collections.singleton("x").remove("x"),
+               "singleton.remove UOE");
+        expect(UnsupportedOperationException.class, () -> Collections.singleton("x").clear(),
+               "singleton.clear UOE");
+        check(Collections.singletonMap("k", 1).hashCode()
+              == ("k".hashCode() ^ Integer.valueOf(1).hashCode()),
+              "singletonMap hashCode = key ^ value hash");
+        check(Collections.singletonMap("k", 1).equals(new HashMap<>(Collections.singletonMap("k", 1))),
+              "singletonMap equals HashMap single entry");
+        expect(UnsupportedOperationException.class,
+               () -> Collections.singletonMap("k", 1).entrySet().iterator().next().setValue(9),
+               "singletonMap entry.setValue UOE");
+        check(Collections.singletonList("x").hashCode() == 31 * 1 + "x".hashCode(),
+              "singletonList hashCode formula");
+        expect(UnsupportedOperationException.class, () -> Collections.singletonList("x").iterator().remove(),
+               "singletonList.iterator.remove UOE");
+    }
+
+    static void testUnmodifiableWriteChannels() {
+        // Map default methods route through put/remove -> UOE
+        Map<String, Integer> um = Collections.unmodifiableMap(
+                new HashMap<String, Integer>(Collections.singletonMap("k", 1)));
+        expect(UnsupportedOperationException.class, () -> um.putIfAbsent("a", 1), "unmodMap.putIfAbsent UOE");
+        expect(UnsupportedOperationException.class, () -> um.compute("a", (k, v) -> 1), "unmodMap.compute UOE");
+        expect(UnsupportedOperationException.class, () -> um.computeIfAbsent("a", k -> 1), "unmodMap.computeIfAbsent UOE");
+        expect(UnsupportedOperationException.class, () -> um.computeIfPresent("k", (k, v) -> 2), "unmodMap.computeIfPresent UOE");
+        expect(UnsupportedOperationException.class, () -> um.merge("a", 1, Integer::sum), "unmodMap.merge UOE");
+        expect(UnsupportedOperationException.class, () -> um.remove("k", 1), "unmodMap.remove(k,v) UOE");
+        expect(UnsupportedOperationException.class, () -> um.replace("k", 2), "unmodMap.replace(k,v) UOE");
+        expect(UnsupportedOperationException.class, () -> um.replace("k", 1, 2), "unmodMap.replace(k,old,new) UOE");
+        expect(UnsupportedOperationException.class, () -> um.replaceAll((k, v) -> v), "unmodMap.replaceAll UOE");
+        expect(UnsupportedOperationException.class,
+               () -> um.entrySet().iterator().next().setValue(9), "unmodMap entry.setValue UOE");
+
+        List<String> ul = Collections.unmodifiableList(new ArrayList<>(Arrays.asList("a")));
+        expect(UnsupportedOperationException.class, () -> ul.iterator().remove(), "unmodList.iterator.remove UOE");
+        expect(UnsupportedOperationException.class, () -> ul.listIterator().add("b"), "unmodList.listIterator.add UOE");
+        expect(UnsupportedOperationException.class, () -> ul.listIterator().set("b"), "unmodList.listIterator.set UOE");
+        expect(UnsupportedOperationException.class, () -> ul.subList(0, 1).add("b"), "unmodList.subList.add UOE");
+
+        TreeSet<Integer> ts = new TreeSet<>(Arrays.asList(1, 2, 3));
+        SortedSet<Integer> uss = Collections.unmodifiableSortedSet(ts);
+        expect(UnsupportedOperationException.class, () -> uss.headSet(3).add(9), "unmodSortedSet.headSet.add UOE");
+        expect(UnsupportedOperationException.class, () -> uss.tailSet(1).remove(1), "unmodSortedSet.tailSet.remove UOE");
+        ts.add(5);
+        check(uss.contains(5) && uss.size() == 4, "unmodSortedSet live view");
+        NavigableSet<Integer> uns = Collections.unmodifiableNavigableSet(ts);
+        expect(UnsupportedOperationException.class, () -> uns.pollFirst(), "unmodNavigableSet.pollFirst UOE");
+        expect(UnsupportedOperationException.class, () -> uns.descendingSet().add(9), "unmodNavigableSet.descendingSet.add UOE");
+
+        TreeMap<String, Integer> tm = new TreeMap<>();
+        tm.put("a", 1);
+        SortedMap<String, Integer> usm = Collections.unmodifiableSortedMap(tm);
+        expect(UnsupportedOperationException.class, () -> usm.subMap("a", "z").put("b", 2),
+               "unmodSortedMap.subMap.put UOE");
+        tm.put("c", 3);
+        check(usm.size() == 2 && usm.lastKey().equals("c"), "unmodSortedMap live view");
+        NavigableMap<String, Integer> unm = Collections.unmodifiableNavigableMap(tm);
+        expect(UnsupportedOperationException.class, () -> unm.descendingMap().put("z", 9),
+               "unmodNavigableMap.descendingMap.put UOE");
+        check(unm.floorKey("b").equals("a"), "unmodNavigableMap read");
+
+        expect(NullPointerException.class, () -> Collections.unmodifiableList(null), "unmodifiableList(null) NPE");
+        expect(NullPointerException.class, () -> Collections.unmodifiableMap(null), "unmodifiableMap(null) NPE");
+        expect(NullPointerException.class, () -> Collections.unmodifiableSet(null), "unmodifiableSet(null) NPE");
+    }
+
+    static void testSynchronizedConcurrentSmoke() {
+        final List<Integer> sync = Collections.synchronizedList(new ArrayList<Integer>());
+        final CountDownLatch done = new CountDownLatch(2);
+        Runnable task = () -> {
+            for (int i = 0; i < 1000; i++) synchronized (sync) { sync.add(i); }
+            done.countDown();
+        };
+        Thread t1 = new Thread(task), t2 = new Thread(task);
+        t1.setDaemon(true); t2.setDaemon(true);
+        t1.start(); t2.start();
+        try {
+            check(done.await(5, TimeUnit.SECONDS), "synchronizedList 2x1000 within 5s");
+        } catch (InterruptedException e) {
+            throw new AssertionError("interrupted waiting for workers", e);
+        }
+        check(sync.size() == 2000, "synchronizedList concurrent adds all land");
+        try { t1.join(2000); t2.join(2000); } catch (InterruptedException e) { /* daemon */ }
+    }
+
+    static void testReverseOrderAndShuffle() {
+        Comparator<Integer> rev = Collections.reverseOrder();
+        Comparator<Integer> nat = Comparator.naturalOrder();
+        check(rev.compare(1, 2) == -nat.compare(1, 2), "reverseOrder inverts naturalOrder");
+        Comparator<Integer> revNat = Collections.reverseOrder(Comparator.<Integer>naturalOrder());
+        check(revNat.compare(1, 2) > 0 && revNat.compare(2, 1) < 0,
+              "reverseOrder(naturalOrder) descending");
+        // documented as NPE for null cmp, but the implementation accepts null as natural order
+        Comparator<Integer> revNull = Collections.reverseOrder(null);
+        check(revNull.compare(1, 2) > 0 && revNull.compare(2, 1) < 0 && revNull.compare(5, 5) == 0,
+              "reverseOrder(null) behaves as reverse natural order (no throw, empirical)");
+        TreeSet<Integer> tr = new TreeSet<>(Collections.reverseOrder());
+        tr.add(1); tr.add(3); tr.add(2);
+        check(new ArrayList<>(tr).equals(Arrays.asList(3, 2, 1)), "TreeSet reverseOrder iteration desc");
+        check(tr.first() == 3 && tr.last() == 1, "TreeSet reverseOrder first/last swapped");
+        Integer[] vals = {-2, 0, 2};
+        for (Integer x : vals) for (Integer y : vals)
+            check(Integer.signum(rev.compare(x, y)) == -Integer.signum(rev.compare(y, x)),
+                  "reverseOrder sgn antisymmetry " + x + "," + y);
+        TreeSet<String> tn = new TreeSet<>(Comparator.nullsFirst(Comparator.reverseOrder()));
+        tn.add("b"); tn.add(null); tn.add("a");
+        check(tn.toString().equals("[null, b, a]"), "nullsFirst(reverseOrder) ordering");
+
+        // shuffle(List, RandomGenerator): JDK-17+ overload agrees with shuffle(List, Random)
+        List<Integer> a = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8));
+        List<Integer> b = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8));
+        Collections.shuffle(a, new Random(42));
+        Collections.shuffle(b, (java.util.random.RandomGenerator) new Random(42));
+        check(a.equals(b), "shuffle(List, RandomGenerator) same sequence as shuffle(List, Random)");
+        expect(NullPointerException.class,
+               () -> Collections.shuffle(new ArrayList<Integer>(Arrays.asList(1, 2)), null),
+               "shuffle(size>=2, null rnd) NPE (rnd consulted)");
+        expect(NullPointerException.class, () -> Collections.reverse(null), "reverse(null) NPE");
+        expect(NullPointerException.class, () -> Collections.fill(null, "x"), "fill(null, x) NPE");
+    }
+
+    static void testMinMaxDisjointNulls() {
+        expect(NullPointerException.class, () -> Collections.min(null), "min(null list) NPE");
+        expect(NullPointerException.class, () -> Collections.max(null), "max(null list) NPE");
+        // null comparator means natural ordering (no NPE; implementation substitutes naturalOrder)
+        check(Collections.min(Arrays.asList(3, 1, 2), null) == 1,
+              "min(list, null comparator) natural ordering");
+        check(Collections.max(Arrays.asList(3, 1, 2), null) == 3,
+              "max(list, null comparator) natural ordering");
+        List<String> withNull = Arrays.asList("b", null, "a");
+        check(Collections.min(withNull, Comparator.nullsLast(Comparator.naturalOrder())).equals("a"),
+              "min with nullsLast ignores trailing null");
+        check(Collections.max(withNull, Comparator.nullsFirst(Comparator.naturalOrder())).equals("b"),
+              "max with nullsFirst ignores leading null");
+        expect(NullPointerException.class,
+               () -> Collections.disjoint(null, Collections.emptyList()), "disjoint(null, empty) NPE");
+        expect(NullPointerException.class,
+               () -> Collections.disjoint(Collections.emptyList(), null), "disjoint(empty, null) NPE");
+        expect(NullPointerException.class,
+               () -> Collections.disjoint(Arrays.asList(1), null), "disjoint(non-empty, null) NPE");
+        expect(NullPointerException.class,
+               () -> Collections.disjoint(null, Arrays.asList(1)), "disjoint(null, non-empty) NPE");
+        expect(NullPointerException.class, () -> Collections.copy(null, Arrays.asList(1)),
+               "copy(null dest, src) NPE");
+        expect(NullPointerException.class,
+               () -> Collections.copy(new ArrayList<Integer>(), null), "copy(dest, null src) NPE");
+        List<String> replaceNull = new ArrayList<>(Arrays.asList("a", null, "a"));
+        check(Collections.replaceAll(replaceNull, null, "x"),
+              "replaceAll with null old value matches nulls");
+        check(replaceNull.equals(Arrays.asList("a", "x", "a")), "replaceAll null replaced");
+        List<Integer> same = new ArrayList<>(Arrays.asList(1, 2));
+        Collections.swap(same, 1, 1);
+        check(same.equals(Arrays.asList(1, 2)), "swap(i, i) no-op");
+        check(Collections.addAll(new ArrayList<String>()) == false,
+              "addAll with no varargs returns false");
+    }
+
+    static void testNewSetFromMapLifoQueue() {
+        HashMap<String, Boolean> backing = new HashMap<>();
+        Set<String> view = Collections.newSetFromMap(backing);
+        check(view.add("a") && !view.add("a"), "newSetFromMap add/duplicate");
+        check(view.contains("a") && view.size() == 1, "newSetFromMap content");
+        backing.put("z", Boolean.TRUE);
+        check(view.contains("z") && view.size() == 2, "newSetFromMap backing-map writes visible");
+        check(view.add("w") && Boolean.TRUE.equals(backing.get("w")),
+              "newSetFromMap view add writes backing map");
+        check(view.remove("a") && !backing.containsKey("a"), "newSetFromMap remove clears backing");
+        check(view.equals(new HashSet<>(Arrays.asList("z", "w"))), "newSetFromMap equals HashSet");
+        check(view.hashCode() == new HashSet<>(Arrays.asList("z", "w")).hashCode(),
+              "newSetFromMap hashCode = sum of element hashes");
+        expect(IllegalArgumentException.class,
+               () -> Collections.newSetFromMap(new HashMap<String, Boolean>(
+                       Collections.singletonMap("x", Boolean.TRUE))),
+               "newSetFromMap(non-empty map) IAE");
+        expect(NullPointerException.class, () -> Collections.newSetFromMap(null),
+               "newSetFromMap(null) NPE");
+
+        Deque<Integer> deque = new ArrayDeque<>();
+        Queue<Integer> lifo = Collections.asLifoQueue(deque);
+        check(lifo.add(1) && lifo.add(2) && lifo.add(3), "asLifoQueue add");
+        check(lifo.peek() == 3, "asLifoQueue peek returns last added");
+        check(lifo.remove() == 3 && lifo.poll() == 2, "asLifoQueue remove/poll LIFO");
+        check(lifo.element() == 1, "asLifoQueue element is oldest");
+        check(lifo.remove() == 1 && lifo.poll() == null, "asLifoQueue drained, poll null");
+        expect(NoSuchElementException.class, () -> lifo.element(), "asLifoQueue element empty NSEE");
+        expect(NoSuchElementException.class, () -> lifo.remove(), "asLifoQueue remove empty NSEE");
+        check(lifo.offer(9) && lifo.addAll(Arrays.asList(7, 8)) && lifo.size() == 3,
+              "asLifoQueue offer/addAll");
+        check(lifo.contains(7) && lifo.remove(Integer.valueOf(7)),
+              "asLifoQueue contains/remove(Object)");
+        expect(NullPointerException.class, () -> Collections.asLifoQueue(null),
+               "asLifoQueue(null) NPE (JDK-27 requires non-null deque)");
+    }
+
+    static void testEnumerationSerializationRoundTrip() throws Exception {
+        Enumeration<String> empty = Collections.enumeration(Collections.<String>emptyList());
+        check(!empty.hasMoreElements(), "enumeration over empty collection");
+        expect(NoSuchElementException.class, () -> empty.nextElement(),
+               "enumeration over empty nextElement NSEE");
+        List<String> src = Arrays.asList("p", "q", "r");
+        List<String> out = new ArrayList<>();
+        Enumeration<String> en = Collections.enumeration(src);
+        while (en.hasMoreElements()) out.add(en.nextElement());
+        check(out.equals(src), "enumeration preserves order");
+        check(Collections.list(Collections.enumeration(src)).equals(src),
+              "list(enumeration(...)) round-trip");
+        expect(NullPointerException.class, () -> Collections.list(null), "list(null) NPE");
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        List<String> emptyL = Collections.emptyList();
+        List<String> single = Collections.singletonList("x");
+        List<String> copies = Collections.nCopies(2, "y");
+        List<String> unmod = Collections.unmodifiableList(new ArrayList<>(Arrays.asList("u", "v")));
+        Map<String, Integer> unmodM = Collections.unmodifiableMap(
+                new HashMap<String, Integer>(Collections.singletonMap("k", 1)));
+        oos.writeObject(emptyL); oos.writeObject(single); oos.writeObject(copies);
+        oos.writeObject(unmod); oos.writeObject(unmodM);
+        oos.close();
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        check(ois.readObject().equals(emptyL), "serialized emptyList round-trip");
+        check(ois.readObject().equals(single), "serialized singletonList round-trip");
+        check(ois.readObject().equals(copies), "serialized nCopies round-trip");
+        @SuppressWarnings("unchecked")
+        List<String> unmodBack = (List<String>) ois.readObject();
+        check(unmodBack.equals(unmod), "serialized unmodifiableList round-trip");
+        expect(UnsupportedOperationException.class, () -> unmodBack.add("w"),
+               "serialized unmodifiableList still unmodifiable");
+        @SuppressWarnings("unchecked")
+        Map<String, Integer> unmodMBack = (Map<String, Integer>) ois.readObject();
+        check(unmodMBack.equals(unmodM), "serialized unmodifiableMap round-trip");
+        expect(UnsupportedOperationException.class, () -> unmodMBack.put("z", 2),
+               "serialized unmodifiableMap still unmodifiable");
+        ois.close();
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testSortBinarySearch();
@@ -494,6 +858,16 @@ public class CollectionsTest {
         testEnumerationListNewSetAsLifo();
         testSortSearchBoundaries();
         testBlackBox();
+        testBinarySearchInsertionFormula();
+        testRotateNCopiesBoundaries();
+        testEmptyIteratorsEnumerations();
+        testSingletonHashCodeFormulas();
+        testUnmodifiableWriteChannels();
+        testSynchronizedConcurrentSmoke();
+        testReverseOrderAndShuffle();
+        testMinMaxDisjointNulls();
+        testNewSetFromMapLifoQueue();
+        testEnumerationSerializationRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

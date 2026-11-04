@@ -45,3 +45,30 @@
 ## 注意事项
 
 确定性；无墙钟/随机/全局副作用；headless-safe 不加 `@key`。
+
+## 第 2 轮深化（2026-11，契约覆盖，33→186 断言）
+
+新增方法：testSgnContract、testThenComparingChain、testSortStabilityUnderComparator、
+testNullsCompositions、testExceptionPropagation、testEqualsContract、
+testPrimitiveSpecializationBoundaries。
+
+### 本轮锁定的易错规范细节（先探测后断言，jdk8u372 实测）
+
+- **sgn 契约矩阵**：natural/reversed/reversed().reversed() 三比较器 × {-2,0,2} 全组合反对称 +
+  natural/reverse 传递性；`naturalOrder` 与 `reverseOrder` 互为精确反号。
+- **3 级链排序**：`comparing(firstChar).thenComparingInt(length).thenComparing(natural)` 把
+  `[b2,a2,c1,a1]` 排成 `[a1,a2,b2,c1]`；`chain.reversed()` 整链反号；`reversed()` 不改变原比较器。
+- **List.sort 稳定性**：相等键保持相遇顺序（TimSort）。
+- **异常同实例透传**：comparing 的 key extractor 抛出的异常**原实例**（`e == boom`）向上传播；
+  thenComparing 的二级 comparator 只在主键打平时被调用（主键分出胜负则跳过）。
+- **equals 语义**：`comparing(fn)`/`nullsFirst(cmp)` 实例间**身份 equals**（不重写）；
+  `naturalOrder()`/`reverseOrder()` 是**缓存单例**（equals 且 ==）；`naturalOrder().reversed().equals(reverseOrder())`。
+- **nullsFirst(reverseOrder()) TreeSet** 迭代为 `[null, b, a]`；`nullsFirst(...).reversed()` 连 null 次序一起翻转；
+  嵌套 `nullsFirst(nullsLast(cmp))` null 仍最前；`nullsFirst(null,null)==0` **不调用**委托比较器。
+- **comparingLong/Int MIN/MAX 边界**；`comparingDouble` 全序：NaN>+Inf、-0.0<+0.0。
+- **thenComparing(keyExtractor) 自然键返回 null → NPE**。
+- TimSort 的 "Comparison method violates its general contract" IAE **刻意不断言**（实现细节、JDK 版本相关）。
+
+## 注意事项（第 2 轮）
+
+全部固定输入；无随机/墙钟；headless 无 `@key`。

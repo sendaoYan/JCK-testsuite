@@ -57,3 +57,29 @@
 
 - TreeSet 有序，断言可依赖升序；跨实现 equals 断言只依赖内容相等。
 - 序列化 serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 契约深化补充（第二轮：CASE_INSENSITIVE/含边界视图/视图活态+CME/双重 descending/comparator 序列化/nullsFirst/双向 poll/精确特征位/addAll 排序）
+
+新增方法（只追加）：
+
+| 测试点 | 用例方法 |
+|---|---|
+| String.CASE_INSENSITIVE_ORDER：'A'/'a' 比较==0 视为重复、迭代序 A,b,C、contains/remove 大小写无关 | testCaseInsensitiveComparator |
+| headSet(to,true)/tailSet(from,false) 含边界布尔四重载精确端点（last/first/内容清单）+ 视图越界 add IAE | testInclusiveBoundViews |
+| 视图活态：父插入范围可见/父删除可见、视图 comparator 同实例、父结构修改后视图迭代器 CME、嵌套子视图写透传 | testViewLivenessAndCme |
+| descendingSet().descendingSet() 等价原集且仍为活视图 | testDescendingTwice |
+| comparator 序列化：CASE_INSENSITIVE_ORDER 与 nullsFirst 序列化保行为；不可序列化 Comparator → writeObject NotSerializableException | testComparatorSerialization |
+| nullsFirst/nullsLast：null 排首/尾、contains(null)、remove(null)、pollFirst 后取最小实元素 | testNullsFirstOrdering |
+| pollFirst 升序耗尽/pollLast 降序耗尽/交错首尾剥离 | testPollDrainSequences |
+| 中删后仍升序、removeIf 后保序、stream 按序 | testOrderAfterMiddleRemoval |
+| spliterator 精确特征位 ORDERED\|DISTINCT\|SORTED\|SIZED（0x55）、getExactSizeIfKnown、getComparator()==comparator()（自然序为 null）、trySplit 两半各自有序且按序拼接==原集 | testSpliteratorDeep |
+| hashCode 公式锁 {1,2,3}=6、addAll 乱序输入排序结果、clone 保 comparator 与序 | testHashCodeLockAndAddAllSorting |
+
+负例精确异常表（新锁定）：
+- 自然序 add/contains/remove(null) → NPE；nullsFirst 比较器下 null 合法
+- 视图越界 add（含 tailSet(from,false).add(from)、headSet(to,true).add(to+1)）→ IllegalArgumentException
+- 父集结构修改后视图迭代器 next() → ConcurrentModificationException
+- subSet(from>to) → IllegalArgumentException
+- 带 Comparator 序列化且 Comparator 不可序列化 → writeObject 抛 NotSerializableException
+
+JDK-8 vs JDK-27：JDK-8 侧无 SequencedSet 方法（getFirst/removeFirst/reversed 在 27 侧断言）；其余契约双侧一致（特征位均 0x55）。

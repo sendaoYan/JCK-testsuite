@@ -50,3 +50,29 @@ List<String> one = Collections.singletonList("x");
 
 健壮性：`shuffle` 用固定 `Random(42)` 种子断言可复现（无无种子随机）；集合比较先排序（不依赖 HashMap/
 HashSet 迭代顺序）；固定输入、无墙钟；无全局副作用；headless，无 `@key`。
+
+## 第 2 轮深化（2026-11，契约覆盖，107→308 断言）
+
+新增方法：testBinarySearchInsertionFormula、testRotateNCopiesBoundaries、
+testEmptyIteratorsEnumerations、testSingletonHashCodeFormulas、testUnmodifiableWriteChannels、
+testSynchronizedConcurrentSmoke、testReverseOrderAndShuffle、testMinMaxDisjointNulls、
+testNewSetFromMapLifoQueue、testEnumerationSerializationRoundTrip。
+
+### 本轮锁定的易错规范细节（先探测后断言，jdk-27.0.1 实测）
+
+- **`binarySearch` 插入公式**：未命中返回 `-(insertionPoint)-1`，边界（首/中/尾/越两端）逐一锁定。
+- **`rotate` 折叠**：`k mod size` 等价；k=0 恒等；`rotate(l, n)` == `reverse(l)`。
+- **`nCopies(-1, x)` IAE**（消息 `List length = -1`）；`nCopies(0, null)` 合法；hashCode 与公式 `1*31^n + ...` 一致。
+- **`emptyIterator().remove()` 抛 IllegalStateException**（非 UOE）；`emptyListIterator().set` ISE；`emptyNavigableMap.pollFirstEntry/pollLastEntry`、`emptyNavigableSet.pollFirst/pollLast` 抛 **UOE**（javadoc 明示）。
+- **`unmodifiable*` 默认方法写通道全 UOE**：putIfAbsent/compute*/merge/remove(k,v)/replace*/replaceAll。
+- **`reverseOrder(null)` 不抛 NPE**（javadoc 声称 IAE，实现回退自然逆序）——按实测断言。
+- **`min/max(coll, null)` 静默走自然序**（非 NPE）。
+- **`disjoint(*, null)` 全组合 NPE**（含空集合：isEmpty() 短路仍解引用）。
+- **`asLifoQueue(null)` 抛 NPE（JDK-27）**——与 JDK-8 相反（8 不抛），版本差异已双侧各自锁定。
+- **`shuffle(List, RandomGenerator)`（JDK-17+）与 `shuffle(List, Random)` 同种子结果一致**：`new Random(42)` 双 API 等价断言。
+- **`newSetFromMap`**：非空 map IAE、null NPE、双向 live 联动（map 侧改动反映到 set）。
+- **序列化往返**：unmodifiableList 反序列化后仍 UOE、内容不变；CheckedList 类型检查保留。
+
+## 第 2 轮健壮性
+
+- synchronized 并发 smoke：2 线程 × 1000 add → 2000，`CountDownLatch` await ≤5s；固定输入无 sleep。

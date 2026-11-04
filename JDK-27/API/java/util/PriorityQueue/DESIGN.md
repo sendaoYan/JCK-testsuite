@@ -38,3 +38,27 @@
 ## 注意事项
 
 - 白盒反射只断言公开结构；serialVersionUID 与 JDK-8 相同。
+
+## 契约深化追加（第二版）
+
+新增 test 方法：testNullComparatorConstructors / testComparatorPlumbing / testCaseInsensitiveOrder /
+testNonComparableEager / testRemovePositions / testInterleavedOfferPoll / testIteratorRemove /
+testSerializationWithComparator / testNonSerializableComparator / testEmptyToArray /
+testIaeMessageless / testWrongTypeQueries / testToStringBrackets / testHashCodeIdentity /
+testElementIdempotent。
+
+### 覆盖点
+
+与 JDK-8 侧同构（null Comparator 构造不抛 NPE 走自然序、比较器实例 == 管道、remove 位置矩阵、
+交错 offer/poll、iterator.remove、带比较器序列化同实例复原、不可序列化 Comparator →
+NotSerializableException、空 toArray 复用+null 终止符、IAE 无消息、错误类型查询 false、
+toString 括号、身份 hashCode、element 幂等），差异点：
+
+- **非 Comparable 元素的立即 CCE（JDK-21+ 契约）**：**首个 offer 即抛 ClassCastException**
+  （入队时转型 Comparable），队列不留元素；两元素集合构造 heapify 比较 CCE。
+  （JDK-8 对照：首个 offer 成功、第二个才 CCE——两侧各自断言记录。）
+
+### 易错规范细节（已锁入断言）
+
+- Spliterator 特征位 JDK-8 == JDK-27（0x4140，黑盒段已断言 SIZED|SUBSIZED|NONNULL）。
+- 序断言只走 poll 序列；toString/迭代序无契约。

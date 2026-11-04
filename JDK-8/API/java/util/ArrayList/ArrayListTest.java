@@ -312,6 +312,190 @@ public class ArrayListTest {
         check(osc.getSerialVersionUID() == 8683452581122892189L, "ArrayList serialVersionUID stable");
     }
 
+    // ---- deepened contract coverage II: hashCode formula, cross-impl equals,
+    //      toArray identity, shallow clone, iterator edges, subList liveness ---
+
+    static void testHashCodeFormula() {
+        // List.hashCode: result=1; result = 31*result + (e==null?0:e.hashCode())
+        check(new ArrayList<String>().hashCode() == 1, "hashCode of empty list is 1");
+        // ["a"]: 31*1 + 97 = 128
+        check(new ArrayList<>(Arrays.asList("a")).hashCode() == 128, "hashCode [a] = 31*1+97 = 128");
+        // ["a","b"]: 31*128 + 98 = 4066
+        check(new ArrayList<>(Arrays.asList("a", "b")).hashCode() == 4066, "hashCode [a,b] = 31*128+98 = 4066");
+        // ["a","b",null]: 31*4066 + 0 = 126046
+        check(new ArrayList<>(Arrays.asList("a", "b", null)).hashCode() == 126046,
+              "hashCode [a,b,null] = 31*4066+0 = 126046 (null contributes 0)");
+        // [null]: 31*1 + 0 = 31
+        check(new ArrayList<>(Arrays.asList((String) null)).hashCode() == 31, "hashCode [null] = 31");
+    }
+
+    static void testCrossImplEquals() {
+        // Same content in every List implementation must be equal, symmetrically.
+        List<String> al = new ArrayList<>(Arrays.asList("a", "b", null));
+        java.util.LinkedList<String> ll = new java.util.LinkedList<>(Arrays.asList("a", "b", null));
+        java.util.Vector<String> vec = new java.util.Vector<>(Arrays.asList("a", "b", null));
+        java.util.Stack<String> st = new java.util.Stack<>();
+        st.addAll(Arrays.asList("a", "b", null));
+        List<String> asList = Arrays.asList("a", "b", null);
+        check(al.equals(ll) && ll.equals(al), "ArrayList equals LinkedList");
+        check(al.equals(vec) && vec.equals(al), "ArrayList equals Vector");
+        check(al.equals(st) && st.equals(al), "ArrayList equals Stack (Stack is a List)");
+        check(al.equals(asList) && asList.equals(al), "ArrayList equals Arrays.asList");
+        check(ll.equals(vec) && vec.equals(st) && st.equals(asList), "all List impls mutually equal");
+        int h = al.hashCode();
+        check(ll.hashCode() == h && vec.hashCode() == h && st.hashCode() == h && asList.hashCode() == h,
+              "equal lists (all impls incl null element) share hashCode");
+        // unequal cases
+        check(!al.equals(Arrays.asList("a", "b")), "size difference not equal");
+        check(!al.equals(Arrays.asList("a", "b", "c")), "null vs non-null element not equal");
+        check(!Arrays.asList(1, 2, 3).equals(Arrays.asList(3, 2, 1)), "order significant");
+        check(!new ArrayList<String>().equals("not a list"), "equals non-List false");
+    }
+
+    static void testToArrayContract() {
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a", "b"));
+        String[] big = new String[10];
+        String[] ret = list.toArray(big);
+        check(ret == big, "toArray(T[]) returns the given array when it fits (identity)");
+        check(big[0].equals("a") && big[1].equals("b"), "toArray(T[]) fills from index 0");
+        check(big[2] == null, "toArray(T[]) null-terminates just past last element");
+        check(big[9] == null, "toArray(T[]) rest of array untouched beyond terminator");
+        String[] exact = list.toArray(new String[0]);
+        check(exact.length == 2, "toArray(T[0]) exact length");
+        String[] same = list.toArray(new String[2]);
+        check(same.length == 2 && same[0].equals("a"), "toArray(T[size]) exact fit no null terminator needed");
+        Object[] oa = list.toArray();
+        check(oa instanceof Object[] && !(oa instanceof String[]), "toArray() is Object[]");
+        check(new ArrayList<>().toArray().length == 0, "toArray() of empty is length 0");
+        // empty-source with roomy array: per contract a[0] is set to null
+        String[] roomy = new String[3];
+        String[] r2 = new ArrayList<String>().toArray(roomy);
+        check(r2 == roomy && roomy[0] == null, "toArray(roomy) on empty list nulls index 0");
+    }
+
+    static void testCloneShallow() {
+        // clone: new object, equal content, structurally independent, elements shared.
+        StringBuilder shared = new StringBuilder("mut");
+        ArrayList<StringBuilder> src = new ArrayList<>();
+        src.add(shared);
+        src.add(null);
+        @SuppressWarnings("unchecked")
+        ArrayList<StringBuilder> clone = (ArrayList<StringBuilder>) src.clone();
+        check(clone != src && clone.getClass() == src.getClass(), "clone same class, distinct object");
+        clone.get(0).append("ated");
+        check(src.get(0).toString().equals("mutated"), "clone is shallow: mutation of shared element visible");
+        clone.add(new StringBuilder("extra"));
+        check(src.size() == 2, "clone structurally independent");
+        check(clone.get(1) == null, "clone keeps null element");
+        clone.remove(0);
+        check(src.size() == 2 && src.get(0) == shared, "removal in clone does not touch source");
+    }
+
+    static void testIteratorEdges() {
+        // remove() before next() -> IllegalStateException
+        checkThrows(IllegalStateException.class,
+                    () -> new ArrayList<>(Arrays.asList("a")).iterator().remove(),
+                    "iterator.remove before next ISE");
+        // remove() twice without next -> ISE
+        ArrayList<String> l = new ArrayList<>(Arrays.asList("a", "b"));
+        Iterator<String> it = l.iterator();
+        it.next();
+        it.remove();
+        checkThrows(IllegalStateException.class, it::remove, "second remove without next ISE");
+        // iterator.remove is the only modification allowed during iteration
+        ArrayList<Integer> nums = new ArrayList<>(Arrays.asList(1, 2, 3, 4));
+        Iterator<Integer> ni = nums.iterator();
+        int sum = 0;
+        while (ni.hasNext()) {
+            int v = ni.next();
+            if (v % 2 == 0) ni.remove();
+            else sum += v;
+        }
+        check(sum == 4 && nums.equals(Arrays.asList(1, 3)), "iterate-and-remove evens leaves odds");
+        // forEachRemaining visits the remainder, then hasNext is false
+        ArrayList<String> fr = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        Iterator<String> fi = fr.iterator();
+        fi.next();
+        StringBuilder sb = new StringBuilder();
+        fi.forEachRemaining(sb::append);
+        check(sb.toString().equals("bc"), "forEachRemaining visits remaining elements only");
+        check(!fi.hasNext(), "forEachRemaining exhausts iterator");
+        // removeIf return values
+        ArrayList<String> rf = new ArrayList<>(Arrays.asList("a", "b"));
+        check(!rf.removeIf(x -> false), "removeIf nothing matched returns false");
+        check(rf.removeIf(x -> true) && rf.isEmpty(), "removeIf all matched returns true and empties");
+        // forEach over nulls tolerated
+        ArrayList<String> withNull = new ArrayList<>(Arrays.asList(null, "x"));
+        final int[] count = {0};
+        withNull.forEach(x -> count[0]++);
+        check(count[0] == 2, "forEach counts null elements");
+        // empty iterator next -> NoSuchElementException
+        checkThrows(java.util.NoSuchElementException.class,
+                    new ArrayList<String>().iterator()::next, "empty iterator next NSEE");
+    }
+
+    static void testSubListLiveness() {
+        ArrayList<Integer> parent = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
+        List<Integer> sub = parent.subList(1, 4);
+        // structural modification of subList reflects in parent
+        sub.add(99);
+        check(parent.equals(Arrays.asList(1, 2, 3, 4, 99, 5)), "subList.add grows parent in place");
+        sub.remove(Integer.valueOf(99));
+        check(parent.size() == 5, "subList.remove(Object) shrinks parent");
+        // parent's iterator sees subList's changes
+        sub.set(0, 20);
+        check(parent.get(1) == 20, "subList.set reflected at parent index");
+        // subList iterator remove passes through
+        java.util.Iterator<Integer> sit = sub.iterator();
+        sit.next();
+        sit.remove();
+        check(parent.equals(Arrays.asList(1, 3, 4, 5)), "subList.iterator.remove removes from parent");
+        // subList equals/hashCode computed on its own contents
+        List<Integer> seg = new ArrayList<>(Arrays.asList(2, 3, 4));
+        List<Integer> segView = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5)).subList(1, 4);
+        check(segView.equals(seg) && seg.equals(segView), "subList equals plain List of same content");
+        check(segView.hashCode() == seg.hashCode(), "subList hashCode equals plain List hashCode");
+        // structural change of parent invalidates subList operations (CME)
+        ArrayList<Integer> p2 = new ArrayList<>(Arrays.asList(1, 2, 3));
+        List<Integer> s2 = p2.subList(0, 2);
+        p2.add(4);
+        checkThrows(ConcurrentModificationException.class, () -> s2.get(0), "subList.get after parent mod CME");
+        checkThrows(ConcurrentModificationException.class, () -> s2.size(), "subList.size after parent mod CME");
+        checkThrows(ConcurrentModificationException.class, () -> s2.iterator(), "subList.iterator after parent mod CME");
+        checkThrows(ConcurrentModificationException.class, () -> s2.add(9), "subList.add after parent mod CME");
+        // parent modification via subList does NOT invalidate the subList itself
+        List<Integer> s3 = new ArrayList<>(Arrays.asList(1, 2, 3)).subList(0, 3);
+        s3.add(4);
+        check(s3.size() == 4, "subList stays usable after its own structural change");
+    }
+
+    static void testIndexedBounds() {
+        ArrayList<String> l = new ArrayList<>(Arrays.asList("a", "b"));
+        expectIOOBE(() -> l.add(-1, "x"), "add(-1,e) IOOBE");
+        expectIOOBE(() -> l.add(3, "x"), "add(size+1,e) IOOBE");
+        expectIOOBE(() -> l.addAll(3, Arrays.asList("c")), "addAll(size+1,c) IOOBE");
+        expectIOOBE(() -> l.addAll(-1, Arrays.asList("c")), "addAll(-1,c) IOOBE");
+        check(l.equals(Arrays.asList("a", "b")), "failed indexed ops leave list intact");
+        l.add(2, "c");
+        check(l.equals(Arrays.asList("a", "b", "c")), "add(size,e) appends");
+        l.addAll(0, Arrays.asList("z"));
+        check(l.equals(Arrays.asList("z", "a", "b", "c")), "addAll(0,c) prepends");
+    }
+
+    static void testEqualsSubListFormula() {
+        // equals between a subList and a whole list of identical content
+        ArrayList<Integer> whole = new ArrayList<>(Arrays.asList(7, 8));
+        List<Integer> view = new ArrayList<>(Arrays.asList(6, 7, 8, 9)).subList(1, 3);
+        check(view.equals(whole) && whole.equals(view), "subList equals whole list with same elements");
+        check(!view.equals(Arrays.asList(6, 7)), "subList not equal to a different segment");
+        // nested subList equals its outer subList segment
+        List<Integer> outer = new ArrayList<>(Arrays.asList(0, 1, 2, 3)).subList(1, 4); // [1,2,3]
+        List<Integer> inner = outer.subList(1, 3); // [2,3]
+        check(inner.equals(Arrays.asList(2, 3)), "nested subList content");
+        inner.set(0, 20);
+        check(outer.get(1) == 20, "nested subList set reflects outer subList");
+    }
+
     public static void main(String[] args) throws Exception {
         testConstruction();
         testAddGetSetRemove();
@@ -330,6 +514,14 @@ public class ArrayListTest {
         testNullArgs();
         testListDefaultMethods();
         testSerialization();
+        testHashCodeFormula();
+        testCrossImplEquals();
+        testToArrayContract();
+        testCloneShallow();
+        testIteratorEdges();
+        testSubListLiveness();
+        testIndexedBounds();
+        testEqualsSubListFormula();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

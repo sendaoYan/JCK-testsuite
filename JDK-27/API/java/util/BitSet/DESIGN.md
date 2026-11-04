@@ -26,3 +26,25 @@
   - clear/flip、and/or/xor/andNot/intersects。
   - 范围 set/get/clear、previousSetBit/previousClearBit。
   - valueOf/toByteArray/toLongArray 往返与位序、clone/equals。
+
+## 5. 契约深化（第二轮追加，映射到新增方法）
+
+| 测试点 | 用例方法 |
+|---|---|
+| 精确异常消息（与 JDK-8 逐字一致）：bitIndex/fromIndex 系列四类 | testExceptionMessages |
+| and/or/xor/andNot/intersects(null) → NPE | testNullNpe |
+| size() 字粒度矩阵（64/0/128） | testSize |
+| toByteArray/toLongArray 小端精确 + 尾零丢弃 | testByteArrayExact |
+| valueOf(ByteBuffer 切片/LongBuffer/空 buffer) | testByteBufferValueOf |
+| toString 精确格式 | testToStringExact |
+| equals/hashCode 深矩阵（空 1234、{0,3,5}=1275、容量无关、清空复原） | testEqualsHashCodeDeep |
+| from==to 空区间四方法 + 超长 get + clear 不含 toIndex | testRangeEdgeCases |
+| 跨 64 位字边界 + 512 位 cardinality==stream().count() | testCrossWordBoundaries |
+| 逻辑运算参数不变 + and 收缩 length + clear() 全清 | testLogicalOperandUnmodified |
+| 超长探针哨兵（nextClearBit/previousClearBit/nextSetBit(length)） | testBeyondLengthProbes |
+| 序列化深往返（稀疏高位、hash 保持、独立可变） | testSerializationDeep |
+
+### 易错细节
+
+- JDK-27 与 JDK-8 在 BitSet 公开 API 与行为上实测**完全一致**（javap 逐方法相同；异常消息/哈希值/小端序相同）。
+- 空集 hashCode()==1234；`BitSet(0).size()==0`；`previousSetBit(-2)` 消息下界为 -1。

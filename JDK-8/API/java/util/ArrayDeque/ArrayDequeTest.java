@@ -21,6 +21,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -234,6 +235,215 @@ public class ArrayDequeTest {
         for (int i = 1; i <= 5; i++) check(!d.contains(i), "clear removed " + i);
     }
 
+    // ---- fail-fast matrix (probe-locked JDK-8 semantics) ---------------------
+    // The ascending iterator fences on tail, the descending iterator fences on
+    // head, so each is invalidated by mutations at the opposite end only.
+
+    static boolean cme(boolean descending, java.util.function.Consumer<ArrayDeque<Integer>> mut) {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4));
+        try {
+            Iterator<Integer> it = descending ? d.descendingIterator() : d.iterator();
+            it.next();
+            mut.accept(d);
+            it.next();
+            return false;
+        } catch (java.util.ConcurrentModificationException e) {
+            return true;
+        }
+    }
+
+    static void testFailFastMatrix() {
+        check(cme(false, q -> q.addLast(9)), "JDK-8: asc CME after addLast");
+        check(!cme(false, q -> q.addFirst(0)), "JDK-8: asc survives addFirst (head-side fence)");
+        check(cme(false, q -> q.removeLast()), "JDK-8: asc CME after removeLast");
+        check(cme(true, q -> q.addFirst(0)), "JDK-8: desc CME after addFirst");
+        check(!cme(true, q -> q.addLast(9)), "JDK-8: desc survives addLast (tail-side fence)");
+        check(cme(true, q -> q.removeFirst()), "JDK-8: desc CME after removeFirst");
+        check(!cme(true, q -> q.removeLast()), "JDK-8: desc survives removeLast");
+    }
+
+    // ---- contract deep-dive: identity equals / toString / bulk ops ----------
+    // ---- / spliterator / iterator remove / wrap serialization / growth ------
+
+    static void testEqualsHashCodeIdentity() {
+        // AbstractCollection does not override equals/hashCode: identity semantics.
+        ArrayDeque<Integer> a = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        ArrayDeque<Integer> b = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        check(!a.equals(b), "same-content ArrayDeques are not equals (identity semantics)");
+        check(a.equals(a), "self equals");
+        check(a.hashCode() == System.identityHashCode(a),
+                "hashCode is Object identity hashCode (not overridden)");
+        List<Integer> sameContent = new ArrayList<>(Arrays.asList(1, 2, 3));
+        check(!a.equals(sameContent), "never equals a content-equal List (no equals override)");
+        check(!sameContent.equals(a), "List side is also false (asymmetric types)");
+    }
+
+    static void testToString() {
+        check("[1, 2, 3]".equals(new ArrayDeque<>(Arrays.asList(1, 2, 3)).toString()),
+                "toString head-to-tail [1, 2, 3]");
+        check("[]".equals(new ArrayDeque<>().toString()), "empty toString []");
+        check("[a, b]".equals(new ArrayDeque<>(Arrays.asList("a", "b")).toString()),
+                "toString strings");
+    }
+
+    static void testBulkOperations() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(d.containsAll(Arrays.asList(2, 4)), "containsAll true");
+        check(!d.containsAll(Arrays.asList(2, 9)), "containsAll false");
+        check(d.removeAll(Arrays.asList(2, 4)), "removeAll returns true");
+        check(Arrays.equals(d.toArray(), new Object[]{1, 3, 5}), "removeAll preserves order");
+        check(!d.removeAll(Arrays.asList(9)), "removeAll no-match false");
+        check(!d.removeAll(Collections.<Integer>emptyList()), "removeAll empty false");
+
+        ArrayDeque<Integer> r = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4, 5));
+        check(r.retainAll(Arrays.asList(2, 4)), "retainAll returns true");
+        check(Arrays.equals(r.toArray(), new Object[]{2, 4}), "retainAll preserves order");
+        check(!r.retainAll(Arrays.asList(2, 4)), "retainAll no-op false");
+
+        ArrayDeque<Integer> f = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4, 5, 6));
+        check(f.removeIf(x -> x % 2 == 0), "removeIf returns true");
+        check(Arrays.equals(f.toArray(), new Object[]{1, 3, 5}), "removeIf removes evens in place");
+        check(!f.removeIf(x -> x > 100), "removeIf no-match false");
+    }
+
+    static void testForEachOrder() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4));
+        List<Integer> seen = new ArrayList<>();
+        d.forEach(seen::add);
+        check(seen.equals(Arrays.asList(1, 2, 3, 4)), "forEach encounter order head-to-tail");
+    }
+
+    static void testSpliterator() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(3, 1, 2));
+        java.util.Spliterator<Integer> sp = d.spliterator();
+        check(sp.estimateSize() == 3, "estimateSize == size");
+        check(sp.getExactSizeIfKnown() == 3, "getExactSizeIfKnown");
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED
+                        | java.util.Spliterator.SIZED
+                        | java.util.Spliterator.SUBSIZED
+                        | java.util.Spliterator.NONNULL),
+                "characteristics ORDERED|SIZED|SUBSIZED|NONNULL");
+
+        // forEachRemaining walks in encounter order.
+        List<Integer> walked = new ArrayList<>();
+        sp.forEachRemaining(walked::add);
+        check(walked.equals(Arrays.asList(3, 1, 2)), "spliterator encounter order");
+
+        // trySplit yields a prefix and a suffix whose concatenation is the deque.
+        ArrayDeque<Integer> d4 = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4));
+        java.util.Spliterator<Integer> whole = d4.spliterator();
+        java.util.Spliterator<Integer> front = whole.trySplit();
+        check(front != null, "trySplit splits SIZED source");
+        check(front.getExactSizeIfKnown() + whole.getExactSizeIfKnown() == 4,
+                "split sizes sum to original");
+        List<Integer> fl = new ArrayList<>(), bl = new ArrayList<>();
+        front.forEachRemaining(fl::add);
+        whole.forEachRemaining(bl::add);
+        List<Integer> joined = new ArrayList<>(fl);
+        joined.addAll(bl);
+        check(joined.equals(Arrays.asList(1, 2, 3, 4)), "split prefix+suffix equals original");
+        check(fl.size() == 2 && bl.size() == 2, "split halves sized evenly");
+
+        java.util.Spliterator<Integer> one = new ArrayDeque<Integer>(Arrays.asList(5)).spliterator();
+        check(one.tryAdvance(x -> check(x == 5, "tryAdvance visits element")), "tryAdvance true");
+        check(!one.tryAdvance(x -> { }), "tryAdvance exhausted false");
+    }
+
+    static void testIteratorRemoveSemantics() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> it = d.iterator();
+        it.next();
+        it.next();
+        it.remove();
+        check(Arrays.equals(d.toArray(), new Object[]{1, 3}), "iterator.remove removes current");
+        checkThrows(IllegalStateException.class, it::remove, "second remove without next ISE");
+
+        ArrayDeque<Integer> d2 = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> it2 = d2.iterator();
+        checkThrows(IllegalStateException.class, it2::remove, "remove before first next ISE");
+
+        // descendingIterator supports remove and it removes the tail-most visited.
+        ArrayDeque<Integer> d3 = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> desc = d3.descendingIterator();
+        checkThrows(IllegalStateException.class, desc::remove, "descending remove before next ISE");
+        desc.next();   // 3
+        desc.remove();
+        check(Arrays.equals(d3.toArray(), new Object[]{1, 2}), "descendingIterator.remove drops tail");
+        check(desc.next() == 2 && desc.next() == 1 && !desc.hasNext(),
+                "descending iteration continues after remove");
+
+        // Live filtering with iterator.remove keeps order.
+        ArrayDeque<Integer> d4 = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4));
+        for (Iterator<Integer> i = d4.iterator(); i.hasNext(); )
+            if (i.next() % 2 == 0) i.remove();
+        check(Arrays.equals(d4.toArray(), new Object[]{1, 3}), "live filter during iteration");
+    }
+
+    static void testWrapAroundSerialization() throws Exception {
+        // Build a deque whose ring buffer has wrapped: add 6, drain 4, add 4 more.
+        ArrayDeque<Integer> w = new ArrayDeque<>(4);
+        for (int i = 0; i < 6; i++) w.addLast(i);
+        for (int i = 0; i < 4; i++) w.pollFirst();
+        for (int i = 6; i < 10; i++) w.addLast(i);
+        check(Arrays.equals(w.toArray(), new Object[]{4, 5, 6, 7, 8, 9}),
+                "wrapped deque logical order");
+        ArrayDeque<Integer> r = roundTrip(w);
+        check(Arrays.equals(r.toArray(), new Object[]{4, 5, 6, 7, 8, 9}),
+                "round-trip preserves wrapped order");
+        check(r.peekFirst() == 4 && r.peekLast() == 9, "round-trip ends intact");
+    }
+
+    static void testMixedGrowth() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(4);
+        for (int i = 0; i < 300; i++) d.addFirst(i);
+        for (int i = 0; i < 300; i++) d.addLast(1000 + i);
+        check(d.size() == 600, "mixed growth size");
+        check(d.peekFirst() == 299, "head is last addFirst");
+        check(d.peekLast() == 1299, "tail is last addLast");
+        // Drain from both ends and verify exact pairing.
+        for (int i = 299; i >= 0; i--) check(d.pollFirst() == i, "head drain " + i);
+        for (int i = 1000; i < 1300; i++) check(d.pollLast() == 1299 - (i - 1000), "tail drain");
+        check(d.isEmpty(), "mixed growth drained");
+    }
+
+    static void testToArrayExactSize() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        Integer[] exact = new Integer[3];
+        Integer[] ret = d.toArray(exact);
+        check(ret == exact, "exact-size array is reused");
+        check(ret[0] == 1 && ret[1] == 2 && ret[2] == 3, "exact-size content");
+    }
+
+    static void testDuplicateRemoval() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 1));
+        check(d.remove(Integer.valueOf(1)), "remove first occurrence of duplicate");
+        check(Arrays.equals(d.toArray(), new Object[]{2, 1}), "later duplicate survives");
+        check(d.contains(1), "duplicate still contained");
+        check(d.size() == 2, "size after duplicate removal");
+    }
+
+    static void testCloneSharesElements() {
+        Object shared = new Object();
+        ArrayDeque<Object> d = new ArrayDeque<>();
+        d.addLast(shared);
+        ArrayDeque<Object> c = d.clone();
+        check(c.getFirst() == shared, "clone is shallow: same element instance");
+        check(c.contains(shared), "clone contains same instance");
+        c.clear();
+        check(d.size() == 1, "clone clear does not touch original");
+    }
+
+    static void testAddAllContract() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1));
+        check(d.addAll(Arrays.asList(2, 3)), "addAll returns true");
+        check(Arrays.equals(d.toArray(), new Object[]{1, 2, 3}), "addAll appends at tail in order");
+        check(!d.addAll(Collections.<Integer>emptyList()), "addAll empty returns false");
+        checkThrows(NullPointerException.class, () -> d.addAll(Arrays.asList(4, null)),
+                "addAll with null element NPE (relay)");
+        check(Arrays.equals(d.toArray(), new Object[]{1, 2, 3, 4}),
+                "null rejected mid-addAll: elements before the null were added");
+    }
+
     public static void main(String[] args) throws Exception {
         testQueue();
         testDeque();
@@ -248,6 +458,19 @@ public class ArrayDequeTest {
         testSerialization();
         testGrowth();
         testStateInvariants();
+        testFailFastMatrix();
+        testEqualsHashCodeIdentity();
+        testToString();
+        testBulkOperations();
+        testForEachOrder();
+        testSpliterator();
+        testIteratorRemoveSemantics();
+        testWrapAroundSerialization();
+        testMixedGrowth();
+        testToArrayExactSize();
+        testDuplicateRemoval();
+        testCloneSharesElements();
+        testAddAllContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

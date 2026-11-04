@@ -39,3 +39,28 @@
 ## 注意事项
 
 - 用 TreeSet（自然序，拒 null 元素）为载体；断言顺序确定。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法
+- `testNearestMatrix` — {1,3,5} 上 lower/floor/ceiling/higher **7×4=28 格全矩阵**
+  （存在键/洞键/双侧越界）；降序视图上 lower/higher 镜像语义；lower/floor/ceiling/higher(null)
+  → NPE（自然序）。
+- `testPollExhaustion` — pollFirst 升序抽干→空后 poll 返回 null→可复用；descending 视图
+  pollFirst == 原 pollLast（作用同一底层）。
+- `testDescendingLiveness` — descendingSet 活视图：add/remove 透传、迭代全序倒序、
+  descendingSet().descendingSet() 恢复升序；自然序集合的降序视图 comparator **非 null**
+  （显式逆序比较器）；降序视图上的 tailSet/headSet 按**逆序语义**（tailSet(3)=自然序<=3、
+  降序方向输出）。
+- `testBooleanRangeMatrix` — subSet 四布尔组合 [..]、headSet/tailSet 含/排他双侧；
+  **[3,3] 闭闭区间含 3、(3,3]/[3,3) 为空**；from>to IAE（不论旗标）；
+  descendingIterator 全序列 + 其 remove 作用底层（删的是先产出的最大元素）。
+
+### 负例精确异常表
+| 操作 | 异常 |
+|---|---|
+| lower/floor/ceiling/higher(null)（自然序） | NullPointerException |
+| subSet(from>to)（任意 inclusive 旗标） | IllegalArgumentException |
+| 空 pollFirst/pollLast | 返回 null（无异常） |

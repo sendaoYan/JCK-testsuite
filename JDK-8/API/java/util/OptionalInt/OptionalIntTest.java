@@ -107,12 +107,123 @@ public class OptionalIntTest {
         check(OptionalInt.empty().toString().equals("OptionalInt.empty"), "toString empty");
     }
 
-    public static void main(String[] args) {
+    // ============ contract deepening (appended) ============
+
+    // NSEE message text is observable contract surface.
+    static void testExceptionMessages() {
+        try {
+            OptionalInt.empty().getAsInt();
+            throw new AssertionError("expected NoSuchElementException");
+        } catch (NoSuchElementException e) {
+            check("No value present".equals(e.getMessage()), "empty getAsInt NSEE message");
+        }
+    }
+
+    // hashCode() == (isPresent) ? Integer.hashCode(value) : 0.
+    static void testHashCodeFormula() {
+        check(OptionalInt.empty().hashCode() == 0, "empty hashCode == 0");
+        check(OptionalInt.of(5).hashCode() == 5, "of(5) hashCode == 5");
+        check(OptionalInt.of(-42).hashCode() == -42, "of(-42) hashCode == -42");
+        check(OptionalInt.of(Integer.MIN_VALUE).hashCode() == Integer.MIN_VALUE,
+              "of(MIN_VALUE) hashCode == Integer.hashCode(MIN_VALUE)");
+        check(OptionalInt.of(Integer.MAX_VALUE).hashCode() == Integer.MAX_VALUE,
+              "of(MAX_VALUE) hashCode == Integer.hashCode(MAX_VALUE)");
+    }
+
+    // equals only compares against OptionalInt, never against other Optional flavors or boxes.
+    static void testEqualsCrossType() {
+        check(!OptionalInt.of(5).equals(null), "equals(null) false");
+        check(!OptionalInt.of(5).equals(Integer.valueOf(5)), "not equal to plain Integer");
+        check(!OptionalInt.of(5).equals(java.util.Optional.of(5)), "not equal to Optional<Integer>");
+        check(!OptionalInt.of(5).equals(java.util.OptionalLong.of(5)), "not equal to OptionalLong");
+        check(OptionalInt.of(5).equals(OptionalInt.of(5)), "equal values equal");
+        check(OptionalInt.of(5).equals(OptionalInt.empty()) == false
+              && OptionalInt.empty().equals(OptionalInt.of(5)) == false,
+              "empty/present never equal, symmetric");
+        check(!OptionalInt.empty().equals(java.util.OptionalDouble.empty()), "empty flavors not equal");
+    }
+
+    // toString is exactly "OptionalInt[<v>]" / "OptionalInt.empty".
+    static void testToStringExact() {
+        check(OptionalInt.of(Integer.MIN_VALUE).toString().equals("OptionalInt[-2147483648]"),
+              "toString MIN_VALUE");
+        check(OptionalInt.of(Integer.MAX_VALUE).toString().equals("OptionalInt[2147483647]"),
+              "toString MAX_VALUE");
+        check(OptionalInt.of(0).toString().equals("OptionalInt[0]"), "toString 0");
+        check(OptionalInt.of(-1).toString().equals("OptionalInt[-1]"), "toString negative");
+        check(OptionalInt.empty().toString().equals("OptionalInt.empty"), "toString empty");
+        check(OptionalInt.of(7).toString().equals(OptionalInt.of(7).toString()),
+              "toString idempotent");
+    }
+
+    // Callback exceptions relay the same instance and leave no state to corrupt.
+    static void testCallbackExceptionRelay() {
+        final RuntimeException relay = new RuntimeException("relay");
+        try {
+            OptionalInt.of(5).ifPresent(v -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "ifPresent relays consumer exception unchanged");
+        }
+        try {
+            OptionalInt.empty().orElseGet(() -> { throw relay; });
+            throw new AssertionError("expected relay");
+        } catch (RuntimeException caught) {
+            check(caught == relay, "orElseGet relays supplier exception unchanged");
+        }
+        OptionalInt keep = OptionalInt.of(9);
+        try { keep.ifPresent(v -> { throw relay; }); } catch (RuntimeException ignored) { }
+        check(keep.getAsInt() == 9, "container unchanged after relayed exception");
+    }
+
+    // API surface lock: no map/flatMap/ofNullable (they exist only on Optional<T>),
+    // and the JDK-9+ additions must be absent on Java 8.
+    static void testSurfaceLock() throws Exception {
+        Class<?> c = OptionalInt.class;
+        for (String absent : new String[] {"map", "flatMap", "ofNullable"}) {
+            try {
+                c.getMethod(absent);
+                throw new AssertionError(absent + " should not exist on OptionalInt");
+            } catch (NoSuchMethodException expected) { passed++; }
+        }
+        for (String absent : new String[] {"isEmpty", "stream"}) {
+            try {
+                c.getMethod(absent);
+                throw new AssertionError(absent + " should not exist on Java 8");
+            } catch (NoSuchMethodException expected) { passed++; }
+        }
+        try {
+            c.getMethod("ifPresentOrElse", java.util.function.IntConsumer.class, Runnable.class);
+            throw new AssertionError("ifPresentOrElse should not exist on Java 8");
+        } catch (NoSuchMethodException expected) { passed++; }
+        try {
+            c.getMethod("orElseThrow");
+            throw new AssertionError("no-arg orElseThrow should not exist on Java 8");
+        } catch (NoSuchMethodException expected) { passed++; }
+        // Java 8 surface present
+        c.getMethod("of", int.class);
+        c.getMethod("empty");
+        c.getMethod("getAsInt");
+        c.getMethod("isPresent");
+        c.getMethod("ifPresent", java.util.function.IntConsumer.class);
+        c.getMethod("orElse", int.class);
+        c.getMethod("orElseGet", java.util.function.IntSupplier.class);
+        c.getMethod("orElseThrow", java.util.function.Supplier.class);
+        passed++; // Java 8 surface complete
+    }
+
+    public static void main(String[] args) throws Exception {
         testOfGet();
         testBoundaries();
         testOrElse();
         testIfPresent();
         testEqualsHashCodeToString();
+        testExceptionMessages();
+        testHashCodeFormula();
+        testEqualsCrossType();
+        testToStringExact();
+        testCallbackExceptionRelay();
+        testSurfaceLock();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

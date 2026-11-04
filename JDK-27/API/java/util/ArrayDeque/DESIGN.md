@@ -43,3 +43,26 @@
 ## 注意事项
 
 - 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 契约深化追加（第二版）
+
+新增 test 方法：testFailFastMatrix / testEqualsHashCodeIdentity / testIteratorRemoveSemantics /
+testWrapAroundSerialization / testMixedGrowth / testToArrayExactSize / testDuplicateRemoval /
+testCloneSharesElements / testAddAllContract / testReversedView。
+
+### 覆盖点
+
+- **fail-fast 完整矩阵（probe 锁定，与 JDK-8 不同！）**：**两个方向都只在尾部 add 后 CME**；
+  头部 add、removeFirst、removeLast 均不触发任何方向的 CME。8 格全断言。
+  （JDK-8 对照：asc 只在尾部修改后 CME、desc 只在头部修改后 CME。）
+- 身份 equals/hashCode（`hashCode()==identityHashCode`）、toString 精确值。
+- 迭代器 remove 状态机（含 descendingIterator.remove 删尾侧）；环形缓冲 wrap 状态序列化保序
+  [4..9]；混合增长 600 元素双端排干；toArray 精确长度；重复元素首现删除；clone 浅拷贝元素共享；
+  addAll 部分应用（null 处 NPE，之前元素已加入）。
+- **JDK-21+ reversed() 活视图**：reversed().addFirst==原 addLast、pollFirst 删原尾、
+  reversed().reversed() 内容复原、getFirst/getLast 互换、removeLast 删原头、size 联动。
+
+### 易错规范细节（已锁入断言）
+
+- best-effort fail-fast 跨版本差异：JDK-27 降序迭代器**不再**因头部修改而 CME（与 JDK-8 相反）。
+- reversed() 是活视图：透过视图的读写立即反映到原 deque。

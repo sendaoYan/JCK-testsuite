@@ -50,3 +50,15 @@
 
 - 白盒反射只断言公开结构，不依赖内部实现字段。
 - 序列化 serialVersionUID 与 JDK-8 相同，锁定官方稳定值。
+
+
+## 5. 契约级深化追加（2026-11，186→339 断言）
+
+新增方法：与 JDK-8 侧同源八块（comparator 序列化/迭代器 remove 模式/subMap 视图 CME 与界值/
+present-null-value 分支/四方法矩阵/inclusive 界点/values 序与降序镜像/null 容忍 comparator）
+另加 testSequencedTreeMap（JDK-21+）。
+
+| 维度 | 锁定内容 |
+|---|---|
+| 八块同源 | 见 JDK-8 侧第 5 节（两侧行为一致，27 侧 PASS 339 断言覆盖） |
+| SequencedMap on TreeMap | putFirst/putLast 抛 **UOE**（排序图不支持位置插入）且失败后不变；reversed()==descendingMap()（equals 相等）活视图：put/remove/poll 双向传导；reversed().descendingMap() equals 原图 |

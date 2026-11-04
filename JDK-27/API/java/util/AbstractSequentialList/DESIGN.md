@@ -31,3 +31,14 @@ indexOf/subList。
 | 继承方法 | indexOf/lastIndexOf/subList |
 
 共 5 组场景、约 13 个 check（`testBlackBox()`）。
+
+## 深化批次 II（契约级追加）
+
+- **全操作经 listIterator 计数器证明**：get/set/add(int,E)/remove(int)/indexOf/lastIndexOf/iterator()/
+  add(E)/clear 各驱动恰好一次 listIterator 创建（equals 也走一次——计数矩阵含此）。
+- **只读子类 UOE**：listIterator 不可变（unmodifiableList / List.of）时 set/add/remove/add(E)/clear 全 UOE，
+  读操作正常。
+- **hashCode 公式**（4066/126046，继承 AbstractList equals/hashCode）。
+- **subList 写通道**与越界（IOOBE/IAE）；空表 get(0)/remove(0) IOOBE；listIterator(±) IOOBE。
+- **JDK-27 追加**：SequencedCollection 默认方法经 listIterator/add(int,E) 路由（getFirst/getLast/addFirst/
+  addLast/removeFirst/removeLast/reversed）。

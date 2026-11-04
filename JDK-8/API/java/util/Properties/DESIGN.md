@@ -71,3 +71,29 @@
 ## 注意事项
 
 - 无 GC/图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。
+
+## 深化追加（契约级，2026-11）
+
+### 新增覆盖
+
+| 维度 | 内容 |
+|---|---|
+| \\uXXXX 转义 | store(OutputStream) 对 >0x7F 字符全部转义为 \\\\uXXXX（中→\\\\u4E2D、值→\\\\u503C），ISO-8859-1 视图无原始非 ASCII 字节；store(Writer) 不转义（原样输出）；两通道 load 回读均 equals；tab/换行控制字符经转义 round-trip |
+| 转义解码 | load 解码 \\uXXXX（k=\\\\u4E2D\\\\u6587 → 中文）；截断转义 \\\\u4E → IllegalArgumentException |
+| list() | 头行 `-- listing properties --`；key=value 逐行；**长值截断为 37 字符+`...`、长键不截断**；defaults 条目也被列出（只断言成员不锁顺序）；list 遇非 String 键/值直接 ClassCastException（旧臆断「跳过」被实测推翻）；PrintStream/PrintWriter 双形态一致 |
+| 解析边界 | 无值行→空值；`k =  v  `→值保尾空格去头空格；`after\ ` 转义尾空格；行首空白跳过；`#`/`!` 注释与空行；键内转义 `=`（`eq\=k=v`） |
+| Hashtable 视图通道 | keySet().remove 删属性；entrySet 迭代器 setValue 反写 getProperty；compute 装入非 String 值后 getProperty 盲（null）而 get 可见；forEach 遍历原始表 |
+| 版本面 | JDK-8 无 Properties(int)、无 storeToXML(...,Charset)（反射 NoSuchMethodException 锁定缺席） |
+| 注释 | 多行 store 注释每行独立 `#` 前缀 |
+
+### 负例表（新增部分）
+
+| 操作 | 异常 |
+|---|---|
+| load 含截断 \\\\u 转义 | IllegalArgumentException |
+
+### 易错点
+
+- store(Writer) 与 store(OutputStream) 转义行为不同：后者必须 ISO-8859-1 可表示，非 ASCII 一律 \\\\uXXXX。
+- list 的截断规则只作用在值（>40 → 37+...），键永不截断；list 会列出 defaults（与 store 不写 defaults 相反！）。
+- getProperty 只见 String 值；get/forEach/compute 等 Hashtable 通道见原始 Object。

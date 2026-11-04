@@ -37,3 +37,26 @@
 ## 注意事项
 
 - 用 TreeSet（自然序，拒 null 元素）为载体；断言顺序确定。
+
+---
+
+## 契约深化增补（2026-11-05，只追加不改上文）
+
+### 新增测试方法
+- `testRangeMatrix` — headSet 排他/tailSet 包含边界矩阵（最小键/越界键/全体键）；subSet [from,to)，
+  **from==to 为合法空区间**，界可越出集合；视图再取视图越界 → IAE；subSet(from>to) IAE。
+- `testViewMutationRules` — 视图写规则矩阵：视图 add 越界（含排他上界本身）→ IAE；
+  界内 add/remove 透传底层（size 联动）；底层界内变更对视图可见；headSet.add(toElement) IAE；
+  tailSet.add(已存在 from) 返回 false（from 含于视图）；**视图 clear 只清区间**，界外元素保留。
+- `testIterationOrder` — 迭代/toArray 严格升序；reverseOrder 比较器降序且 first/last 互换；
+  **comparator() 返回构造时同一实例（==）**；空集 first/last NSEE。
+- `testSpliteratorContract` — TreeSet spliterator **ORDERED|SORTED|DISTINCT** 且 SIZED；
+  SORTED 时 getComparator()==set.comparator()（自然序两 null、定制序同实例）。
+
+### 负例精确异常表
+| 操作 | 异常 |
+|---|---|
+| 空 first()/last() | NoSuchElementException |
+| add(null)（自然序） | NullPointerException |
+| subSet(from>to) / 视图 add 越出区间 | IllegalArgumentException |
+| headSet 视图 add(toElement)（排他界） | IllegalArgumentException |

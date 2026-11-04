@@ -7,10 +7,12 @@
  */
 
 import java.util.AbstractSet;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.TreeSet;
 
 public class AbstractSetTest {
     static int passed;
@@ -69,10 +71,88 @@ public class AbstractSetTest {
         check(s.isEmpty(), "clear empties");
     }
 
+
+    // ---------- contract deepening (appended; nothing above altered) ----------
+
+    /** Recording probe: counts iterator() creations and remove(Object) delegations. */
+    static class RecSet extends AbstractSet<String> {
+        final LinkedHashSet<String> data;
+        int iteratorCreated, removes;
+        RecSet(String... xs) { data = new LinkedHashSet<>(Arrays.asList(xs)); }
+        public Iterator<String> iterator() { iteratorCreated++; return data.iterator(); }
+        public int size() { return data.size(); }
+        public boolean remove(Object o) { removes++; return data.remove(o); }
+    }
+
+    static void testCrossImplEquals() {
+        RecSet r = new RecSet("a", "b");
+        HashSet<String> h = new HashSet<>(Arrays.asList("b", "a"));
+        LinkedHashSet<String> lh = new LinkedHashSet<>(Arrays.asList("a", "b"));
+        TreeSet<String> t = new TreeSet<>(Arrays.asList("a", "b"));
+        check(r.equals(h) && h.equals(r), "AbstractSet probe equals HashSet (symmetric)");
+        check(r.equals(t) && t.equals(r), "AbstractSet probe equals TreeSet");
+        check(lh.equals(t) && h.equals(lh), "HashSet/LinkedHashSet/TreeSet pairwise equal");
+        check(r.hashCode() == h.hashCode() && r.hashCode() == (97 + 98),
+              "hashCode equals sum of element hashCodes across impls");
+        check(!r.equals(Arrays.asList("a", "b")), "Set never equals List");
+        check(!r.equals(null), "equals(null) false");
+        check(r.equals(r), "equals self");
+        RecSet n = new RecSet("a", null);
+        HashSet<String> hn = new HashSet<>(Arrays.asList(null, "a"));
+        check(n.equals(hn) && hn.equals(n), "sets with null element equal across impls");
+        check(n.hashCode() == 97, "null element contributes 0 to hashCode sum");
+        check(new RecSet().hashCode() == 0, "empty set hashCode is 0");
+        check(new RecSet().equals(new HashSet<String>()), "empty sets equal across impls");
+    }
+
+    static void testRemoveAllOptimization() {
+        // this bigger than the argument: skeleton iterates the argument, calling
+        // this.remove(e) for every element of it (documented optimization)
+        RecSet big = new RecSet("a", "b", "c", "d");
+        check(big.removeAll(Arrays.asList("x", "a")), "bigger-this removeAll true");
+        check(big.removes == 2, "this bigger: remove(Object) invoked for each argument element");
+        check(big.iteratorCreated == 0, "this bigger: this.iterator() never created");
+        check(big.data.equals(new LinkedHashSet<>(Arrays.asList("b", "c", "d"))),
+              "only the common element removed");
+        // this smaller than the argument: skeleton iterates this via iterator(),
+        // removing through iterator.remove without calling this.remove
+        RecSet small = new RecSet("a", "b");
+        check(small.removeAll(Arrays.asList("a", "b", "c", "d")), "smaller-this removeAll true");
+        check(small.removes == 0, "this smaller: removals via iterator, this.remove untouched");
+        check(small.iteratorCreated >= 1, "this smaller: iterator created");
+        check(small.isEmpty(), "all common elements removed");
+        // return-value edges
+        RecSet d = new RecSet("a", "b");
+        check(!d.removeAll(Arrays.asList("x", "y")), "disjoint removeAll false");
+        check(d.removes == 0 && d.size() == 2,
+              "equal sizes take the iterator path: this.remove untouched");
+        check(!d.removeAll(new java.util.ArrayList<String>()), "removeAll(empty) false");
+        RecSet e = new RecSet("a", "b", "c");
+        check(!e.removeAll(Arrays.asList("x")), "disjoint smaller-arg removeAll false");
+        check(e.removes == 1 && e.size() == 3, "single-element argument routed via this.remove");
+        check(!new RecSet().removeAll(Arrays.asList("a")), "empty this removeAll false");
+    }
+
+    static void testInheritedOps() {
+        RecSet s = new RecSet("a", "b", "c");
+        check(s.retainAll(Arrays.asList("a", "c")), "retainAll inherited from AbstractCollection");
+        check(s.data.equals(new LinkedHashSet<>(Arrays.asList("a", "c"))), "retainAll kept intersection");
+        check(s.removes == 0, "retainAll path never calls this.remove(Object)");
+        String[] bigArr = new String[5];
+        check(s.toArray(bigArr) == bigArr && bigArr[2] == null,
+              "toArray reuse and null-pad inherited from AbstractCollection");
+        s.clear();
+        check(s.data.isEmpty(), "clear inherited drives iterator.remove");
+        check(new RecSet("a").contains("a"), "contains inherited scans iterator");
+    }
+
     public static void main(String[] args) {
         testEqualsHashCode();
         testRemoveAll();
         testBasicOps();
+        testCrossImplEquals();
+        testRemoveAllOptimization();
+        testInheritedOps();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
