@@ -11,3 +11,10 @@ __pycache__/
 
 # enumerate_api.py generated output
 tools/out/
+
+# coverage-enhancement means: generated/downloaded artifacts
+tools/diff_fuzz/out/
+tools/pit-pilot/lib/
+tools/pit-pilot/classes/
+tools/pit-pilot/testclasses/
+tools/pit-pilot/pit-out/

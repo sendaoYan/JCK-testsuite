@@ -16,7 +16,7 @@ public/protected type there is reachable with no flags.
 
 Outputs (per JDK, written next to this script under tools/out/):
   <jdk>.types.txt     one fqcn per line, non-private types, sorted
-  <jdk>.gap.txt       fqcn without a matching JDK-{8,27}/API/<fqcn> dir
+  <jdk>.gap.txt       fqcn without a matching JDK-{8,27}/API/<pkg>/.../<Simple>/ dir
   <jdk>.internal.txt  (module image only) internal types -> module/pkg
 
 Usage:

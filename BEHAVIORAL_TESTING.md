@@ -5,14 +5,14 @@
 结构覆盖（`tools/enumerate_api.py` 的 gap=0）只验证「每个非 private 类型能反射加载、形态符合二进制」——是**存在性**验证。
 行为化测试验证**黑盒行为是否符合 Java 用户的预期**：站在使用者视角，**创建实例 → 多步 API 组合操作 → 断言可观察行为**。
 
-**白盒（结构/反射）与黑盒（行为）合并到同一个用例文件**：`JDK-{27,8}/API/<fqcn>/<Simple>Test.java` 内分前后两部分——前半白盒（`Class.forName` + 修饰符/继承/成员形态，保留/补齐已有），后半黑盒（组合操作行为，新增）。行为化是**追加**而非替换，也不另开新文件。
+**白盒（结构/反射）与黑盒（行为）合并到同一个用例文件**：`JDK-{27,8}/API/<包路径>/<Simple>/<Simple>Test.java`（包路径按 fqcn 的 `.` 展开为 `/`，如 `java/util/HashMap/HashMapTest.java`）内分前后两部分——前半白盒（`Class.forName` + 修饰符/继承/成员形态，保留/补齐已有），后半黑盒（组合操作行为，新增）。行为化是**追加**而非替换，也不另开新文件。
 
 - **行为化范围**：导出/文档化 API（`java.*` / `javax.*` / `jdk.*` 导出面）——这是大部分用户会看的。
 - **不投入**：内部包（`com.sun.*` / `sun.*` / `jdk.internal.*`）——已 100% 结构覆盖，用户不读，行为化价值低。
 
 ## 工作流程：每类一篇测试方案（DESIGN.md）
 
-**每个 API 类产出一篇正式测试方案** `JDK-{27,8}/API/<fqcn>/DESIGN.md`，与 `<Simple>Test.java` 同目录。方案必须讲清四部分：
+**每个 API 类产出一篇正式测试方案** `JDK-{27,8}/API/<包路径>/<Simple>/DESIGN.md`，与 `<Simple>Test.java` 同目录。方案必须讲清四部分：
 
 1. **API 提供了哪些功能**：构造器/工厂、核心操作、查询、转换、工具方法等，按方法分组列出。
 2. **Java 用户如何使用**：用户怎么构造/工厂实例化，**每个方法**的典型调用方式，以及真实会串起来的组合链路（如 `Map.put → get → containsKey → remove → size`）。
@@ -66,7 +66,7 @@ public class <Simple>Test {
 }
 ```
 
-- 同一文件 `JDK-{27,8}/API/<fqcn>/<Simple>Test.java` 内分白盒（前）/黑盒（后）两部分；已有白盒内容保留/补齐。
+- 同一文件 `JDK-{27,8}/API/<包路径>/<Simple>/<Simple>Test.java` 内分白盒（前）/黑盒（后）两部分；已有白盒内容保留/补齐。
 - 验证用隔离 workDir 跑 jtreg，必须 `Test results: passed: N` 零失败。
 
 ## 优先级（按用户暴露度降序，分批推进）
