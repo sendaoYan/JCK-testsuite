@@ -222,6 +222,29 @@ public class LinkedListTest {
         // clear empties
         list.clear();
         check(list.isEmpty() && list.size() == 0, "clear empties");
+
+        // ---- boundary/equivalence additions (M2) ----
+        LinkedList<Integer> e0 = new LinkedList<>();
+        check(e0.isEmpty() && e0.size() == 0, "empty size/isEmpty");
+        check(e0.peek() == null && e0.poll() == null, "empty queue peek/poll null");
+        check(e0.pollFirst() == null && e0.peekLast() == null, "empty deque poll/peek null");
+        expect(NoSuchElementException.class, e0::getFirst, "empty getFirst throws NSEE");
+
+        LinkedList<Integer> l2 = new LinkedList<>(Arrays.asList(1, 2, 3));
+        expect(IndexOutOfBoundsException.class, () -> l2.get(l2.size()), "get(size) throws IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> l2.get(-1), "get(-1) throws IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> l2.add(l2.size() + 1, 9), "add at size+1 throws IOOBE");
+        l2.add(0, 0);
+        check(l2.getFirst() == 0 && l2.size() == 4, "add at index 0");
+        l2.add(l2.size(), 9);
+        check(l2.getLast() == 9, "add at index==size appends");
+        check(l2.subList(0, 0).isEmpty(), "subList(0,0) empty view");
+
+        LinkedList<String> single = new LinkedList<>();
+        single.add("only");
+        check(single.getFirst().equals("only") && single.getLast().equals("only"),
+              "single element first==last");
+        check(single.removeFirst().equals("only") && single.isEmpty(), "drain single element");
     }
 
     public static void main(String[] args) throws Exception {

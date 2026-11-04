@@ -253,6 +253,28 @@ public class ArrayListTest {
         ExposedArrayList ex = new ExposedArrayList(Arrays.asList("a", "b", "c", "d", "e"));
         ex.removeRangeExposed(1, 4);
         check(ex.equals(Arrays.asList("a", "e")), "removeRange removes [from,to) and shifts");
+
+        // ---- boundary/equivalence additions (M2) ----
+        ArrayList<String> e0 = new ArrayList<>();
+        check(e0.isEmpty() && e0.size() == 0, "empty list size/isEmpty");
+        expect(IndexOutOfBoundsException.class, () -> e0.get(0), "get(0) on empty throws IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> e0.remove(0), "remove(0) on empty throws IOOBE");
+
+        ArrayList<String> l2 = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        expect(IndexOutOfBoundsException.class, () -> l2.get(l2.size()), "get(size) throws IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> l2.get(-1), "get(-1) throws IOOBE");
+        expect(IndexOutOfBoundsException.class, () -> l2.add(l2.size() + 1, "x"), "add at size+1 throws IOOBE");
+        l2.add(0, "first");
+        check(l2.get(0).equals("first") && l2.size() == 4, "add at index 0");
+        l2.add(l2.size(), "last");
+        check(l2.get(l2.size() - 1).equals("last"), "add at index==size appends");
+        check(l2.subList(0, 0).isEmpty(), "subList(0,0) empty view");
+        check(l2.subList(2, 2).isEmpty(), "subList(i,i) empty view");
+        check(l2.indexOf(null) == -1, "indexOf(null) when no null present");
+        check(l2.lastIndexOf(l2.get(l2.size() - 1)) == l2.size() - 1, "lastIndexOf last element");
+        ExposedArrayList ex2 = new ExposedArrayList(Arrays.asList("p", "q", "r"));
+        ex2.removeRangeExposed(1, 1);
+        check(ex2.equals(Arrays.asList("p", "q", "r")), "removeRange(from==to) no-op");
     }
 
     public static void main(String[] args) throws Exception {

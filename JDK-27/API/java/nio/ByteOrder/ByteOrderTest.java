@@ -91,6 +91,18 @@ public class ByteOrderTest {
         big.putInt(0x01020304).flip();
         check(big.get() == 0x01 && big.get() == 0x02 && big.get() == 0x03 && big.get() == 0x04,
               "big-endian byte layout");
+
+        // ---- boundary/equivalence additions (M2) ----
+        check(ByteOrder.LITTLE_ENDIAN.ordinal() == 0, "LITTLE_ENDIAN ordinal 0");
+        check(ByteOrder.BIG_ENDIAN.ordinal() == 1, "BIG_ENDIAN ordinal 1");
+        check("LITTLE_ENDIAN".equals(ByteOrder.LITTLE_ENDIAN.name()), "LITTLE_ENDIAN name");
+        check("BIG_ENDIAN".equals(ByteOrder.BIG_ENDIAN.name()), "BIG_ENDIAN name");
+        check(ByteOrder.LITTLE_ENDIAN.compareTo(ByteOrder.BIG_ENDIAN) < 0, "declared order LITTLE before BIG");
+        check(ByteOrder.valueOf(ByteOrder.BIG_ENDIAN.toString()) == ByteOrder.BIG_ENDIAN,
+              "valueOf(toString) BIG round-trip");
+        check(ByteOrder.valueOf(ByteOrder.LITTLE_ENDIAN.toString()) == ByteOrder.LITTLE_ENDIAN,
+              "valueOf(toString) LITTLE round-trip");
+        check(ByteOrder.BIG_ENDIAN.getDeclaringClass() == ByteOrder.class, "getDeclaringClass");
     }
 
     public static void main(String[] args) throws Exception {

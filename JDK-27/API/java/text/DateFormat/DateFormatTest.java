@@ -151,6 +151,32 @@ public class DateFormatTest {
         Object d = real.parseObject("1/1/70", pp2);
         check(d instanceof Date && ((Date) d).getTime() == 0L, "parseObject on real DateFormat");
         check(pp2.getIndex() == "1/1/70".length(), "real parseObject position");
+
+        // ---- boundary/equivalence additions (M2) ----
+        DateFormat sh = DateFormat.getDateInstance(DateFormat.SHORT, US);
+        sh.setTimeZone(UTC);
+        ParsePosition pp3 = new ParsePosition(0);
+        Date d3 = sh.parse("1/1/70", pp3);
+        check(d3 != null && d3.getTime() == 0L, "parse(String,ParsePosition) result");
+        check(pp3.getIndex() == "1/1/70".length(), "parse position full consumption");
+
+        ParsePosition pf = new ParsePosition(0);
+        check(sh.parse("junk", pf) == null, "failed parse returns null");
+        check(pf.getErrorIndex() == 0, "failed parse errorIndex 0");
+
+        DateFormat t = DateFormat.getTimeInstance(DateFormat.SHORT, US);
+        t.setTimeZone(UTC);
+        String fs = t.format(EPOCH);
+        ParsePosition ptr = new ParsePosition(0);
+        check(t.parse(fs, ptr).getTime() == 0L, "time format->parse round-trip");
+
+        check(sh.isLenient(), "default lenient true");
+        sh.setLenient(false);
+        check(!sh.isLenient(), "setLenient(false)");
+        ParsePosition pstrict = new ParsePosition(0);
+        check(sh.parse("1/1/70", pstrict).getTime() == 0L, "strict parse valid date works");
+        check(sh.getCalendar() != null && UTC.equals(sh.getCalendar().getTimeZone()),
+              "getCalendar timezone");
     }
 
     public static void main(String[] args) throws Exception {

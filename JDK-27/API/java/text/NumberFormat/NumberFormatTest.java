@@ -166,6 +166,36 @@ public class NumberFormatTest {
         Object v = nf.parseObject("42", pp2);
         check(v instanceof Number && ((Number) v).longValue() == 42L, "parseObject on real NumberFormat");
         check(pp2.getIndex() == 2, "real parseObject position");
+
+        // ---- boundary/equivalence additions (M2) ----
+        NumberFormat num = NumberFormat.getNumberInstance(US);
+        check(num.getMaximumFractionDigits() == 3, "number instance default max fraction 3");
+        check(NumberFormat.getCurrencyInstance(US).getMaximumFractionDigits() == 2,
+              "currency instance default max fraction 2");
+        check(NumberFormat.getIntegerInstance(US).getMaximumFractionDigits() == 0,
+              "integer instance default max fraction 0");
+        check(NumberFormat.getPercentInstance(US).getMaximumFractionDigits() == 0,
+              "percent instance default max fraction 0");
+
+        NumberFormat even = NumberFormat.getNumberInstance(US);
+        even.setMaximumFractionDigits(0);
+        check("2".equals(even.format(2.5)), "HALF_EVEN 2.5 -> 2");
+        check("4".equals(even.format(3.5)), "HALF_EVEN 3.5 -> 4");
+        check("-2".equals(even.format(-2.5)), "HALF_EVEN -2.5 -> -2");
+
+        ParsePosition pneg = new ParsePosition(0);
+        Number nn = num.parse("-12.5", pneg);
+        check(nn != null && nn.doubleValue() == -12.5 && pneg.getIndex() == 5, "parse negative");
+
+        ParsePosition ppre = new ParsePosition(0);
+        Number pre = num.parse("123.45xyz", ppre);
+        check(pre != null && pre.doubleValue() == 123.45 && ppre.getIndex() == 6,
+              "parse prefix stops at non-numeric");
+        check(ppre.getErrorIndex() == -1, "successful parse no error");
+
+        ParsePosition pgrp = new ParsePosition(0);
+        Number g = NumberFormat.getNumberInstance(US).parse("1,234,567", pgrp);
+        check(g != null && g.longValue() == 1234567L && pgrp.getIndex() == 9, "parse grouped");
     }
 
     public static void main(String[] args) throws Exception {

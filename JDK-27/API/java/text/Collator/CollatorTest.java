@@ -18,6 +18,17 @@ public class CollatorTest {
         passed++;
     }
 
+    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                    + " but got " + t.getClass().getSimpleName(), t);
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.text.Collator");
@@ -109,6 +120,22 @@ public class CollatorTest {
         c.setDecomposition(Collator.FULL_DECOMPOSITION);
         check(c.getDecomposition() == Collator.FULL_DECOMPOSITION, "setDecomposition FULL");
         check(c.equals(c), "reflexive equals");
+
+        // ---- boundary/equivalence additions (M2) ----
+        Collator col = Collator.getInstance(US);
+        check(col.compare("", "") == 0, "compare empty strings equal");
+        CollationKey emptyKey = col.getCollationKey("");
+        check(emptyKey.getSourceString().equals(""), "collation key source empty");
+        check(emptyKey.compareTo(col.getCollationKey("a")) < 0, "empty key < a key");
+
+        Collator id = Collator.getInstance(US);
+        id.setStrength(Collator.IDENTICAL);
+        check(id.getStrength() == Collator.IDENTICAL, "IDENTICAL strength");
+        check(id.compare("a", "a") == 0, "identical strength equal");
+        check(id.compare("a", "A") != 0, "identical strength a != A");
+
+        expectThrows(() -> col.setStrength(999), IllegalArgumentException.class, "setStrength(999) IAE");
+        expectThrows(() -> col.setDecomposition(999), IllegalArgumentException.class, "setDecomposition(999) IAE");
     }
 
     public static void main(String[] args) throws Exception {

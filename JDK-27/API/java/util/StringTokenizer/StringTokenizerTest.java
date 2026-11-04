@@ -49,6 +49,32 @@ public class StringTokenizerTest {
         testDefaultDelimiters();
         testReturnDelims();
         testEnumeration();
+
+        // ---- boundary/equivalence additions (M2) ----
+        StringTokenizer e0 = new StringTokenizer("", " ");
+        check(e0.countTokens() == 0, "empty countTokens 0");
+        check(!e0.hasMoreTokens(), "empty hasMoreTokens false");
+        check(!e0.hasMoreElements(), "empty hasMoreElements false");
+        assertThrows(NoSuchElementException.class, e0::nextToken, "empty nextToken NSEE");
+
+        StringTokenizer onlyDelims = new StringTokenizer(",,,", ",");
+        check(onlyDelims.countTokens() == 0 && !onlyDelims.hasMoreTokens(),
+              "only delimiters produces no tokens");
+
+        StringTokenizer consecutive = new StringTokenizer("a,,b", ",", false);
+        check(consecutive.countTokens() == 2, "consecutive delimiters skipped");
+        check("a".equals(consecutive.nextToken()) && "b".equals(consecutive.nextToken()),
+              "skips empty tokens");
+
+        StringTokenizer multi = new StringTokenizer("a:b:c", ":");
+        check("a".equals(multi.nextToken()), "first token");
+        check("b".equals(multi.nextToken(":")), "nextToken(delim) same delim");
+        check("c".equals(multi.nextToken()) && !multi.hasMoreTokens(), "last token");
+
+        StringTokenizer ws = new StringTokenizer("  leading and trailing  ");
+        check(ws.countTokens() == 3, "default whitespace trims leading/trailing");
+        check("leading".equals(ws.nextToken()) && "and".equals(ws.nextToken())
+              && "trailing".equals(ws.nextToken()), "default whitespace tokens");
     }
 
     static void testTokens() {

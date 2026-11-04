@@ -7,8 +7,11 @@
 import java.text.AttributedCharacterIterator;
 import java.text.DateFormatSymbols;
 import java.text.ParseException;
+import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.Locale;
 import java.util.TimeZone;
 
@@ -159,6 +162,41 @@ public class SimpleDateFormatTest {
         String out = s2.format(EPOCH);
         check(out != null && out.length() > 0, "no-arg ctor formats non-empty");
         check(s2.toPattern() != null && s2.toPattern().length() > 0, "no-arg ctor has a pattern");
+
+        // ---- boundary/equivalence additions (M2) ----
+        GregorianCalendar cal = new GregorianCalendar(UTC, US);
+        cal.clear();
+        cal.set(2000, Calendar.FEBRUARY, 29, 0, 0, 0);
+        Date leap = cal.getTime();
+        SimpleDateFormat ymd = new SimpleDateFormat("yyyy-MM-dd", US);
+        ymd.setTimeZone(UTC);
+        check("2000-02-29".equals(ymd.format(leap)), "leap day format");
+        ParsePosition pLeap = new ParsePosition(0);
+        check(ymd.parse("2000-02-29", pLeap).getTime() == leap.getTime(), "leap day parse round-trip");
+
+        cal.clear();
+        cal.set(2001, Calendar.DECEMBER, 31, 23, 59, 59);
+        Date endOfYear = cal.getTime();
+        SimpleDateFormat ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", US);
+        ts.setTimeZone(UTC);
+        check("2001-12-31 23:59:59".equals(ts.format(endOfYear)), "year-end format");
+
+        SimpleDateFormat strict = new SimpleDateFormat("yyyy-MM-dd", US);
+        strict.setTimeZone(UTC);
+        strict.setLenient(false);
+        check(!strict.isLenient(), "setLenient(false)");
+        ParsePosition pStrict = new ParsePosition(0);
+        check(strict.parse("2000-01-01", pStrict).getTime()
+                      == ymd.parse("2000-01-01", new ParsePosition(0)).getTime(),
+              "strict parse valid date");
+
+        ParsePosition pp = new ParsePosition(0);
+        Date pd = ymd.parse("1970-01-01", pp);
+        check(pd != null && pd.getTime() == 0L, "parse(String,ParsePosition) result");
+        check(pp.getIndex() == "1970-01-01".length(), "parse position advanced fully");
+
+        AttributedCharacterIterator it2 = ymd.formatToCharacterIterator(EPOCH);
+        check(it2.getEndIndex() == "1970-01-01".length(), "formatToCharacterIterator end index");
     }
 
     public static void main(String[] args) throws Exception {

@@ -230,6 +230,27 @@ public class HashMapTest {
         HashMap<String, Integer> viaFactory = HashMap.newHashMap(16);
         viaFactory.put("z", 9);
         check(viaFactory.get("z") == 9, "newHashMap(int) factory");
+
+        // ---- boundary/equivalence additions (M2) ----
+        expectThrows(() -> new HashMap<String, Integer>(-1), IllegalArgumentException.class,
+                     "negative initial capacity throws IAE");
+        expectThrows(() -> new HashMap<String, Integer>(16, 0.0f), IllegalArgumentException.class,
+                     "loadFactor 0 throws IAE");
+        expectThrows(() -> new HashMap<String, Integer>(16, Float.NaN), IllegalArgumentException.class,
+                     "loadFactor NaN throws IAE");
+        HashMap<String, Integer> zeroCap = new HashMap<>(0);
+        zeroCap.put("a", 1);
+        check(zeroCap.get("a") == 1 && zeroCap.size() == 1, "zero initial capacity usable");
+        expectThrows(() -> HashMap.newHashMap(-1), IllegalArgumentException.class,
+                     "newHashMap negative capacity throws IAE");
+
+        // add -> remove state round-trip (size/contains/get linkage)
+        HashMap<String, Integer> rt = new HashMap<>();
+        for (int i = 0; i < 100; i++) rt.put("k" + i, i);
+        check(rt.size() == 100, "bulk put size");
+        check(rt.containsKey("k50") && rt.get("k50") == 50, "bulk put get");
+        for (int i = 0; i < 100; i++) check(rt.remove("k" + i) == i, "bulk remove returns value " + i);
+        check(rt.isEmpty() && rt.size() == 0, "add->remove state round-trip to empty");
     }
 
     public static void main(String[] args) throws Exception {

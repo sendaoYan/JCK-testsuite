@@ -54,6 +54,20 @@ public class ScannerTest {
         testFindInLine();
         testExceptions();
         testClose();
+
+        // ---- boundary/equivalence additions (M2) ----
+        check(new Scanner("101").useRadix(2).nextInt() == 5, "binary radix 2 parse");
+        check(new Scanner("11111").useRadix(2).nextInt() == 31, "binary radix 2 five bits");
+        check(new Scanner("-42").hasNextInt() && new Scanner("-42").nextInt() == -42,
+              "negative int token");
+        check(new Scanner("1234567890123").nextLong() == 1234567890123L, "nextLong");
+        check(new Scanner("3.5").nextDouble() == 3.5, "nextDouble");
+        check(!new Scanner("").hasNext(), "empty hasNext false");
+        assertThrows(IllegalArgumentException.class, () -> new Scanner("1").useRadix(1), "useRadix(1) IAE");
+        assertThrows(IllegalArgumentException.class, () -> new Scanner("1").useRadix(37), "useRadix(37) IAE");
+        Scanner ws = new Scanner("a\nb\tc");
+        check(ws.next().equals("a") && ws.next().equals("b") && ws.next().equals("c") && !ws.hasNext(),
+              "default whitespace tokens");
     }
 
     static void testTokens() {

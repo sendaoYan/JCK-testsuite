@@ -110,6 +110,31 @@ public class FieldPositionTest {
                 "FRACTION attribute span matches fraction part");
         check(ap.getFieldAttribute() == NumberFormat.Field.FRACTION,
                 "getFieldAttribute returns the same attribute instance after format");
+
+        // ---- boundary/equivalence additions (M2) ----
+        FieldPosition fpb = new FieldPosition(NumberFormat.INTEGER_FIELD);
+        fpb.setBeginIndex(-1);
+        fpb.setEndIndex(-1);
+        check(fpb.getBeginIndex() == -1 && fpb.getEndIndex() == -1, "negative indexes allowed");
+
+        FieldPosition zero = new FieldPosition(NumberFormat.INTEGER_FIELD);
+        check(zero.getBeginIndex() == 0 && zero.getEndIndex() == 0, "indexes default to 0");
+
+        FieldPosition fneg = new FieldPosition(-1);
+        check(fneg.getField() == -1, "int ctor field -1 allowed");
+
+        FieldPosition na = new FieldPosition(-1);
+        na.setBeginIndex(2);
+        na.setEndIndex(3);
+        FieldPosition nb = new FieldPosition(-1);
+        nb.setBeginIndex(2);
+        nb.setEndIndex(3);
+        check(na.equals(nb) && na.hashCode() == nb.hashCode(), "field -1 equals/hashCode");
+        nb.setBeginIndex(4);
+        check(!na.equals(nb), "beginIndex boundary distinguishes equals");
+
+        check("java.text.FieldPosition[field=-1,attribute=null,beginIndex=2,endIndex=3]"
+                .equals(na.toString()), "toString field -1");
     }
 
     public static void main(String[] args) throws Exception {

@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 public class TreeMapTest {
@@ -231,6 +232,29 @@ public class TreeMapTest {
         check(orig.size() == 1, "clone structural independence");
         orig.clear();
         check(orig.isEmpty(), "clear empties");
+
+        // ---- boundary/equivalence additions (M2) ----
+        TreeMap<Integer, String> empty = new TreeMap<>();
+        expectThrows(empty::firstKey, NoSuchElementException.class, "empty firstKey NSEE");
+        expectThrows(empty::lastKey, NoSuchElementException.class, "empty lastKey NSEE");
+        check(empty.pollFirstEntry() == null, "empty pollFirstEntry null");
+        check(empty.pollLastEntry() == null, "empty pollLastEntry null");
+        check(empty.ceilingKey(1) == null && empty.floorKey(1) == null, "empty ceiling/floorKey null");
+        check(empty.higherKey(1) == null && empty.lowerKey(1) == null, "empty higher/lowerKey null");
+        check(empty.subMap(1, 2).isEmpty(), "empty subMap empty view");
+
+        TreeMap<Integer, String> t = new TreeMap<>();
+        t.put(1, "a");
+        t.put(2, "b");
+        t.put(3, "c");
+        check(t.descendingMap().firstKey() == 3 && t.descendingMap().lastKey() == 1,
+              "descendingMap reverses endpoints");
+        check(t.descendingKeySet().first() == 3 && t.descendingKeySet().last() == 1,
+              "descendingKeySet reverses endpoints");
+        check(t.firstKey() < t.lastKey(), "natural order first < last");
+        check(t.subMap(1, true, 1, true).size() == 1, "subMap single inclusive point");
+        check(t.headMap(1).isEmpty(), "headMap below first empty");
+        check(t.tailMap(3, false).isEmpty(), "tailMap above last empty");
     }
 
     public static void main(String[] args) throws Exception {

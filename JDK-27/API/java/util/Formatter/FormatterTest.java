@@ -49,6 +49,28 @@ public class FormatterTest {
         testStringFormat();
         testOutAndLocale();
         testClosed();
+
+        // ---- boundary/equivalence additions (M2) ----
+        check("-2147483648".equals(String.format(Locale.ROOT, "%d", Integer.MIN_VALUE)), "format MIN_VALUE");
+        check("2147483647".equals(String.format(Locale.ROOT, "%d", Integer.MAX_VALUE)), "format MAX_VALUE");
+        check("0".equals(String.format(Locale.ROOT, "%d", 0)), "format zero");
+        check("ffffffff".equals(String.format(Locale.ROOT, "%x", -1)), "format %x negative -> unsigned");
+        check("10".equals(String.format(Locale.ROOT, "%o", 8)), "format %o octal");
+        check("null".equals(String.format(Locale.ROOT, "%s", (Object) null)), "format %s null");
+        check("false".equals(String.format(Locale.ROOT, "%b", (Object) null)), "format %b null");
+        check("A".equals(String.format(Locale.ROOT, "%c", 'A')), "format %c char");
+        check("   42".equals(String.format(Locale.ROOT, "%5d", 42)), "format width right-justify");
+        check("42   ".equals(String.format(Locale.ROOT, "%-5d", 42)), "format left-justify");
+        check("+42".equals(String.format(Locale.ROOT, "%+d", 42)), "format sign");
+        check("1,234".equals(String.format(Locale.US, "%,d", 1234)), "format grouping");
+        check("42".equals(String.format(Locale.ROOT, "%1$d", 42)), "format explicit index");
+
+        assertThrows(java.util.MissingFormatArgumentException.class,
+                () -> String.format(Locale.ROOT, "%d"), "format missing arg");
+        assertThrows(java.util.UnknownFormatConversionException.class,
+                () -> String.format(Locale.ROOT, "%q"), "format unknown conversion");
+        assertThrows(java.util.IllegalFormatConversionException.class,
+                () -> String.format(Locale.ROOT, "%d", "abc"), "format conversion mismatch");
     }
 
     static void testFormat() {

@@ -161,6 +161,34 @@ public class CharBufferTest {
         checkThrows(IndexOutOfBoundsException.class, () -> e.put(-1, 'a'), "absolute put OOB");
         checkThrows(IndexOutOfBoundsException.class, () -> CharBuffer.wrap("abc").charAt(3), "charAt OOB");
         checkThrows(IllegalArgumentException.class, () -> e.position(3), "position > capacity");
+
+        // ---- boundary/equivalence additions (M2) ----
+        CharBuffer zero = CharBuffer.allocate(0);
+        check(zero.capacity() == 0 && zero.remaining() == 0 && !zero.hasRemaining(), "allocate(0) empty");
+        checkThrows(IllegalArgumentException.class, () -> CharBuffer.allocate(-1), "allocate(-1) IAE");
+
+        CharBuffer mark = CharBuffer.allocate(4);
+        mark.put('a').put('b').flip();
+        mark.mark();
+        check(mark.get() == 'a', "get after mark");
+        mark.reset();
+        check(mark.get() == 'a', "reset restores position");
+
+        CharBuffer src2 = CharBuffer.wrap("hello");
+        CharBuffer small = CharBuffer.allocate(3);
+        int n2 = src2.read(small);
+        check(n2 == 3, "read into smaller buffer partial count");
+        small.flip();
+        check("hel".contentEquals(small), "partial read copies min(remaining)");
+
+        CharBuffer sub = CharBuffer.wrap("abc");
+        check(sub.subSequence(0, 0).length() == 0, "empty subSequence");
+        checkThrows(IndexOutOfBoundsException.class, () -> sub.subSequence(-1, 1), "subSequence negative IOOBE");
+        checkThrows(IndexOutOfBoundsException.class, () -> sub.subSequence(1, 4), "subSequence past end IOOBE");
+
+        CharBuffer apb = CharBuffer.allocate(8);
+        checkThrows(IndexOutOfBoundsException.class, () -> apb.append("xy", -1, 1), "append bad start IOOBE");
+        checkThrows(IndexOutOfBoundsException.class, () -> apb.append("xy", 0, 3), "append end>len IOOBE");
     }
 
     public static void main(String[] args) throws Exception {

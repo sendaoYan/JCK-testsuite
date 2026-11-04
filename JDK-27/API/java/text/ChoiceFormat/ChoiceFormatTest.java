@@ -108,6 +108,27 @@ public class ChoiceFormatTest {
         check("yes".equals(cf.format(1L)), "applyPattern format(long)");
         check(cf.parse("no").doubleValue() == 0.0, "applyPattern parse no -> 0.0");
         check(cf.parse("yes").doubleValue() == 1.0, "applyPattern parse yes -> 1.0");
+
+        // ---- boundary/equivalence additions (M2) ----
+        ChoiceFormat f = new ChoiceFormat("0#none|1#one|2#many");
+        check("none".equals(f.format(Double.NEGATIVE_INFINITY)), "-infinity -> first choice");
+        check("many".equals(f.format(Double.POSITIVE_INFINITY)), "+infinity -> last choice");
+        check("none".equals(f.format(Double.NaN)), "NaN -> first choice");
+        check(Double.isNaN(f.parse("unknown", new java.text.ParsePosition(0)).doubleValue()),
+              "parse unknown -> NaN");
+
+        check(ChoiceFormat.nextDouble(0.0) == Double.MIN_VALUE, "nextDouble(0) == MIN_VALUE");
+        check(ChoiceFormat.previousDouble(0.0) == -Double.MIN_VALUE, "previousDouble(0) == -MIN_VALUE");
+        check(ChoiceFormat.nextDouble(Double.MAX_VALUE) == Double.POSITIVE_INFINITY,
+              "nextDouble(MAX) == +inf");
+        check(ChoiceFormat.previousDouble(-Double.MAX_VALUE) == Double.NEGATIVE_INFINITY,
+              "previousDouble(-MAX) == -inf");
+        check(Double.isNaN(ChoiceFormat.nextDouble(Double.NaN)), "nextDouble(NaN) == NaN");
+        check(Double.isNaN(ChoiceFormat.previousDouble(Double.NaN)), "previousDouble(NaN) == NaN");
+        check(ChoiceFormat.nextDouble(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY,
+              "nextDouble(+inf) == +inf");
+        check(ChoiceFormat.previousDouble(Double.NEGATIVE_INFINITY) == Double.NEGATIVE_INFINITY,
+              "previousDouble(-inf) == -inf");
     }
 
     public static void main(String[] args) throws Exception {

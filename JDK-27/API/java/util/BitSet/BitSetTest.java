@@ -18,6 +18,17 @@ public class BitSetTest {
         passed++;
     }
 
+    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
+        try {
+            r.run();
+            throw new AssertionError(msg + ": expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                    + " but got " + t.getClass().getSimpleName(), t);
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.BitSet");
@@ -46,6 +57,27 @@ public class BitSetTest {
         testRangesAndPrevious();
         testValueOfRoundTrip();
         testClone();
+
+        // ---- boundary/equivalence additions (M2) ----
+        BitSet empty = new BitSet();
+        check(empty.isEmpty() && empty.length() == 0 && empty.cardinality() == 0,
+              "empty isEmpty/length/cardinality");
+        check(empty.nextSetBit(0) == -1 && empty.nextClearBit(0) == 0,
+              "empty nextSetBit -1 / nextClearBit 0");
+        check(empty.previousSetBit(0) == -1 && empty.previousClearBit(0) == 0,
+              "empty previousSetBit/previousClearBit");
+        check(BitSet.valueOf(new long[0]).isEmpty(), "valueOf(empty long[]) empty");
+        check(BitSet.valueOf(new byte[0]).isEmpty(), "valueOf(empty byte[]) empty");
+        check(empty.toByteArray().length == 0, "empty toByteArray zero length");
+        check(empty.toLongArray().length == 0, "empty toLongArray zero length");
+
+        expectThrows(() -> { new BitSet().set(-1); }, IndexOutOfBoundsException.class, "set(-1) IOOBE");
+        expectThrows(() -> { new BitSet().get(-1); }, IndexOutOfBoundsException.class, "get(-1) IOOBE");
+        expectThrows(() -> { new BitSet().clear(-1); }, IndexOutOfBoundsException.class, "clear(-1) IOOBE");
+        expectThrows(() -> { new BitSet().flip(-1); }, IndexOutOfBoundsException.class, "flip(-1) IOOBE");
+        expectThrows(() -> { new BitSet().get(3, 2); }, IndexOutOfBoundsException.class, "get(from>to) IOOBE");
+        expectThrows(() -> { new BitSet().set(3, 2); }, IndexOutOfBoundsException.class, "set(from>to) IOOBE");
+        expectThrows(() -> { new BitSet().nextSetBit(-1); }, IndexOutOfBoundsException.class, "nextSetBit(-1) IOOBE");
     }
 
     static void testBasics() {

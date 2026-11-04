@@ -221,6 +221,36 @@ public class ArrayDequeTest {
         check(d.isEmpty() && d.size() == 0, "clear empties");
         d.addLast(7);
         check(!d.isEmpty(), "reusable after clear");
+
+        // ---- boundary/equivalence additions (M2) ----
+        ArrayDeque<Integer> e0 = new ArrayDeque<>();
+        check(e0.isEmpty() && e0.size() == 0, "empty size/isEmpty");
+        check(e0.peek() == null && e0.poll() == null, "empty poll/peek null");
+        expect(NoSuchElementException.class, e0::getFirst, "empty getFirst NSEE");
+        check(!e0.removeFirstOccurrence(1) && !e0.removeLastOccurrence(1),
+              "remove occurrences on empty returns false");
+
+        ArrayDeque<Integer> cap0 = new ArrayDeque<>(0);
+        cap0.addLast(1);
+        check(cap0.size() == 1 && cap0.peekFirst() == 1, "ctor(0) usable");
+
+        ArrayDeque<Integer> single = new ArrayDeque<>();
+        single.addFirst(1);
+        check(single.getFirst() == 1 && single.getLast() == 1, "single first==last");
+        check(single.removeLast() == 1 && single.isEmpty(), "drain single");
+
+        ArrayDeque<Integer> d2 = new ArrayDeque<>();
+        d2.addLast(1);
+        d2.addLast(2);
+        d2.addLast(3);
+        check(d2.peekFirst() == 1 && d2.peekLast() == 3, "peek both ends");
+        d2.addFirst(0);
+        check(d2.peekFirst() == 0 && d2.size() == 4, "addFirst grows front");
+
+        ArrayDeque<Integer> fifo = new ArrayDeque<>();
+        for (int i = 0; i < 5; i++) fifo.offerLast(i);
+        for (int i = 0; i < 5; i++) check(fifo.pollFirst() == i, "FIFO drain " + i);
+        check(fifo.isEmpty(), "FIFO drained");
     }
 
     public static void main(String[] args) throws Exception {

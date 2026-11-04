@@ -188,6 +188,42 @@ public class ByteBufferTest {
         checkThrows(IndexOutOfBoundsException.class, () -> e.put(-1, (byte) 1), "absolute put OOB");
         checkThrows(IllegalArgumentException.class, () -> e.position(3), "position > capacity");
         checkThrows(IllegalArgumentException.class, () -> e.limit(-1), "limit negative");
+
+        // ---- boundary/equivalence additions (M2) ----
+        ByteBuffer zero = ByteBuffer.allocate(0);
+        check(zero.capacity() == 0 && zero.remaining() == 0 && !zero.hasRemaining(), "allocate(0) empty");
+        checkThrows(IllegalArgumentException.class, () -> ByteBuffer.allocate(-1), "allocate(-1) IAE");
+        checkThrows(IllegalArgumentException.class, () -> ByteBuffer.allocateDirect(-1), "allocateDirect(-1) IAE");
+
+        ByteBuffer mark = ByteBuffer.allocate(4);
+        mark.put((byte) 1).put((byte) 2);
+        mark.flip();
+        mark.mark();
+        check(mark.get() == 1, "first get after mark");
+        mark.reset();
+        check(mark.get() == 1, "reset restores position");
+
+        ByteBuffer f = ByteBuffer.allocate(4);
+        f.put((byte) 1).put((byte) 2).put((byte) 3);
+        f.flip();
+        check(f.position() == 0 && f.limit() == 3, "flip sets position 0, limit old position");
+        f.rewind();
+        check(f.position() == 0 && f.limit() == 3, "rewind keeps limit, resets position");
+        check(f.hasRemaining() && f.remaining() == 3, "remaining after rewind");
+
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> ByteBuffer.wrap(new byte[] {1, 2}, -1, 2), "wrap negative offset IOOBE");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> ByteBuffer.wrap(new byte[] {1, 2}, 1, 5), "wrap offset+length overflow IOOBE");
+
+        ByteBuffer putIt = ByteBuffer.allocate(4);
+        putIt.put((byte) 1).put((byte) 2).put((byte) 3).put((byte) 4);
+        checkThrows(BufferOverflowException.class, () -> putIt.put((byte) 5), "put past capacity overflow");
+        ByteBuffer getIt = ByteBuffer.allocate(2);
+        getIt.put((byte) 1).put((byte) 2).flip();
+        getIt.get();
+        getIt.get();
+        checkThrows(BufferUnderflowException.class, getIt::get, "get past limit underflow");
     }
 
     public static void main(String[] args) throws Exception {

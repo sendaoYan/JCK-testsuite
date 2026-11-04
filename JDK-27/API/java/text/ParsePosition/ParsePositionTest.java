@@ -110,6 +110,31 @@ public class ParsePositionTest {
         } catch (ParseException pe) {
             check(pe.getErrorOffset() == 0, "errorOffset mirrors ParsePosition.errorIndex");
         }
+
+        // ---- boundary/equivalence additions (M2) ----
+        ParsePosition maxIdx = new ParsePosition(Integer.MAX_VALUE);
+        check(maxIdx.getIndex() == Integer.MAX_VALUE, "ctor MAX_VALUE index");
+        maxIdx.setErrorIndex(Integer.MAX_VALUE);
+        check(maxIdx.getErrorIndex() == Integer.MAX_VALUE, "setErrorIndex MAX_VALUE");
+
+        ParsePosition neg = new ParsePosition(0);
+        neg.setIndex(-1);
+        check(neg.getIndex() == -1, "setIndex(-1) allowed (no validation)");
+        neg.setErrorIndex(0);
+        check(neg.getErrorIndex() == 0, "setErrorIndex(0) allowed");
+
+        ParsePosition a = new ParsePosition(-1);
+        a.setErrorIndex(5);
+        ParsePosition b = new ParsePosition(-1);
+        b.setErrorIndex(5);
+        check(a.equals(b) && a.hashCode() == b.hashCode(), "negative-index equals/hashCode");
+        b.setErrorIndex(6);
+        check(!a.equals(b), "errorIndex boundary distinguishes equals");
+
+        check("java.text.ParsePosition[index=-1,errorIndex=5]".equals(a.toString()),
+              "toString negative index");
+        check("java.text.ParsePosition[index=2147483647,errorIndex=-1]"
+                .equals(new ParsePosition(Integer.MAX_VALUE).toString()), "toString MAX_VALUE index");
     }
 
     public static void main(String[] args) throws Exception {

@@ -135,6 +135,38 @@ public class IntBufferTest {
         checkThrows(IndexOutOfBoundsException.class, () -> e.put(-1, 1), "absolute put OOB");
         checkThrows(IllegalArgumentException.class, () -> e.position(3), "position > capacity");
         checkThrows(IllegalArgumentException.class, () -> e.limit(-1), "limit negative");
+
+        // ---- boundary/equivalence additions (M2) ----
+        IntBuffer zero = IntBuffer.allocate(0);
+        check(zero.capacity() == 0 && zero.remaining() == 0 && !zero.hasRemaining(), "allocate(0) empty");
+        checkThrows(IllegalArgumentException.class, () -> IntBuffer.allocate(-1), "allocate(-1) IAE");
+
+        IntBuffer mark = IntBuffer.allocate(4);
+        mark.put(1).put(2).flip();
+        mark.mark();
+        check(mark.get() == 1, "get after mark");
+        mark.reset();
+        check(mark.get() == 1, "reset restores position");
+
+        IntBuffer full = IntBuffer.allocate(3);
+        full.put(1).put(2).put(3).flip();
+        full.get();
+        full.get();
+        full.get();
+        full.compact();
+        check(full.position() == 0 && full.limit() == 3, "compact after full consumption");
+
+        IntBuffer mk = IntBuffer.allocate(4);
+        mk.put(1).put(2).put(3).flip();
+        mk.mark();
+        mk.get();
+        mk.rewind();
+        check(mk.position() == 0 && mk.limit() == 3, "rewind keeps limit, resets position");
+
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> IntBuffer.wrap(new int[] {1, 2}, -1, 2), "wrap negative offset IOOBE");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> IntBuffer.wrap(new int[] {1, 2}, 1, 5), "wrap offset+length overflow IOOBE");
     }
 
     public static void main(String[] args) throws Exception {

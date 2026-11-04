@@ -78,6 +78,27 @@ public class NormalizerTest {
         testCompatibilityComposition();
         testIsNormalized();
         testIdempotentAndNull();
+
+        // ---- boundary/equivalence additions (M2) ----
+        check("".equals(Normalizer.normalize("", Form.NFC)), "normalize empty -> empty");
+        check(Normalizer.isNormalized("", Form.NFC), "empty is NFC-normalized");
+        check(Normalizer.isNormalized("", Form.NFD), "empty is NFD-normalized");
+        check(Normalizer.isNormalized("", Form.NFKC), "empty is NFKC-normalized");
+        check(Normalizer.isNormalized("", Form.NFKD), "empty is NFKD-normalized");
+
+        String ascii = "abc123";
+        check(Normalizer.isNormalized(ascii, Form.NFC), "ascii NFC-normalized");
+        check(Normalizer.isNormalized(ascii, Form.NFD), "ascii NFD-normalized");
+        check(Normalizer.isNormalized(ascii, Form.NFKC), "ascii NFKC-normalized");
+        check(Normalizer.isNormalized(ascii, Form.NFKD), "ascii NFKD-normalized");
+
+        String decomposed = "é"; // e + combining acute
+        String nfd = Normalizer.normalize(decomposed, Form.NFD);
+        check(Normalizer.normalize(nfd, Form.NFD).equals(nfd), "NFD idempotent");
+        check(Normalizer.normalize("ﬃ", Form.NFKD).equals("ffi"), "NFKD ligature -> ffi");
+        check(Normalizer.normalize("ﬃ", Form.NFKC).equals("ffi"), "NFKC ligature -> ffi");
+        expectThrows(() -> Normalizer.normalize("x", null), NullPointerException.class, "normalize(x,null) NPE");
+        expectThrows(() -> Normalizer.isNormalized("x", null), NullPointerException.class, "isNormalized(x,null) NPE");
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();
