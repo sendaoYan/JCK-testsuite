@@ -1,10 +1,19 @@
 /*
  * @test
- * @summary java.nio.file.FileVisitResult conformance: enum constants.
+ * @summary java.nio.file.FileVisitResult conformance: white-box structure + black-box behavior (JDK-8).
  * @run main FileVisitResultTest
  */
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class FileVisitResultTest {
     static int passed;
@@ -14,17 +23,88 @@ public class FileVisitResultTest {
         passed++;
     }
 
-    static void testFileVisitResult() {
-        check(FileVisitResult.valueOf("CONTINUE") == FileVisitResult.CONTINUE, "valueOf CONTINUE");
-        check(FileVisitResult.valueOf("TERMINATE") == FileVisitResult.TERMINATE, "valueOf TERMINATE");
-        check(FileVisitResult.valueOf("SKIP_SIBLINGS") == FileVisitResult.SKIP_SIBLINGS, "valueOf SKIP_SIBLINGS");
-        check(FileVisitResult.valueOf("SKIP_SUBTREE") == FileVisitResult.SKIP_SUBTREE, "valueOf SKIP_SUBTREE");
-        check(FileVisitResult.values().length >= 4, "at least 4 values");
-        check(FileVisitResult.class.isEnum(), "is enum");
+    // ---- white-box: structure via reflection ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.nio.file.FileVisitResult");
+        check(c.isEnum(), "FileVisitResult is an enum");
+        check(c.getEnumConstants().length == 4, "exactly 4 constants");
+        for (String n : new String[] {"CONTINUE", "TERMINATE", "SKIP_SUBTREE", "SKIP_SIBLINGS"})
+            check(java.util.Arrays.stream(c.getEnumConstants())
+                  .anyMatch(k -> ((Enum<?>) k).name().equals(n)), "constant " + n);
     }
 
-    public static void main(String[] args) {
-        testFileVisitResult();
+    // ---- black-box: behavior ----
+    static void testBlackBox() throws Exception {
+        check(FileVisitResult.values().length == 4, "values length");
+        check(FileVisitResult.valueOf("SKIP_SUBTREE") == FileVisitResult.SKIP_SUBTREE,
+              "valueOf");
+        check(FileVisitResult.values()[0] == FileVisitResult.CONTINUE, "CONTINUE first");
+
+        Path dir = Files.createTempDirectory("jck");
+        try {
+            List<String> names = new ArrayList<>();
+            Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
+                public FileVisitResult preVisitDirectory(Path d, BasicFileAttributes a) {
+                    names.add("pre:" + d.getFileName());
+                    return FileVisitResult.CONTINUE;
+                }
+                public FileVisitResult visitFile(Path f, BasicFileAttributes a) {
+                    names.add("file:" + f.getFileName());
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+            check(names.size() == 1 && names.get(0).startsWith("pre:"),
+                  "empty tree visited with CONTINUE");
+
+            Files.write(dir.resolve("a.txt"), "a".getBytes(StandardCharsets.UTF_8));
+            Files.write(dir.resolve("b.txt"), "b".getBytes(StandardCharsets.UTF_8));
+            AtomicInteger visits = new AtomicInteger();
+            Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
+                public FileVisitResult visitFile(Path f, BasicFileAttributes a) {
+                    visits.incrementAndGet();
+                    return FileVisitResult.TERMINATE;
+                }
+            });
+            check(visits.get() == 1, "TERMINATE stops after the first file");
+
+            AtomicInteger seen = new AtomicInteger();
+            Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
+                public FileVisitResult visitFile(Path f, BasicFileAttributes a) {
+                    seen.incrementAndGet();
+                    return FileVisitResult.SKIP_SIBLINGS;
+                }
+            });
+            check(seen.get() == 1, "SKIP_SIBLINGS stops the sibling iteration");
+
+            Path sub = dir.resolve("sub");
+            Files.createDirectories(sub);
+            Files.write(sub.resolve("deep.txt"), "d".getBytes(StandardCharsets.UTF_8));
+            AtomicBoolean enteredSub = new AtomicBoolean(false);
+            Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
+                public FileVisitResult preVisitDirectory(Path d, BasicFileAttributes a) {
+                    if (d.getFileName() != null && d.getFileName().toString().equals("sub"))
+                        return FileVisitResult.SKIP_SUBTREE;
+                    return FileVisitResult.CONTINUE;
+                }
+                public FileVisitResult visitFile(Path f, BasicFileAttributes a) {
+                    if (f.getFileName().toString().equals("deep.txt"))
+                        enteredSub.set(true);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+            check(!enteredSub.get(), "SKIP_SUBTREE skips descending");
+        } finally {
+            Files.deleteIfExists(dir.resolve("sub").resolve("deep.txt"));
+            Files.deleteIfExists(dir.resolve("sub"));
+            Files.deleteIfExists(dir.resolve("a.txt"));
+            Files.deleteIfExists(dir.resolve("b.txt"));
+            Files.deleteIfExists(dir);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

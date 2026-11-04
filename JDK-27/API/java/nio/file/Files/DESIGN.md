@@ -1,35 +1,38 @@
-# java.nio.file.Files 设计文档
+# java.nio.file.Files 测试方案
 
 ## 1. API 功能
-
-（补全）
-
-（签名以 JDK-27 javap 实测为准。）
+java.nio.file.Files 是文件系统操作的静态工具类 (final class, extends Object, 全 static)。
+JDK-27 在 JDK-8 基础上新增 (以 javap -public 实测为准)：
+- writeString(Path,CharSequence[,Charset],OpenOption...)/readString(Path[,Charset]) (JDK-11+)
+- mismatch(Path,Path) (JDK-12+)
+其余 JDK-8 已有: 创建/删除、copy/move、readAllBytes/readAllLines/write(byte[]|Iterable)、
+newBufferedReader/Writer、list/walk/find/lines、exists/notExists/isDirectory/isRegularFile/
+isSymbolicLink/isSameFile/size/getLastModifiedTime/getFileStore/probeContentType、属性视图等。
 
 ## 2. Java 用户如何使用
-
-- 常规用法：直接面向 `Files` 编程，或经 Files/Channels/Selector 等门面 API 间接触达。
-- 组合用法：与本包/相关包其它类型配合（如视图+Files.getAttribute、通道+Selector、选项+Files.move）。
-- 生命周期：打开/获取 -> 使用 -> 关闭/释放；AutoCloseable 资源用 try-with-resources。
-- 失败路径：通过本类型或配套异常类型精确报告失败。
+- 常规用法: createTempDirectory/createTempFile 建临时资源 -> writeString/readString (UTF-8) ->
+  readAllLines -> copy/move (REPLACE_EXISTING) -> size/mismatch -> newBufferedWriter/Reader ->
+  deleteIfExists 清理。
+- 组合用法: 与 Path.of、StandardCharsets、Stream (list/walk/lines)、BufferedReader/Writer 组合。
+- 生命周期: 临时资源 finally 递归删除；AutoCloseable 的 Stream/Reader/Writer 用 try-with-resources。
+- 失败路径: IOException/NoSuchFileException/FileAlreadyExistsException 等精确报告失败。
 
 ## 3. 开源代码实际用法调研
-
-典型开源使用方式（按社区常见形态归纳）：
-- 通用
-- 用法特点：优先走 java.nio 高层门面（Files/Channels），仅在需要精细控制时直接触碰本类型；
-  测试侧普遍以临时目录 + finally 递归清理、本地回环端口 + 守护线程保证确定性与无残留。
+- 通用形态: 优先走 Files 高层门面 (读写/遍历/复制)，仅需精细控制时才下探通道。
+- 测试侧惯例: 临时目录 + finally 递归删除保证无残留；相对路径拼接用 Path.resolve 而非手拼分隔符。
 
 ## 4. 测试用例设计 + 自动化实现
+文件: `FilesTest.java` (单文件，testWhiteBox() + testBlackBox()，由 main 依次调用)。
 
-文件：`FilesTest.java`（单文件，含 testWhiteBox() 与 testBlackBox()，由 main 依次调用）。
+白盒 (反射): final class/extends Object；hasMethod 校验 writeString/readString/readAllLines/copy/
+move/createTempDirectory 等关键签名。
 
-设计：（补全）
+黑盒 (行为): 临时目录生命周期 —— createTempDirectory -> createDirectory/createTempFile ->
+writeString/readString (含非 ASCII 往返) -> size == UTF-8 字节数 -> write(Iterable)/readAllLines ->
+write/readAllBytes -> copy + REPLACE_EXISTING -> move + REPLACE_EXISTING -> mismatch (相等与差异下标)
+-> newBufferedWriter/Reader -> Files.lines -> Files.list -> deleteIfExists(true/false) -> delete。
 
-自动化与健壮性：
-- 输出 `PASS (N assertions)` 计数断言；失败抛 AssertionError 立即定位。
-- 文件类用例全部 `Files.createTempDirectory("jck")` + finally 递归删除；套接字/异步用例仅用
-  本地回环地址与临时端口（ServerSocketChannel.open().bind(null)），守护线程 + join/超时等待。
-- 平台相关能力（posix/dos/user/acl 视图）以 `supportedFileAttributeViews()`/supportsFileAttributeView
-  守护，不支持时打印 NOTE 并跳过行为部分，不判失败；headless 安全，不加 @key。
-- 本机实测断言数：? 条。
+健壮性: 全部在 Files.createTempDirectory("jck-files") 下进行，finally 递归删除；无墙钟/随机/
+全局状态/网络依赖；非 ASCII 用 UTF-8 字面量；不硬编码路径分隔符 (Path.of(dir.toString(),...) 与
+dir.resolve(...))；headless 安全不加 @key。
+本机实测断言数: 30 条。
