@@ -1,19 +1,18 @@
 /*
  * @test
- * @summary java.io.DataOutputStream conformance: white-box structure (reflection) + black-box
- *          behavior (size() accounting, primitive writes, writeUTF/writeBytes/writeChars).
+ * @summary java.io.DataOutputStream conformance: white-box structure (reflection) + full
+ *          black-box contract coverage. Constructor null semantics, write(int) low 8 bits,
+ *          write(byte[],off,len) validation (NPE/IOBE), primitive round-trip, size()
+ *          counter, writeBytes/writeChars layout, writeUTF length prefix + >65535 -> UTFDataFormatException
+ *          + null -> NPE, flush delegation.
  * @run main DataOutputStreamTest
- *
- * 黑盒设计案:
- * 1. 契约: 将 Java 基本类型按大端字节序写入底层流，并维护已写字节计数 size()。
- * 2. 场景: writeBoolean/Byte/Short/Char/Int/Long/Float/Double -> size() 逐项断言。
- * 3. 组合: 写入各类型后读回（借助 DataInputStream）验证字节序一致；writeUTF 长度前缀=2+UTF长度。
- * 4. 不变量: writeUTF 写 2 字节长度 + 修改版 UTF-8；writeBytes 每字符取低 8 位；writeChars 每字符 2 字节。
- * 5. 边界: writeUTF(null) 抛 NullPointerException。
  */
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.UTFDataFormatException;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 
@@ -23,6 +22,21 @@ public class DataOutputStreamTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
     static boolean hasInterface(Class<?> c, String name) {
@@ -48,44 +62,131 @@ public class DataOutputStreamTest {
         hasMethod(c, "size");
     }
 
-    // ---- black-box: behavior ----
-    static void testBlackBox() throws Exception {
-        DataOutputStream dos = new DataOutputStream(new ByteArrayOutputStream());
-        check(dos.size() == 0, "initial size");
-        dos.writeBoolean(true);  check(dos.size() == 1, "writeBoolean");
-        dos.writeByte(1);        check(dos.size() == 2, "writeByte");
-        dos.writeShort(1);       check(dos.size() == 4, "writeShort");
-        dos.writeChar('A');      check(dos.size() == 6, "writeChar");
-        dos.writeInt(1);         check(dos.size() == 10, "writeInt");
-        dos.writeLong(1);        check(dos.size() == 18, "writeLong");
-        dos.writeFloat(1f);      check(dos.size() == 22, "writeFloat");
-        dos.writeDouble(1d);     check(dos.size() == 30, "writeDouble");
+    // ---- 1. constructor null semantics ----
+    static void testConstructorNull() throws Exception {
+        DataOutputStream dos = new DataOutputStream(null);
+        checkThrows(NullPointerException.class, () -> dos.writeByte(1),
+                    "writeByte on null-backed -> NPE");
+    }
 
-        ByteArrayOutputStream u = new ByteArrayOutputStream();
-        DataOutputStream ud = new DataOutputStream(u);
-        ud.writeUTF("hello");
-        check(ud.size() == 7, "writeUTF size (2-byte len + 5 bytes)");
-        ud.writeUTF("world");
-        check(ud.size() == 14, "writeUTF accumulates");
-        ud.flush();
-        check(u.toByteArray().length == 14, "writeUTF byte count matches size");
+    // ---- 2. write(int) low 8 bits ----
+    static void testWriteInt() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bos);
+        dos.write(0x1FF);
+        dos.write(256);
+        dos.flush();
+        byte[] b = bos.toByteArray();
+        check(b.length == 2 && (b[0] & 0xFF) == 0xFF && b[1] == 0, "write(int) low 8 bits");
+        check(dos.size() == 2, "size after write(int)");
+    }
 
-        ByteArrayOutputStream b = new ByteArrayOutputStream();
-        DataOutputStream bd = new DataOutputStream(b);
-        bd.writeBytes("AB");   // 2 bytes: 0x41 0x42
-        bd.writeChars("CD");   // 4 bytes: 0x00 0x43 0x00 0x44
-        byte[] raw = b.toByteArray();
-        check(Arrays.equals(raw, new byte[]{0x41, 0x42, 0x00, 0x43, 0x00, 0x44}),
+    // ---- 3. write(byte[],off,len) validation ----
+    static void testWriteArrayValidation() {
+        final DataOutputStream dos = new DataOutputStream(new ByteArrayOutputStream());
+        checkThrows(NullPointerException.class, () -> dos.write(null, 0, 1),
+                    "write(null,0,1) -> NPE");
+        checkThrows(IndexOutOfBoundsException.class, () -> dos.write(new byte[2], 0, 3),
+                    "write(b,0,3) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> dos.write(new byte[2], -1, 1),
+                    "write(b,-1,1) -> IndexOutOfBoundsException");
+    }
+
+    // ---- 4. primitive round-trip ----
+    static void testPrimitivesRoundTrip() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bos);
+        dos.writeBoolean(true);
+        dos.writeBoolean(false);
+        dos.writeByte(0x7F);
+        dos.writeShort(0x1234);
+        dos.writeChar('Z');
+        dos.writeInt(0x12345678);
+        dos.writeLong(0x1234567890ABCDEFL);
+        dos.writeFloat(1.5f);
+        dos.writeDouble(-2.25);
+        dos.flush();
+
+        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        check(dis.readBoolean(), "writeBoolean true round-trip");
+        check(!dis.readBoolean(), "writeBoolean false round-trip");
+        check(dis.readByte() == 0x7F, "writeByte round-trip");
+        check(dis.readShort() == 0x1234, "writeShort round-trip");
+        check(dis.readChar() == 'Z', "writeChar round-trip");
+        check(dis.readInt() == 0x12345678, "writeInt round-trip");
+        check(dis.readLong() == 0x1234567890ABCDEFL, "writeLong round-trip");
+        check(dis.readFloat() == 1.5f, "writeFloat round-trip");
+        check(dis.readDouble() == -2.25, "writeDouble round-trip");
+    }
+
+    // ---- 5. size() counter ----
+    static void testSize() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bos);
+        check(dos.size() == 0, "initial size 0");
+        dos.writeBoolean(true);
+        dos.writeByte(1);
+        dos.writeShort(1);
+        dos.writeChar('a');
+        dos.writeInt(1);
+        dos.writeLong(1);
+        dos.writeFloat(1);
+        dos.writeDouble(1);
+        check(dos.size() == 30, "size sums primitive widths (1+1+2+2+4+8+4+8=30)");
+        dos.writeUTF("hello");
+        check(dos.size() == 37, "size after writeUTF (2 + utf length)");
+    }
+
+    // ---- 6. writeBytes / writeChars byte layout ----
+    static void testWriteBytesChars() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bos);
+        dos.writeBytes("AB");
+        dos.writeChars("CD");
+        byte[] b = bos.toByteArray();
+        check(Arrays.equals(b, new byte[]{0x41, 0x42, 0x00, 0x43, 0x00, 0x44}),
               "writeBytes/writeChars layout");
+    }
 
-        boolean npe = false;
-        try { dos.writeUTF(null); } catch (NullPointerException e) { npe = true; }
-        check(npe, "writeUTF(null) NPE");
+    // ---- 7. writeUTF length prefix + >65535 + null ----
+    static void testWriteUTF() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bos);
+        dos.writeUTF("héllo");
+        byte[] b = bos.toByteArray();
+        check((b[0] & 0xFF) == 0 && (b[1] & 0xFF) == 6, "writeUTF length prefix (6 UTF bytes)");
+        check(b.length == 2 + 6, "writeUTF total length");
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 70000; i++) sb.append('a');
+        final String tooLong = sb.toString();
+        final DataOutputStream big = new DataOutputStream(new ByteArrayOutputStream());
+        checkThrows(UTFDataFormatException.class, () -> big.writeUTF(tooLong),
+                    "writeUTF > 65535 bytes -> UTFDataFormatException");
+
+        checkThrows(NullPointerException.class, () -> dos.writeUTF(null),
+                    "writeUTF(null) -> NPE");
+    }
+
+    // ---- 8. flush delegation ----
+    static void testFlush() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bos);
+        dos.writeByte(7);
+        dos.flush();
+        check(bos.size() == 1, "flush flushes to underlying");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testConstructorNull();
+        testWriteInt();
+        testWriteArrayValidation();
+        testPrimitivesRoundTrip();
+        testSize();
+        testWriteBytesChars();
+        testWriteUTF();
+        testFlush();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

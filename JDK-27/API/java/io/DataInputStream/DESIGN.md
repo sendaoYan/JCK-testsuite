@@ -1,25 +1,38 @@
-# java.io.DataInputStream 测试方案 (DESIGN)
+# java.io.DataInputStream 测试设计案（JDK-27）
 
-## 1. API 功能
-- 构造: `DataInputStream(InputStream)`
-- 基础读: `read()`、`read(byte[])`、`read(byte[],int,int)`、`readFully(byte[])`、`readFully(byte[],int,int)`、`readNBytes(int)`
-- 基本类型: `readBoolean`、`readByte`、`readUnsignedByte`、`readShort`、`readUnsignedShort`、`readChar`、`readInt`、`readLong`、`readFloat`、`readDouble`
-- 定位: `skipBytes(int)`
-- 字符串: `readUTF()`、`readUTF(DataInput)`
-- 状态: `available()`
-- 契约: `implements DataInput`（readLine 已废弃）
+> 覆盖目标：**完整契约**（黑盒）+ 反射白盒结构。与 JDK-8 侧同源。
+
+## 1. API 提供了哪些功能
+
+- **构造器**：`DataInputStream(InputStream)`（不立即校验 null，读时 NPE）。
+- **原始类型读**：`readBoolean/readByte/readUnsignedByte/readShort/readUnsignedShort/readChar/readInt/readLong/readFloat/readDouble`。
+- **批量读**：`readFully(byte[])`、`readFully(byte[],int,int)`、`read(byte[],int,int)`、`skipBytes(int)`。
+- **文本**：`readUTF()`（修改 UTF-8）、`static readUTF(DataInput)`、`readLine()`（弃用）。
 
 ## 2. Java 用户如何使用
-- `DataOutputStream` 写多类型 → `DataInputStream` 按同序读回：readInt/readUTF/readBoolean/readDouble 等。
-- 组合链路：写 5 字节 → `readFully` 全量读；`skipBytes` 跳过字节；`readUTF` 读修改 UTF-8 字符串。
 
-## 3. 开源代码实际用法调研（真实片段）
-- `try (DataInputStream is = new DataInputStream(new ByteArrayInputStream(flow))) {` — `jdk25u-dev/test/jdk/tools/jlink/plugins/CompressIndexesTest.java:86`
-- `DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));` — `jdk25u-dev/src/java.base/share/classes/java/time/zone/TzdbZoneRulesProvider.java:134`
-- `DataOutputStream dos = new DataOutputStream(baos);`（写侧配对）— `jdk25u-dev/test/jdk/java/io/DataInputStream/ReadUTF.java:65`
+- 与 `DataOutputStream` 成对做二进制往返；读越界依赖 `EOFException`；`readUnsignedByte/Short` 读 0..255/0..65535。
 
-## 4. 测试用例设计 + 自动化实现（指向 DataInputStreamTest.java 黑盒 `testBlackBox`）
-- 正常/组合: 用 DataOutputStream 写 byte/short/int/long/float/double/boolean/char/UTF → DataInputStream 按序读回全等；readFully 全量；skipBytes 精确跳过；readNBytes。
-- 边界: readUnsignedByte(0xFF)==255；readUnsignedShort 边界；EOF 读抛 `EOFException`。
-- 健壮性: 固定大端字节序（DataInput 规范）；内存流输入，无全局副作用。
-- 白盒 `testWhiteBox`: 继承 FilterInputStream、实现 DataInput、readUTF/readFully/skipBytes 存在。
+## 3. 参考来源（不凭记忆编造）
+
+- **Oracle javadoc** + `~/git/jdk/src/java.base/share/classes/java/io/DataInputStream.java`。
+
+## 4. 测试用例设计（映射到 DataInputStreamTest.java 方法）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 反射白盒：继承 FilterInputStream、实现 DataInput、readInt/readLong/readUTF/readFully/readUnsignedByte 存在 | testWhiteBox |
+| P0 | 构造器 null 读时 NPE；9 原始类型往返；unsigned 读 | testConstructorNull、testReadPrimitivesRoundTrip、testUnsignedReads |
+| P0 | 每种 readXxx 空流/截断 EOFException | testEOFExceptions |
+| P0 | readFully 精确/短读 EOF/len<0 IOBE/null NPE | testReadFully |
+| P1 | skipBytes 实际跳过数 | testSkipBytes |
+| P0 | readUTF 空/ASCII/非 ASCII + static readUTF | testReadUTF |
+| P1 | readLine（\n、\r\n、EOF）；read 校验 | testReadLine、testReadArrayValidation |
+
+## 关键规范细节（易错，已锁入断言）
+
+- 构造器不立即校验 null；`readFully` 只校验 `len<0`；`skipBytes` 返回实际跳过数。
+
+## 注意事项
+
+- 无墙钟/随机/默认 Locale 依赖；headless 安全。

@@ -1,22 +1,40 @@
-# java.io.ByteArrayOutputStream 测试方案 (DESIGN)
+# java.io.ByteArrayOutputStream 测试设计案（JDK-27）
 
-## 1. API 功能
-- 构造: `ByteArrayOutputStream()`、`ByteArrayOutputStream(int)`
-- 写: `write(int)`、`write(byte[],int,int)`、`writeBytes(byte[])`
-- 读回/转换: `toByteArray()`、`size()`、`toString()`、`toString(String)`、`toString(Charset)`、`toString(int)`
-- 控制/传输: `reset()`、`writeTo(OutputStream)`、`close()`
+> 覆盖目标：**完整契约**（黑盒）+ 反射白盒结构。与 JDK-8 侧同源，另覆盖 JDK 11+
+> `writeBytes(byte[])`、JDK 10+ `toString(Charset)`。
+
+## 1. API 提供了哪些功能
+
+- **构造器（2）**：`ByteArrayOutputStream()`、`ByteArrayOutputStream(int)`（负 → IAE）。
+- **写**：`write(int)`、`write(byte[],int,int)`、`writeBytes(byte[])`（JDK 11+）、继承 `write(byte[])`。
+- **查询/转换**：`size()`、`toByteArray()`、`reset()`、`toString()`、`toString(String)`、`toString(Charset)`（JDK 10+）。
+- **传输/生命周期**：`writeTo(OutputStream)`、`close()` no-op。
 
 ## 2. Java 用户如何使用
-- `new ByteArrayOutputStream()` 累积字节，`toByteArray()` 取回，`toString(StandardCharsets.UTF_8)` 解码文本。
-- 组合链路：写入 → `toByteArray` → 回灌 `ByteArrayInputStream` → `readAllBytes` 逐字节比对；`writeTo` 拷到另一输出流。
 
-## 3. 开源代码实际用法调研（真实片段）
-- `ByteArrayOutputStream bout = new ByteArrayOutputStream();` — `jdk25u-dev/src/java.base/share/classes/java/io/ObjectStreamClass.java:1600`
-- `ByteArrayOutputStream compressedBaos = new ByteArrayOutputStream();` — `jdk25u-dev/src/java.base/share/classes/java/util/zip/snippet-files/Snippets.java:40`
-- `baos = new ByteArrayOutputStream();` — `jdk25u-dev/src/java.base/share/classes/java/util/jar/JarVerifier.java:109`
+- 收集字节 → `toByteArray()`/`toString(Charset)` 取回；`writeBytes` 快速追加整数组；`reset()` 复用；`writeTo` 直拷。
 
-## 4. 测试用例设计 + 自动化实现（指向 ByteArrayOutputStreamTest.java 黑盒 `testBlackBox`）
-- 正常/组合: write(int)/write(byte[],off,len)/writeBytes → size=4 → toByteArray 内容 → toString(Charset)；writeTo 拷贝；reset 清空；小初始容量自动扩容并 roundtrip 10000 字节。
-- 边界: `toByteArray()` 返回副本（外部改动不影响内部）；空流 `toByteArray().length==0`；非 ASCII `toString(UTF_8)` 正确。
-- 健壮性: 固定 UTF-8、固定输入；无全局副作用。
-- 白盒 `testWhiteBox`: 继承 OutputStream、toByteArray/size/reset/toString(Charset)/writeTo 存在。
+## 3. 参考来源（不凭记忆编造）
+
+- **Oracle javadoc** + `~/git/jdk/src/java.base/share/classes/java/io/ByteArrayOutputStream.java`。
+
+## 4. 测试用例设计（映射到 ByteArrayOutputStreamTest.java 方法）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 反射白盒：继承 OutputStream、toByteArray/size/reset/toString(Charset)/writeBytes/writeTo 存在 | testWhiteBox |
+| P0 | 构造器：默认/0/负 IAE | testConstructors |
+| P0 | write(int) 低 8 位；write(byte[],off,len) 校验（NPE/IOBE） | testWriteInt、testWriteArrayValidation |
+| P0 | write 偏移 + writeBytes + 自动扩容不丢数据 | testWriteArrayAndGrow |
+| P0 | toByteArray 副本语义；reset 复用 | testToByteArrayCopy、testReset |
+| P1 | toString()/toString(String)/toString(Charset)/UEE | testToString |
+| P1 | writeTo 拷贝/null NPE；close 幂等 no-op | testWriteTo、testCloseNoOp |
+
+## 关键规范细节（易错，已锁入断言）
+
+- `write(byte[],off,len)` 越界条件是 `off > b.length`，故 `off==b.length && len==0` 合法。
+- `write(int)` 只保留低 8 位；`toString()` 用平台默认字符集，ASCII 之外显式指定 UTF-8。
+
+## 注意事项
+
+- 无墙钟/随机/默认 Locale 依赖；非 ASCII 显式 UTF-8；headless 安全。
