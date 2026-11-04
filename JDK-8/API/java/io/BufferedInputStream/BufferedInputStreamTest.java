@@ -1,11 +1,18 @@
 /*
  * @test
- * @summary java.io.BufferedInputStream API conformance: read, skip, and mark/reset.
+ * @summary java.io.BufferedInputStream API conformance: full contract coverage.
+ *          Constructors (buffer size<=0->IAE, null delegate acts closed->IOException),
+ *          read()/read(byte[],off,len) validation (NPE/IOBE) + exact offset + len==0,
+ *          buffering over a one-byte-at-a-time source, skip (negative->0, past-end),
+ *          available, mark/reset (replay, invalidated->IOException, unmarked->IOException),
+ *          close idempotent + closed-stream IOException.
  * @run main BufferedInputStreamTest
  */
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 public class BufferedInputStreamTest {
     static int passed;
@@ -15,22 +22,164 @@ public class BufferedInputStreamTest {
         passed++;
     }
 
-    static void testBufferedInputStream() throws Exception {
-        BufferedInputStream bis =
-            new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5}));
-        check(bis.read() == 1, "read first");
-        check(bis.skip(2) == 2, "skip two");
-        check(bis.read() == 4, "read after skip");
-        bis.mark(10);
-        int a = bis.read();
-        check(a == 5, "read after mark");
-        bis.reset();
-        check(bis.read() == a, "reset replays");
-        check(bis.read() == -1, "EOF");
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    // source that returns at most one byte per read call (forces buffering to matter)
+    static class OneByteStream extends InputStream {
+        final byte[] data; int i;
+        OneByteStream(byte[] data) { this.data = data; }
+        public int read() { return (i < data.length) ? (data[i++] & 0xFF) : -1; }
+        public int available() { return data.length - i; }
+    }
+
+    // ---- 1. constructors ----
+    static void testConstructors() throws Exception {
+        BufferedInputStream ok = new BufferedInputStream(new ByteArrayInputStream(new byte[3]));
+        check(ok.read() != -1, "default constructor works");
+
+        checkThrows(IllegalArgumentException.class,
+                    () -> new BufferedInputStream(new ByteArrayInputStream(new byte[1]), 0),
+                    "size 0 -> IllegalArgumentException");
+        checkThrows(IllegalArgumentException.class,
+                    () -> new BufferedInputStream(new ByteArrayInputStream(new byte[1]), -5),
+                    "negative size -> IllegalArgumentException");
+
+        // null delegate is treated as a closed stream on first read
+        BufferedInputStream nul = new BufferedInputStream(null);
+        checkThrows(IOException.class, () -> nul.read(), "null delegate -> IOException on read");
+    }
+
+    // ---- 2. buffering over one-byte-at-a-time source ----
+    static void testBuffering() throws Exception {
+        byte[] data = new byte[1000];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 13);
+        BufferedInputStream in = new BufferedInputStream(new OneByteStream(data), 64);
+        byte[] got = new byte[data.length];
+        int off = 0;
+        while (off < got.length) {
+            int n = in.read(got, off, got.length - off);
+            if (n < 0) break;
+            off += n;
+        }
+        check(off == data.length, "buffered read consumes all bytes");
+        boolean eq = true;
+        for (int i = 0; i < data.length; i++) if (got[i] != data[i]) { eq = false; break; }
+        check(eq, "buffered read preserves content");
+    }
+
+    // ---- 3. read(byte[],off,len) validation ----
+    static void testReadArrayValidation() throws Exception {
+        final BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3}));
+        checkThrows(NullPointerException.class, () -> in.read(null, 0, 1),
+                    "read(null,0,1) -> NPE");
+        checkThrows(IndexOutOfBoundsException.class, () -> in.read(new byte[2], -1, 1),
+                    "read(b,-1,1) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> in.read(new byte[2], 0, -1),
+                    "read(b,0,-1) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> in.read(new byte[2], 0, 3),
+                    "read(b,0,3) -> IndexOutOfBoundsException");
+
+        // len == 0 returns 0
+        check(in.read(new byte[1], 0, 0) == 0, "len==0 returns 0");
+
+        // exact offset placement
+        byte[] buf = new byte[5];
+        int n = in.read(buf, 1, 2);
+        check(n == 2, "read count");
+        check(buf[0] == 0 && buf[1] == 1 && buf[2] == 2 && buf[3] == 0, "exact offset placement");
+    }
+
+    // ---- 4. skip ----
+    static void testSkip() throws Exception {
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5}));
+        check(in.skip(2) == 2, "skip(2)");
+        check(in.read() == 3, "read after skip");
+        check(in.skip(100) == 2, "skip past end returns remaining");
+        check(in.read() == -1, "EOF after skip past end");
+
+        BufferedInputStream neg = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3}));
+        check(neg.skip(-5) == 0, "negative skip returns 0");
+        check(neg.read() == 1, "negative skip does not move");
+    }
+
+    // ---- 5. available ----
+    static void testAvailable() throws Exception {
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5}));
+        check(in.available() == 5, "initial available");
+        in.read();
+        in.read();
+        check(in.available() == 3, "available after two reads");
+    }
+
+    // ---- 6. mark/reset ----
+    static void testMarkReset() throws Exception {
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5}));
+        check(in.markSupported(), "markSupported");
+
+        // reset without mark -> IOException
+        final BufferedInputStream unmarked = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1}));
+        checkThrows(IOException.class, () -> unmarked.reset(), "reset without mark -> IOException");
+
+        // mark then reset replays
+        BufferedInputStream m = new BufferedInputStream(new ByteArrayInputStream(new byte[]{10, 20, 30, 40}));
+        m.read();
+        m.mark(100);
+        m.read();
+        m.read();
+        m.reset();
+        check(m.read() == 20 && m.read() == 30, "mark/reset replay");
+
+        // mark invalidated by reading past readlimit -> IOException on reset
+        BufferedInputStream inv = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5, 6, 7, 8}));
+        inv.read();
+        inv.mark(2);                    // allow 2 bytes before invalidation
+        inv.read();
+        inv.read();
+        inv.read();
+        inv.read();
+        inv.reset();
+        check(inv.read() == 2, "reset within limit replays");
+
+        // with a small buffer, reading far past readlimit forces refill -> mark invalidated
+        byte[] wide = new byte[200];
+        for (int i = 0; i < wide.length; i++) wide[i] = (byte) i;
+        final BufferedInputStream inv2 = new BufferedInputStream(new ByteArrayInputStream(wide), 8);
+        inv2.mark(2);
+        for (int i = 0; i < 50; i++) inv2.read();  // forces multiple refills past readlimit
+        checkThrows(IOException.class, () -> inv2.reset(), "reset past readlimit -> IOException");
+    }
+
+    // ---- 7. close ----
+    static void testClose() throws Exception {
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3}));
+        in.close();
+        in.close();                     // idempotent
+        checkThrows(IOException.class, () -> in.read(), "read after close -> IOException");
+        checkThrows(IOException.class, () -> in.available(), "available after close -> IOException");
+        checkThrows(IOException.class, () -> in.reset(), "reset after close -> IOException");
     }
 
     public static void main(String[] args) throws Exception {
-        testBufferedInputStream();
+        testConstructors();
+        testBuffering();
+        testReadArrayValidation();
+        testSkip();
+        testAvailable();
+        testMarkReset();
+        testClose();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

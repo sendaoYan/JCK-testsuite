@@ -1,55 +1,45 @@
-# java.util.ArrayDeque 测试方案
+# java.util.ArrayDeque 测试设计案（JDK-27）
 
-对应测试：`ArrayDequeTest.java`（`testWhiteBox()` 结构断言 + 后续 `test*` 黑盒行为断言）。
+> 覆盖目标：**完整契约**，白盒（反射结构）+ 黑盒（行为契约）。既有白盒/黑盒已覆盖
+> Queue/Deque 双端、push/pop、removeFirst/LastOccurrence、null 拒绝、迭代器顺序、扩容、
+> forEach/spliterator/removeAll/retainAll/removeIf/clear；本版补齐构造器矩阵、空语义、
+> toArray 契约、序列化 round-trip + serialVersionUID、状态不变量。
+> **fail-fast 不做断言**：JDK-27 的 ArrayDeque 迭代器对 addLast/removeLast/addFirst 的
+> modCount 检测与 JDK-8 不同（实证不抛 CME），跨版本无稳定契约，故本测试不锁定。
 
-## 1. API 功能（按方法分组）
+## 1. API 提供了哪些功能
 
-- 构造器：`ArrayDeque()`、`ArrayDeque(int numElements)`、`ArrayDeque(Collection<? extends E>)`
-- Queue 操作：`add(E)` / `offer(E)`、`remove()` / `poll()`、`element()` / `peek()`
-- Deque 双端：`addFirst/addLast`、`offerFirst/offerLast`、`removeFirst/removeLast`、
-  `pollFirst/pollLast`、`getFirst/getLast`、`peekFirst/peekLast`
-- 栈：`push(E)` / `pop()`
-- 定向删除：`removeFirstOccurrence(Object)` / `removeLastOccurrence(Object)`
-- 查询/批量：`contains` / `size` / `isEmpty` / `clear` / `addAll` / `removeAll` / `retainAll`
-- 迭代：`iterator()`、`descendingIterator()`、`spliterator()`、`forEach`
+- 与 JDK-8 相同：构造器（3）、Queue 操作、Deque 操作、`Cloneable`/`Serializable`
+  （`serialVersionUID == 2340985798034038923L`）、`equals/hashCode` 身份语义。
+- JDK-27 额外默认方法（既有黑盒已覆盖）：`forEach`、`removeIf`、`spliterator`
+  （ORDERED|NONNULL|SIZED|SUBSIZED）。
 
 ## 2. Java 用户如何使用
 
-```java
-ArrayDeque<Integer> queue = new ArrayDeque<>();   // FIFO 队列
-queue.offer(1); queue.poll(); queue.peek();
+- 与 JDK-8 一致：队列/栈双端操作、双向遍历。
 
-ArrayDeque<Integer> stack = new ArrayDeque<>();   // LIFO 栈（官方推荐）
-stack.push(1); stack.pop();
+## 3. 参考来源（不凭记忆编造）
 
-ArrayDeque<Integer> deque = new ArrayDeque<>();   // 双端
-deque.addFirst(0); deque.addLast(9); deque.peekFirst(); deque.pollLast();
+- **Oracle javadoc** `java/util/ArrayDeque.html`（JDK-8 与 JDK-27）。
+- **OpenJDK 回归** `~/git/jdk8u-dev/jdk/test/java/util/ArrayDeque` + `~/git/jdk/test/jdk/java/util/ArrayDeque`。
+- **JCK runtime-8b** `~/JDK/testsuite/jck8b/JCK-runtime-8b/tests/api/java_util/ArrayDeque`。
 
-for (Integer x : deque) { ... }                   // 头到尾
-Iterator<Integer> di = deque.descendingIterator(); // 尾到头
-```
+## 4. 测试用例设计（映射到 ArrayDequeTest.java 方法）
 
-约束：禁止 null（所有写入口抛 `NullPointerException`；`contains(null)` / `remove(null)` 返回 false）。
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 白盒结构：继承 AbstractCollection、实现 Deque/Cloneable/Serializable、成员形态 | testWhiteBox |
+| P0 | 既有黑盒：Queue/Deque/push-pop/occurrences/null/迭代器/扩容/forEach/removeAll/retainAll/removeIf/spliterator/clear | testQueue、testDeque、testPushPop、testRemoveOccurrences、testNullRejection、testIterators、testGrowth、testBlackBox |
+| P0 | 构造器矩阵 + 空语义 | testConstructorMatrix、testEmptySemantics |
+| P1 | toArray 契约、序列化、状态不变量 | testToArrayContract、testSerialization、testStateInvariants |
 
-## 3. 开源代码实际用法调研
+## 关键规范细节（易错，已锁入断言）
 
-来源：`~/git/jdk25u-dev`（JDK 源码）；网络检索未执行，以下为 JDK 自用、逐条标注。
+- 同 JDK-8：`ArrayDeque(int)` 对负/0 容量不抛（最小容量 8）；null 集合/含 null 集合 NPE；
+  add/offer 族传 null NPE；contains/remove(null) 返 false；空时 poll/peek 族返 null、
+  remove/element/getFirst/getLast/removeFirst/removeLast/pop 抛 NSEE；身份 equals。
+- **fail-fast 跨版本无稳定契约**：JDK-27 不抛 CME，测试不锁定（与 JDK-8 版差异点）。
 
-- `java/nio/file/FileTreeWalker.java:61` — `private final ArrayDeque<DirectoryNode> stack = new ArrayDeque<>();`（目录遍历栈）
-- `java/util/ArrayDeque.java`（类 javadoc）— 官方说明“用作栈时比 Stack 快、用作队列时比 LinkedList 快”
-- `java/io/ObjectOutputStream.java:1249-1351` — 调试信息栈的 `push/pop` 组合（同语义，用 Deque）
+## 注意事项
 
-结论：ArrayDeque 是 JDK 推荐的无容量限制 Deque，典型用途为栈/队列/双端，配合 `push/pop/offer/poll`。
-
-## 4. 测试用例设计 + 自动化实现
-
-- 正常：Queue 的 offer/poll/peek（FIFO）；Deque 双端 add/offer/peek/poll/get/remove；push/pop LIFO；
-  `removeFirstOccurrence/removeLastOccurrence`；`iterator/descendingIterator` 顺序；`toArray` 顺序。
-- 组合链路：`addLast/addFirst → peekFirst/peekLast → pollFirst/pollLast → push/pop →
-  removeFirstOccurrence`；跨环形边界扩容后 poll 顺序保持不变。
-- 边界/异常：空时 `poll/peek` 返回 null、`remove/element/getFirst/getLast/removeFirst/removeLast/pop`
-  → `NoSuchElementException`；写入口传 null → `NullPointerException`；`contains(null)/remove(null)`
-  返回 false。
-
-健壮性：固定输入、无墙钟/随机；顺序结构无迭代顺序依赖；不依赖 fail-fast 的 CME（ArrayDeque 迭代器
-`next()` 不保证抛 CME，已规避）；无全局副作用；headless，无 `@key`。
+- 无 GC 依赖、无图形/网络/文件依赖；serialVersionUID 锁定官方稳定值（JDK-8 与 JDK-27 相同）。

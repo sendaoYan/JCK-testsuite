@@ -1,22 +1,38 @@
-# java.io.BufferedInputStream 测试方案 (DESIGN)
+# java.io.BufferedInputStream 测试设计案（JDK-27）
 
-## 1. API 功能
-- 构造: `BufferedInputStream(InputStream)`、`BufferedInputStream(InputStream,int)`
-- 读: `read()`、`read(byte[],int,int)`、`readAllBytes()`、`readNBytes(byte[],int,int)`
-- 定位: `skip(long)`、`available()`、`markSupported()`、`mark(int)`、`reset()`
-- 关闭: `close()`
+> 覆盖目标：**完整契约**（黑盒）+ 反射白盒结构。与 JDK-8 侧同源，另覆盖 `readAllBytes`。
+
+## 1. API 提供了哪些功能
+
+- **构造器（2）**：`BufferedInputStream(InputStream)`、`BufferedInputStream(InputStream,int)`（size<=0 → IAE）。
+- **读**：`read()`、`read(byte[],int,int)`、继承 `readAllBytes()`。
+- **定位/状态**：`skip(long)`、`available()`、`markSupported()`、`mark(int)`、`reset()`。
+- **生命周期**：`close()`（幂等，关闭后 read/available/reset → IOException）。
 
 ## 2. Java 用户如何使用
-- `new BufferedInputStream(new FileInputStream(f))` 给底层流加缓冲区；`mark/read/reset` 支持回看（mark limit 内）。
-- 组合链路：包装 `ByteArrayInputStream` → `read`/`skip`/`mark`/`reset` 顺序验证回看语义 → EOF=-1。
 
-## 3. 开源代码实际用法调研（真实片段）
-- `BufferedInputStream bis = new BufferedInputStream(fis)) {` — `jdk25u-dev/test/jdk/tools/launcher/BigJar.java:92`
-- `new BufferedInputStream(new FileInputStream(srcZip)))) {` — `jdk25u-dev/test/jdk/build/translations/VerifyTranslations.java:92`
-- `new BufferedInputStream(new ByteArrayInputStream(...))` — `jdk25u-dev/test/jdk/tools/jpackage/helpers/jdk/jpackage/test/MacSign.java:400`
+- 用大缓冲减少底层小读；`mark(readlimit)` 后 `reset()` 重放；越过 readlimit 后 reset 抛 IOException。
 
-## 4. 测试用例设计 + 自动化实现（指向 BufferedInputStreamTest.java 黑盒 `testBlackBox`）
-- 正常/组合: markSupported==true；从新鲜流 skip(2)==2 后 read==3；mark→read→reset→重放同值→read 下一个→EOF=-1（避免“buffered skip 只跳缓冲区内字节”的陷阱，见文件内 skip 修复）。
-- 边界: read 到 EOF；reset 重放字节一致。
-- 健壮性: 固定字节输入；无墙钟/随机/全局状态。
-- 白盒 `testWhiteBox`: 继承 FilterInputStream、readAllBytes/readNBytes 存在。
+## 3. 参考来源（不凭记忆编造）
+
+- **Oracle javadoc** + `~/git/jdk/src/java.base/share/classes/java/io/BufferedInputStream.java`。
+
+## 4. 测试用例设计（映射到 BufferedInputStreamTest.java 方法）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 反射白盒：继承 FilterInputStream、read/mark/reset/markSupported 存在 | testWhiteBox |
+| P0 | 构造器：size<=0 IAE、null 委托读时 IOException | testConstructors |
+| P0 | 缓冲分块正确 + readAllBytes | testBuffering |
+| P0 | read 校验（NPE/IOBE）+ len==0 + 精确 offset | testReadArrayValidation |
+| P1 | skip 边界；available | testSkip、testAvailable |
+| P0 | mark/reset：重放、未标记 IOException、越过 readlimit 失效 | testMarkReset |
+| P1 | close 幂等 + 关闭后 IOException | testClose |
+
+## 关键规范细节（易错，已锁入断言）
+
+- `mark(int)` 不校验负 readlimit；`reset()` markpos<0 抛 IOException；null 委托首次读视为关闭。
+
+## 注意事项
+
+- 无墙钟/随机/默认 Locale 依赖；headless 安全。

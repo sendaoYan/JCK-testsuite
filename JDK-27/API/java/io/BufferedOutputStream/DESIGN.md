@@ -1,21 +1,34 @@
-# java.io.BufferedOutputStream 测试方案 (DESIGN)
+# java.io.BufferedOutputStream 测试设计案（JDK-27）
 
-## 1. API 功能
-- 构造: `BufferedOutputStream(OutputStream)`、`BufferedOutputStream(OutputStream,int)`
-- 写: `write(int)`、`write(byte[],int,int)`
-- 刷新/关闭: `flush()`、`close()`
+> 覆盖目标：**完整契约**（黑盒）+ 反射白盒结构。与 JDK-8 侧同源。
+
+## 1. API 提供了哪些功能
+
+- **构造器（2）**：`BufferedOutputStream(OutputStream)`、`BufferedOutputStream(OutputStream,int)`（size<=0 → IAE）。
+- **写**：`write(int)`（低 8 位，缓冲）、`write(byte[],int,int)`（len>=buf.length 直写）、`flush()`。
 
 ## 2. Java 用户如何使用
-- `new BufferedOutputStream(fos)` 给底层输出流加缓冲区；写完后 `flush()` 确保落盘。
-- 组合链路：包装 `ByteArrayOutputStream` → 多次 write → flush → 校验缓冲被刷到目标流；close 也触发 flush。
 
-## 3. 开源代码实际用法调研（真实片段）
-- `BufferedOutputStream bos = new BufferedOutputStream(jos);` — `jdk25u-dev/test/jdk/tools/launcher/BigJar.java:136`
-- `new PrintStream(new BufferedOutputStream(baos))` — `jdk25u-dev/test/jdk/tools/launcher/modules/addreads/AddReadsTestWarningError.java:116`
-- `new BufferedOutputStream(new FailingCloseOutputStream())` — `jdk25u-dev/test/jdk/java/io/etc/FailingFlushAndClose.java:299`
+- 写小数据先入缓冲，flush/close 或缓冲满时刷到底层；大块直写。
 
-## 4. 测试用例设计 + 自动化实现（指向 BufferedOutputStreamTest.java 黑盒 `testBlackBox`）
-- 正常/组合: write(int)/write(byte[],off,len) 写缓冲；flush 后目标流可见全部字节；小缓冲区容量自动冲刷；close 后 flush 语义。
-- 边界: 空 write 与 close 后目标流内容正确。
-- 健壮性: 固定字节输入；目标流为内存流，无全局副作用。
-- 白盒 `testWhiteBox`: 继承 FilterOutputStream、write(int)/flush/close 存在。
+## 3. 参考来源（不凭记忆编造）
+
+- **Oracle javadoc** + `~/git/jdk/src/java.base/share/classes/java/io/BufferedOutputStream.java`。
+
+## 4. 测试用例设计（映射到 BufferedOutputStreamTest.java 方法）
+
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 反射白盒：继承 FilterOutputStream、write(int)/flush 存在 | testWhiteBox |
+| P0 | 构造器 size<=0 IAE；write(int) 低 8 位 + 缓冲 | testConstructors、testWriteIntAndBuffering |
+| P0 | write 校验（NPE/IOBE） | testWriteArrayValidation |
+| P1 | 大块直写 | testLargeWrite |
+| P0 | flush 清缓冲；close 隐含 flush | testFlushClose |
+
+## 关键规范细节（易错，已锁入断言）
+
+- `write(byte[],off,len)` 坏索引抛 IndexOutOfBoundsException、null 抛 NPE；`len>=buf.length` 直写。
+
+## 注意事项
+
+- 无墙钟/随机/默认 Locale 依赖；headless 安全。

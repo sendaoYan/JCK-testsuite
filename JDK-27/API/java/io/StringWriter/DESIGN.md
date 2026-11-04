@@ -1,22 +1,26 @@
-# java.io.StringWriter 测试方案 (DESIGN)
+# java.io.StringWriter 测试设计案（JDK-27）
+
+> 覆盖目标：**完整契约**（黑盒）+ 反射白盒结构。与 JDK-8 侧同源；注意 `write(String,off,len)` 的 null 语义与 JDK-8 差异。
 
 ## 1. API 功能
-- 构造: `StringWriter()`、`StringWriter(int)`
-- 写: `write(int)`、`write(char[],int,int)`、`write(String)`、`write(String,int,int)`
-- 追加: `append(char)`、`append(CharSequence)`、`append(CharSequence,int,int)`
-- 读回/状态: `toString()`、`getBuffer()`、`flush()`、`close()`
+- 构造器（2）：`StringWriter()`、`StringWriter(int)`（负→IAE）。
+- 写：`write(int)`、`write(char[],int,int)`、`write(String)`、`write(String,int,int)`。
+- 追加：`append(CharSequence)`、`append(CharSequence,int,int)`、`append(char)`。
+- 查询：`toString()`、`getBuffer()`；`flush()`/`close()` no-op。
 
-## 2. Java 用户如何使用
-- `new StringWriter()` 累积字符，`toString()` 取回；`getBuffer()` 直接操作底层 StringBuffer。
-- 组合链路：write/append 多段 → `toString()` 等值 → `PrintWriter` 包装做格式化输出。
+## 2. 使用方式
+- 收集字符到内存；`getBuffer()` 返回内部 StringBuffer。
 
-## 3. 开源代码实际用法调研（真实片段）
-- `StringWriter writer = new StringWriter();` — `jdk25u-dev/test/jdk/tools/lib/tests/JImageGenerator.java:562`
-- `StringWriter writer = new StringWriter();` — `jdk25u-dev/test/jdk/tools/jlink/bindservices/BindServices.java:206`
-- `StringWriter writer = new StringWriter();` — `jdk25u-dev/test/jdk/tools/jlink/bindservices/SuggestProviders.java:311`
+## 3. 参考来源
+- javadoc + `~/git/jdk/src/java.base/share/classes/java/io/StringWriter.java`。
 
-## 4. 测试用例设计 + 自动化实现（指向 StringWriterTest.java 黑盒 `testBlackBox`）
-- 正常/组合: write(int)/write(char[],off,len)/write(String,int,int)/append 累积 → toString 精确；getBuffer 内容一致；flush 无副作用；close 后 toString 仍可用。
-- 边界: 空写；append(CharSequence,off,len) 子区间。
-- 健壮性: 内存累积，无全局副作用；固定输入。
-- 白盒 `testWhiteBox`: 继承 Writer、toString/getBuffer/append/flush 存在。
+## 4. 测试用例设计
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 反射白盒：继承 Writer、write(int)/append/getBuffer/toString/flush 存在 | testWhiteBox |
+| P0 | 构造器负容量 IAE；write(int) 低 16 位；write(char[],off,len) 校验 | testConstructors、testWriteInt、testWriteArrayValidation |
+| P0 | write(String) null→"null"；write(String,off,len) 内容 + JDK 9+ null→"null" | testWriteString |
+| P1 | append 各重载；getBuffer 活缓冲；flush/close no-op | testAppend、testGetBuffer、testFlushClose |
+
+## 关键细节
+- JDK 9+ `write(String,off,len)` 委托 `StringBuffer.append(null,off,len)` → 追加 "null"（JDK-8 抛 NPE）。

@@ -22,8 +22,13 @@
  *    getLast/removeFirst/removeLast/pop 抛 NoSuchElementException。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -253,6 +258,104 @@ public class ArrayDequeTest {
         check(fifo.isEmpty(), "FIFO drained");
     }
 
+    // ---- contract deep-dive (constructor matrix / empty semantics / fail-fast /
+    //      toArray contract / serialization / state invariants) ---------------
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <E> ArrayDeque<E> roundTrip(ArrayDeque<E> d) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(d); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (ArrayDeque<E>) ois.readObject();
+        }
+    }
+
+    static void testConstructorMatrix() {
+        checkThrows(NullPointerException.class, () -> new ArrayDeque<Integer>((Collection<Integer>) null),
+                    "ArrayDeque(null Collection) NPE");
+        checkThrows(NullPointerException.class, () -> new ArrayDeque<Integer>(Arrays.asList(1, null)),
+                    "ArrayDeque(Collection with null) NPE");
+
+        ArrayDeque<Integer> neg = new ArrayDeque<>(-1);
+        neg.addLast(1);
+        check(neg.size() == 1 && neg.peekFirst() == 1, "ArrayDeque(-1) usable (min capacity)");
+        ArrayDeque<Integer> zero = new ArrayDeque<>(0);
+        zero.addLast(1);
+        check(zero.size() == 1 && zero.peekFirst() == 1, "ArrayDeque(0) usable");
+
+        ArrayDeque<Integer> copy = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        check(copy.size() == 3 && copy.peekFirst() == 1 && copy.peekLast() == 3, "ArrayDeque(Collection) copies");
+    }
+
+    static void testEmptySemantics() {
+        ArrayDeque<Integer> empty = new ArrayDeque<>();
+        check(empty.poll() == null && empty.peek() == null, "empty poll/peek null");
+        check(empty.pollFirst() == null && empty.pollLast() == null, "empty pollFirst/pollLast null");
+        check(empty.peekFirst() == null && empty.peekLast() == null, "empty peekFirst/peekLast null");
+        checkThrows(NoSuchElementException.class, empty::remove, "remove empty NSEE");
+        checkThrows(NoSuchElementException.class, empty::element, "element empty NSEE");
+        checkThrows(NoSuchElementException.class, empty::getFirst, "getFirst empty NSEE");
+        checkThrows(NoSuchElementException.class, empty::getLast, "getLast empty NSEE");
+        checkThrows(NoSuchElementException.class, empty::removeFirst, "removeFirst empty NSEE");
+        checkThrows(NoSuchElementException.class, empty::removeLast, "removeLast empty NSEE");
+        checkThrows(NoSuchElementException.class, empty::pop, "pop empty NSEE");
+        check(!empty.removeFirstOccurrence(1) && !empty.removeLastOccurrence(1), "occurrence on empty returns false");
+    }
+
+    static void testToArrayContract() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        Object[] oa = d.toArray();
+        check(Arrays.equals(oa, new Object[]{1, 2, 3}), "toArray() order");
+
+        Integer[] exact = d.toArray(new Integer[0]);
+        check(exact.length == 3 && Arrays.equals(exact, new Integer[]{1, 2, 3}), "toArray(new T[0]) exact");
+
+        Integer[] reusable = new Integer[]{9, 9, 9, 9};
+        Integer[] returned = d.toArray(reusable);
+        check(returned == reusable, "toArray(T[]) reuses array when it fits");
+        check(reusable[3] == null, "toArray(T[]) pads trailing null");
+        check(Arrays.equals(Arrays.copyOf(reusable, 3), new Integer[]{1, 2, 3}), "toArray(T[]) content");
+    }
+
+    static void testSerialization() throws Exception {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 3));
+        ArrayDeque<Integer> r = roundTrip(d);
+        check(r != d, "round-trip distinct object");
+        check(Arrays.equals(r.toArray(), new Object[]{1, 2, 3}), "round-trip order preserved");
+        r.addLast(4);
+        check(r.size() == 4 && d.size() == 3, "round-trip result usable and independent");
+
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(ArrayDeque.class);
+        check(osc.getSerialVersionUID() == 2340985798034038923L, "ArrayDeque serialVersionUID stable");
+    }
+
+    static void testStateInvariants() {
+        ArrayDeque<Integer> d = new ArrayDeque<>(Arrays.asList(1, 2, 3, 4, 5));
+        d.removeFirstOccurrence(3);
+        check(d.size() == 4 && !d.contains(3), "remove updates size");
+        check(d.contains(1) && d.contains(2) && d.contains(4) && d.contains(5), "others survive remove");
+        checkThrows(NullPointerException.class, () -> d.add(null), "failed add leaves state intact");
+        check(d.size() == 4, "state intact after failed op");
+        d.clear();
+        check(d.isEmpty() && d.size() == 0, "clear empties");
+        for (int i = 1; i <= 5; i++) check(!d.contains(i), "clear removed " + i);
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testQueue();
@@ -263,6 +366,11 @@ public class ArrayDequeTest {
         testIterators();
         testGrowth();
         testBlackBox();
+        testConstructorMatrix();
+        testEmptySemantics();
+        testToArrayContract();
+        testSerialization();
+        testStateInvariants();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

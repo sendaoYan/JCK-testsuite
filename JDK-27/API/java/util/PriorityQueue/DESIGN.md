@@ -1,53 +1,40 @@
-# java.util.PriorityQueue 测试方案
+# java.util.PriorityQueue 测试设计案（JDK-27）
 
-对应测试：`PriorityQueueTest.java`（`testWhiteBox()` 结构断言 + 后续 `test*` 黑盒行为断言）。
+> 覆盖目标：**完整契约**，白盒（反射结构）+ 黑盒（行为契约）。构造器矩阵、null 语义、
+> 迭代器 fail-fast、身份 equals、toArray 契约、序列化 round-trip、状态不变量补齐；
+> 白盒/黑盒既有内容已覆盖堆序、重复、空语义、remove/removeIf、comparator 访问、集合构造。
 
-## 1. API 功能（按方法分组）
+## 1. API 提供了哪些功能
 
-- 构造器：`PriorityQueue()`、`PriorityQueue(int)`、`PriorityQueue(Comparator)`、
-  `PriorityQueue(int, Comparator)`、`PriorityQueue(Collection)`、`PriorityQueue(SortedSet)`、
-  `PriorityQueue(PriorityQueue)`
-- 入队：`add(E)`、`offer(E)`（无界，永不返回 false）
-- 出队/查看：`poll()`、`peek()`、`remove()`、`element()`
-- 查询/删除：`contains(Object)`、`remove(Object)`、`removeIf(Predicate)`、`removeAll` / `retainAll`
-- 其它：`size()` / `isEmpty()` / `clear()`、`comparator()`、`toArray()` / `toArray(T[])`、
-  `iterator()`、`spliterator()`、`forEach`
+- **构造器（7）**：`PriorityQueue()`、`PriorityQueue(int)`、`PriorityQueue(int,Comparator)`、
+  `PriorityQueue(Comparator)`、`PriorityQueue(Collection)`、`PriorityQueue(PriorityQueue)`、
+  `PriorityQueue(SortedSet)`。
+- **核心操作**：同 JDK-8。
+- **契约继承**：`Serializable`（`serialVersionUID == -7720805057305804111L`）；`equals` 未覆写。
 
 ## 2. Java 用户如何使用
 
-```java
-PriorityQueue<Integer> q = new PriorityQueue<>();           // 自然序（最小优先）
-q.offer(5); q.offer(1); q.peek();                            // 查看最小
-while (!q.isEmpty()) { q.poll(); }                           // 依序取最小
+- 与 JDK-8 一致。
 
-PriorityQueue<Integer> max = new PriorityQueue<>(Comparator.reverseOrder()); // 最大优先
-max.add(1); max.poll();                                     // 取最大
+## 3. 参考来源（不凭记忆编造）
 
-q.comparator();                                              // 自然序返回 null
-q.remove(obj); q.contains(obj);                              // 用 equals
-```
+- **Oracle javadoc** `java/util/PriorityQueue.html`（JDK-8 与 JDK-27）。
+- **OpenJDK 回归** `~/git/jdk8u-dev/jdk/test/java/util/PriorityQueue` + `~/git/jdk/test/jdk/java/util/PriorityQueue`。
+- **JCK runtime-8b** `~/JDK/testsuite/jck8b/JCK-runtime-8b/tests/api/java_util/PriorityQueue`。
 
-约束：禁止 null（`add/offer(null)` 及含 null 集合构造抛 `NullPointerException`）；空队列 `poll/peek`
-返回 null、`remove/element` 抛 `NoSuchElementException`。
+## 4. 测试用例设计（映射到 PriorityQueueTest.java 方法）
 
-## 3. 开源代码实际用法调研
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 白盒结构：继承 AbstractQueue、实现 Serializable、成员形态 | testWhiteBox |
+| P0 | 既有黑盒：堆序/重复/空语义/remove/removeIf/集合构造/comparator | testNaturalOrder、testComparatorOrder、testDuplicates、testElementRemoveEmpty、testRemoveContainsRemoveIf、testConstructorFromCollectionAndSortedSet、testBlackBox |
+| P0 | 构造器矩阵 + null 语义 + fail-fast + 身份 equals | testConstructorMatrix、testNullSemantics、testFailFast、testIdentityEquals |
+| P1 | toArray 契约、序列化、状态不变量 | testToArrayContract、testSerialization、testStateInvariants |
 
-来源：`~/git/jdk25u-dev`（JDK 源码 + test/jdk）；网络检索未执行，以下为 JDK 自用、逐条标注。
+## 关键规范细节（易错，已锁入断言）
 
-- `java/util/concurrent/DelayQueue.java:104` — `private final PriorityQueue<E> q = new PriorityQueue<E>();`（内部用 PriorityQueue 实现延迟队列）
-- `java/util/concurrent/PriorityBlockingQueue.java:903` — `q = new PriorityQueue<E>(Math.max(size, 1), comparator);`（带 Comparator 构造）
-- `test/jdk/java/util/PriorityQueue/ForgetMeNot.java:64` — `final PriorityQueue<Integer> q = new PriorityQueue<>();`（官方测试，覆盖“遗忘元素”实现细节）
-- `test/jdk/java/util/PriorityQueue/PriorityQueueSort.java` — 官方排序语义测试
+- 同 JDK-8 版：初始容量 ≥1；add/offer(null) NPE；contains/remove(null) 返 false；equals 身份语义。
 
-结论：PriorityQueue 是“无界优先队列”，被 `DelayQueue`/`PriorityBlockingQueue` 作为底层堆使用，
-支持自然序与 Comparator。
+## 注意事项
 
-## 4. 测试用例设计 + 自动化实现
-
-- 正常：自然序与 Comparator 出队顺序；重复元素全部出队；`comparator()` 访问器；`toArray` 多重集。
-- 组合链路：`add/offer → peek → poll → remove/removeIf → contains`；从 `Collection`/`SortedSet` 构造。
-- 边界/异常：`add/offer(null)` 及含 null 构造 → `NullPointerException`；空队列 `element/remove` →
-  `NoSuchElementException`、`poll/peek` 返回 null。
-
-健壮性：poll 顺序按比较器单调（确定性）；`toArray`/迭代顺序不保证有序，故先排序再断言多重集；
-固定输入、无墙钟/随机；无全局副作用；headless，无 `@key`。
+- 白盒反射只断言公开结构；serialVersionUID 与 JDK-8 相同。

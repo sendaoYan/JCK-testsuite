@@ -1,15 +1,10 @@
 /*
  * @test
- * @summary java.io.BufferedOutputStream conformance: white-box structure (reflection) + black-box
- *          behavior (write/flush/close auto-flush, small-buffer correctness).
+ * @summary java.io.BufferedOutputStream conformance: white-box structure (reflection) + full
+ *          black-box contract coverage. Constructors (size<=0->IAE), write(int) low 8 bits +
+ *          buffering, write(byte[],off,len) validation (NPE/IOBE), direct-write path,
+ *          flush semantics, close flushes remaining bytes.
  * @run main BufferedOutputStreamTest
- *
- * 黑盒设计案:
- * 1. 契约: 带缓冲的输出流，write 先入缓冲，flush/close 或缓冲满时刷到底层。
- * 2. 场景: BufferedOutputStream(OutputStream, smallBuffer) 写单字节/批量/off-len。
- * 3. 组合: 以小缓冲写大块字节 -> close 自动 flush -> 读回底层字节逐字节比对。
- * 4. 不变量: flush() 后底层立即可见；close() 隐含 flush；小缓冲满时自动刷写不丢字节。
- * 5. 边界: write(int) 只写低 8 位。
  */
 
 import java.io.BufferedOutputStream;
@@ -23,6 +18,21 @@ public class BufferedOutputStreamTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
     static void hasMethod(Class<?> c, String name, Class<?>... params) {
@@ -40,35 +50,76 @@ public class BufferedOutputStreamTest {
         hasMethod(c, "flush");
     }
 
-    // ---- black-box: behavior ----
-    static void testBlackBox() throws Exception {
-        ByteArrayOutputStream sink = new ByteArrayOutputStream();
-        BufferedOutputStream bos = new BufferedOutputStream(sink);
-        bos.write(65);
-        bos.write(new byte[]{66, 67}, 0, 2);
-        bos.write(new byte[]{68, 69, 70}, 1, 2);
-        bos.flush();
-        check(Arrays.equals(sink.toByteArray(), new byte[]{65, 66, 67, 69, 70}), "write + flush");
+    // ---- 1. constructors ----
+    static void testConstructors() throws Exception {
+        BufferedOutputStream ok = new BufferedOutputStream(new ByteArrayOutputStream());
+        ok.write(1);
+        ok.flush();
 
-        byte[] data = new byte[1000];
-        for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 5);
-        ByteArrayOutputStream small = new ByteArrayOutputStream();
-        BufferedOutputStream sbos = new BufferedOutputStream(small, 64);
-        sbos.write(data, 0, data.length);
-        sbos.close();
-        check(Arrays.equals(small.toByteArray(), data), "small buffer auto-flush + close");
+        checkThrows(IllegalArgumentException.class,
+                    () -> new BufferedOutputStream(new ByteArrayOutputStream(), 0),
+                    "size 0 -> IllegalArgumentException");
+        checkThrows(IllegalArgumentException.class,
+                    () -> new BufferedOutputStream(new ByteArrayOutputStream(), -1),
+                    "negative size -> IllegalArgumentException");
+    }
 
-        ByteArrayOutputStream bits = new ByteArrayOutputStream();
-        BufferedOutputStream bbos = new BufferedOutputStream(bits);
-        bbos.write(0x1FF); // 511 -> low byte 0xFF
-        bbos.close();
-        check(bits.toByteArray().length == 1 && bits.toByteArray()[0] == (byte) 0xFF,
-              "write(int) low 8 bits");
+    // ---- 2. write(int) + buffering ----
+    static void testWriteIntAndBuffering() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        BufferedOutputStream out = new BufferedOutputStream(bos, 8);
+        out.write(65);
+        out.write(0x1FF);
+        check(bos.size() == 0, "small writes stay buffered before flush");
+        out.flush();
+        byte[] b = bos.toByteArray();
+        check(b.length == 2 && b[0] == 65 && (b[1] & 0xFF) == 0xFF, "flush writes buffered low 8 bits");
+    }
+
+    // ---- 3. write(byte[],off,len) validation ----
+    static void testWriteArrayValidation() {
+        final BufferedOutputStream out = new BufferedOutputStream(new ByteArrayOutputStream(), 4);
+        checkThrows(NullPointerException.class, () -> out.write(null, 0, 1),
+                    "write(null,0,1) -> NPE");
+        checkThrows(IndexOutOfBoundsException.class, () -> out.write(new byte[2], -1, 1),
+                    "write(b,-1,1) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> out.write(new byte[2], 0, 3),
+                    "write(b,0,3) -> IndexOutOfBoundsException");
+    }
+
+    // ---- 4. large write direct + content ----
+    static void testLargeWrite() throws Exception {
+        byte[] data = new byte[100];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) i;
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        BufferedOutputStream out = new BufferedOutputStream(bos, 8);
+        out.write(data, 0, data.length);
+        check(bos.size() == data.length, "large write bypasses buffer");
+        check(Arrays.equals(bos.toByteArray(), data), "large write content");
+    }
+
+    // ---- 5. flush + close ----
+    static void testFlushClose() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        BufferedOutputStream out = new BufferedOutputStream(bos, 8);
+        out.write(new byte[]{1, 2, 3}, 0, 3);
+        check(bos.size() == 0, "buffered before flush");
+        out.flush();
+        check(bos.size() == 3, "flush empties buffer");
+
+        out.write(new byte[]{4, 5}, 0, 2);
+        out.close();
+        check(bos.size() == 5, "close flushes remaining bytes");
+        check(Arrays.equals(bos.toByteArray(), new byte[]{1, 2, 3, 4, 5}), "final content");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testConstructors();
+        testWriteIntAndBuffering();
+        testWriteArrayValidation();
+        testLargeWrite();
+        testFlushClose();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

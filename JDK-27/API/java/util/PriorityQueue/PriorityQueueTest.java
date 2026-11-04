@@ -20,8 +20,17 @@
  *    comparator() 在自然序时返回 null。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.PriorityQueue;
 import java.util.SortedSet;
@@ -209,6 +218,126 @@ public class PriorityQueueTest {
         check(q.isEmpty() && q.size() == 0, "clear empties");
     }
 
+    // ---- contract deep-dive (constructor matrix / null semantics / fail-fast /
+    //      identity equals / serialization / state invariants) ----------------
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <E> PriorityQueue<E> roundTrip(PriorityQueue<E> q) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(q); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (PriorityQueue<E>) ois.readObject();
+        }
+    }
+
+    static void testConstructorMatrix() {
+        checkThrows(IllegalArgumentException.class, () -> new PriorityQueue<Integer>(-1), "PriorityQueue(-1) IAE");
+        checkThrows(IllegalArgumentException.class, () -> new PriorityQueue<Integer>(-1, Comparator.naturalOrder()),
+                    "PriorityQueue(-1,cmp) IAE");
+        checkThrows(IllegalArgumentException.class, () -> new PriorityQueue<Integer>(0), "PriorityQueue(0) IAE");
+        checkThrows(NullPointerException.class, () -> new PriorityQueue<Integer>((Collection<Integer>) null),
+                    "PriorityQueue(null Collection) NPE");
+        checkThrows(NullPointerException.class, () -> new PriorityQueue<Integer>((SortedSet<Integer>) null),
+                    "PriorityQueue(null SortedSet) NPE");
+        checkThrows(NullPointerException.class, () -> new PriorityQueue<Integer>(Arrays.asList(1, null, 2)),
+                    "PriorityQueue(Collection with null) NPE");
+
+        PriorityQueue<Integer> sized = new PriorityQueue<>(8);
+        sized.add(1);
+        check(sized.peek() == 1, "PriorityQueue(int) usable");
+
+        PriorityQueue<Integer> src = new PriorityQueue<>(Arrays.asList(3, 1, 2));
+        PriorityQueue<Integer> copy = new PriorityQueue<>(src);
+        check(copy.poll() == 1 && copy.poll() == 2 && copy.poll() == 3, "PriorityQueue(PriorityQueue) multiset");
+    }
+
+    static void testNullSemantics() {
+        PriorityQueue<String> q = new PriorityQueue<>();
+        checkThrows(NullPointerException.class, () -> q.add(null), "add(null) NPE");
+        checkThrows(NullPointerException.class, () -> q.offer(null), "offer(null) NPE");
+        q.add("a");
+        check(!q.contains(null), "contains(null) returns false (not NPE)");
+        check(!q.remove(null), "remove(null) returns false (not NPE)");
+    }
+
+    static void testFailFast() {
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(1, 2, 3));
+        Iterator<Integer> it = q.iterator();
+        it.next();
+        q.add(99);
+        checkThrows(java.util.ConcurrentModificationException.class, it::next, "iterator CME after add");
+
+        Iterator<Integer> it2 = q.iterator();
+        it2.next();
+        q.remove(99);
+        checkThrows(java.util.ConcurrentModificationException.class, it2::next, "iterator CME after remove");
+    }
+
+    static void testIdentityEquals() {
+        PriorityQueue<Integer> a = new PriorityQueue<>(Arrays.asList(1, 2, 3));
+        PriorityQueue<Integer> b = new PriorityQueue<>(Arrays.asList(1, 2, 3));
+        check(a != b, "two distinct instances");
+        check(!a.equals(b), "PriorityQueue does not override equals (identity semantics)");
+        check(a.equals(a), "a equals itself");
+    }
+
+    static void testToArrayContract() {
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(3, 1, 2));
+        Object[] oa = q.toArray();
+        check(oa.length == 3, "toArray() length");
+        List<Integer> sorted = new ArrayList<>();
+        for (Object o : oa) sorted.add((Integer) o);
+        Collections.sort(sorted);
+        check(sorted.equals(Arrays.asList(1, 2, 3)), "toArray() multiset");
+
+        Integer[] reusable = new Integer[]{9, 9, 9, 9};
+        Integer[] returned = q.toArray(reusable);
+        check(returned == reusable, "toArray(T[]) reuses array when it fits");
+        check(reusable[3] == null, "toArray(T[]) pads trailing null");
+        List<Integer> sortedReuse = new ArrayList<>(Arrays.asList(reusable[0], reusable[1], reusable[2]));
+        Collections.sort(sortedReuse);
+        check(sortedReuse.equals(Arrays.asList(1, 2, 3)), "toArray(T[]) multiset");
+    }
+
+    static void testSerialization() throws Exception {
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(3, 1, 2));
+        PriorityQueue<Integer> r = roundTrip(q);
+        check(r != q, "round-trip distinct object");
+        check(r.size() == 3, "round-trip size preserved");
+        check(r.poll() == 1 && r.poll() == 2 && r.poll() == 3, "round-trip heap order preserved");
+        check(r.isEmpty(), "round-trip result drained");
+
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(PriorityQueue.class);
+        check(osc.getSerialVersionUID() == -7720805057305804111L, "PriorityQueue serialVersionUID stable");
+    }
+
+    static void testStateInvariants() {
+        PriorityQueue<Integer> q = new PriorityQueue<>(Arrays.asList(5, 4, 3, 2, 1));
+        check(q.remove(3), "remove(element) updates");
+        check(q.size() == 4 && !q.contains(3), "size after remove");
+        check(q.contains(1) && q.contains(2) && q.contains(4) && q.contains(5), "others survive remove");
+        checkThrows(NullPointerException.class, () -> q.add(null), "failed add leaves state intact");
+        check(q.size() == 4, "state intact after failed op");
+        q.clear();
+        check(q.isEmpty() && q.size() == 0, "clear empties");
+        for (int i = 1; i <= 5; i++) check(!q.contains(i), "clear removed " + i);
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testNaturalOrder();
@@ -220,6 +349,13 @@ public class PriorityQueueTest {
         testToArray();
         testConstructorFromCollectionAndSortedSet();
         testBlackBox();
+        testConstructorMatrix();
+        testNullSemantics();
+        testFailFast();
+        testIdentityEquals();
+        testToArrayContract();
+        testSerialization();
+        testStateInvariants();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

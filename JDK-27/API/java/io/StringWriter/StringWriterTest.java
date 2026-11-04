@@ -1,18 +1,12 @@
 /*
  * @test
- * @summary java.io.StringWriter conformance: white-box structure (reflection) + black-box
- *          behavior (write/append variants, toString, getBuffer, roundtrip with StringReader).
+ * @summary java.io.StringWriter conformance: white-box structure (reflection) + full
+ *          black-box contract coverage. Constructors (negative->IAE), write(int) low 16 bits,
+ *          write(char[],off,len) validation, write(String) null->"null", write(String,off,len),
+ *          append variants, getBuffer live semantics, toString, flush/close no-op.
  * @run main StringWriterTest
- *
- * 黑盒设计案:
- * 1. 契约: 以 StringBuffer 为目标的字符输出流，支持 write/append，toString 返回累积内容。
- * 2. 场景: StringWriter() 写 -> write(String)/write(char)/append -> toString/getBuffer。
- * 3. 组合: 写多行 -> toString -> StringReader 读回逐段比对；write(String,off,len) 子串。
- * 4. 不变量: getBuffer() 与 toString() 内容一致；flush/close 为 no-op。
- * 5. 边界: 空流 toString()==""。
  */
 
-import java.io.StringReader;
 import java.io.StringWriter;
 import java.lang.reflect.Modifier;
 
@@ -22,6 +16,21 @@ public class StringWriterTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
     static void hasMethod(Class<?> c, String name, Class<?>... params) {
@@ -35,42 +44,100 @@ public class StringWriterTest {
         Class<?> c = Class.forName("java.io.StringWriter");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "is concrete class");
         check(c.getSuperclass() == java.io.Writer.class, "extends Writer");
-        hasMethod(c, "write", String.class);
+        hasMethod(c, "write", int.class);
         hasMethod(c, "append", CharSequence.class);
-        hasMethod(c, "toString");
         hasMethod(c, "getBuffer");
+        hasMethod(c, "toString");
+        hasMethod(c, "flush");
     }
 
-    // ---- black-box: behavior ----
-    static void testBlackBox() throws Exception {
+    // ---- 1. constructors ----
+    static void testConstructors() {
+        StringWriter def = new StringWriter();
+        check(def.toString().length() == 0, "default empty");
+        checkThrows(IllegalArgumentException.class, () -> new StringWriter(-1),
+                    "negative size -> IllegalArgumentException");
+    }
+
+    // ---- 2. write(int) low 16 bits ----
+    static void testWriteInt() {
         StringWriter w = new StringWriter();
-        check("".equals(w.toString()), "initial empty");
-        w.write("abc");
-        w.write('d');
-        w.write("efgh", 1, 3); // "fgh"
-        check("abcdfgh".equals(w.toString()), "write/toString");
-        check(w.toString().equals(w.getBuffer().toString()), "getBuffer matches toString");
+        w.write('A');
+        w.write(0x10041);
+        check("AA".equals(w.toString()), "write(int) low 16 bits");
+    }
 
-        StringWriter w2 = new StringWriter();
-        w2.append("xy").append('z');
-        check("xyz".equals(w2.toString()), "append");
-        w2.flush();
-        w2.close();
-        check("xyz".equals(w2.toString()), "flush/close no-op");
+    // ---- 3. write(char[],off,len) validation ----
+    static void testWriteArrayValidation() {
+        final StringWriter w = new StringWriter();
+        checkThrows(NullPointerException.class, () -> w.write((char[]) null, 0, 1),
+                    "write(null,0,1) -> NPE");
+        checkThrows(IndexOutOfBoundsException.class, () -> w.write(new char[2], -1, 1),
+                    "write(c,-1,1) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> w.write(new char[2], 0, 3),
+                    "write(c,0,3) -> IndexOutOfBoundsException");
+        w.write(new char[1], 0, 0);
+        check(w.toString().length() == 0, "len==0 no-op");
+    }
 
-        StringWriter w3 = new StringWriter();
-        w3.write("line1\nline2\nline3");
-        StringReader r = new StringReader(w3.toString());
-        StringBuilder sb = new StringBuilder();
-        char[] buf = new char[5];
-        int n;
-        while ((n = r.read(buf)) != -1) sb.append(buf, 0, n);
-        check(w3.toString().equals(sb.toString()), "roundtrip with StringReader");
+    // ---- 4. write(String) / write(String,off,len) ----
+    static void testWriteString() {
+        StringWriter w = new StringWriter();
+        w.write("hello");
+        w.write((String) null);
+        check("hellonull".equals(w.toString()), "write(String) + null -> \"null\"");
+
+        StringWriter sub = new StringWriter();
+        sub.write("hello world", 0, 5);
+        check("hello".equals(sub.toString()), "write(String,off,len) content");
+
+        final StringWriter n = new StringWriter();
+        // JDK 9+: write(String,off,len) delegates to StringBuffer.append(null,off,len) -> "null"
+        n.write((String) null, 0, 4);
+        check("null".equals(n.toString()), "write((String)null,0,4) appends \"null\" in JDK 9+");
+        checkThrows(IndexOutOfBoundsException.class, () -> n.write("abc", 0, 5),
+                    "write(String, bad off/len) -> IndexOutOfBoundsException");
+    }
+
+    // ---- 5. append variants ----
+    static void testAppend() {
+        StringWriter w = new StringWriter();
+        w.append("ab");
+        w.append('c');
+        w.append((CharSequence) null);
+        w.append("XY", 0, 1);
+        check("abcnullX".equals(w.toString()), "append variants incl. null csq");
+    }
+
+    // ---- 6. getBuffer live semantics ----
+    static void testGetBuffer() {
+        StringWriter w = new StringWriter();
+        w.write("ab");
+        StringBuffer b = w.getBuffer();
+        b.append("cd");
+        check("abcd".equals(w.toString()), "getBuffer returns live buffer");
+    }
+
+    // ---- 7. flush/close no-op ----
+    static void testFlushClose() throws Exception {
+        StringWriter w = new StringWriter();
+        w.write("data");
+        w.flush();
+        w.close();
+        w.close();
+        w.write("more");
+        check("datamore".equals(w.toString()), "flush/close are no-ops");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testConstructors();
+        testWriteInt();
+        testWriteArrayValidation();
+        testWriteString();
+        testAppend();
+        testGetBuffer();
+        testFlushClose();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

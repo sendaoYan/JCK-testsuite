@@ -1,18 +1,14 @@
 /*
  * @test
- * @summary java.io.BufferedReader conformance: white-box structure (reflection) + black-box
- *          behavior (readLine variants, single-char/block reads, skip, mark/reset, lines()).
+ * @summary java.io.BufferedReader conformance: white-box structure (reflection) + full
+ *          black-box contract coverage. Constructors (null->NPE, size<=0->IAE), read/EOF,
+ *          read(char[],off,len) validation, readLine, skip (negative->IAE), ready, mark/reset,
+ *          close, lines() stream.
  * @run main BufferedReaderTest
- *
- * 黑盒设计案:
- * 1. 契约: 字符缓冲输入流，支持按行读取 readLine、单字符/批量读、skip 与 mark/reset，并提供 lines() 流。
- * 2. 场景: BufferedReader(StringReader) 读多行 -> readLine 逐行 -> EOF 返回 null。
- * 3. 组合: readLine 处理空行与无尾换行；lines() 收集行；read(char[],off,len) 与 skip 混合。
- * 4. 不变量: markSupported()==true；readLine 在末尾返回 null；readLine 去掉行终止符但保留内容。
- * 5. 边界: 空输入首行 readLine()==null。
  */
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.StringReader;
 import java.lang.reflect.Modifier;
 import java.util.List;
@@ -26,6 +22,21 @@ public class BufferedReaderTest {
         passed++;
     }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
     static void hasMethod(Class<?> c, String name, Class<?>... params) {
         try { c.getMethod(name, params); }
         catch (NoSuchMethodException e) { throw new AssertionError("missing method " + name); }
@@ -37,43 +48,127 @@ public class BufferedReaderTest {
         Class<?> c = Class.forName("java.io.BufferedReader");
         check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "is concrete class");
         check(c.getSuperclass() == java.io.Reader.class, "extends Reader");
+        hasMethod(c, "read");
         hasMethod(c, "readLine");
-        hasMethod(c, "lines");
+        hasMethod(c, "skip", long.class);
         hasMethod(c, "mark", int.class);
         hasMethod(c, "reset");
+        hasMethod(c, "lines");
     }
 
-    // ---- black-box: behavior ----
-    static void testBlackBox() throws Exception {
-        BufferedReader br = new BufferedReader(new StringReader("a\n\nc"));
-        check("a".equals(br.readLine()), "readLine 1");
-        check("".equals(br.readLine()), "readLine empty line");
-        check("c".equals(br.readLine()), "readLine 3");
-        check(br.readLine() == null, "readLine EOF");
+    // ---- 1. constructors ----
+    static void testConstructors() throws Exception {
+        checkThrows(NullPointerException.class, () -> new BufferedReader(null),
+                    "BufferedReader(null) -> NPE");
+        checkThrows(IllegalArgumentException.class, () -> new BufferedReader(new StringReader("x"), 0),
+                    "size 0 -> IllegalArgumentException");
+        checkThrows(IllegalArgumentException.class, () -> new BufferedReader(new StringReader("x"), -1),
+                    "negative size -> IllegalArgumentException");
+    }
 
-        BufferedReader last = new BufferedReader(new StringReader("x\ny"));
-        check("x".equals(last.readLine()) && "y".equals(last.readLine()) && last.readLine() == null,
-              "readLine without trailing newline");
+    // ---- 2. read() single char ----
+    static void testReadSingleChar() throws Exception {
+        BufferedReader r = new BufferedReader(new StringReader("AB"));
+        check(r.read() == 'A', "read first");
+        check(r.read() == 'B', "read second");
+        check(r.read() == -1, "read EOF");
+        check(r.read() == -1, "read repeatedly EOF");
+    }
 
-        BufferedReader mix = new BufferedReader(new StringReader("abcdefgh"));
-        check(mix.markSupported(), "markSupported");
+    // ---- 3. read(char[],off,len) validation ----
+    static void testReadArrayValidation() throws Exception {
+        final BufferedReader r = new BufferedReader(new StringReader("hello"));
+        checkThrows(NullPointerException.class, () -> r.read(null, 0, 1),
+                    "read(null,0,1) -> NPE");
+        checkThrows(IndexOutOfBoundsException.class, () -> r.read(new char[2], -1, 1),
+                    "read(c,-1,1) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> r.read(new char[2], 0, -1),
+                    "read(c,0,-1) -> IndexOutOfBoundsException");
+        checkThrows(IndexOutOfBoundsException.class, () -> r.read(new char[2], 0, 3),
+                    "read(c,0,3) -> IndexOutOfBoundsException");
+        check(r.read(new char[1], 0, 0) == 0, "len==0 returns 0");
+
         char[] buf = new char[4];
-        check(mix.read(buf, 1, 2) == 2 && buf[1] == 'a' && buf[2] == 'b', "read(char[],off,len)");
-        check(mix.skip(2) == 2, "skip");
-        check(mix.read() == 'e', "single read after skip");
-        mix.mark(10);
-        int c = mix.read();
-        mix.reset();
-        check(c == mix.read(), "mark/reset replay");
+        int n = r.read(buf, 1, 2);
+        check(n == 2, "read count");
+        check(buf[0] == 0 && buf[1] == 'h' && buf[2] == 'e' && buf[3] == 0, "exact offset placement");
+    }
 
-        List<String> lines = new BufferedReader(new StringReader("l1\nl2\nl3"))
-                .lines().collect(Collectors.toList());
-        check(lines.size() == 3 && lines.get(0).equals("l1") && lines.get(2).equals("l3"), "lines()");
+    // ---- 4. readLine ----
+    static void testReadLine() throws Exception {
+        BufferedReader r = new BufferedReader(new StringReader("one\ntwo\r\nthree\n"));
+        check("one".equals(r.readLine()), "readLine LF");
+        check("two".equals(r.readLine()), "readLine CRLF");
+        check("three".equals(r.readLine()), "readLine trailing LF");
+        check(r.readLine() == null, "readLine EOF null");
+    }
+
+    // ---- 5. skip ----
+    static void testSkip() throws Exception {
+        BufferedReader r = new BufferedReader(new StringReader("abcdef"));
+        check(r.skip(2) == 2, "skip(2)");
+        check(r.read() == 'c', "read after skip");
+        check(r.skip(100) == 3, "skip past end returns remaining");
+        check(r.read() == -1, "EOF after skip");
+
+        final BufferedReader neg = new BufferedReader(new StringReader("abc"));
+        checkThrows(IllegalArgumentException.class, () -> neg.skip(-1),
+                    "negative skip -> IllegalArgumentException");
+    }
+
+    // ---- 6. ready ----
+    static void testReady() throws Exception {
+        BufferedReader r = new BufferedReader(new StringReader("abc"));
+        check(r.ready(), "ready with data");
+    }
+
+    // ---- 7. mark/reset ----
+    static void testMarkReset() throws Exception {
+        BufferedReader r = new BufferedReader(new StringReader("abcd"));
+        check(r.markSupported(), "markSupported");
+
+        final BufferedReader unmarked = new BufferedReader(new StringReader("x"));
+        checkThrows(IOException.class, () -> unmarked.reset(), "reset unmarked -> IOException");
+
+        r.read();
+        r.mark(100);
+        r.read();
+        r.read();
+        r.reset();
+        check(r.read() == 'b' && r.read() == 'c', "mark/reset replay");
+
+        final BufferedReader neg = new BufferedReader(new StringReader("x"));
+        checkThrows(IllegalArgumentException.class, () -> neg.mark(-1),
+                    "mark(-1) -> IllegalArgumentException");
+    }
+
+    // ---- 8. close ----
+    static void testClose() throws Exception {
+        BufferedReader r = new BufferedReader(new StringReader("abc"));
+        r.close();
+        r.close();
+        checkThrows(IOException.class, () -> r.read(), "read after close -> IOException");
+    }
+
+    // ---- 9. lines() stream ----
+    static void testLines() {
+        BufferedReader r = new BufferedReader(new StringReader("a\nb\nc"));
+        List<String> lines = r.lines().collect(Collectors.toList());
+        check(lines.size() == 3 && lines.get(0).equals("a") && lines.get(1).equals("b")
+              && lines.get(2).equals("c"), "lines() stream");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testConstructors();
+        testReadSingleChar();
+        testReadArrayValidation();
+        testReadLine();
+        testSkip();
+        testReady();
+        testMarkReset();
+        testClose();
+        testLines();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
