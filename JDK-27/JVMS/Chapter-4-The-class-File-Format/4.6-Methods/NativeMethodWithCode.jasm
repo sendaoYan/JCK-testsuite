@@ -1,0 +1,20 @@
+// JVMS 4.6: a native method must not carry a Code attribute; the native
+// implementation is supplied by the host environment, never by class-file
+// bytecode.  This class file violates the rule and must be rejected.
+super public class NativeMethodWithCode
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public native Method bad:"()V"
+        stack 1 locals 1
+    {
+        return;
+    }
+}

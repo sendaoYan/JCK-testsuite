@@ -1,0 +1,17 @@
+// JVMS 4.6: a method must not have both ACC_ABSTRACT and ACC_NATIVE set -
+// an abstract method has no body by definition of the flag, while a native
+// method supplies its body outside the class file; the combination is
+// structurally meaningless and is rejected.
+super public class AbstractNativeMethod
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public abstract native Method bad:"()V";
+}

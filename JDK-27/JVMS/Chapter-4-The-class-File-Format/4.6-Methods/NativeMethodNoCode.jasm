@@ -1,0 +1,18 @@
+// JVMS 4.6: a native method (ACC_NATIVE = 0x0100) carries no Code attribute;
+// its method_info records only the name, descriptor and access flags.  The
+// implementation is looked up outside the class file at first invocation
+// (JVMS 5.6), which fails with UnsatisfiedLinkError until a library with the
+// bound symbol has been loaded.
+super public class NativeMethodNoCode
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static native Method nat:"(I)I";
+}

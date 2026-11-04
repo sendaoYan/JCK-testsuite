@@ -1,0 +1,20 @@
+// Target class for the JVMS 5.6 binding test.  The native methods are
+// declared in the class file with ACC_NATIVE and no Code attribute; the JVM
+// binds them to Java_<class>_<method> symbols of a shared library only when
+// the library has been loaded.  Includes both a static and an instance
+// native method to cover the two JNIEnv calling conventions.
+super public class NativeBindingTarget
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static native Method add:"(II)I";
+
+    public native Method greet:"()Ljava/lang/String;";
+}
