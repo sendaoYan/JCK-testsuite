@@ -1,7 +1,6 @@
 /*
  * @test
- * @summary java.text.DecimalFormatSymbols conformance: separators/currency/NaN/infinity and
- *          setters/clone.
+ * @summary java.text.DecimalFormatSymbols conformance: white-box structure + black-box symbol access/mutation.
  * @run main DecimalFormatSymbolsTest
  */
 
@@ -11,53 +10,118 @@ import java.util.Locale;
 
 public class DecimalFormatSymbolsTest {
     static int passed;
+    static final Locale US = Locale.US;
 
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
+    static void check(boolean c, String m) {
+        if (!c) throw new AssertionError(m);
         passed++;
     }
 
-    static void testDecimalFormatSymbols() {
-        DecimalFormatSymbols s = DecimalFormatSymbols.getInstance(Locale.US);
-        check(s.getDecimalSeparator() == '.', "decimalSeparator");
-        check(s.getGroupingSeparator() == ',', "groupingSeparator");
-        check(s.getPercent() == '%', "percent");
-        check(s.getPerMill() == '‰', "perMill");
-        check(s.getMinusSign() == '-', "minusSign");
-        check(s.getZeroDigit() == '0', "zeroDigit");
-        check(s.getDigit() == '#', "digit");
-        check(s.getPatternSeparator() == ';', "patternSeparator");
-        check(s.getMonetaryDecimalSeparator() == '.', "monetaryDecimalSeparator");
-        check(s.getNaN() != null, "NaN");
-        check(s.getInfinity() != null, "infinity");
-        check(s.getCurrencySymbol() != null, "currencySymbol");
-        check(s.getInternationalCurrencySymbol() != null, "internationalCurrencySymbol");
-        check(s.getCurrency() != null, "currency");
-        check(s.getExponentSeparator() != null, "exponentSeparator");
-
-        s.setDecimalSeparator(',');
-        check(s.getDecimalSeparator() == ',', "setDecimalSeparator");
-        s.setGroupingSeparator('.');
-        check(s.getGroupingSeparator() == '.', "setGroupingSeparator");
-        s.setZeroDigit('0');
-        check(s.getZeroDigit() == '0', "setZeroDigit");
-        s.setCurrency(Currency.getInstance("USD"));
-        check("USD".equals(s.getCurrency().getCurrencyCode()), "setCurrency");
-        s.setCurrencySymbol("$");
-        check("$".equals(s.getCurrencySymbol()), "setCurrencySymbol");
-        s.setInternationalCurrencySymbol("USD");
-        check("USD".equals(s.getInternationalCurrencySymbol()), "setInternationalCurrencySymbol");
-
-        DecimalFormatSymbols s2 = (DecimalFormatSymbols) s.clone();
-        check(s.equals(s2), "clone equals");
-        check(s.hashCode() == s2.hashCode(), "clone hashCode");
-        check(DecimalFormatSymbols.getInstance(Locale.US)
-                .equals(DecimalFormatSymbols.getInstance(Locale.US)), "getInstance equals");
-        check(DecimalFormatSymbols.getAvailableLocales().length > 0, "getAvailableLocales");
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.text.DecimalFormatSymbols");
+        check(!c.isInterface() && !c.isEnum() && !c.isAnnotation(), "concrete class");
+        check(java.io.Serializable.class.isAssignableFrom(c), "implements Serializable");
+        check(Cloneable.class.isAssignableFrom(c), "implements Cloneable");
+        check(c.getConstructor() != null, "no-arg ctor");
+        check(c.getConstructor(Locale.class) != null, "ctor(Locale)");
+        check(DecimalFormatSymbols.getInstance() instanceof DecimalFormatSymbols, "getInstance() non-null");
+        check(DecimalFormatSymbols.getAvailableLocales().length > 0, "getAvailableLocales non-empty");
     }
 
-    public static void main(String[] args) {
-        testDecimalFormatSymbols();
+    // ---- Part 2: black-box (behavioral) ----
+    static void testUsSymbols() {
+        DecimalFormatSymbols dfs = DecimalFormatSymbols.getInstance(US);
+        check(dfs.getZeroDigit() == '0', "zeroDigit");
+        check(dfs.getGroupingSeparator() == ',', "grouping separator");
+        check(dfs.getDecimalSeparator() == '.', "decimal separator");
+        check(dfs.getPercent() == '%', "percent");
+        check(dfs.getPerMill() == '\u2030', "perMill");
+        check(dfs.getMinusSign() == '-', "minus sign");
+        check("\u221E".equals(dfs.getInfinity()), "infinity");
+        check("\uFFFD".equals(dfs.getNaN()), "NaN (U+FFFD)");
+        check("$".equals(dfs.getCurrencySymbol()), "currency symbol");
+        check("USD".equals(dfs.getInternationalCurrencySymbol()), "international currency symbol");
+        check(dfs.getMonetaryDecimalSeparator() == '.', "monetary decimal separator");
+        check(dfs.getDigit() == '#', "digit");
+        check(dfs.getPatternSeparator() == ';', "pattern separator");
+        check("E".equals(dfs.getExponentSeparator()), "exponent separator");
+    }
+
+    static void testMutation() {
+        DecimalFormatSymbols dfs = DecimalFormatSymbols.getInstance(US);
+        dfs.setZeroDigit('0');
+        check(dfs.getZeroDigit() == '0', "setZeroDigit/getZeroDigit");
+        dfs.setGroupingSeparator(' ');
+        check(dfs.getGroupingSeparator() == ' ', "setGroupingSeparator/getGroupingSeparator");
+        dfs.setDecimalSeparator(';');
+        check(dfs.getDecimalSeparator() == ';', "setDecimalSeparator/getDecimalSeparator");
+        dfs.setPercent('p');
+        check(dfs.getPercent() == 'p', "setPercent/getPercent");
+        dfs.setPerMill('m');
+        check(dfs.getPerMill() == 'm', "setPerMill/getPerMill");
+        dfs.setMinusSign('~');
+        check(dfs.getMinusSign() == '~', "setMinusSign/getMinusSign");
+        dfs.setInfinity("Inf");
+        check("Inf".equals(dfs.getInfinity()), "setInfinity/getInfinity");
+        dfs.setNaN("NotANumber");
+        check("NotANumber".equals(dfs.getNaN()), "setNaN/getNaN");
+        dfs.setCurrencySymbol("USD$");
+        check("USD$".equals(dfs.getCurrencySymbol()), "setCurrencySymbol/getCurrencySymbol");
+        dfs.setInternationalCurrencySymbol("XXX");
+        check("XXX".equals(dfs.getInternationalCurrencySymbol()), "setInternationalCurrencySymbol");
+        dfs.setMonetaryDecimalSeparator(':');
+        check(dfs.getMonetaryDecimalSeparator() == ':', "setMonetaryDecimalSeparator");
+        dfs.setExponentSeparator("e");
+        check("e".equals(dfs.getExponentSeparator()), "setExponentSeparator");
+    }
+
+    static void testCurrency() {
+        DecimalFormatSymbols dfs = DecimalFormatSymbols.getInstance(US);
+        check(Currency.getInstance("USD").equals(dfs.getCurrency()), "default currency USD");
+        dfs.setCurrency(Currency.getInstance("EUR"));
+        check(Currency.getInstance("EUR").equals(dfs.getCurrency()), "setCurrency/getCurrency EUR");
+        check("EUR".equals(dfs.getInternationalCurrencySymbol()), "intl symbol updated to EUR");
+    }
+
+    static void testEqualsCloneHashCode() {
+        DecimalFormatSymbols a = DecimalFormatSymbols.getInstance(US);
+        DecimalFormatSymbols b = DecimalFormatSymbols.getInstance(US);
+        check(a.equals(b) && b.equals(a), "two US instances equal");
+        check(a.hashCode() == b.hashCode(), "equal hashCode");
+        DecimalFormatSymbols c = (DecimalFormatSymbols) a.clone();
+        check(a.equals(c) && c.equals(a), "clone equals");
+        check(a.hashCode() == c.hashCode(), "clone hashCode");
+        DecimalFormatSymbols d = (DecimalFormatSymbols) a.clone();
+        d.setDecimalSeparator('X');
+        check(!a.equals(d), "mutated clone not equal");
+    }
+
+    static void testBlackBox() {
+        DecimalFormatSymbols us = new DecimalFormatSymbols(Locale.US);
+        check(us.getDecimalSeparator() == '.', "ctor(Locale.US) decimal separator");
+        check(us.getGroupingSeparator() == ',', "ctor(Locale.US) grouping separator");
+        check(us.getZeroDigit() == '0', "ctor(Locale.US) zero digit");
+
+        DecimalFormatSymbols def = new DecimalFormatSymbols();
+        check(def.getDecimalSeparator() != 0, "no-arg ctor decimal separator set");
+        check(def.getGroupingSeparator() != 0, "no-arg ctor grouping separator set");
+        check(def.getInfinity() != null && def.getNaN() != null, "no-arg ctor infinity/NaN non-null");
+
+        DecimalFormatSymbols m = DecimalFormatSymbols.getInstance(US);
+        m.setDigit('D');
+        check(m.getDigit() == 'D', "setDigit/getDigit");
+        m.setPatternSeparator(':');
+        check(m.getPatternSeparator() == ':', "setPatternSeparator/getPatternSeparator");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testUsSymbols();
+        testMutation();
+        testCurrency();
+        testEqualsCloneHashCode();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
