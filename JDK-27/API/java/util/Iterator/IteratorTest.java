@@ -82,6 +82,13 @@ public class IteratorTest {
         Iterator<String> empty = List.<String>of().iterator();
         check(!empty.hasNext(), "empty iterator hasNext false");
         expectThrows(empty::next, NoSuchElementException.class, "empty next throws");
+
+        // 7. remove without next / double remove throw IllegalStateException
+        Iterator<String> it4 = new ArrayList<>(Arrays.asList("a", "b")).iterator();
+        expectThrows(it4::remove, IllegalStateException.class, "remove before next ISE");
+        it4.next();
+        it4.remove();
+        expectThrows(it4::remove, IllegalStateException.class, "double remove ISE");
     }
 
     public static void main(String[] args) throws Exception {

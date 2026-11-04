@@ -62,11 +62,30 @@ public class CollectionTest {
         check(e.equals(new ArrayList<>(Arrays.asList("q"))), "removeIf");
     }
 
+    static void testStreamDefaults() {
+        Collection<Integer> c = new ArrayList<>(Arrays.asList(1, 2, 3, 4));
+        check(c.stream().filter(x -> x % 2 == 0).count() == 2, "stream filter");
+        check(c.stream().mapToInt(Integer::intValue).sum() == 10, "stream mapToInt sum");
+        check(c.parallelStream().sorted().mapToInt(Integer::intValue).sum() == 10,
+              "parallelStream sum");
+        check(c.spliterator().getExactSizeIfKnown() == 4, "spliterator exact size");
+        check(c.stream().findFirst().get() == 1, "stream findFirst order");
+    }
+
+    static void testRemoveIfEdge() {
+        Collection<Integer> c = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5, 6));
+        check(c.removeIf(x -> x % 2 == 1), "removeIf returns true");
+        check(c.equals(new ArrayList<>(Arrays.asList(2, 4, 6))), "removeIf removed odds");
+        check(!c.removeIf(x -> x > 100), "removeIf returns false when none match");
+    }
+
     public static void main(String[] args) {
         testBasics();
         testBulk();
         testToArray();
         testIterationAndDefaults();
+        testStreamDefaults();
+        testRemoveIfEdge();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

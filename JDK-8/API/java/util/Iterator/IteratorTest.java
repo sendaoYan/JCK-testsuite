@@ -41,9 +41,30 @@ public class IteratorTest {
         check(seen.equals(Arrays.asList("x", "y")), "forEachRemaining");
     }
 
+    static void testRemoveWithoutNext() {
+        List<String> l = new ArrayList<>(Arrays.asList("a", "b"));
+        Iterator<String> it = l.iterator();
+        try {
+            it.remove();
+            throw new AssertionError("remove before next: expected IllegalStateException");
+        } catch (IllegalStateException expected) {
+            passed++;
+        }
+        it.next();
+        it.remove();
+        try {
+            it.remove();
+            throw new AssertionError("double remove: expected IllegalStateException");
+        } catch (IllegalStateException expected) {
+            passed++;
+        }
+        check(l.equals(Arrays.asList("b")), "single remove applied");
+    }
+
     public static void main(String[] args) {
         testNextRemove();
         testForEachRemaining();
+        testRemoveWithoutNext();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

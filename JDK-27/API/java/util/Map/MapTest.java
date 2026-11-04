@@ -73,9 +73,55 @@ public class MapTest {
         check(lazy.size() == 2 && "A".equals(lazy.get("a")) && "B".equals(lazy.get("b")), "ofLazy");
     }
 
+    static void testDefaultMethodContract() {
+        Map<String, Integer> m = new HashMap<>();
+        m.put("a", 1);
+
+        check(m.remove("a", 2) == false, "remove(k,v) wrong value false");
+        check(m.remove("a", 1) == true && !m.containsKey("a"), "remove(k,v) matching true");
+
+        m.put("a", 1);
+        check(m.replace("a", 10) == 1, "replace(k,v) returns old");
+        check(m.get("a") == 10, "replace(k,v) updates");
+        check(m.replace("z", 10) == null, "replace(k,v) absent returns null");
+
+        check(m.replace("a", 10, 20) == true, "replace(k,old,new) matching true");
+        check(m.replace("a", 99, 20) == false, "replace(k,old,new) wrong old false");
+        check(m.get("a") == 20, "replace(k,old,new) updated");
+
+        check(m.computeIfPresent("a", (k, v) -> v + 1) == 21, "computeIfPresent present");
+        check(m.computeIfPresent("z", (k, v) -> v + 1) == null, "computeIfPresent absent no-op");
+        check(!m.containsKey("z"), "computeIfPresent absent no mapping");
+        check(m.computeIfPresent("a", (k, v) -> null) == null, "computeIfPresent null result");
+        check(!m.containsKey("a"), "computeIfPresent null result removes");
+
+        m.put("a", 5);
+        check(m.compute("a", (k, v) -> v * 2) == 10, "compute applies");
+        check(m.compute("b", (k, v) -> 7) == 7, "compute absent inserts");
+        check(m.get("b") == 7, "compute absent inserted");
+        check(m.compute("b", (k, v) -> null) == null, "compute null result");
+        check(!m.containsKey("b"), "compute null result removes");
+
+        m.clear();
+        m.put("a", 2);
+        check(m.merge("a", 3, Integer::sum) == 5, "merge present sum");
+        check(m.merge("b", 10, Integer::sum) == 10, "merge absent puts value");
+        check(m.get("b") == 10, "merge absent value stored");
+        check(m.merge("b", 1, (old, inc) -> null) == null, "merge null result");
+        check(!m.containsKey("b"), "merge null result removes");
+
+        expectThrows(() -> m.merge("a", null, Integer::sum), NullPointerException.class, "merge null value NPE");
+        expectThrows(() -> m.merge("a", 1, null), NullPointerException.class, "merge null fn NPE");
+        expectThrows(() -> m.compute("a", null), NullPointerException.class, "compute null fn NPE");
+        expectThrows(() -> m.computeIfAbsent("a", null), NullPointerException.class, "computeIfAbsent null fn NPE");
+        expectThrows(() -> m.computeIfPresent("a", null), NullPointerException.class, "computeIfPresent null fn NPE");
+        expectThrows(() -> m.replaceAll(null), NullPointerException.class, "replaceAll null fn NPE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDefaultMethodContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

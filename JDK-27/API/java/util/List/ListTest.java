@@ -73,6 +73,16 @@ public class ListTest {
         check(nums.equals(Arrays.asList(10, 20, 30)), "replaceAll");
         check(nums.subList(1, 3).equals(Arrays.asList(20, 30)), "subList");
 
+        // sort(null) uses natural ordering; removeIf filters in place
+        List<Integer> nat = new ArrayList<>(Arrays.asList(3, 1, 2));
+        nat.sort(null);
+        check(nat.equals(Arrays.asList(1, 2, 3)), "sort(null) natural ordering");
+        List<Integer> filt = new ArrayList<>(Arrays.asList(1, 2, 3, 4));
+        filt.removeIf(x -> x % 2 == 0);
+        check(filt.equals(Arrays.asList(1, 3)), "removeIf");
+        expectThrows(() -> new ArrayList<Integer>(Arrays.asList(1)).replaceAll(null),
+                NullPointerException.class, "replaceAll(null) NPE");
+
         check(List.ofLazy(3, i -> i * i).equals(Arrays.asList(0, 1, 4)), "ofLazy");
         expectThrows(() -> List.ofLazy(-1, i -> i), IllegalArgumentException.class,
                 "ofLazy negative size");

@@ -48,6 +48,35 @@ public class ListTest {
         List<Integer> nums = new ArrayList<>(Arrays.asList(3, 1, 2));
         nums.sort(Comparator.naturalOrder());
         check(nums.equals(Arrays.asList(1, 2, 3)), "sort default method");
+        // sort(null) uses natural ordering
+        List<Integer> nat = new ArrayList<>(Arrays.asList(3, 1, 2));
+        nat.sort(null);
+        check(nat.equals(Arrays.asList(1, 2, 3)), "sort(null) natural ordering");
+    }
+
+    static void testReplaceAllRemoveIf() {
+        List<Integer> l = new ArrayList<>(Arrays.asList(1, 2, 3));
+        l.replaceAll(x -> x * 10);
+        check(l.equals(Arrays.asList(10, 20, 30)), "replaceAll");
+
+        List<Integer> l2 = new ArrayList<>(Arrays.asList(1, 2, 3, 4));
+        l2.removeIf(x -> x % 2 == 0);
+        check(l2.equals(Arrays.asList(1, 3)), "removeIf");
+
+        checkThrows(java.lang.NullPointerException.class, () -> l.replaceAll(null), "replaceAll(null) NPE");
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
     public static void main(String[] args) {
@@ -55,6 +84,7 @@ public class ListTest {
         testSubList();
         testListIterator();
         testSort();
+        testReplaceAllRemoveIf();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
