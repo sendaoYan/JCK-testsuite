@@ -50,6 +50,45 @@ public class GregorianCalendarTest {
         testAddRoll();
         testActualMaximum();
         testZonedDateTimeRoundTrip();
+        testGregorianChangeCloneWeekDate();
+    }
+
+    static void expectThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
+    static void testGregorianChangeCloneWeekDate() {
+        GregorianCalendar g = utc();
+        java.util.Date cut = new java.util.Date(1000000000000L);
+        g.setGregorianChange(cut);
+        check(g.getGregorianChange().equals(cut), "setGregorianChange roundtrip");
+        expectThrows(NullPointerException.class, () -> g.setGregorianChange(null),
+                "setGregorianChange(null) NPE");
+
+        check(g.getMinimum(Calendar.MONTH) == Calendar.JANUARY, "getMinimum(MONTH)");
+        check(g.getMaximum(Calendar.MONTH) == Calendar.DECEMBER, "getMaximum(MONTH)");
+        check(g.getActualMinimum(Calendar.MONTH) == Calendar.JANUARY, "getActualMinimum(MONTH)");
+        check(g.getActualMaximum(Calendar.MONTH) == Calendar.DECEMBER, "getActualMaximum(MONTH)");
+
+        GregorianCalendar clone = (GregorianCalendar) g.clone();
+        check(clone != g && clone.equals(g), "clone distinct + equal");
+        clone.add(Calendar.DAY_OF_MONTH, 1);
+        check(!clone.equals(g), "clone mutation independent");
+
+        GregorianCalendar w = utc();
+        check(w.isWeekDateSupported(), "isWeekDateSupported");
+        w.setFirstDayOfWeek(Calendar.MONDAY);
+        w.setMinimalDaysInFirstWeek(4);
+        w.setWeekDate(2020, 10, Calendar.MONDAY);
+        check(w.getWeekYear() == 2020, "getWeekYear after setWeekDate");
+        check(w.get(Calendar.DAY_OF_WEEK) == Calendar.MONDAY, "setWeekDate day of week");
     }
 
     static void testLeapYear() {
