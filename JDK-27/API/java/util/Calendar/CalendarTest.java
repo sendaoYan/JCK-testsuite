@@ -43,13 +43,77 @@ public class CalendarTest {
     }
 
     // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testEpoch();
         testFieldOps();
         testAddVsRoll();
         testActualMaximum();
         testTimeInMillisRoundTrip();
         testCloneEquals();
+        testLenientNullSerialization();
+    }
+
+    static void expectThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
+    static void testLenientNullSerialization() throws Exception {
+        Calendar cal = utc();
+        cal.set(2020, Calendar.MAY, 15);
+        expectThrows(NullPointerException.class, () -> cal.compareTo(null), "compareTo(null) NPE");
+        check(!cal.before(null) && !cal.after(null), "before(null)/after(null) false (no NPE)");
+        check(!cal.before("x") && !cal.after("x"), "before/after non-Calendar false");
+
+        // lenient vs strict.
+        check(cal.isLenient(), "default lenient");
+        cal.setLenient(false);
+        cal.clear();
+        cal.set(2020, Calendar.MAY, 15);
+        cal.set(Calendar.MONTH, 13);
+        expectThrows(IllegalArgumentException.class, () -> cal.getTimeInMillis(),
+                "non-lenient MONTH 13 IAE on compute");
+        cal.clear();
+        cal.set(2020, Calendar.MAY, 15);
+        cal.set(Calendar.DAY_OF_MONTH, 32);
+        expectThrows(IllegalArgumentException.class, () -> cal.getTimeInMillis(),
+                "non-lenient DAY_OF_MONTH 32 IAE on compute");
+        cal.setLenient(true);
+        cal.clear();
+        cal.set(2020, Calendar.DECEMBER, 15);
+        cal.set(Calendar.MONTH, 12);
+        check(cal.get(Calendar.MONTH) == Calendar.JANUARY && cal.get(Calendar.YEAR) == 2021,
+              "lenient normalizes month 12");
+
+        // week settings round-trip (no validation: values are stored as-is).
+        cal.setFirstDayOfWeek(Calendar.MONDAY);
+        check(cal.getFirstDayOfWeek() == Calendar.MONDAY, "setFirstDayOfWeek MONDAY");
+        cal.setMinimalDaysInFirstWeek(4);
+        check(cal.getMinimalDaysInFirstWeek() == 4, "setMinimalDaysInFirstWeek");
+
+        // min/max contracts.
+        check(cal.getMinimum(Calendar.MONTH) == Calendar.JANUARY, "getMinimum(MONTH)");
+        check(cal.getMaximum(Calendar.MONTH) == Calendar.DECEMBER, "getMaximum(MONTH)");
+        check(cal.getActualMinimum(Calendar.MONTH) == Calendar.JANUARY, "getActualMinimum(MONTH)");
+        check(cal.getActualMaximum(Calendar.MONTH) == Calendar.DECEMBER, "getActualMaximum(MONTH)");
+
+        // serialization round-trip.
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(cal);
+        }
+        Calendar revived;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            revived = (Calendar) ois.readObject();
+        }
+        check(revived != cal && revived.equals(cal), "serialization roundtrip preserves equality");
     }
 
     static void testEpoch() {
