@@ -1,0 +1,20 @@
+# java.awt.datatransfer.UnsupportedFlavorException 测试设计
+
+## 1. API 功能
+不支持的 flavor 异常。
+
+## 2. Java 用户如何使用
+new UnsupportedFlavorException(DataFlavor)。
+
+## 3. 开源代码实际用法调研
+JDK 源码: ~/git/jdk25u-dev/src/java.desktop/share/classes/java/awt/datatransfer/UnsupportedFlavorException.java
+
+## 4. 测试用例设计 + 自动化实现
+白盒: 继承 Exception；黑盒: 构造、getMessage。
+
+自动化实现位于同目录 `UnsupportedFlavorExceptionTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（本轮追加）
+- message 即所给 flavor 的 humanPresentableName（imageFlavor → "Image"、自定义名跟随）。
+- 由 StringSelection.getTransferData(不支持) 实际抛出并被精确捕获。
+- 序列化 round-trip 保 message；单构造器白盒。
