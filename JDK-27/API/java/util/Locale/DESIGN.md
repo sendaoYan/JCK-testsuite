@@ -27,3 +27,6 @@
   - `toLanguageTag`/`forLanguageTag` 往返与 script/region 解析。
   - ISO3 语言/国家码、显示名（en 固定）。
   - `getAvailableLocales` 含 US、`getISOLanguages` 含 en。
+  - clone 独立但 equals/hashCode 相等；equals 语义。
+  - 扩展：`forLanguageTag("en-US-u-ca-gregory")` 的 unicode 扩展与 `stripExtensions`。
+  - `Locale.filter`/`Locale.LanguageRange.parse` 过滤与匹配。

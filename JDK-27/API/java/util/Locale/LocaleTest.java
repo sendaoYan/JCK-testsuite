@@ -43,6 +43,9 @@ public class LocaleTest {
         testIso3();
         testDisplayNames();
         testAvailableLocales();
+        testCloneEqualsHashCode();
+        testExtensions();
+        testFilterLookup();
     }
 
     static void testConstants() {
@@ -97,6 +100,41 @@ public class LocaleTest {
         boolean hasEn = false;
         for (String s : langs) { if ("en".equals(s)) { hasEn = true; break; } }
         check(hasEn, "getISOLanguages contains en");
+    }
+
+    static void testCloneEqualsHashCode() {
+        Locale us = new Locale("en", "US");
+        Locale copy = (Locale) us.clone();
+        check(us.equals(copy), "clone equals original");
+        check(us.hashCode() == copy.hashCode(), "clone hashCode equal");
+        check(us != copy, "clone is a distinct object");
+        check(Locale.US.equals(new Locale("en", "US")), "equals same language/country");
+    }
+
+    static void testExtensions() {
+        Locale l = Locale.forLanguageTag("en-US-u-ca-gregory");
+        check(l.hasExtensions(), "hasExtensions for BCP47 unicode extension");
+        check(l.getExtension(Locale.UNICODE_LOCALE_EXTENSION) != null
+              || "en-US-u-ca-gregory".equals(l.toLanguageTag()),
+              "unicode extension present");
+        Locale stripped = l.stripExtensions();
+        check(!stripped.hasExtensions(), "stripExtensions removes extensions");
+        check("en-US".equals(stripped.toLanguageTag()), "stripped language tag");
+
+        Locale p = Locale.forLanguageTag("en-US-x-lvariant");
+        check(p.getExtension(Locale.PRIVATE_USE_EXTENSION) != null || p.hasExtensions(),
+              "private use extension");
+    }
+
+    static void testFilterLookup() {
+        java.util.List<Locale.LanguageRange> ranges = Locale.LanguageRange.parse("en-*");
+        java.util.List<Locale> candidates = new java.util.ArrayList<Locale>();
+        candidates.add(Locale.US);
+        candidates.add(Locale.CANADA);
+        java.util.List<Locale> filtered = Locale.filter(ranges, candidates);
+        check(filtered.size() == 2, "filter keeps both en candidates");
+        check(filtered.contains(Locale.US) && filtered.contains(Locale.CANADA),
+              "filter results contain US and CANADA");
     }
 
     public static void main(String[] args) throws Exception {

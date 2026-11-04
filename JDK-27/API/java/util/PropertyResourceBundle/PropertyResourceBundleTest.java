@@ -46,6 +46,8 @@ public class PropertyResourceBundleTest {
         testFromStream();
         testFromReader();
         testUnicodeEscape();
+        testNullConstructor();
+        testMissingAndCasts();
     }
 
     static void testFromStream() throws Exception {
@@ -73,6 +75,28 @@ public class PropertyResourceBundleTest {
         PropertyResourceBundle b = new PropertyResourceBundle(
             new StringReader("msg=hi\\u0020there"));
         check("hi there".equals(b.getString("msg")), "unicode escape parsed");
+    }
+
+    static void testNullConstructor() {
+        assertThrows(NullPointerException.class, () -> {
+            try { new PropertyResourceBundle((java.io.InputStream) null); }
+            catch (java.io.IOException e) { throw new AssertionError("unexpected IOException", e); }
+        }, "PropertyResourceBundle((InputStream)null) NPE");
+        assertThrows(NullPointerException.class, () -> {
+            try { new PropertyResourceBundle((java.io.Reader) null); }
+            catch (java.io.IOException e) { throw new AssertionError("unexpected IOException", e); }
+        }, "PropertyResourceBundle((Reader)null) NPE");
+    }
+
+    static void testMissingAndCasts() throws Exception {
+        PropertyResourceBundle b = new PropertyResourceBundle(
+            new StringReader("greeting=hello\n"));
+        assertThrows(MissingResourceException.class,
+                () -> b.getObject("missing"), "getObject missing throws MissingResourceException");
+        // property values are Strings, so getStringArray ClassCastException.
+        assertThrows(ClassCastException.class,
+                () -> b.getStringArray("greeting"),
+                "getStringArray on String value throws ClassCastException");
     }
 
     public static void main(String[] args) throws Exception {

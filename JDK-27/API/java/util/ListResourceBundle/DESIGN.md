@@ -16,5 +16,6 @@
 
 ## 4. 测试用例设计 + 自动化实现
 - 白盒：`Class.forName` 断言抽象类、继承 ResourceBundle、`getContents` 等方法存在。
-- 黑盒（固定 `getContents`）：getString/getObject/getStringArray/containsKey/getKeys/keySet 组合、
-  缺失键抛 MissingResourceException。
+- 黑盒（固定 `getContents`）：getString/getObject/getStringArray/containsKey/getKeys/keySet 组合；
+  getString/getObject/getStringArray 缺失键抛 MissingResourceException；
+  `getContents()` 返回 null 或 null key/value 时，首次访问抛 NullPointerException（懒加载）。

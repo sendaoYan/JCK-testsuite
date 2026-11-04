@@ -21,5 +21,8 @@
 - 白盒：`Class.forName` 断言抽象类、关键方法存在。
 - 黑盒（自定义子类固定内容）：
   - getString/getObject/getStringArray/containsKey/keySet 组合。
-  - 缺失键抛 MissingResourceException、null 键抛 NullPointerException。
-  - getBaseBundleName 非空。
+  - getString/getObject/getStringArray 缺失键抛 MissingResourceException；
+    getStringArray 非数组值抛 ClassCastException。
+  - 自定义子类 `getLocale()`（未设置）与 `getBaseBundleName()` → null。
+  - `getBundle(null)` → NPE；`getBundle(不存在 baseName)` → MissingResourceException；
+    `clearCache()` 可调用。

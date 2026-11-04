@@ -6,6 +6,10 @@
  * @run main CurrencyTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Currency;
 import java.util.Locale;
@@ -17,6 +21,16 @@ public class CurrencyTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static void assertThrows(Class<? extends Throwable> exType, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (exType.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + " (threw " + t + ")");
+        }
+        throw new AssertionError(msg + " (no exception)");
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -38,11 +52,13 @@ public class CurrencyTest {
     }
 
     // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testUsd();
         testOtherCodes();
         testFromLocale();
         testAvailableCurrencies();
+        testGetInstanceErrors();
+        testSerialization();
     }
 
     static void testUsd() {
@@ -65,6 +81,8 @@ public class CurrencyTest {
         Currency jpy = Currency.getInstance("JPY");
         check("JPY".equals(jpy.getCurrencyCode()) && jpy.getDefaultFractionDigits() == 0,
               "JPY fraction digits 0");
+        check(jpy.getNumericCode() == 392, "JPY numeric code 392");
+        check("392".equals(jpy.getNumericCodeAsString()), "JPY numeric code as string 392");
     }
 
     static void testFromLocale() {
@@ -76,6 +94,35 @@ public class CurrencyTest {
         Set<Currency> all = Currency.getAvailableCurrencies();
         check(!all.isEmpty(), "getAvailableCurrencies non-empty");
         check(all.contains(Currency.getInstance("USD")), "available currencies contain USD");
+    }
+
+    static void testGetInstanceErrors() {
+        assertThrows(NullPointerException.class,
+                () -> Currency.getInstance((String) null), "getInstance((String)null) NPE");
+        assertThrows(NullPointerException.class,
+                () -> Currency.getInstance((Locale) null), "getInstance((Locale)null) NPE");
+        assertThrows(IllegalArgumentException.class,
+                () -> Currency.getInstance("NOTACODE"), "getInstance(invalid code) IAE");
+        assertThrows(IllegalArgumentException.class,
+                () -> Currency.getInstance(""), "getInstance(empty) IAE");
+        // ISO 4217 codes are uppercase-only; lowercase/mixed case are rejected.
+        assertThrows(IllegalArgumentException.class,
+                () -> Currency.getInstance("usd"), "getInstance(lowercase) IAE");
+        assertThrows(IllegalArgumentException.class,
+                () -> Currency.getInstance("Jpy"), "getInstance(mixed case) IAE");
+    }
+
+    static void testSerialization() throws Exception {
+        Currency usd = Currency.getInstance("USD");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(usd);
+        oos.close();
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        Currency revived = (Currency) ois.readObject();
+        ois.close();
+        check(revived == usd, "Serializable round-trip returns cached instance");
+        check("USD".equals(revived.getCurrencyCode()), "revived currency code");
     }
 
     public static void main(String[] args) throws Exception {

@@ -20,5 +20,7 @@
 - 白盒：`Class.forName` 断言 final 类、实现 Serializable、关键方法存在。
 - 黑盒（固定 Locale.US，不依赖平台默认 locale）：
   - USD 代码/小数位 2/数值码 840/`$` 符号/显示名。
-  - EUR 2 位、JPY 0 位小数。
+  - EUR 2 位、JPY 0 位小数、JPY 数值码 392/`getNumericCodeAsString`。
   - `getInstance(Locale.US)` == USD、`getAvailableCurrencies` 含 USD、实例缓存相等。
+  - `getInstance(null String/Locale)` → NPE；非法/空代码 → IAE；小写/混合大小写 → IAE（代码大小写敏感）。
+  - Serializable 往返返回缓存实例（`==`）。

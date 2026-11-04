@@ -78,8 +78,23 @@ public class ResourceBundleTest {
 
         assertThrows(MissingResourceException.class,
                 () -> b.getString("missing"), "getString missing throws MissingResourceException");
+        assertThrows(MissingResourceException.class,
+                () -> b.getObject("missing"), "getObject missing throws MissingResourceException");
+        assertThrows(MissingResourceException.class,
+                () -> b.getStringArray("missing"), "getStringArray missing throws MissingResourceException");
+        assertThrows(ClassCastException.class,
+                () -> b.getStringArray("n"), "getStringArray non-array throws ClassCastException");
 
+        check(b.getLocale() == null, "getLocale null for custom bundle (not set)");
         check(b.getBaseBundleName() == null, "getBaseBundleName null for directly-instantiated bundle");
+
+        assertThrows(NullPointerException.class,
+                () -> ResourceBundle.getBundle((String) null), "getBundle((String)null) NPE");
+        assertThrows(MissingResourceException.class,
+                () -> ResourceBundle.getBundle("com.example.DoesNotExistBundle"),
+                "getBundle(nonexistent) MissingResourceException");
+        ResourceBundle.clearCache();
+        passed++;
     }
 
     public static void main(String[] args) throws Exception {

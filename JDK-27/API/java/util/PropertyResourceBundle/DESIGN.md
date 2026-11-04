@@ -20,4 +20,6 @@
 - 黑盒（StringReader/ByteArrayInputStream 固定内容）：
   - 从流/Reader 取值、containsKey、keySet。
   - unicode 转义解析（` ` → 空格）。
-  - 缺失键抛 MissingResourceException。
+  - getString/getObject 缺失键抛 MissingResourceException；
+    getStringArray 对 String 值抛 ClassCastException。
+  - `PropertyResourceBundle((InputStream/Reader)null)` → NPE。

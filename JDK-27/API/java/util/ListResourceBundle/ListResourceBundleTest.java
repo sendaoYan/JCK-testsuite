@@ -37,6 +37,18 @@ public class ListResourceBundleTest {
         }
     }
 
+    static class NullContentsLRB extends ListResourceBundle {
+        protected Object[][] getContents() {
+            return null;
+        }
+    }
+
+    static class NullKeyLRB extends ListResourceBundle {
+        protected Object[][] getContents() {
+            return new Object[][] { { null, "v" } };
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.ListResourceBundle");
@@ -65,6 +77,17 @@ public class ListResourceBundleTest {
 
         assertThrows(MissingResourceException.class,
                 () -> b.getString("missing"), "getString missing throws MissingResourceException");
+        assertThrows(MissingResourceException.class,
+                () -> b.getObject("missing"), "getObject missing throws MissingResourceException");
+        assertThrows(MissingResourceException.class,
+                () -> b.getStringArray("missing"), "getStringArray missing throws MissingResourceException");
+
+        // Lookup is loaded lazily on first access; null contents or a null
+        // key/value pair therefore NPEs on access, not at construction.
+        assertThrows(NullPointerException.class,
+                () -> new NullContentsLRB().getKeys(), "getContents() null -> NPE on access");
+        assertThrows(NullPointerException.class,
+                () -> new NullKeyLRB().getString("k"), "null key -> NPE on access");
     }
 
     public static void main(String[] args) throws Exception {
