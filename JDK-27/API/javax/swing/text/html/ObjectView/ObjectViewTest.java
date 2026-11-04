@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.text.html.ObjectView conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main ObjectViewTest
+ * @run main/othervm --add-opens=java.desktop/javax.swing.text=ALL-UNNAMED ObjectViewTest
  */
 
 import java.awt.EventQueue;
@@ -106,9 +106,57 @@ public class ObjectViewTest {
         return null;
     }
 
+    static javax.swing.text.html.HTMLEditorKit deepKit = new javax.swing.text.html.HTMLEditorKit();
+
+    static javax.swing.text.html.HTMLDocument deepLoad(String html) throws Exception {
+        javax.swing.text.html.HTMLDocument d = (javax.swing.text.html.HTMLDocument) deepKit.createDefaultDocument();
+        deepKit.read(new java.io.StringReader(html), d, 0);
+        return d;
+    }
+
+    // ---- component creation matrix (headless-safe, reflection) ----
+    static void testCreateComponent() throws Exception {
+                javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
+        javax.swing.text.html.HTMLDocument doc = deepLoad("<html><body>"
+                + "<object classid='javax.swing.JLabel' id='ok'><param name='text' value='P'></object>"
+                + "<object classid='java.lang.String' id='bad'></object>"
+                + "<object classid='no.such.Clazz' id='miss'></object>"
+                + "<object id='none'></object>"
+                + "</body></html>");
+        java.lang.reflect.Method create = Class.forName("javax.swing.text.ComponentView")
+                .getDeclaredMethod("createComponent");
+        create.setAccessible(true);
+        javax.swing.text.html.ObjectView ok = new javax.swing.text.html.ObjectView(doc.getElement("ok"));
+        Object c1 = create.invoke(ok);
+        check(c1 instanceof javax.swing.JLabel, "reflect: valid classid yields a JLabel");
+        if (c1 instanceof javax.swing.JLabel) {
+            javax.swing.JLabel lb = (javax.swing.JLabel) c1;
+            check("P".equals(lb.getText()), "reflect: param name/text propagated to the bean");
+            check(!lb.getForeground().equals(java.awt.Color.red), "reflect: valid component not flagged red");
+        }
+        javax.swing.text.html.ObjectView bad = new javax.swing.text.html.ObjectView(doc.getElement("bad"));
+        Object c2 = create.invoke(bad);
+        check(c2 instanceof javax.swing.JLabel && "??".equals(((javax.swing.JLabel) c2).getText())
+              && ((javax.swing.JLabel) c2).getForeground().equals(java.awt.Color.red),
+              "reflect: non-Component classid gets the red ?? fallback");
+        javax.swing.text.html.ObjectView miss = new javax.swing.text.html.ObjectView(doc.getElement("miss"));
+        Object c3 = create.invoke(miss);
+        check(c3 instanceof javax.swing.JLabel && "??".equals(((javax.swing.JLabel) c3).getText())
+              && ((javax.swing.JLabel) c3).getForeground().equals(java.awt.Color.red),
+              "reflect: unresolvable classid gets the red ?? fallback");
+        javax.swing.text.html.ObjectView none = new javax.swing.text.html.ObjectView(doc.getElement("none"));
+        Object c4 = create.invoke(none);
+        check(c4 instanceof javax.swing.JLabel && "??".equals(((javax.swing.JLabel) c4).getText())
+              && ((javax.swing.JLabel) c4).getForeground().equals(java.awt.Color.red),
+              "reflect: missing classid gets the red ?? fallback");
+        javax.swing.text.html.ObjectView fresh = new javax.swing.text.html.ObjectView(doc.getElement("ok"));
+        check(fresh.getComponent() == null, "reflect: getComponent null before parenting");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(ObjectViewTest::testWhiteBox);
         runOnEDT(ObjectViewTest::testBlackBox);
+        runOnEDT(ObjectViewTest::testCreateComponent);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

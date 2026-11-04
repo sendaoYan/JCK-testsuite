@@ -120,9 +120,45 @@ public class BlockViewTest {
         return null;
     }
 
+    static javax.swing.text.html.HTMLEditorKit deepKit = new javax.swing.text.html.HTMLEditorKit();
+
+    static javax.swing.text.html.HTMLDocument deepLoad(String html) throws Exception {
+        javax.swing.text.html.HTMLDocument d = (javax.swing.text.html.HTMLDocument) deepKit.createDefaultDocument();
+        deepKit.read(new java.io.StringReader(html), d, 0);
+        return d;
+    }
+
+    // ---- model layer over a fixed document (headless-safe) ----
+    static void testModelLayer() throws Exception {
+                javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
+        javax.swing.text.html.HTMLDocument doc = deepLoad("<html><body><div id='d' align='center'><p>Para one</p></div><p>Para two</p></body></html>");
+        javax.swing.text.Element div = doc.getElement("d");
+        check(div != null, "model: div element found");
+        javax.swing.text.html.BlockView bv = new javax.swing.text.html.BlockView(div, javax.swing.text.View.Y_AXIS);
+        check(bv.getElement() == div, "model: element identity");
+        check(bv.getAxis() == javax.swing.text.View.Y_AXIS, "model: Y_AXIS stored");
+        javax.swing.text.html.BlockView bx = new javax.swing.text.html.BlockView(div, javax.swing.text.View.X_AXIS);
+        check(bx.getAxis() == javax.swing.text.View.X_AXIS, "model: X_AXIS stored");
+        check(bv.getResizeWeight(javax.swing.text.View.X_AXIS) == 1, "model: resizeWeight X == 1");
+        check(bv.getResizeWeight(javax.swing.text.View.Y_AXIS) == 0, "model: resizeWeight Y == 0");
+        javax.swing.text.AttributeSet attrs = bv.getAttributes();
+        check(attrs.getAttributeCount() == 1, "model: one attribute for align=center");
+        check(attrs.isDefined(javax.swing.text.html.CSS.Attribute.TEXT_ALIGN), "model: text-align defined");
+        check(String.valueOf(attrs.getAttribute(javax.swing.text.html.CSS.Attribute.TEXT_ALIGN)).contains("center"),
+              "model: text-align value center");
+        bv.setSize(100f, 100f);
+        check(bv.getPreferredSpan(javax.swing.text.View.X_AXIS) == 0.0f, "model: preferred X zero before layout");
+        check(bv.getPreferredSpan(javax.swing.text.View.Y_AXIS) == 0.0f, "model: preferred Y zero before layout");
+        check(bv.getMinimumSpan(javax.swing.text.View.Y_AXIS) <= bv.getPreferredSpan(javax.swing.text.View.Y_AXIS), "model: min <= pref");
+        javax.swing.text.html.HTMLDocument plain = deepLoad("<html><body><div id='p'>x</div></body></html>");
+        javax.swing.text.html.BlockView bp = new javax.swing.text.html.BlockView(plain.getElement("p"), javax.swing.text.View.Y_AXIS);
+        check(bp.getAttributes().getAttributeCount() == 0, "model: plain div carries no css attributes");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(BlockViewTest::testWhiteBox);
         runOnEDT(BlockViewTest::testBlackBox);
+        runOnEDT(BlockViewTest::testModelLayer);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

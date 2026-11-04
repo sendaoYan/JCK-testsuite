@@ -110,9 +110,43 @@ public class InlineViewTest {
         return null;
     }
 
+    static javax.swing.text.html.HTMLEditorKit deepKit = new javax.swing.text.html.HTMLEditorKit();
+
+    static javax.swing.text.html.HTMLDocument deepLoad(String html) throws Exception {
+        javax.swing.text.html.HTMLDocument d = (javax.swing.text.html.HTMLDocument) deepKit.createDefaultDocument();
+        deepKit.read(new java.io.StringReader(html), d, 0);
+        return d;
+    }
+
+    // ---- model layer over a fixed document (headless-safe) ----
+    static void testModelLayer() throws Exception {
+                javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
+        javax.swing.text.html.HTMLDocument bdoc = deepLoad("<html><body><p><b>bold text</b> plain</p></body></html>");
+        javax.swing.text.Element boldRun = bdoc.getDefaultRootElement().getElement(1).getElement(0).getElement(0);
+        check("content".equals(boldRun.getName()), "model: bold run is a content element");
+        javax.swing.text.html.InlineView iv = new javax.swing.text.html.InlineView(boldRun);
+        check(iv.getElement() == boldRun, "model: element identity");
+        javax.swing.text.AttributeSet attrs = iv.getAttributes();
+        check(attrs.getAttributeCount() == 3, "model: bold run carries three attributes");
+        check(attrs.isDefined(javax.swing.text.html.CSS.Attribute.FONT_WEIGHT), "model: font-weight defined for <b>");
+        check(String.valueOf(attrs.getAttribute(javax.swing.text.html.CSS.Attribute.FONT_WEIGHT)).contains("bold"),
+              "model: font-weight value bold");
+        javax.swing.text.html.HTMLDocument ndoc = deepLoad("<html><body><p>plain</p></body></html>");
+        javax.swing.text.Element plainRun = ndoc.getDefaultRootElement().getElement(1).getElement(0).getElement(0);
+        javax.swing.text.html.InlineView iv2 = new javax.swing.text.html.InlineView(plainRun);
+        check(!iv2.getAttributes().isDefined(javax.swing.text.html.CSS.Attribute.FONT_WEIGHT),
+              "model: no font-weight for unstyled text");
+        check(iv.getBreakWeight(javax.swing.text.View.X_AXIS, 0f, 3f) == javax.swing.text.View.BadBreakWeight,
+              "model: break weight bad for 3px request");
+        javax.swing.text.View frag = iv.breakView(javax.swing.text.View.X_AXIS, 0, iv.getStartOffset(), 3f);
+        check(frag != null, "model: breakView returns a fragment");
+        check(frag.getEndOffset() >= frag.getStartOffset(), "model: fragment range ordered");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(InlineViewTest::testWhiteBox);
         runOnEDT(InlineViewTest::testBlackBox);
+        runOnEDT(InlineViewTest::testModelLayer);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

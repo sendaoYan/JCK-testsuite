@@ -94,9 +94,57 @@ public class ListViewTest {
         }
     }
 
+    static javax.swing.text.html.HTMLEditorKit deepKit = new javax.swing.text.html.HTMLEditorKit();
+
+    static javax.swing.text.html.HTMLDocument deepLoad(String html) throws Exception {
+        javax.swing.text.html.HTMLDocument d = (javax.swing.text.html.HTMLDocument) deepKit.createDefaultDocument();
+        deepKit.read(new java.io.StringReader(html), d, 0);
+        return d;
+    }
+
+    static boolean deepHasAttrName(javax.swing.text.AttributeSet s, String name) {
+        for (java.util.Enumeration<?> e = s.getAttributeNames(); e.hasMoreElements(); ) {
+            if (name.equals(String.valueOf(e.nextElement()))) return true;
+        }
+        return false;
+    }
+
+    // ---- model layer over a fixed document (headless-safe) ----
+    static void testModelLayer() throws Exception {
+                javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
+        javax.swing.text.html.HTMLDocument doc = deepLoad("<html><body><ul id='ul'><li>item one</li><li>item two</li></ul></body></html>");
+        javax.swing.text.Element ul = doc.getElement("ul");
+        check(ul != null, "model: ul element found");
+        javax.swing.text.html.ListView lv = new javax.swing.text.html.ListView(ul);
+        check(lv.getElement() == ul, "model: element identity");
+        javax.swing.text.AttributeSet attrs = lv.getAttributes();
+        check(attrs.getAttributeCount() == 6, "model: ul view carries six attributes");
+        check(attrs.isDefined(javax.swing.text.html.CSS.Attribute.LIST_STYLE_TYPE), "model: list-style-type defined");
+        check(String.valueOf(attrs.getAttribute(javax.swing.text.html.CSS.Attribute.LIST_STYLE_TYPE)).contains("disc"),
+              "model: default marker is disc");
+        check(attrs.isDefined(javax.swing.text.html.CSS.Attribute.MARGIN_TOP), "model: margin-top defined");
+        check(attrs.isDefined(javax.swing.text.html.CSS.Attribute.MARGIN_BOTTOM), "model: margin-bottom defined");
+        check(deepHasAttrName(attrs, "margin-left-ltr"), "model: margin-left-ltr defined");
+        check(deepHasAttrName(attrs, "margin-right-rtl"), "model: margin-right-rtl defined");
+        check(lv.getAlignment(javax.swing.text.View.Y_AXIS) == 0.5f, "model: alignment Y 0.5");
+        check(lv.getResizeWeight(javax.swing.text.View.X_AXIS) == 1, "model: resizeWeight X == 1");
+        check(lv.getResizeWeight(javax.swing.text.View.Y_AXIS) == 0, "model: resizeWeight Y == 0");
+        javax.swing.text.html.HTMLDocument sdoc = deepLoad("<html><body><ul type='square'><li>one</li></ul></body></html>");
+        javax.swing.text.Element sul = sdoc.getDefaultRootElement().getElement(1).getElement(0);
+        javax.swing.text.html.ListView slv = new javax.swing.text.html.ListView(sul);
+        check(String.valueOf(slv.getAttributes().getAttribute(javax.swing.text.html.CSS.Attribute.LIST_STYLE_TYPE)).contains("square"),
+              "model: type=square maps to list-style-type square");
+        javax.swing.text.html.HTMLDocument odoc = deepLoad("<html><body><ol><li>one</li></ol></body></html>");
+        javax.swing.text.Element ol = odoc.getDefaultRootElement().getElement(1).getElement(0);
+        javax.swing.text.html.ListView olv = new javax.swing.text.html.ListView(ol);
+        check(String.valueOf(olv.getAttributes().getAttribute(javax.swing.text.html.CSS.Attribute.LIST_STYLE_TYPE)).contains("decimal"),
+              "model: ol default marker is decimal");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(ListViewTest::testWhiteBox);
         runOnEDT(ListViewTest::testBlackBox);
+        runOnEDT(ListViewTest::testModelLayer);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

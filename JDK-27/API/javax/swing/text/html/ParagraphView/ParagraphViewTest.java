@@ -100,9 +100,42 @@ public class ParagraphViewTest {
         return null;
     }
 
+    static javax.swing.text.html.HTMLEditorKit deepKit = new javax.swing.text.html.HTMLEditorKit();
+
+    static javax.swing.text.html.HTMLDocument deepLoad(String html) throws Exception {
+        javax.swing.text.html.HTMLDocument d = (javax.swing.text.html.HTMLDocument) deepKit.createDefaultDocument();
+        deepKit.read(new java.io.StringReader(html), d, 0);
+        return d;
+    }
+
+    // ---- model layer over a fixed document (headless-safe) ----
+    static void testModelLayer() throws Exception {
+                javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
+        javax.swing.text.html.HTMLDocument doc = deepLoad("<html><body><div align='center'><p id='p'>Para one</p></div></body></html>");
+        javax.swing.text.Element para = doc.getElement("p");
+        check(para != null, "model: paragraph element found");
+        javax.swing.text.html.ParagraphView pv = new javax.swing.text.html.ParagraphView(para);
+        check(pv.getElement() == para, "model: element identity");
+        check(pv.getViewCount() == 0, "model: children not loaded before parenting");
+        check(pv.getAttributes().getAttributeCount() == 2, "model: two paragraph attributes");
+        boolean npe = false;
+        try { pv.isVisible(); } catch (NullPointerException e) { npe = true; }
+        check(npe, "model: isVisible before parenting NPE");
+        check(pv.getAlignment(javax.swing.text.View.X_AXIS) == 0.5f, "model: alignment X 0.5");
+        check(pv.getAlignment(javax.swing.text.View.Y_AXIS) == 0.5f, "model: alignment Y 0.5");
+        javax.swing.text.html.BlockView host = new javax.swing.text.html.BlockView(para.getParentElement(), javax.swing.text.View.Y_AXIS);
+        pv.setParent(host);
+        check(pv.getParent() == host, "model: setParent round-trip");
+        check(pv.getBreakWeight(javax.swing.text.View.X_AXIS, 0f, 10f) == javax.swing.text.View.GoodBreakWeight,
+              "model: break weight good for a wide request");
+        check(pv.getBreakWeight(javax.swing.text.View.X_AXIS, 0f, 0f) == javax.swing.text.View.BadBreakWeight,
+              "model: break weight bad for a zero-width request");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(ParagraphViewTest::testWhiteBox);
         runOnEDT(ParagraphViewTest::testBlackBox);
+        runOnEDT(ParagraphViewTest::testModelLayer);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

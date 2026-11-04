@@ -113,9 +113,57 @@ public class FormViewTest {
         return null;
     }
 
+    static javax.swing.text.html.HTMLEditorKit deepKit = new javax.swing.text.html.HTMLEditorKit();
+
+    static javax.swing.text.html.HTMLDocument deepLoad(String html) throws Exception {
+        javax.swing.text.html.HTMLDocument d = (javax.swing.text.html.HTMLDocument) deepKit.createDefaultDocument();
+        deepKit.read(new java.io.StringReader(html), d, 0);
+        return d;
+    }
+
+    static javax.swing.text.Element deepFindByTag(javax.swing.text.html.HTMLDocument doc, javax.swing.text.html.HTML.Tag tag) {
+        java.util.ArrayDeque<javax.swing.text.Element> q = new java.util.ArrayDeque<javax.swing.text.Element>();
+        q.add(doc.getDefaultRootElement());
+        while (!q.isEmpty()) {
+            javax.swing.text.Element e = q.poll();
+            if (e.getAttributes().getAttribute(javax.swing.text.StyleConstants.NameAttribute) == tag) return e;
+            for (int i = 0; i < e.getElementCount(); i++) q.add(e.getElement(i));
+        }
+        return null;
+    }
+
+    // ---- model layer over a fixed document (headless-safe) ----
+    static void testModelLayer() throws Exception {
+                javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
+        check("Submit Query".equals(javax.swing.text.html.FormView.SUBMIT), "model: SUBMIT default label");
+        check("Reset".equals(javax.swing.text.html.FormView.RESET), "model: RESET default label");
+        javax.swing.text.html.HTMLDocument doc = deepLoad("<html><body><form action='/go'><input type='text' name='t1'><input type='submit' value='Go'><input type='reset'></form></body></html>");
+        javax.swing.text.Element input = deepFindByTag(doc, javax.swing.text.html.HTML.Tag.INPUT);
+        check(input != null, "model: input element found");
+        javax.swing.text.html.FormView fv = new javax.swing.text.html.FormView(input);
+        check(fv.getElement() == input, "model: element identity");
+        check(fv.getComponent() == null, "model: no component before parenting");
+        check(fv.getMaximumSpan(javax.swing.text.View.X_AXIS) == 0.0f, "model: max span X zero without parent");
+        check(fv.getMaximumSpan(javax.swing.text.View.Y_AXIS) == 0.0f, "model: max span Y zero without parent");
+        boolean npe1 = false;
+        try { fv.actionPerformed(new java.awt.event.ActionEvent(fv, 0, "x")); }
+        catch (NullPointerException e) { npe1 = true; }
+        check(npe1, "model: actionPerformed(plain command) NPE without container");
+        boolean npe2 = false;
+        try { fv.actionPerformed(new java.awt.event.ActionEvent(fv, 0, javax.swing.text.html.FormView.SUBMIT)); }
+        catch (NullPointerException e) { npe2 = true; }
+        check(npe2, "model: actionPerformed(SUBMIT) NPE without container");
+        boolean npe3 = false;
+        try { fv.actionPerformed(new java.awt.event.ActionEvent(fv, 0, javax.swing.text.html.FormView.RESET)); }
+        catch (NullPointerException e) { npe3 = true; }
+        check(npe3, "model: actionPerformed(RESET) NPE without container");
+        check(input.isLeaf(), "model: input is a leaf element");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(FormViewTest::testWhiteBox);
         runOnEDT(FormViewTest::testBlackBox);
+        runOnEDT(FormViewTest::testModelLayer);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

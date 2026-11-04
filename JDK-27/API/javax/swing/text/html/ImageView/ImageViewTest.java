@@ -130,9 +130,67 @@ public class ImageViewTest {
         for (int i = 0; i < e.getElementCount(); i++) collectElements(e.getElement(i), tag, out);
     }
 
+    static javax.swing.text.html.HTMLEditorKit deepKit = new javax.swing.text.html.HTMLEditorKit();
+
+    static javax.swing.text.html.HTMLDocument deepLoad(String html) throws Exception {
+        javax.swing.text.html.HTMLDocument d = (javax.swing.text.html.HTMLDocument) deepKit.createDefaultDocument();
+        deepKit.read(new java.io.StringReader(html), d, 0);
+        return d;
+    }
+
+    static javax.swing.text.Element deepFindImg(javax.swing.text.html.HTMLDocument doc) {
+        java.util.ArrayDeque<javax.swing.text.Element> q = new java.util.ArrayDeque<javax.swing.text.Element>();
+        q.add(doc.getDefaultRootElement());
+        while (!q.isEmpty()) {
+            javax.swing.text.Element e = q.poll();
+            if (e.getAttributes().getAttribute(javax.swing.text.StyleConstants.NameAttribute) == javax.swing.text.html.HTML.Tag.IMG) return e;
+            for (int i = 0; i < e.getElementCount(); i++) q.add(e.getElement(i));
+        }
+        return null;
+    }
+
+    // ---- model layer over a fixed document (headless-safe) ----
+    static void testModelLayer() throws Exception {
+                javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
+        javax.swing.text.html.HTMLDocument doc = deepLoad("<html><body><img src='x.png' alt='ALT' width=20 height=10></body></html>");
+        javax.swing.text.Element img = deepFindImg(doc);
+        check(img != null, "model: img element found");
+        javax.swing.text.html.ImageView imageV = new javax.swing.text.html.ImageView(img);
+        check(imageV.getElement() == img, "model: element identity");
+        check("ALT".equals(imageV.getAltText()), "model: alt text");
+        check(imageV.getImageURL() == null, "model: relative src without base yields null url");
+        check(imageV.getNoImageIcon() != null, "model: no-image icon available");
+        check(imageV.getLoadingImageIcon() != null, "model: loading icon available");
+        check(imageV.getLoadsSynchronously() == false, "model: loads asynchronously by default");
+        imageV.setLoadsSynchronously(true);
+        check(imageV.getLoadsSynchronously() == true, "model: setLoadsSynchronously round-trip");
+        check(imageV.getAttributes().getAttributeCount() == 0, "model: view attributes empty");
+        imageV.setSize(100f, 100f);
+        check(imageV.getPreferredSpan(javax.swing.text.View.X_AXIS) == 59.0f, "model: preferred X uses icon fallback size");
+        check(imageV.getPreferredSpan(javax.swing.text.View.Y_AXIS) == 53.0f, "model: preferred Y uses icon fallback size");
+        check(imageV.getAlignment(javax.swing.text.View.X_AXIS) == 0.5f, "model: alignment X 0.5");
+        check(imageV.getAlignment(javax.swing.text.View.Y_AXIS) == 1.0f, "model: alignment Y 1.0");
+        check("ALT".equals(imageV.getToolTipText(1f, 1f, new java.awt.Rectangle(0, 0, 50, 50))),
+              "model: tooltip falls back to alt text");
+        check(imageV.getImage() == null, "model: image not loaded for a missing file without sync load");
+        javax.swing.text.html.HTMLDocument dnos = deepLoad("<html><body>nosrc<img alt='NO'>x</body></html>");
+        javax.swing.text.Element nos = deepFindImg(dnos);
+        javax.swing.text.html.ImageView ivn = new javax.swing.text.html.ImageView(nos);
+        check(ivn.getImageURL() == null, "model: no src -> null url");
+        check("NO".equals(ivn.getAltText()), "model: no src -> alt text kept");
+        ivn.setSize(50f, 50f);
+        check(ivn.getPreferredSpan(javax.swing.text.View.X_AXIS) == 56.0f, "model: src-less preferred X");
+        check(ivn.getPreferredSpan(javax.swing.text.View.Y_AXIS) == 53.0f, "model: src-less preferred Y");
+        javax.swing.text.html.HTMLDocument dabs = deepLoad("<html><head><base href='http://ex.com/dir/'></head><body><img src='sub/x.png'></body></html>");
+        javax.swing.text.Element baseImg = deepFindImg(dabs);
+        java.net.URL u = new javax.swing.text.html.ImageView(baseImg).getImageURL();
+        check(u != null && "http://ex.com/dir/sub/x.png".equals(u.toString()), "model: src resolved against base");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(ImageViewTest::testWhiteBox);
         runOnEDT(ImageViewTest::testBlackBox);
+        runOnEDT(ImageViewTest::testModelLayer);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }
