@@ -31,6 +31,21 @@ public class SectionElementTest {
         Set<String> names = new HashSet<String>();
         for (Method m : c.getMethods()) names.add(m.getName());
         check(names.contains("getName"), "method getName");
+
+        // the default root of a DefaultStyledDocument is a SectionElement
+        javax.swing.text.DefaultStyledDocument d = new javax.swing.text.DefaultStyledDocument();
+        javax.swing.text.Element root = d.getDefaultRootElement();
+        check(root.getClass().getName().equals("javax.swing.text.DefaultStyledDocument$SectionElement"),
+                "root is a SectionElement");
+        check(root.getName().equals("section"), "section name");
+        check(!root.isLeaf(), "section is a branch");
+        check(root.getElementCount() == 1, "empty section has one paragraph");
+        d.insertString(0, "ab\ncd", null);
+        check(root.getStartOffset() == 0 && root.getEndOffset() == 6, "section spans [0,6) after insert");
+        check(root.getElementCount() == 2, "section tracks paragraphs");
+        check(root.getElement(0).getName().equals("paragraph"), "section children are paragraphs");
+        check(root.getDocument() == d, "section documents back");
+        check(root.getParentElement() == null, "section has no parent element");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

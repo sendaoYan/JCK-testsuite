@@ -36,6 +36,14 @@ public class ElementBufferTest {
         check(names.contains("remove"), "method remove");
         check(names.contains("change"), "method change");
         check(names.contains("clone"), "method clone");
+
+        // ElementBuffer is constructible around the default root and reports it back
+        javax.swing.text.DefaultStyledDocument d = new javax.swing.text.DefaultStyledDocument();
+        d.insertString(0, "one\ntwo", null);
+        javax.swing.text.DefaultStyledDocument.ElementBuffer buf = d.new ElementBuffer(d.getDefaultRootElement());
+        check(buf.getRootElement() == d.getDefaultRootElement(), "buffer wraps the root");
+        check(buf.getClass().getName().equals("javax.swing.text.DefaultStyledDocument$ElementBuffer"),
+                "buffer class identity");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

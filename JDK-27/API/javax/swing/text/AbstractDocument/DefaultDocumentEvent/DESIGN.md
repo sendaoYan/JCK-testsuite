@@ -20,3 +20,10 @@
 - 直接构造 `INSERT`/`REMOVE` 事件，验证 `getType/getOffset/getLength/getDocument/isSignificant` 及各 presentation name 非空、`toString` 非空。
 - 通过 `DocumentListener` 捕获真实插入事件（含换行触发结构变更），验证 `getType/getOffset/getLength/getDocument` 与 `getChange(root)` 返回元素变更。
 - 单行插入时 `getChange(root)` 为 null。
+
+## 5. 契约深化（本轮追加）
+`testInsertEvent/testRemoveEvent/testUndoThroughEvent/testElementChange`（48 断言）：
+- 事件载荷：getOffset/getLength/getType/getDocument 精确（INSERT/REMOVE 各走查）；单行纯文本插入无结构变化（getChange(defaultRoot) null）。
+- EventType 反例：是 final 类而非枚举（无 values()），INSERT/REMOVE/CHANGE toString 精确且三者互异。
+- 事件本身是 UndoableEdit：isSignificant true、新事件只能 undo；presentationName "addition"/undo 名 "deletion" 精确；经事件 undo() 回滚插入、状态精确。
+- ElementChange：DefaultStyledDocument 段落级插入产生 ElementEdit——section 的 index=1/added=1/removed=0；段内合并 index=0/added=1/removed=1；纯文本单行插入无变化。

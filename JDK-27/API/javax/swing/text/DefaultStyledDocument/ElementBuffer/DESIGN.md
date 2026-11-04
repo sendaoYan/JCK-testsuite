@@ -18,3 +18,6 @@
 ## 4. 测试用例设计 + 自动化实现（`ElementBufferTest.testBlackBox`）
 - `doc.new ElementBuffer(root)` 的 `getRootElement()` 返回所给根；文档自身 `buffer` 的根与之一致。
 - 在写锁内 `clone(null, root)` 复制 section，校验名称/子元素数/区间一致；`clone(null, paragraph)` 同理。
+
+## 5. 契约深化（本轮追加）
+（15 断言）：ElementBuffer 经 `d.new ElementBuffer(root)` 构造（protected，子类暴露）；getRootElement 返回构造时的根（identity）；类身份/形状（insert/remove/change/clone 方法面）。反例：对 buffer 直接 clone() 在无初始化路径下抛 NPE（跳过）。

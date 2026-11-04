@@ -21,3 +21,12 @@
 3. equals：自反、对称、位置/对齐/引导任一不同则不相等、null/非 TabStop 不相等。
 4. hashCode：相等对象相等 + 具体公式值（`TabStop(10f).hashCode()==10`）。
 5. toString 各对齐/引导组合输出。
+
+## 5. 契约深化（本轮追加）
+`testConstants/testConstructors/testEqualsHashCode/testToString/testSerialization`（38 断言）：
+- 常量精确值：ALIGN_LEFT=0/ALIGN_RIGHT=1/ALIGN_CENTER=2/ALIGN_DECIMAL=4/ALIGN_BAR=5；LEAD_NONE=0/LEAD_DOTS=1/LEAD_HYPHENS=2/LEAD_UNDERLINE=3/LEAD_THICKLINE=4/LEAD_EQUALS=5（注意 3 被跳过，DECIMAL 不是 3）。
+- 构造器矩阵：单参默认 align=LEFT、leader=LEAD_NONE；三参 getPosition/getAlignment/getLeader 回读。
+- 无校验反例：负 position、越界 alignment/leader 原样存储；Float.NaN 位置也被接受。
+- equals/hashCode：位置+对齐+leader 全字段参与，任一不同即不等；自反/非 null/异类比较。
+- toString 含 "tab @10.0" 位置文本，非默认对齐名与 leader 出现 "w/leaders" 标记。
+- 序列化 round-trip：三字段精确保留。

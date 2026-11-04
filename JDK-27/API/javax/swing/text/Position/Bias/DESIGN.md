@@ -21,3 +21,9 @@ String s = b.toString();   // "Forward"
 2. `Forward`/`Backward` 字段为 public static final，非 null 且互不相同。
 3. 字段与 `Position.Bias.Forward/Backward` 恒等（==）。
 4. `toString()` 分别为 "Forward"/"Backward"。
+
+## 5. 契约深化（本轮追加）
+`BiasTest`（9 断言）：
+- 仅 Forward/Backward 两个 public static final 常量实例，非 null 且互异。
+- toString 精确为 "Forward"/"Backward"。
+- getDeclaredFields 无其他公有实例字段（枚举化封闭集合）。

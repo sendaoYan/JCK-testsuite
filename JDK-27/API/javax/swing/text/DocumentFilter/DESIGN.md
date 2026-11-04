@@ -20,3 +20,9 @@ Document 变更过滤器。当 Document 执行 insert/remove/replace 时，若�
 3. 过滤器收到的 FilterBypass.getDocument() 与文档同一。
 4. 直接通过 FilterBypass 的 insertString/remove/replace 变更文档，验证不重新进入过滤器（调用计数不变）。
 5. 取消过滤器后 getDocumentFilter 为 null。
+
+## 5. 契约深化（本轮追加）
+（17 断言）：
+- 类型面：非抽象类 + insertString/remove/replace 三方法；FilterBypass 为嵌套抽象类（getDocument 抽象）。
+- 默认委托逐字：三方法各自把参数原样传给 bypass（insert:3:abc:null / remove:1:2 / replace:0:4:Z:null）。
+- 覆盖改写：override 可在转发途中改写文本（KEEP 拦截改写）；不调用 bypass 即完全拦截（文档不变）；未 override 的方法仍走默认路由。

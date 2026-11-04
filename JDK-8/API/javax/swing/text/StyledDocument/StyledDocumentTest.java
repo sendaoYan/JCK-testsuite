@@ -38,6 +38,39 @@ public class StyledDocumentTest {
         check(names.contains("setLogicalStyle"), "method setLogicalStyle");
         check(names.contains("getLogicalStyle"), "method getLogicalStyle");
         check(names.contains("getParagraphElement"), "method getParagraphElement");
+        check(names.contains("getCharacterElement"), "method getCharacterElement");
+        check(names.contains("getForeground"), "method getForeground");
+        check(names.contains("getBackground"), "method getBackground");
+        check(names.contains("getFont"), "method getFont");
+
+        testUmbrella();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testUmbrella() throws Exception {
+        // DefaultStyledDocument is the reference StyledDocument implementation
+        javax.swing.text.DefaultStyledDocument d = new javax.swing.text.DefaultStyledDocument();
+        check(d instanceof javax.swing.text.StyledDocument, "DefaultStyledDocument is a StyledDocument");
+        d.insertString(0, "hello world", null);
+        check(d.getParagraphElement(0).getName().equals("paragraph"), "styled paragraphs");
+        check(d.getCharacterElement(2).getName().equals("content"), "styled runs");
+        check(d.getLogicalStyle(0) != null, "logical style present");
+        javax.swing.text.Style s = d.addStyle("umb", null);
+        check(d.getStyle("umb") == s, "style registry shared");
+        d.setLogicalStyle(0, s);
+        check(d.getLogicalStyle(0) == s, "logical style settable");
+        d.setParagraphAttributes(0, 1, new javax.swing.text.SimpleAttributeSet(), false);
+        check(true, "paragraph attributes accepted");
+        java.util.Vector<String> names = new java.util.Vector<String>();
+        for (java.util.Enumeration<?> e = d.getStyleNames(); e.hasMoreElements(); )
+            names.add(String.valueOf(e.nextElement()));
+        check(names.contains("umb") && names.contains("default"), "style names enumerable");
+        javax.swing.text.SimpleAttributeSet red = new javax.swing.text.SimpleAttributeSet();
+        javax.swing.text.StyleConstants.setForeground(red, java.awt.Color.RED);
+        check(d.getForeground(red).equals(java.awt.Color.RED), "foreground delegation");
+        check(d.getBackground(red) != null, "background delegation");
+        check(d.getFont(red) != null, "font delegation");
+        d.removeStyle("umb");
+        check(d.getStyle("umb") == null, "style removal");
     }
 }

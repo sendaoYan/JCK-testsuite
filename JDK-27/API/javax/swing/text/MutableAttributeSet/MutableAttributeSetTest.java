@@ -1,98 +1,102 @@
 /*
  * @test
- * @summary javax.swing.text.MutableAttributeSet conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.MutableAttributeSet conformance: interface shape + mutation contract through SimpleAttributeSet and NamedStyle (headless-safe).
  * @run main MutableAttributeSetTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Collections;
-import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Vector;
-import javax.swing.text.AttributeSet;
 import javax.swing.text.MutableAttributeSet;
 import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.Style;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyleContext;
 
 public class MutableAttributeSetTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.MutableAttributeSet");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
+    static void testTypeShape() throws Exception {
+        Class<?> c = Class.forName("javax.swing.text.MutableAttributeSet", false, MutableAttributeSetTest.class.getClassLoader());
         check(c.isInterface(), "is interface");
-        check(!c.isAnnotation(), "is annotation");
-        check(!c.isEnum(), "is enum");
-        check(Modifier.isPublic(mods), "public modifier");
-        check(!Modifier.isProtected(mods), "protected modifier");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 1, "interface count");
-        check(c.getInterfaces()[0].getName().equals("javax.swing.text.AttributeSet"), "interface 0");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        check(hasInterface(c, "javax.swing.text.AttributeSet"), "extends javax.swing.text.AttributeSet");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("addAttribute"), "method addAttribute");
+        check(names.contains("addAttributes"), "method addAttributes");
+        check(names.contains("removeAttribute"), "method removeAttribute");
+        check(names.contains("removeAttributes"), "method removeAttributes");
+        check(names.contains("setResolveParent"), "method setResolveParent");
+        // also inherits the full AttributeSet query surface
+        check(names.contains("getAttributeCount"), "inherited getAttributeCount");
+        check(names.contains("getAttribute"), "inherited getAttribute");
+        check(names.contains("isEqual"), "inherited isEqual");
+        check(names.contains("getResolveParent"), "inherited getResolveParent");
     }
 
-    static void testBlackBox() {
-        MutableAttributeSet m = new SimpleAttributeSet();
-        check(m.getAttributeCount() == 0, "initial count 0");
-        check(m.getResolveParent() == null, "initial resolve parent null");
+    static void exercise(MutableAttributeSet a, String tag) {
+        a.addAttribute("k1", "v1");
+        check("v1".equals(a.getAttribute("k1")), tag + " addAttribute/getAttribute");
+        check(a.getAttributeCount() == 1, tag + " count after add");
 
-        m.addAttribute("k1", "v1");
-        check(m.getAttributeCount() == 1, "count 1 after add");
-        check("v1".equals(m.getAttribute("k1")), "getAttribute reads added value");
-        check(m.isDefined("k1"), "isDefined true");
-        check(m.containsAttribute("k1", "v1"), "containsAttribute true");
+        SimpleAttributeSet more = new SimpleAttributeSet();
+        more.addAttribute("k2", "v2");
+        more.addAttribute("k3", "v3");
+        a.addAttributes(more);
+        check(a.getAttributeCount() == 3, tag + " addAttributes merges");
+        check("v2".equals(a.getAttribute("k2")) && "v3".equals(a.getAttribute("k3")), tag + " merged values");
 
-        // Overwriting an existing key does not change the count.
-        m.addAttribute("k1", "v1-new");
-        check(m.getAttributeCount() == 1, "count unchanged after overwrite");
-        check("v1-new".equals(m.getAttribute("k1")), "overwrite value");
+        Vector<Object> names = new Vector<Object>();
+        names.add("k2");
+        a.removeAttributes(names.elements());
+        check(a.getAttribute("k2") == null, tag + " removeAttributes(Enumeration)");
+        check(a.isDefined("k1") && a.isDefined("k3"), tag + " others intact");
 
-        // addAttributes imports all name/value pairs.
-        SimpleAttributeSet src = new SimpleAttributeSet();
-        src.addAttribute("k2", "v2");
-        src.addAttribute("k3", "v3");
-        m.addAttributes(src);
-        check(m.getAttributeCount() == 3, "count 3 after addAttributes");
-        check("v2".equals(m.getAttribute("k2")), "k2 imported");
-        check("v3".equals(m.getAttribute("k3")), "k3 imported");
+        a.removeAttribute("k1");
+        check(!a.isDefined("k1"), tag + " removeAttribute");
 
-        // removeAttribute.
-        m.removeAttribute("k1");
-        check(!m.isDefined("k1"), "k1 removed");
-        check(m.getAttributeCount() == 2, "count 2 after remove");
-
-        // removeAttributes(AttributeSet) removes only matching name/value pairs.
-        SimpleAttributeSet toRemove = new SimpleAttributeSet();
-        toRemove.addAttribute("k2", "v2");
-        toRemove.addAttribute("k3", "WRONG");
-        m.removeAttributes(toRemove);
-        check(!m.isDefined("k2"), "k2 removed by matching pair");
-        check(m.isDefined("k3"), "k3 retained (value mismatch)");
-
-        // removeAttributes(Enumeration).
-        Vector<String> names = new Vector<>();
-        names.add("k3");
-        m.removeAttributes(names.elements());
-        check(!m.isDefined("k3"), "k3 removed via enumeration");
-        check(m.getAttributeCount() == 0, "count 0 after removals");
-
-        // Resolve parent: lookup falls through, isDefined stays local.
-        MutableAttributeSet child = new SimpleAttributeSet();
         SimpleAttributeSet parent = new SimpleAttributeSet();
-        parent.addAttribute("inherit", "pv");
-        child.setResolveParent(parent);
-        check(child.getResolveParent() == parent, "resolve parent set");
-        check("pv".equals(child.getAttribute("inherit")), "lookup falls through to parent");
-        check(!child.isDefined("inherit"), "isDefined is local only");
-        child.addAttribute("own", "ov");
-        check("ov".equals(child.getAttribute("own")), "own attribute wins");
+        parent.addAttribute("pk", "pv");
+        a.setResolveParent(parent);
+        check(a.getResolveParent() == parent, tag + " setResolveParent/getResolveParent");
+        check("pv".equals(a.getAttribute("pk")), tag + " parent fallthrough");
+
+        // removeAttributes(AttributeSet) with matching values removes
+        SimpleAttributeSet toRemove = new SimpleAttributeSet();
+        toRemove.addAttribute("k3", "v3");
+        a.removeAttributes(toRemove);
+        check(a.getAttribute("k3") == null, tag + " removeAttributes(AttributeSet)");
+    }
+
+    static void testThroughSimpleAttributeSet() {
+        exercise(new SimpleAttributeSet(), "SAS");
+    }
+
+    static void testThroughNamedStyle() {
+        StyleContext sc = new StyleContext();
+        // anonymous style carries no NameAttribute so counts stay comparable
+        Style s = sc.addStyle(null, null);
+        check(s.getName() == null, "anonymous style has no name");
+        exercise(s, "NamedStyle");
+        // NamedStyle.setResolveParent(null) removes the link (unlike raw add/remove).
+        s.setResolveParent(null);
+        check(s.getResolveParent() == null, "NamedStyle null parent clears");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testTypeShape();
+        testThroughSimpleAttributeSet();
+        testThroughNamedStyle();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

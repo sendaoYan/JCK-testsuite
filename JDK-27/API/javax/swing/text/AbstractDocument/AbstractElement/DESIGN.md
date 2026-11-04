@@ -20,3 +20,11 @@
 - 经 `PlainDocument` 元素树验证只读面：`getDocument/getParentElement/getAttributes/getName/getStartOffset/getEndOffset/isLeaf/getElementCount/getElement/getElementIndex`。
 - TreeNode 面：`getChildCount/getChildAt/getParent/getIndex/getAllowsChildren/children` 枚举。
 - 用暴露 `writeLock` 的 `AbstractDocument` 子类在写锁内验证 `MutableAttributeSet` 面：`addAttribute/getAttribute/isDefined/containsAttribute/containsAttributes/copyAttributes/isEqual/removeAttribute/addAttributes/removeAttributes(Enumeration/AttributeSet)/setResolveParent/getResolveParent/getAttributeNames`。
+
+## 5. 契约深化（本轮追加）
+`testAttributeContract/testResolveParent/testLockGuard`（55 断言）：
+- getAttributes() 返回元素自身（identity）；新元素无属性且与 SimpleAttributeSet.EMPTY isEqual。
+- 属性契约（写锁内经暴露 writeLock 的子类验证）：add/get/isDefined/getAttributeNames 枚举、同键覆写；copyAttributes 为独立快照（改元素后旧快照不变、不 isEqual）；containsAttribute/containsAttributes 值精确。
+- resolve parent：默认解析到父元素属性（穿透查找），显式 setResolveParent 覆盖；removeAttributes(this) 清空自身键。
+- 锁卫反例：未持写锁调用 addAttribute → javax.swing.text.StateInvariantError("Illegal cast to MutableAttributeSet")（包私有类，用类名比较断言）。
+- TreeNode 面：getChildAt/getChildCount/getParent/getIndex/getAllowsChildren/children 经 AbstractElement 引用可用。

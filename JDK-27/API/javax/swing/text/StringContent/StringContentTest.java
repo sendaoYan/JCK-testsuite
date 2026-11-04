@@ -1,10 +1,13 @@
 /*
  * @test
- * @summary javax.swing.text.StringContent conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.StringContent conformance: Content contract + exact BadLocationException matrix + positions + undo/redo + serialization (headless-safe).
  * @run main StringContentTest
  */
 
-import java.lang.reflect.Modifier;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Position;
 import javax.swing.text.Segment;
@@ -13,91 +16,177 @@ import javax.swing.undo.UndoableEdit;
 
 public class StringContentTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    interface ThrowingRunnable { void run() throws Exception; }
-    static void expectThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
-        boolean thrown = false;
-        try { r.run(); } catch (Throwable t) {
-            thrown = true;
-            check(expected.isAssignableFrom(t.getClass()),
-                  msg + " expected " + expected.getSimpleName() + " but got " + t.getClass().getSimpleName());
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    interface Throwing { Object run() throws Exception; }
+    static void expectBLE(Throwing r, String m, int expectedOffset) throws Exception {
+        try {
+            Object o = r.run();
+            throw new AssertionError(m + ": expected BadLocationException but returned " + o);
+        } catch (BadLocationException e) {
+            check(e.offsetRequested() == expectedOffset, m + " offsetRequested==" + expectedOffset + " (got " + e.offsetRequested() + ")");
         }
-        check(thrown, msg + " should throw " + expected.getSimpleName());
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.StringContent");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 2, "interface count");
-        check(c.getInterfaces()[0].getName().equals("javax.swing.text.AbstractDocument$Content"), "interface 0");
-        check(c.getInterfaces()[1].getName().equals("java.io.Serializable"), "interface 1");
+    static void testInitial() {
+        StringContent s = new StringContent();
+        check(s.length() == 1, "default initial length 1");
+        StringContent s10 = new StringContent(10);
+        check(s10.length() == 1, "sized initial length 1");
+        StringContent s0 = new StringContent(0);
+        check(s0.length() == 1, "size < 1 clamped");
+        StringContent sNeg = new StringContent(-7);
+        check(sNeg.length() == 1, "negative size clamped");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        StringContent c = new StringContent();
-        check(c.length() == 1, "initial length 1");
-        check("\n".equals(c.getString(0, 1)), "initial implied newline");
+    static void testInsert() throws Exception {
+        StringContent s = new StringContent();
+        s.insertString(0, "hi");
+        check(s.length() == 3, "length after insert");
+        check("hi".equals(s.getString(0, 2)), "content");
+        check("\n".equals(s.getString(2, 1)), "implicit newline at end");
 
-        // insert / getString / getChars
-        UndoableEdit ins = c.insertString(0, "abc");
-        check(ins != null, "insertString returns edit");
-        check(c.length() == 4, "length after insert");
-        check("abc\n".equals(c.getString(0, c.length())), "content after insert");
+        s.insertString(1, "X"); // hXi
+        check("hXi".equals(s.getString(0, 3)), "mid insert");
+
+        // bounds: where < 0 or where >= length() is invalid. Inserting just before
+        // the trailing newline (length()-1) is the legal end position; inserting
+        // right at length() (after the implicit newline) is refused.
+        StringContent b = new StringContent();
+        b.insertString(0, "abc"); // length 4
+        expectBLE(() -> b.insertString(b.length(), "z"), "insert at length()", b.length());
+    }
+
+    static void testInsertBounds() throws Exception {
+        StringContent b = new StringContent();
+        b.insertString(0, "abc");
+        // inserting just before the trailing newline is the legal end position
+        b.insertString(3, "d");
+        check("abcd".equals(b.getString(0, 4)), "insert at end of user content");
+        expectBLE(() -> b.insertString(-1, "z"), "insert negative", b.length());
+        expectBLE(() -> b.insertString(5, "z"), "insert beyond", b.length());
+        int len = b.length();
+        b.insertString(0, "");
+        check(b.length() == len, "empty insert no-op");
+    }
+
+    static void testRemove() throws Exception {
+        StringContent s = new StringContent();
+        s.insertString(0, "abcdef");
+        s.remove(0, 2);
+        check("cdef".equals(s.getString(0, 4)), "remove front");
+        s.remove(2, 2);
+        check("cd".equals(s.getString(0, 2)), "remove end");
+        // where + nitems must be < length(): the trailing newline cannot be removed
+        expectBLE(() -> s.remove(2, 1), "remove trailing newline", s.length());
+        expectBLE(() -> s.remove(0, 3), "remove past end", s.length());
+        // negative offsets fall through to String construction and surface as
+        // StringIndexOutOfBoundsException rather than BadLocationException
+        try {
+            s.remove(-1, 1);
+            check(false, "remove negative should throw");
+        } catch (StringIndexOutOfBoundsException e) {
+            check(true, "remove negative SIOOBE");
+        }
+        expectBLE(() -> s.remove(3, 0), "remove(3,0) past end", s.length());
+        s.remove(0, 0);
+        check("cd".equals(s.getString(0, 2)), "remove(.,0) no-op");
+    }
+
+    static void testGetStringGetChars() throws Exception {
+        StringContent s = new StringContent();
+        s.insertString(0, "abcdefgh");
+        check("".equals(s.getString(0, 0)), "empty range");
+        check("abc".equals(s.getString(0, 3)), "prefix");
+        expectBLE(() -> s.getString(0, 10), "getString past end", s.length());
+        check("".equals(s.getString(s.length(), 0)), "getString at end zero length ok");
+        expectBLE(() -> s.getString(10, 0), "getString offset past end", s.length());
+        try {
+            s.getString(-1, 0);
+            check(false, "getString negative should throw");
+        } catch (StringIndexOutOfBoundsException e) {
+            check(true, "getString negative SIOOBE");
+        }
 
         Segment seg = new Segment();
-        c.getChars(1, 2, seg);
-        check("bc".equals(new String(seg.array, seg.offset, seg.count)), "getChars subrange");
+        s.getChars(2, 3, seg);
+        check(seg.count == 3, "segment count");
+        check("cde".equals(seg.toString()), "segment content");
+        expectBLE(() -> { s.getChars(2, 100, seg); return null; }, "getChars past end", s.length());
+    }
 
-        // position tracking
-        Position p = c.createPosition(1);
-        c.insertString(0, "XY");
-        check(p.getOffset() == 3, "position tracks insert before it");
-        c.remove(0, 2);
-        check("abc\n".equals(c.getString(0, c.length())), "content after remove");
+    static void testPositions() throws Exception {
+        StringContent s = new StringContent();
+        s.insertString(0, "hello");
+        Position p0 = s.createPosition(0);
+        Position p2 = s.createPosition(2);
+        Position p5 = s.createPosition(5);
+        check(p0.getOffset() == 0, "p0");
+        check(p2.getOffset() == 2, "p2");
+        check(p5.getOffset() == 5, "p5");
 
-        // insert undo / redo
+        s.insertString(2, "XX");
+        check(p2.getOffset() == 4, "p2 shifts");
+        check(p5.getOffset() == 7, "p5 shifts");
+        s.remove(2, 2);
+        check(p2.getOffset() == 2, "p2 back");
+        s.remove(0, 3);
+        check(p2.getOffset() == 0, "p2 collapses to remove start");
+        check(p0.getOffset() == 0, "p0 pinned");
+
+        // inserting at offset 0 does not drag existing marks forward
+        StringContent t = new StringContent();
+        t.insertString(0, "ab");
+        Position at0 = t.createPosition(0);
+        t.insertString(0, "z");
+        check(at0.getOffset() == 0, "insert at 0 keeps mark at 0");
+    }
+
+    static void testUndoRedo() throws Exception {
+        StringContent s = new StringContent();
+        UndoableEdit ins = s.insertString(0, "hello");
+        check(ins != null, "insert returns edit");
         ins.undo();
-        check(c.length() == 1 && "\n".equals(c.getString(0, 1)), "insert undo restores newline");
+        check(s.length() == 1, "undo insert");
         ins.redo();
-        check("abc\n".equals(c.getString(0, c.length())), "insert redo reapplies");
+        check("hello".equals(s.getString(0, 5)), "redo insert");
 
-        // remove undo / redo
-        UndoableEdit rm = c.remove(0, 3);
-        check(c.length() == 1, "remove shortens");
+        Position p2 = s.createPosition(2);
+        UndoableEdit rm = s.remove(1, 2); // hlo
+        check("hlo".equals(s.getString(0, 3)), "after remove");
+        check(p2.getOffset() == 1, "position adjusted");
         rm.undo();
-        check("abc\n".equals(c.getString(0, c.length())), "remove undo restores");
+        check("hello".equals(s.getString(0, 5)), "undo remove");
+        check(p2.getOffset() == 2, "position restored");
         rm.redo();
-        check("\n".equals(c.getString(0, c.length())), "remove redo reapplies");
+        check("hlo".equals(s.getString(0, 3)), "redo remove");
+    }
 
-        // sized constructor clamps sizes below 1.
-        StringContent sized = new StringContent(0);
-        check(sized.length() == 1, "sized(0) clamps to length 1");
-        sized.insertString(0, "hello");
-        check("hello\n".equals(sized.getString(0, sized.length())), "sized constructor usable");
-
-        // bounds: insert at length() is invalid for StringContent.
-        expectThrows(BadLocationException.class, () -> c.insertString(c.length(), "x"), "insert at length");
-        expectThrows(BadLocationException.class, () -> c.insertString(-1, "x"), "insert negative");
-        expectThrows(BadLocationException.class, () -> c.remove(0, c.length()), "remove whole content");
-        expectThrows(BadLocationException.class, () -> c.getString(0, c.length() + 1), "getString past end");
+    static void testSerialization() throws Exception {
+        StringContent s = new StringContent();
+        s.insertString(0, "round trip");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(s);
+        oos.close();
+        StringContent r = (StringContent) new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(r != s, "round-trip distinct");
+        check(r.length() == s.length(), "round-trip length");
+        check("round trip".equals(r.getString(0, 10)), "round-trip content");
+        r.insertString(0, "X");
+        check("Xround trip".equals(r.getString(0, 11)), "round-trip mutable");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testInitial();
+        testInsert();
+        testInsertBounds();
+        testRemove();
+        testGetStringGetChars();
+        testPositions();
+        testUndoRedo();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

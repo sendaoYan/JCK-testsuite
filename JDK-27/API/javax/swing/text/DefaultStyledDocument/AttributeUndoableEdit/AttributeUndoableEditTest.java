@@ -1,100 +1,111 @@
 /*
  * @test
- * @summary javax.swing.text.DefaultStyledDocument.AttributeUndoableEdit conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.DefaultStyledDocument.AttributeUndoableEdit conformance: attribute snapshot/undo/redo semantics under the write lock (headless-safe).
  * @run main AttributeUndoableEditTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.Element;
-import javax.swing.text.GapContent;
 import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.StyleConstants;
+import javax.swing.undo.AbstractUndoableEdit;
 
 public class AttributeUndoableEditTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    // Concrete document exposing write lock + leaf factory so attribute
-    // mutations on elements can be driven through a user-visible path.
-    static class Doc extends AbstractDocument {
-        Doc() { super(new GapContent()); }
-        public Element getDefaultRootElement() { return root; }
-        public Element getParagraphElement(int pos) { return root; }
-        public void lock() { writeLock(); }
-        public void unlock() { writeUnlock(); }
-        public Element leaf(Element parent, AttributeSet a, int s, int e) { return createLeafElement(parent, a, s, e); }
-        Element root = createBranchElement(null, null);
-    }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.DefaultStyledDocument$AttributeUndoableEdit");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.undo.AbstractUndoableEdit"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 0, "no interfaces");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        Doc d = new Doc();
-
-        // Replacing edit: redo drops old attributes, undo restores them.
-        d.lock();
-        AbstractDocument.AbstractElement leaf = (AbstractDocument.AbstractElement) d.leaf(d.root, null, 0, 1);
-        leaf.addAttribute("old", "1");
-        d.unlock();
-
-        SimpleAttributeSet nas = new SimpleAttributeSet();
-        nas.addAttribute("new", "2");
-        DefaultStyledDocument.AttributeUndoableEdit replace =
-            new DefaultStyledDocument.AttributeUndoableEdit(leaf, nas, true);
-
-        d.lock();
-        replace.undo();
-        d.unlock();
-        check("1".equals(leaf.getAttribute("old")) && leaf.getAttribute("new") == null,
-              "undo restores pre-edit attributes");
-
-        d.lock();
-        replace.redo();
-        d.unlock();
-        check("2".equals(leaf.getAttribute("new")) && leaf.getAttribute("old") == null,
-              "replacing redo replaces all attributes");
-
-        // Merging edit: redo keeps existing attributes and adds new ones.
-        SimpleAttributeSet nas2 = new SimpleAttributeSet();
-        nas2.addAttribute("extra", "3");
-        DefaultStyledDocument.AttributeUndoableEdit merge =
-            new DefaultStyledDocument.AttributeUndoableEdit(leaf, nas2, false);
-
-        d.lock();
-        merge.undo();
-        d.unlock();
-        check("2".equals(leaf.getAttribute("new")) && leaf.getAttribute("extra") == null,
-              "merging undo keeps base attributes");
-
-        d.lock();
-        merge.redo();
-        d.unlock();
-        check("2".equals(leaf.getAttribute("new")) && "3".equals(leaf.getAttribute("extra")),
-              "merging redo adds attributes without dropping existing");
+    static class OpenDoc extends DefaultStyledDocument {
+        Element makeBranch(Element parent, AttributeSet a) {
+            writeLock();
+            try { return ((AbstractDocument) this).new BranchElement(parent, a); }
+            finally { writeUnlock(); }
+        }
+        void locked(Runnable r) { writeLock(); try { r.run(); } finally { writeUnlock(); } }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.text.DefaultStyledDocument$AttributeUndoableEdit", false, AttributeUndoableEditTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(!Modifier.isAbstract(c.getModifiers()), "not abstract");
+        check(!Modifier.isFinal(c.getModifiers()), "not final");
+        check(c.getSuperclass().getName().equals("javax.swing.undo.AbstractUndoableEdit"), "superclass AbstractUndoableEdit");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("undo"), "method undo");
+        check(names.contains("redo"), "method redo");
+        check(names.contains("isSignificant"), "method isSignificant");
+
+        testUndoRedo(false);
+        testUndoRedo(true);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testUndoRedo(boolean replacing) throws Exception {
+        OpenDoc d = new OpenDoc();
+        d.insertString(0, "hello", null);
+        Element root = d.getDefaultRootElement();
+        final Element branch = d.makeBranch(root, null);
+        // seed the element with one attribute
+        SimpleAttributeSet seed = new SimpleAttributeSet();
+        StyleConstants.setBold(seed, true);
+        d.locked(() -> ((javax.swing.text.MutableAttributeSet) branch.getAttributes()).addAttributes(seed));
+        check(StyleConstants.isBold(branch.getAttributes()), "seeded bold, replace=" + replacing);
+
+        // the edit snapshots the current attributes and applies newAttributes on redo
+        SimpleAttributeSet next = new SimpleAttributeSet();
+        StyleConstants.setItalic(next, true);
+        StyleConstants.setFontSize(next, 20);
+        final DefaultStyledDocument.AttributeUndoableEdit edit =
+                new DefaultStyledDocument.AttributeUndoableEdit(branch, next, replacing);
+        check(edit.isSignificant(), "attribute edits are significant");
+        check(edit.canUndo(), "fresh edit is in the done state");
+
+        // the edit starts in the "done" state: undo first (restores the snapshot),
+        // then redo to apply the recorded attributes like the document would
+        d.locked(() -> {
+            try { edit.undo(); } catch (Exception e) { throw new RuntimeException(e); }
+        });
+        check(StyleConstants.isBold(branch.getAttributes()), "initial undo restores the snapshot");
+        d.locked(() -> {
+            try { edit.redo(); } catch (Exception e) { throw new RuntimeException(e); }
+        });
+        check(StyleConstants.isItalic(branch.getAttributes()), "redo applied the new attributes");
+        check(StyleConstants.getFontSize(branch.getAttributes()) == 20, "redo applied font size");
+        if (replacing) {
+            check(!StyleConstants.isBold(branch.getAttributes()), "replacing edit cleared the old value");
+        } else {
+            check(StyleConstants.isBold(branch.getAttributes()), "non-replacing edit kept the old value");
+        }
+
+        // undo restores the snapshotted attribute set
+        d.locked(() -> {
+            try { edit.undo(); } catch (Exception e) { throw new RuntimeException(e); }
+        });
+        check(StyleConstants.isBold(branch.getAttributes()), "undo restored bold");
+        check(!StyleConstants.isItalic(branch.getAttributes()), "undo removed the new attributes");
+        check(StyleConstants.getFontSize(branch.getAttributes()) != 20, "undo removed the new size");
+
+        // redo re-applies, and the cycle is repeatable
+        d.locked(() -> {
+            try { edit.redo(); } catch (Exception e) { throw new RuntimeException(e); }
+        });
+        check(StyleConstants.isItalic(branch.getAttributes()), "second redo applies again");
+        d.locked(() -> {
+            try { edit.undo(); } catch (Exception e) { throw new RuntimeException(e); }
+        });
+        check(!StyleConstants.isItalic(branch.getAttributes()), "second undo reverts again");
     }
 }

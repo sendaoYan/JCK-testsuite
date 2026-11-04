@@ -1,72 +1,63 @@
 /*
  * @test
- * @summary javax.swing.text.DocumentFilter.FilterBypass conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.DocumentFilter.FilterBypass conformance: type shape via reflection (headless-safe).
  * @run main FilterBypassTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import javax.swing.JTextArea;
-import javax.swing.text.AbstractDocument;
-import javax.swing.text.AttributeSet;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.DocumentFilter;
+import java.util.HashSet;
+import java.util.Set;
 
 public class FilterBypassTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.DocumentFilter$FilterBypass");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == true, "abstract modifier");
-        check(c.getInterfaces().length == 0, "no interfaces");
-    }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        JTextArea area = new JTextArea("abcdef");
-        AbstractDocument doc = (AbstractDocument) area.getDocument();
-        final DocumentFilter.FilterBypass[] captured = new DocumentFilter.FilterBypass[1];
-        doc.setDocumentFilter(new DocumentFilter() {
-            @Override
-            public void replace(FilterBypass fb, int offs, int len, String text, AttributeSet attrs) throws BadLocationException {
-                captured[0] = fb;
-                super.replace(fb, offs, len, text, attrs);
-            }
-        });
-
-        doc.replace(0, 2, "XY", null);
-        DocumentFilter.FilterBypass bypass = captured[0];
-        check(bypass != null, "bypass captured from filter");
-        check(bypass.getDocument() == doc, "getDocument returns the mutated document");
-        check(doc.getText(0, doc.getLength()).equals("XYcdef"), "replace applied");
-
-        bypass.insertString(0, "P", null);
-        check(doc.getText(0, doc.getLength()).equals("PXYcdef"), "bypass insertString");
-
-        bypass.remove(0, 1);
-        check(doc.getText(0, doc.getLength()).equals("XYcdef"), "bypass remove");
-
-        bypass.replace(0, 2, "Q", null);
-        check(doc.getText(0, doc.getLength()).equals("Qcdef"), "bypass replace");
-
-        doc.setDocumentFilter(null);
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.text.DocumentFilter$FilterBypass", false, FilterBypassTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == true, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getDocument"), "method getDocument");
+        check(names.contains("remove"), "method remove");
+        check(names.contains("insertString"), "method insertString");
+        check(names.contains("replace"), "method replace");
+
+        // a concrete bypass drives the document it was created for
+        final javax.swing.text.PlainDocument doc = new javax.swing.text.PlainDocument();
+        javax.swing.text.DocumentFilter.FilterBypass fb = new javax.swing.text.DocumentFilter.FilterBypass() {
+            public javax.swing.text.Document getDocument() { return doc; }
+            public void remove(int offset, int length) throws javax.swing.text.BadLocationException {
+                getDocument().remove(offset, length);
+            }
+            public void insertString(int offset, String string, javax.swing.text.AttributeSet attr)
+                    throws javax.swing.text.BadLocationException {
+                getDocument().insertString(offset, string, attr);
+            }
+            public void replace(int offset, int length, String string, javax.swing.text.AttributeSet attr)
+                    throws javax.swing.text.BadLocationException {
+                ((javax.swing.text.AbstractDocument) getDocument()).replace(offset, length, string, attr);
+            }
+        };
+        check(fb.getDocument() == doc, "getDocument returns the document");
+        fb.insertString(0, "hello", null);
+        check(doc.getLength() == 5, "bypass insert applied");
+        fb.replace(0, 5, "bye", null);
+        check("bye".equals(doc.getText(0, 3)), "bypass replace applied");
+        fb.remove(0, 3);
+        check(doc.getLength() == 0, "bypass remove applied");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

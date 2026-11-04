@@ -17,3 +17,6 @@ DocumentFilter 的回调旁路（抽象类），用于在过滤器内部直接�
 ## 4. 测试用例设计（黑盒部分，`FilterBypassTest.testBlackBox`）
 1. 通过过滤器 replace 捕获实际 FilterBypass；getDocument() 与文档同一。
 2. bypass.insertString / remove / replace 直接变更文档并断言文本（不重入过滤器）。
+
+## 5. 契约深化（本轮追加）
+（15 断言）：抽象类形状（getDocument/remove/insertString/replace）；实现具体 bypass（getDocument 返回目标文档）后 insertString/remove/replace 驱动文档精确生效（replace 需将 Document 转型 AbstractDocument 调用）。

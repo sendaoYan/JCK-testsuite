@@ -25,3 +25,13 @@
 - `setCharacterAttributes/setParagraphAttributes` 反映到元素属性。
 - `getForeground/getBackground/getFont` 经 `StyleConstants` 解析固定颜色/字体族。
 - `removeElement` 删除段落文本与结构；`DefaultStyledDocument(StyleContext)` 构造可用。
+
+## 5. 契约深化（本轮追加）
+`testTypeShape/testElementTree/testCharacterAttributes/testParagraphAttributesAndLogicalStyle/testStyleRegistry/testColorsAndFont/testChangeEventsAndUndo`（89 断言）：
+- 类型面与常量：BUFFER_SIZE_DEFAULT=4096；方法面 setCharacterAttributes/setParagraphAttributes/setLogicalStyle/getLogicalStyle/getCharacterElement/getParagraphElement/getForeground/getBackground/getFont/addStyle/removeStyle/getStyle/getStyleNames。
+- 元素树：section→paragraph→content 三级；空文档各层区间 [0,1)；插入后 section end 随内容、每段一个 content run；getParagraphElement identity 与钳制；getCharacterElement 返回 run（parent 是段）并钳到末 run。
+- 字符属性：styled 范围内 isBold、区间外不变；非 replace 合并保留旧值、replace=true 清除其它；插入新文本不继承 run 属性；零长度 apply 是 no-op；越界偏移钳到末 run 并应用（头部 run 不受影响）。
+- 段落属性：段落元素带 resolver 条目（NameAttribute="resolver"）指向逻辑 style；ALIGN_CENTER==1/ALIGN_RIGHT==2 交叉验证；setLogicalStyle 经 resolver 生效。
+- style 注册表：addStyle/getStyle/removeStyle、匿名 style 名 null；逻辑 style 缺省链。
+- 颜色/字体：getForeground/getBackground 默认黑、属性覆盖生效；getFont 由 attrs 派生（Monospaced 12 默认）。
+- 事件/撤销：changedUpdate 触发 "C0:3:CHANGE"（offset/length/type=CHANGE）；样式修改产生 undoable edit（presentationName "style change"、significant）且 undo/redo 回滚/重放属性。

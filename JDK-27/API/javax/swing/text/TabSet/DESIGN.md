@@ -21,3 +21,11 @@
 4. `getTab(-1)/getTab(2)` → IllegalArgumentException。
 5. equals（自反/对称/不同数量/不同元素/null/非 TabSet）+ 相等对象 hashCode 相等 + toString。
 6. 空集合（null 入参）各查询行为。
+
+## 5. 契约深化（本轮追加）
+`testConstructor/testGetTabBounds/testLookup/testEqualsHashCode/testToString/testSerialization`（47 断言）：
+- 构造器对 null/空数组容错（getTabCount()==0）；getTabAt 越界 → ArrayIndexOutOfBoundsException。
+- getTabAfter 精确语义：返回第一个 pos≥入参的 stop，无则 null；边界 pos 恰好相等也命中。
+- equals/hashCode 按内容比较（同序同 stop 列表相等，个数/内容不同必不等）；null 容错。
+- toString 以 "[ " 开头 " ]" 结尾并列出每个 stop。
+- 序列化 round-trip：列表内容与顺序精确保留。

@@ -17,3 +17,6 @@ NavigationFilter 的回调旁路（抽象类），用于在过滤器内部直接
 ## 4. 测试用例设计（黑盒部分，`FilterBypassTest.testBlackBox`）
 1. 通过过滤器 setDot 捕获实际 FilterBypass；getCaret() 与组件 Caret 同一。
 2. bypass.setDot / moveDot 直接定位 Caret，断言 dot 与 mark。
+
+## 5. 契约深化（本轮追加）
+（11 断言）：抽象类形状（getCaret/setDot/moveDot）；实现具体 bypass（getCaret 返回 DefaultCaret）后 setDot/moveDot 驱动 caret 状态（dot/mark 精确变化）。

@@ -18,3 +18,6 @@
 - 验证 `getDefaultRootElement()` 是 `SectionElement` 实例、`getName()=="section"`、非叶子、允许子元素、初始 1 个段落。
 - 区间：`getStartOffset()==0`、`getEndOffset()==getLength()+1`（含尾随换行）。
 - 插入多行后段落数更新、`getParagraphElement` 映射到 section 子元素、父元素为 null、所属文档正确。
+
+## 5. 契约深化（本轮追加）
+（17 断言）：DefaultStyledDocument 默认根就是 SectionElement（protected 类，经 getClass().getName() 判定）；名字 "section"；为 branch；空文档恰一段；插入 "ab\ncd" 后区间 [0,6) 且子元素是名为 "paragraph" 的段；getDocument 回链、无父元素。

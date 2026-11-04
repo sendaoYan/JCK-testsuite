@@ -16,3 +16,6 @@
 1. 匿名实现 paint 记录调用与偏移参数（验证接口可调用）。
 2. `DefaultHighlighter.DefaultHighlightPainter` instanceof HighlightPainter，getColor 正确。
 3. 作为 painter 加入高亮器后按同一性读回。
+
+## 5. 契约深化（本轮追加）
+（13 断言）：接口仅 paint(Graphics,int,int,Shape,JTextComponent)，不继承 Serializable（序列化由实现自行负责）；DefaultHighlightPainter 构造后颜色保留、paint 签名可用、不覆写 equals/hashCode（identity 相等：自身相等、不同实例必不等）；DefaultHighlightPainter 同时是 LayeredHighlighter.LayerPainter。

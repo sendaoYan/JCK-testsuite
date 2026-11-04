@@ -26,3 +26,9 @@
 5. 可见性/选区可见性默认 false、set/get 往返。
 6. ChangeListener 在 setDot 改变位置时触发；removeChangeListener 后不再触发。
 7. deinstall 正常完成。
+
+## 5. 契约深化（本轮追加）
+`testDefaultCaretModelState`（31 断言）：
+- 接口形状：install/deinstall/paint/addChangeListener/removeChangeListener/isVisible/setVisible/isSelectionVisible/setSelectionVisible/setDot/moveDot/getDot/getMark/setBlinkRate/getBlinkRate/setMagicCaretPosition/getMagicCaretPosition。
+- DefaultCaret 模型态（headless 可测）：dot/mark 初始 0；blink 初始 0、可设置；magic position 默认 null、可设置回读。
+- 反例：未 install 到组件即 setDot → NPE（绘制/闪烁等 UI 面本轮跳过）。

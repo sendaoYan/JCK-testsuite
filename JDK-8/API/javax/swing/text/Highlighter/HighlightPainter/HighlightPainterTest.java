@@ -30,6 +30,20 @@ public class HighlightPainterTest {
         Set<String> names = new HashSet<String>();
         for (Method m : c.getMethods()) names.add(m.getName());
         check(names.contains("paint"), "method paint");
+
+        // the default painter is a pure data holder usable headlessly
+        javax.swing.text.DefaultHighlighter.DefaultHighlightPainter p1 =
+                new javax.swing.text.DefaultHighlighter.DefaultHighlightPainter(java.awt.Color.YELLOW);
+        check(p1.getColor().equals(java.awt.Color.YELLOW), "color retained");
+        javax.swing.text.DefaultHighlighter.DefaultHighlightPainter p2 =
+                new javax.swing.text.DefaultHighlighter.DefaultHighlightPainter(java.awt.Color.YELLOW);
+        check(!p1.equals(p2), "painters use identity equality");
+        check(p1.equals(p1), "identity equality with itself");
+        javax.swing.text.DefaultHighlighter.DefaultHighlightPainter p3 =
+                new javax.swing.text.DefaultHighlighter.DefaultHighlightPainter(java.awt.Color.RED);
+        check(!p1.equals(p3) && !p2.equals(p3), "distinct instances never equal");
+        check(p1 instanceof javax.swing.text.Highlighter.HighlightPainter, "is a HighlightPainter");
+        check(p1 instanceof javax.swing.text.LayeredHighlighter.LayerPainter, "is a layered highlight painter");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -19,3 +19,13 @@
 - 初始长度/换行；insert/getString/getChars 往返；位置跟踪（位置前插入右移）。
 - 插入/删除返回的编辑 `undo()/redo()`。
 - `StringContent(0)` 长度钳制为 1；边界：`insertString(length(),...)`（与 GapContent 不同的边界）、负偏移、`remove(0,length())`、越界 `getString` 均抛 `BadLocationException`。
+
+## 5. 契约深化（本轮追加）
+`testInitial/testInsert/testInsertBounds/testRemove/testGetStringGetChars/testPositions/testUndoRedo/testSerialization`（50 断言）：
+- 初始态与尺寸钳制同 GapContent（<1/负 → 1）；隐式换行语义。
+- 插入：0/中部/length()-1 合法；insert 于 length() 允许（尾接）；负/越界 → BLE 且 offsetRequested 精确（StringContent 对负偏移返回 length+1 语义）。
+- 删除：负偏移 len>0 → BLE（通过 doc 层观察为 BadLocationException；直接调用为 SIOOBE 反例在 Content 契约下统一为 BLE 捕获）；len==0 越界 no-op。
+- getString/getChars 越界/负偏移 BLE 精确；Segment 填充正确。
+- 位置：插入点前移/后不动、塌缩到删除起点、0 钉死、insert at 0 保持既有 mark 在 0。
+- Undo/Redo：insert/remove 编辑往返与位置联动。
+- 序列化 round-trip：内容/可变性保留。

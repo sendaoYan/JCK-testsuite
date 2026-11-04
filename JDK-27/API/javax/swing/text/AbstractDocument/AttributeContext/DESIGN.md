@@ -19,3 +19,10 @@
 - `getEmptySet()` 非空、属性数为 0、实例稳定。
 - `addAttribute/addAttributes` 合并结果可读；`removeAttribute/removeAttributes(AttributeSet)/removeAttributes(Enumeration)` 逐项删除。
 - `reclaim` 可调用且不影响集合可用性。
+
+## 5. 契约深化（本轮追加）
+`testInterningContract`（26 断言，经 StyleContext 实现）：
+- 接口形状：addAttribute/addAttributes/removeAttribute(×2)/getEmptySet/reclaim。
+- getEmptySet：无属性、跨调用稳定（幂等）；StyleContext 返回 SimpleAttributeSet.EMPTY。
+- interning：同参数 addAttribute 再次调用返回同一实例；源集合不被修改（不可变更新）；覆写值/批量合并/按键删除/按集合删除全部返回新集合且语义精确；回到空集与 getEmptySet isEqual。
+- reclaim 对未缓存集合容忍（no-op）。

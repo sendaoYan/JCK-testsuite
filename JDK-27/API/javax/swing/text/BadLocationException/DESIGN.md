@@ -18,3 +18,9 @@
 1. 构造 + `getMessage()`/`offsetRequested()` 精确往返（message="offset out of range"，offset=42）。
 2. 类型链路：instanceof Exception / Throwable，且非 RuntimeException（受检异常）。
 3. 边界：空串 message、offset=0、null message、Integer.MAX_VALUE、负 offset 均原样保留（构造器不校验）。
+
+## 5. 契约深化（本轮追加）
+`testBasic/testSerialization`（10 断言）：
+- `BadLocationException(String,int)` 的 getMessage 精确回传入描述、offsetRequested() 精确回传偏移。
+- 异常类型继承链：直接父类 java.lang.Exception。
+- 序列化 round-trip：desc 与 offsetRequested 均精确保留（含负偏移）。

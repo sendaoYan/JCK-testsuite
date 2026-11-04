@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary javax.swing.text.ElementIterator conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.ElementIterator conformance: depth-first traversal, first/current/next/previous/depth, clone independence, null handling (headless-safe).
  * @run main ElementIteratorTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.HashSet;
+import java.util.Set;
+import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.Document;
 import javax.swing.text.Element;
 import javax.swing.text.ElementIterator;
@@ -12,84 +16,125 @@ import javax.swing.text.PlainDocument;
 
 public class ElementIteratorTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.ElementIterator");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 1, "interface count");
-        check(c.getInterfaces()[0].getName().equals("java.lang.Cloneable"), "interface 0");
-    }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        PlainDocument doc = new PlainDocument();
-        doc.insertString(0, "hello\nworld", null);
-        Element root = doc.getDefaultRootElement();
-        check(root.getElementCount() == 2, "root has 2 leaf children");
-        check(!root.isLeaf(), "root is branch");
-
-        // Document constructor iterates from the default root element.
-        ElementIterator it = new ElementIterator(doc);
-        check(it.depth() == 0, "depth 0 before first");
-        Element first = it.first();
-        check(first == root, "first() == default root");
-        check(it.current() == root, "current() after first() == root");
-        check(it.depth() == 1, "depth 1 after first");
-
-        Element leaf0 = it.next();
-        check(leaf0 != null && leaf0.isLeaf(), "next leaf0 is leaf");
-        check(leaf0.getStartOffset() == 0, "leaf0 start offset");
-        check(leaf0.getEndOffset() == 6, "leaf0 end offset");
-        check("content".equals(leaf0.getName()), "leaf0 name content");
-
-        Element leaf1 = it.next();
-        check(leaf1 != null && leaf1.isLeaf(), "next leaf1 is leaf");
-        check(leaf1.getStartOffset() == 6, "leaf1 start offset");
-        check(leaf1.getEndOffset() == 12, "leaf1 end offset");
-
-        check(it.next() == null, "next after end == null");
-        check(it.previous() == null, "previous at exhausted stack == null");
-        check(it.current() == null, "current at exhausted stack == null");
-
-        // previous() from the first child returns the root.
-        ElementIterator it2 = new ElementIterator(root);
-        it2.first();
-        it2.next(); // now positioned on leaf0
-        check(it2.previous() == root, "previous from first child == root");
-
-        // next() called before first()/current() returns the root.
-        ElementIterator it3 = new ElementIterator(root);
-        check(it3.next() == root, "next before first == root");
-
-        // Element constructor is equivalent for the same root.
-        ElementIterator it4 = new ElementIterator(root);
-        check(it4.first() == root, "Element ctor first == root");
-
-        // clone() yields an independent iterator over the same tree.
-        ElementIterator clone = (ElementIterator) it4.clone();
-        check(clone != root && clone != it4, "clone is a distinct object");
-        check(clone.first() == root, "clone first == root");
-        Element cLeaf = clone.next();
-        check(cLeaf != null && cLeaf.isLeaf() && cLeaf.getStartOffset() == 0, "clone iterates leaf0");
-        check(clone.depth() == 1, "clone depth independent");
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.text.ElementIterator", false, ElementIteratorTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
+        check(hasInterface(c, "java.lang.Cloneable"), "implements java.lang.Cloneable");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("clone"), "method clone");
+        check(names.contains("first"), "method first");
+        check(names.contains("depth"), "method depth");
+        check(names.contains("current"), "method current");
+        check(names.contains("next"), "method next");
+        check(names.contains("previous"), "method previous");
+
+        testDocumentIteration();
+        testNavigation();
+        testClone();
+        testNullsAndExhaustion();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testDocumentIteration() throws Exception {
+        PlainDocument d = new PlainDocument();
+        d.insertString(0, "ab\ncd\nef", null);
+        ElementIterator it = new ElementIterator(d);
+        StringBuilder sb = new StringBuilder();
+        Element e;
+        while ((e = it.next()) != null) {
+            sb.append(e.getName()).append("@").append(e.getStartOffset()).append(" ");
+        }
+        check(sb.toString().equals("paragraph@0 content@0 content@3 content@6 "),
+                "depth-first document order, got [" + sb + "]");
+        check(it.next() == null, "iteration stays exhausted");
+        check(it.current() == null, "current null when exhausted");
+
+        // starting from an element instead of a document iterates that subtree
+        Element root = d.getDefaultRootElement();
+        ElementIterator sub = new ElementIterator(root);
+        sb = new StringBuilder();
+        while ((e = sub.next()) != null) sb.append(e.getName()).append(" ");
+        check(sb.toString().equals("paragraph content content content "), "element-rooted iteration");
+
+        // styled documents walk the full three-level tree
+        DefaultStyledDocument sd = new DefaultStyledDocument();
+        sd.insertString(0, "one", null);
+        ElementIterator sit = new ElementIterator(sd);
+        sb = new StringBuilder();
+        while ((e = sit.next()) != null) sb.append(e.getName()).append(" ");
+        check(sb.toString().equals("section paragraph content "), "styled tree order");
+    }
+
+    static void testNavigation() throws Exception {
+        PlainDocument d = new PlainDocument();
+        d.insertString(0, "ab\ncd", null);
+        Element root = d.getDefaultRootElement();
+        ElementIterator it = new ElementIterator(d);
+        check(it.first() == root, "first is the default root");
+        check(it.current() == root, "current after first");
+        check(it.depth() == 1, "depth of root is 1");
+        Element n1 = it.next();
+        check(n1 == root.getElement(0), "next descends to first child");
+        check(it.current() == n1, "current tracks next");
+        check(it.depth() == 1, "depth of a leaf is 1");
+        check(it.previous() == root, "previous returns the parent");
+        check(it.current() == n1, "previous does not move current");
+        // after previous the walk continues with the following sibling
+        Element r2 = it.next();
+        check(r2 == root.getElement(1), "next after previous resumes traversal");
+        check(it.current() == r2, "current tracks next again");
+        // first() restarts the walk
+        check(it.first() == root, "first restarts");
+        check(it.next() == root.getElement(0), "next after restart");
+    }
+
+    static void testClone() throws Exception {
+        PlainDocument d = new PlainDocument();
+        d.insertString(0, "a\nb\nc", null);
+        ElementIterator it = new ElementIterator(d);
+        it.next(); it.next(); it.next(); // positioned on the first leaf
+        ElementIterator clone = (ElementIterator) it.clone();
+        check(clone != it, "clone is a distinct object");
+        check(clone.current() == it.current(), "clone starts at the same position");
+        // advancing the clone does not disturb the original
+        Element origCurrent = it.current();
+        clone.next();
+        check(it.current() == origCurrent, "original position unaffected by clone advance");
+        Element a = it.next();
+        Element b = clone.previous();
+        check(a != null && b != null, "both iterators still navigable");
+    }
+
+    static void testNullsAndExhaustion() throws Exception {
+        ElementIterator empty = new ElementIterator(new PlainDocument());
+        check(empty.first() != null, "empty document still has a root");
+        check(empty.next() != null, "root has a line child");
+        ElementIterator nulled = new ElementIterator((Element) null);
+        check(nulled.first() == null, "element-null first null");
+        check(nulled.next() == null, "element-null next null");
+        check(nulled.current() == null, "element-null current null");
+        check(nulled.previous() == null, "element-null previous null");
+        check(nulled.depth() == 0, "element-null depth 0");
+        try {
+            new ElementIterator((Document) null);
+            check(false, "document-null should throw NPE");
+        } catch (NullPointerException e) {
+            check(true, "document-null NPE");
+        }
     }
 }

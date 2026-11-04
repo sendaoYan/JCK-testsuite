@@ -33,6 +33,20 @@ public class FilterBypassTest {
         check(names.contains("getCaret"), "method getCaret");
         check(names.contains("setDot"), "method setDot");
         check(names.contains("moveDot"), "method moveDot");
+
+        // a concrete bypass drives the caret it was created for
+        final javax.swing.text.DefaultCaret caret = new javax.swing.text.DefaultCaret();
+        javax.swing.text.NavigationFilter.FilterBypass fb = new javax.swing.text.NavigationFilter.FilterBypass() {
+            public javax.swing.text.Caret getCaret() { return caret; }
+            public void setDot(int dot, javax.swing.text.Position.Bias bias) {
+                log += "set:" + dot + ":" + bias + ";";
+            }
+            public void moveDot(int dot, javax.swing.text.Position.Bias bias) {
+                log += "move:" + dot + ":" + bias + ";";
+            }
+            String log = "";
+        };
+        check(fb.getCaret() == caret, "getCaret returns the caret");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

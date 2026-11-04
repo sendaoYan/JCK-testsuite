@@ -23,3 +23,13 @@
 - `getRootElements/getDefaultRootElement`、`putProperty/getProperty`（含 null 删除）、`render` 执行回调。
 - 监听器：插入+删除各通知一次，移除后不再通知。
 - 边界：越界 `insertString`、`getText` 负长度抛 `BadLocationException`。
+
+## 5. 契约深化（本轮追加）
+`testTypeShape/testNegativeOffsetGetText/testInsertBounds/testRemoveBounds`（114 断言）：
+- 接口完整方法面（16 方法）与三个属性键常量（StreamDescriptionProperty/TitleProperty 为互异 String）。
+- 契约面通过 PlainDocument(默认 GapContent) 与 StringContent 构造的 PlainDocument 双实现走查：空文档 length 0、root [0,1)（隐式换行）、root[0] 是 default root。
+- getText 精确矩阵：中部切片、零长度（0 与 length 处）、含换行文本、getText(int,int,Segment) 填充；负偏移/负长度/越界 → BadLocationException 且 offsetRequested 精确（负偏移=length+1、越界=length；零长度越界不抛）。
+- insertString 边界：负偏移 BLE 精确；属性随插入可携带并回读。
+- remove 边界：越界 BLE 精确、零长度 no-op 不抛；remove 后 getText 反映。
+- 事件面：I0:1:INSERT / R0:1:REMOVE 精确（offset/length/type），removeDocumentListener 后静默。
+- 位置/render/property 面：null 值移除属性、createPosition 追踪插入、end 位置在内容末、render 执行 Runnable。

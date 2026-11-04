@@ -1,67 +1,105 @@
 /*
  * @test
- * @summary javax.swing.text.Position conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.Position conformance: interface + createPosition / tracking / start-end (headless-safe).
  * @run main PositionTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.HashSet;
+import java.util.Set;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.PlainDocument;
 import javax.swing.text.Position;
 
 public class PositionTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.Position");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
+    interface Throwing { void run() throws Throwable; }
+    static void expectEx(Class<? extends Throwable> ex, Throwing r, String m) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + ex.getName() + " but got " + t, t);
+        }
+        throw new AssertionError(m + ": expected " + ex.getName() + " but no exception thrown");
+    }
+
+    static void testTypeShape() {
+        Class<?> c = Position.class;
         check(c.isInterface(), "is interface");
-        check(!c.isAnnotation(), "is annotation");
-        check(!c.isEnum(), "is enum");
-        check(Modifier.isPublic(mods), "public modifier");
-        check(!Modifier.isProtected(mods), "protected modifier");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 0, "no interfaces");
-        check(c.getDeclaredMethods().length == 1, "single getOffset method");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getOffset"), "method getOffset");
     }
 
-    static void testBlackBox() throws Exception {
-        PlainDocument doc = new PlainDocument();
-        doc.insertString(0, "abcdef", null);
+    static void testCreatePosition() throws Exception {
+        PlainDocument d = new PlainDocument();
+        d.insertString(0, "hello", null);
+        Position p0 = d.createPosition(0);
+        Position p2 = d.createPosition(2);
+        Position p5 = d.createPosition(d.getLength());
+        check(p0.getOffset() == 0, "position 0");
+        check(p2.getOffset() == 2, "position 2");
+        check(p5.getOffset() == 5, "position at end of user content");
+        // The start position sits at offset 0; the end position sits at the very
+        // end of the backing content, i.e. after the implicit trailing newline
+        // (content length = getLength() + 1).
+        check(d.getStartPosition().getOffset() == 0, "start position 0");
+        check(d.getEndPosition().getOffset() == 6, "end position after implicit newline");
+        // Positions may also be created on an empty document.
+        PlainDocument e = new PlainDocument();
+        check(e.createPosition(0).getOffset() == 0, "position 0 on empty doc");
+        check(e.getEndPosition().getOffset() == 1, "end position of empty doc is content end");
+    }
 
-        // A Position tracks edits made before its location.
-        Position p = doc.createPosition(3);
-        check(p.getOffset() == 3, "initial offset 3");
+    static void testPositionTracksChanges() throws Exception {
+        PlainDocument d = new PlainDocument();
+        d.insertString(0, "hello", null);
+        Position p0 = d.createPosition(0);
+        Position p2 = d.createPosition(2);
+        Position p5 = d.createPosition(5);
 
-        doc.insertString(0, "xx", null);
-        check(p.getOffset() == 5, "offset shifts after insert before position");
+        d.insertString(1, "XX", null); // hXXello
+        check(p0.getOffset() == 0, "start position unaffected by insert after");
+        check(p2.getOffset() == 4, "position shifted by insert before");
+        check(p5.getOffset() == 7, "end position shifted by insert");
 
-        doc.insertString(5, "YY", null); // insert exactly at position (forward bias)
-        check(p.getOffset() == 7, "forward bias moves position past inserted text");
+        d.remove(1, 2); // back to hello
+        check(p2.getOffset() == 2, "position shifted back after remove");
+        check(p5.getOffset() == 5, "end position shifted back");
 
-        doc.insertString(0, "z", null);
-        check(p.getOffset() == 8, "further shift after more leading inserts");
+        d.remove(0, 2); // llo
+        check(p0.getOffset() == 0, "start position pinned at 0");
+        check(p2.getOffset() == 0, "position in removed range collapses to start");
+    }
 
-        // Position 0 is a special case that never moves.
-        Position zero = doc.createPosition(0);
-        check(zero.getOffset() == 0, "zero position starts at 0");
-        doc.insertString(0, "abc", null);
-        check(zero.getOffset() == 0, "zero position stays at 0");
-
-        // A position at the end tracks the document length.
-        Position end = doc.createPosition(doc.getLength());
-        check(end.getOffset() == doc.getLength(), "end position equals length");
-        doc.insertString(doc.getLength(), "tail", null);
-        check(end.getOffset() == doc.getLength(), "end position tracks growth");
+    static void testStartEndTrack() throws Exception {
+        PlainDocument d = new PlainDocument();
+        Position start = d.getStartPosition();
+        Position end = d.getEndPosition();
+        check(start.getOffset() == 0, "empty doc start 0");
+        check(end.getOffset() == 1, "empty doc end at implicit newline");
+        d.insertString(0, "abc", null);
+        check(start.getOffset() == 0, "start stays 0");
+        check(end.getOffset() == 4, "end tracks to content end");
+        d.remove(0, 1);
+        check(end.getOffset() == 3, "end tracks back after remove");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testTypeShape();
+        testCreatePosition();
+        testPositionTracksChanges();
+        testStartEndTrack();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

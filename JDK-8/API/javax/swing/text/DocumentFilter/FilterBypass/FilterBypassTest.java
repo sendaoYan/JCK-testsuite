@@ -34,6 +34,30 @@ public class FilterBypassTest {
         check(names.contains("remove"), "method remove");
         check(names.contains("insertString"), "method insertString");
         check(names.contains("replace"), "method replace");
+
+        // a concrete bypass drives the document it was created for
+        final javax.swing.text.PlainDocument doc = new javax.swing.text.PlainDocument();
+        javax.swing.text.DocumentFilter.FilterBypass fb = new javax.swing.text.DocumentFilter.FilterBypass() {
+            public javax.swing.text.Document getDocument() { return doc; }
+            public void remove(int offset, int length) throws javax.swing.text.BadLocationException {
+                getDocument().remove(offset, length);
+            }
+            public void insertString(int offset, String string, javax.swing.text.AttributeSet attr)
+                    throws javax.swing.text.BadLocationException {
+                getDocument().insertString(offset, string, attr);
+            }
+            public void replace(int offset, int length, String string, javax.swing.text.AttributeSet attr)
+                    throws javax.swing.text.BadLocationException {
+                ((javax.swing.text.AbstractDocument) getDocument()).replace(offset, length, string, attr);
+            }
+        };
+        check(fb.getDocument() == doc, "getDocument returns the document");
+        fb.insertString(0, "hello", null);
+        check(doc.getLength() == 5, "bypass insert applied");
+        fb.replace(0, 5, "bye", null);
+        check("bye".equals(doc.getText(0, 3)), "bypass replace applied");
+        fb.remove(0, 3);
+        check(doc.getLength() == 0, "bypass remove applied");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

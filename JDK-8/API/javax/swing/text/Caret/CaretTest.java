@@ -37,6 +37,39 @@ public class CaretTest {
         check(names.contains("isVisible"), "method isVisible");
         check(names.contains("setVisible"), "method setVisible");
         check(names.contains("isSelectionVisible"), "method isSelectionVisible");
+        check(names.contains("setDot"), "method setDot");
+        check(names.contains("moveDot"), "method moveDot");
+        check(names.contains("getDot"), "method getDot");
+        check(names.contains("getMark"), "method getMark");
+        check(names.contains("setBlinkRate"), "method setBlinkRate");
+        check(names.contains("getBlinkRate"), "method getBlinkRate");
+        check(names.contains("setMagicCaretPosition"), "method setMagicCaretPosition");
+        check(names.contains("getMagicCaretPosition"), "method getMagicCaretPosition");
+
+        testDefaultCaretModelState();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testDefaultCaretModelState() {
+        // DefaultCaret's pure model state is observable before installation
+        javax.swing.text.DefaultCaret c = new javax.swing.text.DefaultCaret();
+        check(c instanceof javax.swing.text.Caret, "DefaultCaret implements Caret");
+        check(c.getDot() == 0 && c.getMark() == 0, "dot and mark start at 0");
+        check(c.getBlinkRate() == 0, "blink rate starts at 0");
+        c.setBlinkRate(300);
+        check(c.getBlinkRate() == 300, "blink rate settable");
+        check(!c.isVisible(), "not visible before install");
+        check(!c.isSelectionVisible(), "selection not visible before install");
+        java.awt.Point p = new java.awt.Point(1, 2);
+        c.setMagicCaretPosition(p);
+        check(c.getMagicCaretPosition() != null && c.getMagicCaretPosition().x == 1, "magic position stored");
+        check(c.getChangeListeners().length == 0, "no listeners initially");
+        // moving the caret requires an installed text component
+        try {
+            c.setDot(3);
+            check(false, "setDot before install should NPE");
+        } catch (NullPointerException e) {
+            check(true, "setDot before install NPE");
+        }
     }
 }

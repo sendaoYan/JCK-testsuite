@@ -21,3 +21,8 @@
 - `addStyle/getStyle/removeStyle`、`setLogicalStyle/getLogicalStyle`。
 - `setCharacterAttributes` 反映到 `getCharacterElement`，`setParagraphAttributes` 反映到 `getParagraphElement`。
 - `getForeground/getBackground/getFont` 经 `StyleConstants` 解析固定颜色/字体族。
+
+## 5. 契约深化（本轮追加）
+`testUmbrella`（31 断言）：
+- 接口形状：12 个方法（无 getStyleNames——那是 DefaultStyledDocument 的具体方法，反射锁定反例）。
+- DefaultStyledDocument 实现 StyledDocument：段/run 结构、逻辑 style 存在且可换、段落属性接受、style 注册表与上下文共享（addStyle 后 getStyleNames 含名字）、getForeground/getBackground/getFont 委托 style/attrs 派生。

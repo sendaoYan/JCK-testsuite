@@ -28,3 +28,13 @@ SimpleAttributeSet cloned = (SimpleAttributeSet) s.clone();
 4. containsAttributes 子集判断。
 5. resolve parent 回退与本地 isDefined 语义。
 6. `EMPTY` 常量行为。
+
+## 5. 契约深化（本轮追加）
+`testBasic/testCopyConstructor/testQueries/testResolveParent/testRemoveVariants/testEmpty/testEqualsHashCodeToString/testCloneAndSerialization`（96 断言）：
+- 基本面：add/get/isDefined/getAttributeCount、同键覆写保持计数、remove 后 miss、重复 remove 无害。
+- 拷贝构造器逐项拷贝且与源独立（改源不影响副本）。
+- 查询面：containsAttribute 值不匹配/键缺失必 false；containsAttributes 子集成立、超集不成立、自反成立；isEqual 同内容 true、计数不同/计数同内容不同 false。
+- resolve parent：父条目计入 getAttributeCount、使集合非空；查找穿透到父但 isDefined 对父键为 false；本地键遮蔽父键；只有父条目时与平铺集合 isEqual 单向不对称（flat.isEqual(child) false）；equals 委托 isEqual。
+- remove 变体：removeAttribute/removeAttributes(Enumeration)/removeAttributes(AttributeSet)（按键去交集）。
+- EMPTY 常量：空、count 0、无父、copyAttributes 与自身 isEqual。
+- toString 含条目数；clone 独立；序列化 round-trip 内容精确保留（resolve parent 可序列化部分）。

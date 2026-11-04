@@ -37,6 +37,30 @@ public class HighlighterTest {
         check(names.contains("removeAllHighlights"), "method removeAllHighlights");
         check(names.contains("changeHighlight"), "method changeHighlight");
         check(names.contains("getHighlights"), "method getHighlights");
+
+        // nested types: Highlight (a rendered range + painter) and HighlightPainter
+        Class<?> hl = Class.forName("javax.swing.text.Highlighter$Highlight", false, HighlighterTest.class.getClassLoader());
+        check(hl.isInterface(), "Highlight is an interface");
+        Set<String> hn = new HashSet<String>();
+        for (Method m : hl.getMethods()) hn.add(m.getName());
+        check(hn.contains("getStartOffset"), "Highlight getStartOffset");
+        check(hn.contains("getEndOffset"), "Highlight getEndOffset");
+        check(hn.contains("getPainter"), "Highlight getPainter");
+        Class<?> hp = Class.forName("javax.swing.text.Highlighter$HighlightPainter", false, HighlighterTest.class.getClassLoader());
+        check(hp.isInterface(), "HighlightPainter is an interface");
+        check(hp.getInterfaces().length == 0, "HighlightPainter extends nothing (serializable only via implementations)");
+        Set<String> pn = new HashSet<String>();
+        for (Method m : hp.getMethods()) pn.add(m.getName());
+        check(pn.contains("paint"), "HighlightPainter paint");
+
+        // the default implementation covers the same surface
+        javax.swing.text.Highlighter def = new javax.swing.text.DefaultHighlighter();
+        check(def != null, "DefaultHighlighter instantiable headlessly");
+        check(def.getHighlights().length == 0, "fresh highlighter has no highlights");
+        // DefaultHighlighter.DefaultHighlightPainter is the shared painter
+        javax.swing.text.DefaultHighlighter.DefaultHighlightPainter painter =
+                new javax.swing.text.DefaultHighlighter.DefaultHighlightPainter(java.awt.Color.YELLOW);
+        check(painter.getColor().equals(java.awt.Color.YELLOW), "painter color retained");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

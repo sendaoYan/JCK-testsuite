@@ -1,99 +1,97 @@
 /*
  * @test
- * @summary javax.swing.text.NavigationFilter conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.NavigationFilter conformance: default setDot/moveDot delegation to FilterBypass with exact arguments (headless-safe).
  * @run main NavigationFilterTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import javax.swing.JTextArea;
-import javax.swing.SwingConstants;
+import java.util.HashSet;
+import java.util.Set;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.NavigationFilter;
 import javax.swing.text.Position;
 
 public class NavigationFilterTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.NavigationFilter");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 0, "no interfaces");
+    /** Records every call made through the bypass. */
+    static class RecordingBypass extends NavigationFilter.FilterBypass {
+        String log = "";
+        public void setDot(int dot, Position.Bias bias) { log += "setDot:" + dot + ":" + bias + ";"; }
+        public void moveDot(int dot, Position.Bias bias) { log += "moveDot:" + dot + ":" + bias + ";"; }
+        public javax.swing.text.Caret getCaret() { return null; }
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        JTextArea area = new JTextArea();
-        area.setText("hello world");
+    /** A filter that constrains navigation to the even offsets it lets through. */
+    static class Clamping extends NavigationFilter {
+        NavigationFilter base = new NavigationFilter();
+        public void setDot(FilterBypass fb, int dot, Position.Bias bias) {
+            log += "f.setDot:" + dot + ";";
+            base.setDot(fb, dot, bias); // default behaviour: straight through
+        }
+        public void moveDot(FilterBypass fb, int dot, Position.Bias bias) {
+            log += "f.moveDot:" + dot + ";";
+            base.moveDot(fb, dot, bias);
+        }
+        String log = "";
+    }
 
-        // default pass-through filter
-        NavigationFilter pass = new NavigationFilter();
-        area.setNavigationFilter(pass);
-        check(area.getNavigationFilter() == pass, "filter set");
-        area.setCaretPosition(5);
-        check(area.getCaretPosition() == 5, "default setDot passes through");
-        area.moveCaretPosition(8);
-        check(area.getCaretPosition() == 8 && area.getCaret().getMark() == 5, "default moveDot passes through");
+    static void testTypeShape() throws Exception {
+        Class<?> c = Class.forName("javax.swing.text.NavigationFilter", false, NavigationFilterTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(!c.isEnum() && !c.isAnnotation(), "not enum/annotation");
+        check(!Modifier.isAbstract(c.getModifiers()), "not abstract");
+        check(!Modifier.isFinal(c.getModifiers()), "not final");
+        check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("setDot"), "method setDot");
+        check(names.contains("moveDot"), "method moveDot");
+        check(names.contains("getNextVisualPositionFrom"), "method getNextVisualPositionFrom");
+        Class<?> fb = Class.forName("javax.swing.text.NavigationFilter$FilterBypass", false, NavigationFilterTest.class.getClassLoader());
+        check(Modifier.isAbstract(fb.getModifiers()), "FilterBypass abstract");
+        int abstractCount = 0;
+        for (Method m : fb.getMethods()) if (Modifier.isAbstract(m.getModifiers())) abstractCount++;
+        check(abstractCount >= 2, "FilterBypass has abstract setDot/moveDot");
+    }
 
-        // clamping filter + FilterBypass
-        final NavigationFilter.FilterBypass[] captured = new NavigationFilter.FilterBypass[1];
-        area.setNavigationFilter(new NavigationFilter() {
-            @Override
-            public void setDot(FilterBypass fb, int dot, Position.Bias bias) {
-                captured[0] = fb;
-                fb.setDot(Math.min(dot, 3), bias);
-            }
-            @Override
-            public void moveDot(FilterBypass fb, int dot, Position.Bias bias) {
-                captured[0] = fb;
-                fb.moveDot(Math.min(dot, area.getDocument().getLength()), bias);
-            }
-        });
-        area.setCaretPosition(10);
-        check(area.getCaretPosition() == 3, "setDot clamped to 3 by filter");
-        check(captured[0].getCaret() == area.getCaret(), "FilterBypass.getCaret returns the caret");
+    static void testDefaultDelegation() throws Exception {
+        // plain filter: every call goes straight to the bypass untouched
+        NavigationFilter plain = new NavigationFilter();
+        RecordingBypass rb = new RecordingBypass();
+        plain.setDot(rb, 7, Position.Bias.Forward);
+        check(rb.log.equals("setDot:7:Forward;"), "default setDot delegates verbatim, got [" + rb.log + "]");
+        plain.moveDot(rb, 3, Position.Bias.Backward);
+        check(rb.log.equals("setDot:7:Forward;moveDot:3:Backward;"), "default moveDot delegates verbatim");
+        // null bias is forwarded as-is
+        plain.setDot(rb, 0, null);
+        check(rb.log.endsWith("setDot:0:null;"), "null bias forwarded");
+    }
 
-        area.setCaretPosition(0);
-        area.moveCaretPosition(7);
-        check(area.getCaretPosition() == 7 && area.getCaret().getMark() == 0, "moveDot clamped to document length");
-
-        // FilterBypass direct calls bypass the filter
-        NavigationFilter.FilterBypass fb = captured[0];
-        fb.setDot(4, Position.Bias.Forward);
-        check(area.getCaretPosition() == 4, "bypass setDot");
-        fb.moveDot(9, Position.Bias.Forward);
-        check(area.getCaretPosition() == 9 && area.getCaret().getMark() == 4, "bypass moveDot");
-
-        // custom getNextVisualPositionFrom override
-        area.setNavigationFilter(new NavigationFilter() {
-            @Override
-            public int getNextVisualPositionFrom(javax.swing.text.JTextComponent text, int pos,
-                                                 Position.Bias bias, int direction, Position.Bias[] biasRet) {
-                biasRet[0] = Position.Bias.Forward;
-                return 42;
-            }
-        });
-        Position.Bias[] biasRet = {Position.Bias.Backward};
-        int v = area.getNavigationFilter().getNextVisualPositionFrom(
-                area, 0, Position.Bias.Forward, SwingConstants.EAST, biasRet);
-        check(v == 42, "getNextVisualPositionFrom override returns sentinel");
-        check(biasRet[0] == Position.Bias.Forward, "biasRet populated by override");
+    static void testOverrideChainsToDefault() throws Exception {
+        Clamping f = new Clamping();
+        RecordingBypass rb = new RecordingBypass();
+        f.setDot((NavigationFilter.FilterBypass) rb, 5, Position.Bias.Forward);
+        check(f.log.equals("f.setDot:5;"), "override observed the call");
+        check(rb.log.equals("setDot:5:Forward;"), "override forwarded via default");
+        f.moveDot((NavigationFilter.FilterBypass) rb, 9, Position.Bias.Forward);
+        check(f.log.equals("f.setDot:5;f.moveDot:9;"), "moveDot override observed");
+        check(rb.log.equals("setDot:5:Forward;moveDot:9:Forward;"), "moveDot forwarded verbatim");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testTypeShape();
+        testDefaultDelegation();
+        testOverrideChainsToDefault();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

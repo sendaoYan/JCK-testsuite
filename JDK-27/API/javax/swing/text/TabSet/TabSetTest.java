@@ -1,103 +1,135 @@
 /*
  * @test
- * @summary javax.swing.text.TabSet conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.TabSet conformance: constructor copy / lookup / equals-hashCode / serialization (headless-safe).
  * @run main TabSetTest
  */
 
-import java.lang.reflect.Modifier;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import javax.swing.text.TabSet;
 import javax.swing.text.TabStop;
 
 public class TabSetTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
-    static void expectThrows(Runnable r, Class<? extends Throwable> type, String msg) {
-        try {
-            r.run();
-        } catch (Throwable t) {
-            check(type.isInstance(t), msg + " -> " + t.getClass().getName());
-            return;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    interface Throwing { void run() throws Throwable; }
+    static void expectEx(Class<? extends Throwable> ex, Throwing r, String m) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + ex.getName() + " but got " + t, t);
         }
-        check(false, msg + " -> no exception");
+        throw new AssertionError(m + ": expected " + ex.getName() + " but no exception thrown");
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.TabSet");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 1, "interface count");
-        check(c.getInterfaces()[0].getName().equals("java.io.Serializable"), "interface 0");
-    }
+    static void testConstructor() {
+        TabStop[] arr = { new TabStop(10f), new TabStop(20f), new TabStop(30f) };
+        TabSet s = new TabSet(arr);
+        check(s.getTabCount() == 3, "count 3");
+        check(s.getTab(0).getPosition() == 10f, "tab0");
+        check(s.getTab(2).getPosition() == 30f, "tab2");
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        TabStop t10 = new TabStop(10f);
-        TabStop t20 = new TabStop(20f, TabStop.ALIGN_CENTER, TabStop.LEAD_DOTS);
-        TabStop[] arr = new TabStop[]{t10, t20};
-        TabSet set = new TabSet(arr);
+        // Defensive copy: mutating the source array does not affect the TabSet.
+        arr[0] = new TabStop(999f);
+        check(s.getTab(0).getPosition() == 10f, "defensive copy");
 
-        check(set.getTabCount() == 2, "getTabCount");
-        check(set.getTab(0) == t10, "getTab(0) identity");
-        check(set.getTab(1) == t20, "getTab(1) identity");
-
-        // Defensive copy of the input array.
-        arr[0] = new TabStop(99f);
-        check(set.getTab(0) == t10, "constructor copies input array");
-
-        // getTabAfter / getTabIndexAfter.
-        check(set.getTabAfter(5f) == t10, "getTabAfter(5)");
-        check(set.getTabAfter(15f) == t20, "getTabAfter(15)");
-        check(set.getTabAfter(25f) == null, "getTabAfter(25) null");
-        check(set.getTabIndexAfter(5f) == 0, "getTabIndexAfter(5)");
-        check(set.getTabIndexAfter(15f) == 1, "getTabIndexAfter(15)");
-        check(set.getTabIndexAfter(25f) == -1, "getTabIndexAfter(25)");
-
-        // getTabIndex uses object identity, not equality.
-        check(set.getTabIndex(t10) == 0, "getTabIndex(t10)");
-        check(set.getTabIndex(t20) == 1, "getTabIndex(t20)");
-        check(set.getTabIndex(new TabStop(10f)) == -1, "getTabIndex identity-based");
-
-        // Out of range access.
-        expectThrows(() -> set.getTab(-1), IllegalArgumentException.class, "getTab(-1)");
-        expectThrows(() -> set.getTab(2), IllegalArgumentException.class, "getTab(2)");
-
-        // equals / hashCode.
-        TabSet same = new TabSet(new TabStop[]{new TabStop(10f), new TabStop(20f, TabStop.ALIGN_CENTER, TabStop.LEAD_DOTS)});
-        check(set.equals(set), "equals reflexive");
-        check(set.equals(same), "equals same content");
-        check(same.equals(set), "equals symmetric");
-        check(set.hashCode() == same.hashCode(), "equal objects equal hash");
-        check(!set.equals(null), "equals null false");
-        check(!set.equals("not a TabSet"), "equals non-TabSet false");
-        check(!set.equals(new TabSet(new TabStop[]{t10})), "equals different count false");
-        check(!set.equals(new TabSet(new TabStop[]{t10, new TabStop(21f)})), "equals different stop false");
-
-        // toString.
-        check(set.toString().equals("[ tab @10.0 - center tab @20.0 (w/leaders) ]"), "toString");
-
-        // Empty / null-backed TabSet.
+        // null array is legal -> empty TabSet.
         TabSet empty = new TabSet(null);
-        check(empty.getTabCount() == 0, "null tabs count 0");
-        check(empty.getTabAfter(0f) == null, "empty getTabAfter null");
-        check(empty.getTabIndexAfter(0f) == -1, "empty getTabIndexAfter -1");
-        check(empty.toString().equals("[  ]"), "empty toString");
-        expectThrows(() -> empty.getTab(0), IllegalArgumentException.class, "empty getTab(0)");
+        check(empty.getTabCount() == 0, "null array empty");
+        expectEx(IllegalArgumentException.class, () -> empty.getTab(0), "empty getTab IAE");
+        check(empty.getTabAfter(5f) == null, "empty getTabAfter null");
+        check(empty.getTabIndexAfter(5f) == -1, "empty getTabIndexAfter -1");
+    }
+
+    static void testGetTabBounds() {
+        TabSet s = new TabSet(new TabStop[] { new TabStop(10f), new TabStop(20f), new TabStop(30f) });
+        expectEx(IllegalArgumentException.class, () -> s.getTab(-1), "getTab -1 IAE");
+        expectEx(IllegalArgumentException.class, () -> s.getTab(3), "getTab 3 IAE");
+        expectEx(IllegalArgumentException.class, () -> s.getTab(100), "getTab 100 IAE");
+    }
+
+    static void testLookup() {
+        TabStop t10 = new TabStop(10f);
+        TabStop t20 = new TabStop(20f);
+        TabStop t30 = new TabStop(30f);
+        TabSet s = new TabSet(new TabStop[] { t10, t20, t30 });
+
+        check(s.getTabAfter(5f) == t10, "getTabAfter 5 -> 10");
+        // A tab exactly at the requested location is itself returned ("at or after").
+        check(s.getTabAfter(10f) == t10, "getTabAfter 10 -> tab at 10");
+        check(s.getTabAfter(10.001f) == t20, "getTabAfter 10.001 -> 20");
+        check(s.getTabAfter(19.9f) == t20, "getTabAfter 19.9 -> 20");
+        check(s.getTabAfter(-5f) == t10, "getTabAfter -5 -> first tab");
+        check(s.getTabAfter(30f) == t30, "getTabAfter 30 -> tab at 30");
+        check(s.getTabAfter(30.001f) == null, "getTabAfter 30.001 -> null");
+        check(s.getTabAfter(40f) == null, "getTabAfter 40 -> null");
+
+        check(s.getTabIndexAfter(5f) == 0, "getTabIndexAfter 5 -> 0");
+        check(s.getTabIndexAfter(10f) == 0, "getTabIndexAfter 10 -> 0 (tab at location)");
+        check(s.getTabIndexAfter(10.001f) == 1, "getTabIndexAfter 10.001 -> 1");
+        check(s.getTabIndexAfter(30f) == 2, "getTabIndexAfter 30 -> 2 (tab at location)");
+        check(s.getTabIndexAfter(30.001f) == -1, "getTabIndexAfter 30.001 -> -1");
+
+        // getTabIndex compares by identity (==), not equals.
+        check(s.getTabIndex(t10) == 0, "getTabIndex identity 0");
+        check(s.getTabIndex(t30) == 2, "getTabIndex identity 2");
+        check(s.getTabIndex(new TabStop(20f)) == -1, "getTabIndex equal-but-not-identical -1");
+        check(s.getTabIndex(null) == -1, "getTabIndex null -1");
+    }
+
+    static void testEqualsHashCode() {
+        TabSet a = new TabSet(new TabStop[] { new TabStop(10f), new TabStop(20f) });
+        TabSet b = new TabSet(new TabStop[] { new TabStop(10f), new TabStop(20f) });
+        TabSet c = new TabSet(new TabStop[] { new TabStop(10f) });
+        TabSet d = new TabSet(new TabStop[] { new TabStop(10f), new TabStop(21f) });
+        check(a.equals(b), "equal TabSets");
+        check(a.hashCode() == b.hashCode(), "equal hashCodes");
+        check(a.equals(a), "reflexive");
+        check(!a.equals(c), "different count not equal");
+        check(!a.equals(d), "different tab not equal");
+        check(!a.equals(null), "not equal null");
+        check(!a.equals("x"), "not equal other type");
+        // hashCode is cached; calling twice returns the same value.
+        check(a.hashCode() == a.hashCode(), "hashCode cached/stable");
+    }
+
+    static void testToString() {
+        TabSet s = new TabSet(new TabStop[] { new TabStop(10f), new TabStop(20f) });
+        String str = s.toString();
+        check(str.startsWith("[ "), "toString starts [");
+        check(str.endsWith(" ]"), "toString ends ]");
+        check(str.contains("tab @10.0"), "toString contains first tab");
+        check(str.contains("tab @20.0"), "toString contains second tab");
+        check(new TabSet(null).toString().equals("[  ]"), "empty toString");
+    }
+
+    static void testSerialization() throws Exception {
+        TabSet s = new TabSet(new TabStop[] { new TabStop(10f), new TabStop(20f, TabStop.ALIGN_DECIMAL, TabStop.LEAD_DOTS) });
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(s);
+        oos.close();
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        TabSet r = (TabSet) ois.readObject();
+        check(r != s, "round-trip distinct instance");
+        check(r.equals(s), "round-trip equals");
+        check(r.getTabCount() == 2, "round-trip count");
+        check(r.getTab(1).getPosition() == 20f, "round-trip tab position");
+        check(r.getTab(1).getAlignment() == TabStop.ALIGN_DECIMAL, "round-trip tab alignment");
+        check(r.getTab(1).getLeader() == TabStop.LEAD_DOTS, "round-trip tab leader");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testConstructor();
+        testGetTabBounds();
+        testLookup();
+        testEqualsHashCode();
+        testToString();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

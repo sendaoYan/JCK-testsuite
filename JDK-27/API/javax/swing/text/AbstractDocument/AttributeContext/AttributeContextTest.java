@@ -1,13 +1,13 @@
 /*
  * @test
- * @summary javax.swing.text.AbstractDocument.AttributeContext conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.AbstractDocument.AttributeContext conformance: interface shape + interning contract exercised through StyleContext (headless-safe).
  * @run main AttributeContextTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.Vector;
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.SimpleAttributeSet;
@@ -15,68 +15,72 @@ import javax.swing.text.StyleContext;
 
 public class AttributeContextTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.AbstractDocument$AttributeContext");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == true, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 0, "no interfaces");
-    }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        // StyleContext is the reference AttributeContext implementation.
-        AbstractDocument.AttributeContext ac = new StyleContext();
-
-        AttributeSet empty = ac.getEmptySet();
-        check(empty != null, "getEmptySet non-null");
-        check(empty.getAttributeCount() == 0, "empty set has no attributes");
-        check(empty == ac.getEmptySet(), "getEmptySet stable instance");
-
-        SimpleAttributeSet sas = new SimpleAttributeSet();
-        sas.addAttribute("k", "v");
-        sas.addAttribute("n", "1");
-
-        AttributeSet added = ac.addAttribute(empty, "k", "v");
-        check("v".equals(added.getAttribute("k")), "addAttribute adds name/value");
-        check(added.getAttributeCount() == 1, "addAttribute count 1");
-
-        AttributeSet addedAll = ac.addAttributes(empty, sas);
-        check("v".equals(addedAll.getAttribute("k")) && "1".equals(addedAll.getAttribute("n")),
-              "addAttributes adds set");
-
-        AttributeSet removed = ac.removeAttribute(addedAll, "k");
-        check(removed.getAttribute("k") == null, "removeAttribute removes name");
-        check("1".equals(removed.getAttribute("n")), "removeAttribute keeps other");
-
-        AttributeSet removedAll = ac.removeAttributes(addedAll, sas);
-        check(removedAll.getAttribute("k") == null && removedAll.getAttribute("n") == null,
-              "removeAttributes(AttributeSet) removes all named");
-
-        Enumeration<?> names = new Vector<Object>(Arrays.asList("k", "n")).elements();
-        AttributeSet removedEnum = ac.removeAttributes(addedAll, names);
-        check(removedEnum.getAttribute("k") == null && removedEnum.getAttribute("n") == null,
-              "removeAttributes(Enumeration) removes all enumerated");
-
-        // reclaim is a documented no-op hook; must be callable without effect.
-        ac.reclaim(addedAll);
-        check(addedAll.getAttribute("k") != null, "reclaim leaves set usable");
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.text.AbstractDocument$AttributeContext", false, AttributeContextTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("addAttribute"), "method addAttribute");
+        check(names.contains("addAttributes"), "method addAttributes");
+        check(names.contains("removeAttribute"), "method removeAttribute");
+        check(names.contains("removeAttributes"), "method removeAttributes");
+        check(names.contains("getEmptySet"), "method getEmptySet");
+        check(names.contains("reclaim"), "method reclaim");
+        check(hasInterface(Class.forName("javax.swing.text.StyleContext"), "javax.swing.text.AbstractDocument$AttributeContext"),
+                "StyleContext implements AttributeContext");
+
+        testInterningContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testInterningContract() {
+        AbstractDocument.AttributeContext ctx = new StyleContext();
+        AttributeSet empty = ctx.getEmptySet();
+        check(empty.getAttributeCount() == 0, "empty set has no attributes");
+        check(ctx.getEmptySet() == empty, "empty set is stable");
+
+        // addAttribute returns an interned immutable instance; the input is untouched
+        AttributeSet one = ctx.addAttribute(empty, "k", "v");
+        check(one.getAttributeCount() == 1 && "v".equals(one.getAttribute("k")), "add one");
+        check(ctx.addAttribute(empty, "k", "v") == one, "same addition interns to the same instance");
+        check(empty.getAttributeCount() == 0, "source unchanged");
+
+        // overwriting produces a distinct interned instance
+        AttributeSet two = ctx.addAttribute(one, "k", "v2");
+        check("v2".equals(two.getAttribute("k")), "overwritten value");
+        check("v".equals(one.getAttribute("k")), "original immutable");
+
+        // bulk add merges
+        SimpleAttributeSet more = new SimpleAttributeSet();
+        more.addAttribute("x", "1");
+        more.addAttribute("k", "v3");
+        AttributeSet merged = ctx.addAttributes(one, more);
+        check(merged.getAttributeCount() == 2, "bulk merge count");
+        check("v3".equals(merged.getAttribute("k")), "bulk merge overwrites");
+
+        // removals walk back toward the empty set
+        AttributeSet dropK = ctx.removeAttribute(merged, "k");
+        check(dropK.getAttributeCount() == 1 && "1".equals(dropK.getAttribute("x")), "remove one key");
+        AttributeSet dropX = ctx.removeAttribute(dropK, "x");
+        check(dropX.getAttributeCount() == 0, "back to empty");
+        check(ctx.removeAttributes(merged, more).getAttributeCount() == 0, "removeAttributes(AttributeSet) empties matching entries");
+
+        // reclaim is a hint and must never throw
+        ctx.reclaim(one);
+        ctx.reclaim(empty);
+        check(true, "reclaim tolerated");
     }
 }

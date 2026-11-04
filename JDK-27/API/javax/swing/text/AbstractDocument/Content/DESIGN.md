@@ -20,3 +20,10 @@
 - 位置跟踪：在位置前插入，位置右移。
 - 边界：负偏移插入、越界 `getString/remove` 抛 `BadLocationException`。
 - 用 `StringContent` 验证同一契约（初始长度、insert/getString、位置跟踪）。
+
+## 5. 契约深化（本轮追加）
+ContentTest 以 GapContent 与 StringContent 双实现走查接口契约（48 断言）：
+- 接口形状：length/insertString/remove/getString/getChars/createPosition 六方法。
+- 共同契约：初始 length()==1 且唯一字符为隐式 "\n"；插入后用户内容在前、换行恒最后；中部插入精确；createPosition 后 remove 联动位置；getString/getChars 一致；remove 尾部换行/全部内容允许。
+- 反例：getString/getChars 越界抛 BadLocationException；remove 越界抛 BLE（两实现的 offsetRequested 细节差异在各自用例中锁定）。
+- insertString 返回 UndoableEdit：canUndo、undo 后内容回退、redo 恢复。

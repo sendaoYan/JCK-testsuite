@@ -1,0 +1,17 @@
+# javax.swing.text.Highlighter.Highlight — DESIGN
+
+## 1. API 功能
+单个高亮区间的只读描述接口。方法分组：
+- 位置：`getStartOffset()` / `getEndOffset()`（`getStartOffset() <= getEndOffset()`）。
+- 绘制器：`getPainter()`（返回 `Highlighter.HighlightPainter`）。
+
+## 2. Java 用户如何使用
+通过 `Highlighter.getHighlights()` 得到 `Highlight[]`，逐个读取 `getStartOffset()/getEndOffset()/getPainter()` 判断高亮覆盖区间与绘制器。实现由 `DefaultHighlighter.HighlightInfo`（内部类）提供。
+
+## 3. 开源代码实际用法调研（来源：JDK 源码）
+- `~/git/jdk8u/jdk/src/share/classes/javax/swing/text/DefaultHighlighter.java`（`HighlightInfo`）：`public int getStartOffset() { return p0.getOffset(); } public int getEndOffset() { return p1.getOffset(); } public Highlighter.HighlightPainter getPainter() { return painter; }` —— 内部类实现。
+- `~/git/jdk8u/jdk/src/share/classes/javax/swing/text/DefaultHighlighter.java`（`getHighlights`）：`Highlighter.Highlight[] h = new Highlighter.Highlight[size]; highlights.copyInto(h);` —— 返回 Highlight 数组。
+- `~/git/jdk8u/jdk/src/share/classes/javax/swing/text/Highlighter.java`：`public interface Highlight { int getStartOffset(); int getEndOffset(); HighlightPainter getPainter(); }`。
+
+## 4. 测试用例设计 + 自动化实现
+（12 断言）：接口三方法 getStartOffset/getEndOffset/getPainter；经 DefaultHighlighter.addHighlight 产生的 Highlight（DefaultHighlight）区间/painter 回读精确、区间良构（start<=end）。模型面无需组件即可验证区间契约。

@@ -22,3 +22,11 @@
 3. `setPartialReturn` 往返；`clone()` 独立对象且视图一致。
 4. 空 Segment（默认构造）各查询返回 0/空串/DONE。
 5. 异常：charAt/subSequence 越界 → StringIndexOutOfBoundsException；setIndex 越界 → IllegalArgumentException。
+
+## 5. 契约深化（本轮追加）
+用例重组为 `testDefaultConstructor/testArrayConstructor/testCharSequence/testCharacterIterator/testPartialReturn/testClone`（71 断言）：
+- 构造器矩阵：默认构造为全零空片段；数组构造器后 `array/offset/count` 字段直读。
+- CharSequence 契约与 String 语义一致（length/charAt/subSequence/toString）；charAt/subSequence 越界 → StringIndexOutOfBoundsException。
+- CharacterIterator 全协议：first/last/current/next/previous/setIndex，两端各返回一次 DONE 后保持 DONE；getBeginIndex/getEndIndex/getIndex 精确回读。
+- setIndex 越界（<begin 或 >end）→ IllegalArgumentException。
+- setPartialReturn 默认 false，切换后读回；clone() 为独立副本且视图一致。

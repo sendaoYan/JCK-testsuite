@@ -16,3 +16,9 @@ static 嵌套类，可直接 `new AbstractDocument.ElementEdit(elem, index, remo
 ## 4. 测试用例设计 + 自动化实现（`ElementEditTest.testBlackBox`）
 - 构造 `BranchElement` 与子 `LeafElement`，创建 `ElementEdit(be, 0, removed=[A], added=[C])`，验证 `getElement/getIndex/getChildrenRemoved/getChildrenAdded`。
 - 先手动应用前向状态（`be.replace(0,1,[C])`），再 `undo()` 恢复 `[A,B]`、`redo()` 重新变为 `[C,B]`，验证组合后的可观察结构。
+
+## 5. 契约深化（本轮追加）
+`testGettersAndUndoRedo/testFromEvent`（33 断言）：
+- 公有构造器（public，非 protected）直接可用；getElement/getIndex/getChildrenRemoved/getChildrenAdded 回读精确；实现 DocumentEvent.ElementChange 且是 UndoableEdit、significant。
+- 状态机反例：新编辑处于 done 态只能 undo（直接 redo 抛 CannotRedoException）；undo→redo→undo 循环中 added/removed 元素精确装回/还原，未涉及的兄弟不受影响；空记录容错。
+- 从真实 DocumentEvent 提取的 ElementEdit：元素/索引/added/removed 与结构变化一致。

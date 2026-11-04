@@ -19,3 +19,9 @@
 2. 自定义过滤器钳制 setDot 到 3、moveDot 到文档长度；FilterBypass.getCaret() 返回组件 Caret。
 3. FilterBypass 直接 setDot/moveDot 绕过过滤器。
 4. 覆写 getNextVisualPositionFrom 返回哨兵值并写入 biasRet。
+
+## 5. 契约深化（本轮追加）
+`testTypeShape/testDefaultDelegation/testOverrideChainsToDefault`（18 断言）：
+- 类型面：非抽象类 + 三个方法 setDot/moveDot/getNextVisualPositionFrom；FilterBypass 是嵌套抽象类（setDot/moveDot 抽象，getCaret 具体抽象方法由子类实现）。
+- 默认委托逐字：setDot(fb,7,Forward) → fb.setDot(7,Forward)；moveDot 同理；null bias 原样转发（用记录型 FilterBypass 捕获精确三元组）。
+- 覆盖链：子类 override 先观察再 super 调用默认实现，默认实现再落到 bypass（两跳都被记录且参数不变）。

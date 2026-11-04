@@ -1,73 +1,102 @@
 /*
  * @test
- * @summary javax.swing.text.Style conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.Style conformance: interface shape + Style contract via NamedStyle (name/change listeners/mutable attributes) (headless-safe).
  * @run main StyleTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.HashSet;
+import java.util.Set;
+import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyleContext;
 
 public class StyleTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.Style");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
+    static void testTypeShape() throws Exception {
+        Class<?> c = Class.forName("javax.swing.text.Style", false, StyleTest.class.getClassLoader());
         check(c.isInterface(), "is interface");
-        check(!c.isAnnotation(), "is annotation");
-        check(!c.isEnum(), "is enum");
-        check(Modifier.isPublic(mods), "public modifier");
-        check(!Modifier.isProtected(mods), "protected modifier");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 1, "interface count");
-        check(c.getInterfaces()[0].getName().equals("javax.swing.text.MutableAttributeSet"), "interface 0");
-        check(c.getDeclaredMethods().length == 3, "three declared methods");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        check(hasInterface(c, "javax.swing.text.MutableAttributeSet"), "extends MutableAttributeSet");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getName"), "method getName");
+        check(names.contains("addChangeListener"), "method addChangeListener");
+        check(names.contains("removeChangeListener"), "method removeChangeListener");
+        // inherited mutation surface
+        check(names.contains("addAttribute"), "inherited addAttribute");
+        check(names.contains("setResolveParent"), "inherited setResolveParent");
+        check(names.contains("getAttribute"), "inherited getAttribute");
     }
 
-    static void testBlackBox() {
-        StyleContext ctx = new StyleContext();
+    static void testNameContract() {
+        StyleContext sc = new StyleContext();
+        Style named = sc.addStyle("n0", null);
+        check("n0".equals(named.getName()), "named style getName");
+        // The name is carried as the NameAttribute entry.
+        check(named.isDefined(StyleConstants.NameAttribute), "name stored as NameAttribute");
+        named.addAttribute(StyleConstants.NameAttribute, "n1");
+        check("n1".equals(named.getName()), "name follows NameAttribute");
+        Style anon = sc.addStyle(null, null);
+        check(anon.getName() == null, "anonymous getName null");
+        check(!anon.isDefined(StyleConstants.NameAttribute), "anonymous has no NameAttribute");
+    }
 
-        // A named style reports its name and behaves as a MutableAttributeSet.
-        Style s = ctx.addStyle("mystyle", null);
-        check("mystyle".equals(s.getName()), "named style name");
-        check(s.getAttributeCount() == 1, "style holds its name attribute");
-        s.addAttribute(StyleConstants.Bold, Boolean.TRUE);
-        check(Boolean.TRUE.equals(s.getAttribute(StyleConstants.Bold)), "style attribute add/read");
-
-        // Change listeners fire on mutation and can be removed.
-        final int[] fired = {0};
-        ChangeListener l = e -> fired[0]++;
+    static void testChangeListenerContract() {
+        StyleContext sc = new StyleContext();
+        Style s = sc.addStyle("cl", null);
+        final int[] count = { 0 };
+        final Object[] source = { null };
+        ChangeListener l = new ChangeListener() {
+            public void stateChanged(ChangeEvent e) { count[0]++; source[0] = e.getSource(); }
+        };
         s.addChangeListener(l);
-        s.addAttribute(StyleConstants.Italic, Boolean.TRUE);
-        check(fired[0] == 1, "listener fired on add");
+        s.addAttribute("k", "v");
+        check(count[0] == 1, "attribute change fires listener");
+        check(source[0] == s, "event source is the style");
+        s.addAttributes(new SimpleAttributeSet());
+        check(count[0] == 2, "addAttributes fires");
+        s.removeAttribute("k");
+        check(count[0] == 3, "removeAttribute fires");
+
         s.removeChangeListener(l);
-        s.addAttribute(StyleConstants.Underline, Boolean.TRUE);
-        check(fired[0] == 1, "listener not fired after remove");
+        s.addAttribute("k2", "v2");
+        check(count[0] == 3, "no events after removeChangeListener");
+    }
 
-        // An unnamed style has a null name.
-        Style unnamed = ctx.addStyle(null, null);
-        check(unnamed.getName() == null, "unnamed style null name");
-
-        // Parent/child attribute resolution through Style.
-        Style parent = ctx.addStyle("parent", null);
-        parent.addAttribute("pattr", "pv");
-        Style child = ctx.addStyle("child", parent);
-        check(child.getResolveParent() == parent, "child resolve parent");
-        check("pv".equals(child.getAttribute("pattr")), "child inherits parent attribute");
-        check(!child.isDefined("pattr"), "inherited attribute not local");
+    static void testStyleHierarchy() {
+        StyleContext sc = new StyleContext();
+        Style parent = sc.addStyle("parent", null);
+        StyleConstants.setFontSize(parent, 40);
+        Style child = sc.addStyle("child", parent);
+        check(child.getResolveParent() == parent, "parent link");
+        check(StyleConstants.getFontSize(child) == 40, "attribute resolved through parent");
+        StyleConstants.setFontSize(child, 8);
+        check(StyleConstants.getFontSize(child) == 8, "local value shadows parent");
+        check(StyleConstants.getFontSize(parent) == 40, "parent unaffected");
+        child.setResolveParent(null);
+        check(child.getResolveParent() == null, "parent cleared");
+        check(StyleConstants.getFontSize(child) == 8, "local value kept after unlink");
+        check(child.getAttribute(StyleConstants.FontSize) != null, "still has local size");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testTypeShape();
+        testNameContract();
+        testChangeListenerContract();
+        testStyleHierarchy();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

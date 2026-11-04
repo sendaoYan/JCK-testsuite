@@ -24,3 +24,11 @@ int start = line.getStartOffset(), end = line.getEndOffset();
 1. 根元素：getDocument 恒等、无 parent、非 leaf、名 "paragraph"、空属性、初始 1 个子元素。
 2. 叶子元素：parent 是根、isLeaf、名 "content"、区间 [0,12)（含隐含换行）、`getElementIndex` 正确映射。
 3. 组合操作：`insertString("\nsecond")` 后结构变为 2 个叶子，第二个叶子区间 [12,19)，`getElementIndex(12)==1`。
+
+## 5. 契约深化（本轮追加）
+`testPlainTree/testStyledTree/testInvalidIndices`（60 断言）：
+- 接口形状：11 方法逐一存在；非枚举/注解。
+- PlainDocument 树：root getDocument identity、parent null、名 "paragraph"、区间 [0,6)、两行元素 [0,3)/[3,6)、children parent 回链、行为 leaf、行名 "content"、行无子。
+- 结构变更：插入 "\n" 精确拆分（中段 [2,4)）；删除换行合并（内容 "ab\ncd"）。
+- DefaultStyledDocument 树：root 名 "section"、两段、段名 "paragraph" 且为 branch、每段一个 "content" run。
+- 反例矩阵：getElement(-1) → ArrayIndexOutOfBoundsException；getElement(count) → null（不抛）；spare 容量外 null。

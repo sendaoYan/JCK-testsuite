@@ -18,3 +18,9 @@ static 嵌套类，可 `new DefaultStyledDocument.AttributeUndoableEdit(element,
 - 用暴露写锁的 `AbstractDocument` 子类创建带 `old=1` 的叶子元素。
 - `isReplacing=true`：`undo()` 恢复旧属性、`redo()` 清空旧并只保留 `new=2`。
 - `isReplacing=false`：`undo()` 保留基础属性、`redo()` 合并新增 `extra=3` 而不删除既有属性。
+
+## 5. 契约深化（本轮追加）
+`testUndoRedo(replacing=false/true)`（32 断言）：
+- 类型面：public 类、父类 AbstractUndoableEdit、方法 undo/redo/isSignificant。
+- 状态机：新编辑处于 done 态（canUndo、直接 redo 抛 CannotRedoException）；undo 先恢复快照、redo 应用记录的新属性（italic/fontSize 精确）；replacing=true 时 redo 清除旧值、false 保留；undo→redo→undo 循环重复可用。
+- 全程在暴露 writeLock 的文档子类锁内执行（元素属性修改的锁卫契约）。

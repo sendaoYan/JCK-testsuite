@@ -20,3 +20,10 @@
 - 用 char[] 构造器验证 `getType/getDirection(默认 Originate)/getAttributes/getOffset/getLength/getArray`，且 `getArray` 是防御性拷贝。
 - `setType/setDirection` 往返、`toString` 输出 `StartTag:JoinNext:3`。
 - 标记构造器与长度构造器：数组/属性为 null、长度/偏移为 0。
+
+## 5. 契约深化（本轮追加）
+`testConstructorsAndViews/testMutators` + 常量/形状（JDK-27 43 断言）：
+- 常量精确值：StartTagType=1/EndTagType=2/ContentType=3/JoinPreviousDirection=4/JoinNextDirection=5/OriginateDirection=6/JoinFractureDirection=7。
+- 构造器矩阵：两参（无数组、默认 Originate、属性 identity）、三参（显式长度仍无数组）、五参数组窗（offset/length 精确）。
+- 版本差异锁定（JDK-27）：数组构造器防御性拷贝（Arrays.copyOf），getArray() != 调用者数组且后续修改源数组不影响快照；JDK-8 则按引用保留调用者数组（getArray()==data，活视图）。
+- 可变性：setType/setDirection 往返；null 属性容忍。

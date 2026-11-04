@@ -22,3 +22,13 @@
 - 行结构：多行插入后 `getDefaultRootElement` 行数、`getParagraphElement` 映射与各行区间。
 - `filterNewlines` 属性开启后 `\n` 变空格；`PlainDocument(Content)` 构造可用；null/空插入为 no-op。
 - 边界：越界 `insertString/remove` 抛 `BadLocationException`。
+
+## 5. 契约深化（本轮追加）
+`testTypeShape/testDefaults/testLineMap/testSplitAndMerge/testFilterNewlines/testProperties`（89 断言）：
+- 类型面：直接父类 AbstractDocument、无直接接口（Document/Serializable 由父类继承）；方法面含 insertString/getDefaultRootElement/getParagraphElement 等。
+- 默认值：tabSize 属性 8（tabSizeAttribute 经属性字典可见）、lineLimit 属性 null（模型层不强制）；空文档 root [0,1) 一个名为 "content" 的行 leaf。
+- 行映射：构造后 "ab\ncd\nef" → 三个行元素 [0,3)/[3,6)/[6,9)，名字 "content"、parent 是 root、无子、空属性；getElementIndex 全点位（0/2/3/5/8）+ 越界钳制（100→last、-1→first）。
+- getParagraphElement：返回命中行的 identity、越界（100/-1）钳到末/首行。
+- 分裂/合并：插入 "\n" 拆分元素；删除 "\n" 合并相邻元素且内容精确。
+- filterNewlines 属性：置 true 后经 insertString 的 "\n" 变空格；tabSize/lineLimit 属性 putProperty 可改写并回读。
+- StringContent 支路：new PlainDocument(new StringContent()) 同套行结构断言成立。

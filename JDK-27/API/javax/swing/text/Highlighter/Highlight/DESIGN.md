@@ -17,3 +17,6 @@
 1. 通过 DefaultHighlighter.addHighlight 得到 Highlight，断言 getStartOffset/getEndOffset/getPainter、start<=end。
 2. changeHighlight 后 Highlight 偏移同步更新。
 3. 多个高亮时数组长度与元素区分、painter 共享。
+
+## 5. 契约深化（本轮追加）
+（12 断言）：接口三方法 getStartOffset/getEndOffset/getPainter；经 DefaultHighlighter.addHighlight 产生的 Highlight（DefaultHighlight）区间/painter 回读精确、区间良构（start<=end）。模型面无需组件即可验证区间契约。

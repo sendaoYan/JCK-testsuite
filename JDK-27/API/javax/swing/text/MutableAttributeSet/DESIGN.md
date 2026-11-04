@@ -26,3 +26,10 @@ m.removeAttributes(names.elements());
 2. addAttributes 批量导入。
 3. removeAttribute、removeAttributes(AttributeSet) 仅删匹配键值对、removeAttributes(Enumeration)。
 4. setResolveParent：getAttribute 向上回退，isDefined 保持本地语义；本地键优先。
+
+## 5. 契约深化（本轮追加）
+`testTypeShape/testThroughSimpleAttributeSet/testThroughNamedStyle`（34 断言）：
+- 接口方法面：AttributeSet 全部只读方法 + addAttribute/addAttributes/removeAttribute/removeAttributes(×2)/setResolveParent。
+- SimpleAttributeSet 实现走查：写入后读回、remove 清除、setResolveParent 穿透与遮蔽。
+- NamedStyle（StyleContext.createStyle）实现同套断言：同一接口契约在两种实现上一致成立。
+- resolve parent 写入后 getResolveParent/getAttribute(ResolveAttribute) 一致。

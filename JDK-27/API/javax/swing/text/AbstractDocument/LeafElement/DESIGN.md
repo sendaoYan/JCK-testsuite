@@ -17,3 +17,9 @@
 ## 4. 测试用例设计 + 自动化实现（`LeafElementTest.testBlackBox`）
 - 直接构造 `LeafElement(null,null,3,8)`，验证 `isLeaf/getStartOffset/getEndOffset/getName/getElementCount==0/getElement==null/getElementIndex==-1/getAllowsChildren==false/children()==null/toString`。
 - 经 `PlainDocument` 插入 "hello\nworld"，验证两行 `LeafElement` 的区间、`getParagraphElement` 映射、父元素与所属文档。
+
+## 5. 契约深化（本轮追加）
+`testBehavior`（31 断言）：
+- PlainDocument 行元素就是 LeafElement（名 "content"）；区间精确 [2,5)；isLeaf true、getAllowsChildren false、children() 返回 null（不是空枚举）、getElement 恒 null、getElementCount 0、getElementIndex 返回 -1。
+- toString 精确格式 "LeafElement(content) 2,5\n"（换行结尾）。
+- 属性：未持锁修改 → StateInvariantError；锁内 addAttribute 生效；ElementNameAttribute 覆盖名字；null 属性集容忍。

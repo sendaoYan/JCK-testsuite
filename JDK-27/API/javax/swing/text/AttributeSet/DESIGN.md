@@ -28,3 +28,10 @@ AttributeSet parent = a.getResolveParent();
 1. 反射断言 `NameAttribute`/`ResolveAttribute` 是 public static final，且与 `StyleConstants` 同名常量恒等（==）。
 2. 用 `SimpleAttributeSet.EMPTY` 作为 `AttributeSet` 引用，验证空集合语义：count==0、names 空、resolve parent null、getAttribute 返回 null、isDefined false、isEqual/containsAttributes 自反成立。
 3. 四个嵌套标记接口均为接口且 `getDeclaredMethods().length == 0`（空标记）。
+
+## 5. 契约深化（本轮追加）
+`testTypeShape/testWellKnownKeys/testCrossImplementationEquals/testContractThroughImplementations`（59 断言）：
+- 接口完整方法面（15 个方法）与常量键：NameAttribute/ResolveAttribute/KeyEndOffset/KeyStartOffset 等互异且多为 String/Integer 常量。
+- 跨实现 isEqual：SimpleAttributeSet 与 StyleContext.addAttributes 产物、SimpleAttributeSet.EMPTY 内容相等即 isEqual 成立（实现无关）。
+- 通过 SimpleAttributeSet/NamedStyle 双实现走完整读写契约（含 resolve parent 穿透、copyAttributes 快照独立）。
+- 反例：接口本身无 contains/EMPTY（那是 AbstractElement/SimpleAttributeSet 的成员）——用反射锁定，防止误记。

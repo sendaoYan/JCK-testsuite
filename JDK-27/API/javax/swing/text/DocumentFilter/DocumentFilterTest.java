@@ -1,104 +1,87 @@
 /*
  * @test
- * @summary javax.swing.text.DocumentFilter conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.text.DocumentFilter conformance: default insert/remove/replace delegation to FilterBypass with exact arguments (headless-safe).
  * @run main DocumentFilterTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.List;
-import javax.swing.JTextArea;
-import javax.swing.text.AbstractDocument;
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.text.AttributeSet;
-import javax.swing.text.BadLocationException;
 import javax.swing.text.DocumentFilter;
 
 public class DocumentFilterTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.text.DocumentFilter");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 0, "no interfaces");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        JTextArea area = new JTextArea();
-        area.setText("abcdef");
-        AbstractDocument doc = (AbstractDocument) area.getDocument();
-        check(doc.getDocumentFilter() == null, "no filter initially");
-
-        final List<String> ops = new ArrayList<>();
-        final DocumentFilter.FilterBypass[] captured = new DocumentFilter.FilterBypass[1];
-        DocumentFilter f = new DocumentFilter() {
-            @Override
-            public void insertString(FilterBypass fb, int offs, String str, AttributeSet a) throws BadLocationException {
-                captured[0] = fb;
-                ops.add("insert@" + offs + ":" + str);
-                super.insertString(fb, offs, str.toUpperCase(), a);
-            }
-            @Override
-            public void remove(FilterBypass fb, int offs, int len) throws BadLocationException {
-                captured[0] = fb;
-                ops.add("remove@" + offs + ":" + len);
-                super.remove(fb, offs, len);
-            }
-            @Override
-            public void replace(FilterBypass fb, int offs, int len, String text, AttributeSet attrs) throws BadLocationException {
-                captured[0] = fb;
-                ops.add("replace@" + offs + ":" + len + ":" + text);
-                super.replace(fb, offs, len, text, attrs);
-            }
-        };
-        doc.setDocumentFilter(f);
-        check(doc.getDocumentFilter() == f, "filter set");
-
-        doc.insertString(0, "xy", null);
-        check(doc.getText(0, doc.getLength()).equals("XYabcdef"), "insertString uppercased by filter");
-        check(captured[0].getDocument() == doc, "bypass getDocument returns the document");
-
-        doc.remove(0, 2);
-        check(doc.getText(0, doc.getLength()).equals("abcdef"), "remove through filter");
-
-        doc.replace(0, 2, "mn", null);
-        check(doc.getText(0, doc.getLength()).equals("mncdef"), "replace through filter");
-
-        check(ops.size() == 3, "three filter ops recorded");
-        check(ops.get(0).equals("insert@0:xy"), "insert op recorded");
-        check(ops.get(1).equals("remove@0:2"), "remove op recorded");
-        check(ops.get(2).equals("replace@0:2:mn"), "replace op recorded");
-
-        // FilterBypass direct calls do not re-enter the filter
-        DocumentFilter.FilterBypass fb = captured[0];
-        fb.insertString(0, "P", null);
-        check(doc.getText(0, doc.getLength()).equals("Pmncdef"), "bypass insertString");
-        fb.remove(0, 1);
-        check(doc.getText(0, doc.getLength()).equals("mncdef"), "bypass remove");
-        fb.replace(0, 2, "Q", null);
-        check(doc.getText(0, doc.getLength()).equals("Qcdef"), "bypass replace");
-        check(ops.size() == 3, "bypass calls do not re-enter filter");
-
-        doc.setDocumentFilter(null);
-        check(doc.getDocumentFilter() == null, "filter unset");
+    /** Records every mutation routed through the bypass. */
+    static class RecordingBypass extends DocumentFilter.FilterBypass {
+        String log = "";
+        public javax.swing.text.Document getDocument() { return null; }
+        public void remove(int offset, int length) { log += "remove:" + offset + ":" + length + ";"; }
+        public void insertString(int offset, String string, AttributeSet attr) {
+            log += "insert:" + offset + ":" + string + ":" + attr + ";";
+        }
+        public void replace(int offset, int length, String string, AttributeSet attr) {
+            log += "replace:" + offset + ":" + length + ":" + string + ":" + attr + ";";
+        }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.text.DocumentFilter", false, DocumentFilterTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("remove"), "method remove");
+        check(names.contains("insertString"), "method insertString");
+        check(names.contains("replace"), "method replace");
+
+        Class<?> fb = Class.forName("javax.swing.text.DocumentFilter$FilterBypass", false, DocumentFilterTest.class.getClassLoader());
+        check(Modifier.isAbstract(fb.getModifiers()), "FilterBypass abstract");
+
+        // default behaviour: everything is routed verbatim to the bypass
+        DocumentFilter plain = new DocumentFilter();
+        RecordingBypass rb = new RecordingBypass();
+        javax.swing.text.SimpleAttributeSet attrs = new javax.swing.text.SimpleAttributeSet();
+        javax.swing.text.StyleConstants.setBold(attrs, true);
+        plain.insertString(rb, 3, "abc", attrs);
+        check(rb.log.equals("insert:3:abc:" + attrs + ";"), "insertString delegates verbatim, got [" + rb.log + "]");
+        plain.remove(rb, 1, 2);
+        check(rb.log.endsWith("remove:1:2;"), "remove delegates verbatim");
+        plain.replace(rb, 0, 4, "Z", null);
+        check(rb.log.endsWith("replace:0:4:Z:null;"), "replace delegates verbatim");
+
+        // an overriding filter decides what reaches the bypass
+        DocumentFilter upper = new DocumentFilter() {
+            public void insertString(FilterBypass fb2, int offset, String string, AttributeSet attr)
+                    throws javax.swing.text.BadLocationException {
+                fb2.insertString(offset, string.toUpperCase(), attr);
+            }
+            public void remove(FilterBypass fb2, int offset, int length)
+                    throws javax.swing.text.BadLocationException {
+                // swallow all removals
+            }
+        };
+        RecordingBypass rb2 = new RecordingBypass();
+        upper.insertString(rb2, 0, "keep", null);
+        check(rb2.log.equals("insert:0:KEEP:null;"), "override rewrites the text en route");
+        upper.remove(rb2, 0, 2);
+        check(rb2.log.equals("insert:0:KEEP:null;"), "blocking override forwards nothing");
+        upper.replace(rb2, 0, 1, "y", null); // not overridden: default routing
+        check(rb2.log.endsWith("replace:0:1:y:null;"), "non-overridden replace still routes");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

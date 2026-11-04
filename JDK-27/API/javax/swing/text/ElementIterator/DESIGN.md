@@ -20,3 +20,11 @@
 2. 深度优先 `next()` 依次返回 leaf0[0,6)、leaf1[6,12)、再 null（结束）。
 3. 耗尽后 `previous()/current()` 均 null；中间状态 `previous()` 从首叶子返回根。
 4. 未调用 first/current 直接 `next()` 返回根；Element 构造器等价；`clone()` 独立遍历且状态一致。
+
+## 5. 契约深化（本轮追加）
+`testDocumentIteration/testNavigation/testClone/testNullsAndExhaustion`（43 断言）：
+- 类型面：abstract 类、方法面 first/current/next/previous/depth/clone。
+- 深度优先序精确串：PlainDocument("ab\ncd\nef") → "paragraph@0 content@0 content@3 content@6 "；以根元素构造与以文档构造等价；styled 树 → "section paragraph content "。
+- 导航语义：first 返回默认根、depth(root)==1；next 深入并推进 current；previous 返回父节点但不移动 current；previous 后 next 从原位继续；耗尽后 next/current 持续 null；first 可重启。
+- clone 独立：新实例同起点，互不影响推进。
+- 边界：ElementIterator((Element)null) 的 first/next/current/previous 全 null 且 depth 0；ElementIterator((Document)null) → NullPointerException。

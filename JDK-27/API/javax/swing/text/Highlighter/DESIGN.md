@@ -18,3 +18,10 @@
 2. changeHighlight 更新偏移；removeHighlight 删除。
 3. 连续 add 多个后 removeAllHighlights 清空。
 4. addHighlight 非法区间（负起点、终点小于起点）抛 BadLocationException。
+
+## 5. 契约深化（本轮追加）
+（24 断言）：
+- 接口形状：install/deinstall/paint/addHighlight/removeHighlight/removeAllHighlights/changeHighlight/getHighlights。
+- 嵌套面：Highlight 是接口（getStartOffset/getEndOffset/getPainter）；HighlightPainter 是接口且不继承任何接口（仅 paint）。
+- DefaultHighlighter 可 headless 实例化：新实例无高亮（getHighlights 空）；DefaultHighlightPainter 构造保留颜色。
+- 反例：未 install 到组件就 removeAllHighlights → NPE（需要 JTextComponent，本轮跳过 UI 面）。

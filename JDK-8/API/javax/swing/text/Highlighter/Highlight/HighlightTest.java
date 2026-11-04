@@ -32,6 +32,18 @@ public class HighlightTest {
         check(names.contains("getStartOffset"), "method getStartOffset");
         check(names.contains("getEndOffset"), "method getEndOffset");
         check(names.contains("getPainter"), "method getPainter");
+
+        // a highlight is implementable as a plain record of range + painter
+        final javax.swing.text.Highlighter.HighlightPainter painter =
+                new javax.swing.text.DefaultHighlighter.DefaultHighlightPainter(java.awt.Color.CYAN);
+        javax.swing.text.Highlighter.Highlight h = new javax.swing.text.Highlighter.Highlight() {
+            public int getStartOffset() { return 2; }
+            public int getEndOffset() { return 5; }
+            public javax.swing.text.Highlighter.HighlightPainter getPainter() { return painter; }
+        };
+        check(h.getStartOffset() == 2 && h.getEndOffset() == 5, "highlight range");
+        check(h.getPainter() == painter, "highlight painter");
+        check(h.getEndOffset() > h.getStartOffset(), "well-formed range");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
