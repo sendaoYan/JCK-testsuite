@@ -40,6 +40,50 @@ public class ComparatorTest {
         testMinMax();
         testThenComparingVariants();
         testBoundaries();
+        testNullAndExceptionMatrix();
+    }
+
+    static void expectThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
+    static void testNullAndExceptionMatrix() {
+        Comparator<Integer> natural = Comparator.naturalOrder();
+        expectThrows(NullPointerException.class, () -> natural.compare(null, 1),
+                "naturalOrder compare(null,x) NPE");
+        expectThrows(NullPointerException.class,
+                () -> Comparator.comparing((java.util.function.Function<String, String>) null),
+                "comparing(null function) NPE");
+        expectThrows(NullPointerException.class,
+                () -> Comparator.comparing(String::length, null), "comparing(fn, null cmp) NPE");
+        expectThrows(NullPointerException.class,
+                () -> Comparator.<String, String>comparing(s -> null).compare("a", "b"),
+                "comparing natural key returns null NPE");
+        // null comparator is legal: all non-null values are considered equal (0).
+        check(Comparator.nullsFirst(null).compare(null, "a") < 0, "nullsFirst(null) null first");
+        check(Comparator.nullsFirst(null).compare("a", "b") == 0, "nullsFirst(null) non-null equal");
+        check(Comparator.nullsLast(null).compare(null, "a") > 0, "nullsLast(null) null last");
+        check(Comparator.nullsLast(null).compare("a", "b") == 0, "nullsLast(null) non-null equal");
+        expectThrows(NullPointerException.class,
+                () -> Comparator.comparingInt(String::length).thenComparing((Comparator<String>) null),
+                "thenComparing(null comparator) NPE");
+        expectThrows(NullPointerException.class,
+                () -> Comparator.comparingInt(String::length).thenComparing((java.util.function.Function<String, String>) null),
+                "thenComparing(null function) NPE");
+
+        // comparingDouble uses Double.compare: NaN == NaN, +0.0 != -0.0.
+        Comparator<double[]> byFirstD = Comparator.comparingDouble(a -> a[0]);
+        check(byFirstD.compare(new double[]{Double.NaN}, new double[]{Double.NaN}) == 0,
+              "comparingDouble NaN == NaN");
+        check(byFirstD.compare(new double[]{0.0}, new double[]{-0.0}) > 0,
+              "comparingDouble +0.0 > -0.0");
     }
 
     static void testNaturalAndReverse() {
