@@ -1,17 +1,22 @@
-# javax.swing.tree.TreeNode 行为化测试设计
+# javax.swing.tree.TreeNode 测试设计
 
 ## 1. API 功能
-树节点只读接口：`getChildAt(int)`、`getChildCount()`、`getParent()`、`getIndex(TreeNode)`、`getAllowsChildren()`、`isLeaf()`、`children()`（返回 `Enumeration<? extends TreeNode>`）。
+只读树节点契约：7 个方法（getChildAt/getChildCount/getParent/getIndex/getAllowsChildren/
+isLeaf/children），与 MutableTreeNode 一起构成 Swing 树节点双接口。
 
 ## 2. Java 用户如何使用
-自定义节点实现全部方法后接入 `TreeModel`/`DefaultMutableTreeNode`；`DefaultMutableTreeNode` 已实现该接口，是 Swing 树的标准节点实现。
+自定义只读节点（如缓存目录树）实现 TreeNode；`node.children()` 返回 Enumeration 遍历子节点。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `DefaultMutableTreeNode.java`：实现 `TreeNode`，`children()` 返回 `new Enumeration<TreeNode>() { ... }`；`isLeaf()` 返回 `children == null || children.size() == 0`。
-- JDK 源码 `JTree.java`：`convertValueToText` 取 `TreeNode` 的 `toString()` 作为显示文字。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/tree/TreeNode.java`；
+JTree/DefaultTreeModel 的泛型调用点。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒部分在 `TreeNodeTest.java`：
-- 匿名实现一个叶子（childCount 0、children 空枚举、isLeaf true）与一个父节点（含一个子节点）。
-- 分别对父与子断言全部 7 个方法（含 `getIndex` 非子节点返回 -1、空枚举）。
-- `DefaultMutableTreeNode` 实现该接口。
+## 4. 测试用例设计 + 易错细节
+- 反射形态：接口、7 个方法名（getIndex/getChildAt/getChildCount/getParent/isLeaf/
+  getAllowsChildren/children）、全部 abstract。
+- 已知实现：MutableTreeNode extends TreeNode；DefaultMutableTreeNode 具体实现。
+- 多态：固定形状的 Recording 实现经接口引用断言只读查询与 children() 枚举顺序、
+  耗尽行为（与 DefaultMutableTreeNode 对照）。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

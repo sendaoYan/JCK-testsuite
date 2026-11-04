@@ -1,11 +1,14 @@
 /*
  * @test
- * @summary javax.swing.table.DefaultTableColumnModel conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.table.DefaultTableColumnModel conformance: columns (headless-safe):
+ *          defaults, add/remove/move semantics and events, X/width mapping, selection
+ *          wiring, null/out-of-range exception matrix, serialization.
  * @run main DefaultTableColumnModelTest
  */
 
-import java.lang.reflect.Modifier;
 import java.util.Enumeration;
+import javax.swing.DefaultListSelectionModel;
+import javax.swing.ListSelectionModel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.TableColumnModelEvent;
@@ -15,132 +18,179 @@ import javax.swing.table.TableColumn;
 
 public class DefaultTableColumnModelTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> ex, String m, ThrowingRunnable r) {
+        try { r.run(); } catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + ex.getName() + " but got " + t.getClass().getName() + ": " + t.getMessage());
+        }
+        throw new AssertionError(m + ": expected " + ex.getName() + " but no exception");
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.table.DefaultTableColumnModel");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 4, "interface count");
-        check(c.getInterfaces()[0].getName().equals("javax.swing.table.TableColumnModel"), "interface 0");
-        check(c.getInterfaces()[1].getName().equals("java.beans.PropertyChangeListener"), "interface 1");
-        check(c.getInterfaces()[2].getName().equals("javax.swing.event.ListSelectionListener"), "interface 2");
-        check(c.getInterfaces()[3].getName().equals("java.io.Serializable"), "interface 3");
+    static Object roundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        Object r = ois.readObject();
+        ois.close();
+        return r;
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        DefaultTableColumnModel cm = new DefaultTableColumnModel();
-        check(cm.getColumnCount() == 0, "new: 0 columns");
-        check(cm.getColumnMargin() == 1, "new: margin 1");
-        check(!cm.getColumnSelectionAllowed(), "new: column selection not allowed");
+    static class Recorder implements TableColumnModelListener {
+        int[] added = {-2, -2}, removed = {-2, -2}, moved = {-2, -2};
+        int marginChanges, selectionChanges;
+        public void columnAdded(TableColumnModelEvent e) { added = new int[]{e.getFromIndex(), e.getToIndex()}; }
+        public void columnRemoved(TableColumnModelEvent e) { removed = new int[]{e.getFromIndex(), e.getToIndex()}; }
+        public void columnMoved(TableColumnModelEvent e) { moved = new int[]{e.getFromIndex(), e.getToIndex()}; }
+        public void columnMarginChanged(ChangeEvent e) { marginChanges++; }
+        public void columnSelectionChanged(ListSelectionEvent e) { selectionChanges++; }
+    }
 
-        TableColumn a = new TableColumn(0); a.setIdentifier("a");
-        TableColumn b = new TableColumn(1); b.setIdentifier("b");
-        TableColumn c = new TableColumn(2); c.setIdentifier("c");
-        cm.addColumn(a);
-        cm.addColumn(b);
-        cm.addColumn(c);
-        check(cm.getColumnCount() == 3, "addColumn x3 count");
-        check(cm.getColumn(0) == a, "getColumn(0)");
-        check(cm.getColumn(2) == c, "getColumn(2)");
-        check(cm.getColumnIndex("a") == 0, "getColumnIndex a == 0");
-        check(cm.getColumnIndex("b") == 1, "getColumnIndex b == 1");
-        check(cm.getColumnIndex("c") == 2, "getColumnIndex c == 2");
+    static String order(DefaultTableColumnModel m) {
+        StringBuilder s = new StringBuilder();
+        Enumeration<TableColumn> e = m.getColumns();
+        while (e.hasMoreElements()) s.append(e.nextElement().getModelIndex()).append(",");
+        return s.toString();
+    }
 
-        // getColumns order
-        Enumeration<TableColumn> en = cm.getColumns();
-        check(en.nextElement() == a && en.nextElement() == b && en.nextElement() == c, "getColumns order a,b,c");
-        check(!en.hasMoreElements(), "getColumns exhausted");
+    static void test() throws Exception {
+        DefaultTableColumnModel m = new DefaultTableColumnModel();
+        check(m.getColumnCount() == 0, "empty");
+        check(m.getColumnMargin() == 1, "default columnMargin 1");
+        check(m.getTotalColumnWidth() == 0, "default totalColumnWidth 0");
+        check(m.getColumnSelectionAllowed() == false, "default columnSelectionAllowed false");
+        check(m.getSelectionModel() != null, "default selection model non-null");
+        check(m.getSelectionModel() instanceof DefaultListSelectionModel, "default selection model type");
+        check(m.getColumnModelListeners().length == 0, "no listeners initially");
+        check(!m.getColumns().hasMoreElements(), "no columns enumerated");
 
-        // moveColumn reorders
-        cm.moveColumn(2, 0);
-        check(cm.getColumnIndex("c") == 0, "moveColumn: c to front");
-        check(cm.getColumnIndex("a") == 1, "moveColumn: a shifted");
-        check(cm.getColumnIndex("b") == 2, "moveColumn: b shifted");
-        check(cm.getColumn(0) == c && cm.getColumn(1) == a && cm.getColumn(2) == b, "moveColumn: getColumn order");
+        Recorder rec = new Recorder();
+        m.addColumnModelListener(rec);
+
+        TableColumn col = new TableColumn(0);
+        col.setWidth(100);
+        m.addColumn(col);
+        check(m.getColumnCount() == 1 && m.getColumn(0) == col, "addColumn");
+        check(rec.added[0] == 0 && rec.added[1] == 0, "columnAdded(0,0) for first column");
+        check(m.getTotalColumnWidth() == 100, "totalColumnWidth after first column");
+        // getColumnIndex by identifier: headerValue fallback identifier
+        TableColumn named = new TableColumn(7);
+        named.setHeaderValue("SEVEN");
+        m.addColumn(named);
+        check(m.getColumnIndex("SEVEN") == 1, "getColumnIndex by headerValue identifier");
+        check(rec.added[0] == 0 && rec.added[1] == 1, "columnAdded(0,1) for second column");
+        // named still has the TableColumn default width of 75.
+        check(m.getTotalColumnWidth() == 175, "totalColumnWidth sums current widths (100+75)");
+        named.setWidth(60);
+        check(m.getTotalColumnWidth() == 160, "totalColumnWidth live update after setWidth");
+        check(m.getColumn(1) == named, "getColumn(1)");
+
+        // Enumeration order is insertion order.
+        check("0,7,".equals(order(m)), "enumeration order by modelIndex: " + order(m));
+
+        // moveColumn
+        m.moveColumn(1, 0);
+        check("7,0,".equals(order(m)), "moveColumn(1,0) order");
+        check(rec.moved[0] == 1 && rec.moved[1] == 0, "columnMoved(1,0)");
+        m.moveColumn(0, 1);
+        check("0,7,".equals(order(m)), "moveColumn back");
+        m.moveColumn(0, 0);
+        check("0,7,".equals(order(m)), "self moveColumn is a no-op");
+
+        // getColumnIndexAtX boundaries: col0 spans [0,100), col1 [100,160).
+        check(m.getColumnIndexAtX(0) == 0, "x=0 in first column");
+        check(m.getColumnIndexAtX(99) == 0, "x=99 in first column");
+        check(m.getColumnIndexAtX(100) == 1, "x=100 starts second column");
+        check(m.getColumnIndexAtX(159) == 1, "x=159 in second column");
+        check(m.getColumnIndexAtX(160) == -1, "x beyond total is -1");
+        check(m.getColumnIndexAtX(-1) == -1, "negative x is -1");
+
+        // margin events and round-trip (negative accepted verbatim).
+        m.setColumnMargin(7);
+        check(m.getColumnMargin() == 7, "columnMargin round-trip");
+        check(rec.marginChanges >= 1, "setColumnMargin fires columnMarginChanged");
+        m.setColumnMargin(-1);
+        check(m.getColumnMargin() == -1, "negative columnMargin stored verbatim");
+
+        // selection wiring.
+        m.setColumnSelectionAllowed(true);
+        check(m.getColumnSelectionAllowed(), "columnSelectionAllowed round-trip");
+        ListSelectionModel sel = m.getSelectionModel();
+        sel.setSelectionInterval(1, 1);
+        check(m.getSelectedColumnCount() == 1, "selected count");
+        check(m.getSelectedColumns().length == 1 && m.getSelectedColumns()[0] == 1, "selected columns content");
+        check(rec.selectionChanges >= 1, "selection change fires columnSelectionChanged");
+        DefaultListSelectionModel replacement = new DefaultListSelectionModel();
+        m.setSelectionModel(replacement);
+        check(m.getSelectionModel() == replacement, "setSelectionModel replaces");
+        check(m.getSelectedColumnCount() == 0, "selection cleared by replacement model");
+        checkThrows(IllegalArgumentException.class, "setSelectionModel(null)",
+                new ThrowingRunnable() { public void run() { m.setSelectionModel(null); } });
 
         // removeColumn
-        cm.removeColumn(a);
-        check(cm.getColumnCount() == 2, "removeColumn: count");
-        check(cm.getColumnIndex("b") == 1, "removeColumn: b index");
+        m.removeColumn(named);
+        check(m.getColumnCount() == 1, "removeColumn count");
+        check("0,".equals(order(m)), "removeColumn order");
+        check(rec.removed[0] == 1, "columnRemoved from index of removed column");
+        // Removing an absent column is a silent no-op; removing null likewise.
+        m.removeColumn(named);
+        check(m.getColumnCount() == 1, "removing absent column is a no-op");
+        m.removeColumn(null);
+        check(m.getColumnCount() == 1, "removing null column is a no-op");
+        m.removeColumn(col);
+        check(m.getColumnCount() == 0 && m.getTotalColumnWidth() == 0, "remove last column");
 
-        // getColumnIndex not-found throws IllegalArgumentException
-        boolean threw = false;
-        try { cm.getColumnIndex("nope"); } catch (IllegalArgumentException e) { threw = true; }
-        check(threw, "getColumnIndex unknown throws IllegalArgumentException");
-        threw = false;
-        try { cm.getColumnIndex(null); } catch (IllegalArgumentException e) { threw = true; }
-        check(threw, "getColumnIndex null throws IllegalArgumentException");
+        // Exception matrix.
+        checkThrows(IllegalArgumentException.class, "addColumn(null)",
+                new ThrowingRunnable() { public void run() { m.addColumn(null); } });
+        checkThrows(IllegalArgumentException.class, "getColumnIndex(null)",
+                new ThrowingRunnable() { public void run() { m.getColumnIndex(null); } });
+        checkThrows(IllegalArgumentException.class, "getColumnIndex(missing)",
+                new ThrowingRunnable() { public void run() { m.getColumnIndex("no-such-identifier"); } });
+        checkThrows(ArrayIndexOutOfBoundsException.class, "getColumn(5) empty model",
+                new ThrowingRunnable() { public void run() { m.getColumn(5); } });
+        checkThrows(ArrayIndexOutOfBoundsException.class, "getColumn(-1)",
+                new ThrowingRunnable() { public void run() { m.getColumn(-1); } });
+        final DefaultTableColumnModel m2 = new DefaultTableColumnModel();
+        m2.addColumn(new TableColumn(0));
+        checkThrows(IllegalArgumentException.class, "moveColumn(0,5) beyond range",
+                new ThrowingRunnable() { public void run() { m2.moveColumn(0, 5); } });
+        checkThrows(IllegalArgumentException.class, "moveColumn(-1,0)",
+                new ThrowingRunnable() { public void run() { m2.moveColumn(-1, 0); } });
 
-        // width helpers: default width 75 each
-        TableColumn w1 = new TableColumn(0); w1.setIdentifier("w1"); w1.setWidth(100);
-        TableColumn w2 = new TableColumn(1); w2.setIdentifier("w2"); w2.setWidth(50);
-        DefaultTableColumnModel cm2 = new DefaultTableColumnModel();
-        cm2.addColumn(w1);
-        cm2.addColumn(w2);
-        check(cm2.getTotalColumnWidth() == 150, "getTotalColumnWidth sum");
-        check(cm2.getColumnIndexAtX(-1) == -1, "getColumnIndexAtX negative == -1");
-        check(cm2.getColumnIndexAtX(0) == 0, "getColumnIndexAtX 0 == 0");
-        check(cm2.getColumnIndexAtX(99) == 0, "getColumnIndexAtX 99 == 0");
-        check(cm2.getColumnIndexAtX(100) == 1, "getColumnIndexAtX 100 == 1");
-        check(cm2.getColumnIndexAtX(150) == -1, "getColumnIndexAtX past end == -1");
+        // Listener registry.
+        m.removeColumnModelListener(rec);
+        check(m.getColumnModelListeners().length == 0, "listener removed");
+        check(m.getListeners(TableColumnModelListener.class).length == 0, "getListeners empty");
+        m.addColumnModelListener(rec);
+        check(m.getListeners(TableColumnModelListener.class).length == 1, "getListeners one");
+    }
 
-        // column margin + selection allowed
-        cm2.setColumnMargin(7);
-        check(cm2.getColumnMargin() == 7, "set/get columnMargin");
-        cm2.setColumnSelectionAllowed(true);
-        check(cm2.getColumnSelectionAllowed(), "set/get columnSelectionAllowed true");
-
-        // listener firing: added/removed/moved/marginChanged
-        final int[] added = {0}; final int[] removed = {0}; final int[] moved = {0}; final int[] margin = {0};
-        final TableColumnModelEvent[] lastAdded = new TableColumnModelEvent[1];
-        final TableColumnModelEvent[] lastRemoved = new TableColumnModelEvent[1];
-        final TableColumnModelEvent[] lastMoved = new TableColumnModelEvent[1];
-        TableColumnModelListener l = new TableColumnModelListener() {
-            public void columnAdded(TableColumnModelEvent e) { added[0]++; lastAdded[0] = e; }
-            public void columnRemoved(TableColumnModelEvent e) { removed[0]++; lastRemoved[0] = e; }
-            public void columnMoved(TableColumnModelEvent e) { moved[0]++; lastMoved[0] = e; }
-            public void columnMarginChanged(ChangeEvent e) { margin[0]++; }
-            public void columnSelectionChanged(ListSelectionEvent e) { }
-        };
-        DefaultTableColumnModel cm3 = new DefaultTableColumnModel();
-        cm3.addColumnModelListener(l);
-        TableColumn x = new TableColumn(0); x.setIdentifier("x");
-        TableColumn y = new TableColumn(1); y.setIdentifier("y");
-        cm3.addColumn(x);
-        check(added[0] == 1, "addColumn fires columnAdded");
-        check(lastAdded[0].getFromIndex() == 0 && lastAdded[0].getToIndex() == 0, "columnAdded event indices");
-        cm3.addColumn(y);
-        check(added[0] == 2, "addColumn fires columnAdded again");
-        cm3.moveColumn(1, 0);
-        check(moved[0] == 1, "moveColumn fires columnMoved");
-        check(lastMoved[0].getFromIndex() == 1 && lastMoved[0].getToIndex() == 0, "columnMoved event indices");
-        cm3.setColumnMargin(9);
-        check(margin[0] == 1, "setColumnMargin fires columnMarginChanged");
-        cm3.removeColumn(x);
-        check(removed[0] == 1, "removeColumn fires columnRemoved");
-        check(lastRemoved[0].getFromIndex() == 1 && lastRemoved[0].getToIndex() == 0, "columnRemoved event indices");
-        cm3.removeColumnModelListener(l);
-        int aBefore = added[0];
-        cm3.addColumn(new TableColumn(2));
-        check(added[0] == aBefore, "removeColumnModelListener stops delivery");
+    static void testSerialization() throws Exception {
+        DefaultTableColumnModel m = new DefaultTableColumnModel();
+        TableColumn a = new TableColumn(0), b = new TableColumn(1);
+        m.addColumn(a); m.addColumn(b);
+        m.setColumnMargin(9);
+        m.setColumnSelectionAllowed(true);
+        DefaultTableColumnModel back = (DefaultTableColumnModel) roundTrip(m);
+        check(back.getColumnCount() == 2, "round-trip column count");
+        check(back.getColumn(0).getModelIndex() == 0, "round-trip column 0");
+        check(back.getColumn(1).getModelIndex() == 1, "round-trip column 1");
+        check(back.getColumnMargin() == 9, "round-trip margin");
+        check(back.getColumnSelectionAllowed(), "round-trip selection allowed");
+        check(back.getSelectionModel() != null, "round-trip selection model");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        test();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

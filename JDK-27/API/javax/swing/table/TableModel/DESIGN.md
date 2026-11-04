@@ -1,24 +1,23 @@
-# TableModel 测试设计
+# javax.swing.table.TableModel 测试设计
 
 ## 1. API 功能
-`javax.swing.table.TableModel` 接口定义表格数据源契约。核心方法：
-
-- **结构**：`getRowCount`、`getColumnCount`、`getColumnName`、`getColumnClass`。
-- **单元格**：`getValueAt`、`setValueAt`、`isCellEditable`。
-- **监听器**：`addTableModelListener`、`removeTableModelListener`。
+表格数据最小契约接口：9 个方法（getRowCount/getColumnCount/getValueAt/setValueAt/getColumnName/
+getColumnClass/isCellEditable/addTableModelListener/removeTableModelListener）。
 
 ## 2. Java 用户如何使用
-- 实现：匿名类提供 backing 数组与监听列表，实现 9 个方法。
-- 每个方法典型调用：`m.getRowCount()`；`m.getColumnCount()`；`m.getColumnName(0)`；`m.getColumnClass(0)`；`m.isCellEditable(r,c)`；`m.getValueAt(r,c)`；`m.setValueAt(v,r,c)`；`m.addTableModelListener(l)`；`m.removeTableModelListener(l)`。
-- 真实组合链路：`getColumnCount → getColumnClass → getValueAt → setValueAt → getValueAt`。
+JTable 构造时接收 TableModel；自定义模型实现该接口（或继承 AbstractTableModel 省事），
+监听器收到 TableModelEvent 后按 type/区间重绘。
 
-## 3. 开源代码实际用法调研
-1. JDK 实现 `src/java.desktop/share/classes/javax/swing/table/AbstractTableModel.java`：实现该接口并补齐默认方法（本测试接口实现的对照）。
-2. `test/jdk/javax/swing/JTableHeader/TableHeaderRendererTest.java` 的 `SampleTableModel extends AbstractTableModel` 展示最小编程模型。
-3. SwingSet3 `OscarTableModel` 通过实现/继承该接口提供电影数据表。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/table/TableModel.java`；
+JTable.java 内部调用点；`test/jdk/javax/swing/table/`。
 
-## 4. 测试用例设计 + 自动化实现
-落入 `TableModelTest.java` 的 `testBlackBox()`：
-- 匿名实现，断言行列数、列名、列类（Integer/String）、isCellEditable、getValueAt。
-- `setValueAt → getValueAt` 往返；监听器 add/remove 可调用。
-共 18 个断言。
+## 4. 测试用例设计 + 易错细节
+- 反射形态：接口、无父接口之外的成员、全部 public abstract，恰好 9 个方法名。
+- 已知实现：AbstractTableModel（abstract class）、DefaultTableModel 直接可用。
+- 多态：RecordingModel（手写实现）注册到 DefaultTableModel 的对照 + 通过接口引用驱动
+  RecordingModel 的 getValueAt/getColumnName/isCellEditable 与监听器投递。
+- 易错点：接口本身不带 TableModelListener 事件类型常量（常量在 TableModelEvent）。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

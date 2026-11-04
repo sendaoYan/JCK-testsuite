@@ -1,20 +1,26 @@
-# java.awt.font.TextAttribute 设计案
+# java.awt.font.TextAttribute 测试设计
 
-## 1. API 功能分组
-- **类型**：`TextAttribute extends AttributedCharacterIterator.Attribute`（final）。
-- **属性键**：`FAMILY/WEIGHT/WIDTH/POSTURE/SIZE/TRANSFORM/SUPERSCRIPT/FONT/CHAR_REPLACEMENT/FOREGROUND/BACKGROUND/UNDERLINE/STRIKETHROUGH/RUN_DIRECTION/JUSTIFICATION/KERNING/LIGATURES/TRACKING/NUMERIC_SHAPING/INPUT_METHOD_HIGHLIGHT/INPUT_METHOD_UNDERLINE/SWAP_COLORS/BIDI_EMBEDDING`。
-- **属性值常量**：`WEIGHT_*`（Float）、`WIDTH_*`（Float）、`POSTURE_*`（Float）、`SUPERSCRIPT_*`（Integer）、`UNDERLINE_*`（Integer）、`RUN_DIRECTION_*`（Boolean）、`SWAP_COLORS_ON`（Boolean）、`KERNING_ON/LIGATURES_ON`（Integer）、`TRACKING_*`（Float）等。
+## 1. API 功能
+文本属性键类（extends AttributedCharacterIterator.Attribute，public final）：
+23 个属性键常量（FAMILY/SIZE/WEIGHT/POSTURE/SUPERSCRIPT/FOREGROUND/...）与约 35 个值常量
+（WEIGHT_BOLD、UNDERLINE_ON、KERNING_ON、LIGATURES_ON、RUN_DIRECTION_* 等）。
 
 ## 2. Java 用户如何使用
-构造带属性的文本：`AttributedString s = new AttributedString("text"); s.addAttribute(TextAttribute.FONT, font); s.addAttribute(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON);` 然后交给 TextLayout/TextMeasurer 排版。
+`Map<TextAttribute,Object> m = new HashMap<>(); m.put(TextAttribute.FAMILY, "Dialog");
+m.put(TextAttribute.WEIGHT, TextAttribute.WEIGHT_BOLD); Font f = Font.getFont(m);`
+TextLayout/AttributedString 同样以这些键携带样式。
 
-## 3. 开源代码实际用法调研
-- `java.awt.font.TextLayout` 的构造接受 `Map<? extends Attribute,?>`，用户以 `TextAttribute.*` 键填充（`src/java.desktop/share/classes/java/awt/font/TextLayout.java`）。
-- `test/jdk/java/awt/font/TextLayout/` 用例大量用 TextAttribute 键值构造带样式文本（本用例常量值断言参考）。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/java/awt/font/TextAttribute.java`；
+Font.deriveFont/TextLayout/AttributedString 调用点；`test/jdk/java/awt/font/`。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒场景（`TextAttributeTest.testBlackBox()`）：
-1. 属性键非空且互异、是 TextAttribute 实例。
-2. 数值常量精确值（WEIGHT/SUPERSCRIPT/UNDERLINE/POSTURE/KERNING/LIGATURES/RUN_DIRECTION/BOOLEAN）。
-3. 值常量类型（Float/Integer/Boolean）；readResolve 保持单例身份。
-白盒（`testWhiteBox()`）：public final、extends Attribute、18 个属性键字段存在。
+## 4. 测试用例设计 + 易错细节
+- 全部 23 个键逐一断言 toString() 精确字符串（"family"/"size"/"weight"/"bidi_embedding" 等）与互异性。
+- 值常量精确值/类型：WEIGHT_BOLD=2.0f(Float)、WIDTH_SEMI_EXTENDED=1.25f/WIDTH_EXTENDED=1.5f（易错：
+  不是 1.125/1.25）、SUPERSCRIPT_SUB=-1/SUPER=1(Integer)、UNDERLINE_ON=0(Integer)、
+  KERNING_ON/LIGATURES_ON=1、RUN_DIRECTION_LTR=Boolean.TRUE、INPUT_METHOD_* 语义。
+- 键序列化：round-trip 后与常量 **identity 相等**（readResolve 单例），equals/hashCode 稳定。
+- 形态：public final、protected 构造器、extends Attribute、Serializable。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

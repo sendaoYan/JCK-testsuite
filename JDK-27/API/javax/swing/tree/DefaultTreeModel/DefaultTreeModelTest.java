@@ -1,152 +1,205 @@
 /*
  * @test
- * @summary javax.swing.tree.DefaultTreeModel conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.tree.DefaultTreeModel conformance: tree model (headless-safe):
+ *          constructors and asksAllowsChildren/isLeaf interplay, child/index queries
+ *          with null semantics, mutation methods with exact TreeModelEvent payloads
+ *          (path/children/childIndices for inserted/removed/changed/structure events),
+ *          reload/valueForPathChanged, listener registry, root replacement.
  * @run main DefaultTreeModelTest
  */
 
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.List;
-
+import java.util.Arrays;
 import javax.swing.event.TreeModelEvent;
 import javax.swing.event.TreeModelListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreePath;
 
 public class DefaultTreeModelTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> ex, String m, ThrowingRunnable r) {
+        try { r.run(); } catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + ex.getName() + " but got " + t.getClass().getName() + ": " + t.getMessage());
+        }
+        throw new AssertionError(m + ": expected " + ex.getName() + " but no exception");
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.tree.DefaultTreeModel");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 2, "interface count");
-        check(c.getInterfaces()[0].getName().equals("java.io.Serializable"), "interface 0");
-        check(c.getInterfaces()[1].getName().equals("javax.swing.tree.TreeModel"), "interface 1");
+    /** Records the payload of every event, most recent last. */
+    static class Rec implements TreeModelListener {
+        String last = "none";
+        int inserted, removed, changed, structure;
+        public void treeNodesChanged(TreeModelEvent e) { changed++; last = dump("CHANGED", e); }
+        public void treeNodesInserted(TreeModelEvent e) { inserted++; last = dump("INSERTED", e); }
+        public void treeNodesRemoved(TreeModelEvent e) { removed++; last = dump("REMOVED", e); }
+        public void treeStructureChanged(TreeModelEvent e) { structure++; last = dump("STRUCT", e); }
+        static String dump(String k, TreeModelEvent e) {
+            return k + " path=" + Arrays.toString(e.getPath())
+                    + " children=" + Arrays.toString(e.getChildren())
+                    + " idx=" + Arrays.toString(e.getChildIndices());
+        }
     }
 
-    static final class Recorder implements TreeModelListener {
-        final List<TreeModelEvent> inserted = new ArrayList<>();
-        final List<TreeModelEvent> removed = new ArrayList<>();
-        final List<TreeModelEvent> changed = new ArrayList<>();
-        final List<TreeModelEvent> structure = new ArrayList<>();
-        public void treeNodesInserted(TreeModelEvent e) { inserted.add(e); }
-        public void treeNodesRemoved(TreeModelEvent e) { removed.add(e); }
-        public void treeNodesChanged(TreeModelEvent e) { changed.add(e); }
-        public void treeStructureChanged(TreeModelEvent e) { structure.add(e); }
-    }
-
-    static boolean sameInts(int[] a, int... b) {
-        if (a == null || a.length != b.length) return false;
-        for (int i = 0; i < a.length; i++) if (a[i] != b[i]) return false;
-        return true;
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        DefaultMutableTreeNode root = new DefaultMutableTreeNode("root");
-        DefaultMutableTreeNode child0 = new DefaultMutableTreeNode("child0", false);
-        DefaultMutableTreeNode child1 = new DefaultMutableTreeNode("child1", false);
-        root.add(child0);
-        root.add(child1);
-
-        DefaultTreeModel model = new DefaultTreeModel(root);
-        check(model.asksAllowsChildren() == false, "asksAllowsChildren default false");
-        model.setAsksAllowsChildren(true);
-        check(model.asksAllowsChildren() == true, "setAsksAllowsChildren true");
-        model.setAsksAllowsChildren(false);
-
-        // Root + basic queries.
-        check(model.getRoot() == root, "getRoot");
-        check(model.getChildCount(root) == 2, "getChildCount root 2");
-        check(model.getChildCount(child0) == 0, "getChildCount leaf 0");
-        check(model.getChild(root, 0) == child0, "getChild 0");
-        check(model.getChild(root, 1) == child1, "getChild 1");
-        check(model.getIndexOfChild(root, child1) == 1, "getIndexOfChild child1 == 1");
-        check(model.getIndexOfChild(root, root) == -1, "getIndexOfChild non-child -1");
-        check(model.getIndexOfChild(null, child1) == -1, "getIndexOfChild null parent -1");
-        check(model.isLeaf(child0) == true, "isLeaf child0 true");
-        check(model.isLeaf(root) == false, "isLeaf root false");
-
-        // getPathToRoot.
-        TreeNode[] path = model.getPathToRoot(child0);
-        check(path.length == 2 && path[0] == root && path[1] == child0, "getPathToRoot child0");
-        TreeNode[] rootPath = model.getPathToRoot(root);
-        check(rootPath.length == 1 && rootPath[0] == root, "getPathToRoot root");
-
-        // Listener registration + events.
-        Recorder rec = new Recorder();
-        model.addTreeModelListener(rec);
-        check(model.getTreeModelListeners().length == 1 && model.getTreeModelListeners()[0] == rec, "getTreeModelListeners");
-
-        // insertNodeInto at index 1 -> treeNodesInserted with child index 1.
-        DefaultMutableTreeNode newNode = new DefaultMutableTreeNode("new", false);
-        model.insertNodeInto(newNode, root, 1);
-        check(rec.inserted.size() == 1, "treeNodesInserted fired");
-        check(rec.inserted.get(0).getChildIndices() != null && sameInts(rec.inserted.get(0).getChildIndices(), 1), "inserted child index 1");
-        check(rec.inserted.get(0).getChildren().length == 1 && rec.inserted.get(0).getChildren()[0] == newNode, "inserted child object");
-        check(model.getChildCount(root) == 3 && model.getChild(root, 1) == newNode, "inserted into model");
-        check(root.getIndex(newNode) == 1, "inserted node index");
-
-        // nodeChanged(child0) -> treeNodesChanged with child index 0.
-        model.nodeChanged(child0);
-        check(rec.changed.size() == 1, "treeNodesChanged fired");
-        check(sameInts(rec.changed.get(0).getChildIndices(), 0), "changed child index 0");
-
-        // valueForPathChanged -> sets user object + fires treeNodesChanged.
-        TreePath child0Path = new TreePath(new Object[] { root, child0 });
-        model.valueForPathChanged(child0Path, "renamed");
-        check("renamed".equals(child0.getUserObject()), "valueForPathChanged sets user object");
-        check(rec.changed.size() == 2, "valueForPathChanged fires treeNodesChanged");
-
-        // removeNodeFromParent(newNode) -> treeNodesRemoved with index 1.
-        model.removeNodeFromParent(newNode);
-        check(rec.removed.size() == 1, "treeNodesRemoved fired");
-        check(sameInts(rec.removed.get(0).getChildIndices(), 1), "removed child index 1");
-        check(rec.removed.get(0).getChildren().length == 1 && rec.removed.get(0).getChildren()[0] == newNode, "removed child object");
-        check(model.getChildCount(root) == 2, "removed from model");
-        check(newNode.getParent() == null, "removed node parent null");
-
-        // nodeStructureChanged(root) -> treeStructureChanged.
-        model.nodeStructureChanged(root);
-        check(rec.structure.size() == 1, "treeStructureChanged fired");
-        check(rec.structure.get(0).getChildIndices() == null, "structure childIndices null");
-
-        // reload() -> treeStructureChanged on root.
-        model.reload();
-        check(rec.structure.size() == 2, "reload fires treeStructureChanged");
-
-        // removeTreeModelListener.
-        model.removeTreeModelListener(rec);
-        check(model.getTreeModelListeners().length == 0, "removeTreeModelListener");
-
-        // setRoot -> new root, getRoot reflects it.
-        DefaultMutableTreeNode newRoot = new DefaultMutableTreeNode("newRoot");
-        model.setRoot(newRoot);
-        check(model.getRoot() == newRoot, "setRoot");
-
-        // null root tolerated.
-        DefaultTreeModel emptyModel = new DefaultTreeModel(null);
-        check(emptyModel.getRoot() == null, "null root getRoot");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testModelBasics();
+        testEvents();
+        testExceptionsAndNulls();
+        testInterfacePosition();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testModelBasics() {
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("R");
+        DefaultMutableTreeNode a = new DefaultMutableTreeNode("A");
+        DefaultMutableTreeNode b = new DefaultMutableTreeNode("B");
+        root.add(a);
+        root.add(b);
+        DefaultTreeModel m = new DefaultTreeModel(root);
+        check(m.getRoot() == root, "root wiring");
+        check(!m.asksAllowsChildren(), "asksAllowsChildren defaults false");
+        check(m.getChildCount(root) == 2, "child count");
+        check(m.getChild(root, 0) == a && m.getChild(root, 1) == b, "child order");
+        check(m.getIndexOfChild(root, a) == 0 && m.getIndexOfChild(root, b) == 1, "index of child");
+        check(m.isLeaf(a), "childless node is leaf when asksAllowsChildren=false");
+        check(!m.isLeaf(root), "node with children is not leaf");
+
+        // asksAllowsChildren ctor flips isLeaf to !getAllowsChildren().
+        DefaultTreeModel m2 = new DefaultTreeModel(root, true);
+        check(m2.asksAllowsChildren(), "ctor(root, true)");
+        check(!m2.isLeaf(new DefaultMutableTreeNode("x")), "asks: childless-but-allows is NOT a leaf");
+        check(m2.isLeaf(new DefaultMutableTreeNode("y", false)), "asks: disallows-children is a leaf");
+        m.setAsksAllowsChildren(true);
+        check(m.asksAllowsChildren(), "setAsksAllowsChildren round-trip");
+        check(!m.isLeaf(a), "isLeaf follows asksAllowsChildren dynamically");
+        m.setAsksAllowsChildren(false);
+        check(m.isLeaf(a), "isLeaf restored");
+
+        // Model exposes itself through the TreeModel interface.
+        check(m instanceof TreeModel, "implements TreeModel");
+        check(m.getTreeModelListeners().length == 0, "no listeners initially");
+        Rec rec = new Rec();
+        m.addTreeModelListener(rec);
+        check(m.getTreeModelListeners().length == 1, "listener added");
+        check(m.getListeners(TreeModelListener.class).length == 1, "getListeners(Class)");
+        m.removeTreeModelListener(rec);
+        check(m.getTreeModelListeners().length == 0, "listener removed");
+    }
+
+    static void testEvents() {
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("R");
+        DefaultMutableTreeNode a = new DefaultMutableTreeNode("A");
+        DefaultMutableTreeNode b = new DefaultMutableTreeNode("B");
+        root.add(a);
+        root.add(b);
+        DefaultTreeModel m = new DefaultTreeModel(root);
+        Rec rec = new Rec();
+        m.addTreeModelListener(rec);
+
+        // insertNodeInto: INSERT with parent path, the child, and the exact index.
+        DefaultMutableTreeNode nb = new DefaultMutableTreeNode("NB");
+        m.insertNodeInto(nb, root, 1);
+        check(rec.inserted == 1, "insert fired once");
+        check(rec.last.equals("INSERTED path=[R] children=[NB] idx=[1]"), "insert payload: " + rec.last);
+        check(root.getChildAt(1) == nb, "insert applied to the underlying node");
+        check(rec.last.startsWith("INSERTED"), "event kind");
+
+        // removeNodeFromParent: REMOVE with the pre-removal index.
+        m.removeNodeFromParent(nb);
+        check(rec.removed == 1, "remove fired once");
+        check(rec.last.equals("REMOVED path=[R] children=[NB] idx=[1]"), "remove payload: " + rec.last);
+
+        // nodeChanged(child): CHANGE carrying the node and its index under the parent.
+        m.nodeChanged(a);
+        check(rec.changed == 1, "change fired once");
+        check(rec.last.equals("CHANGED path=[R] children=[A] idx=[0]"), "change payload: " + rec.last);
+        // nodeChanged(root): no parent exists, so children/indices are null.
+        m.nodeChanged(root);
+        check(rec.changed == 2, "nodeChanged(root) also fires");
+        check(rec.last.equals("CHANGED path=[R] children=null idx=null"), "nodeChanged(root) payload: " + rec.last);
+        // nodeChanged(null) is a documented no-op.
+        int before = rec.changed;
+        m.nodeChanged(null);
+        check(rec.changed == before, "nodeChanged(null) is a no-op");
+
+        // reload() and reload(node): STRUCTURE with children/indices null.
+        m.reload();
+        check(rec.structure == 1 && rec.last.equals("STRUCT path=[R] children=null idx=null"),
+                "reload payload: " + rec.last);
+        m.reload(a);
+        check(rec.structure == 2 && rec.last.equals("STRUCT path=[R, A] children=null idx=null"),
+                "reload(node) payload: " + rec.last);
+        m.nodeStructureChanged(b);
+        check(rec.structure == 3 && rec.last.equals("STRUCT path=[R, B] children=null idx=null"),
+                "nodeStructureChanged payload: " + rec.last);
+
+        // Manual nodesWereInserted / nodesWereRemoved.
+        m.nodesWereInserted(root, new int[]{0});
+        check(rec.inserted == 2 && rec.last.equals("INSERTED path=[R] children=[A] idx=[0]"),
+                "nodesWereInserted payload: " + rec.last);
+        m.nodesWereRemoved(root, new int[]{0}, new Object[]{a});
+        check(rec.removed == 2 && rec.last.equals("REMOVED path=[R] children=[A] idx=[0]"),
+                "nodesWereRemoved payload: " + rec.last);
+        root.insert(a, 0); // reattach silently for later checks
+
+        // nodesChanged(parent, null) fires with null payload (as nodeChanged(root) does).
+        m.nodesChanged(root, null);
+        check(rec.last.equals("CHANGED path=[R] children=null idx=null"), "nodesChanged(null idx)");
+
+        // valueForPathChanged sets the user object and fires CHANGE for it.
+        m.valueForPathChanged(new TreePath(new Object[]{root, a}), "A2");
+        check("A2".equals(a.getUserObject()), "valueForPathChanged sets user object");
+        check(rec.last.equals("CHANGED path=[R] children=[A2] idx=[0]"), "valueForPathChanged payload: " + rec.last);
+
+        // setRoot fires STRUCTURE on the new root path.
+        DefaultMutableTreeNode nr = new DefaultMutableTreeNode("Y");
+        m.setRoot(nr);
+        check(m.getRoot() == nr, "setRoot replaces root");
+        check(rec.last.equals("STRUCT path=[Y] children=null idx=null"), "setRoot payload: " + rec.last);
+        // setRoot(null): allowed; getRoot reports null and a structure event fires.
+        m.setRoot(null);
+        check(m.getRoot() == null, "setRoot(null) accepted");
+        check(rec.structure == 5, "setRoot(null) fires structure event (5th)");
+        m.setRoot(root);
+        check(m.getRoot() == root, "root restored");
+    }
+
+    static void testExceptionsAndNulls() {
+        final DefaultMutableTreeNode root = new DefaultMutableTreeNode("R");
+        root.add(new DefaultMutableTreeNode("A"));
+        final DefaultTreeModel m = new DefaultTreeModel(root);
+        checkThrows(NullPointerException.class, "getChildCount(null)",
+                new ThrowingRunnable() { public void run() { m.getChildCount(null); } });
+        checkThrows(NullPointerException.class, "getChild(null, 0)",
+                new ThrowingRunnable() { public void run() { m.getChild(null, 0); } });
+        checkThrows(NullPointerException.class, "isLeaf(null)",
+                new ThrowingRunnable() { public void run() { m.isLeaf(null); } });
+        checkThrows(IllegalArgumentException.class, "insertNodeInto(null child)",
+                new ThrowingRunnable() { public void run() { m.insertNodeInto(null, root, 0); } });
+        checkThrows(IllegalArgumentException.class, "removeNodeFromParent(root)",
+                new ThrowingRunnable() { public void run() { m.removeNodeFromParent(root); } });
+        // getIndexOfChild: null on either side gives -1, not an exception.
+        check(m.getIndexOfChild(root, null) == -1, "getIndexOfChild null child is -1");
+        check(m.getIndexOfChild(null, root) == -1, "getIndexOfChild null parent is -1");
+        check(m.getIndexOfChild(root, new DefaultMutableTreeNode("zz")) == -1, "getIndexOfChild unknown child is -1");
+    }
+
+    static void testInterfacePosition() {
+        // The interface contract (TreeModel) is exercised through the interface type.
+        DefaultMutableTreeNode r = new DefaultMutableTreeNode("R");
+        r.add(new DefaultMutableTreeNode("A"));
+        TreeModel tm = new DefaultTreeModel(r);
+        check(tm.getChildCount(r) == 1, "getChildCount through interface");
+        check("A".equals(((DefaultMutableTreeNode) tm.getChild(r, 0)).getUserObject()), "getChild through interface");
+        check(tm.getIndexOfChild(r, r.getChildAt(0)) == 0, "getIndexOfChild through interface");
+        check(tm.isLeaf(r.getChildAt(0)), "isLeaf through interface");
+        check(tm.getRoot() == r, "getRoot through interface");
+        tm.valueForPathChanged(new TreePath(r), "X");
+        check("X".equals(r.getUserObject()), "valueForPathChanged through interface");
     }
 }

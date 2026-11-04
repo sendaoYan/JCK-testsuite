@@ -1,24 +1,29 @@
-# javax.swing.tree.TreePath 行为化测试设计
+# javax.swing.tree.TreePath 测试设计
 
 ## 1. API 功能
-表示树中一条从根到节点的路径（不可变，元素数组 + 逐级 parent 链），实现 `Serializable`。
-- 构造器：`TreePath(Object)`（单节点根路径）、`TreePath(Object[])`（多段路径，防御性）。
-- 查询：`getPathCount`、`getPathComponent(int)`、`getPath()`（返回新数组）、`getLastPathComponent`、`getParentPath`。
-- 派生：`pathByAddingChild(Object)`（不改变原路径）、`isDescendant(TreePath)`。
-- 工具：`equals`、`hashCode`（取最后元素 hash）、`toString`。
+不可变树路径（Serializable）：`TreePath(Object)`（单节点）与 `TreePath(Object[])`（多段，防御性复制）、
+getPathCount/getPathComponent/getLastPathComponent/getParentPath/pathByAddingChild/isDescendant/equals/hashCode/toString。
 
 ## 2. Java 用户如何使用
-构造与多步链路：`new TreePath(new Object[]{root, child, leaf})` → `getPathCount()` → `getLastPathComponent()` → `getParentPath()` → `pathByAddingChild(grand)` → `isDescendant(parent)` → `equals`/`hashCode` 比较。
-- 每个方法典型调用：`p.getPathComponent(1)`；越界索引抛 `IllegalArgumentException`；`p.getPath()` 返回副本；`p.pathByAddingChild(x)` 返回长度 +1 的新路径而 `p` 不变；`child.isDescendant(p)` 判断 `p` 是否在 `child` 之下。
+`new TreePath(new Object[]{root, child, leaf})`；`tree.expandPath(p)`、`p.pathByAddingChild(next)`
+逐步下钻；`child.isDescendant(ancestorPath)` 判定包含关系。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/javax/swing/JTree/bug4210432.java`：`Object[] tpa = {root, expansible, subexpansible1};` 再 `t.setSelectionPath(new TreePath(tpa));` 及 `t.isExpanded(new TreePath(tpa2))`。
-- `test/jdk/javax/swing/JTree/DnD/LastNodeLowerHalfDrop.java`：`new TreePath(node.getPath())` 用 `TreeNode.getPath()` 构造 TreePath 后 `tree.getRowForPath(...)`。
-- `test/jdk/javax/swing/tree/DefaultTreeSelectionModel/bug4485322.java`：`TreePath sPaths[] = ...; for (...) sPaths[i] = new TreePath(obj1[i]);` 构造选择路径数组。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/tree/TreePath.java`；
+`test/jdk/javax/swing/JTree/bug4210432.java`、`DnD/LastNodeLowerHalfDrop.java`。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒部分在 `TreePathTest.java`：
-- 单节点构造器与 `Object[]` 构造器的计数/组件/末组件断言。
-- 验证 `Object[]` 构造与 `getPath()` 均防御性（构造后改输入数组、改返回数组不影响路径）。
-- `getParentPath`、`pathByAddingChild`（断言不改变原路径）、`isDescendant`（正反 + 自身 + 无关）。
-- `equals`/`hashCode` 往返、`toString` 含末组件、`getPathComponent(3)` 抛 `IllegalArgumentException`。
+## 4. 测试用例设计 + 易错细节
+- 防御性：构造后改入参数组、改 `getPath()` 返回数组均不影响路径。
+- 构造校验（IllegalArgumentException 精确消息）：null → "path in TreePath must be non null."；
+  空数组 → "path in TreePath must be non null and not empty."；含 null 元素 →
+  "Last path component must be non-null"（父构造路径）。
+- `pathByAddingChild(null)` 抛 NullPointerException（"Null child not allowed"）。
+- `getPathComponent` 越界/负数抛 IllegalArgumentException（JDK-8 为 ArrayIndexOutOfBoundsException 的
+  反例不存在——两侧均 IllegalArgumentException，按实际探测断言）。
+- equals 跨构造器（单节点构造 == 等价单元素数组构造）、hashCode 取最后元素 hash、
+  toString 形如 "[a, b]"。
+- `isDescendant` 方向：a.isDescendant(b) 为 b 在 a 之下；自身算后代。
+- 序列化 round-trip equals 保持。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

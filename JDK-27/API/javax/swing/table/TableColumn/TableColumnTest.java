@@ -1,151 +1,219 @@
 /*
  * @test
- * @summary javax.swing.table.TableColumn conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.table.TableColumn conformance: column props (headless-safe):
+ *          constructor defaults, width clamping invariants, identifier/headerValue
+ *          interplay, property-change events, serialization round-trip.
  * @run main TableColumnTest
  */
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.lang.reflect.Modifier;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.TableCellEditor;
-import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 
 public class TableColumnTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> ex, String m, ThrowingRunnable r) {
+        try { r.run(); } catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + ex.getName() + " but got " + t.getClass().getName() + ": " + t.getMessage());
+        }
+        throw new AssertionError(m + ": expected " + ex.getName() + " but no exception");
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.table.TableColumn");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 1, "interface count");
-        check(c.getInterfaces()[0].getName().equals("java.io.Serializable"), "interface 0");
+    static Object roundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        Object r = ois.readObject();
+        ois.close();
+        return r;
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        // default constructor defaults
-        TableColumn c0 = new TableColumn();
-        check(c0.getModelIndex() == 0, "default: modelIndex 0");
-        check(c0.getWidth() == 75, "default: width 75");
-        check(c0.getPreferredWidth() == 75, "default: preferredWidth 75");
-        check(c0.getMinWidth() == 15, "default: minWidth 15");
-        check(c0.getMaxWidth() == Integer.MAX_VALUE, "default: maxWidth Integer.MAX_VALUE");
-        check(c0.getResizable(), "default: resizable true");
-        check(c0.getHeaderValue() == null, "default: headerValue null");
-        check(c0.getIdentifier() == null, "default: identifier null");
+    static class Recorder implements PropertyChangeListener {
+        String lastProperty;
+        Object oldV, newV;
+        int count;
+        public void propertyChange(PropertyChangeEvent e) { lastProperty = e.getPropertyName(); oldV = e.getOldValue(); newV = e.getNewValue(); count++; }
+    }
 
-        // width-taking constructors
-        TableColumn c1 = new TableColumn(7);
-        check(c1.getModelIndex() == 7, "(modelIndex): modelIndex");
-        TableColumn c2 = new TableColumn(9, 120);
-        check(c2.getModelIndex() == 9 && c2.getWidth() == 120, "(modelIndex,width)");
+    static void testConstructorDefaults() {
+        TableColumn c = new TableColumn();
+        check(c.getModelIndex() == 0, "default modelIndex 0");
+        check(c.getWidth() == 75, "default width 75");
+        check(c.getMinWidth() == 15, "default minWidth 15");
+        check(c.getMaxWidth() == Integer.MAX_VALUE, "default maxWidth Integer.MAX_VALUE");
+        check(c.getPreferredWidth() == 75, "default preferredWidth 75");
+        check(c.getIdentifier() == null, "default identifier null");
+        check(c.getHeaderValue() == null, "default headerValue null");
+        check(c.getResizable(), "default resizable true");
+        check(c.getHeaderRenderer() == null, "default headerRenderer null");
+        check(c.getCellRenderer() == null, "default cellRenderer null");
+        check(c.getCellEditor() == null, "default cellEditor null");
 
-        // set/get modelIndex, identifier, headerValue
-        c2.setModelIndex(11);
-        check(c2.getModelIndex() == 11, "set/get modelIndex");
-        c2.setIdentifier("col-id");
-        check("col-id".equals(c2.getIdentifier()), "set/get identifier");
-        c2.setHeaderValue("Header");
-        check("Header".equals(c2.getHeaderValue()), "set/get headerValue");
+        TableColumn c2 = new TableColumn(3);
+        check(c2.getModelIndex() == 3, "ctor modelIndex 3");
+        check(c2.getIdentifier() == null, "ctor identifier null when no headerValue");
 
-        // width round-trip and clamping
-        c2.setMaxWidth(200);
-        c2.setMinWidth(20);
-        c2.setPreferredWidth(150);
-        check(c2.getPreferredWidth() == 150, "set/get preferredWidth");
-        c2.setWidth(150);
-        check(c2.getWidth() == 150, "set/get width");
-        c2.setWidth(9999);
-        check(c2.getWidth() == 200, "setWidth clamps to maxWidth");
-        c2.setWidth(1);
-        check(c2.getWidth() == 20, "setWidth clamps to minWidth");
-        check(c2.getMinWidth() == 20 && c2.getMaxWidth() == 200, "set/get min/maxWidth");
+        TableColumn c3 = new TableColumn(4, 90);
+        check(c3.getModelIndex() == 4 && c3.getPreferredWidth() == 90, "ctor (modelIndex, width)");
+        check(c3.getWidth() == 90, "ctor (modelIndex, width) also sets current width");
+    }
 
-        // resizable
-        c2.setResizable(false);
-        check(!c2.getResizable(), "set/get resizable false");
-        c2.setResizable(true);
-        check(c2.getResizable(), "set/get resizable true");
+    static void testIdentifierHeaderInterplay() {
+        TableColumn c = new TableColumn(0);
+        c.setHeaderValue("H");
+        check("H".equals(c.getHeaderValue()), "headerValue round-trip");
+        // getIdentifier falls back to headerValue until setIdentifier is used.
+        check("H".equals(c.getIdentifier()), "identifier falls back to headerValue");
+        c.setIdentifier("ID1");
+        check("ID1".equals(c.getIdentifier()), "identifier set");
+        check("H".equals(c.getHeaderValue()), "headerValue unaffected by setIdentifier");
+        c.setIdentifier(null);
+        check("H".equals(c.getIdentifier()), "null identifier falls back to headerValue dynamically");
+        // identifier is an arbitrary Object, not only String
+        c.setIdentifier(Integer.valueOf(7));
+        check(Integer.valueOf(7).equals(c.getIdentifier()), "arbitrary identifier object");
+        c.setHeaderValue(null);
+        check(c.getHeaderValue() == null, "headerValue cleared");
+    }
 
-        // renderers/editor round-trip
-        TableCellRenderer headerRenderer = new DefaultTableCellRenderer();
-        TableCellRenderer cellRenderer = new DefaultTableCellRenderer();
-        TableCellEditor editor = new TableCellEditor() {
-            public java.awt.Component getTableCellEditorComponent(javax.swing.JTable t, Object v, boolean s, int r, int col) { return new javax.swing.JLabel(); }
-            public Object getCellEditorValue() { return null; }
-            public boolean isCellEditable(java.util.EventObject e) { return true; }
-            public boolean shouldSelectCell(java.util.EventObject e) { return true; }
-            public boolean stopCellEditing() { return true; }
-            public void cancelCellEditing() { }
-            public void addCellEditorListener(javax.swing.event.CellEditorListener l) { }
-            public void removeCellEditorListener(javax.swing.event.CellEditorListener l) { }
-        };
-        c2.setHeaderRenderer(headerRenderer);
-        c2.setCellRenderer(cellRenderer);
-        c2.setCellEditor(editor);
-        check(c2.getHeaderRenderer() == headerRenderer, "set/get headerRenderer");
-        check(c2.getCellRenderer() == cellRenderer, "set/get cellRenderer");
-        check(c2.getCellEditor() == editor, "set/get cellEditor");
+    static void testWidthClamping() {
+        // Width is always clamped to [minWidth, maxWidth].
+        TableColumn c = new TableColumn(0);
+        c.setWidth(-1);
+        check(c.getWidth() == 15, "setWidth(-1) clamps to minWidth");
+        c.setWidth(Integer.MAX_VALUE);
+        check(c.getWidth() == Integer.MAX_VALUE, "setWidth(MAX) accepted when max is MAX");
+        c.setPreferredWidth(-5);
+        check(c.getPreferredWidth() == 15, "setPreferredWidth(-5) clamps to minWidth");
+        c.setPreferredWidth(Integer.MAX_VALUE);
+        check(c.getPreferredWidth() == Integer.MAX_VALUE, "setPreferredWidth(MAX) accepted");
 
-        // 4-arg constructor round-trip
-        TableColumn c3 = new TableColumn(5, 100, cellRenderer, editor);
-        check(c3.getModelIndex() == 5, "4-arg: modelIndex");
-        check(c3.getWidth() == 100, "4-arg: width");
-        check(c3.getCellRenderer() == cellRenderer, "4-arg: cellRenderer");
-        check(c3.getCellEditor() == editor, "4-arg: cellEditor");
+        // minWidth clamps to [0, maxWidth]; raising minWidth pushes width and preferred.
+        TableColumn d = new TableColumn(0);
+        d.setMinWidth(-7);
+        check(d.getMinWidth() == 0, "setMinWidth(-7) clamps to 0");
+        d.setMinWidth(30);
+        check(d.getMinWidth() == 30, "setMinWidth(30)");
+        check(d.getWidth() == 75 && d.getPreferredWidth() == 75, "width/pref unchanged while inside new range");
+        d.setMinWidth(90);
+        check(d.getWidth() == 90 && d.getPreferredWidth() == 90, "raising minWidth above width lifts both");
 
-        // property change listener firing
-        final String[] propName = new String[1];
-        final Object[] oldV = new Object[1];
-        final Object[] newV = new Object[1];
-        PropertyChangeListener pcl = e -> {
-            propName[0] = e.getPropertyName();
-            oldV[0] = e.getOldValue();
-            newV[0] = e.getNewValue();
-        };
-        TableColumn c4 = new TableColumn();
-        c4.addPropertyChangeListener(pcl);
-        c4.setIdentifier("before");
-        c4.setIdentifier("after");
-        check("identifier".equals(propName[0]), "identifier change fires property");
-        check("before".equals(oldV[0]) && "after".equals(newV[0]), "identifier change old/new value");
-        c4.setHeaderValue("H");
-        check("headerValue".equals(propName[0]), "headerValue change fires property");
-        c4.setModelIndex(3);
-        check("modelIndex".equals(propName[0]), "modelIndex change fires property");
-        c4.setWidth(80);
-        check("width".equals(propName[0]), "width change fires property");
-        c4.removePropertyChangeListener(pcl);
-        c4.setIdentifier("ignored");
-        check("ignored".equals(c4.getIdentifier()), "identifier still settable after listener removed");
-        check("width".equals(propName[0]), "no event after listener removed");
+        // maxWidth below minWidth pulls everything down to the (smaller) upper bound.
+        TableColumn e = new TableColumn(0);
+        e.setMaxWidth(10);
+        check(e.getMaxWidth() == 15, "setMaxWidth(10) clamps up to minWidth");
+        check(e.getWidth() == 15 && e.getPreferredWidth() == 15, "width/pref pinned at 15");
+        TableColumn f = new TableColumn(0);
+        f.setMinWidth(30);
+        f.setMaxWidth(40);
+        check(f.getMinWidth() == 30 && f.getMaxWidth() == 40, "disjoint-but-consistent min/max");
+        f.setWidth(999);
+        check(f.getWidth() == 40, "setWidth clamps to maxWidth");
+        f.setPreferredWidth(1);
+        check(f.getPreferredWidth() == 30, "setPreferredWidth clamps to minWidth");
+        // max clamps down to min
+        TableColumn g = new TableColumn(0);
+        g.setMinWidth(30);
+        g.setMaxWidth(20);
+        check(g.getMaxWidth() == 30, "setMaxWidth below min clamps to min");
+    }
 
-        // sizeWidthToFit: clamps min/preferred/width to renderer size (positive widths)
-        TableColumn c5 = new TableColumn(0);
-        c5.setHeaderRenderer(new DefaultTableCellRenderer());
-        c5.setHeaderValue("a header");
-        c5.sizeWidthToFit();
-        check(c5.getWidth() == c5.getPreferredWidth(), "sizeWidthToFit: width == preferredWidth");
-        check(c5.getMinWidth() >= 0, "sizeWidthToFit: minWidth non-negative");
+    static void testPropertyConstantsAndEvents() {
+        // Documented (historically misspelled) property name constants.
+        check("columWidth".equals(TableColumn.COLUMN_WIDTH_PROPERTY), "COLUMN_WIDTH_PROPERTY is 'columWidth'");
+        check("headerValue".equals(TableColumn.HEADER_VALUE_PROPERTY), "HEADER_VALUE_PROPERTY is 'headerValue'");
+        check("headerRenderer".equals(TableColumn.HEADER_RENDERER_PROPERTY), "HEADER_RENDERER_PROPERTY");
+        check("cellRenderer".equals(TableColumn.CELL_RENDERER_PROPERTY), "CELL_RENDERER_PROPERTY");
+
+        TableColumn c = new TableColumn(0);
+        Recorder r = new Recorder();
+        c.addPropertyChangeListener(r);
+        c.setWidth(80);
+        check(r.count == 1 && "width".equals(r.lastProperty), "width property event");
+        check(((Integer) r.newV).intValue() == 80, "width event new value");
+        c.setModelIndex(5);
+        check("modelIndex".equals(r.lastProperty), "modelIndex property event");
+        c.setHeaderValue("hv");
+        check("headerValue".equals(r.lastProperty), "headerValue property event");
+        c.setIdentifier("id");
+        check("identifier".equals(r.lastProperty), "identifier property event");
+        c.setMinWidth(20);
+        check("minWidth".equals(r.lastProperty), "minWidth property event");
+        c.setMaxWidth(500);
+        check("maxWidth".equals(r.lastProperty), "maxWidth property event");
+        c.setPreferredWidth(90);
+        check("preferredWidth".equals(r.lastProperty), "preferredWidth property event");
+        c.setResizable(false);
+        check("isResizable".equals(r.lastProperty), "isResizable property event");
+        // Setting the same value again must not fire.
+        int before = r.count;
+        c.setResizable(false);
+        check(r.count == before, "no event when value unchanged");
+
+        // Listener registry.
+        c.removePropertyChangeListener(r);
+        int after = r.count;
+        c.setWidth(33);
+        check(r.count == after, "removed listener not notified");
+        check(c.getPropertyChangeListeners().length == 0, "no listeners left");
+        c.addPropertyChangeListener(r);
+        check(c.getPropertyChangeListeners().length == 1, "listener re-added");
+    }
+
+    static void testObsoleteAndMisc() {
+        TableColumn c = new TableColumn(0);
+        // Obsolete no-ops must not throw.
+        c.disableResizedPosting();
+        c.enableResizedPosting();
+        check(true, "resized posting toggles are no-ops");
+        // sizeWidthToFit with no header renderer is documented to do nothing.
+        c.sizeWidthToFit();
+        check(c.getWidth() == 75, "sizeWidthToFit without renderer leaves width");
+        c.setWidth(75);
+        c.sizeWidthToFit();
+        check(true, "sizeWidthToFit does not throw headless");
+        c.setModelIndex(-3);
+        check(c.getModelIndex() == -3, "negative modelIndex stored verbatim (view mapping is the model's concern)");
+    }
+
+    static void testSerialization() throws Exception {
+        TableColumn c = new TableColumn(9, 123);
+        c.setHeaderValue("head");
+        c.setIdentifier("ident");
+        c.setMinWidth(20);
+        c.setMaxWidth(400);
+        c.setWidth(100);
+        c.setResizable(false);
+        TableColumn back = (TableColumn) roundTrip(c);
+        check(back.getModelIndex() == 9, "round-trip modelIndex");
+        check(back.getPreferredWidth() == 123, "round-trip preferredWidth");
+        check("head".equals(back.getHeaderValue()), "round-trip headerValue");
+        check("ident".equals(back.getIdentifier()), "round-trip identifier");
+        check(back.getMinWidth() == 20, "round-trip minWidth");
+        check(back.getMaxWidth() == 400, "round-trip maxWidth");
+        check(back.getWidth() == 100, "round-trip width");
+        check(!back.getResizable(), "round-trip resizable");
+        // Mutating the copy must not touch the original.
+        back.setWidth(55);
+        check(c.getWidth() == 100, "original untouched by deserialized copy");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testConstructorDefaults();
+        testIdentifierHeaderInterplay();
+        testWidthClamping();
+        testPropertyConstantsAndEvents();
+        testObsoleteAndMisc();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

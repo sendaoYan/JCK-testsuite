@@ -1,71 +1,115 @@
 /*
  * @test
- * @summary java.awt.print.PageFormat conformance: white-box structure + black-box behavior.
+ * @summary java.awt.print.PageFormat conformance: page description (headless-safe):
+ *          orientation constants and per-orientation geometry, transform matrices,
+ *          paper copy semantics, setOrientation validation, clone, defaults.
  * @run main PageFormatTest
  */
 
-import java.lang.reflect.*;
+import java.awt.print.PageFormat;
+import java.awt.print.Paper;
 
 public class PageFormatTest {
     static int passed;
-    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(n)) return true;
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true;
-        return false;
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
+        passed++;
     }
 
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.awt.print.PageFormat", false, PageFormatTest.class.getClassLoader());
-        check(c != null, "type loads: java.awt.print.PageFormat");
-        int m = c.getModifiers();
-        check(Modifier.isPublic(m) || Modifier.isProtected(m) || c.isMemberClass(), "public/protected/member");
-        if (c.isEnum()) check(c.getEnumConstants() != null, "enum has constants");
-        else check(c.getEnumConstants() == null, "non-enum returns null constants");
-        check(c.getDeclaredConstructors() != null, "constructors array non-null");
-        check(c.getDeclaredMethods() != null, "methods array non-null");
-        check(c.getDeclaredFields() != null, "fields array non-null");
-        if (c.isInterface()) check(Modifier.isInterface(m), "interface modifier consistent");
-        else if (c != Object.class) check(c.getSuperclass() != null, "class superclass non-null");
-        check(hasInterface(c, "java.lang.Cloneable"), "implements Cloneable");
-        check(hasMethod(c, "setOrientation"), "declares setOrientation");
-        check(hasMethod(c, "getMatrix"), "declares getMatrix");
+    interface ThrowingRunnable { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> ex, String m, ThrowingRunnable r) {
+        try { r.run(); } catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + ex.getName() + " but got " + t.getClass().getName() + ": " + t.getMessage());
+        }
+        throw new AssertionError(m + ": expected " + ex.getName() + " but no exception");
     }
 
-    static void testBlackBox() throws Exception {
-        java.awt.print.PageFormat pf = new java.awt.print.PageFormat();
-        check(pf.getWidth() == 612.0 && pf.getHeight() == 792.0, "default LETTER 612x792");
-        check(pf.getOrientation() == java.awt.print.PageFormat.PORTRAIT, "default PORTRAIT");
-        check(pf.getImageableX() >= 0.0, "imageableX >= 0");
-        check(pf.getImageableWidth() > 0.0, "imageableWidth > 0");
-        check(pf.getImageableHeight() > 0.0, "imageableHeight > 0");
-        pf.setOrientation(java.awt.print.PageFormat.LANDSCAPE);
-        check(pf.getOrientation() == java.awt.print.PageFormat.LANDSCAPE, "setOrientation LANDSCAPE");
-        pf.setOrientation(java.awt.print.PageFormat.REVERSE_LANDSCAPE);
-        check(pf.getOrientation() == java.awt.print.PageFormat.REVERSE_LANDSCAPE, "setOrientation REVERSE_LANDSCAPE");
-        pf.setOrientation(java.awt.print.PageFormat.PORTRAIT);
-        check(pf.getOrientation() == java.awt.print.PageFormat.PORTRAIT, "setOrientation PORTRAIT");
-        boolean iae = false;
-        try { pf.setOrientation(999); } catch (IllegalArgumentException e) { iae = true; }
-        check(iae, "invalid orientation IAE");
-        double[] m = pf.getMatrix();
-        check(m != null && m.length == 6, "getMatrix 6 doubles");
-        java.awt.print.PageFormat cl = (java.awt.print.PageFormat) pf.clone();
-        check(cl != pf && cl.getWidth() == pf.getWidth(), "clone equal value");
-        java.awt.print.Paper paper = pf.getPaper();
-        check(paper != null, "getPaper non-null");
-        pf.setPaper(paper);
-        java.awt.print.Paper got = pf.getPaper();
-        check(got != paper, "setPaper clones");
-        check(got.getWidth() == paper.getWidth() && got.getHeight() == paper.getHeight(), "setPaper equal value");
+    static String matrix(PageFormat f) {
+        double[] m = f.getMatrix();
+        StringBuilder sb = new StringBuilder("[");
+        for (double v : m) sb.append(v).append(",");
+        return sb.append("]").toString();
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        // Constants.
+        check(PageFormat.LANDSCAPE == 0, "LANDSCAPE == 0");
+        check(PageFormat.PORTRAIT == 1, "PORTRAIT == 1");
+        check(PageFormat.REVERSE_LANDSCAPE == 2, "REVERSE_LANDSCAPE == 2");
+
+        // Defaults: portrait letter.
+        PageFormat f = new PageFormat();
+        check(f.getOrientation() == PageFormat.PORTRAIT, "default orientation portrait");
+        check(f.getWidth() == 612.0 && f.getHeight() == 792.0, "default extents letter");
+        check(f.getImageableX() == 72.0 && f.getImageableY() == 72.0, "default imageable origin");
+        check(f.getImageableWidth() == 468.0 && f.getImageableHeight() == 648.0, "default imageable extent");
+
+        // Portrait matrix is the identity.
+        check(matrix(f).equals("[1.0,0.0,0.0,1.0,0.0,0.0,]"), "portrait matrix identity: " + matrix(f));
+
+        // Landscape swaps extents and keeps imageable origin in page coordinates.
+        f.setOrientation(PageFormat.LANDSCAPE);
+        check(f.getOrientation() == PageFormat.LANDSCAPE, "orientation round-trip");
+        check(f.getWidth() == 792.0 && f.getHeight() == 612.0, "landscape swaps extents");
+        check(f.getImageableX() == 72.0 && f.getImageableY() == 72.0, "landscape imageable origin");
+        check(f.getImageableWidth() == 648.0 && f.getImageableHeight() == 468.0, "landscape swaps imageable extents");
+        check(matrix(f).equals("[0.0,-1.0,1.0,0.0,0.0,792.0,]"), "landscape matrix: " + matrix(f));
+
+        // Reverse landscape mirrors the other way.
+        f.setOrientation(PageFormat.REVERSE_LANDSCAPE);
+        check(f.getWidth() == 792.0 && f.getHeight() == 612.0, "reverse landscape extents");
+        check(matrix(f).equals("[0.0,1.0,-1.0,0.0,612.0,0.0,]"), "reverse landscape matrix: " + matrix(f));
+
+        // Matrix is a fresh array each time.
+        double[] m1 = f.getMatrix();
+        double[] m2 = f.getMatrix();
+        check(m1 != m2, "getMatrix returns a fresh copy");
+        m1[0] = 99;
+        check(f.getMatrix()[0] != 99.0, "mutating returned matrix is harmless");
+
+        // Only the three constants are accepted.
+        checkThrows(IllegalArgumentException.class, "setOrientation(5)",
+                new ThrowingRunnable() { public void run() { new PageFormat().setOrientation(5); } });
+        checkThrows(IllegalArgumentException.class, "setOrientation(-1)",
+                new ThrowingRunnable() { public void run() { new PageFormat().setOrientation(-1); } });
+
+        // Paper wiring: setPaper clones the argument, getPaper clones the field.
+        PageFormat g = new PageFormat();
+        Paper shared = new Paper();
+        shared.setSize(300, 400);
+        shared.setImageableArea(5, 6, 7, 8);
+        g.setPaper(shared);
+        check(g.getPaper().getWidth() == 300.0, "paper stored");
+        shared.setSize(999, 999);
+        check(g.getPaper().getWidth() == 300.0, "setPaper clones its argument");
+        Paper got = g.getPaper();
+        check(got != g.getPaper(), "getPaper returns a fresh copy each call");
+        got.setSize(1, 1);
+        check(g.getPaper().getWidth() == 300.0, "mutating a returned paper is harmless");
+        // Geometry follows the paper through the portrait orientation.
+        check(g.getWidth() == 300.0 && g.getHeight() == 400.0, "extents follow paper");
+        check(g.getImageableX() == 5.0 && g.getImageableWidth() == 7.0, "imageable follows paper");
+        // setPaper(null) rejects null.
+        try {
+            g.setPaper(null);
+            check(false, "setPaper(null) should reject");
+        } catch (NullPointerException expected) {
+            check(true, "setPaper(null) throws NPE");
+        }
+
+        // clone(): same values, independent object (equals is identity-based).
+        PageFormat orig = new PageFormat();
+        orig.setPaper(shared);
+        PageFormat cl = (PageFormat) orig.clone();
+        check(cl.getClass() == PageFormat.class, "clone is a PageFormat");
+        check(cl.getOrientation() == orig.getOrientation(), "clone orientation");
+        check(cl.getWidth() == orig.getWidth() && cl.getHeight() == orig.getHeight(), "clone extents");
+        check(!cl.equals(orig), "PageFormat equals is identity-based");
+        check(!orig.equals(null), "equals(null) false");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

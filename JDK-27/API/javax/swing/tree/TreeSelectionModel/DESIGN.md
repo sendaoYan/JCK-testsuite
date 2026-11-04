@@ -1,23 +1,23 @@
-# javax.swing.tree.TreeSelectionModel 行为化测试设计
+# javax.swing.tree.TreeSelectionModel 测试设计
 
 ## 1. API 功能
-树选择模型接口，管理选中路径集合与行号映射。常量 `SINGLE_TREE_SELECTION=1`、`CONTIGUOUS_TREE_SELECTION=2`、`DISCONTIGUOUS_TREE_SELECTION=4`。
-- 模式：`setSelectionMode/getSelectionMode`。
-- 选择操作：`setSelectionPath/setSelectionPaths/addSelectionPath/addSelectionPaths/removeSelectionPath/removeSelectionPaths/clearSelection`。
-- 查询：`getSelectionPath/getSelectionPaths/getSelectionCount/isPathSelected/isSelectionEmpty`。
-- 行映射：`setRowMapper/getRowMapper/getSelectionRows/getMinSelectionRow/getMaxSelectionRow/isRowSelected/resetRowSelection/getLeadSelectionRow/getLeadSelectionPath`。
-- 监听：`add/removePropertyChangeListener`、`add/removeTreeSelectionListener`。
+树选择契约接口：27 个方法（三模式常量 SINGLE_TREE=1/SINGLE_INTERVAL=2/DISCONTIGUOUS=4，
+set/get/add/removeSelectionPath(s)，RowMapper 挂接，lead/anchor 查询，选择与属性监听器）。
 
 ## 2. Java 用户如何使用
-匿名实现后用 `setSelectionMode(CONTIGUOUS)`、`setRowMapper(mapper)`、`setSelectionPaths(paths)`，再查询 `getSelectionRows/getMin/MaxSelectionRow/isRowSelected`；`DefaultTreeSelectionModel` 已实现该接口。
+JTree.getSelectionModel() 取；`setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION)` 限单选；
+TreeSelectionListener.valueChanged 里 getNewLeadSelectionPath 更新 UI。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `DefaultTreeSelectionModel.java`：`getSelectionRows()` 返回 `getRowMapper().getRowsForPaths(getSelectionPaths())`；`setSelectionPaths` 触发 `TreeSelectionEvent` 与 `PropertyChangeEvent`。
-- `test/jdk/javax/swing/tree/DefaultTreeSelectionModel/bug4485322.java`：`setSelectionPaths` + `setRowMapper` + `CONTIGUOUS_TREE_SELECTION` 后断言 `getSelectionPaths` 顺序。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/tree/TreeSelectionModel.java`；
+JTree 调用点。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒部分在 `TreeSelectionModelTest.java`：
-- 匿名实现维护 `ArrayList<TreePath>` 选择集与 `RowMapper`，行号由 mapper 映射 p0=0/p1=2/p2=5。
-- 断言三个常量值、`setRowMapper/getRowMapper`、`setSelectionMode/getSelectionMode`。
-- `setSelectionPaths` 后断言 count/paths/lead 与 `getSelectionRows/getMin/getMax/isRowSelected/getLeadSelectionRow`，`resetRowSelection` 不抛。
-- `addSelectionPaths` 去重、`removeSelectionPath`、两类监听器往返、`clearSelection` 清空并返回 null 首路径；`DefaultTreeSelectionModel` 实现该接口。
+## 4. 测试用例设计 + 易错细节
+- 反射形态：接口、恰好 27 个方法（含 add/removePropertyChangeListener）、全部 abstract、
+  三个模式常量精确值 1/2/4 且 public static final。
+- 易错点：接口**无** getLastSelectedPathComponent（那是 JTree 的便捷方法）；
+  SELECTION_MODE_PROPERTY 常量在 DefaultTreeSelectionModel 而非接口（两侧均如此）。
+- 多态：Recording 实现经接口引用驱动选择/清除/监听器注册与 RowMapper 回调。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

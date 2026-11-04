@@ -1,19 +1,21 @@
-# TableStringConverter 测试设计
+# javax.swing.table.TableStringConverter 测试设计
 
 ## 1. API 功能
-`javax.swing.table.TableStringConverter` 是抽象类，唯一抽象方法 `String toString(TableModel model, int row, int column)`，把表格某单元格的值转换为字符串，供 `TableRowSorter` 在无法用比较器/Comparable 时做字符串化比较。
+抽象字符串包装器：`toString(TableModel, int row, int col)` 一个抽象方法，供 TableRowSorter
+在比较前把单元格值转成可比较字符串（避免反射调用 toString 的开销）。
 
 ## 2. Java 用户如何使用
-- 子类化：`TableStringConverter c = new TableStringConverter() { public String toString(TableModel m, int r, int col) { Object v = m.getValueAt(r,col); return v==null?"":v.toString(); } };`
-- 典型调用：`c.toString(model, 0, 0)`；`sorter.setStringConverter(c)`。
-- 真实组合链路：`setStringConverter(c) → sort →（sorter 内部调用 c.toString）`。
+继承并实现 toString；`rowSorter.setStringConverter(conv)`；排序时比较走 conv 而非
+value.toString()（如本地化数字格式）。
 
-## 3. 开源代码实际用法调研
-1. JDK 实现 `src/java.desktop/share/classes/javax/swing/table/TableRowSorter.java`：`getStringValueAt` 在存在 `TableStringConverter` 时调用 `converter.toString(model, row, column)`，为 null 时回退 `""`（权威用法）。
-2. SwingSet3 `test/jdk/sanity/client/lib/SwingSet3/src/com/sun/swingset3/demos/table/TableDemo.java` 通过 `TableRowSorter` 间接依赖该转换路径（过滤/排序时把非字符串值转成字符串）。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/table/TableStringConverter.java`；
+TableRowSorter 内部调用。
 
-## 4. 测试用例设计 + 自动化实现
-落入 `TableStringConverterTest.java` 的 `testBlackBox()`：
-- 匿名子类把 `getValueAt` 结果转字符串，断言整数/字符串/null 三种输入的输出（null 自定义回退 `<null>`）。
-- 使用真实 `DefaultTableModel` 作为参数传入 `toString`。
-共 13 个断言。
+## 4. 测试用例设计 + 易错细节
+- 反射形态：abstract 类、恰好 1 个抽象方法、Serializable。
+- 行为：匿名子类返回固定字符串经 TableRowSorter 排序生效（大写映射改变顺序）。
+- 版本差异（javap 确认）：JDK-8 无参构造器为 public，JDK-9+ 收紧为 protected——两侧分别断言。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

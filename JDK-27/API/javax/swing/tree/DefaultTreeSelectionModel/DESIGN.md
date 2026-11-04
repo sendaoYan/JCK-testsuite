@@ -1,24 +1,30 @@
-# javax.swing.tree.DefaultTreeSelectionModel 行为化测试设计
+# javax.swing.tree.DefaultTreeSelectionModel 测试设计
 
 ## 1. API 功能
-`TreeSelectionModel` 的默认实现，维护一组选中 `TreePath`，支持单选/连续/不连续三种模式与 `RowMapper` 行映射。
-- 构造器：`DefaultTreeSelectionModel()`（默认 `DISCONTIGUOUS_TREE_SELECTION`）。
-- 选择操作：`setSelectionPath(s)`、`addSelectionPath(s)`、`removeSelectionPath(s)`、`clearSelection`、`resetRowSelection`。
-- 查询：`getSelectionPath(s)`、`getSelectionCount`、`isPathSelected`、`isSelectionEmpty`、`getLeadSelectionPath`。
-- 模式/映射：`setSelectionMode`、`getSelectionMode`、`setRowMapper`、`getRowMapper`、`getSelectionRows`、`getMin/MaxSelectionRow`、`isRowSelected`、`getLeadSelectionRow`。
-- 监听：`addTreeSelectionListener`、`removeTreeSelectionListener`、`getTreeSelectionListeners`；`clone`。
+树选择默认实现：SINGLE_TREE/SINGLE_INTERVAL/ DISCONTIGUOUS_TREE 三模式、
+set/add/removeSelectionPath(s)、getSelectionPaths/Count、isPathSelected/isSelectedPath、
+RowMapper 行映射、resetRowSelection、lead/anchor 路径、选择监听器与 propertyChange。
 
 ## 2. Java 用户如何使用
-构造与多步链路：`new DefaultTreeSelectionModel()` → `setRowMapper(mapper)` → `setSelectionPath(p0)` → `addSelectionPath(p1)` → `getSelectionCount()` → `getSelectionRows()` → `isPathSelected(p1)` → `removeSelectionPath(p1)` → `clearSelection()`。
-- 每个方法典型调用：`setSelectionMode(SINGLE_TREE_SELECTION)` 只保留 `setSelectionPaths` 传入的第一条；`CONTIGUOUS` 模式下不连续路径只保留第一条；`addTreeSelectionListener(l)` 后 `addSelectionPath` 触发 `valueChanged`，`isAddedPath()` 区分增删。
+JTree 内部持有；程序侧 `tree.getSelectionModel().setSelectionMode(SINGLE_TREE_SELECTION)`；
+监听 TreeSelectionEvent 的 getPaths()+isAdded() 做增量 UI。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/javax/swing/tree/DefaultTreeSelectionModel/bug4485322.java`：`model.setSelectionPaths(sPaths)` + `model.setRowMapper(new DummyRowMapper())` + `model.setSelectionMode(TreeSelectionModel.CONTIGUOUS_TREE_SELECTION)` + `model.insureRowContinuity()` 后校验 `getSelectionPaths()`。
-- JDK 源码 `DefaultTreeSelectionModel.getSelectionRows()` 调用 `rowMapper.getRowsForPaths(selection)`；`resetRowSelection()` 亦按 `rowMapper` 重建行区间。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/tree/DefaultTreeSelectionModel.java`；
+`test/jdk/javax/swing/tree/DefaultTreeSelectionModel/bug4485322.java`。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒部分在 `DefaultTreeSelectionModelTest.java`：
-- 匿名 `RowMapper` 将 `p0/p1/p2` 映射到行 `0/2/5`；验证默认模式、初始为空。
-- `setSelectionPath` + 连续 `addSelectionPath` 断言顺序 `[p0,p1,p2]`、行 `[0,2,5]`、min/max 行、`isRowSelected`、lead path/row（在 remove 前确定）。
-- `removeSelectionPath` 后只断言成员与计数（实现用 Hashtable 重建顺序不确定，故不排序断言顺序）。
-- 监听器增删与 `isAddedPath` 增删事件；三种 `setSelectionMode` 下 `setSelectionPaths` 的首条保留语义；`setSelectionPath(null)`/`clearSelection` 清空；`resetRowSelection` 保活；`clone` 独立复制选择。
+## 4. 测试用例设计 + 易错细节
+- 默认：DISCONTIGUOUS 模式、空选择时 getSelectionPaths() 返回**空数组而非 null**、
+  getSelectionCount()==0、lead/anchor null。
+- SINGLE 模式 setSelectionPaths 两个路径只保留第一个；SINGLE_INTERVAL 丢弃不连续段；
+  DISCONTIGUOUS 全保留；addSelectionPath 并集、removeSelectionPath 差集。
+- setSelectionMode(99/-5) 不抛异常而被**钳到 DISCONTIGUOUS(4)**（与 ListSelectionModel 的 IAE 相反）。
+- RowMapper：自定义映射 rows=[1,2] 后 getMinSelectionRow/getMaxSelectionRow/getLeadSelectionRow；
+  resetRowSelection 清行缓存并重查。
+- 事件：精确 TreeSelectionEvent（paths+isAdded 逐位断言）；冗余 set 同一选择不投递；
+  isAddedPath(path) 在非事件上下文抛 IllegalArgumentException（"path is not a selection path"）。
+- SELECTION_MODE_PROPERTY="selectionMode" 常量在 Default 实现上（接口无此常量）。
+- 序列化：DefaultMutableTreeNode equals 为身份比较，round-trip 后断言反序列化模型自身路径选中。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

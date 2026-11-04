@@ -1,245 +1,258 @@
 /*
  * @test
- * @summary javax.swing.tree.DefaultMutableTreeNode conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.tree.DefaultMutableTreeNode conformance: tree nodes (headless-safe):
+ *          add/insert/remove/removeAllChildren, ancestors/descendants, traversals
+ *          (pre/post/breadth/depth/pathFromAncestor), siblings/leaves, paths and levels,
+ *          null/out-of-range exception matrix, clone/serialization semantics.
  * @run main DefaultMutableTreeNodeTest
  */
 
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.List;
-
+import java.util.NoSuchElementException;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeNode;
 
 public class DefaultMutableTreeNodeTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.tree.DefaultMutableTreeNode");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 3, "interface count");
-        check(c.getInterfaces()[0].getName().equals("java.lang.Cloneable"), "interface 0");
-        check(c.getInterfaces()[1].getName().equals("javax.swing.tree.MutableTreeNode"), "interface 1");
-        check(c.getInterfaces()[2].getName().equals("java.io.Serializable"), "interface 2");
-    }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
-    static List<String> names(Enumeration<? extends TreeNode> e) {
-        List<String> out = new ArrayList<>();
-        while (e.hasMoreElements()) {
-            out.add(String.valueOf(e.nextElement()));
+    interface ThrowingRunnable { void run() throws Exception; }
+
+    static void checkThrows(Class<? extends Throwable> ex, String m, ThrowingRunnable r) {
+        try { r.run(); } catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + ex.getName() + " but got " + t.getClass().getName() + ": " + t.getMessage());
         }
-        return out;
+        throw new AssertionError(m + ": expected " + ex.getName() + " but no exception");
     }
 
-    static List<String> list(String... s) {
-        List<String> out = new ArrayList<>();
-        for (String x : s) out.add(x);
-        return out;
+    static Object roundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        Object r = ois.readObject();
+        ois.close();
+        return r;
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        // Constructors.
-        DefaultMutableTreeNode empty = new DefaultMutableTreeNode();
-        check(empty.getUserObject() == null, "no-arg user object null");
-        check(empty.getAllowsChildren() == true, "no-arg allows children true");
-        DefaultMutableTreeNode one = new DefaultMutableTreeNode("x");
-        check("x".equals(one.getUserObject()), "user object ctor");
-        check(one.getAllowsChildren() == true, "user object ctor allows children");
-        DefaultMutableTreeNode leafOnly = new DefaultMutableTreeNode("leafOnly", false);
-        check(leafOnly.getAllowsChildren() == false, "allows-children ctor false");
-        check(!DefaultMutableTreeNode.EMPTY_ENUMERATION.hasMoreElements(), "EMPTY_ENUMERATION empty");
+    static String enumStr(Enumeration<?> e) {
+        StringBuilder s = new StringBuilder();
+        while (e.hasMoreElements()) s.append(e.nextElement()).append(",");
+        return s.toString();
+    }
 
-        // Build multi-level hierarchy: root -> (a -> (a1,a2)), b(leaf), c.
+    /** Tree used by traversal tests: root -> {c1 -> g1, c2}. */
+    static DefaultMutableTreeNode sample() {
         DefaultMutableTreeNode root = new DefaultMutableTreeNode("root");
-        DefaultMutableTreeNode a = new DefaultMutableTreeNode("a");
-        DefaultMutableTreeNode b = new DefaultMutableTreeNode("b", false);
+        DefaultMutableTreeNode c1 = new DefaultMutableTreeNode("c1");
+        DefaultMutableTreeNode c2 = new DefaultMutableTreeNode("c2");
+        root.add(c1);
+        root.add(c2);
+        c1.add(new DefaultMutableTreeNode("g1"));
+        return root;
+    }
+
+    static void testBasics() {
+        DefaultMutableTreeNode n = new DefaultMutableTreeNode("root");
+        check(n.isRoot() && n.getChildCount() == 0, "root");
+        check("root".equals(n.getUserObject()), "user object");
+        check(n.getParent() == null, "root parent null");
+        check(n.getAllowsChildren(), "allows children by default");
+        check(n.isLeaf(), "childless node is leaf");
+        check(new DefaultMutableTreeNode().getUserObject() == null, "null user object default");
+        check("".equals(new DefaultMutableTreeNode().toString()), "null user object toString is empty string");
+        check("root".equals(n.toString()), "toString delegates to user object");
+        DefaultMutableTreeNode noKids = new DefaultMutableTreeNode("k", false);
+        check(!noKids.getAllowsChildren(), "allowsChildren=false ctor");
+        check(noKids.isLeaf(), "disallows children means leaf");
+
+        DefaultMutableTreeNode child = new DefaultMutableTreeNode("child");
+        n.add(child);
+        check(n.getChildCount() == 1, "child");
+        check(n.getChildAt(0) == child, "getChildAt");
+        check(child.getParent() == n, "parent set by add");
+        check(n.getIndex(child) == 0, "getIndex");
+        check(!n.isLeaf() && child.isLeaf(), "leaf-ness after add");
+        check(n.getFirstChild() == child && n.getLastChild() == child, "first/last child");
+
+        // insert at explicit positions, including the childCount boundary.
+        DefaultMutableTreeNode b = new DefaultMutableTreeNode("b");
+        n.insert(b, 0);
+        check(n.getChildAt(0) == b && n.getChildAt(1) == child, "insert at 0 shifts");
         DefaultMutableTreeNode c = new DefaultMutableTreeNode("c");
-        DefaultMutableTreeNode a1 = new DefaultMutableTreeNode("a1", false);
-        DefaultMutableTreeNode a2 = new DefaultMutableTreeNode("a2", false);
+        n.insert(c, n.getChildCount());
+        check(n.getChildAt(2) == c, "insert at childCount boundary");
+        check(b.getParent() == n && c.getParent() == n, "insert rewires parent");
 
-        root.add(a);
-        root.add(c);
-        a.add(a1);
-        a.add(a2);
-        root.insert(b, 1); // root children become: a, b, c
+        // remove(int), remove(MutableTreeNode), removeAllChildren.
+        n.remove(0);
+        check(n.getChildCount() == 2 && n.getChildAt(0) == child, "remove(int) shifts");
+        check(b.getParent() == null, "remove(int) detaches parent");
+        n.remove(child);
+        check(n.getChildCount() == 1 && child.getParent() == null, "remove(node)");
+        n.add(b);
+        n.removeAllChildren();
+        check(n.getChildCount() == 0 && b.getParent() == null, "removeAllChildren detaches all");
+        child.removeFromParent();
+        check(true, "removeFromParent on detached node is harmless");
 
-        // Child/parent/index queries.
-        check(root.getChildCount() == 3, "root child count 3");
-        check(a.getChildCount() == 2, "a child count 2");
-        check(b.getChildCount() == 0, "b child count 0");
-        check(root.getChildAt(0) == a, "getChildAt 0 == a");
-        check(root.getChildAt(1) == b, "getChildAt 1 == b");
-        check(root.getChildAt(2) == c, "getChildAt 2 == c");
-        check(root.getIndex(a) == 0, "index of a");
-        check(root.getIndex(b) == 1, "index of b");
-        check(root.getIndex(c) == 2, "index of c");
-        check(root.getIndex(a1) == -1, "index of non-child is -1");
-        check(a.getIndex(a1) == 0, "index of a1 under a");
-        check(a.getParent() == root, "a parent");
-        check(a1.getParent() == a, "a1 parent");
+        // setUserObject.
+        n.setUserObject(Integer.valueOf(5));
+        check(Integer.valueOf(5).equals(n.getUserObject()), "setUserObject");
+        check("5".equals(n.toString()), "toString follows new user object");
+    }
 
-        // Levels / depths.
-        check(root.getLevel() == 0, "root level 0");
-        check(a.getLevel() == 1, "a level 1");
-        check(a1.getLevel() == 2, "a1 level 2");
-        check(b.getLevel() == 1, "b level 1");
-        check(root.getDepth() == 2, "root depth 2");
-        check(a.getDepth() == 1, "a depth 1");
-        check(b.getDepth() == 0, "b depth 0");
-
-        // Paths.
-        TreeNode[] pathA2 = a2.getPath();
-        check(pathA2.length == 3 && pathA2[0] == root && pathA2[1] == a && pathA2[2] == a2, "getPath a2");
-        Object[] uoPath = a2.getUserObjectPath();
-        check(uoPath.length == 3 && "root".equals(uoPath[0]) && "a".equals(uoPath[1]) && "a2".equals(uoPath[2]), "getUserObjectPath a2");
-
-        // Root / isRoot.
-        check(a1.getRoot() == root, "getRoot a1");
-        check(root.isRoot() == true, "root isRoot");
-        check(a1.isRoot() == false, "a1 not root");
-
-        // Leaf queries.
-        check(a1.isLeaf() == true, "a1 isLeaf");
-        check(a.isLeaf() == false, "a not leaf");
-        check(b.isLeaf() == true, "b isLeaf");
-
-        // Ancestor / descendant / related / sibling.
-        check(a1.isNodeAncestor(root) == true, "a1 isNodeAncestor root");
-        check(root.isNodeAncestor(a1) == false, "root isNodeAncestor a1 false");
-        check(root.isNodeDescendant(a1) == true, "root isNodeDescendant a1");
-        check(a1.isNodeDescendant(root) == false, "a1 isNodeDescendant root false");
-        check(a.isNodeDescendant(a) == true, "node descendant of itself");
-        check(a1.getSharedAncestor(a2) == a, "shared ancestor a1,a2 == a");
-        check(a1.getSharedAncestor(b) == root, "shared ancestor a1,b == root");
-        check(a1.getSharedAncestor(a1) == a1, "shared ancestor self == self");
-        check(a1.getSharedAncestor(null) == null, "shared ancestor null");
-        check(a1.isNodeRelated(a2) == true, "related a1,a2");
-        check(a1.isNodeRelated(new DefaultMutableTreeNode("other")) == false, "unrelated");
-
-        check(a1.isNodeSibling(a2) == true, "siblings a1,a2");
-        check(a.isNodeSibling(b) == true, "siblings a,b");
-        check(a1.isNodeSibling(b) == false, "not siblings a1,b");
-        check(a.getSiblingCount() == 3, "a sibling count 3");
-        check(a1.getSiblingCount() == 2, "a1 sibling count 2");
-        check(root.getSiblingCount() == 1, "root sibling count 1");
-        check(a.getNextSibling() == b, "a next sibling b");
-        check(b.getPreviousSibling() == a, "b previous sibling a");
-        check(c.getNextSibling() == null, "c next sibling null");
-        check(a.getPreviousSibling() == null, "a previous sibling null");
-
-        // First/last child + childAfter/childBefore.
-        check(root.getFirstChild() == a, "first child a");
-        check(root.getLastChild() == c, "last child c");
-        check(root.getChildAfter(a) == b, "childAfter a == b");
-        check(root.getChildBefore(b) == a, "childBefore b == a");
-        check(root.getChildBefore(a) == null, "childBefore a null");
-        check(root.getChildAfter(c) == null, "childAfter c null");
-
-        // Preorder neighbors.
-        check(root.getNextNode() == a, "nextNode root == a");
-        check(a.getNextNode() == a1, "nextNode a == a1");
-        check(a2.getNextNode() == b, "nextNode a2 == b");
-        check(c.getNextNode() == null, "nextNode c null");
-        check(a.getPreviousNode() == root, "prevNode a == root");
-        check(c.getPreviousNode() == b, "prevNode c == b");
-        check(root.getPreviousNode() == null, "prevNode root null");
-
-        // Leaf traversal.
-        check(root.getFirstLeaf() == a1, "firstLeaf a1");
-        check(root.getLastLeaf() == c, "lastLeaf c");
-        check(root.getLeafCount() == 4, "leaf count 4");
-        check(a2.getNextLeaf() == b, "nextLeaf a2 == b");
-        check(b.getPreviousLeaf() == a2, "prevLeaf b == a2");
-
-        // Enumerations (deterministic order).
-        check(names(root.preorderEnumeration()).equals(list("root", "a", "a1", "a2", "b", "c")), "preorder");
-        check(names(root.postorderEnumeration()).equals(list("a1", "a2", "a", "b", "c", "root")), "postorder");
-        check(names(root.depthFirstEnumeration()).equals(list("a1", "a2", "a", "b", "c", "root")), "depthFirst == postorder");
-        check(names(root.breadthFirstEnumeration()).equals(list("root", "a", "b", "c", "a1", "a2")), "breadthFirst");
-        check(names(root.children()).equals(list("a", "b", "c")), "children() order");
-        check(names(a2.pathFromAncestorEnumeration(root)).equals(list("root", "a", "a2")), "pathFromAncestor");
-
-        // User object + toString round-trip.
-        a2.setUserObject("renamed");
-        check("renamed".equals(a2.getUserObject()), "setUserObject/getUserObject");
-        check("renamed".equals(a2.toString()), "toString reflects user object");
-        DefaultMutableTreeNode nullUO = new DefaultMutableTreeNode(null);
-        check("".equals(nullUO.toString()), "toString empty for null user object");
-
-        // clone(): shallow copy, no parent/children, same user object.
-        DefaultMutableTreeNode cloneA = (DefaultMutableTreeNode) a.clone();
-        check(cloneA != a, "clone distinct object");
-        check(cloneA.getParent() == null, "clone parent null");
-        check(cloneA.getChildCount() == 0, "clone child count 0");
-        check(cloneA.getUserObject() == a.getUserObject(), "clone shares user object");
-
-        // Raw setParent does not touch child arrays.
-        DefaultMutableTreeNode orphan = new DefaultMutableTreeNode("orphan");
-        orphan.setParent(root);
-        check(orphan.getParent() == root, "setParent sets parent");
-        orphan.setParent(null);
-
-        // Removal / re-parenting on a separate subtree.
-        DefaultMutableTreeNode r2 = new DefaultMutableTreeNode("r2");
+    static void testExceptionMatrix() {
+        final DefaultMutableTreeNode n = new DefaultMutableTreeNode("n");
+        final DefaultMutableTreeNode child = new DefaultMutableTreeNode("c");
+        checkThrows(IllegalArgumentException.class, "insert null child",
+                new ThrowingRunnable() { public void run() { n.insert(null, 0); } });
+        checkThrows(ArrayIndexOutOfBoundsException.class, "insert index too big",
+                new ThrowingRunnable() { public void run() { n.insert(new DefaultMutableTreeNode("x"), 1); } });
+        checkThrows(ArrayIndexOutOfBoundsException.class, "insert negative index",
+                new ThrowingRunnable() { public void run() { n.insert(new DefaultMutableTreeNode("x"), -1); } });
+        checkThrows(IllegalArgumentException.class, "remove null node",
+                new ThrowingRunnable() { public void run() { n.remove((javax.swing.tree.MutableTreeNode) null); } });
+        checkThrows(IllegalArgumentException.class, "remove non-child node",
+                new ThrowingRunnable() { public void run() { n.remove(child); } });
+        checkThrows(IllegalArgumentException.class, "getIndex null",
+                new ThrowingRunnable() { public void run() { n.getIndex((TreeNode) null); } });
+        checkThrows(ArrayIndexOutOfBoundsException.class, "getChildAt beyond children",
+                new ThrowingRunnable() { public void run() { n.getChildAt(0); } });
+        checkThrows(ArrayIndexOutOfBoundsException.class, "remove(int) beyond children",
+                new ThrowingRunnable() { public void run() { n.remove(0); } });
+        checkThrows(IllegalArgumentException.class, "pathFromAncestor null",
+                new ThrowingRunnable() { public void run() { n.pathFromAncestorEnumeration(null); } });
+        checkThrows(IllegalArgumentException.class, "pathFromAncestor non-ancestor",
+                new ThrowingRunnable() { public void run() { child.pathFromAncestorEnumeration(n); } });
+        checkThrows(IllegalArgumentException.class, "getChildAfter null",
+                new ThrowingRunnable() { public void run() { n.getChildAfter(null); } });
+        final DefaultMutableTreeNode noKids = new DefaultMutableTreeNode("x", false);
+        checkThrows(IllegalStateException.class, "insert when children disallowed",
+                new ThrowingRunnable() { public void run() { noKids.insert(new DefaultMutableTreeNode("y"), 0); } });
+        // setAllowsChildren(false) drops existing children.
         DefaultMutableTreeNode x = new DefaultMutableTreeNode("x");
-        DefaultMutableTreeNode y = new DefaultMutableTreeNode("y");
-        DefaultMutableTreeNode z = new DefaultMutableTreeNode("z");
-        r2.add(x);
-        r2.add(y);
-        r2.add(z);
-        check(r2.getChildCount() == 3, "r2 child count 3");
-        r2.remove(1); // removes y
-        check(r2.getChildCount() == 2 && r2.getChildAt(0) == x && r2.getChildAt(1) == z, "remove(int)");
-        check(y.getParent() == null, "removed child parent null");
-        z.removeFromParent();
-        check(z.getParent() == null, "removeFromParent parent null");
-        check(r2.getChildCount() == 1, "r2 child count after removeFromParent");
-        DefaultMutableTreeNode w = new DefaultMutableTreeNode("w");
-        r2.add(w);
-        check(r2.getChildAt(1) == w, "add appends");
-        r2.insert(z, 0); // moves z (currently parentless) to front
-        check(r2.getChildAt(0) == z && r2.getChildAt(1) == x && r2.getChildAt(2) == w, "insert at index");
-        // insert re-parents a node already owned elsewhere
-        DefaultMutableTreeNode r3 = new DefaultMutableTreeNode("r3");
-        DefaultMutableTreeNode mover = new DefaultMutableTreeNode("mover");
-        r2.add(mover);       // mover under r2 (index 3)
-        r3.insert(mover, 0); // move mover to r3
-        check(r3.getChildAt(0) == mover && mover.getParent() == r3, "insert moves from old parent");
-        check(r2.getChildCount() == 3, "old parent lost moved child");
-        r2.remove(x);
-        check(r2.getChildCount() == 2, "remove(MutableTreeNode)");
-        r2.removeAllChildren();
-        check(r2.getChildCount() == 0, "removeAllChildren");
-        check(z.getParent() == null && w.getParent() == null, "removeAllChildren clears parents");
+        x.add(new DefaultMutableTreeNode("y"));
+        x.setAllowsChildren(false);
+        check(x.getChildCount() == 0, "setAllowsChildren(false) drops children");
+        check(!x.getAllowsChildren(), "allowsChildren false after set");
+        // Cycle prevention: inserting an ancestor below its descendant.
+        final DefaultMutableTreeNode root = new DefaultMutableTreeNode("r");
+        final DefaultMutableTreeNode mid = new DefaultMutableTreeNode("m");
+        root.add(mid);
+        checkThrows(IllegalArgumentException.class, "insert own ancestor creates cycle",
+                new ThrowingRunnable() { public void run() { mid.insert(root, 0); } });
+        // null-tolerant predicates.
+        check(!n.isNodeChild(null), "isNodeChild(null) is false");
+        check(!n.isNodeAncestor(null), "isNodeAncestor(null) is false");
+        check(!n.isNodeDescendant(null), "isNodeDescendant(null) is false");
+    }
 
-        // setAllowsChildren(false) drops children.
-        DefaultMutableTreeNode parent2 = new DefaultMutableTreeNode("p2");
-        parent2.add(new DefaultMutableTreeNode("k1"));
-        parent2.add(new DefaultMutableTreeNode("k2"));
-        check(parent2.getChildCount() == 2, "parent2 has 2 children");
-        parent2.setAllowsChildren(false);
-        check(parent2.getAllowsChildren() == false, "setAllowsChildren false");
-        check(parent2.getChildCount() == 0, "setAllowsChildren(false) removed children");
+    static void testRelations() {
+        DefaultMutableTreeNode root = sample();
+        DefaultMutableTreeNode c1 = (DefaultMutableTreeNode) root.getChildAt(0);
+        DefaultMutableTreeNode c2 = (DefaultMutableTreeNode) root.getChildAt(1);
+        DefaultMutableTreeNode g1 = (DefaultMutableTreeNode) c1.getChildAt(0);
+
+        // Direction: x.isNodeAncestor(a) asks whether a is an ancestor of x;
+        // x.isNodeDescendant(d) asks whether d is a descendant of x.
+        check(root.isNodeAncestor(root), "isNodeAncestor self");
+        check(g1.isNodeAncestor(root), "root is ancestor of grandchild");
+        check(!root.isNodeAncestor(g1), "grandchild is not ancestor of root");
+        check(g1.isNodeDescendant(g1), "isNodeDescendant self");
+        check(root.isNodeDescendant(g1), "grandchild is a descendant of root");
+        check(!g1.isNodeDescendant(root), "root is not a descendant of grandchild");
+        check(g1.getRoot() == root && g1.isRoot() == false, "getRoot/isRoot");
+        check(g1.getLevel() == 2 && c1.getLevel() == 1 && root.getLevel() == 0, "levels");
+        check(root.getDepth() == 2 && c1.getDepth() == 1 && g1.getDepth() == 0, "depth");
+        check(root.isNodeChild(c1) && !c1.isNodeChild(root), "isNodeChild");
+        check(c1.isNodeSibling(c1) && c1.isNodeSibling(c2) && !root.isNodeSibling(c1), "isNodeSibling");
+        check(root.getSiblingCount() == 1, "root sibling count is 1");
+        check(c1.getSiblingCount() == 2, "sibling count includes self");
+        check(root.isNodeRelated(g1), "isNodeRelated same tree");
+        check(!root.isNodeRelated(new DefaultMutableTreeNode("z")), "isNodeRelated unrelated");
+        check(g1.getSharedAncestor(c2) == root, "shared ancestor");
+        check(c1.getSharedAncestor(g1) == c1, "shared ancestor is the nearer node");
+        check(root.getSharedAncestor(new DefaultMutableTreeNode("z")) == null, "no shared ancestor -> null");
+        check(root.getPreviousNode() == null, "root has no previous in preorder");
+        check(root.getNextNode() == c1, "root next in preorder is first child");
+        check(c1.getPreviousNode() == root, "previous node in preorder");
+        check(c2.getNextNode() == null, "last node in preorder has no next");
+        check(g1.getNextNode() == c2, "next node in preorder");
+        check(root.getFirstChild() == c1 && root.getLastChild() == c2, "first/last child");
+        check(root.getChildAfter(c1) == c2, "getChildAfter");
+        check(root.getChildBefore(c1) == null, "getChildBefore first child");
+        check(root.getChildAfter(c2) == null, "getChildAfter last child");
+        check(c1.getNextSibling() == c2 && c2.getPreviousSibling() == c1, "siblings");
+        check(c1.getNextSibling() == c2 && c2.getNextSibling() == null, "last sibling null");
+        check(root.getFirstLeaf() == g1, "first leaf in depth-first order");
+        check(root.getLastLeaf() == c2, "last leaf");
+        check(g1.getNextLeaf() == c2 && c2.getNextLeaf() == null, "leaf chaining forward");
+        check(c2.getPreviousLeaf() == g1 && g1.getPreviousLeaf() == null, "leaf chaining backward");
+        check(root.getLeafCount() == 2, "leaf count");
+        check(root.getChildCount() == 2, "child count");
+        TreeNode[] path = g1.getPath();
+        check(path.length == 3 && path[0] == root && path[1] == c1 && path[2] == g1, "getPath");
+        Object[] uo = g1.getUserObjectPath();
+        check(uo.length == 3 && "root".equals(uo[0]) && "g1".equals(uo[2]), "getUserObjectPath");
+    }
+
+    static void testTraversals() {
+        DefaultMutableTreeNode root = sample();
+        check("root,c1,g1,c2,".equals(enumStr(root.preorderEnumeration())), "preorder");
+        check("g1,c1,c2,root,".equals(enumStr(root.postorderEnumeration())), "postorder");
+        check("root,c1,c2,g1,".equals(enumStr(root.breadthFirstEnumeration())), "breadth-first");
+        // depthFirst is postorder.
+        check("g1,c1,c2,root,".equals(enumStr(root.depthFirstEnumeration())), "depth-first == postorder");
+        check("root,c1,g1,".equals(enumStr(
+                ((DefaultMutableTreeNode) root.getChildAt(0).getChildAt(0)).pathFromAncestorEnumeration(root))),
+                "pathFromAncestor order");
+        check("c1,c2,".equals(enumStr(root.children())), "children enumeration order");
+        // Exhausted enumerations throw NoSuchElementException.
+        Enumeration<?> e = root.children();
+        e.nextElement();
+        e.nextElement();
+        boolean threw = false;
+        try { e.nextElement(); } catch (NoSuchElementException ex) { threw = true; }
+        check(threw, "exhausted children throws NoSuchElementException");
+        check(!DefaultMutableTreeNode.EMPTY_ENUMERATION.hasMoreElements(), "EMPTY_ENUMERATION has no elements");
+        DefaultMutableTreeNode leaf = new DefaultMutableTreeNode("l");
+        check(leaf.preorderEnumeration().hasMoreElements(), "leaf preorder yields itself");
+        check("l,".equals(enumStr(leaf.postorderEnumeration())), "leaf postorder yields itself");
+    }
+
+    static void testCloneAndSerialization() throws Exception {
+        DefaultMutableTreeNode root = sample();
+        // clone() copies user object by reference but drops parent and children.
+        DefaultMutableTreeNode cl = (DefaultMutableTreeNode) root.clone();
+        check(cl.getChildCount() == 0, "clone has no children");
+        check(cl.getParent() == null, "clone has no parent");
+        check("root".equals(cl.getUserObject()), "clone shares user object by reference");
+        cl.setUserObject("changed");
+        check("root".equals(root.getUserObject()), "user object reference shared, but field assignment is per node");
+
+        DefaultMutableTreeNode back = (DefaultMutableTreeNode) roundTrip(root);
+        check(back.getChildCount() == 2, "round-trip child count");
+        check(back.getUserObject().equals("root"), "round-trip user object");
+        DefaultMutableTreeNode bc1 = (DefaultMutableTreeNode) back.getChildAt(0);
+        check(bc1.getChildCount() == 1, "round-trip grandchild count");
+        check(bc1.getParent() == back, "round-trip parent links restored");
+        check(bc1.getChildAt(0).getParent() == bc1, "round-trip deep parent links");
+        DefaultMutableTreeNode added = new DefaultMutableTreeNode("new");
+        back.add(added);
+        check(back.getChildCount() == 3, "deserialized node still mutable");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testBasics();
+        testExceptionMatrix();
+        testRelations();
+        testTraversals();
+        testCloneAndSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

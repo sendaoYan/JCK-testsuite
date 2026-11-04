@@ -1,67 +1,75 @@
 /*
  * @test
- * @summary javax.swing.tree.RowMapper conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.tree.RowMapper conformance: type shape via reflection
+ *          (headless-safe) plus polymorphic use of getRowsForPaths.
  * @run main RowMapperTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-
-import javax.swing.tree.AbstractLayoutCache;
-import javax.swing.tree.FixedHeightLayoutCache;
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.tree.RowMapper;
 import javax.swing.tree.TreePath;
 
 public class RowMapperTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.tree.RowMapper");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == true, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 0, "no interfaces");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        final TreePath pA = new TreePath("a");
-        final TreePath pB = new TreePath("b");
-
-        RowMapper mapper = new RowMapper() {
-            public int[] getRowsForPaths(TreePath[] paths) {
-                if (paths == null) return null;
-                int[] rows = new int[paths.length];
-                for (int i = 0; i < paths.length; i++) {
-                    if (paths[i] == pA) rows[i] = 3;
-                    else if (paths[i] == pB) rows[i] = 7;
-                    else rows[i] = -1;
-                }
-                return rows;
+    // Fixed mapping: "a" -> row 0, "b" -> row 2, anything else -> -1.
+    static class FixedMapper implements RowMapper {
+        int calls;
+        public int[] getRowsForPaths(TreePath[] paths) {
+            calls++;
+            int[] rows = new int[paths.length];
+            for (int i = 0; i < paths.length; i++) {
+                String s = String.valueOf(paths[i].getLastPathComponent());
+                rows[i] = "a".equals(s) ? 0 : "b".equals(s) ? 2 : -1;
             }
-        };
-
-        int[] rows = mapper.getRowsForPaths(new TreePath[] { pA, pB, new TreePath("other") });
-        check(rows != null && rows.length == 3 && rows[0] == 3 && rows[1] == 7 && rows[2] == -1, "getRowsForPaths mapping");
-        check(mapper.getRowsForPaths(null) == null, "getRowsForPaths null");
-
-        // Concrete implementations of RowMapper.
-        check(RowMapper.class.isAssignableFrom(AbstractLayoutCache.class), "AbstractLayoutCache implements RowMapper");
-        check(RowMapper.class.isAssignableFrom(FixedHeightLayoutCache.class), "FixedHeightLayoutCache implements RowMapper");
+            return rows;
+        }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.tree.RowMapper", false, RowMapperTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getRowsForPaths"), "method getRowsForPaths");
+        check(names.size() == 1, "single-method interface, got " + names.size() + ": " + names);
+        Method m = c.getMethod("getRowsForPaths", TreePath[].class);
+        check(Modifier.isAbstract(m.getModifiers()), "getRowsForPaths abstract");
+        check(m.getReturnType() == int[].class, "getRowsForPaths returns int[]");
+        for (Method dm : c.getDeclaredMethods()) {
+            check(Modifier.isAbstract(dm.getModifiers()), "abstract method " + dm.getName());
+        }
+
+        // Polymorphic contract through the interface reference: the returned rows
+        // are positionally aligned with the paths argument.
+        RowMapper rm = new FixedMapper();
+        TreePath[] ps = new TreePath[]{new TreePath("a"), new TreePath("b"), new TreePath("z")};
+        int[] rows = rm.getRowsForPaths(ps);
+        check(rows.length == 3, "one row per path");
+        check(rows[0] == 0 && rows[1] == 2 && rows[2] == -1, "positional mapping: " + java.util.Arrays.toString(rows));
+        check(((FixedMapper) rm).calls == 1, "invoked through interface");
+        check(rm.getRowsForPaths(new TreePath[0]).length == 0, "empty path array gives empty rows");
+
+        // DefaultTreeSelectionModel consumes a RowMapper (see DefaultTreeSelectionModelTest).
+        Class<?> sel = Class.forName("javax.swing.tree.DefaultTreeSelectionModel", false, RowMapperTest.class.getClassLoader());
+        check(sel.getMethod("setRowMapper", RowMapper.class) != null, "DefaultTreeSelectionModel.setRowMapper(RowMapper)");
+        check(sel.getMethod("getRowMapper").getReturnType() == RowMapper.class, "DefaultTreeSelectionModel.getRowMapper returns RowMapper");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

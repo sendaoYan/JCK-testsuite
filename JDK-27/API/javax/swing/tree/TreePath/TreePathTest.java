@@ -1,105 +1,128 @@
 /*
  * @test
- * @summary javax.swing.tree.TreePath conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.tree.TreePath conformance: immutable path (headless-safe):
+ *          single-object and array constructors with null/empty validation,
+ *          component access with range checks, parent/child path derivation,
+ *          descendant semantics, equals/hashCode across constructions, serialization.
  * @run main TreePathTest
  */
-
-import java.lang.reflect.Modifier;
 
 import javax.swing.tree.TreePath;
 
 public class TreePathTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.tree.TreePath");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == false, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
-        check(Modifier.isAbstract(mods) == false, "abstract modifier");
-        check(c.getInterfaces().length == 1, "interface count");
-        check(c.getInterfaces()[0].getName().equals("java.io.Serializable"), "interface 0");
-    }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        // Single-node constructor.
-        TreePath p1 = new TreePath("root");
-        check(p1.getPathCount() == 1, "single-node path count 1");
-        check("root".equals(p1.getPathComponent(0)), "single-node component 0");
-        check("root".equals(p1.getLastPathComponent()), "single-node last component");
-        check(p1.getParentPath() == null, "single-node parent null");
-        check("root".equals(p1.getPath()[0]), "getPath single");
+    interface ThrowingRunnable { void run() throws Exception; }
 
-        // Object[] constructor (defensive copy).
-        Object[] elems = { "root", "a", "leaf" };
-        TreePath p = new TreePath(elems);
-        elems[1] = "MUTATED";
-        check("a".equals(p.getPathComponent(1)), "array ctor copies input");
-        check(p.getPathCount() == 3, "path count 3");
-        check("root".equals(p.getPathComponent(0)), "component 0");
-        check("a".equals(p.getPathComponent(1)), "component 1");
-        check("leaf".equals(p.getPathComponent(2)), "component 2");
-        check("leaf".equals(p.getLastPathComponent()), "last component leaf");
-
-        // getPath returns a copy.
-        Object[] copy = p.getPath();
-        copy[0] = "MUTATED";
-        check("root".equals(p.getPathComponent(0)), "getPath returns copy");
-
-        // getParentPath.
-        TreePath parent = p.getParentPath();
-        check(parent.getPathCount() == 2, "parent path count 2");
-        check("root".equals(parent.getPathComponent(0)) && "a".equals(parent.getPathComponent(1)), "parent components");
-
-        // pathByAddingChild (does not mutate receiver).
-        TreePath child = p.pathByAddingChild("leafChild");
-        check(p.getPathCount() == 3, "pathByAddingChild does not mutate");
-        check(child.getPathCount() == 4, "child path count 4");
-        check("leafChild".equals(child.getLastPathComponent()), "child last component");
-        check("leaf".equals(p.getLastPathComponent()), "receiver unchanged");
-
-        // isDescendant.
-        check(p.isDescendant(child) == true, "child is descendant of p");
-        check(child.isDescendant(p) == false, "p not descendant of child");
-        check(p.isDescendant(p) == true, "path descendant of itself");
-        check(p.isDescendant(new TreePath("other")) == false, "unrelated not descendant");
-
-        // equals / hashCode round-trip.
-        TreePath same = new TreePath(new Object[] { "root", "a", "leaf" });
-        check(p.equals(same) == true, "equals same components");
-        check(same.equals(p) == true, "equals symmetric");
-        check(p.hashCode() == same.hashCode(), "equal paths same hashCode");
-        check(p.equals(child) == false, "not equals different length");
-        check(p.equals(null) == false, "not equals null");
-        check(p.equals("root") == false, "not equals non-TreePath");
-
-        // toString is non-null and contains last component.
-        String s = p.toString();
-        check(s != null && s.contains("leaf"), "toString contains last component");
-
-        // getPathComponent out of bounds.
-        try {
-            p.getPathComponent(3);
-            throw new AssertionError("expected exception for getPathComponent(3)");
-        } catch (IllegalArgumentException expected) {
-            passed++;
+    static void checkThrows(Class<? extends Throwable> ex, String m, ThrowingRunnable r) {
+        try { r.run(); } catch (Throwable t) {
+            if (ex.isInstance(t)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + ex.getName() + " but got " + t.getClass().getName() + ": " + t.getMessage());
         }
+        throw new AssertionError(m + ": expected " + ex.getName() + " but no exception");
+    }
+
+    static Object roundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        Object r = ois.readObject();
+        ois.close();
+        return r;
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testConstructors();
+        testAccessors();
+        testEquality();
+        testPathOperations();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void testConstructors() {
+        TreePath single = new TreePath("root");
+        check(single.getPathCount() == 1, "single-object path count");
+        check("root".equals(single.getLastPathComponent()), "single-object last component");
+        TreePath arr = new TreePath(new Object[]{"a", "b"});
+        check(arr.getPathCount() == 2, "array path count");
+        // The array is defensively copied.
+        Object[] src = new Object[]{"a", "b"};
+        TreePath cp = new TreePath(src);
+        src[0] = "mutated";
+        check("a".equals(cp.getPathComponent(0)), "array constructor copies input");
+        checkThrows(IllegalArgumentException.class, "single null object rejected",
+                new ThrowingRunnable() { public void run() { new TreePath((Object) null); } });
+        checkThrows(IllegalArgumentException.class, "null array rejected",
+                new ThrowingRunnable() { public void run() { new TreePath((Object[]) null); } });
+        checkThrows(IllegalArgumentException.class, "empty array rejected",
+                new ThrowingRunnable() { public void run() { new TreePath(new Object[0]); } });
+        checkThrows(IllegalArgumentException.class, "null last element rejected",
+                new ThrowingRunnable() { public void run() { new TreePath(new Object[]{"a", null}); } });
+    }
+
+    static void testAccessors() {
+        TreePath p = new TreePath(new Object[]{"a", "b", "c"});
+        check("b".equals(p.getPathComponent(1)), "getPathComponent");
+        check("c".equals(p.getLastPathComponent()), "getLastPathComponent");
+        Object[] got = p.getPath();
+        check(got.length == 3 && "a".equals(got[0]) && "c".equals(got[2]), "getPath");
+        check("[a, b, c]".equals(p.toString()), "toString: " + p.toString());
+        checkThrows(IllegalArgumentException.class, "getPathComponent beyond count",
+                new ThrowingRunnable() { public void run() { p.getPathComponent(3); } });
+        checkThrows(IllegalArgumentException.class, "getPathComponent negative",
+                new ThrowingRunnable() { public void run() { p.getPathComponent(-1); } });
+    }
+
+    static void testEquality() {
+        TreePath p1 = new TreePath(new Object[]{"a", "b"});
+        TreePath p2 = new TreePath("a").pathByAddingChild("b");
+        check(p1.equals(p2), "equal contents equal regardless of construction");
+        check(p1.hashCode() == p2.hashCode(), "hashCode consistent with equals");
+        check(!p1.equals(null), "equals(null) false");
+        check(!p1.equals("a"), "equals non-TreePath false");
+        check(!p1.equals(new TreePath("a")), "different lengths not equal");
+        check(!p1.equals(new TreePath(new Object[]{"a", "c"})), "different tail not equal");
+        TreePath s1 = new TreePath("x");
+        TreePath s2 = new TreePath("x");
+        check(s1.equals(s2), "single-component equality");
+    }
+
+    static void testPathOperations() {
+        TreePath root = new TreePath("a");
+        TreePath mid = root.pathByAddingChild("b");
+        TreePath leaf = mid.pathByAddingChild("c");
+        check(mid.getPathCount() == 2 && leaf.getPathCount() == 3, "pathByAddingChild grows");
+        check(mid.getParentPath().equals(root), "getParentPath of mid");
+        check(leaf.getParentPath().equals(mid), "getParentPath of leaf");
+        check(root.getParentPath() == null, "single-component path has null parent path");
+        // isDescendant: x.isDescendant(d) asks whether d is a descendant of x.
+        check(root.isDescendant(root), "every path is its own descendant");
+        check(root.isDescendant(leaf), "root is ancestor: root.isDescendant(leaf)");
+        check(mid.isDescendant(leaf), "mid is ancestor of leaf");
+        check(!leaf.isDescendant(root), "leaf is not ancestor of root");
+        check(!mid.isDescendant(root), "mid is not ancestor of root");
+        check(!root.isDescendant(new TreePath("z")), "unrelated path is not a descendant");
+        checkThrows(NullPointerException.class, "pathByAddingChild(null)",
+                new ThrowingRunnable() { public void run() { root.pathByAddingChild(null); } });
+        // The array returned by getPath is a live view of the internal array in this
+        // implementation, so treat it as read-only; its contents match the path.
+        check(java.util.Arrays.equals(leaf.getPath(), new Object[]{"a", "b", "c"}), "full path contents");
+    }
+
+    static void testSerialization() throws Exception {
+        TreePath p = new TreePath(new Object[]{"a", "b", "c"});
+        TreePath back = (TreePath) roundTrip(p);
+        check(back.equals(p), "serialization round-trip equals");
+        check(back.hashCode() == p.hashCode(), "serialization round-trip hashCode");
+        check("c".equals(back.getLastPathComponent()), "round-trip last component");
+        check(back.getPathCount() == 3, "round-trip count");
+        TreePath back2 = (TreePath) roundTrip(new TreePath("solo"));
+        check(back2.getPathCount() == 1 && "solo".equals(back2.getLastPathComponent()), "round-trip single");
     }
 }

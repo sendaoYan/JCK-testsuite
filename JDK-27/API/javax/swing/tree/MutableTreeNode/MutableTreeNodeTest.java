@@ -1,116 +1,106 @@
 /*
  * @test
- * @summary javax.swing.tree.MutableTreeNode conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.tree.MutableTreeNode conformance: type shape via reflection
+ *          (headless-safe), interface completeness, and polymorphic use.
  * @run main MutableTreeNodeTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Enumeration;
-import java.util.List;
-
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.MutableTreeNode;
 import javax.swing.tree.TreeNode;
 
 public class MutableTreeNodeTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.tree.MutableTreeNode");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == true, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 1, "interface count");
-        check(c.getInterfaces()[0].getName().equals("javax.swing.tree.TreeNode"), "interface 0");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        final List<MutableTreeNode> kids = new ArrayList<>();
-        final MutableTreeNode[] parentRef = new MutableTreeNode[1];
-        final Object[] userObject = new Object[1];
-
-        final MutableTreeNode node = new MutableTreeNode() {
-            public TreeNode getChildAt(int i) { return kids.get(i); }
-            public int getChildCount() { return kids.size(); }
-            public TreeNode getParent() { return parentRef[0]; }
-            public int getIndex(TreeNode n) { return kids.indexOf(n); }
-            public boolean getAllowsChildren() { return true; }
-            public boolean isLeaf() { return kids.isEmpty(); }
-            public Enumeration<TreeNode> children() {
-                return Collections.enumeration(new ArrayList<TreeNode>(kids));
-            }
-            public void insert(MutableTreeNode c, int i) { kids.add(i, c); }
-            public void remove(int i) { kids.remove(i); }
-            public void remove(MutableTreeNode c) { kids.remove(c); }
-            public void setUserObject(Object o) { userObject[0] = o; }
-            public void removeFromParent() {
-                MutableTreeNode p = (MutableTreeNode) getParent();
-                if (p != null) p.remove(this);
-                parentRef[0] = null;
-            }
-            public void setParent(MutableTreeNode p) { parentRef[0] = p; }
-        };
-
-        // Exercise TreeNode methods via MutableTreeNode.
-        check(node.getAllowsChildren() == true, "getAllowsChildren");
-        check(node.isLeaf() == true, "initially leaf");
-        check(node.getParent() == null, "initially no parent");
-
-        // insert + queries.
-        MutableTreeNode childA = new DefaultMutableTreeNode("a");
-        MutableTreeNode childB = new DefaultMutableTreeNode("b");
-        node.insert(childA, 0);
-        node.insert(childB, 1);
-        check(node.getChildCount() == 2, "getChildCount 2");
-        check(node.getChildAt(0) == childA && node.getChildAt(1) == childB, "getChildAt");
-        check(node.getIndex(childB) == 1, "getIndex childB");
-        check(node.isLeaf() == false, "no longer leaf");
-        Enumeration<? extends TreeNode> kidsEnum = node.children();
-        check(kidsEnum.hasMoreElements() && kidsEnum.nextElement() == childA, "children() order");
-
-        // setUserObject.
-        node.setUserObject("payload");
-        check("payload".equals(userObject[0]), "setUserObject stores value");
-
-        // setParent + removeFromParent.
-        DefaultMutableTreeNode parentNode = new DefaultMutableTreeNode("parent");
-        node.setParent(parentNode);
-        check(node.getParent() == parentNode, "setParent/getParent");
-        node.setParent(null);
-        check(node.getParent() == null, "setParent(null)");
-        parentNode.add(node);
-        check(parentNode.getChildCount() == 1, "parent holds node");
-        check(node.getParent() == parentNode, "add sets parent");
-        node.removeFromParent();
-        check(parentNode.getChildCount() == 0, "removeFromParent removed from parent");
-        check(node.getParent() == null, "removeFromParent clears parent");
-
-        // remove(int) and remove(MutableTreeNode).
-        node.remove(0); // removes childA
-        check(node.getChildCount() == 1 && node.getChildAt(0) == childB, "remove(int)");
-        node.remove(childB);
-        check(node.getChildCount() == 0, "remove(MutableTreeNode)");
-        check(node.isLeaf() == true, "back to leaf");
-
-        check(MutableTreeNode.class.isAssignableFrom(DefaultMutableTreeNode.class), "DefaultMutableTreeNode implements MutableTreeNode");
+    // Recording implementation used to exercise the interface reference.
+    static class RecordingNode implements MutableTreeNode {
+        MutableTreeNode parent, inserted;
+        int insertIndex = -1, removedIndex = -1;
+        MutableTreeNode removedNode;
+        Object userObject;
+        int detachCalls;
+        public void insert(MutableTreeNode child, int index) { inserted = child; insertIndex = index; }
+        public void remove(int index) { removedIndex = index; }
+        public void remove(MutableTreeNode node) { removedNode = node; }
+        public void setUserObject(Object object) { userObject = object; }
+        public void removeFromParent() { detachCalls++; }
+        public void setParent(MutableTreeNode newParent) { parent = newParent; }
+        public TreeNode getChildAt(int childIndex) { return null; }
+        public int getChildCount() { return 0; }
+        public TreeNode getParent() { return parent; }
+        public int getIndex(TreeNode node) { return -1; }
+        public boolean getAllowsChildren() { return true; }
+        public boolean isLeaf() { return true; }
+        public Enumeration<? extends TreeNode> children() { return java.util.Collections.emptyEnumeration(); }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.tree.MutableTreeNode", false, MutableTreeNodeTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        check(hasInterface(c, "javax.swing.tree.TreeNode"), "implements javax.swing.tree.TreeNode");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("insert"), "method insert");
+        check(names.contains("remove"), "method remove");
+        check(names.contains("remove"), "method remove");
+        check(names.contains("setUserObject"), "method setUserObject");
+        check(names.contains("removeFromParent"), "method removeFromParent");
+        check(names.contains("setParent"), "method setParent");
+        check(names.size() == 12, "7 TreeNode names + 5 own names (both remove overloads share one name), got "
+                + names.size() + ": " + names);
+        check(c.getDeclaredMethods().length == 6, "exactly 6 declared methods");
+        for (Method m : c.getDeclaredMethods()) {
+            check(Modifier.isAbstract(m.getModifiers()), "abstract method " + m.getName());
+        }
+        // Overloads: remove(int) and remove(MutableTreeNode).
+        check(c.getMethod("remove", int.class) != null, "remove(int) overload");
+        check(c.getMethod("remove", MutableTreeNode.class) != null, "remove(MutableTreeNode) overload");
+
+        // Known implementations.
+        Class<?> impl = Class.forName("javax.swing.tree.DefaultMutableTreeNode", false, MutableTreeNodeTest.class.getClassLoader());
+        check(c.isAssignableFrom(impl), "DefaultMutableTreeNode is a MutableTreeNode");
+
+        // Polymorphic contract through the interface reference.
+        MutableTreeNode m = new RecordingNode();
+        MutableTreeNode other = new RecordingNode();
+        m.insert(other, 2);
+        check(((RecordingNode) m).inserted == other && ((RecordingNode) m).insertIndex == 2, "insert through interface");
+        m.remove(1);
+        check(((RecordingNode) m).removedIndex == 1, "remove(int) through interface");
+        m.remove(other);
+        check(((RecordingNode) m).removedNode == other, "remove(node) through interface");
+        m.setUserObject("u");
+        check("u".equals(((RecordingNode) m).userObject), "setUserObject through interface");
+        m.setParent(other);
+        check(((RecordingNode) m).getParent() == other, "setParent/getParent through interface");
+        m.removeFromParent();
+        check(((RecordingNode) m).detachCalls == 1, "removeFromParent through interface");
+
+        // DefaultMutableTreeNode honours the same contract through the interface type.
+        MutableTreeNode dmtn = new DefaultMutableTreeNode("p");
+        dmtn.setUserObject("q");
+        check("q".equals(((DefaultMutableTreeNode) dmtn).getUserObject()), "DefaultMutableTreeNode via interface");
+        MutableTreeNode kid = new DefaultMutableTreeNode("k");
+        dmtn.insert(kid, 0);
+        check(kid.getParent() == dmtn, "insert rewires parent via interface");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,21 +1,22 @@
-# javax.swing.tree.MutableTreeNode 行为化测试设计
+# javax.swing.tree.MutableTreeNode 测试设计
 
 ## 1. API 功能
-`TreeNode` 的变异子接口，为可变树节点定义增删改接口。
-- 新增/删除：`insert(MutableTreeNode,int)`、`remove(int)`、`remove(MutableTreeNode)`。
-- 修改：`setUserObject(Object)`、`setParent(MutableTreeNode)`。
-- 移除自身：`removeFromParent()`（从父节点移除自身并清除父引用）。
+可变节点契约：extends TreeNode，追加 insert/removeFromParent/setParent/setUserObject 四个方法
+（声明方法名 12 个：TreeNode 7 + 本接口新增 4 + Object 继承）。
 
 ## 2. Java 用户如何使用
-自定义可变节点实现全部方法后：`parent.insert(child, 0)` → `child.setParent(parent)` → `parent.setUserObject("x")` → `child.removeFromParent()`；或直接使用 `DefaultMutableTreeNode`（已实现该接口）。
+DefaultTreeModel.insertNodeInto 要求 MutableTreeNode；自定义可变节点实现这四个方法维护父子双向链。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/javax/swing/JTree/NodeChangedTest.java`：`root.add(new DefaultMutableTreeNode(...))` 通过 `MutableTreeNode.insert/remove` 增删子节点。
-- JDK 源码 `DefaultMutableTreeNode.java`：`insert(MutableTreeNode,int)` 先 `remove` 旧父再设置新父并 `fireTreeNodesInserted`；`removeFromParent()` 调 `parent.remove(this)`。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/tree/MutableTreeNode.java`；
+DefaultTreeModel/DefaultMutableTreeNode 调用点。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒部分在 `MutableTreeNodeTest.java`：
-- 匿名实现全部方法，用 `ArrayList` 保存子节点、数组引用保存父与 userObject。
-- 断言 `insert/getChildCount/getChildAt/getIndex/children/isLeaf` 组合；`setUserObject` 存值。
-- `setParent(parent)/getParent`、`setParent(null)`、`add` 反向设置父、`removeFromParent` 从父移除并清父引用。
-- `remove(int)`/`remove(MutableTreeNode)` 后回到叶子；`DefaultMutableTreeNode` 实现该接口。
+## 4. 测试用例设计 + 易错细节
+- 反射形态：接口、extends TreeNode、新增 4 个方法签名精确（insert(MutableTreeNode,int) 等）。
+- 多态行为矩阵：Recording 实现记录 insert/remove/setParent/setUserObject 调用，
+  验证 DefaultTreeModel.insertNodeInto 会调用 child.setParent(parent)+parent.insert(child,i) 两条链；
+  removeFromParent 将 parent 置 null。
+- 易错点：insert 契约不要求去重/防环——那是 DefaultMutableTreeNode 的实现级行为。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

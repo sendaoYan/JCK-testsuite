@@ -1,24 +1,29 @@
-# javax.swing.tree.DefaultTreeModel 行为化测试设计
+# javax.swing.tree.DefaultTreeModel 测试设计
 
 ## 1. API 功能
-`TreeModel` 的默认实现，基于 `TreeNode` 并提供事件派发（`TreeModelListener`）。
-- 构造器：`DefaultTreeModel(TreeNode)`、`DefaultTreeModel(TreeNode, boolean asksAllowsChildren)`。
-- 模型查询：`getRoot`、`setRoot`、`getChild`、`getChildCount`、`getIndexOfChild`、`isLeaf`、`getPathToRoot`。
-- 变更通知：`insertNodeInto`、`removeNodeFromParent`、`nodeChanged`、`nodeStructureChanged`、`reload`、`reload(node)`、`valueForPathChanged`、以及底层 `nodesWereInserted/nodesWereRemoved/nodesChanged`。
-- 监听：`addTreeModelListener`、`removeTreeModelListener`、`getTreeModelListeners`、`getListeners`。
+TreeModel 默认实现：root、asksAllowsChildren（三态 isLeaf 判定）、insertNodeInto/removeNodeFromParent、
+nodesWereInserted/nodesWereRemoved/nodesChanged/nodeChanged/nodeStructureChanged/reload 事件分发、
+valueForPathChanged、getPathToRoot、getChild/getChildCount/getIndexOfChild。
 
 ## 2. Java 用户如何使用
-构造与多步链路：`new DefaultTreeModel(root)` → `getRoot()` → `getChildCount(root)` → `getIndexOfChild(root, child)` → `insertNodeInto(newChild, root, 1)`（触发 `treeNodesInserted`）→ `nodeChanged(child)`（触发 `treeNodesChanged`）→ `removeNodeFromParent(newChild)`（触发 `treeNodesRemoved`）→ `nodeStructureChanged(root)` / `reload()`（触发 `treeStructureChanged`）→ `valueForPathChanged(path, newValue)`。
-- 每个方法典型调用：`model.getChild(root, 0)`；`model.isLeaf(leafNode)` 取决于 `asksAllowsChildren`；`model.getPathToRoot(node)` 返回从根到节点数组；`model.addTreeModelListener(l)` 后用 `getTreeModelListeners()` 验证。
+`DefaultTreeModel m = new DefaultTreeModel(root); tree.setModel(m); m.insertNodeInto(node, parent, 0);`
+UI 依 TreeModelEvent 增量刷新；`m.reload()` 全树重建。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/javax/swing/JTree/NodeChangedTest.java`：`new DefaultTreeModel(root)` 作 `JTree` 模型，`root.setUserObject(...)` 后 `((DefaultTreeModel)tree.getModel()).nodeChanged(root)` 刷新。
-- `test/jdk/javax/swing/JTree/bug4210432.java`：`DefaultTreeModel model = new DefaultTreeModel(root); JTree t = new JTree(model);`。
-- `test/jdk/javax/swing/JTree/DnD/LastNodeLowerHalfDrop.java`：`new DefaultTreeModel(root)` 作为拖拽测试树模型。
-- JDK 源码 `JTree` 大量使用 `DefaultTreeModel` 作为默认模型并调用 `reload/nodeChanged` 等。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/tree/DefaultTreeModel.java`；
+`test/jdk/javax/swing/tree/DefaultTreeSelectionModel/`、JTree 测试。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒部分在 `DefaultTreeModelTest.java`：
-- 构造器与 `asksAllowsChildren` 往返；`getRoot/setRoot/getChild/getChildCount/getIndexOfChild/isLeaf/getPathToRoot` 断言（含 null 参数、非子节点 -1）。
-- 注册 `TreeModelListener` 记录器，依次执行 `insertNodeInto`（断言 `treeNodesInserted` 的 `getChildIndices()==[1]` 与 `getChildren()`）、`nodeChanged`（`[0]`）、`valueForPathChanged`（改 userObject 并再触发 `treeNodesChanged`）、`removeNodeFromParent`（`[1]` + removed children）、`nodeStructureChanged` 与 `reload`（`treeStructureChanged`，childIndices 为 null）。
-- `getTreeModelListeners`/`removeTreeModelListener` 往返；`setRoot` 换根；`new DefaultTreeModel(null)` 容忍空根。
+## 4. 测试用例设计 + 易错细节
+- 事件载荷精确断言（Recorder）：insertNodeInto → INSERTED path=[父] children=[新] idx=[i]；
+  removeNodeFromParent → REMOVED 携带 children 与 idx；nodeChanged(非根) → CHANGED path=[父] idx=[i]；
+  nodeChanged(root) → CHANGED children=null/idx=null（源码 `else if (node == getRoot()) nodesChanged(node, null)`）；
+  reload()/nodeStructureChanged/setRoot → STRUCT 全结构事件。
+- asksAllowsChildren=false 时 isLeaf==getChildCount==0；=true 时 isLeaf 由 getAllowsChildren 决定。
+- valueForPathChanged 回调 userObject；getIndexOfChild 未命中 -1；getChild 越界（字符串根喂给
+  TreeNode 强转路径）抛 ClassCastException 的形态断言（用真实节点避开）。
+- null/异常矩阵：getChildCount(null)/getChild(null,0)/isLeaf(null) 抛 NullPointerException；
+  insertNodeInto(null child) 抛 IllegalArgumentException；removeNodeFromParent(root) 抛 IllegalArgumentException。
+- 接口位置：implements TreeModel + Serializable；序列化 round-trip 后事件链与结构保留。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

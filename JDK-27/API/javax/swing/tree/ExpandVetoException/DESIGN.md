@@ -1,19 +1,26 @@
-# javax.swing.tree.ExpandVetoException 行为化测试设计
+# javax.swing.tree.ExpandVetoException 测试设计
 
 ## 1. API 功能
-在 `TreeWillExpandListener` 中阻止展开/折叠时抛出的受检异常，继承 `Exception`。
-- 构造器：`ExpandVetoException(TreeExpansionEvent)`（无消息）、`ExpandVetoException(TreeExpansionEvent, String message)`。
-- 继承方法：`getMessage()`、`toString()`、`getCause()`；受保护的 `event` 字段保存触发事件。
+受检异常（extends Exception）：TreeWillExpandListener 否决展开/折叠时抛出；
+两个构造器 `ExpandVetoException(TreeExpansionEvent)` 与 `(TreeExpansionEvent, String)`，
+被否决事件存于 **protected 字段 event**（无 public 访问器）。
 
 ## 2. Java 用户如何使用
-构造与多步链路：在监听器里 `new TreeExpansionEvent(tree, path)` → `throw new ExpandVetoException(event, "veto")`；调用方 `catch (ExpandVetoException e)` 后用 `e.getMessage()` 读取原因。
+`tree.addTreeWillExpandListener(new TreeWillExpandListener() { public void treeWillExpand(TreeExpansionEvent e)
+throws ExpandVetoException { throw new ExpandVetoException(e, "locked"); } });` 阻止节点展开。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `javax.swing.JTree#fireTreeWillExpand(TreePath)`：构造 `TreeExpansionEvent` 并逐个通知 `TreeWillExpandListener.treeWillExpand(e)`，监听器可抛出 `ExpandVetoException` 阻止展开（`fireTreeWillExpand` 声明 `throws ExpandVetoException`）。
-- JDK 源码 `javax.swing.JTree` 展开内部逻辑（约 3711/3738/3762 行）多处 `catch (ExpandVetoException eve)` 放弃展开/折叠。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/tree/ExpandVetoException.java`；
+JTree.basicExpandChild 处 catch；`test/jdk/javax/swing/JTree/` 展开相关测试。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒部分在 `ExpandVetoExceptionTest.java`：
-- 用 `TreeExpansionEvent` + 双参构造器断言 `getMessage()` 往返、`getCause()==null`。
-- 单参构造器断言 `getMessage()==null`。
-- 断言 `instanceof Exception/Throwable` 与 `toString()` 含类名。
+## 4. 测试用例设计 + 易错细节
+- 两构造器消息/事件接线：单参消息 null、双参消息保留、null 事件被接受不校验。
+- event 字段经反射 getDeclaredField 读取并断言身份一致；无 public getEvent（遍历 getMethods 验证）。
+- 受检语义：非 RuntimeException/Error、可被 catch(Exception) 捕获、binary name 精确。
+- 恰好 2 个 public 构造器；toString/stackTrace 继承 Throwable 行为。
+- 版本差异（javap/实测确认）：JDK-8 反射 setAccessible 可读 protected 字段值；
+  JDK-9+ 强封装（java.desktop 未开放 unnamed 模块）抛 InaccessibleObjectException——
+  JDK-27 侧测试保留 Field 元数据（断言 protected 修饰符）但跳过取值断言。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动。

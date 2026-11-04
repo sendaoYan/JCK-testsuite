@@ -1,113 +1,105 @@
 /*
  * @test
- * @summary javax.swing.table.TableColumnModel conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.table.TableColumnModel conformance: type shape via reflection
+ *          (headless-safe) plus interface completeness and polymorphic use.
  * @run main TableColumnModelTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.ListSelectionModel;
 import javax.swing.event.TableColumnModelListener;
-import javax.swing.table.DefaultTableColumnModel;
-import javax.swing.table.TableColumn;
-import javax.swing.table.TableColumnModel;
 
 public class TableColumnModelTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    // anonymous implementation delegating to a DefaultTableColumnModel
-    static TableColumnModel makeModel() {
-        return new TableColumnModel() {
-            private final DefaultTableColumnModel d = new DefaultTableColumnModel();
-            public void addColumn(TableColumn c) { d.addColumn(c); }
-            public void removeColumn(TableColumn c) { d.removeColumn(c); }
-            public void moveColumn(int a, int b) { d.moveColumn(a, b); }
-            public void setColumnMargin(int m) { d.setColumnMargin(m); }
-            public int getColumnCount() { return d.getColumnCount(); }
-            public Enumeration<TableColumn> getColumns() { return d.getColumns(); }
-            public int getColumnIndex(Object id) { return d.getColumnIndex(id); }
-            public TableColumn getColumn(int i) { return d.getColumn(i); }
-            public int getColumnMargin() { return d.getColumnMargin(); }
-            public int getColumnIndexAtX(int x) { return d.getColumnIndexAtX(x); }
-            public int getTotalColumnWidth() { return d.getTotalColumnWidth(); }
-            public void setColumnSelectionAllowed(boolean b) { d.setColumnSelectionAllowed(b); }
-            public boolean getColumnSelectionAllowed() { return d.getColumnSelectionAllowed(); }
-            public int[] getSelectedColumns() { return d.getSelectedColumns(); }
-            public int getSelectedColumnCount() { return d.getSelectedColumnCount(); }
-            public void setSelectionModel(ListSelectionModel m) { d.setSelectionModel(m); }
-            public ListSelectionModel getSelectionModel() { return d.getSelectionModel(); }
-            public void addColumnModelListener(TableColumnModelListener l) { d.addColumnModelListener(l); }
-            public void removeColumnModelListener(TableColumnModelListener l) { d.removeColumnModelListener(l); }
-        };
-    }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.table.TableColumnModel");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == true, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 0, "no interfaces");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        TableColumnModel m = makeModel();
-        check(m.getColumnCount() == 0, "initial column count");
-        check(m.getColumnMargin() == 1, "initial margin");
-
-        TableColumn a = new TableColumn(0); a.setIdentifier("a"); a.setWidth(100);
-        TableColumn b = new TableColumn(1); b.setIdentifier("b"); b.setWidth(50);
-        m.addColumn(a);
-        m.addColumn(b);
-        check(m.getColumnCount() == 2, "addColumn count");
-        check(m.getColumn(0) == a && m.getColumn(1) == b, "getColumn");
-        check(m.getColumnIndex("a") == 0 && m.getColumnIndex("b") == 1, "getColumnIndex");
-        Enumeration<TableColumn> en = m.getColumns();
-        check(en.nextElement() == a && en.nextElement() == b, "getColumns order");
-        check(m.getTotalColumnWidth() == 150, "getTotalColumnWidth");
-        check(m.getColumnIndexAtX(99) == 0 && m.getColumnIndexAtX(100) == 1, "getColumnIndexAtX");
-
-        m.moveColumn(1, 0);
-        check(m.getColumnIndex("b") == 0 && m.getColumnIndex("a") == 1, "moveColumn reorder");
-
-        m.setColumnMargin(5);
-        check(m.getColumnMargin() == 5, "set/get columnMargin");
-
-        m.setColumnSelectionAllowed(true);
-        check(m.getColumnSelectionAllowed(), "set/get columnSelectionAllowed");
-        check(m.getSelectedColumnCount() == 0, "no selection yet");
-        check(m.getSelectedColumns().length == 0, "no selected columns");
-
-        check(m.getSelectionModel() != null, "selection model present");
-        m.setSelectionModel(m.getSelectionModel());
-        check(m.getSelectionModel() != null, "setSelectionModel round-trip");
-
-        m.removeColumn(b);
-        check(m.getColumnCount() == 1, "removeColumn count");
-
-        m.addColumnModelListener(new TableColumnModelListener() {
-            public void columnAdded(javax.swing.event.TableColumnModelEvent e) { }
-            public void columnRemoved(javax.swing.event.TableColumnModelEvent e) { }
-            public void columnMoved(javax.swing.event.TableColumnModelEvent e) { }
-            public void columnMarginChanged(javax.swing.event.ChangeEvent e) { }
-            public void columnSelectionChanged(javax.swing.event.ListSelectionEvent e) { }
-        });
-        check(true, "addColumnModelListener accepted");
+    // Recording implementation: every interface method is reachable through the
+    // interface type and reports the arguments it was called with.
+    static class RecordingModel implements javax.swing.table.TableColumnModel {
+        int addCalls, removeCalls, moveCalls, marginCalls, selAllowedCalls;
+        javax.swing.table.TableColumn lastAdded, lastRemoved;
+        int moveFrom = -1, moveTo = -1, lastMargin = -1;
+        public void addColumn(javax.swing.table.TableColumn aColumn) { addCalls++; lastAdded = aColumn; }
+        public void removeColumn(javax.swing.table.TableColumn column) { removeCalls++; lastRemoved = column; }
+        public void moveColumn(int columnIndex, int newIndex) { moveCalls++; moveFrom = columnIndex; moveTo = newIndex; }
+        public void setColumnMargin(int newMargin) { marginCalls++; lastMargin = newMargin; }
+        public int getColumnCount() { return 2; }
+        public java.util.Enumeration<javax.swing.table.TableColumn> getColumns() {
+            return java.util.Collections.enumeration(java.util.Arrays.asList(
+                    new javax.swing.table.TableColumn(0), new javax.swing.table.TableColumn(1)));
+        }
+        public int getColumnIndex(Object columnIdentifier) { return 1; }
+        public javax.swing.table.TableColumn getColumn(int columnIndex) { return new javax.swing.table.TableColumn(columnIndex); }
+        public int getColumnMargin() { return 4; }
+        public int getColumnIndexAtX(int xPosition) { return xPosition < 50 ? 0 : 1; }
+        public int getTotalColumnWidth() { return 100; }
+        public void setColumnSelectionAllowed(boolean flag) { selAllowedCalls++; }
+        public boolean getColumnSelectionAllowed() { return false; }
+        public int[] getSelectedColumns() { return new int[]{0}; }
+        public int getSelectedColumnCount() { return 1; }
+        public void setSelectionModel(ListSelectionModel newModel) { }
+        public ListSelectionModel getSelectionModel() { return null; }
+        public void addColumnModelListener(TableColumnModelListener x) { }
+        public void removeColumnModelListener(TableColumnModelListener x) { }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.table.TableColumnModel", false, TableColumnModelTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("addColumn"), "method addColumn");
+        check(names.contains("removeColumn"), "method removeColumn");
+        check(names.contains("moveColumn"), "method moveColumn");
+        check(names.contains("setColumnMargin"), "method setColumnMargin");
+        check(names.contains("getColumnCount"), "method getColumnCount");
+        check(names.contains("getColumns"), "method getColumns");
+        check(names.contains("getColumnIndex"), "method getColumnIndex");
+        check(names.contains("getColumn"), "method getColumn");
+        check(names.size() == 19, "exactly the 19 specified methods, got " + names.size() + ": " + names);
+        for (Method m : c.getDeclaredMethods()) {
+            check(Modifier.isAbstract(m.getModifiers()), "abstract method " + m.getName());
+        }
+
+        // DefaultTableColumnModel implements the interface.
+        Class<?> impl = Class.forName("javax.swing.table.DefaultTableColumnModel", false, TableColumnModelTest.class.getClassLoader());
+        check(c.isAssignableFrom(impl), "DefaultTableColumnModel is a TableColumnModel");
+
+        // Polymorphic contract.
+        javax.swing.table.TableColumnModel m = new RecordingModel();
+        javax.swing.table.TableColumn tc = new javax.swing.table.TableColumn(3);
+        m.addColumn(tc);
+        m.moveColumn(0, 1);
+        m.setColumnMargin(9);
+        m.removeColumn(tc);
+        RecordingModel rec = (RecordingModel) m;
+        check(rec.addCalls == 1 && rec.lastAdded == tc, "addColumn through interface");
+        check(rec.moveCalls == 1 && rec.moveFrom == 0 && rec.moveTo == 1, "moveColumn args");
+        check(rec.marginCalls == 1 && rec.lastMargin == 9, "setColumnMargin arg");
+        check(rec.removeCalls == 1 && rec.lastRemoved == tc, "removeColumn through interface");
+        check(m.getColumnCount() == 2, "getColumnCount through interface");
+        check(m.getColumnIndex("any") == 1, "getColumnIndex through interface");
+        check(m.getColumnMargin() == 4, "getColumnMargin through interface");
+        check(m.getTotalColumnWidth() == 100, "getTotalColumnWidth through interface");
+        check(m.getColumnIndexAtX(10) == 0 && m.getColumnIndexAtX(60) == 1, "getColumnIndexAtX through interface");
+        check(m.getSelectedColumns().length == 1 && m.getSelectedColumnCount() == 1, "selection queries through interface");
+        check(!m.getColumnSelectionAllowed(), "getColumnSelectionAllowed through interface");
+        check(m.getColumns().hasMoreElements(), "getColumns through interface");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

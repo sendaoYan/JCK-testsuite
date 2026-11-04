@@ -1,87 +1,74 @@
 /*
  * @test
- * @summary javax.swing.tree.TreeNode conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.tree.TreeNode conformance: type shape via reflection
+ *          (headless-safe), interface completeness, and polymorphic use.
  * @run main TreeNodeTest
  */
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.Enumeration;
-
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeNode;
 
 public class TreeNodeTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
-    }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.tree.TreeNode");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(c.isInterface() == true, "is interface");
-        check(c.isAnnotation() == false, "is annotation");
-        check(c.isEnum() == false, "is enum");
-        check(Modifier.isPublic(mods) == true, "public modifier");
-        check(Modifier.isProtected(mods) == false, "protected modifier");
-        check(c.getSuperclass() == null, "no superclass");
-        check(c.getInterfaces().length == 0, "no interfaces");
-    }
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        final TreeNode child = new TreeNode() {
-            public TreeNode getChildAt(int i) { throw new ArrayIndexOutOfBoundsException(); }
-            public int getChildCount() { return 0; }
-            public TreeNode getParent() { return null; }
-            public int getIndex(TreeNode n) { return -1; }
-            public boolean getAllowsChildren() { return false; }
-            public boolean isLeaf() { return true; }
-            public Enumeration<TreeNode> children() { return Collections.emptyEnumeration(); }
-        };
-
-        final TreeNode parent = new TreeNode() {
-            public TreeNode getChildAt(int i) { return i == 0 ? child : null; }
-            public int getChildCount() { return 1; }
-            public TreeNode getParent() { return null; }
-            public int getIndex(TreeNode n) { return (n == child) ? 0 : -1; }
-            public boolean getAllowsChildren() { return true; }
-            public boolean isLeaf() { return false; }
-            public Enumeration<TreeNode> children() {
-                return Collections.enumeration(Collections.singletonList(child));
-            }
-        };
-
-        // Exercise every TreeNode method on the parent.
-        check(parent.getChildCount() == 1, "parent getChildCount");
-        check(parent.getChildAt(0) == child, "parent getChildAt");
-        check(parent.getIndex(child) == 0, "parent getIndex child");
-        check(parent.getIndex(parent) == -1, "parent getIndex non-child");
-        check(parent.getParent() == null, "parent getParent");
-        check(parent.getAllowsChildren() == true, "parent getAllowsChildren");
-        check(parent.isLeaf() == false, "parent isLeaf");
-        Enumeration<? extends TreeNode> kids = parent.children();
-        check(kids.hasMoreElements() && kids.nextElement() == child, "parent children()");
-
-        // Exercise every TreeNode method on the child (leaf).
-        check(child.getChildCount() == 0, "child getChildCount");
-        check(child.getParent() == null, "child getParent");
-        check(child.getIndex(child) == -1, "child getIndex");
-        check(child.getAllowsChildren() == false, "child getAllowsChildren");
-        check(child.isLeaf() == true, "child isLeaf");
-        check(!child.children().hasMoreElements(), "child children() empty");
-
-        // DefaultMutableTreeNode satisfies the interface contract.
-        check(TreeNode.class.isAssignableFrom(DefaultMutableTreeNode.class), "DefaultMutableTreeNode implements TreeNode");
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.swing.tree.TreeNode", false, TreeNodeTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getChildAt"), "method getChildAt");
+        check(names.contains("getChildCount"), "method getChildCount");
+        check(names.contains("getParent"), "method getParent");
+        check(names.contains("getIndex"), "method getIndex");
+        check(names.contains("getAllowsChildren"), "method getAllowsChildren");
+        check(names.contains("isLeaf"), "method isLeaf");
+        check(names.contains("children"), "method children");
+        check(names.size() == 7, "exactly the 7 specified methods, got " + names.size() + ": " + names);
+        for (Method m : c.getDeclaredMethods()) {
+            check(Modifier.isAbstract(m.getModifiers()), "abstract method " + m.getName());
+        }
+        check(c.getMethod("children").getReturnType() == Enumeration.class, "children returns Enumeration");
+        check(c.getMethod("getParent").getReturnType() == TreeNode.class, "getParent returns TreeNode");
+
+        // Known implementations.
+        check(hasInterface(Class.forName("javax.swing.tree.MutableTreeNode", false, TreeNodeTest.class.getClassLoader()),
+                "javax.swing.tree.TreeNode"), "MutableTreeNode extends TreeNode");
+        Class<?> impl = Class.forName("javax.swing.tree.DefaultMutableTreeNode", false, TreeNodeTest.class.getClassLoader());
+        check(c.isAssignableFrom(impl), "DefaultMutableTreeNode is a TreeNode");
+
+        // Polymorphic contract through the interface reference.
+        DefaultMutableTreeNode node = new DefaultMutableTreeNode("parent");
+        DefaultMutableTreeNode kid = new DefaultMutableTreeNode("kid");
+        node.add(kid);
+        TreeNode t = node;
+        check(t.getParent() == null, "getParent through interface");
+        check(t.getChildAt(0) == kid, "getChildAt through interface");
+        check(t.getChildCount() == 1, "getChildCount through interface");
+        check(t.getIndex(kid) == 0, "getIndex through interface");
+        check(t.getAllowsChildren(), "getAllowsChildren through interface");
+        check(!t.isLeaf(), "isLeaf through interface");
+        Enumeration<?> e = t.children();
+        check(e.hasMoreElements() && e.nextElement() == kid, "children through interface");
+        check(((TreeNode) kid).getParent() == node, "child parent through interface");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
