@@ -1,23 +1,22 @@
-# javax.swing.InputMap 设计案
+# javax.swing.InputMap 测试设计
 
 ## 1. API 功能
-`InputMap` 是 `KeyStroke -> Object` 映射，支持父映射回退。方法分组：
-- 增删：`put(KeyStroke, Object)`、`remove(KeyStroke)`、`clear()`。
-- 查询：`get(KeyStroke)`、`keys()`、`allKeys()`、`size()`。
-- 层级：`setParent/getParent`。
+KeyStroke→action-name 绑定表 + 父链；ComponentInputMap 变体要求父链同组件。
 
 ## 2. Java 用户如何使用
-用户把按键映射到动作名，配合 `ActionMap` 使用：
-```java
-InputMap map = component.getInputMap();
-map.put(KeyStroke.getKeyStroke("ENTER"), "commit");
-```
-典型链路：`new InputMap` → `put(keystroke, action)` → `get` → `keys/allKeys` → `setParent` 回退。
+`comp.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ctrl X"), "cut")`。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `javax/swing/JComponent.java` 使用 `InputMap` 存储组件按键映射（来源：`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/JComponent.java`）。
-- JDK 源码 `javax/swing/LookAndFeel.java` 的 `makeInputMap` 返回 `InputMap`。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/InputMap.java`；
+ComponentInputMap.java；JComponent.getInputMap()；JDK 自带 `test/jdk/javax/swing/` 相应模块用例。
 
-## 4. 测试用例设计 + 自动化实现
-- 结构（白盒）：`testWhiteBox()` 校验实现 `Serializable`。
-- 行为（黑盒）：`testBlackBox()` 覆盖空 size、`put/get/keys/allKeys/size`、缺失键 null、`setParent` 后父链回退与 `allKeys` 合并、`remove/clear`。
+## 4. 测试用例设计 + 易错细节
+- 从未 put 过的 map：keys()/allKeys() 返回 null；put 后再全部 remove 则 keys() 变为空数组（非 null）。
+- put(ks,null) 移除绑定；get(null) 返回 null。
+- 父链：跨链 get、own keys、allKeys 并集、影子、clear 保留父。
+- ComponentInputMap：getParent 要求同组件的 ComponentInputMap，否则 IllegalArgumentException
+  （普通 InputMap 作父同样拒绝）；**易错**：子绑定对同 key 覆盖父绑定（验证用不同 key 走父链）。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动（headless 安全，Metal LaF 先行）。
+

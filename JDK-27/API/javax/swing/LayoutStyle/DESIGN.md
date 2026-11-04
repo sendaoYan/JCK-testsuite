@@ -1,22 +1,27 @@
-# javax.swing.LayoutStyle 设计案
+# javax.swing.LayoutStyle 测试设计
 
 ## 1. API 功能
-`LayoutStyle` 抽象类提供组件间距约定。方法分组：
-- 全局实例：`setInstance/getInstance`。
-- 间距（抽象）：`getPreferredGap`、`getContainerGap`。
+组件间/组件到容器边距的平台无关抽象：getInstance/setInstance 管共享实例，
+getPreferredGap（RELATED/UNRELATED/INDENT 三档 × 四方向）、getContainerGap 交由当前 LaF 的
+LayoutStyle 实现给出像素值。
 
 ## 2. Java 用户如何使用
-LookAndFeel 提供 LayoutStyle，用户读取间距：
-```java
-LayoutStyle style = LayoutStyle.getInstance();
-int gap = style.getPreferredGap(a, b, LayoutStyle.ComponentPlacement.RELATED, SwingConstants.WEST, parent);
-```
-典型链路：`LayoutStyle.getInstance()` → `getPreferredGap`。
+自定义间距规范时 `LayoutStyle.setInstance(myStyle)`；GroupLayout 的 autoCreateGaps 内部经
+GroupLayout.setLayoutStyle 委托到它，FormBuilder 类工具直接查询。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `javax/swing/LookAndFeel.java` 的 `getLayoutStyle` 返回 `LayoutStyle`（来源：`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/LookAndFeel.java`）。
-- JDK 源码 `javax/swing/plaf/basic/BasicLookAndFeel.java` 有默认实现。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk/src/java.desktop/share/classes/javax/swing/LayoutStyle.java`（setInstance(null) 复位逻辑）；
+MetalLookAndFeel 相关 spacing 定义；GroupLayout.java 的用法。
 
-## 4. 测试用例设计 + 自动化实现
-- 结构（白盒）：`testWhiteBox()` 校验 abstract。
-- 行为（黑盒）：`testBlackBox()` 覆盖 `getInstance` 单例、匿名实现 `getPreferredGap/getContainerGap`。
+## 4. 测试用例设计 + 易错细节
+- ComponentPlacement 枚举恰 3 个值且 RELATED=0/UNRELATED=1/INDENT=2（ordinal 锁定）。
+- getInstance 幂等（同一实例）；**setInstance(null) 恢复到之前的共享实例（不是 null）**，
+  自定义实例随即失联——复位语义必须锁定。
+- 匿名子类覆写 getPreferredGap=7/getContainerGap=3，安装后 getInstance()==custom，
+  两个覆写方法直接可调（返回覆写值而非 LaF 值）。
+- Metal 下逐值锁定：RELATED 四方向全 6px；UNRELATED/INDENT 12px；getContainerGap 12px
+  （这些值来自 Metal 的按钮/标签默认间距，依赖先 setLookAndFeel(Metal)）。
+- 抽象类：new LayoutStyle(){...} 匿名实现合法，两抽象方法签名（JComponent,JComponent,
+  ComponentPlacement,int,Container)/(JComponent,int,Container)。
+
+自动化实现位于同目录 `*Test.java`。

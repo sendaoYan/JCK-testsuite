@@ -38,6 +38,7 @@ public class JDesktopPaneTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JDesktopPaneTest::testWhiteBox);
         runOnEDT(JDesktopPaneTest::testBlackBox);
+        runOnEDT(JDesktopPaneTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
     }
 
@@ -98,5 +99,40 @@ public class JDesktopPaneTest {
         desk.remove(f1);
         check(desk.getAllFrames().length == 1, "one frame after remove");
         check(desk.getAllFrames()[0] == f2, "remaining frame f2");
+    }
+
+    // Appended contract section: null selection, unlink on remove, explicit
+    // layer tracking, count invariants, UI plumbing.
+    static void testContract() throws Exception {
+        JDesktopPane dp = new JDesktopPane();
+        dp.setSelectedFrame(null);
+        check(dp.getSelectedFrame() == null, "setSelectedFrame(null) allowed");
+
+        JInternalFrame a = new JInternalFrame("a");
+        JInternalFrame b = new JInternalFrame("b");
+        dp.add(a);
+        dp.add(b);
+        check(dp.getComponentCount() == dp.getAllFrames().length, "componentCount == frame count");
+        check(a.getDesktopPane() == dp && b.getDesktopPane() == dp, "added frames linked to desktop");
+
+        // explicit-layer add is still tracked as a frame
+        JInternalFrame layered = new JInternalFrame("L");
+        dp.add(layered, JLayeredPane.PALETTE_LAYER);
+        check(dp.getAllFrames().length == 3, "explicit-layer add tracked");
+        check(layered.getLayer() == JLayeredPane.PALETTE_LAYER.intValue(), "explicit layer preserved");
+        check(dp.getAllFramesInLayer(JLayeredPane.PALETTE_LAYER.intValue()).length == 1,
+              "getAllFramesInLayer finds palette frame");
+
+        dp.remove(a);
+        check(a.getDesktopPane() == null, "removed frame unlinked");
+        dp.removeAll();
+        check(dp.getAllFrames().length == 0, "getAllFrames empty after removeAll");
+        check(dp.getAllFramesInLayer(JLayeredPane.DEFAULT_LAYER.intValue()).length == 0,
+              "getAllFramesInLayer empty after removeAll");
+
+        check(dp.getUI() instanceof javax.swing.plaf.DesktopPaneUI, "getUI is DesktopPaneUI");
+        dp.updateUI();
+        check(dp.getUI() != null, "updateUI no-throw");
+        check(dp.getAccessibleContext() != null, "accessible context non-null");
     }
 }

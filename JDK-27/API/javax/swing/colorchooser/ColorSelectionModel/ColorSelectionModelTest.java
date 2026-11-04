@@ -86,6 +86,19 @@ public class ColorSelectionModelTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // Appended contract: custom model drives JColorChooser color.
+    static void testContract() throws Exception {
+        javax.swing.colorchooser.ColorSelectionModel m =
+                new javax.swing.colorchooser.DefaultColorSelectionModel(java.awt.Color.WHITE);
+        javax.swing.JColorChooser cc = new javax.swing.JColorChooser(m);
+        check(java.awt.Color.WHITE.equals(cc.getColor()), "JColorChooser reads custom model color");
+        m.setSelectedColor(java.awt.Color.CYAN);
+        check(java.awt.Color.CYAN.equals(cc.getColor()), "model changes propagate to chooser getColor");
+        m.setSelectedColor(null);
+        check(java.awt.Color.CYAN.equals(m.getSelectedColor()), "null color ignored by default model");
     }
 }

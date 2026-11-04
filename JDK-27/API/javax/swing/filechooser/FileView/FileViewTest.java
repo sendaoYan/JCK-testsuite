@@ -70,6 +70,27 @@ public class FileViewTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // Appended contract: partial override keeps null defaults, chooser roundtrip.
+    static void testContract() throws Exception {
+        java.io.File doc = new java.io.File("document.txt");
+        javax.swing.filechooser.FileView partial = new javax.swing.filechooser.FileView() {
+            public String getName(java.io.File f) { return f == null ? null : f.getName(); }
+        };
+        check("document.txt".equals(partial.getName(doc)), "partial override getName");
+        check(partial.getDescription(doc) == null, "partial override: description stays null");
+        check(partial.getIcon(doc) == null, "partial override: icon stays null");
+        javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+        check(fc.getFileView() == null, "default chooser fileView null");
+        javax.swing.filechooser.FileView full = new javax.swing.filechooser.FileView() {
+            public String getName(java.io.File f) { return "N"; }
+        };
+        fc.setFileView(full);
+        check(fc.getFileView() == full, "setFileView roundtrip");
+        fc.setFileView(null);
+        check(fc.getFileView() == null, "setFileView(null)");
     }
 }

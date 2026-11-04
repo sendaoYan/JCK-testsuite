@@ -102,6 +102,37 @@ public class FileSystemViewTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // Appended contract section: shared-view identity, icon absence semantics,
+    // platform flags, and JDK-27-only link / shortcut / sized-icon APIs.
+    static void testContract() throws java.io.FileNotFoundException {
+        FileSystemView v = FileSystemView.getFileSystemView();
+        check(FileSystemView.getFileSystemView() == v, "getFileSystemView returns shared instance");
+
+        File home = v.getHomeDirectory();
+        File missing = new File(home, "definitely-missing-file.txt");
+        check(v.getSystemIcon(home) != null, "getSystemIcon(directory) non-null");
+        check(v.getSystemIcon(missing) == null, "getSystemIcon(nonexistent) null");
+        check(!v.isComputerNode(home), "isComputerNode false for home");
+        check(!v.isDrive(home), "isDrive false for home");
+        check(!v.isFloppyDrive(home), "isFloppyDrive false for home");
+        check(v.isFileSystem(home), "home is a plain filesystem dir");
+
+        // ---- JDK-27-only APIs (absent from JDK-8) ----
+        File tmp = new File(System.getProperty("java.io.tmpdir"));
+        check(!v.isLink(tmp), "isLink(non-link) false");
+        try { v.isLink(null); throw new AssertionError("expected NullPointerException"); }
+        catch (NullPointerException expected) { passed++; }
+        check(v.getLinkLocation(tmp) == null, "getLinkLocation(non-link) null");
+        check(v.getChooserComboBoxFiles() != null, "getChooserComboBoxFiles non-null array");
+        check(v.getChooserShortcutPanelFiles().length >= 1, "getChooserShortcutPanelFiles non-empty");
+        check(v.getSystemIcon(tmp, 16, 16) != null, "getSystemIcon(f,16,16) non-null");
+        try { v.getSystemIcon(tmp, 0, 0); throw new AssertionError("expected IllegalArgumentException"); }
+        catch (IllegalArgumentException expected) { passed++; }
+        try { v.getSystemIcon(tmp, -1, 16); throw new AssertionError("expected IllegalArgumentException"); }
+        catch (IllegalArgumentException expected) { passed++; }
     }
 }

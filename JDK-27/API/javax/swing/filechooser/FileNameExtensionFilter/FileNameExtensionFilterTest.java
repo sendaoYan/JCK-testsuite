@@ -104,6 +104,26 @@ public class FileNameExtensionFilterTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // Appended contract: extensions returned verbatim, defensive copy, directory accept.
+    static void testContract() throws Exception {
+        javax.swing.filechooser.FileNameExtensionFilter f =
+                new javax.swing.filechooser.FileNameExtensionFilter("Docs", "txt", "md");
+        check(f.getExtensions().length == 2, "getExtensions length");
+        check("txt".equals(f.getExtensions()[0]) && "md".equals(f.getExtensions()[1]),
+              "getExtensions exact order/content, no normalization");
+        javax.swing.filechooser.FileNameExtensionFilter spaced =
+                new javax.swing.filechooser.FileNameExtensionFilter("S", " csv ");
+        check(" csv ".equals(spaced.getExtensions()[0]), "extensions returned verbatim (untrimmed)");
+        check(!spaced.accept(new java.io.File("a.csv")), "extension not trimmed for matching");
+        String[] stolen = f.getExtensions();
+        stolen[0] = "hacked";
+        check(f.getExtensions()[0].equals("txt"), "getExtensions defensive copy");
+        javax.swing.filechooser.FileNameExtensionFilter nullDesc =
+                new javax.swing.filechooser.FileNameExtensionFilter(null, "x");
+        check(nullDesc.getDescription() == null, "null description preserved");
     }
 }

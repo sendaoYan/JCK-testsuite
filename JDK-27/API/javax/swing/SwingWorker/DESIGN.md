@@ -1,25 +1,25 @@
-# javax.swing.SwingWorker 设计案
+# javax.swing.SwingWorker 测试设计
 
 ## 1. API 功能
-`SwingWorker` 抽象类在后台线程执行任务。方法分组：
-- 任务：`doInBackground`（抽象）、`execute`。
-- 结果/状态：`get`、`getProgress/isDone/isCancelled/getState`。
-- 发布/进度：`publish/process/done/setProgress`。
+后台任务框架：EDT 外 doInBackground、EDT 上 process/done、publish 中间结果、
+state(PENDING/STARTED/DONE)、progress、取消语义。
 
 ## 2. Java 用户如何使用
-用户继承它执行耗时任务并在 EDT 处理结果：
-```java
-SwingWorker<Integer, Void> worker = new SwingWorker<>() {
-    protected Integer doInBackground() { return compute(); }
-};
-worker.execute();
-Integer result = worker.get();
-```
-典型链路：`execute` → `get` → `isDone/getState`。
+`new SwingWorker<Result,Progress>() {...}.execute()`；done() 里 get() 取结果更新 UI。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `javax/swing/SwingWorker.java` 是 JDK 自身实现（来源：`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/SwingWorker.java`）。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/SwingWorker.java`；
+SwingWorkerTest 同目录探针；java.util.concurrent.FutureTask 对照；JDK 自带 `test/jdk/javax/swing/` 相应模块用例。
 
-## 4. 测试用例设计 + 自动化实现
-- 结构（白盒）：`testWhiteBox()` 校验 abstract + `RunnableFuture`。
-- 行为（黑盒）：`testBlackBox()` 匿名实现 `doInBackground` 返回 42，验证初始进度、`execute` 后 `get(timeout)` 结果、`isDone`、状态 `DONE`。
+## 4. 测试用例设计 + 易错细节
+- 生命周期：初始 PENDING/progress 0；execute() 后立刻仍 PENDING；get 超时版取值；DONE；
+  done 恰一次且在 EDT；doInBackground 不在 EDT。
+- publish(1)/publish(2,3) 的 process 累计收 [1,2,3]。
+- 属性事件："state" PENDING→STARTED→STARTED→DONE、"progress" 0→42。
+- 取消：cancel(true) 返回 true、中断穿透进阻塞的 doInBackground、state 仍走 DONE、
+  get() 抛 CancellationException、再次 cancel 返回 false。
+- setProgress 边界：-1/101 IAE，0/100 合法；二次 execute 是 no-op。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动（headless 安全，Metal LaF 先行）。
+

@@ -1,27 +1,24 @@
-# javax.swing.Action 设计案
+# javax.swing.Action 测试设计
 
 ## 1. API 功能
-`Action` 是 Swing 命令抽象，继承 `java.awt.event.ActionListener`。定义一组标准键常量（`NAME`、`SHORT_DESCRIPTION`、`ACCELERATOR_KEY` 等）。方法分组：
-- 键常量：`DEFAULT/NAME/SHORT_DESCRIPTION/LONG_DESCRIPTION/SMALL_ICON/ACTION_COMMAND_KEY/ACCELERATOR_KEY/MNEMONIC_KEY/SELECTED_KEY/DISPLAYED_MNEMONIC_INDEX_KEY/LARGE_ICON_KEY`。
-- 值存取：`getValue(String)`、`putValue(String, Object)`。
-- 状态：`isEnabled()`、`setEnabled(boolean)`。
-- 默认方法：`accept(Object)`（默认 true）。
-- 监听：`addPropertyChangeListener`、`removePropertyChangeListener`。
+Action 接口（Swing 动作抽象）：11 个标准 key 常量（NAME/SHORT_DESCRIPTION/SMALL_ICON 等）、
+enabled 状态、putValue/getValue 值袋 + PropertyChange 通知。
 
 ## 2. Java 用户如何使用
-`Action` 由 `AbstractAction` 实现；用户把 `Action` 绑定到按钮/菜单/按键映射，共享命令状态：
-```java
-Action a = new AbstractAction("Copy") { public void actionPerformed(ActionEvent e) {} };
-a.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke("control C"));
-button.setAction(a);
-```
-典型链路：`putValue(NAME/ACCELERATOR_KEY)` → `getValue` → `isEnabled/setEnabled` → `accept` → `actionPerformed`。
+`JButton.setAction(a)` / `JMenuItem.setAction(a)` 绑定后由组件监听 enabled/"enabled" 事件联动；
+程序侧自定义 AbstractAction 覆写 actionPerformed。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `javax/swing/AbstractAction.java` 实现该接口全部抽象方法（来源：`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/AbstractAction.java`）。
-- JDK 源码 `javax/swing/plaf/basic/BasicLookAndFeel.java` 等用 `Action.ACCELERATOR_KEY` 等常量配置按键绑定。
-- JDK 源码 `javax/swing/JButton.java`、`JMenuItem.java` 通过 `setAction(Action)` 消费该接口。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/Action.java`；
+AbstractAction.java；JButton/JMenuItem 的 setAction 实现；JDK 自带 `test/jdk/javax/swing/` 相应模块用例。
 
-## 4. 测试用例设计 + 自动化实现
-- 结构（白盒）：`testWhiteBox()` 校验 isInterface、父接口 `ActionListener`。
-- 行为（黑盒）：`testBlackBox()` 覆盖全部 11 个键常量字符串、匿名实现的 `putValue/getValue`、`isEnabled/setEnabled`、默认方法 `accept` 返回 true、`actionPerformed` 可调用。
+## 4. 测试用例设计 + 易错细节
+- key 常量字符串逐一精确断言（含内部 SwingDisplayedMnemonicIndexKey/SwingLargeIconKey/
+  SwingSelectedKey），并断言 11 个常量互异。
+- 契约经 AbstractAction 验证：enabled 往返、putValue 后 getValue、同值 putValue 不发事件、
+  "enabled" 事件 old/new、putValue 以 key 本身为 propertyName、监听器移除后静默。
+- **易错**：DISPLAYED_MNEMONIC_INDEX_KEY 等三个"Swing 前缀" key 是后来加的公共常量但值是内部字符串。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动（headless 安全，Metal LaF 先行）。
+

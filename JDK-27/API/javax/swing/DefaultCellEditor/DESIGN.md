@@ -1,26 +1,24 @@
-# javax.swing.DefaultCellEditor 设计案
+# javax.swing.DefaultCellEditor 测试设计
 
 ## 1. API 功能
-`DefaultCellEditor` 是 `AbstractCellEditor` 的具体实现，用 JTextField/JCheckBox/JComboBox 作为表格/树单元格编辑器。方法分组：
-- 构造：`DefaultCellEditor(JTextField|JCheckBox|JComboBox)`。
-- 组件：`getComponent()`、`getTreeCellEditorComponent(JTree,...)`、`getTableCellEditorComponent(JTable,...)`。
-- 配置：`setClickCountToStart/getClickCountToStart`。
-- 编辑：`getCellEditorValue`、`isCellEditable`、`shouldSelectCell`、`stopCellEditing`、`cancelCellEditing`。
+JTable/JTree 通用单元格编辑器：三种组件构造器、clickCountToStart、
+getTableCellEditorComponent/getTreeCellEditorComponent、编辑生命周期事件。
 
 ## 2. Java 用户如何使用
-用户把它装到表格列上，双击进入编辑：
-```java
-JTextField field = new JTextField();
-DefaultCellEditor ed = new DefaultCellEditor(field);
-table.getColumnModel().getColumn(0).setCellEditor(ed);
-```
-典型链路：`new DefaultCellEditor(field)` → `getComponent` → `setClickCountToStart` → `getCellEditorValue` → `stopCellEditing`。
+`table.setDefaultEditor(Object.class, new DefaultCellEditor(combo))`。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `javax/swing/JTable.java` 用 `DefaultCellEditor` 作为默认布尔/文本编辑器（来源：`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/JTable.java`）。
-- JDK 源码 `javax/swing/JTree.java` 同样使用 `DefaultCellEditor`。
-- JDK 测试 `test/jdk/javax/swing/JTable/`、`JTree/` 覆盖默认单元格编辑。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/DefaultCellEditor.java`；
+AbstractCellEditor.java；JTable/JTree 编辑路径；JDK 自带 `test/jdk/javax/swing/` 相应模块用例。
 
-## 4. 测试用例设计 + 自动化实现
-- 结构（白盒）：`testWhiteBox()` 校验父类 `AbstractCellEditor`、实现 `TableCellEditor`+`TreeCellEditor`。
-- 行为（黑盒）：`testBlackBox()` 覆盖三种构造器、`getComponent`、文本/复选框/下拉框的 `getCellEditorValue`、`setClickCountToStart/getClickCountToStart`、`isCellEditable/shouldSelectCell/stopCellEditing`。
+## 4. 测试用例设计 + 易错细节
+- **clickCountToStart 默认：文本 2、复选框 1、组合框 1**（易记错：组合框是 1 不是 2）。
+- getCellEditorValue 跟随：文本=field.getText()、组合框=combo.getSelectedItem、复选框=Boolean。
+- 表格/树编辑组件就是构造器组件本身，且值写入 field 文本。
+- isCellEditable：null/非鼠标事件 true；MouseEvent 按 clickCount>=clickCountToStart 判定，
+  setClickCountToStart(1) 后单击即可。
+- stopCellEditing true + editingStopped；cancelCellEditing + editingCanceled；移除监听器后静默。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动（headless 安全，Metal LaF 先行）。
+

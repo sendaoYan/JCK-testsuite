@@ -1,78 +1,101 @@
 /*
  * @test
- * @summary javax.swing.DebugGraphics conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.DebugGraphics conformance: type shape + constants + logging pass-through (headless-safe).
  * @run main DebugGraphicsTest
  */
 
 import java.awt.Color;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.DebugGraphics;
+import javax.swing.JLabel;
+import javax.swing.UIManager;
+import javax.swing.plaf.metal.MetalLookAndFeel;
 
 public class DebugGraphicsTest {
     static int passed;
-    static void check(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-        passed++;
+
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.swing.DebugGraphics");
-        check(c != null, "loads");
-        int mods = c.getModifiers();
-        check(!c.isInterface(), "is interface");
-        check(!c.isAnnotation(), "is annotation");
-        check(!c.isEnum(), "is enum");
-        check(Modifier.isPublic(mods), "public modifier");
-        check(!Modifier.isProtected(mods), "protected modifier");
-        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.awt.Graphics"), "superclass");
-        check(!Modifier.isAbstract(mods), "abstract modifier");
-        check(c.getInterfaces().length == 0, "no interfaces");
+    static void testShape() throws Exception {
+        Class<?> c = Class.forName("javax.swing.DebugGraphics", false, DebugGraphicsTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.awt.Graphics"),
+                "superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("create"), "method create");
+        check(names.contains("setFlashColor"), "method setFlashColor");
+        check(names.contains("flashColor"), "method flashColor");
+        check(names.contains("setFlashTime"), "method setFlashTime");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        BufferedImage img = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = img.createGraphics();
-        DebugGraphics dg = new DebugGraphics(g2);
-
-        // color/round-trip + drawing smoke
-        dg.setColor(Color.RED);
-        check(Color.RED.equals(dg.getColor()), "setColor/getColor");
-        dg.fillRect(0, 0, 8, 8);
-        dg.drawRect(0, 0, 31, 31);
-        dg.drawLine(0, 0, 10, 10);
-        dg.drawOval(2, 2, 10, 10);
-        dg.drawString("x", 4, 16);
-        check(true, "drawing smoke");
-
-        // debug options
-        dg.setDebugOptions(DebugGraphics.LOG_OPTION | DebugGraphics.BUFFERED_OPTION);
-        check((dg.getDebugOptions() & DebugGraphics.LOG_OPTION) != 0, "log option set");
-        check((dg.getDebugOptions() & DebugGraphics.BUFFERED_OPTION) != 0, "buffered option set");
-
-        // flash settings
-        DebugGraphics.setFlashColor(Color.BLUE);
-        check(Color.BLUE.equals(DebugGraphics.flashColor()), "flashColor");
+    static void testConstants() {
+        check(DebugGraphics.NONE_OPTION == -1, "NONE_OPTION == -1");
+        check(DebugGraphics.LOG_OPTION == 1, "LOG_OPTION == 1");
+        check(DebugGraphics.FLASH_OPTION == 2, "FLASH_OPTION == 2");
+        check(DebugGraphics.BUFFERED_OPTION == 4, "BUFFERED_OPTION == 4");
         DebugGraphics.setFlashTime(123);
-        check(DebugGraphics.flashTime() == 123, "flashTime");
+        check(DebugGraphics.flashTime() == 123, "setFlashTime roundtrip");
         DebugGraphics.setFlashCount(7);
-        check(DebugGraphics.flashCount() == 7, "flashCount");
+        check(DebugGraphics.flashCount() == 7, "setFlashCount roundtrip");
+        Color c = new Color(1, 2, 3);
+        DebugGraphics.setFlashColor(c);
+        check(DebugGraphics.flashColor() == c, "setFlashColor roundtrip");
+        DebugGraphics.setFlashTime(100);
+        DebugGraphics.setFlashCount(2);
+        DebugGraphics.setFlashColor(Color.red);
+    }
 
-        // create() returns a new graphics context
-        Graphics child = dg.create();
-        check(child != null, "create");
-        child.dispose();
-        dg.dispose();
+    static void testLoggingAndPassthrough() throws Exception {
+        PrintStream saved = DebugGraphics.logStream();
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        PrintStream capture = new PrintStream(captured, true);
+        DebugGraphics.setLogStream(capture);
+        try {
+            BufferedImage img = new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = img.createGraphics();
+            DebugGraphics dg = new DebugGraphics(g, new JLabel("dbg"));
+            dg.setDebugOptions(DebugGraphics.LOG_OPTION);
+            dg.drawLine(1, 2, 3, 4);
+            String logged = captured.toString();
+            check(logged.contains("Drawing line"), "drawLine logged to log stream under LOG_OPTION");
+            DebugGraphics child = (DebugGraphics) dg.create();
+            check(child != null && child != dg, "create() yields new DebugGraphics");
+            child.dispose();
+            dg.setColor(Color.BLUE);
+            check(dg.getColor() == Color.BLUE, "setColor/getColor passthrough");
+            dg.setFont(new java.awt.Font("Dialog", java.awt.Font.PLAIN, 10));
+            check(dg.getFont() != null, "setFont/getFont passthrough");
+            dg.translate(2, 3); // passthrough no-throw
+            dg.dispose();
+            g.dispose();
+        } finally {
+            DebugGraphics.setLogStream(saved);
+        }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        UIManager.setLookAndFeel(new MetalLookAndFeel());
+        testShape();
+        testConstants();
+        testLoggingAndPassthrough();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -96,6 +96,28 @@ public class DefaultColorSelectionModelTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // Appended contract: null-initialized model NPE, serialization round-trip.
+    static void testContract() throws Exception {
+        javax.swing.colorchooser.DefaultColorSelectionModel n =
+                new javax.swing.colorchooser.DefaultColorSelectionModel(null);
+        check(n.getSelectedColor() == null, "ctor(null) -> null selection");
+        // a null-initialized model throws NPE when set to a real color
+        // (both JDK-8 and JDK-27 compare via the stored null selection)
+        try { n.setSelectedColor(java.awt.Color.BLUE);
+              throw new AssertionError("expected NullPointerException on null-initialized model"); }
+        catch (NullPointerException expected) { passed++; }
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(new javax.swing.colorchooser.DefaultColorSelectionModel(java.awt.Color.GRAY));
+        oos.close();
+        javax.swing.colorchooser.DefaultColorSelectionModel back =
+                (javax.swing.colorchooser.DefaultColorSelectionModel)
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(java.awt.Color.GRAY.equals(back.getSelectedColor()), "serialized color preserved");
+        check(back.getChangeListeners().length == 0, "listeners not serialized");
     }
 }

@@ -42,6 +42,7 @@ public class JInternalFrameTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JInternalFrameTest::testWhiteBox);
         runOnEDT(JInternalFrameTest::testBlackBox);
+        runOnEDT(JInternalFrameTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
     }
 
@@ -138,5 +139,99 @@ public class JInternalFrameTest {
         sel.setSelected(false);
         check(sel.isSelected() == false, "deselected after setSelected(false)");
         window.dispose();
+    }
+
+    // Appended contract section: parameter-order matrix, bound-property event
+    // names, pane null contracts, close/veto semantics, JDK-27 setMaximum.
+    static void testContract() throws Exception {
+        // constructor parameter order (title, resizable, closable, maximizable, iconifiable)
+        JInternalFrame f1 = new JInternalFrame("p1", true);
+        check(f1.isResizable() && !f1.isClosable() && !f1.isMaximizable() && !f1.isIconifiable(),
+              "2-arg: resizable position");
+        JInternalFrame f2 = new JInternalFrame("p2", false, true);
+        check(!f2.isResizable() && f2.isClosable() && !f2.isMaximizable() && !f2.isIconifiable(),
+              "3-arg: closable position");
+        JInternalFrame f3 = new JInternalFrame("p3", false, false, true);
+        check(!f3.isResizable() && !f3.isClosable() && f3.isMaximizable() && !f3.isIconifiable(),
+              "4-arg: maximizable position");
+        JInternalFrame f4 = new JInternalFrame("p4", false, false, false, true);
+        check(!f4.isResizable() && !f4.isClosable() && !f4.isMaximizable() && f4.isIconifiable(),
+              "5-arg: iconifiable position");
+
+        JInternalFrame f = new JInternalFrame("ct");
+        // bound-property event names (note: setIconifiable fires "iconable")
+        final java.util.List<String> names = new java.util.ArrayList<String>();
+        f.addPropertyChangeListener(e -> names.add(e.getPropertyName()));
+        f.setTitle("T");
+        check(names.contains("title"), "setTitle fires \"title\"");
+        f.setTitle(null);
+        check(f.getTitle() == null, "setTitle(null) -> null");
+        f.setClosable(true);
+        check(names.contains("closable"), "setClosable fires \"closable\"");
+        f.setResizable(true);
+        check(names.contains("resizable"), "setResizable fires \"resizable\"");
+        f.setMaximizable(true);
+        check(names.contains("maximizable"), "setMaximizable fires \"maximizable\"");
+        f.setIconifiable(true);
+        check(names.contains("iconable"), "setIconifiable fires \"iconable\" (not \"iconifiable\")");
+
+        // root pane container null contracts
+        check(f.getContentPane().getLayout() instanceof java.awt.BorderLayout,
+              "contentPane default layout BorderLayout");
+        try { f.setContentPane(null); throw new AssertionError("expected IllegalComponentStateException"); }
+        catch (java.awt.IllegalComponentStateException expected) { passed++; }
+        try { f.setGlassPane(null); throw new AssertionError("expected NullPointerException"); }
+        catch (NullPointerException expected) { passed++; }
+        try { f.setLayeredPane(null); throw new AssertionError("expected IllegalComponentStateException"); }
+        catch (java.awt.IllegalComponentStateException expected) { passed++; }
+        f.setJMenuBar(new JMenuBar());
+        f.setJMenuBar(null);
+        check(f.getJMenuBar() == null, "setJMenuBar(null) allowed");
+
+        // setClosed(true) is effective even when closable == false
+        JInternalFrame fc = new JInternalFrame("cc"); // closable == false
+        fc.setClosed(true);
+        check(fc.isClosed(), "setClosed(true) effective even when closable==false");
+
+        // vetoing VetoableChangeListener keeps isClosed false
+        JInternalFrame fv = new JInternalFrame("vv", false, true);
+        fv.addVetoableChangeListener(e -> {
+            if ("closed".equals(e.getPropertyName())) throw new java.beans.PropertyVetoException("veto", e);
+        });
+        try { fv.setClosed(true); throw new AssertionError("expected PropertyVetoException"); }
+        catch (java.beans.PropertyVetoException expected) { passed++; }
+        check(!fv.isClosed(), "vetoed close leaves isClosed false");
+
+        // JDK-27 contract: setMaximum(true) completes even without a showing
+        // desktop (JDK-8 threw NPE from the UI path instead)
+        JInternalFrame fm = new JInternalFrame("mm");
+        fm.setMaximum(true);
+        check(fm.isMaximum(), "setMaximum(true) effective (JDK-27; JDK-8 threw NPE)");
+        fm.setMaximum(false);
+        check(!fm.isMaximum(), "setMaximum(false) roundtrip");
+
+        // selection/icon on an unshown frame: no veto escapes
+        JInternalFrame fs = new JInternalFrame("ss");
+        fs.setSelected(true);
+        check(!fs.isSelected(), "setSelected(true) unshown: no-throw, isSelected false");
+        fs.setIcon(true);
+        check(fs.isIcon(), "setIcon(true) unshown");
+        fs.setIcon(false);
+        check(!fs.isIcon(), "setIcon(false) unshown");
+
+        // UI plumbing (LaF-independent)
+        check(f.getUIClassID().equals("InternalFrameUI"), "getUIClassID");
+        check(f.getUI() instanceof javax.swing.plaf.InternalFrameUI, "getUI is InternalFrameUI");
+        f.updateUI();
+        check(f.getUI() != null, "updateUI no-throw");
+
+        f.setLocation(11, 22);
+        check(f.getX() == 11 && f.getY() == 22, "setLocation roundtrip");
+        f.setSize(120, 90);
+        check(f.getWidth() == 120 && f.getHeight() == 90, "setSize roundtrip");
+        f.pack(); f.toFront(); f.toBack(); f.moveToFront(); f.moveToBack();
+        passed++; // lifecycle methods no-throw
+        check(f.getWarningString() == null, "getWarningString null");
+        check(f.getAccessibleContext() != null, "accessible context non-null");
     }
 }

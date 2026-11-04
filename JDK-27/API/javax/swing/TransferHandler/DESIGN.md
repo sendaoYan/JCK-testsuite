@@ -1,23 +1,25 @@
-# javax.swing.TransferHandler 设计案
+# javax.swing.TransferHandler 测试设计
 
 ## 1. API 功能
-`TransferHandler` 处理组件间拖拽/复制数据传递。方法分组：
-- 常量：`NONE/COPY/MOVE/COPY_OR_MOVE/LINK`。
-- 静态动作：`getCutAction/getCopyAction/getPasteAction`。
-- 拖拽图：`setDragImage/getDragImage/setDragImageOffset/getDragImageOffset`。
-- 导入判定：`canImport/getSourceActions`。
+数据传输：COPY/MOVE/NONE/COPY_OR_MOVE、createTransferable/exportToClipboard/exportAsDrag、
+canImport/importData 默认实现、内置 cut/copy/paste Action。
 
 ## 2. Java 用户如何使用
-用户为组件设置 TransferHandler 启用复制/粘贴：
-```java
-component.setTransferHandler(new TransferHandler("text"));
-Action copy = TransferHandler.getCopyAction();
-```
-典型链路：`new TransferHandler("text")` → `getSourceActions/canImport`。
+`label.setTransferHandler(new TransferHandler("text"))`；子类覆写 createTransferable 定制。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `javax/swing/TransferHandler.java` 是 JDK 自身实现（来源：`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/TransferHandler.java`）。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/TransferHandler.java`；
+JComponent.setTransferHandler()；JDK 自带 `test/jdk/javax/swing/` 相应模块用例。
 
-## 4. 测试用例设计 + 自动化实现
-- 结构（白盒）：`testWhiteBox()` 校验 `Serializable`。
-- 行为（黑盒）：`testBlackBox()` 覆盖 5 个动作常量、三个静态动作、`getSourceActions` 默认 `NONE`、拖拽图 get/set、`canImport` 默认 false。
+## 4. 测试用例设计 + 易错细节
+- 常量 0/1/2/3；getCopy/Cut/PasteAction 共享单例且为 Action。
+- **new TransferHandler(null) 不抛**（构造器不校验）。
+- 属性处理器：getSourceActions==COPY、canImport(数组) 默认 false、importData(comp,null) NPE。
+- 默认实现子类验证：canImport/importData(TransferSupport) false、getVisualRepresentation(null) null、
+  exportAsDrag headless no-throw。
+- exportToClipboard：动作不在 sourceActions 时静默不导出（剪贴板空）；合法导出触发
+  createTransferable、剪贴板持有内容且暴露 stringFlavor。
+
+自动化实现位于同目录 `*Test.java`：`check(boolean, msg)` 计数断言、`checkThrows` 校验精确异常类型，
+`main` 结尾打印 `PASS (N assertions)`；jtreg `@run main` 直接驱动（headless 安全，Metal LaF 先行）。
+

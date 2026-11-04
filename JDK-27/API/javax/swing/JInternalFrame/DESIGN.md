@@ -17,3 +17,10 @@
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒覆盖：默认构造器与 5 参构造器能力位；title/closable/iconifiable/maximizable/resizable 往返；isClosed/isMaximum/isIcon/isSelected 默认 false；默认关闭操作 DISPOSE_ON_CLOSE 及切换；RootPaneContainer 各窗格非 null；菜单往返；layer 往返；desktopPane 初始 null 与加入后命中；normalBounds/frameIcon 往返；在可见 JDesktopPane 内 `setVisible(true)` 后 `setSelected` 往返。见 `JInternalFrameTest.java` 的 `testBlackBox()`。
+
+## 5. 追加契约段（2026-11 深化）
+构造器 2/3/4/5 参逐位参数序；属性事件名（**setIconifiable 触发 "iconable"**）；
+RootPaneContainer null 异常（setContentPane/setLayeredPane null→IllegalComponentStateException、
+setGlassPane null→NPE）；**setClosed(true) 在 closable==false 时仍生效**；veto 否决保持 isClosed false；
+**setMaximum(true) 无桌面也能完成（JDK-27 行为；JDK-8 侧同调用从 UI 路径抛 NPE——版本差异，各侧各自锁定）**；
+未显示 setSelected no-throw 且 isSelected 不变；setIcon headless 往返；getUI/updateUI/accessible。

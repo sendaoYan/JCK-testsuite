@@ -33,3 +33,11 @@ File[] children = fsv.getFiles(dir, false);
 - `createFileObject` 等价 `new File(...)`。
 - 临时目录：`getSystemDisplayName` 返回文件名、`isTraversable` 目录真/文件假、`getParentDirectory(file)==父目录`、`getFiles(dir,false)` 列出条目（排序后比对）、`isHiddenFile==File.isHidden`。
 - 白盒保留结构断言（父类 `Object`、抽象、`getFileSystemView` 存在）。
+
+## 5. 追加契约段（2026-11 深化）
+getFileSystemView() 共享单例；getSystemIcon(不存在文件)==null；isComputerNode/isDrive/isFloppyDrive
+对普通目录 false；isFileSystem(home) true。
+**JDK-27 独有 API（JDK-8 不存在，仅本侧锁定）：isLink(tmp)==false、isLink(null)→NPE、
+getLinkLocation(非链接)==null、getChooserComboBoxFiles() 非 null 数组、
+getChooserShortcutPanelFiles() 非空（≥1）、getSystemIcon(f,16,16) 非 null、
+getSystemIcon(f,0,0)→IllegalArgumentException、getSystemIcon(f,-1,16)→IllegalArgumentException**。

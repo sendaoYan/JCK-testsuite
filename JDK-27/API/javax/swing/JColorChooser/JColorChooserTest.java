@@ -101,6 +101,82 @@ public class JColorChooserTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JColorChooserTest::testWhiteBox);
         runOnEDT(JColorChooserTest::testBlackBox);
+        runOnEDT(JColorChooserTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+    // Appended contract section: ctor matrix, event counting, panel count
+    // rules, removeChooserPanel IAE, JDK-27 defensive-copy getChooserPanels.
+    static void testContract() {
+        JColorChooser plain = new JColorChooser();
+        check(Color.WHITE.equals(plain.getColor()), "no-arg default color WHITE");
+        check(plain.getSelectionModel() instanceof DefaultColorSelectionModel,
+              "default model DefaultColorSelectionModel");
+        DefaultColorSelectionModel m = new DefaultColorSelectionModel(Color.GREEN);
+        JColorChooser mc = new JColorChooser(m);
+        check(mc.getSelectionModel() == m, "ctor(model) keeps model identity");
+        check(Color.GREEN.equals(mc.getColor()), "ctor(model) color follows model");
+
+        // change events: 1 for a different color, 0 for the same color
+        final int[] fired = {0};
+        plain.getSelectionModel().addChangeListener(e -> fired[0]++);
+        plain.setColor(Color.RED);
+        check(fired[0] == 1, "setColor different color fires exactly 1 event");
+        plain.setColor(Color.RED);
+        check(fired[0] == 1, "setColor same color fires 0 events");
+        DefaultColorSelectionModel m2 = new DefaultColorSelectionModel(Color.CYAN);
+        plain.setSelectionModel(m2);
+        check(Color.CYAN.equals(plain.getColor()), "color follows new model");
+        final int[] fired2 = {0};
+        m2.addChangeListener(e -> fired2[0]++);
+        plain.setColor(Color.DARK_GRAY);
+        check(fired2[0] == 1, "setColor routes through the new model's listeners");
+
+        // panel count rules on fresh choosers
+        JColorChooser p1 = new JColorChooser();
+        check(p1.getChooserPanels().length == 5, "Metal default panels == 5");
+        AbstractColorChooserPanel nop = new AbstractColorChooserPanel() {
+            public void updateChooser() { }
+            public void buildChooser() { }
+            public String getDisplayName() { return "nop"; }
+            public javax.swing.Icon getSmallDisplayIcon() { return null; }
+            public javax.swing.Icon getLargeDisplayIcon() { return null; }
+        };
+        p1.addChooserPanel(nop);
+        check(p1.getChooserPanels().length == 6, "addChooserPanel grows list to 6");
+        check(p1.removeChooserPanel(nop) == nop, "removeChooserPanel returns removed panel");
+        check(p1.getChooserPanels().length == 5, "back to 5 after remove");
+
+        // removing a never-added panel: IllegalArgumentException, list unchanged
+        JColorChooser p2 = new JColorChooser();
+        try { p2.removeChooserPanel(new AbstractColorChooserPanel() {
+                public void updateChooser() { }
+                public void buildChooser() { }
+                public String getDisplayName() { return "absent"; }
+                public javax.swing.Icon getSmallDisplayIcon() { return null; }
+                public javax.swing.Icon getLargeDisplayIcon() { return null; }
+            });
+            throw new AssertionError("expected IllegalArgumentException");
+        } catch (IllegalArgumentException expected) { passed++; }
+        check(p2.getChooserPanels().length == 5, "failed remove leaves list unchanged");
+
+        // re-adding an already-installed panel: panel rejects the second install
+        JColorChooser p3 = new JColorChooser();
+        try { p3.addChooserPanel(p3.getChooserPanels()[0]);
+              throw new AssertionError("expected RuntimeException"); }
+        catch (RuntimeException expected) { passed++; }
+
+        // JDK-27 contract: getChooserPanels() returns a fresh copy each call
+        // (JDK-8 returned the same aliased internal array instead)
+        JColorChooser p4 = new JColorChooser();
+        check(p4.getChooserPanels() != p4.getChooserPanels(),
+              "JDK-27: repeated getChooserPanels returns defensive copies");
+        check(p4.getChooserPanels().length == 5, "defensive copy same length");
+
+        plain.setPreviewPanel(null);
+        check(plain.getPreviewPanel() == null, "setPreviewPanel(null) -> null");
+        check(plain.getUI() instanceof javax.swing.plaf.ColorChooserUI, "getUI is ColorChooserUI");
+        plain.updateUI();
+        check(plain.getUI() != null, "updateUI no-throw");
+        check(plain.getAccessibleContext() != null, "accessible context non-null");
     }
 }

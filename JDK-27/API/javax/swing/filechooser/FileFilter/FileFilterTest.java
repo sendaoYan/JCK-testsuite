@@ -60,6 +60,24 @@ public class FileFilterTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // Appended contract section: JFileChooser interop and JDK-provided subclass.
+    static void testContract() {
+        try { javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel()); }
+        catch (Exception e) { throw new AssertionError("Metal LaF: " + e); }
+        TextFilter txt = new TextFilter();
+        javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+        fc.setFileFilter(txt);
+        check(fc.getFileFilter() == txt, "JFileChooser.setFileFilter accepts custom filter");
+        check("Text files".equals(fc.getFileFilter().getDescription()),
+              "chooser delegates description to custom filter");
+        check(fc.getFileFilter().accept(new File("x.txt")), "chooser delegates accept to custom filter");
+        check(fc.removeChoosableFileFilter(txt), "custom filter removable from choosable list");
+        FileFilter fnef = new javax.swing.filechooser.FileNameExtensionFilter("d", "ext");
+        check(fnef instanceof FileFilter, "FileNameExtensionFilter is a FileFilter");
+        check(!txt.accept(new File("nosuchdir")), "accept evaluates by name, not existence");
     }
 }

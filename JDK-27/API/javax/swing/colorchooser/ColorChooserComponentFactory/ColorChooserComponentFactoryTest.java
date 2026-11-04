@@ -58,6 +58,30 @@ public class ColorChooserComponentFactoryTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // Appended contract: panel names/mnemonics, fresh preview instances.
+    static void testContract() throws Exception {
+        try { javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel()); }
+        catch (Exception e) { throw new AssertionError("Metal LaF: " + e); }
+        javax.swing.colorchooser.AbstractColorChooserPanel[] panels =
+                javax.swing.colorchooser.ColorChooserComponentFactory.getDefaultChooserPanels();
+        check(panels.length == 5, "Metal default panel count 5");
+        StringBuilder names = new StringBuilder();
+        for (javax.swing.colorchooser.AbstractColorChooserPanel p : panels) {
+            check(p.getMnemonic() != 0, "panel mnemonic set");
+            check(p.getDisplayedMnemonicIndex() >= 0, "panel displayed mnemonic index valid");
+            names.append(p.getDisplayName()).append(';');
+        }
+        check(names.toString().equals("Swatches;HSV;HSL;RGB;CMYK;"),
+              "Metal panel display names Swatches/HSV/HSL/RGB/CMYK");
+        javax.swing.JComponent preview =
+                javax.swing.colorchooser.ColorChooserComponentFactory.getPreviewPanel();
+        check("DefaultPreviewPanel".equals(preview.getClass().getSimpleName()),
+              "preview concrete type DefaultPreviewPanel");
+        check(javax.swing.colorchooser.ColorChooserComponentFactory.getPreviewPanel() != preview,
+              "getPreviewPanel returns a fresh instance each call");
     }
 }

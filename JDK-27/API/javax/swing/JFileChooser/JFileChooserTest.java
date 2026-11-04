@@ -121,6 +121,65 @@ public class JFileChooserTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JFileChooserTest::testWhiteBox);
         runOnEDT(JFileChooserTest::testBlackBox);
+        runOnEDT(JFileChooserTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+    // Appended contract section: IAE matrix with unchanged state, null
+    // semantics, ctor directory preservation, choosable list lifecycle.
+    static void testContract() throws Exception {
+        // invalid mode/type: IllegalArgumentException, state unchanged
+        JFileChooser bad = new JFileChooser();
+        try { bad.setFileSelectionMode(99); throw new AssertionError("expected IllegalArgumentException"); }
+        catch (IllegalArgumentException expected) { passed++; }
+        check(bad.getFileSelectionMode() == JFileChooser.FILES_ONLY, "mode unchanged after IAE");
+        try { bad.setDialogType(99); throw new AssertionError("expected IllegalArgumentException"); }
+        catch (IllegalArgumentException expected) { passed++; }
+        check(bad.getDialogType() == JFileChooser.OPEN_DIALOG, "type unchanged after IAE");
+
+        File tmp = new File(System.getProperty("java.io.tmpdir"));
+        JFileChooser d = new JFileChooser();
+        File initial = d.getCurrentDirectory();
+        d.setCurrentDirectory(null);
+        check(d.getCurrentDirectory().equals(initial), "setCurrentDirectory(null) falls back to home");
+        JFileChooser d2 = new JFileChooser(tmp);
+        check(d2.getCurrentDirectory().equals(tmp), "ctor(File) preserves directory");
+        javax.swing.filechooser.FileSystemView fsv = javax.swing.filechooser.FileSystemView.getFileSystemView();
+        JFileChooser d3 = new JFileChooser(tmp, fsv);
+        check(d3.getCurrentDirectory().equals(tmp), "ctor(File,FSV) preserves directory");
+        check(d3.getFileSystemView() == fsv, "ctor(File,FSV) preserves FSV");
+
+        d2.setSelectedFile(new File(tmp, "s.tmp"));
+        d2.setSelectedFile(null);
+        check(d2.getSelectedFile() == null, "setSelectedFile(null)");
+        d2.setSelectedFiles(new File[]{new File(tmp, "m1.tmp"), new File(tmp, "m2.tmp")});
+        check(d2.getSelectedFiles().length == 2, "setSelectedFiles roundtrip");
+        d2.setSelectedFiles(new File[0]);
+        check(d2.getSelectedFiles().length == 0, "setSelectedFiles(empty)");
+        d2.setSelectedFiles(null);
+        check(d2.getSelectedFiles().length == 0, "setSelectedFiles(null) -> empty");
+
+        javax.swing.filechooser.FileFilter custom =
+                new javax.swing.filechooser.FileNameExtensionFilter("tmp files", "tmp");
+        d2.setFileFilter(custom);
+        check(d2.getFileFilter() == custom, "setFileFilter roundtrip");
+        d2.setFileFilter(null);
+        check(d2.getFileFilter() == null, "setFileFilter(null) -> null");
+        d2.addChoosableFileFilter(custom);
+        check(d2.removeChoosableFileFilter(custom), "removeChoosableFileFilter true");
+        check(d2.removeChoosableFileFilter(custom) == false, "second remove false");
+        d2.resetChoosableFileFilters();
+        check(d2.getChoosableFileFilters().length == 1, "reset restores default choosable list");
+
+        d2.setApproveButtonToolTipText("tip");
+        check("tip".equals(d2.getApproveButtonToolTipText()), "setApproveButtonToolTipText roundtrip");
+        check(d2.getFileView() == null, "default fileView null");
+        javax.swing.filechooser.FileView fv = new javax.swing.filechooser.FileView() {};
+        d2.setFileView(fv);
+        check(d2.getFileView() == fv, "setFileView roundtrip");
+
+        check("FileChooserUI".equals(d2.getUIClassID()), "getUIClassID");
+        d2.updateUI();
+        check(d2.getUI() != null, "updateUI no-throw");
+        check(d2.getAccessibleContext() != null, "accessible context non-null");
     }
 }

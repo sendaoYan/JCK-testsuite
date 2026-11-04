@@ -41,6 +41,7 @@ public class JOptionPaneTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JOptionPaneTest::testWhiteBox);
         runOnEDT(JOptionPaneTest::testBlackBox);
+        runOnEDT(JOptionPaneTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
     }
 
@@ -153,5 +154,68 @@ public class JOptionPaneTest {
         check("title2".equals(d2.getTitle()), "createDialog(Component,String) title");
         check(d2.isVisible() == false, "createDialog component not visible");
         d2.dispose();
+    }
+
+    // Appended contract section: bound-property event names, invalid-type
+    // RuntimeException matrix, null semantics, 6-arg ctor, UI plumbing.
+    static void testContract() throws Exception {
+        // bound-property event names
+        JOptionPane p = new JOptionPane("m");
+        final java.util.List<String> names = new java.util.ArrayList<String>();
+        p.addPropertyChangeListener(e -> names.add(e.getPropertyName()));
+        p.setMessage("m2");
+        check(names.contains("message"), "setMessage fires \"message\"");
+        p.setMessageType(JOptionPane.ERROR_MESSAGE);
+        check(names.contains("messageType"), "setMessageType fires \"messageType\"");
+        p.setOptionType(JOptionPane.YES_NO_OPTION);
+        check(names.contains("optionType"), "setOptionType fires \"optionType\"");
+        p.setWantsInput(false);
+        p.setWantsInput(true);
+        check(names.contains("wantsInput"), "setWantsInput fires \"wantsInput\"");
+        p.setValue("v");
+        check(names.contains("value"), "setValue fires \"value\"");
+
+        // invalid types: RuntimeException (not IllegalArgumentException), value unchanged
+        int mt = p.getMessageType();
+        try { p.setMessageType(99); throw new AssertionError("expected RuntimeException"); }
+        catch (RuntimeException expected) { passed++; }
+        check(p.getMessageType() == mt, "messageType unchanged after invalid set");
+        int ot = p.getOptionType();
+        try { p.setOptionType(99); throw new AssertionError("expected RuntimeException"); }
+        catch (RuntimeException expected) { passed++; }
+        check(p.getOptionType() == ot, "optionType unchanged after invalid set");
+        try { new JOptionPane("m", 99); throw new AssertionError("expected RuntimeException"); }
+        catch (RuntimeException expected) { passed++; }
+        try { new JOptionPane("m", JOptionPane.PLAIN_MESSAGE, 99); throw new AssertionError("expected RuntimeException"); }
+        catch (RuntimeException expected) { passed++; }
+
+        // null semantics
+        p.setOptions(new Object[]{"a", "b"});
+        check(p.getOptions().length == 2, "setOptions roundtrip");
+        p.setOptions(null);
+        check(p.getOptions() == null, "setOptions(null) -> null");
+        p.setValue(null);
+        check(p.getValue() == null, "setValue(null) -> null");
+        p.setSelectionValues(new Object[]{"A", "B"});
+        check(p.getSelectionValues().length == 2, "setSelectionValues roundtrip");
+        p.setSelectionValues(null);
+        check(p.getSelectionValues() == null, "setSelectionValues(null) -> null");
+
+        // 6-arg ctor: message, messageType, optionType, icon, options, initialValue
+        JOptionPane six = new JOptionPane("m6", JOptionPane.ERROR_MESSAGE,
+                JOptionPane.YES_NO_OPTION, null, new Object[]{"x", "y"}, "x");
+        check("m6".equals(six.getMessage()), "6-arg ctor message");
+        check(six.getMessageType() == JOptionPane.ERROR_MESSAGE, "6-arg ctor messageType");
+        check(six.getOptionType() == JOptionPane.YES_NO_OPTION, "6-arg ctor optionType");
+        check(six.getIcon() == null, "6-arg ctor icon null");
+        check(six.getOptions().length == 2, "6-arg ctor options");
+        check("x".equals(six.getInitialValue()), "6-arg ctor initialValue");
+
+        // UI plumbing
+        check("OptionPaneUI".equals(p.getUIClassID()), "getUIClassID");
+        check(p.getUI() instanceof javax.swing.plaf.OptionPaneUI, "getUI is OptionPaneUI");
+        p.updateUI();
+        check(p.getUI() != null, "updateUI no-throw");
+        check(p.getAccessibleContext() != null, "accessible context non-null");
     }
 }
