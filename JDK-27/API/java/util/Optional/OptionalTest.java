@@ -190,6 +190,53 @@ public class OptionalTest {
     }
 
 
+    static void testNullMatrix() {
+        // orElse(null) is legal and distinguishes missing from mapped-null only via container.
+        check(Optional.<String>empty().orElse(null) == null, "orElse(null) empty returns null");
+        check(Optional.of("x").orElse(null).equals("x"), "orElse(null) present returns value");
+
+        // orElseGet(null): present short-circuits (no NPE); empty invokes null -> NPE.
+        check(Optional.of("x").orElseGet(null).equals("x"), "orElseGet(null) present returns value");
+        expectThrows(NullPointerException.class, () -> Optional.empty().orElseGet(null),
+            "orElseGet(null) empty NPE");
+
+        // orElseThrow(null): present short-circuits; empty invokes null -> NPE.
+        check(Optional.of("x").orElseThrow(null).equals("x"), "orElseThrow(null) present returns value");
+        expectThrows(NullPointerException.class, () -> Optional.empty().orElseThrow(null),
+            "orElseThrow(null) empty NPE");
+        expectThrows(NullPointerException.class, () -> Optional.empty().orElseThrow(() -> null),
+            "orElseThrow supplier returns null NPE");
+
+        // supplier exception object is passed through unchanged.
+        IllegalStateException ex = new IllegalStateException("boom");
+        try {
+            Optional.empty().orElseThrow(() -> ex);
+            throw new AssertionError("expected IllegalStateException");
+        } catch (IllegalStateException caught) {
+            check(caught == ex, "orElseThrow passes through same exception object");
+        }
+
+        // ifPresent(null): present -> NPE; empty -> no-op (documented).
+        expectThrows(NullPointerException.class, () -> Optional.of("x").ifPresent(null),
+            "ifPresent(null) present NPE");
+        Optional.<String>empty().ifPresent(null);
+        passed++;
+
+        // filter/map/flatMap null-check their function even when empty.
+        expectThrows(NullPointerException.class, () -> Optional.of("x").filter(null),
+            "filter(null) present NPE");
+        expectThrows(NullPointerException.class, () -> Optional.<String>empty().filter(null),
+            "filter(null) empty NPE");
+        expectThrows(NullPointerException.class, () -> Optional.of("x").map(null),
+            "map(null) present NPE");
+        expectThrows(NullPointerException.class, () -> Optional.<String>empty().map(null),
+            "map(null) empty NPE");
+        expectThrows(NullPointerException.class, () -> Optional.of("x").flatMap(null),
+            "flatMap(null) present NPE");
+        expectThrows(NullPointerException.class, () -> Optional.<String>empty().flatMap(null),
+            "flatMap(null) empty NPE");
+    }
+
     static void testBlackBox() throws Exception {
         testCreation();
         testGetOrElse();
@@ -197,6 +244,7 @@ public class OptionalTest {
         testOrStreamIfPresentOrElse();
         testIfPresentEqualsToString();
         testBoundaryEquivalence();
+        testNullMatrix();
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();

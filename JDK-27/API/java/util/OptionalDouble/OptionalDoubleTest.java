@@ -153,12 +153,41 @@ public class OptionalDoubleTest {
     }
 
 
+    static void testNullMatrix() {
+        OptionalDouble present = OptionalDouble.of(2.5);
+        OptionalDouble empty = OptionalDouble.empty();
+
+        check(present.orElseGet(null) == 2.5, "orElseGet(null) present returns value");
+        expectThrows(NullPointerException.class, () -> empty.orElseGet(null),
+            "orElseGet(null) empty NPE");
+
+        check(present.orElseThrow(null) == 2.5, "orElseThrow(null) present returns value");
+        expectThrows(NullPointerException.class, () -> empty.orElseThrow(null),
+            "orElseThrow(null) empty NPE");
+        expectThrows(NullPointerException.class, () -> empty.orElseThrow(() -> null),
+            "orElseThrow supplier returns null NPE");
+
+        IllegalStateException ex = new IllegalStateException("boom");
+        try {
+            empty.orElseThrow(() -> ex);
+            throw new AssertionError("expected IllegalStateException");
+        } catch (IllegalStateException caught) {
+            check(caught == ex, "orElseThrow passes through same exception object");
+        }
+
+        expectThrows(NullPointerException.class, () -> present.ifPresent(null),
+            "ifPresent(null) present NPE");
+        empty.ifPresent(null);
+        passed++;
+    }
+
     static void testBlackBox() throws Exception {
         testOfGet();
         testOrElse();
         testIfPresentAndStream();
         testEqualsToString();
         testBoundaryEquivalence();
+        testNullMatrix();
     }
 public static void main(String[] args) throws Exception {
         testWhiteBox();
