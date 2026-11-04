@@ -8,6 +8,16 @@
  *          explicit BeanInfo search-path flags, stopClass validation
  *          (not-a-superclass -> IntrospectionException), and cache flush
  *          (flushCaches / flushFromCaches null -> NPE).
+ *          Deepening: full decapitalize matrix (two-leading-cap rule on
+ *          "ABc"/"AB"/"aB"/"URLs", non-ASCII upper "U-umlaut" pairs,
+ *          titlecase chars, digits, leading space), bean hierarchy
+ *          (stopClass hides inherited + Object properties, 4-arg overload),
+ *          BeanInfo cache identity (same instance until flushCaches),
+ *          non-defensive descriptor arrays, getBeanInfo(null) -> NPE,
+ *          interface/primitive/array/package-private class introspection,
+ *          setBeanInfoSearchPath(null) -> empty path (probe, restored in
+ *          finally), flag constant exact values, and per-flag property-set
+ *          equivalence for beans without explicit BeanInfo.
  * @run main IntrospectorTest
  */
 
@@ -163,6 +173,188 @@ public class IntrospectorTest {
     static void testStructure() {
         Class<?> c = Introspector.class;
         check(!c.isInterface(), "concrete class");
+        // exact flag constant values (frozen API surface)
+        check(Introspector.USE_ALL_BEANINFO == 1, "USE_ALL_BEANINFO == 1");
+        check(Introspector.IGNORE_IMMEDIATE_BEANINFO == 2, "IGNORE_IMMEDIATE_BEANINFO == 2");
+        check(Introspector.IGNORE_ALL_BEANINFO == 3, "IGNORE_ALL_BEANINFO == 3");
+    }
+
+    // ---------- deepening: full decapitalize matrix ----------
+
+    static void testDecapitalizeMatrix() {
+        // rule: length>1 AND first two chars both uppercase -> unchanged
+        check("ABc".equals(Introspector.decapitalize("ABc")), "two leading caps ABc unchanged");
+        check("AB".equals(Introspector.decapitalize("AB")), "two leading caps AB unchanged");
+        check("URLs".equals(Introspector.decapitalize("URLs")), "acronym+s URLs unchanged");
+        check("AB2".equals(Introspector.decapitalize("AB2")), "AB2 unchanged (second char uppercase)");
+        check("aB".equals(Introspector.decapitalize("aB")), "aB unchanged (first already lowercase)");
+        check("A".equals(Introspector.decapitalize("A")) == false, "A is lowered");
+        check("a".equals(Introspector.decapitalize("a")), "single lowercase unchanged");
+        // non-ASCII uppercase participates in the rule
+        check("AÜ".equals(Introspector.decapitalize("AÜ")), "A+U-umlaut unchanged");
+        check("ÜA".equals(Introspector.decapitalize("ÜA")), "U-umlaut+A unchanged");
+        check("ÜU".equals(Introspector.decapitalize("ÜU")), "U-umlaut pair unchanged");
+        check("ünicode".equals(Introspector.decapitalize("Ünicode")), "U-umlaut head lowered");
+        check("üü".equals(Introspector.decapitalize("Üü")), "U-umlaut+u-umlaut lowered head");
+        // titlecase chars (Lt) are NOT uppercase: rule not triggered, first char lowered
+        check("ǆungla".equals(Introspector.decapitalize("ǅungla")), "titlecase D-z lowered");
+        check("ǆǅ".equals(Introspector.decapitalize("ǅǅ")), "titlecase pair head lowered");
+        // non-letters
+        check(" x".equals(Introspector.decapitalize(" x")), "leading space unchanged");
+        check("xy".equals(Introspector.decapitalize("Xy")), "Xy -> xy");
+        // determinism
+        String once = Introspector.decapitalize("Ünicode");
+        check(once.equals(Introspector.decapitalize("Ünicode")), "decapitalize deterministic");
+    }
+
+    // ---------- deepening: bean hierarchy / stopClass semantics ----------
+
+    public static class HBase {
+        private int a;
+        public int getA() { return a; }
+        public void setA(int a) { this.a = a; }
+    }
+    public static class HSub extends HBase {
+        private int b;
+        public int getB() { return b; }
+        public void setB(int b) { this.b = b; }
+    }
+
+    static void testHierarchyAndStopClasses() throws Exception {
+        BeanInfo full = Introspector.getBeanInfo(HSub.class);
+        check(find(full.getPropertyDescriptors(), "a") != null, "hierarchy: inherited a present");
+        check(find(full.getPropertyDescriptors(), "b") != null, "hierarchy: declared b present");
+        check(find(full.getPropertyDescriptors(), "class") != null, "hierarchy: Object getClass yields class");
+        check(full.getPropertyDescriptors().length == 3, "hierarchy: exactly a,b,class");
+
+        BeanInfo toBase = Introspector.getBeanInfo(HSub.class, HBase.class);
+        check(find(toBase.getPropertyDescriptors(), "a") == null, "stopClass Base hides a");
+        check(find(toBase.getPropertyDescriptors(), "b") != null, "stopClass Base keeps b");
+        check(find(toBase.getPropertyDescriptors(), "class") == null, "stopClass Base hides class too");
+        check(toBase.getPropertyDescriptors().length == 1, "stopClass Base leaves exactly b");
+        check(toBase.getBeanDescriptor() != null, "beanDescriptor present with stopClass");
+        check(toBase.getMethodDescriptors().length == 2, "only getB/setB method descriptors below stop");
+        check(toBase.getEventSetDescriptors() != null && toBase.getEventSetDescriptors().length == 0,
+                "empty (not null) event set array");
+
+        BeanInfo toObject = Introspector.getBeanInfo(HSub.class, Object.class);
+        check(find(toObject.getPropertyDescriptors(), "a") != null, "stopClass Object keeps a");
+        check(find(toObject.getPropertyDescriptors(), "b") != null, "stopClass Object keeps b");
+        check(find(toObject.getPropertyDescriptors(), "class") == null, "stopClass Object hides class");
+        check(toObject.getPropertyDescriptors().length == 2, "stopClass Object leaves exactly a,b");
+
+        BeanInfo four = Introspector.getBeanInfo(HSub.class, HBase.class, Introspector.USE_ALL_BEANINFO);
+        check(four != null && find(four.getPropertyDescriptors(), "b") != null
+                && find(four.getPropertyDescriptors(), "a") == null,
+                "4-arg stopClass+flags mirrors 3-arg behavior");
+        check(Introspector.getBeanInfo(HSub.class, Introspector.IGNORE_ALL_BEANINFO) != null,
+                "flags-only overload returns BeanInfo");
+        check(Introspector.getBeanInfo(HSub.class, 0) != null, "flags=0 accepted");
+    }
+
+    // ---------- deepening: cache identity ----------
+
+    static void testCacheIdentity() throws Exception {
+        Introspector.flushCaches();
+        BeanInfo b1 = Introspector.getBeanInfo(HBase.class);
+        BeanInfo b2 = Introspector.getBeanInfo(HBase.class);
+        check(b1 == b2, "same-class getBeanInfo returns cached identical instance");
+
+        PropertyDescriptor pd1 = find(b1.getPropertyDescriptors(), "a");
+        PropertyDescriptor pd2 = find(Introspector.getBeanInfo(HBase.class).getPropertyDescriptors(), "a");
+        check(pd1 == pd2, "cached PropertyDescriptor identical instance across calls");
+
+        PropertyDescriptor[] arr1 = b1.getPropertyDescriptors();
+        PropertyDescriptor[] arr2 = b1.getPropertyDescriptors();
+        check(arr1 == arr2, "getPropertyDescriptors returns internal array (no defensive copy)");
+        PropertyDescriptor saved = arr1[0];
+        arr1[0] = null;
+        check(b1.getPropertyDescriptors()[0] == null, "array mutation visible (shared storage, probe)");
+        arr1[0] = saved;
+
+        Introspector.flushCaches();
+        BeanInfo b3 = Introspector.getBeanInfo(HBase.class);
+        check(b3 != b1, "after flushCaches a fresh BeanInfo instance is built");
+        PropertyDescriptor pd3 = find(b3.getPropertyDescriptors(), "a");
+        check(pd3 != pd1, "after flushCaches a fresh PropertyDescriptor instance is built");
+    }
+
+    // ---------- deepening: negatives / odd bean types ----------
+
+    public interface SimpleIface { int getA(); }
+    static class PkgBean {
+        private int x;
+        public int getX() { return x; }
+        public void setX(int x) { this.x = x; }
+    }
+
+    static void testNegativeAndOddTypes() throws Exception {
+        checkThrows(NullPointerException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Introspector.getBeanInfo((Class<?>) null);
+                }}, "getBeanInfo(null) -> NPE");
+        checkThrows(NullPointerException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Introspector.getBeanInfo(null, Object.class);
+                }}, "getBeanInfo(null, stop) -> NPE");
+        checkThrows(IntrospectionException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Introspector.getBeanInfo(HSub.class, String.class, Introspector.USE_ALL_BEANINFO);
+                }}, "4-arg invalid stopClass -> IntrospectionException");
+        checkThrows(IntrospectionException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Introspector.getBeanInfo(HSub.class, HSub.class, 0);
+                }}, "4-arg stopClass == beanClass -> IntrospectionException");
+
+        // interface introspection works; getters become properties; Object methods excluded
+        BeanInfo ifBi = Introspector.getBeanInfo(SimpleIface.class);
+        check(ifBi.getPropertyDescriptors().length == 1, "interface yields exactly one property");
+        check(find(ifBi.getPropertyDescriptors(), "a") != null, "interface getter becomes property a");
+        check(find(ifBi.getPropertyDescriptors(), "class") == null, "interface has no Object class property");
+
+        // package-private nested class in an accessible package is introspectable (probe: no exception)
+        BeanInfo ppBi = Introspector.getBeanInfo(PkgBean.class);
+        check(find(ppBi.getPropertyDescriptors(), "x") != null, "package-private class introspectable");
+
+        // primitive / boxed / array classes accepted
+        check(Introspector.getBeanInfo(int.class).getPropertyDescriptors().length == 0,
+                "primitive class has no methods -> zero properties (probe)");
+        check(find(Introspector.getBeanInfo(String[].class).getPropertyDescriptors(), "class") != null,
+                "array class -> class property only");
+    }
+
+    // ---------- deepening: search path null / flag equivalence ----------
+
+    static void testSearchPathNull() {
+        String[] original = Introspector.getBeanInfoSearchPath();
+        try {
+            Introspector.setBeanInfoSearchPath(null);
+            String[] sp = Introspector.getBeanInfoSearchPath();
+            check(sp != null, "getBeanInfoSearchPath never null");
+            check(sp.length == 0, "setBeanInfoSearchPath(null) stores empty path (probe)");
+        } finally {
+            Introspector.setBeanInfoSearchPath(original);
+        }
+        check(java.util.Arrays.equals(original, Introspector.getBeanInfoSearchPath()),
+                "search path restored byte-for-byte");
+    }
+
+    static java.util.List<String> sortedPropNames(BeanInfo bi) {
+        java.util.List<String> names = new java.util.ArrayList<String>();
+        for (PropertyDescriptor pd : bi.getPropertyDescriptors()) names.add(pd.getName());
+        java.util.Collections.sort(names);
+        return names;
+    }
+
+    static void testFlagEquivalence() throws Exception {
+        java.util.List<String> expected = sortedPropNames(Introspector.getBeanInfo(HBase.class));
+        int[] flags = { Introspector.USE_ALL_BEANINFO, Introspector.IGNORE_IMMEDIATE_BEANINFO,
+                        Introspector.IGNORE_ALL_BEANINFO, 0 };
+        String[] labels = { "USE_ALL_BEANINFO", "IGNORE_IMMEDIATE_BEANINFO", "IGNORE_ALL_BEANINFO", "0" };
+        for (int i = 0; i < flags.length; i++) {
+            check(expected.equals(sortedPropNames(Introspector.getBeanInfo(HBase.class, flags[i]))),
+                    "flag " + labels[i] + " yields identical property set (no explicit BeanInfo)");
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -171,6 +363,12 @@ public class IntrospectorTest {
         testGetBeanInfo();
         testFlagsAndStopClass();
         testCachesAndSearchPath();
+        testDecapitalizeMatrix();
+        testHierarchyAndStopClasses();
+        testCacheIdentity();
+        testNegativeAndOddTypes();
+        testSearchPathNull();
+        testFlagEquivalence();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

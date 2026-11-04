@@ -4,9 +4,11 @@
  *          all three constructors + read-only/write-only forms, exact
  *          IntrospectionException triggers (null/empty name, null bean,
  *          missing method, bad read arg count, void read method, type
- *          mismatch), bound/constrained toggling, property editor class and
- *          createPropertyEditor (null when absent / non-editor class),
- *          setReadMethod/setWriteMethod null clearing, equals/hashCode.
+ *          mismatch, 2-arg setter), bound/constrained toggling and
+ *          Introspector auto-detection, property editor class and
+ *          createPropertyEditor (new instance per call, (Object bean) ctor,
+ *          null when absent/non-editor/abstract), setReadMethod/setWriteMethod
+ *          null clearing, equals/hashCode matrix, not serializable.
  * @run main PropertyDescriptorTest
  */
 
@@ -48,6 +50,39 @@ public class PropertyDescriptorTest {
         public void voidReturn() {}
         public int takesArg(int x) { return x; }
     }
+
+    // helper beans for the appended deepening tests
+    public static class TwoArgSetterBean {
+        public int getFoo() { return 0; }
+        public void setFoo(int a, int b) {}
+    }
+    public static class WrongTypesBean {
+        public String getFoo() { return null; }
+        public void setFoo(int v) {}
+    }
+    public static class WriteOnlyBean {
+        public void setFoo(int v) {}
+    }
+    public static class PlainBean {
+        public int getFoo() { return 0; }
+        public void setFoo(int v) {}
+    }
+    public static class SameShapeBean {
+        public int getFoo() { return 0; }
+        public void setFoo(int v) {}
+    }
+    public static class VetoBean {
+        private int x;
+        public int getX() { return x; }
+        public void setX(int v) throws java.beans.PropertyVetoException { x = v; }
+        public void addVetoableChangeListener(java.beans.VetoableChangeListener l) {}
+        public void removeVetoableChangeListener(java.beans.VetoableChangeListener l) {}
+    }
+    public static class EditorWithBeanCtor extends PropertyEditorSupport {
+        public Object received;
+        public EditorWithBeanCtor(Object bean) { super(); received = bean; }
+    }
+    public abstract static class AbstractEditor extends PropertyEditorSupport {}
 
     static void testBasicConstructor() throws Exception {
         PropertyDescriptor pd = new PropertyDescriptor("foo", Bean.class);
@@ -182,6 +217,149 @@ public class PropertyDescriptorTest {
         check(!a.equals("foo"), "not equals non-PropertyDescriptor");
     }
 
+    // ---- appended deepening tests (top-up) ----
+
+    static void testBadAccessorSignatures() throws Exception {
+        // 2-arg setter via the method-name constructor -> IntrospectionException
+        checkThrows(IntrospectionException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    new PropertyDescriptor("foo", TwoArgSetterBean.class, "getFoo", "setFoo");
+                }}, "2-arg setter via name ctor -> IntrospectionException");
+        // 2-arg setter via the Method-pair constructor -> IntrospectionException
+        checkThrows(IntrospectionException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    new PropertyDescriptor("foo", TwoArgSetterBean.class.getMethod("getFoo"),
+                            TwoArgSetterBean.class.getMethod("setFoo", int.class, int.class));
+                }}, "2-arg setter via Method ctor -> IntrospectionException");
+        // getter/setter type mismatch: String read + int write
+        checkThrows(IntrospectionException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    new PropertyDescriptor("foo", WrongTypesBean.class);
+                }}, "read/write type mismatch -> IntrospectionException");
+        // Method-pair with mismatched types
+        checkThrows(IntrospectionException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    new PropertyDescriptor("foo", WrongTypesBean.class.getMethod("getFoo"),
+                            WrongTypesBean.class.getMethod("setFoo", int.class));
+                }}, "Method-pair type mismatch -> IntrospectionException");
+        // explicit method names not found, and no conventional fallback either
+        checkThrows(IntrospectionException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    new PropertyDescriptor("nope", Bean.class, "noGetter", "noSetter");
+                }}, "noGetter/noSetter names -> IntrospectionException");
+    }
+
+    static void testPropertyTypeEdgeCases() throws Exception {
+        // write-only property: type comes from the write method parameter
+        PropertyDescriptor wo = new PropertyDescriptor("foo", WriteOnlyBean.class, null, "setFoo");
+        check(int.class == wo.getPropertyType(), "write-only propertyType from setter param");
+        check(wo.getReadMethod() == null, "write-only has no read method");
+        // no methods at all: type null
+        PropertyDescriptor empty = new PropertyDescriptor("x", null, null);
+        check(empty.getPropertyType() == null, "no methods -> propertyType null");
+        check(empty.getReadMethod() == null && empty.getWriteMethod() == null,
+                "no methods -> both accessors null");
+    }
+
+    static void testCreatePropertyEditorDetails() throws Exception {
+        PropertyDescriptor pd = new PropertyDescriptor("foo", PlainBean.class);
+        pd.setPropertyEditorClass(PropertyEditorSupport.class);
+        PropertyEditor e1 = pd.createPropertyEditor(null);
+        PropertyEditor e2 = pd.createPropertyEditor(null);
+        check(e1 != null && e2 != null, "editor created");
+        check(e1 != e2, "createPropertyEditor returns a new instance each call");
+        // editor with an (Object bean) constructor receives the exact bean instance
+        PropertyDescriptor pd2 = new PropertyDescriptor("foo", PlainBean.class);
+        pd2.setPropertyEditorClass(EditorWithBeanCtor.class);
+        PlainBean target = new PlainBean();
+        EditorWithBeanCtor withBean = (EditorWithBeanCtor) pd2.createPropertyEditor(target);
+        check(withBean != null, "bean-ctor editor created for non-null bean");
+        check(withBean.received == target, "bean-ctor editor receives the bean");
+        // null bean: the (Object) ctor path is not taken; no no-arg ctor exists -> null
+        check(pd2.createPropertyEditor(null) == null,
+                "null bean with only-(Object)-ctor editor -> null");
+        // abstract editor class cannot be instantiated -> null
+        PropertyDescriptor pd3 = new PropertyDescriptor("foo", PlainBean.class);
+        pd3.setPropertyEditorClass(AbstractEditor.class);
+        check(pd3.createPropertyEditor(null) == null, "abstract editor class -> null");
+        check(AbstractEditor.class == pd3.getPropertyEditorClass(),
+                "editor class kept even when instantiation fails");
+    }
+
+    static void testPropertyEditorClearing() throws Exception {
+        PropertyDescriptor pd = new PropertyDescriptor("foo", PlainBean.class);
+        pd.setPropertyEditorClass(PropertyEditorSupport.class);
+        check(PropertyEditorSupport.class == pd.getPropertyEditorClass(), "editor class set");
+        pd.setPropertyEditorClass(null);
+        check(pd.getPropertyEditorClass() == null, "setPropertyEditorClass(null) clears");
+        check(pd.createPropertyEditor(new PlainBean()) == null,
+                "createPropertyEditor null after clearing");
+    }
+
+    static void testEqualsMatrix() throws Exception {
+        // equal shape via different constructor paths
+        PropertyDescriptor byClass = new PropertyDescriptor("foo", PlainBean.class);
+        PropertyDescriptor byMethods = new PropertyDescriptor("foo",
+                PlainBean.class.getMethod("getFoo"), PlainBean.class.getMethod("setFoo", int.class));
+        check(byClass.equals(byMethods), "equal across constructor paths");
+        check(byMethods.equals(byClass), "equal across constructor paths (symmetric)");
+        check(byClass.hashCode() == byMethods.hashCode(), "hashCode consistent across paths");
+        // same shape but a different bean class -> not equal
+        PropertyDescriptor otherBean = new PropertyDescriptor("foo", SameShapeBean.class);
+        check(!byClass.equals(otherBean), "same shape different bean class not equal");
+        // displayName/shortDescription do not participate in equals
+        PropertyDescriptor renamed = new PropertyDescriptor("foo", PlainBean.class);
+        renamed.setDisplayName("Other");
+        renamed.setShortDescription("Other desc");
+        check(byClass.equals(renamed), "displayName/shortDescription ignored by equals");
+        // bound/constrained flags do participate
+        PropertyDescriptor flagged = new PropertyDescriptor("foo", PlainBean.class);
+        flagged.setBound(true);
+        check(!byClass.equals(flagged), "bound flag difference not equal");
+        flagged.setBound(false);
+        flagged.setConstrained(true);
+        check(!byClass.equals(flagged), "constrained flag difference not equal");
+        // property editor class participates
+        PropertyDescriptor withEditor = new PropertyDescriptor("foo", PlainBean.class);
+        withEditor.setPropertyEditorClass(PropertyEditorSupport.class);
+        check(!byClass.equals(withEditor), "editor class difference not equal");
+        // cleared write method participates
+        PropertyDescriptor noWrite = new PropertyDescriptor("foo", PlainBean.class);
+        noWrite.setWriteMethod(null);
+        check(!byClass.equals(noWrite), "cleared write method not equal");
+    }
+
+    static void testBoundConstrainedAutoDetection() throws Exception {
+        // direct construction: no bound detection without Introspector
+        PropertyDescriptor plain = new PropertyDescriptor("foo", PlainBean.class);
+        check(!plain.isBound(), "no listener methods -> not bound");
+        check(!plain.isConstrained(), "never constrained by direct construction");
+        // Introspector detects constrained from setter throwing PropertyVetoException
+        java.beans.BeanInfo info = java.beans.Introspector.getBeanInfo(VetoBean.class);
+        PropertyDescriptor found = null;
+        for (PropertyDescriptor pd : info.getPropertyDescriptors()) {
+            if ("x".equals(pd.getName())) found = pd;
+        }
+        check(found != null, "veto property found by Introspector");
+        check(found.isConstrained(), "setter throws PropertyVetoException -> constrained");
+        check(!found.isBound(), "no propertyChange listeners -> not bound");
+    }
+
+    static void testNotSerializable() throws Exception {
+        check(!java.io.Serializable.class.isAssignableFrom(PropertyDescriptor.class),
+                "PropertyDescriptor is not Serializable");
+        final PropertyDescriptor pd = new PropertyDescriptor("foo", PlainBean.class);
+        pd.setBound(true);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        final java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        try {
+            oos.writeObject(pd);
+            check(false, "expected NotSerializableException");
+        } catch (java.io.NotSerializableException expected) {
+            passed++;
+        }
+    }
+
 
     static void testStructure() {
         check(java.beans.FeatureDescriptor.class.isAssignableFrom(PropertyDescriptor.class), "extends FeatureDescriptor");
@@ -195,6 +373,13 @@ public class PropertyDescriptorTest {
         testSettersAndType();
         testBoundConstrainedEditor();
         testEqualsHashCode();
+        testBadAccessorSignatures();
+        testPropertyTypeEdgeCases();
+        testCreatePropertyEditorDetails();
+        testPropertyEditorClearing();
+        testEqualsMatrix();
+        testBoundConstrainedAutoDetection();
+        testNotSerializable();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

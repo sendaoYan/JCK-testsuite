@@ -27,3 +27,18 @@
 - 索引方法校验：读方法 1 个 int 参数、写方法 2 个参数且首个为 int，否则 IntrospectionException。
 - 数组组件类型必须等于索引类型，否则 `type mismatch between indexed and non-indexed methods`。
 - **不能连续清空索引读写两个方法**：清掉一个后数组类型仍在而索引类型变 null，第二次清空会触发 type mismatch。测试中对每个方法用独立实例单独清空。
+
+## 5. 追加深化（top-up）设计
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | indexed-only（null,null,ir,iw）；全 null 构造器（两类型 null、四访问器 null、name 保留） | testIndexedOnlyMethodCtor/testAllNullMethodCtor |
+| P0 | array-only（gr,sw,null,null）→ IE type mismatch（索引类型 null 与数组类型冲突） | testArrayOnlyMethodCtorThrows |
+| P0 | 不匹配矩阵：Method 构造器 Integer[]/String → IE；不匹配 bean 的 2 参构造器 → IE（消息 `Method not found: setVals`）；indexed-only bean 的 2 参构造器 → IE `Method not found: getNames`（2 参要求数组级访问器）；6 参 null 数组名可用 | testMismatchTypeRules |
+| P0 | 非 int 下标（读/写）、1 参写、void 索引读 → IE；非 void 索引写合法 | testIndexedSetterNegatives |
+| P1 | equals 族 + **PD/IPD 不对称**（IPD.equals(PD)=false、PD.equals(IPD)=true，实测记录）；继承能力；非 Serializable | testEqualsFamily/testInheritedPropertyFeatures/testNotSerializable |
+
+### 追加实测细节（双侧一致）
+- 2 参构造器委托 6 参（全常规名），要求存在数组级访问器；只给数组方法不给索引方法时
+  indexedPropertyType 为 null 与数组类型冲突 → type mismatch（array-only 无法用公共构造器表达）。
+- IPD.equals 只认 IndexedPropertyDescriptor；基类 PD.equals 对同名同方法 IPD 返回 true——
+  非对称但双侧一致，按实际断言。
