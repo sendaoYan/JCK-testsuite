@@ -1,0 +1,60 @@
+/*
+ * @test
+ * @summary JLS 13.4.24: an instance method added to a subclass that overrides a superclass method is found by pre-existing binaries.
+ * @run main AddMethodBecomesOverride
+ */
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class AddMethodBecomesOverride {
+    static int passed;
+    static void check(boolean cond, String msg) { if (!cond) throw new AssertionError(msg); passed++; }
+
+    public static void main(String[] args) throws Exception {
+        Path d = Files.createTempDirectory("jls13424-ambo");
+        write(d, "C.java", "class C { int m(){ return 1; } }");
+        write(d, "Sub.java", "class Sub extends C { }");
+        write(d, "Client.java", "public class Client { public static void main(String[] a){ System.out.println(new Sub().m()); } }");
+        javac(d, "C.java", "Sub.java", "Client.java");
+        write(d, "Sub.java", "class Sub extends C { int m(){ return 2; } }");
+        javac(d, "Sub.java");
+        String out = run(d, javaBin(), "-cp", ".", "Client");
+        check(out.startsWith("exit=0"), "client exits normally");
+        check(out.contains("2"), "output contains 2");
+        System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static String jdkHome() {
+        String h = System.getProperty("java.home");
+        java.io.File f = new java.io.File(h);
+        return "jre".equals(f.getName()) ? f.getParent() : h;
+    }
+    static String javaBin() { return jdkHome() + "/bin/java"; }
+    static String javacBin() { return jdkHome() + "/bin/javac"; }
+    static void write(Path d, String name, String content) throws IOException {
+        Path p = d.resolve(name);
+        if (p.getParent() != null) Files.createDirectories(p.getParent());
+        Files.write(p, content.getBytes("UTF-8"));
+    }
+    static void javac(Path d, String... files) throws Exception {
+        String[] c = new String[files.length + 5];
+        c[0] = javacBin(); c[1] = "-cp"; c[2] = "."; c[3] = "-d"; c[4] = ".";
+        System.arraycopy(files, 0, c, 5, files.length);
+        String out = run(d, c);
+        if (!out.startsWith("exit=0")) throw new AssertionError("javac failed:\n" + out);
+    }
+    static String run(Path d, String... cmd) throws Exception {
+        Process p = new ProcessBuilder(cmd).directory(d.toFile()).redirectErrorStream(true).start();
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line).append('\n');
+        }
+        int exit = p.waitFor();
+        return "exit=" + exit + "\n" + sb;
+    }
+}
