@@ -90,9 +90,32 @@ public class AbstractQueueTest {
         check("[m, n]".equals(q2.toString()), "toString via iterator");
     }
 
+    static void testAddWhenFullAndAddAllEdges() {
+        // bounded queue: offer returns false when full -> add throws IllegalStateException
+        class Bounded extends AbstractQueue<String> {
+            final LinkedList<String> list = new LinkedList<>();
+            public boolean offer(String e) {
+                if (list.size() >= 1) return false;
+                return list.offer(e);
+            }
+            public String poll() { return list.poll(); }
+            public String peek() { return list.peek(); }
+            public Iterator<String> iterator() { return list.iterator(); }
+            public int size() { return list.size(); }
+        }
+        Bounded b = new Bounded();
+        check(b.add("a"), "add first succeeds");
+        expectThrows(() -> b.add("b"), IllegalStateException.class, "add when full throws ISE");
+
+        Q q = new Q();
+        expectThrows(() -> q.addAll(null), NullPointerException.class, "addAll(null) NPE");
+        expectThrows(() -> q.addAll(q), IllegalArgumentException.class, "addAll(self) IAE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testAddWhenFullAndAddAllEdges();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

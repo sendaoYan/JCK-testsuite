@@ -108,9 +108,19 @@ public class AbstractCollectionTest {
         expectThrows(() -> ro.add("x"), UnsupportedOperationException.class, "default add unsupported");
     }
 
+    static void testNullArgs() {
+        C c = new C();
+        c.add("a");
+        expectThrows(() -> c.addAll(null), NullPointerException.class, "addAll(null) NPE");
+        expectThrows(() -> c.containsAll(null), NullPointerException.class, "containsAll(null) NPE");
+        expectThrows(() -> c.removeAll(null), NullPointerException.class, "removeAll(null) NPE");
+        expectThrows(() -> c.retainAll(null), NullPointerException.class, "retainAll(null) NPE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNullArgs();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
