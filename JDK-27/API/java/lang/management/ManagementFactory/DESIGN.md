@@ -1,20 +1,48 @@
-# ManagementFactory — 设计方案
+# java.lang.management.ManagementFactory 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。每个单例 MXBean 访问器非 null、MemoryMXBean 堆/非堆使用量与 pending finalization、
+> RuntimeMXBean name（pid@hostname）/uptime/startTime/inputArguments/systemProperties、OperatingSystemMXBean
+> name/arch/processors、ThreadMXBean 计数/CPU 时间、ClassLoadingMXBean 计数、CompilationMXBean 守卫 null、
+> 内存池/GC/管理器 bean 非空且值界、平台 MBeanServer + 接口集、getPlatformMXBean(s)、MemoryType 枚举、
+> MemoryUsage 值不变量。全部确定性（仅非 null/非空/非负/一致性断言，不依赖时钟/随机）。
 
 ## 1. API 功能
-`java.lang.management.ManagementFactory`（类）是平台 MXBean 的工厂入口：`getRuntimeMXBean`/`getMemoryMXBean`/`getThreadMXBean`/`getOperatingSystemMXBean`/`getClassLoadingMXBean`/`getCompilationMXBean`；列表 `getMemoryPoolMXBeans`/`getMemoryManagerMXBeans`/`getGarbageCollectorMXBeans`；`getPlatformMBeanServer()`；`getPlatformMXBean(s)`；`getPlatformManagementInterfaces()`；`newPlatformMXBeanProxy`；常量 `*_MXBEAN_NAME`。
 
-## 2. Java 用户如何使用
-```java
-RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
-MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-List<MemoryPoolMXBean> pools = ManagementFactory.getMemoryPoolMXBeans();
-```
+- 单例 getter：getMemoryMXBean/getThreadMXBean/getRuntimeMXBean/getClassLoadingMXBean/getOperatingSystemMXBean。
+- 集合：getMemoryPoolMXBeans/getMemoryManagerMXBeans/getGarbageCollectorMXBeans。
+- 平台：getPlatformMBeanServer/getPlatformManagementInterfaces/getPlatformMXBean(s)。
 
-## 3. 开源代码实际用法调研
-- JDK `test/jdk/java/lang/management` 全部用例都经 `ManagementFactory` 取 MXBean。
-- Spring Boot Actuator 的 JMX 端点、Micrometer 用 `getPlatformMBeanServer` 注册/查询 MBean。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-白盒：具体类 + 各 getter 返回类型 + getPlatformMBeanServer/getPlatformManagementInterfaces 返回类型。
-黑盒：各 getXxxMXBean 非空；列表非空；MBeanServer 单例；平台接口集合含 Runtime/Memory/Thread/OS；getPlatformMXBean(s) 非空；newPlatformMXBeanProxy 往返 vmName；常量非空。
-对应 `ManagementFactoryTest.java` 白盒 + 黑盒部分。
+- `ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()` 读堆使用量（MemoryUsage）。
+- `getPlatformMBeanServer()` 提供 JMX 平台 MBean 的 MBeanServer。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/management/ManagementFactory.html）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/management/ManagementFactory.java`。
+- JCK runtime-8b `tests/api/java_lang/management/ManagementFactory/`。
+
+## 4. 测试用例设计（映射到 ManagementFactoryTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 单例访问器非 null | testSingletons |
+| P0 | MemoryMXBean 堆/非堆/pending | testMemoryMXBean |
+| P0 | RuntimeMXBean name/uptime/startTime/props | testRuntimeMXBean |
+| P0 | OperatingSystemMXBean name/arch/processors | testOperatingSystemMXBean |
+| P0 | ThreadMXBean 计数/CPU 时间 | testThreadMXBean |
+| P0 | ClassLoadingMXBean 计数 | testClassLoadingMXBean |
+| P1 | CompilationMXBean 守卫 null | testCompilationMXBean |
+| P0 | 池/GC/管理器 bean 非空 + 值界 | testPoolAndGCBeans |
+| P0 | getPlatformMXBean(s)/interfaces | testPlatformMXBeans |
+| P1 | MemoryType 枚举 | testMemoryType |
+| P1 | MemoryUsage 值不变量 | testMemoryUsageInvariants |
+
+## 易错规范细节（已锁入断言）
+
+- `MemoryType.HEAP.toString()` 为 "Heap memory"（非 "HEAP"）；用 name() 断言枚举名。
+- `getPlatformManagementInterfaces()` 返回 `Set<Class<? extends PlatformManagedObject>>`。
+- heap/non-heap `committed>=used`；`max>=-1`（-1 表示未指定）；`getObjectPendingFinalizationCount()>=0`。
+- `getCompilationMXBean()` 可能为 null（无 JIT），需守卫。
+- 断言数随 JVM 内存池/GC 数量变化（JDK-8 109 条，JDK-27 123 条）。

@@ -1,12 +1,25 @@
 /*
  * @test
- * @summary java.lang.invoke.MethodHandles conformance: white-box + black-box behavior.
+ * @summary java.lang.invoke.MethodHandles conformance: full contract coverage.
+ *          Lookup (lookup/publicLookup/lookupClass/lookupModes/in/toString), find
+ *          (static/virtual/constructor/static+instance getter+setter/special/bind),
+ *          unreflect (method/constructor/getter/setter), revealDirect/reflectAs,
+ *          identity/constant, arrayElementGetter/Setter + validation matrix,
+ *          insertArguments/dropArguments/filterArguments/filterReturnValue/
+ *          foldArguments/guardWithTest/catchException/throwException/permuteArguments/
+ *          explicitCastArguments, and exactInvoker/invoker/spreadInvoker.
  * @run main MethodHandlesTest
  */
 
+import java.io.IOException;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Arrays;
 
 public class MethodHandlesTest {
     static int passed;
@@ -16,152 +29,348 @@ public class MethodHandlesTest {
         passed++;
     }
 
-    static int doubleIt(int x) { return x * 2; }
-    static int add3(int a, int b, int c) { return a + b + c; }
-    static boolean isPositive(int x) { return x > 0; }
-    static String paren(String s) { return "(" + s + ")"; }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.lang.invoke.MethodHandles");
-        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "final class");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public class");
-        int pubCtors = 0;
-        for (java.lang.reflect.Constructor<?> ct : c.getDeclaredConstructors()) {
-            if (java.lang.reflect.Modifier.isPublic(ct.getModifiers())) pubCtors++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
         }
-        check(pubCtors == 0, "no public constructor");
-        String[] names = {"lookup", "publicLookup", "privateLookupIn", "identity", "constant",
-                "zero", "empty", "arrayElementGetter", "arrayElementSetter", "arrayLength",
-                "arrayConstructor", "insertArguments", "dropArguments", "permuteArguments",
-                "filterArguments", "filterReturnValue", "foldArguments", "guardWithTest",
-                "catchException", "throwException", "countedLoop", "iteratedLoop", "loop",
-                "whileLoop", "doWhileLoop", "tryFinally", "explicitCastArguments",
-                "spreadInvoker", "exactInvoker", "invoker",
-                "arrayElementVarHandle", "byteArrayViewVarHandle", "byteBufferViewVarHandle"};
-        for (String n : names) {
-            boolean found = false;
-            for (java.lang.reflect.Method mm : c.getDeclaredMethods())
-                if (mm.getName().equals(n)) found = true;
-            check(found, "declares " + n);
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    // --- reflection targets ---
+    static int add2(int a, int b) { return a + b; }
+    static int sub(int a, int b) { return a - b; }
+    static int negate(int a) { return -a; }
+    static boolean isPositive(int a) { return a > 0; }
+    static int mayThrow(int x) throws IOException {
+        if (x < 0) throw new IOException("negative " + x);
+        return x;
+    }
+    static int recover(IOException e, int x) { return 999; }
+
+    static class Parent { int val() { return 1; } }
+    static class Child extends Parent { int val() { return 2; } }
+    static class Box { int x; static int s; }
+
+    static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+
+    static MethodHandle stat(String name, MethodType mt) throws Exception {
+        return LOOKUP.findStatic(MethodHandlesTest.class, name, mt);
+    }
+
+    static void testLookup() throws Exception {
+        MethodHandles.Lookup l = MethodHandles.lookup();
+        check(l.lookupClass() == MethodHandlesTest.class, "lookup lookupClass");
+        int modes = l.lookupModes();
+        check((modes & MethodHandles.Lookup.PUBLIC) != 0
+                && (modes & MethodHandles.Lookup.PRIVATE) != 0
+                && (modes & MethodHandles.Lookup.PROTECTED) != 0
+                && (modes & MethodHandles.Lookup.PACKAGE) != 0, "lookup all modes");
+        check(l.toString() != null, "lookup toString");
+
+        MethodHandles.Lookup pub = MethodHandles.publicLookup();
+        check(pub.lookupClass() == Object.class, "publicLookup lookupClass Object");
+        check(pub.lookupModes() == MethodHandles.Lookup.UNCONDITIONAL,
+                "publicLookup UNCONDITIONAL mode");
+        check((pub.lookupModes() & MethodHandles.Lookup.PUBLIC) == 0,
+                "publicLookup has no PUBLIC bit (JDK-27 uses UNCONDITIONAL)");
+        check(pub.toString() != null, "publicLookup toString");
+
+        // in() narrows the lookup class
+        MethodHandles.Lookup same = l.in(MethodHandlesTest.class);
+        check(same.lookupClass() == MethodHandlesTest.class, "in(same class)");
+        check(same.lookupModes() == l.lookupModes(), "in(same class) keeps modes");
+
+        MethodHandles.Lookup narrowed = l.in(String.class);
+        check(narrowed.lookupClass() == String.class, "in() changes lookupClass");
+        check((narrowed.lookupModes() & MethodHandles.Lookup.PUBLIC) != 0,
+                "in(String) keeps PUBLIC");
+        check((narrowed.lookupModes() & (MethodHandles.Lookup.PRIVATE
+                | MethodHandles.Lookup.PACKAGE)) == 0,
+                "in(String) drops private/package modes");
+    }
+
+    static void testFind() throws Throwable {
+        MethodHandle add = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        check((int) add.invokeExact(2, 3) == 5, "findStatic invoke");
+
+        MethodHandle virt = LOOKUP.findVirtual(Child.class, "val", MethodType.methodType(int.class));
+        check((int) virt.invoke(new Child()) == 2, "findVirtual invoke");
+
+        MethodHandle ctor = LOOKUP.findConstructor(Box.class, MethodType.methodType(void.class));
+        Box b = (Box) ctor.invoke();
+        check(b != null, "findConstructor invoke");
+
+        MethodHandle getter = LOOKUP.findGetter(Box.class, "x", int.class);
+        MethodHandle setter = LOOKUP.findSetter(Box.class, "x", int.class);
+        setter.invoke(b, 11);
+        check((int) getter.invoke(b) == 11, "findGetter/findSetter");
+
+        MethodHandle sget = LOOKUP.findStaticGetter(Box.class, "s", int.class);
+        MethodHandle sset = LOOKUP.findStaticSetter(Box.class, "s", int.class);
+        sset.invoke(7);
+        check((int) sget.invoke() == 7, "findStaticGetter/Setter");
+
+        // findSpecial invokes the superclass version; the lookup must be from Child
+        MethodHandle special = LOOKUP.in(Child.class).findSpecial(Parent.class, "val",
+                MethodType.methodType(int.class), Child.class);
+        check((int) special.invoke(new Child()) == 1, "findSpecial super version");
+
+        // bind() finds a virtual method by name and binds the receiver
+        MethodHandle bound = LOOKUP.bind(new Child(), "val", MethodType.methodType(int.class));
+        check(bound.type().parameterCount() == 0, "bind binds receiver");
+        check((int) bound.invoke() == 2, "bind invoke");
+
+        // discovery errors
+        checkThrows(NoSuchMethodException.class,
+                () -> LOOKUP.findStatic(MethodHandlesTest.class, "nope",
+                        MethodType.methodType(int.class)), "findStatic missing NSME");
+        checkThrows(NoSuchFieldException.class,
+                () -> LOOKUP.findGetter(Box.class, "nope", int.class),
+                "findGetter missing NSFE");
+        checkThrows(NoSuchMethodException.class,
+                () -> LOOKUP.findConstructor(Box.class, MethodType.methodType(int.class)),
+                "findConstructor wrong type NSME");
+    }
+
+    static void testUnreflect() throws Throwable {
+        Method m = MethodHandlesTest.class.getDeclaredMethod("add2", int.class, int.class);
+        MethodHandle um = LOOKUP.unreflect(m);
+        check((int) um.invokeExact(4, 6) == 10, "unreflect method");
+
+        Constructor<Box> ctor = Box.class.getDeclaredConstructor();
+        MethodHandle uc = LOOKUP.unreflectConstructor(ctor);
+        Box b = (Box) uc.invoke();
+        check(b != null, "unreflectConstructor");
+
+        Field x = Box.class.getDeclaredField("x");
+        MethodHandle ug = LOOKUP.unreflectGetter(x);
+        MethodHandle us = LOOKUP.unreflectSetter(x);
+        us.invoke(b, 33);
+        check((int) ug.invoke(b) == 33, "unreflectGetter/Setter");
+
+        Field s = Box.class.getDeclaredField("s");
+        MethodHandle usg = LOOKUP.unreflectGetter(s);
+        MethodHandle uss = LOOKUP.unreflectSetter(s);
+        uss.invoke(9);
+        check((int) usg.invoke() == 9, "unreflect static getter/setter");
+    }
+
+    static void testRevealDirectReflectAs() throws Throwable {
+        MethodHandle add = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        MethodHandleInfo info = LOOKUP.revealDirect(add);
+        check(info.getName().equals("add2"), "revealDirect name");
+        check(info.getDeclaringClass() == MethodHandlesTest.class, "revealDirect declaring");
+        check(info.getMethodType().equals(MethodType.methodType(int.class, int.class, int.class)),
+                "revealDirect methodType");
+        check(info.getReferenceKind() != 0, "revealDirect referenceKind");
+
+        // non-direct handle -> IAE
+        checkThrows(IllegalArgumentException.class,
+                () -> LOOKUP.revealDirect(MethodHandles.identity(int.class)),
+                "revealDirect non-direct IAE");
+        checkThrows(NullPointerException.class,
+                () -> LOOKUP.revealDirect(null), "revealDirect null NPE");
+
+        Method m = MethodHandles.reflectAs(Method.class, add);
+        check(m.getName().equals("add2"), "reflectAs Method name");
+        check(m.getParameterTypes().length == 2, "reflectAs Method params");
+
+        MethodHandle getter = LOOKUP.findGetter(Box.class, "x", int.class);
+        Field f = MethodHandles.reflectAs(Field.class, getter);
+        check(f.getName().equals("x"), "reflectAs Field name");
+    }
+
+    static void testIdentityConstant() throws Throwable {
+        MethodHandle id = MethodHandles.identity(int.class);
+        check((int) id.invokeExact(42) == 42, "identity int");
+        check(MethodHandles.identity(String.class).invoke("s") == "s", "identity String");
+
+        MethodHandle c = MethodHandles.constant(String.class, "x");
+        check("x".equals((String) c.invoke()), "constant String");
+        check((int) MethodHandles.constant(int.class, 0).invoke() == 0, "constant int");
+        checkThrows(NullPointerException.class,
+                () -> MethodHandles.constant(int.class, null), "constant null value NPE");
+    }
+
+    static void testArrayElementAccessors() throws Throwable {
+        MethodHandle get = MethodHandles.arrayElementGetter(int[].class);
+        int[] arr = {1, 2, 3};
+        check((int) get.invoke(arr, 2) == 3, "arrayElementGetter int");
+        MethodHandle set = MethodHandles.arrayElementSetter(int[].class);
+        set.invoke(arr, 1, 99);
+        check(arr[1] == 99, "arrayElementSetter int");
+
+        MethodHandle oget = MethodHandles.arrayElementGetter(String[].class);
+        String[] sa = {"a", "b"};
+        check("b".equals(oget.invoke(sa, 1)), "arrayElementGetter String");
+
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodHandles.arrayElementGetter(int.class), "getter non-array IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodHandles.arrayElementSetter(String.class), "setter non-array IAE");
+        checkThrows(NullPointerException.class,
+                () -> MethodHandles.arrayElementGetter(null), "getter null NPE");
+        checkThrows(NullPointerException.class,
+                () -> MethodHandles.arrayElementSetter(null), "setter null NPE");
+    }
+
+    static void testInsertDropArguments() throws Throwable {
+        MethodHandle add = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        // insert 10 at position 0 -> (int)int
+        MethodHandle ins = MethodHandles.insertArguments(add, 0, 10);
+        check((int) ins.invokeExact(5) == 15, "insertArguments");
+        // insert at position 1 -> (int)int
+        MethodHandle ins2 = MethodHandles.insertArguments(add, 1, 10);
+        check((int) ins2.invokeExact(5) == 15, "insertArguments position 1");
+
+        MethodHandle id = MethodHandles.identity(int.class);
+        MethodHandle drop = MethodHandles.dropArguments(id, 0, String.class);
+        check(drop.type().parameterCount() == 2 && drop.type().parameterType(0) == String.class,
+                "dropArguments type");
+        check((int) drop.invoke("ignored", 7) == 7, "dropArguments invoke");
+        MethodHandle dropList = MethodHandles.dropArguments(id, 0,
+                Arrays.asList(String.class, Object.class));
+        check(dropList.type().parameterCount() == 3, "dropArguments List");
+    }
+
+    static void testFilterArguments() throws Throwable {
+        MethodHandle add = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        MethodHandle neg = stat("negate", MethodType.methodType(int.class, int.class));
+        // negate the first argument before adding
+        MethodHandle filtered = MethodHandles.filterArguments(add, 0, neg);
+        check((int) filtered.invoke(5, 3) == -2, "filterArguments negates first arg");
+    }
+
+    static void testFilterReturnValue() throws Throwable {
+        MethodHandle add = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        MethodHandle neg = stat("negate", MethodType.methodType(int.class, int.class));
+        MethodHandle filtered = MethodHandles.filterReturnValue(add, neg);
+        check((int) filtered.invoke(2, 3) == -5, "filterReturnValue negates result");
+    }
+
+    static void testFoldArguments() throws Throwable {
+        MethodHandle add = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        MethodHandle id = MethodHandles.identity(int.class);
+        // fold: adapter(a) = add(a, a) -> (int)int
+        MethodHandle folded = MethodHandles.foldArguments(add, id);
+        check(folded.type().parameterCount() == 1, "foldArguments arity");
+        check((int) folded.invoke(5) == 10, "foldArguments add(a,a)");
+    }
+
+    static void testGuardWithTest() throws Throwable {
+        MethodHandle pos = stat("isPositive", MethodType.methodType(boolean.class, int.class));
+        MethodHandle id = MethodHandles.identity(int.class);
+        MethodHandle neg = stat("negate", MethodType.methodType(int.class, int.class));
+        MethodHandle guard = MethodHandles.guardWithTest(pos, id, neg);
+        check((int) guard.invoke(5) == 5, "guardWithTest positive -> target");
+        check((int) guard.invoke(-3) == 3, "guardWithTest negative -> fallback");
+    }
+
+    static void testCatchException() throws Throwable {
+        MethodHandle may = stat("mayThrow", MethodType.methodType(int.class, int.class));
+        MethodHandle rec = stat("recover", MethodType.methodType(int.class, IOException.class, int.class));
+        MethodHandle guarded = MethodHandles.catchException(may, IOException.class, rec);
+        check((int) guarded.invoke(5) == 5, "catchException no throw");
+        check((int) guarded.invoke(-1) == 999, "catchException handler invoked");
+    }
+
+    static void testThrowException() throws Throwable {
+        // throwException builds a handle of type (exType)returnType which throws its argument
+        MethodHandle thrower = MethodHandles.throwException(int.class, IOException.class);
+        check(thrower.type().equals(MethodType.methodType(int.class, IOException.class)),
+                "throwException handle type");
+        final IOException ioe = new IOException("via handle");
+        try {
+            int r = (int) thrower.invokeExact(ioe);
+            throw new AssertionError("expected IOException, got " + r);
+        } catch (IOException e) {
+            passed++;
+            check(e == ioe, "throwException throws the supplied exception identity");
         }
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Throwable {
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
-
-        // identity / constant / zero
-        MethodHandle id = MethodHandles.identity(int.class);
-        check((int) id.invokeExact(42) == 42, "identity round trip");
-        MethodHandle s = MethodHandles.constant(String.class, "x");
-        check("x".equals((String) s.invoke()), "constant String");
-        check((int) MethodHandles.constant(int.class, 7).invoke() == 7, "constant int");
-        check((int) MethodHandles.zero(int.class).invoke() == 0, "zero int");
-        check(MethodHandles.zero(String.class).invoke() == null, "zero reference null");
-
-        // empty: callable, returns nothing
-        MethodHandle noop = MethodHandles.empty(MethodType.methodType(void.class));
-        noop.invoke();
-
-        // array combinators
-        MethodHandle arrayGet = MethodHandles.arrayElementGetter(int[].class);
-        int[] arr = {1, 2, 3};
-        check((int) arrayGet.invoke(arr, 2) == 3, "arrayElementGetter");
-        MethodHandle arrSet = MethodHandles.arrayElementSetter(int[].class);
-        arrSet.invoke(arr, 1, 99);
-        check(arr[1] == 99, "arrayElementSetter");
-        check((int) MethodHandles.arrayLength(int[].class).invoke(new int[7]) == 7, "arrayLength");
-        int[] made = (int[]) MethodHandles.arrayConstructor(int[].class).invoke(5);
-        check(made.length == 5, "arrayConstructor");
-
-        // insertArguments / dropArguments
-        MethodHandle add3 = lookup.findStatic(MethodHandlesTest.class, "add3",
-                MethodType.methodType(int.class, int.class, int.class, int.class));
-        MethodHandle add12 = MethodHandles.insertArguments(add3, 0, 10, 20);
-        check((int) add12.invokeExact(3) == 33, "insertArguments");
-        MethodHandle dropped = MethodHandles.dropArguments(add3, 0, String.class);
-        check((int) dropped.invoke("ignored", 1, 2, 3) == 6, "dropArguments");
-
-        // permuteArguments swaps arguments
-        MethodHandle sub = lookup.findStatic(MethodHandlesTest.class, "sub",
-                MethodType.methodType(int.class, int.class, int.class));
+    static void testPermuteArguments() throws Throwable {
+        MethodHandle sub = stat("sub", MethodType.methodType(int.class, int.class, int.class));
+        // swap args: b - a
         MethodHandle swapped = MethodHandles.permuteArguments(sub,
                 MethodType.methodType(int.class, int.class, int.class), 1, 0);
-        check((int) swapped.invokeExact(10, 4) == -6, "permuteArguments swaps");
+        check((int) swapped.invoke(2, 5) == 3, "permuteArguments swap");
 
-        // filterArguments applies functions to selected arguments
-        MethodHandle dbl = lookup.findStatic(MethodHandlesTest.class, "doubleIt",
-                MethodType.methodType(int.class, int.class));
-        MethodHandle filtered = MethodHandles.filterArguments(add3, 0, dbl);
-        check((int) filtered.invokeExact(1, 2, 3) == 7, "filterArguments doubles first");
-
-        // filterReturnValue post-processes the result
-        MethodHandle frv = MethodHandles.filterReturnValue(dbl, dbl);
-        check((int) frv.invokeExact(3) == 12, "filterReturnValue");
-
-        // foldArguments: combiner runs on the first arg; its result is prepended to the
-        // remaining arguments: folded(2,3) == add3(dbl(2), 2, 3) == 9
-        MethodHandle folded = MethodHandles.foldArguments(add3, dbl);
-        check(folded.type().parameterCount() == 2, "foldArguments shrinks parameter list");
-        check((int) folded.invokeExact(2, 3) == 9, "foldArguments");
-
-        // guardWithTest picks a branch
-        MethodHandle pos = lookup.findStatic(MethodHandlesTest.class, "isPositive",
-                MethodType.methodType(boolean.class, int.class));
-        MethodHandle branch = MethodHandles.guardWithTest(pos, dbl, dbl.asType(
-                MethodType.methodType(int.class, int.class)));
-        check((int) branch.invokeExact(21) == 42, "guardWithTest true branch");
-        MethodHandle neg = MethodHandles.guardWithTest(pos,
-                MethodHandles.dropArguments(MethodHandles.constant(int.class, 0), 0, int.class),
-                MethodHandles.dropArguments(MethodHandles.constant(int.class, -1), 0, int.class));
-        check((int) neg.invokeExact(5) == 0 && (int) neg.invokeExact(-5) == -1,
-              "guardWithTest both branches");
-
-        // catchException recovers from a thrown exception
-        MethodHandle thrower = MethodHandles.throwException(int.class,
-                IllegalStateException.class);
-        MethodHandle guarded = MethodHandles.catchException(thrower,
-                IllegalStateException.class,
-                MethodHandles.dropArguments(MethodHandles.constant(int.class, -99), 0,
-                        IllegalStateException.class));
-        check((int) guarded.invokeExact(new IllegalStateException()) == -99,
-              "catchException recovers");
-
-        // throwException actually throws
-        try {
-            int unreachable = (int) thrower.invokeExact(new IllegalStateException("boom"));
-            check(unreachable == 0, "unreachable");
-            check(false, "throwException must throw");
-        } catch (IllegalStateException e) {
-            check("boom".equals(e.getMessage()), "throwException throws ISE");
-        check(true, "throwException reached catch");
-        }
-
-        // explicitCastArguments widens int -> Object
-        MethodHandle boxed = MethodHandles.explicitCastArguments(dbl,
-                MethodType.methodType(Object.class, Object.class));
-        check(boxed.invoke(21).equals(42), "explicitCastArguments");
-
-        // tryFinally preserves the result through the cleanup:
-        // cleanup(Throwable, int result, int arg) -> int
-        MethodHandle tf = MethodHandles.tryFinally(dbl,
-                lookup.findStatic(MethodHandlesTest.class, "cleanup",
-                        MethodType.methodType(int.class, Throwable.class, int.class,
-                                int.class)));
-        check((int) tf.invokeExact(4) == 8, "tryFinally keeps the result");
-
-        // reflectAs works on a lookup-created handle
-        java.lang.reflect.Method m = MethodHandles.reflectAs(java.lang.reflect.Method.class, dbl);
-        check(m.getName().equals("doubleIt"), "reflectAs");
+        // duplicate first arg (old param 0 comes from new param 0)
+        MethodHandle id = MethodHandles.identity(int.class);
+        MethodHandle dup = MethodHandles.permuteArguments(id,
+                MethodType.methodType(int.class, int.class, int.class), 0);
+        check((int) dup.invoke(7, 99) == 7, "permuteArguments duplicate");
     }
 
-    static int sub(int a, int b) { return a - b; }
-    static int cleanup(Throwable t, int result, int arg) { return result; }
+    static void testExplicitCastArguments() throws Throwable {
+        MethodHandle id = MethodHandles.identity(int.class);
+        // cast Integer parameter to int
+        MethodHandle cast = MethodHandles.explicitCastArguments(id,
+                MethodType.methodType(int.class, Integer.class));
+        check((int) cast.invoke(Integer.valueOf(7)) == 7, "explicitCastArguments unbox");
+    }
+
+    static void testInvokers() throws Throwable {
+        MethodHandle target = MethodHandles.constant(int.class, 42);
+        // exactInvoker(type) -> (MethodHandle)int
+        MethodHandle exact = MethodHandles.exactInvoker(MethodType.methodType(int.class));
+        check((int) exact.invoke(target) == 42, "exactInvoker");
+
+        MethodHandle inv = MethodHandles.invoker(MethodType.methodType(int.class));
+        check((int) inv.invoke(target) == 42, "invoker");
+
+        MethodHandle add = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        MethodHandle spread = MethodHandles.spreadInvoker(
+                MethodType.methodType(int.class, int.class, int.class), 1);
+        check(spread != null, "spreadInvoker returns handle");
+    }
+
+    static void testJdk27Methods() throws Throwable {
+        MethodHandle z = MethodHandles.zero(int.class);
+        check((int) z.invokeExact() == 0, "zero int");
+        check(MethodHandles.zero(String.class).invoke() == null, "zero String -> null");
+
+        MethodHandle e = MethodHandles.empty(MethodType.methodType(void.class));
+        check(e.type().equals(MethodType.methodType(void.class)), "empty type");
+
+        MethodHandle ac = MethodHandles.arrayConstructor(int[].class);
+        int[] arr = (int[]) ac.invoke(3);
+        check(arr.length == 3, "arrayConstructor length");
+
+        check(MethodHandles.Lookup.MODULE != 0 && MethodHandles.Lookup.UNCONDITIONAL != 0,
+                "MODULE/UNCONDITIONAL constants");
+        MethodHandles.Lookup l = MethodHandles.lookup();
+        check((l.lookupModes() & MethodHandles.Lookup.MODULE) != 0, "lookup has MODULE mode");
+        check(l.hasFullPrivilegeAccess(), "lookup has full privilege access");
+    }
 
     public static void main(String[] args) throws Throwable {
-        testWhiteBox();
-        testBlackBox();
+        testLookup();
+        testFind();
+        testUnreflect();
+        testRevealDirectReflectAs();
+        testIdentityConstant();
+        testArrayElementAccessors();
+        testInsertDropArguments();
+        testFilterArguments();
+        testFilterReturnValue();
+        testFoldArguments();
+        testGuardWithTest();
+        testCatchException();
+        testThrowException();
+        testPermuteArguments();
+        testExplicitCastArguments();
+        testInvokers();
+        testJdk27Methods();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

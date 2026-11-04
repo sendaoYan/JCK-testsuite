@@ -1,12 +1,27 @@
 /*
  * @test
- * @summary java.lang.reflect.Constructor conformance: white-box structure + black-box behavior.
+ * @summary java.lang.reflect.Constructor conformance: full contract coverage.
+ *          parameter/exception type reflection incl. generic type parameters,
+ *          newInstance success + wrong arity/type -> IllegalArgumentException,
+ *          private without setAccessible -> IllegalAccessException, abstract/interface
+ *          -> InstantiationException, InvocationTargetException wraps the exact cause,
+ *          isVarArgs/isSynthetic, getAnnotation/getDeclaredAnnotations/
+ *          getParameterAnnotations/getAnnotatedReturnType/getAnnotatedReceiverType,
+ *          equals/hashCode/toString/toGenericString, getConstructors vs
+ *          getDeclaredConstructors, and NoSuchMethodException/NPE discovery paths.
  * @run main ConstructorTest
  */
 
+import java.io.IOException;
+import java.lang.annotation.Annotation;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.TypeVariable;
 
 public class ConstructorTest {
     static int passed;
@@ -16,160 +31,237 @@ public class ConstructorTest {
         passed++;
     }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.CONSTRUCTOR)
+    @interface CAnn { String value(); }
+
     static class Sample {
         public int x;
-
-        public Sample() {
-            x = 0;
-        }
-
-        public Sample(int v) {
-            x = v;
-        }
-
-        private Sample(String s) {
-            x = s.length();
+        public Sample() { x = 0; }
+        public Sample(int v) { x = v; }
+        private Sample(String s) { x = s.length(); }
+        public Sample(int... vs) { for (int v : vs) x += v; }
+        @CAnn("c") public Sample(long l, String s) { x = (int) l; }
+        public <T> Sample(T t, boolean b) { x = b ? 1 : 0; }
+        public Sample(boolean throwIt) throws IOException {
+            if (throwIt) throw new IOException("ctor boom");
+            x = -1;
         }
     }
 
-    static class Widget {
-        final String tag;
-        final int n;
-
-        public Widget() { this("none", 0); }
-        public Widget(String tag, int n) { this.tag = tag; this.n = n; }
-        public Widget(String... parts) { this(String.join("-", parts), parts.length); }
-        private Widget(boolean boom) {
-            if (boom) throw new IllegalArgumentException("ctor-boom");
-            this.tag = "b";
-            this.n = -1;
-        }
+    static abstract class AbstractThing {
+        public AbstractThing() { }
     }
 
-    static class Gadget<T> {
-        public final T payload;
-        public Gadget(T payload) { this.payload = payload; }
+    // Non-static inner class: its constructor has a receiver (the enclosing instance),
+    // so getAnnotatedReceiverType() returns a non-null value.
+    class InnerCtor {
+        public InnerCtor(long l, String s) { }
     }
 
-    abstract static class AbstractThing {
-    }
+    interface Iface { }
 
-    interface Marker {
-    }
-
-    enum Color {
-        RED, GREEN
-    }
-
-    // ---- Part 1: white-box (structural, retained from previous revision) ----
-    static void testWhiteBox() throws Exception {
+    static void testMetadata() throws Exception {
         Constructor<Sample> c = Sample.class.getConstructor(int.class);
         check(c.getParameterTypes().length == 1, "getParameterTypes length");
+        check(c.getParameterTypes()[0] == int.class, "getParameterTypes element");
         check(c.getParameterCount() == 1, "getParameterCount");
         check(c.getModifiers() == Modifier.PUBLIC, "public modifier");
-        check(c.getName().equals(Sample.class.getName()), "getName");
+        check(c.getName().equals(Sample.class.getName()), "getName == class name");
         check(c.getDeclaringClass() == Sample.class, "getDeclaringClass");
-        Sample s = c.newInstance(42);
-        check(s.x == 42, "newInstance with args");
-        Sample s0 = Sample.class.getConstructor().newInstance();
-        check(s0.x == 0, "newInstance no-arg");
-        check(Sample.class.getConstructors().length == 2, "getConstructors length");
-        check(Sample.class.getDeclaredConstructors().length == 3, "getDeclaredConstructors length");
-        check(c.toString() != null, "toString");
-        check(c.toGenericString() != null, "toGenericString");
-        check(Modifier.isFinal(Constructor.class.getModifiers()), "Constructor is final");
-        check(Constructor.class.getSuperclass().getName().equals("java.lang.reflect.Executable"),
-              "Constructor extends Executable");
+        check(c.getGenericParameterTypes().length == 1, "getGenericParameterTypes length");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        // 1. exact-signature construction and state verification
-        Constructor<Widget> twoArg = Widget.class.getConstructor(String.class, int.class);
-        Widget w = twoArg.newInstance("a", 2);
-        check("a".equals(w.tag) && w.n == 2, "newInstance(String,int) state");
-        check(twoArg.getParameterCount() == 2, "twoArg param count");
-        check(twoArg.getParameterTypes()[0] == String.class
-              && twoArg.getParameterTypes()[1] == int.class, "twoArg param types");
-        check(twoArg.getModifiers() == Modifier.PUBLIC, "twoArg public");
-        check(twoArg.getExceptionTypes().length == 0, "no declared exceptions");
-        check(Widget.class.getConstructor().newInstance().tag.equals("none"), "no-arg chaining");
+    static void testGenericConstructor() throws Exception {
+        Constructor<Sample> c = Sample.class.getConstructor(Object.class, boolean.class);
+        TypeVariable<?>[] tp = c.getTypeParameters();
+        check(tp.length == 1, "generic constructor one type parameter");
+        check(tp[0].getName().equals("T"), "type parameter name");
+        check(c.getGenericParameterTypes()[0] instanceof TypeVariable,
+                "generic parameter TypeVariable");
+        check(c.getParameterTypes()[0] == Object.class, "erasure parameter Object");
+    }
 
-        // 2. varargs constructor
-        Constructor<Widget> va = Widget.class.getConstructor(String[].class);
-        check(va.isVarArgs(), "varargs ctor isVarArgs");
-        check(va.getParameterTypes()[0] == String[].class, "varargs ctor param type");
-        Widget w2 = va.newInstance(new Object[]{new String[]{"x", "y"}});
-        check("x-y".equals(w2.tag) && w2.n == 2, "varargs packed newInstance");
-        Widget w3 = va.newInstance((Object) new String[]{"single"});
-        check("single".equals(w3.tag) && w3.n == 1, "varargs single array");
+    static void testNewInstance() throws Exception {
+        Constructor<Sample> c0 = Sample.class.getConstructor();
+        Sample s0 = c0.newInstance();
+        check(s0.x == 0, "newInstance no-arg");
 
-        // 3. constructor that throws: wrapped in InvocationTargetException
-        Constructor<Widget> boom = Widget.class.getDeclaredConstructor(boolean.class);
-        try {
-            boom.newInstance(true);
-            check(false, "throwing ctor must wrap");
-        } catch (InvocationTargetException e) {
-            check(e.getCause() instanceof IllegalArgumentException, "cause exact type");
-            check("ctor-boom".equals(e.getCause().getMessage()), "cause message");
-        }
-        boom.setAccessible(true);
-        Widget quiet = boom.newInstance(false);
-        check("b".equals(quiet.tag) && quiet.n == -1, "private ctor after setAccessible");
+        Constructor<Sample> ci = Sample.class.getConstructor(int.class);
+        Sample s1 = ci.newInstance(42);
+        check(s1.x == 42, "newInstance int");
+        check(ci.newInstance(Integer.valueOf(-3)).x == -3, "newInstance boxed widening");
 
-        // 4. private constructor access control (different nest)
-        Constructor<CtorSeparate> priv = (Constructor<CtorSeparate>) CtorSeparate.class.getDeclaredConstructor();
-        check(Modifier.isPrivate(priv.getModifiers()), "ctor private modifier");
-        try {
-            priv.newInstance();
-            check(false, "private ctor must be denied");
-        } catch (IllegalAccessException e) {
-            check(true, "IllegalAccessException private ctor");
-        }
+        Constructor<Sample> cl = Sample.class.getConstructor(long.class, String.class);
+        check(cl.newInstance(9L, "ignored").x == 9, "newInstance two args");
+
+        // wrong arity -> IllegalArgumentException
+        checkThrows(IllegalArgumentException.class, () -> ci.newInstance(),
+                "newInstance too few IAE");
+        checkThrows(IllegalArgumentException.class, () -> ci.newInstance(1, 2),
+                "newInstance too many IAE");
+        checkThrows(IllegalArgumentException.class, () -> ci.newInstance((Object[]) null),
+                "newInstance null args IAE");
+        // wrong type -> IllegalArgumentException
+        checkThrows(IllegalArgumentException.class, () -> ci.newInstance(1L),
+                "newInstance wrong type IAE");
+        checkThrows(IllegalArgumentException.class, () -> ci.newInstance("s"),
+                "newInstance wrong type String IAE");
+    }
+
+    static void testAccessibility() throws Exception {
+        // Use a separate top-level class (not a nestmate): JDK-11+ permits reflection
+        // access to a nestmate's private member without setAccessible, so the IAE path
+        // must target a non-nest class to remain a valid contract assertion.
+        Constructor<ExtCtor> priv = ExtCtor.class.getDeclaredConstructor(String.class);
+        check(Modifier.isPrivate(priv.getModifiers()), "private ctor");
+        checkThrows(IllegalAccessException.class, () -> priv.newInstance("ab"),
+                "private newInstance without accessible IAE");
         priv.setAccessible(true);
-        check(priv.newInstance() != null, "private ctor after setAccessible");
+        ExtCtor s = priv.newInstance("abcd");
+        check(s.x == 4, "private newInstance after setAccessible");
+    }
 
-        // 5. abstract class cannot be instantiated; interfaces have no ctors; enums reject newInstance
-        Constructor<?> abs = AbstractThing.class.getDeclaredConstructor();
-        try { abs.newInstance(); check(false, "abstract must fail"); }
-        catch (InstantiationException e) { check(true, "InstantiationException abstract class"); }
-        check(Marker.class.getDeclaredConstructors().length == 0, "interface has no constructors");
-        Constructor<Color> ec = (Constructor<Color>) (Constructor<?>) Color.class.getDeclaredConstructor(String.class, int.class);
-        try { ec.newInstance("r", 1); check(false, "enum ctor must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IllegalArgumentException enum newInstance"); }
+    static void testInstantiationException() throws Exception {
+        Constructor<AbstractThing> ac = AbstractThing.class.getDeclaredConstructor();
+        checkThrows(InstantiationException.class, () -> ac.newInstance(),
+                "abstract class InstantiationException");
+    }
 
-        // 6. argument mismatches
-        try { twoArg.newInstance("only-one"); check(false, "arity mismatch must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IllegalArgumentException arity"); }
-        try { twoArg.newInstance("a", "not-an-int"); check(false, "type mismatch must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IllegalArgumentException type"); }
+    static void testInvocationTargetException() throws Exception {
+        Constructor<Sample> tc = Sample.class.getConstructor(boolean.class);
+        try {
+            tc.newInstance(true);
+            throw new AssertionError("expected InvocationTargetException");
+        } catch (InvocationTargetException ite) {
+            passed++;
+            check(ite.getCause() instanceof IOException, "ctor ITE cause IOException");
+            check(ite.getTargetException() instanceof IOException, "ctor ITE target");
+            check("ctor boom".equals(ite.getTargetException().getMessage()),
+                    "ctor ITE message");
+        }
+        // non-throwing path works
+        check(tc.newInstance(false).x == -1, "ctor false path works");
+    }
 
-        // 7. generic constructor / annotated return
-        Constructor<Gadget<String>> g = (Constructor<Gadget<String>>) (Constructor<?>) Gadget.class.getConstructor(Object.class);
-        check(g.getParameterTypes()[0] == Object.class, "generic ctor erased param");
-        check(g.newInstance("p").payload.equals("p"), "generic ctor newInstance");
-        check(g.getTypeParameters().length == 0, "ctor own type parameters empty");
-        check(g.getAnnotatedReturnType().getType() == Gadget.class, "annotated return declaring type");
+    static void testVarArgs() throws Exception {
+        Constructor<Sample> var = Sample.class.getConstructor(int[].class);
+        check(var.isVarArgs(), "varargs constructor isVarArgs");
+        check(var.newInstance((Object) new int[]{1, 2, 3}).x == 6,
+                "varargs newInstance");
+        Constructor<Sample> ci = Sample.class.getConstructor(int.class);
+        check(!ci.isVarArgs(), "non-varargs not varargs");
+    }
 
-        // 8. equality and string forms
-        Constructor<Widget> twoArg2 = Widget.class.getConstructor(String.class, int.class);
-        check(twoArg.equals(twoArg2), "Constructor equals by value");
-        check(twoArg.hashCode() == twoArg2.hashCode(), "Constructor hashCode consistent");
-        check(!twoArg.equals(va), "different ctors not equal");
-        check(twoArg.toString().contains("Widget"), "toString contains class name");
-        check(va.toGenericString().contains("Widget"), "toGenericString contains class name");
-        check(Widget.class.getDeclaredConstructors().length == 4, "declared ctor count");
+    static void testAnnotations() throws Exception {
+        Constructor<Sample> ca = Sample.class.getConstructor(long.class, String.class);
+        CAnn ann = ca.getAnnotation(CAnn.class);
+        check(ann != null && "c".equals(ann.value()), "getAnnotation");
+        Annotation[] declared = ca.getDeclaredAnnotations();
+        boolean found = false;
+        for (Annotation a : declared) {
+            if (a instanceof CAnn) found = true;
+        }
+        check(found, "getDeclaredAnnotations includes CAnn");
+        check(ca.getParameterAnnotations().length == 2, "getParameterAnnotations length");
+        check(ca.getAnnotatedReturnType() != null, "getAnnotatedReturnType non-null");
+        // JDK-27: a static nested class constructor has no receiver, so the annotated
+        // receiver type is null (JDK-8 returned a non-null degenerate value here).
+        check(ca.getAnnotatedReceiverType() == null,
+                "getAnnotatedReceiverType null for static nested class");
+
+        Constructor<?> ic = InnerCtor.class.getConstructor(ConstructorTest.class, long.class, String.class);
+        java.lang.reflect.AnnotatedType ict = ic.getAnnotatedReceiverType();
+        check(ict != null, "inner class getAnnotatedReceiverType non-null");
+        check(ict.getType() == ConstructorTest.class,
+                "inner class receiver type is enclosing class");
+
+        check(Sample.class.getConstructor(int.class).getAnnotation(CAnn.class) == null,
+                "unannotated getAnnotation null");
+    }
+
+    static void testEqualsHashCodeToString() throws Exception {
+        Constructor<Sample> a = Sample.class.getConstructor(int.class);
+        Constructor<Sample> b = Sample.class.getConstructor(int.class);
+        Constructor<Sample> c = Sample.class.getConstructor();
+        check(a.equals(b), "equals same ctor");
+        check(a.hashCode() == b.hashCode(), "hashCode same");
+        check(!a.equals(c), "equals different ctor");
+        check(!a.equals(null), "equals null");
+        check(!a.equals("x"), "equals non-Constructor");
+        check(a.toString().contains(Sample.class.getName()), "toString contains class");
+        check(a.toGenericString().contains("int"), "toGenericString contains type");
+    }
+
+    static void testDiscovery() throws Exception {
+        Constructor<?>[] pub = Sample.class.getConstructors();
+        // public constructors: (), (int), (int[]), (long,String), (Object,boolean), (boolean)
+        check(pub.length == 6, "getConstructors length " + pub.length);
+        for (Constructor<?> c : pub) {
+            check(Modifier.isPublic(c.getModifiers()), "getConstructors all public");
+        }
+
+        Constructor<?>[] all = Sample.class.getDeclaredConstructors();
+        boolean hasPrivate = false;
+        for (Constructor<?> c : all) {
+            if (Modifier.isPrivate(c.getModifiers())) hasPrivate = true;
+        }
+        check(hasPrivate, "getDeclaredConstructors includes private");
+        check(all.length == 7, "getDeclaredConstructors length " + all.length);
+
+        checkThrows(NoSuchMethodException.class,
+                () -> Sample.class.getConstructor(String.class), "getConstructor private NSME");
+        checkThrows(NoSuchMethodException.class,
+                () -> Sample.class.getConstructor(float.class), "getConstructor missing NSME");
+        check(Sample.class.getDeclaredConstructor(String.class) != null,
+                "getDeclaredConstructor finds private");
+        // null parameterTypes is treated as empty -> no-arg constructor
+        check(Sample.class.getConstructor((Class<?>[]) null).getParameterCount() == 0,
+                "getConstructor null paramTypes -> no-arg");
+        check(Sample.class.getDeclaredConstructor((Class<?>[]) null).getParameterCount() == 0,
+                "getDeclaredConstructor null paramTypes -> no-arg");
+        // a null element inside parameterTypes -> NoSuchMethodException (no matching ctor)
+        checkThrows(NoSuchMethodException.class,
+                () -> Sample.class.getConstructor(int.class, null),
+                "getConstructor null element NSME");
+        checkThrows(NoSuchMethodException.class,
+                () -> Sample.class.getDeclaredConstructor(int.class, null),
+                "getDeclaredConstructor null element NSME");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testMetadata();
+        testGenericConstructor();
+        testNewInstance();
+        testAccessibility();
+        testInstantiationException();
+        testInvocationTargetException();
+        testVarArgs();
+        testAnnotations();
+        testEqualsHashCodeToString();
+        testDiscovery();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
 
-// second top-level class = a different nest: its private constructor is not
-// accessible to ConstructorTest, exercising the access-control paths.
-class CtorSeparate {
-    private CtorSeparate() { }
+// Separate top-level class (not a nestmate of ConstructorTest) so reflection access to
+// its private constructor requires setAccessible(true).
+class ExtCtor {
+    int x;
+    private ExtCtor(String s) { x = s.length(); }
 }

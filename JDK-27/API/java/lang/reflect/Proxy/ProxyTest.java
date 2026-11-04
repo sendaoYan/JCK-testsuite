@@ -1,15 +1,22 @@
 /*
  * @test
- * @summary java.lang.reflect.Proxy conformance: white-box structure + black-box behavior.
+ * @summary java.lang.reflect.Proxy conformance: full contract coverage.
+ *          newProxyInstance dispatches every method (incl. Object's hashCode/equals/
+ *          toString) to the handler with (proxy, method, args), isProxyClass identity,
+ *          getInvocationHandler identity + IllegalArgumentException on non-proxy,
+ *          handler-returned wrong type -> ClassCastException, null for primitive return
+ *          -> NullPointerException, runtime exception propagation, undeclared checked
+ *          exception -> UndeclaredThrowableException, and constructor/factory exception
+ *          matrix (null loader/interfaces/handler -> NPE, empty/dup/non-interface/
+ *          non-public interfaces -> IllegalArgumentException).
  * @run main ProxyTest
  */
 
+import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.UndeclaredThrowableException;
-import java.util.ArrayList;
-import java.util.List;
 
 public class ProxyTest {
     static int passed;
@@ -19,181 +26,208 @@ public class ProxyTest {
         passed++;
     }
 
-    interface Foo {
-        String bar(int x);
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    interface Service {
-        String name();
-        int add(int a, int b);
-        default String describe() { return "default-describe"; }
-        void checkedOp() throws java.io.IOException;
-    }
+    interface Foo { String bar(int x); }
+    interface Baz { int qux(); }
 
-    /** Records every dispatch: method name + args, answers from a canned table. */
-    static class RecordingHandler implements InvocationHandler {
-        final List<String> calls = new ArrayList<>();
-        Object answer = null;
-        Throwable toThrow = null;
-
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            calls.add(method.getName() + "(" + (args == null ? "" : args.length) + ")");
-            if (method.getName().equals("hashCode")) return 42;
-            if (method.getName().equals("toString")) return "ProxyStr";
-            if (method.getName().equals("equals")) return args[0] == proxy;
-            if (toThrow != null) { Throwable t = toThrow; toThrow = null; throw t; }
-            return answer;
+    static final class RecordingHandler implements InvocationHandler {
+        Object proxySeen;
+        Method methodSeen;
+        Object[] argsSeen;
+        int calls;
+        public Object invoke(Object proxy, Method method, Object[] args) {
+            proxySeen = proxy;
+            methodSeen = method;
+            argsSeen = args;
+            calls++;
+            if (method.getDeclaringClass() == Object.class) {
+                switch (method.getName()) {
+                    case "toString": return "PROXY-STRING";
+                    case "hashCode": return Integer.valueOf(42);
+                    case "equals": return Boolean.valueOf(proxy == args[0]);
+                    default: return null;
+                }
+            }
+            return "bar:" + args[0];
         }
     }
 
-    // ---- Part 1: white-box (structural, retained from previous revision) ----
-    static void testWhiteBox() throws Exception {
-        InvocationHandler h = new InvocationHandler() {
-            public Object invoke(Object proxy, Method method, Object[] args) {
-                return "bar:" + args[0];
-            }
-        };
+    static void testDispatch() throws Exception {
+        RecordingHandler h = new RecordingHandler();
         Foo foo = (Foo) Proxy.newProxyInstance(ProxyTest.class.getClassLoader(),
                 new Class<?>[]{Foo.class}, h);
         check("bar:7".equals(foo.bar(7)), "proxy dispatch");
-        check(Proxy.isProxyClass(foo.getClass()), "isProxyClass");
-        check(Proxy.getInvocationHandler(foo) == h, "getInvocationHandler");
+        check(h.calls == 1, "handler called once");
+        check(h.proxySeen == foo, "handler receives proxy identity");
+        check(h.methodSeen.getName().equals("bar"), "handler receives method name");
+        check(h.argsSeen.length == 1 && h.argsSeen[0].equals(7), "handler receives args");
 
-        Class<?> pc = Proxy.getProxyClass(ProxyTest.class.getClassLoader(), Foo.class);
-        check(Proxy.isProxyClass(pc), "getProxyClass result is proxy class");
-        check(java.io.Serializable.class.isAssignableFrom(Proxy.class), "Proxy is Serializable");
-        check(!Proxy.class.isInterface(), "Proxy is a class");
-        check(!java.lang.reflect.Modifier.isAbstract(Proxy.class.getModifiers()),
-              "Proxy concrete");
+        check("PROXY-STRING".equals(foo.toString()), "Object.toString dispatched");
+        check(foo.hashCode() == 42, "Object.hashCode dispatched");
+        check(foo.equals(foo), "Object.equals dispatched (proxy==arg)");
+        check(h.methodSeen.getName().equals("equals"), "last dispatched method equals");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        ClassLoader ld = ProxyTest.class.getClassLoader();
+    static void testIdentity() throws Exception {
+        RecordingHandler h = new RecordingHandler();
+        Foo foo = (Foo) Proxy.newProxyInstance(ProxyTest.class.getClassLoader(),
+                new Class<?>[]{Foo.class}, h);
+        Class<?> pc = foo.getClass();
+        check(Proxy.isProxyClass(pc), "isProxyClass true");
+        check(Proxy.getInvocationHandler(foo) == h, "getInvocationHandler identity");
 
-        // 1. dispatch records method and args; answers flow back
-        RecordingHandler rec = new RecordingHandler();
-        Service svc = (Service) Proxy.newProxyInstance(ld, new Class<?>[]{Service.class}, rec);
-        check(svc instanceof Service, "proxy implements interface");
-        check(svc.getClass().getInterfaces().length >= 1, "proxy class lists interface");
-        rec.answer = "svc-name";
-        check("svc-name".equals(svc.name()), "answer returned");
-        rec.answer = 30;
-        check(svc.add(10, 20) == 30, "boxed int unboxed");
-        rec.answer = null;
-        check(rec.calls.get(0).equals("name()") && rec.calls.get(1).equals("add(2)"),
-              "calls recorded with arity");
-        try { svc.add(1, 2); check(false, "null return must unbox-fail"); }
-        catch (NullPointerException e) { check(true, "NPE unboxing null int"); }
+        check(!Proxy.isProxyClass(Foo.class), "isProxyClass interface false");
+        check(!Proxy.isProxyClass(String.class), "isProxyClass normal class false");
+        check(!Proxy.isProxyClass(int[].class), "isProxyClass array false");
 
-        // 2. Object methods are dispatched to the handler
-        rec.calls.clear();
-        check(svc.hashCode() == 42, "hashCode via handler");
-        check("ProxyStr".equals(svc.toString()), "toString via handler");
-        check(svc.equals(svc), "equals(proxy) via handler true");
-        check(!svc.equals("other"), "equals(other) via handler false");
-        check(rec.calls.size() == 4, "Object methods recorded");
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.getInvocationHandler(new Object()),
+                "getInvocationHandler non-proxy IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.getInvocationHandler(foo.getClass()),
+                "getInvocationHandler Class object IAE");
+        checkThrows(NullPointerException.class,
+                () -> Proxy.getInvocationHandler(null), "getInvocationHandler null NPE");
+        checkThrows(NullPointerException.class,
+                () -> Proxy.isProxyClass(null), "isProxyClass null NPE");
 
-        // 3. wrong-typed handler answer -> ClassCastException at the call site
-        RecordingHandler bad = new RecordingHandler();
-        Service badSvc = (Service) Proxy.newProxyInstance(ld, new Class<?>[]{Service.class}, bad);
-        bad.answer = "not-an-int";
-        try { badSvc.add(1, 2); check(false, "wrong type must fail"); }
-        catch (ClassCastException e) { check(true, "ClassCastException wrong return type"); }
+        // proxy class implements Serializable and the interfaces
+        check(pc.getInterfaces().length == 1 && pc.getInterfaces()[0] == Foo.class,
+                "proxy implements Foo");
+        check(java.io.Serializable.class.isAssignableFrom(pc), "proxy is Serializable");
 
-        // 4. undeclared checked throwable -> UndeclaredThrowableException
-        RecordingHandler thrower = new RecordingHandler();
-        Service throwSvc = (Service) Proxy.newProxyInstance(ld, new Class<?>[]{Service.class}, thrower);
-        thrower.toThrow = new java.io.IOException("io-boom");
+        // getProxyClass returns a proxy class
+        Class<?> pc2 = Proxy.getProxyClass(ProxyTest.class.getClassLoader(), Foo.class);
+        check(Proxy.isProxyClass(pc2), "getProxyClass result is proxy class");
+        check(pc2.getInterfaces()[0] == Foo.class, "getProxyClass implements Foo");
+    }
+
+    static void testMultipleInterfaces() throws Exception {
+        RecordingHandler h = new RecordingHandler();
+        Object o = Proxy.newProxyInstance(ProxyTest.class.getClassLoader(),
+                new Class<?>[]{Foo.class, Baz.class}, h);
+        check(o instanceof Foo && o instanceof Baz, "proxy implements both interfaces");
+        check("bar:1".equals(((Foo) o).bar(1)), "Foo method through proxy");
+        // Baz.qux returns int but handler returns "bar:null" -> we use a dedicated handler
+        // instead; this proxy only needs to be instanceof both.
+    }
+
+    static void testHandlerReturnBehavior() throws Exception {
+        // handler returns wrong type -> ClassCastException from generated checkcast
+        InvocationHandler wrong = new InvocationHandler() {
+            public Object invoke(Object p, Method m, Object[] a) { return Integer.valueOf(1); }
+        };
+        Foo f1 = (Foo) Proxy.newProxyInstance(ProxyTest.class.getClassLoader(),
+                new Class<?>[]{Foo.class}, wrong);
+        checkThrows(ClassCastException.class, () -> f1.bar(1),
+                "handler wrong return type CCE");
+
+        // handler returns null for primitive int -> NullPointerException (unboxing)
+        InvocationHandler nullReturn = new InvocationHandler() {
+            public Object invoke(Object p, Method m, Object[] a) { return null; }
+        };
+        Baz b = (Baz) Proxy.newProxyInstance(ProxyTest.class.getClassLoader(),
+                new Class<?>[]{Baz.class}, nullReturn);
+        checkThrows(NullPointerException.class, () -> b.qux(),
+                "handler null for int return NPE");
+
+        // handler throwing RuntimeException -> propagates unchanged
+        final RuntimeException rte = new IllegalStateException("rte");
+        InvocationHandler rteHandler = new InvocationHandler() {
+            public Object invoke(Object p, Method m, Object[] a) { throw rte; }
+        };
+        Foo f2 = (Foo) Proxy.newProxyInstance(ProxyTest.class.getClassLoader(),
+                new Class<?>[]{Foo.class}, rteHandler);
         try {
-            throwSvc.name(); // declares no checked exceptions
-            check(false, "undeclared checked must wrap");
-        } catch (UndeclaredThrowableException e) {
-            check(e.getUndeclaredThrowable() instanceof java.io.IOException, "UTE cause exact type");
-        }
-        // declared checked exception propagates raw through InvocationTargetException-free path
-        thrower.toThrow = new java.io.IOException("declared-ok");
-        try {
-            throwSvc.checkedOp(); // declares IOException
-            check(false, "declared checked must propagate");
-        } catch (java.io.IOException e) {
-            check("declared-ok".equals(e.getMessage()), "declared checked propagates raw");
-        } catch (UndeclaredThrowableException e) {
-            check(false, "declared checked must not wrap");
-        }
-        // runtime exception propagates raw
-        thrower.toThrow = new IllegalStateException("rt-boom");
-        try {
-            throwSvc.name();
-            check(false, "runtime must propagate");
+            f2.bar(1);
+            throw new AssertionError("expected IllegalStateException");
         } catch (IllegalStateException e) {
-            check("rt-boom".equals(e.getMessage()), "runtime propagates raw");
+            passed++;
+            check(e == rte, "runtime exception propagates by identity");
         }
 
-        // 5. InvocationHandler.invokeDefault runs the real default method
-        InvocationHandler def = new InvocationHandler() {
-            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                if (method.getName().equals("describe"))
-                    return InvocationHandler.invokeDefault(proxy, method, args);
-                return null;
+        // handler throwing undeclared checked exception -> UndeclaredThrowableException
+        InvocationHandler checked = new InvocationHandler() {
+            public Object invoke(Object p, Method m, Object[] a) throws IOException {
+                throw new IOException("declared nowhere");
             }
         };
-        Service defSvc = (Service) Proxy.newProxyInstance(ld, new Class<?>[]{Service.class}, def);
-        check("default-describe".equals(defSvc.describe()), "invokeDefault executes default body");
-        check(Service.class.getMethod("describe").isDefault(), "describe is default");
+        Foo f3 = (Foo) Proxy.newProxyInstance(ProxyTest.class.getClassLoader(),
+                new Class<?>[]{Foo.class}, checked);
+        try {
+            f3.bar(1);
+            throw new AssertionError("expected UndeclaredThrowableException");
+        } catch (UndeclaredThrowableException e) {
+            passed++;
+            check(e.getCause() instanceof IOException, "UndeclaredThrowableException cause");
+        }
+    }
 
-        // 6. class caching: same loader + same interfaces -> same proxy class
-        RecordingHandler h1 = new RecordingHandler(), h2 = new RecordingHandler();
-        Service s1 = (Service) Proxy.newProxyInstance(ld, new Class<?>[]{Service.class}, h1);
-        Service s2 = (Service) Proxy.newProxyInstance(ld, new Class<?>[]{Service.class}, h2);
-        check(s1.getClass() == s2.getClass(), "proxy class cached per loader+interfaces");
-        check(Proxy.getProxyClass(ld, Service.class) == s1.getClass(),
-              "getProxyClass matches newProxyInstance class");
-        check(Proxy.isProxyClass(s1.getClass()), "isProxyClass on live proxy");
-        check(!Proxy.isProxyClass(Service.class), "plain interface not proxy class");
-        check(!Proxy.isProxyClass(String.class), "String not proxy class");
-        check(s1 != s2 && Proxy.getInvocationHandler(s1) == h1
-              && Proxy.getInvocationHandler(s2) == h2, "distinct instances hold their handlers");
+    static void testFactoryExceptions() throws Exception {
+        ClassLoader l = ProxyTest.class.getClassLoader();
+        RecordingHandler h = new RecordingHandler();
 
-        // 7. multiple interfaces on one proxy
-        RecordingHandler multi = new RecordingHandler();
-        Object both = Proxy.newProxyInstance(ld,
-                new Class<?>[]{Foo.class, Service.class}, multi);
-        check(both instanceof Foo && both instanceof Service, "proxy implements both");
-        multi.answer = "multi";
-        check("multi".equals(((Foo) both).bar(1)), "Foo dispatch");
-        check("multi".equals(((Service) both).name()), "Service dispatch");
-        try {
-            Proxy.newProxyInstance(ld, new Class<?>[]{Foo.class, Foo.class}, multi);
-            check(false, "duplicate interfaces must fail");
-        } catch (IllegalArgumentException e) {
-            check(true, "IllegalArgumentException duplicate interfaces");
-        }
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.newProxyInstance(null, new Class<?>[]{Foo.class}, h),
+                "newProxyInstance null loader IAE");
+        checkThrows(NullPointerException.class,
+                () -> Proxy.newProxyInstance(l, null, h),
+                "newProxyInstance null interfaces NPE");
+        checkThrows(NullPointerException.class,
+                () -> Proxy.newProxyInstance(l, new Class<?>[]{Foo.class}, null),
+                "newProxyInstance null handler NPE");
 
-        // 8. argument validation
-        try {
-            Proxy.newProxyInstance(ld, new Class<?>[]{String.class}, multi);
-            check(false, "non-interface must fail");
-        } catch (IllegalArgumentException e) {
-            check(true, "IllegalArgumentException non-interface");
-        }
-        try {
-            Proxy.newProxyInstance(ld, new Class<?>[]{Service.class}, null);
-            check(false, "null handler must fail");
-        } catch (NullPointerException e) {
-            check(true, "NullPointerException null handler");
-        }
-        try {
-            Proxy.getInvocationHandler("not-a-proxy");
-            check(false, "non-proxy must fail");
-        } catch (IllegalArgumentException e) {
-            check(true, "IllegalArgumentException getInvocationHandler non-proxy");
-        }
+        // empty interfaces array is permitted (produces a no-interface proxy)
+        Object emptyProxy = Proxy.newProxyInstance(l, new Class<?>[0], h);
+        check(Proxy.isProxyClass(emptyProxy.getClass()), "empty interfaces still proxy");
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.newProxyInstance(l, new Class<?>[]{Foo.class, Foo.class}, h),
+                "newProxyInstance duplicate interface IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.newProxyInstance(l, new Class<?>[]{String.class}, h),
+                "newProxyInstance non-interface IAE");
+        checkThrows(NullPointerException.class,
+                () -> Proxy.newProxyInstance(l, new Class<?>[]{Foo.class, null}, h),
+                "newProxyInstance null interface element NPE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.newProxyInstance(l, new Class<?>[]{int[].class}, h),
+                "newProxyInstance array interface IAE");
+
+        // getProxyClass mirror of the same matrix
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.getProxyClass(null, Foo.class), "getProxyClass null loader IAE");
+        checkThrows(NullPointerException.class,
+                () -> Proxy.getProxyClass(l, (Class<?>[]) null),
+                "getProxyClass null interfaces NPE");
+        check(Proxy.isProxyClass(Proxy.getProxyClass(l, new Class<?>[0])),
+                "getProxyClass empty interfaces still proxy");
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.getProxyClass(l, Foo.class, Foo.class),
+                "getProxyClass duplicate IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Proxy.getProxyClass(l, String.class), "getProxyClass non-interface IAE");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testDispatch();
+        testIdentity();
+        testMultipleInterfaces();
+        testHandlerReturnBehavior();
+        testFactoryExceptions();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

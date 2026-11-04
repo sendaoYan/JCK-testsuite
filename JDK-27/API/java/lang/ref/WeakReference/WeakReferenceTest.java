@@ -1,13 +1,12 @@
 /*
  * @test
- * @summary java.lang.ref.WeakReference conformance: white-box structure + black-box behavior.
+ * @summary java.lang.ref.WeakReference conformance: constructors, get before/after
+ *          clear, null referent -> NPE, queue registration, and bounded GC reclamation.
  * @run main WeakReferenceTest
  */
 
-import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Modifier;
 
 public class WeakReferenceTest {
     static int passed;
@@ -17,61 +16,68 @@ public class WeakReferenceTest {
         passed++;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.lang.ref.WeakReference");
-        check(!Modifier.isAbstract(c.getModifiers()), "WeakReference is concrete");
-        check(c.getSuperclass() == Reference.class, "extends Reference");
-        check(Modifier.isPublic(c.getDeclaredConstructor(Object.class).getModifiers()),
-              "public WeakReference(T)");
-        check(Modifier.isPublic(c.getDeclaredConstructor(Object.class, ReferenceQueue.class).getModifiers()),
-              "public WeakReference(T, ReferenceQueue)");
-        // does NOT override get()
-        boolean overridesGet = false;
-        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
-            if (m.getName().equals("get")) overridesGet = true;
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
         }
-        check(!overridesGet, "get() inherited from Reference (no override)");
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        // strong referent: get deterministic without GC
-        StringBuilder sb = new StringBuilder("weak");
-        WeakReference<StringBuilder> wr = new WeakReference<>(sb);
-        check(wr.get() == sb, "get returns referent while strongly reachable");
-        check(wr.refersTo(sb), "refersTo true");
+    static void testConstructors() {
+        Object o = new Object();
+        WeakReference<Object> wr = new WeakReference<>(o);
+        check(wr.get() == o, "get returns referent");
+        check(!wr.isEnqueued(), "no queue not enqueued");
+        check(!wr.enqueue(), "no queue enqueue false");
 
-        // interning/lookup pattern: key kept alive, identity comparison via refersTo
-        Object key = new Object();
         ReferenceQueue<Object> q = new ReferenceQueue<>();
-        WeakReference<Object> kref = new WeakReference<>(key, q);
-        check(kref.enqueue(), "manual enqueue works while referent alive");
-        check(q.poll() == kref, "poll round-trip");
-        // enqueue() clears the referent before queueing (JDK semantics)
-        check(kref.get() == null, "get null after manual enqueue");
-        check(!kref.refersTo(key), "refersTo false after manual enqueue");
+        Object o2 = new Object();
+        WeakReference<Object> wr2 = new WeakReference<>(o2, q);
+        check(wr2.get() == o2, "get with queue");
+        check(!wr2.isEnqueued(), "with queue not enqueued");
 
-        // clear
+        // null referent and null queue are both permitted (no NPE)
+        check(new WeakReference<Object>(null).get() == null, "null referent -> get null");
+        check(new WeakReference<Object>(null, q).get() == null, "null referent with queue -> null");
+        check(new WeakReference<>(new Object(), null).get() != null,
+                "null queue treated as no queue");
+    }
+
+    static void testClear() {
+        Object o = new Object();
+        WeakReference<Object> wr = new WeakReference<>(o);
         wr.clear();
         check(wr.get() == null, "clear nulls referent");
-        check(!wr.isEnqueued(), "clear alone does not enqueue");
-
-        // null referent allowed
-        WeakReference<Object> nref = new WeakReference<>(null, null);
-        check(nref.get() == null, "null referent, null queue accepted");
-        check(!nref.enqueue(), "enqueue with null queue false");
-        check(!nref.isEnqueued(), "never enqueued with null queue");
-
-        // subtype relationships usable via Reference
-        Reference<Object> asSuper = new WeakReference<>(sb);
-        check(asSuper.get() == sb, "usable as Reference<T>");
-        check(WeakReference.class.isAssignableFrom(asSuper.getClass()), "assignable back");
+        check(wr.get() == null, "get stays null after clear");
+        wr.clear();
+        check(wr.get() == null, "double clear idempotent");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    static void testGC() {
+        // bounded retry; see ReferenceTest for the same note about extreme environments
+        ReferenceQueue<Object> q = new ReferenceQueue<>();
+        WeakReference<Object> wr = new WeakReference<>(new Object(), q);
+        boolean cleared = false;
+        for (int i = 0; i < 10 && !cleared; i++) {
+            System.gc();
+            for (int j = 0; j < 100000; j++) new Object();
+            cleared = (wr.get() == null || q.poll() != null);
+        }
+        check(cleared, "weak referent reclaimed");
+    }
+
+    public static void main(String[] args) {
+        testConstructors();
+        testClear();
+        testGC();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

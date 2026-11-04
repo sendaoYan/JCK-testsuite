@@ -1,31 +1,28 @@
-# java.lang.ref.WeakReference — 设计方案
+# java.lang.ref.WeakReference 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。两个构造器（无队列/有队列）、get 保留引用、clear 幂等、null 引用/队列语义、有界 GC 回收。
 
 ## 1. API 功能
-弱引用：不阻止 GC 回收（只要无强路径）：
-- 构造：`WeakReference(T)`、`WeakReference(T, ReferenceQueue<? super T>)`（queue 可为 null，表示永不入队）
-- 查询：继承 `get()/refersTo(T)/isEnqueued()`；操作：`clear()/enqueue()`
 
-## 2. Java 用户如何使用
-规范映射（WeakHashMap 内部）与规范化缓存：
-```java
-ReferenceQueue<K> queue = new ReferenceQueue<>();
-WeakReference<K> keyRef = new WeakReference<>(key, queue);
-if (keyRef.get() == key) { /* key 仍被外部持有 */ }
-keyRef.enqueue();  // 显式入队；q.poll() 取回
-```
+- `WeakReference(T)`、`WeakReference(T, ReferenceQueue)`；继承 get/clear/enqueue/isEnqueued。
 
-## 3. 开源代码实际用法调研
-- JDK `src/java.base/share/classes/java/util/WeakHashMap.java`：Entry extends WeakReference，配合 ReferenceQueue 在 resize/get 时 expunge 失效条目。
-- JDK `test/jdk/java/lang/ref/Basic.java`：WeakReference+queue 的 enqueue/poll 基础行为。
-- Guava `MapMaker().weakKeys()` 底层（`com.google.common.collect/LocalCache`）同样以 WeakReference 包装 key。
-- Netty `Recycler`（`common/src/main/java/io/netty/util/concurrent/...`）以 WeakReference 持有线程局部对象。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-白盒：具体类、`extends Reference`、两个 public 构造器、不覆写 `get()`。
-黑盒（强可达 + 显式 enqueue，不依赖 GC）：
-- get/refersTo 返回同一对象；
-- 模拟 WeakHashMap 模式：带 queue 构造→手动 enqueue→poll 同一引用；`enqueue()` 实现先清 referent（get 变 null、refersTo false）；
-- clear 后 get null 且不入队；
-- null 引用对象 + null 队列组合合法，enqueue 恒 false；
-- 以 `Reference<T>` 视角使用与类型回转。
-对应 `WeakReferenceTest.java` 的 `testBlackBox()`。
+- 弱引用在 GC 时被回收（只要无强引用）；用队列监听回收事件。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/ref/WeakReference.html）。
+- JCK runtime-8b `tests/api/java_lang/ref/WeakReference/`。
+
+## 4. 测试用例设计（映射到 WeakReferenceTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 构造器 + null 引用/队列 | testConstructors |
+| P0 | clear 幂等 | testClear |
+| P1 | 有界 GC 回收 | testGC |
+
+## 易错规范细节（已锁入断言）
+
+- `new WeakReference<>(null)`、`new WeakReference<>(null,q)`、`new WeakReference<>(o,null)` 均不抛 NPE（null 队列映射为 ReferenceQueue.NULL）。

@@ -1,30 +1,38 @@
-# java.lang.reflect.Proxy — 测试设计（JDK-27）
+# java.lang.reflect.Proxy 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。newProxyInstance 分发每个方法（含 Object 的 hashCode/equals/toString）到 handler
+> 且携带 (proxy,method,args)、isProxyClass 判断、getInvocationHandler 身份 + 非代理→IAE、handler 返回错类型→CCE、
+> 基本类型返回 null→NPE、运行时异常原样传播、未声明受检异常→UndeclaredThrowableException、工厂异常矩阵。
 
 ## 1. API 功能
-`Proxy` 运行时生成实现一组接口的代理类：
-- 创建：`newProxyInstance(ClassLoader, Class<?>[], InvocationHandler)`、`getProxyClass(ClassLoader, Class<?>...)`（等价于前者触发的类生成）、protected 构造器由生成类使用。
-- 查询：`isProxyClass(Class<?>)`、`getInvocationHandler(Object)`。
-- 行为约定：所有接口方法（含 `java.lang.Object` 的 `hashCode/toString/equals`）分派到 handler；default 方法可经 `InvocationHandler.invokeDefault` 执行真实现；未声明的受检异常包装为 `UndeclaredThrowableException`；返回值与接口返回类型不符在调用点 `ClassCastException`/拆箱 `NullPointerException`。
-- 校验：非接口/重复接口 → `IllegalArgumentException`；null handler → `NullPointerException`。
 
-## 2. Java 用户如何使用
-定义业务接口 + `InvocationHandler`（记录/鉴权/懒加载/RPC 转发）→ `newProxyInstance` → 以接口类型调用 → handler 内检查 `Method`/args 决定行为；需要 default 逻辑时 `invokeDefault`。AOP（Spring JDK 代理）、MyBatis Mapper、RMI/Dubbo 存根皆此模型。
+- `newProxyInstance(loader, interfaces[], handler)`、`getProxyClass`、`isProxyClass`、`getInvocationHandler`。
+- 生成的代理类实现接口 + Serializable，所有方法委托给 InvocationHandler。
 
-## 3. 开源代码实际用法调研
-- JDK 自测 `~/git/jdk25u-dev/test/jdk/java/lang/reflect/Proxy/Basic1.java`：`newProxyInstance` + 分派返回值断言。
-- JDK 自测 `Proxy/DefaultMethods.java`：default 方法经 `invokeDefault` 的行为（JDK-16+ API）。
-- JDK 自测 `Proxy/Boxing.java`/`TestVarArgs.java`：拆装箱与 varargs 分派的边界。
-- Spring `JdkDynamicAopProxy`（spring-aop）：handler 记录并转发调用（对应场景 1/2）；MyBatis `MapperProxy`：接口方法 → SQL 命令分派（场景 1）。
-- JDK 源码 `~/git/jdk25u-dev/src/java.base/share/classes/java/lang/reflect/Proxy.java`：异常包装规则权威实现。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-黑盒场景（`ProxyTest.testBlackBox`，`RecordingHandler` 记录方法名+参数个数并按罐头值应答）：
-1. 分派链路：答案回流、装箱 int 拆箱、调用记录（无参方法 args 为 null、有参为长度）、null 返回拆 int → `NullPointerException`。
-2. `Object` 方法分派：hashCode=42、toString="ProxyStr"、equals 自反真/他值假 + 调用记录数。
-3. 返回类型错配：int 方法返回 String → 调用点 `ClassCastException`。
-4. 异常路径：未声明受检 → `UndeclaredThrowableException`（cause 精确 IOException）；已声明受检原样传播；运行时异常原样传播。
-5. `InvocationHandler.invokeDefault`：handler 内执行真 default 体返回 "default-describe"。
-6. 类缓存：同 loader+接口同代理类（与 `getProxyClass` 一致）、`isProxyClass` 正反例、实例各自持有 handler。
-7. 多接口单代理 + 双接口均分派；重复接口 → `IllegalArgumentException`。
-8. 参数校验：非接口 IAE、null handler NPE、`getInvocationHandler` 非代理 IAE。
-白盒保留原有创建/查询断言 + Serializable/结构检查。产出：`ProxyTest.java`（37 断言通过）。
+- 动态实现接口：`(Foo) Proxy.newProxyInstance(loader, new Class[]{Foo.class}, h)`。
+- `Proxy.isProxyClass(c)` 判断某 Class 是否代理类；`getInvocationHandler(proxy)` 取 handler。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/reflect/Proxy.html）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/reflect/Proxy.java`。
+- JCK runtime-8b `tests/api/java_lang/reflect/Proxy/`。
+
+## 4. 测试用例设计（映射到 ProxyTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 分发（含 Object 三方法）| testDispatch |
+| P0 | isProxyClass/getInvocationHandler 身份 | testIdentity |
+| P0 | 多接口代理 | testMultipleInterfaces |
+| P0 | handler 返回行为（CCE/NPE/运行时异常/UndeclaredThrowableException）| testHandlerReturnBehavior |
+| P0 | 工厂异常矩阵 | testFactoryExceptions |
+
+## 易错规范细节（已锁入断言）
+
+- `newProxyInstance(null, ifaces, h)` → IAE（非 NPE）；null interfaces/handler → NPE。
+- 空接口数组合法（生成无接口代理）；重复接口/非接口/数组接口 → IAE；null 接口元素 → NPE。
+- handler 返回错类型 → ClassCastException；基本类型返回 null → NPE。
+- handler 抛未声明受检异常 → UndeclaredThrowableException（cause 保留）。

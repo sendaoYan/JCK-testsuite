@@ -1,25 +1,42 @@
-# java.lang.reflect.Modifier — 测试设计（JDK-27）
+# java.lang.reflect.Modifier 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。12 个修饰符常量位值、每个 is* 谓词对自身/无关/0/组合位、toString(int)
+> 空/单/组合/全掩码精确格式、六个 *Modifiers() 掩码精确位、以及 JDK-8 特有的 public 无参构造器。
 
 ## 1. API 功能
-`Modifier` 工具类（final、私有构造、全静态）：
-- 修饰符位常量：`PUBLIC/PRIVATE/PROTECTED/STATIC/FINAL/SYNCHRONIZED/VOLATILE/TRANSIENT/NATIVE/INTERFACE/ABSTRACT/STRICT`（及包内 BRIDGE/VARARGS/SYNTHETIC/ANNOTATION/ENUM/MANDATED）。
-- 判定：`isPublic/isPrivate/isProtected/isStatic/isFinal/isSynchronized/isVolatile/isTransient/isNative/isInterface/isAbstract/isStrict(int)`。
-- 展示：`toString(int)` 按规范次序输出（public protected private abstract static final transient volatile synchronized native strictfp interface）。
-- 允许掩码：`classModifiers/interfaceModifiers/constructorModifiers/methodModifiers/fieldModifiers/parameterModifiers`。
 
-## 2. Java 用户如何使用
-拿 `Field/Method/Constructor/Class.getModifiers()` 的 int → `Modifier.isXxx` 组合判定或 `toString` 展示；允许掩码用于校验某类成员的修饰符合法性（IDE/字节码工具/校验器）。
+- 12 个 public static final int 常量：PUBLIC..STRICT（0x1..0x800）。
+- 12 个 is* 静态谓词 + `toString(int)` + 6 个 `*Modifiers()` 掩码工厂。
+- JDK-8：`Modifier` 是普通类，带 public 无参构造器。
 
-## 3. 开源代码实际用法调研
-- JDK 自测 `~/git/jdk25u-dev/test/jdk/java/lang/reflect/Modifier/`（含 toString 次序与掩码成员断言）。
-- JDK 源码 `~/git/jdk25u-dev/src/java.base/share/classes/java/lang/reflect/Modifier.java`：canonical 输出次序与掩码常量的权威定义。
-- Commons Lang `Modifier.isPublic` 系列包装（`MemberUtils`）；Spring `ReflectionUtils.isPublic/isPrivate` 同构（真实反射对象 + 判定组合，对应场景 1/2）。
-- 注解处理器/字节码库（ASM `ACC_*` 对照）广泛用位常量对照掩码（场景 4）。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-黑盒场景（`ModifierTest.testBlackBox`，固定目标类 `Targets/AbstractTarget`）：
-1. 真实成员精确组合：`private static final`（toString 精确串）、`public transient`、`protected volatile`、`public synchronized`、`public native`。
-2. 类/接口级：嵌套 abstract 类 "abstract static"、嵌套 public 接口 "public abstract static interface"、注解型接口标志。
-3. `toString` 规范次序与退化：`public static final`、`abstract interface`、空串、单标志、`protected transient`。
-4. 允许掩码逐成员判定：classModifiers/interfaceModifiers/methodModifiers/fieldModifiers/constructorModifiers/parameterModifiers 的包含与排除集合（以 JDK-27 实测为准：interfaceModifiers 不含 final；parameterModifiers 仅 final）。
-白盒保留位常量值与 isXxx 判定。产出：`ModifierTest.java`（52 断言通过）。
+- `Modifier.isPublic(m.getModifiers())` 判断成员可见性。
+- `Modifier.toString(mods)` 生成可读修饰符串（无固定顺序，仅按固定位序）。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/reflect/Modifier.html）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/reflect/Modifier.java`（掩码常量值经源码核对）。
+- JCK runtime-8b `tests/api/java_lang/reflect/Modifier/`。
+
+## 4. 测试用例设计（映射到 ModifierTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 12 常量位值 + 幂次方 + OR=0xfff | testConstants |
+| P0 | is* 谓词自身/0/无关位/组合位/未知位 | testPredicates |
+| P0 | toString 空/单/组合/全掩码/未知位忽略 | testToString |
+| P0 | 6 个 *Modifiers() 精确位（含 interface 无 FINAL/INTERFACE）| testMaskHelpers |
+| P1 | public 无参构造器（JDK-8 only）| testConstructor |
+
+## 易错规范细节（已锁入断言）
+
+- `classModifiers()==0xc1f`（PUBLIC|PRIVATE|PROTECTED|STATIC|FINAL|ABSTRACT|STRICT，无 INTERFACE）。
+- `interfaceModifiers()==0xc0f`（无 FINAL、无 INTERFACE）——已核对源码。
+- `parameterModifiers()==FINAL`；`toString(0x1000|PUBLIC)=="public"`（未知位忽略）。
+- 每个 is* 谓词是纯单比特测试，无关位不影响结果。
+
+## JDK-27 差异（已锁入断言）
+
+- JDK-27 `Modifier` 为 `final` 类且无 public 构造器（JDK-8 有 public 无参构造器）；由 `testFinalClass` 覆盖。

@@ -1,14 +1,23 @@
 /*
  * @test
- * @summary java.lang.invoke.MethodType conformance: white-box + black-box behavior.
+ * @summary java.lang.invoke.MethodType conformance: full contract coverage.
+ *          all 6 methodType factory overloads (rtype only / rtype+ptype0 / varargs /
+ *          array / List / rtype+MethodType), genericMethodType variants, factory
+ *          validation (null rtype/ptype/element -> NPE, void parameter -> IAE,
+ *          negative generic arity -> IAE), structural mutators (changeParameterType/
+ *          insert/append/drop/changeReturnType incl. List forms and index edges),
+ *          hasPrimitives/hasWrappers, erase/generic/wrap/unwrap round-trips,
+ *          accessors (parameterType/parameterCount/returnType/parameterList/
+ *          parameterArray), equals/hashCode/toString exact forms, and
+ *          fromMethodDescriptorString/toMethodDescriptorString round-trip with
+ *          malformed descriptor -> IAE / null -> NPE.
  * @run main MethodTypeTest
  */
 
 import java.lang.invoke.MethodType;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 public class MethodTypeTest {
     static int passed;
@@ -18,131 +27,322 @@ public class MethodTypeTest {
         passed++;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.lang.invoke.MethodType");
-        check(Modifier.isFinal(c.getModifiers()), "final class");
-        check(Modifier.isPublic(c.getModifiers()), "public class");
-        check(java.io.Serializable.class.isAssignableFrom(c), "Serializable");
-        check(Class.forName("java.lang.constant.Constable").isAssignableFrom(c), "Constable");
-        check(Class.forName("java.lang.invoke.TypeDescriptor$OfMethod").isAssignableFrom(c),
-              "TypeDescriptor.OfMethod");
-        int pubCtors = 0;
-        for (java.lang.reflect.Constructor<?> ct : c.getDeclaredConstructors()) {
-            if (Modifier.isPublic(ct.getModifiers())) pubCtors++;
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
         }
-        check(pubCtors == 0, "no public constructor (factory only)");
-        String[] names = {"methodType", "genericMethodType", "fromMethodDescriptorString",
-                "changeParameterType", "insertParameterTypes", "appendParameterTypes",
-                "dropParameterTypes", "changeReturnType", "hasPrimitives", "hasWrappers",
-                "erase", "generic", "wrap", "unwrap", "parameterType", "parameterCount",
-                "returnType", "parameterList", "lastParameterType", "parameterArray",
-                "toMethodDescriptorString", "descriptorString", "describeConstable",
-                "equals", "hashCode", "toString"};
-        for (String n : names) {
-            boolean found = false;
-            for (Method mm : c.getDeclaredMethods()) if (mm.getName().equals(n)) found = true;
-            check(found, "declares " + n);
-        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        // factory families agree; MethodType is interned
-        MethodType a = MethodType.methodType(String.class, int.class, boolean.class);
-        MethodType b = MethodType.methodType(String.class,
-                List.of(int.class, boolean.class));
-        MethodType d = MethodType.methodType(String.class,
-                new Class<?>[]{int.class, boolean.class});
-        check(a.equals(b) && a.equals(d), "factories agree");
-        check(a == MethodType.methodType(String.class, int.class, boolean.class),
-              "interned instances");
-        check(MethodType.methodType(int.class, String.class)
-                      == MethodType.methodType(int.class).appendParameterTypes(String.class),
-              "appendParameterTypes equals factory");
+    static void testFactories() {
+        MethodType mt0 = MethodType.methodType(int.class);
+        check(mt0.returnType() == int.class && mt0.parameterCount() == 0,
+                "methodType(rtype)");
 
-        // accessors
-        check(a.returnType() == String.class, "returnType");
-        check(a.parameterCount() == 2, "parameterCount");
-        check(a.parameterType(0) == int.class, "parameterType(0)");
-        check(a.parameterList().equals(List.of(int.class, boolean.class)), "parameterList");
-        check(a.lastParameterType() == boolean.class, "lastParameterType");
-        check(a.parameterArray().length == 2, "parameterArray");
-        check(a.toString().equals("(int,boolean)String"), "toString format");
+        MethodType mt1 = MethodType.methodType(int.class, String.class);
+        check(mt1.parameterCount() == 1 && mt1.parameterType(0) == String.class,
+                "methodType(rtype, ptype0)");
 
-        // one-param sugar: (Class, MethodType) copies the tail
-        check(MethodType.methodType(void.class, a).toMethodDescriptorString()
-                      .equals("(IZ)Ljava/lang/String;".replace("Ljava/lang/String;", "V")),
-              "methodType(rtype, MethodType) reuses parameter list");
-        check(MethodType.methodType(void.class).parameterCount() == 0, "void type no params");
+        MethodType mtV = MethodType.methodType(void.class, int.class, long.class);
+        check(mtV.returnType() == void.class && mtV.parameterCount() == 2,
+                "methodType(void, int, long)");
 
-        // genericMethodType
-        MethodType g2 = MethodType.genericMethodType(2);
-        check(g2.parameterCount() == 2 && g2.parameterType(0) == Object.class
-              && g2.returnType() == Object.class, "genericMethodType(2)");
-        MethodType gv = MethodType.genericMethodType(1, true);
-        check(gv.parameterCount() == 2 && gv.lastParameterType() == Object[].class,
-              "genericMethodType(1, true) appends Object[]");
+        MethodType mtVar = MethodType.methodType(int.class, String.class, int.class, boolean.class);
+        check(mtVar.parameterCount() == 3, "methodType varargs");
 
-        // transformations
-        MethodType v = MethodType.methodType(void.class, String.class, int.class);
-        check(v.changeReturnType(int.class).returnType() == int.class, "changeReturnType");
-        check(v.changeParameterType(0, Object.class).parameterType(0) == Object.class,
-              "changeParameterType");
-        check(v.dropParameterTypes(0, 1).parameterCount() == 1, "dropParameterTypes");
-        check(v.insertParameterTypes(0, long.class).parameterType(0) == long.class,
-              "insertParameterTypes");
-        check(v.toMethodDescriptorString().equals("(Ljava/lang/String;I)V"),
-              "descriptor for (String,int)void");
+        MethodType mtArr = MethodType.methodType(int.class, new Class<?>[]{String.class, int.class});
+        check(mtArr.parameterCount() == 2 && mtArr.parameterType(0) == String.class
+                && mtArr.parameterType(1) == int.class, "methodType(array)");
 
-        // primitive/wrapper classification and conversions
-        check(v.hasPrimitives(), "hasPrimitives (void/int)");
-        check(!MethodType.methodType(String.class, String.class).hasPrimitives(),
-              "no primitives");
-        check(MethodType.methodType(Integer.class, int.class).hasWrappers(), "hasWrappers");
-        check(!MethodType.methodType(int.class).hasWrappers(), "no wrappers");
-        MethodType refy = MethodType.methodType(String.class, String.class, int.class);
-        check(refy.erase().toMethodDescriptorString().equals("(Ljava/lang/Object;I)Ljava/lang/Object;"),
-              "erase: references -> Object, primitives kept");
-        check(refy.generic().toMethodDescriptorString()
-                      .equals("(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
-              "generic: everything Object");
-        check(MethodType.methodType(Integer.class, int.class).wrap()
-                      .toMethodDescriptorString().equals("(Ljava/lang/Integer;)Ljava/lang/Integer;"),
-              "wrap");
-        check(MethodType.methodType(int.class, Integer.class).unwrap()
-                      .toMethodDescriptorString().equals("(I)I"),
-              "unwrap");
-        check(MethodType.methodType(int.class, Integer.class).wrap().unwrap()
-                      == MethodType.methodType(int.class, int.class),
-              "wrap then unwrap");
+        MethodType mtList = MethodType.methodType(int.class, Arrays.asList(String.class, int.class));
+        check(mtList.parameterCount() == 2 && mtList.parameterType(0) == String.class,
+                "methodType(List)");
 
-        // descriptor round trip through fromMethodDescriptorString
-        String desc = "(IZLjava/lang/String;)V";
-        check(MethodType.fromMethodDescriptorString(desc, null).toMethodDescriptorString()
-                      .equals(desc), "descriptor round trip");
+        MethodType mtMT = MethodType.methodType(String.class, MethodType.methodType(int.class, long.class));
+        check(mtMT.returnType() == String.class && mtMT.parameterCount() == 1
+                && mtMT.parameterType(0) == long.class, "methodType(rtype, MethodType)");
 
-        // describeConstable produces a resolvable nominal form
-        Optional<java.lang.constant.MethodTypeDesc> nd = a.describeConstable();
-        check(nd.isPresent(), "describeConstable present");
-        check(nd.get().resolveConstantDesc(java.lang.invoke.MethodHandles.lookup()) == a,
-              "nominal form resolves back");
-
-        // equals/hashCode are value-based
-        check(a.hashCode() == b.hashCode(), "hashCode equal for equal types");
-        check(!a.equals(v), "!equals different shape");
-        check(!a.equals(null) && !a.equals("(int,boolean)String"), "!equals unrelated");
-
-        // invalid input
-        try { MethodType.methodType(void.class, (List<Class<?>>) null); check(false, "null list rejected"); }
-        catch (NullPointerException expected) { check(true, "null list NPE"); }
-        try { a.parameterType(99); check(false, "index rejected"); }
-        catch (IndexOutOfBoundsException expected) { check(true, "parameterType OOB"); }
+        // equality across array/List factory forms
+        check(mtArr.equals(mtList), "array/List factories agree");
+        check(mtArr.equals(MethodType.methodType(int.class, String.class, int.class)),
+                "varargs factory agrees for same signature");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    static void testGenericMethodType() {
+        check(MethodType.genericMethodType(0).parameterCount() == 0
+                && MethodType.genericMethodType(0).returnType() == Object.class,
+                "genericMethodType(0)");
+        check(MethodType.genericMethodType(3).parameterCount() == 3,
+                "genericMethodType(3) count");
+        for (int i = 0; i < 3; i++) {
+            check(MethodType.genericMethodType(3).parameterType(i) == Object.class,
+                    "genericMethodType(3) Object param " + i);
+        }
+        check(MethodType.genericMethodType(3, false).parameterCount() == 3,
+                "genericMethodType(3,false) count");
+        check(MethodType.genericMethodType(3, true).parameterCount() == 4
+                && MethodType.genericMethodType(3, true).parameterType(3) == Object[].class,
+                "genericMethodType(3,true) trailing Object[]");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.genericMethodType(-1), "genericMethodType negative IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.genericMethodType(-1, false),
+                "genericMethodType(-1,false) IAE");
+    }
+
+    static void testFactoryValidation() {
+        checkThrows(NullPointerException.class,
+                () -> MethodType.methodType(null), "methodType null rtype NPE");
+        checkThrows(NullPointerException.class,
+                () -> MethodType.methodType(null, int.class), "methodType null rtype NPE 2");
+        checkThrows(NullPointerException.class,
+                () -> MethodType.methodType(int.class, (Class<?>) null),
+                "methodType null ptype0 NPE");
+        checkThrows(NullPointerException.class,
+                () -> MethodType.methodType(int.class, (Class<?>[]) null),
+                "methodType null ptype array NPE");
+        checkThrows(NullPointerException.class,
+                () -> MethodType.methodType(int.class, (List<Class<?>>) null),
+                "methodType null ptype List NPE");
+        checkThrows(NullPointerException.class,
+                () -> MethodType.methodType(int.class, new Class<?>[]{String.class, null}),
+                "methodType null ptype element NPE");
+        checkThrows(NullPointerException.class,
+                () -> MethodType.methodType(int.class, Arrays.asList(String.class, null)),
+                "methodType null ptype List element NPE");
+
+        // void is not a legal parameter type
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.methodType(int.class, void.class), "void parameter IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.methodType(int.class, void.class, int.class),
+                "void parameter varargs IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.methodType(int.class, new Class<?>[]{int.class, Void.TYPE}),
+                "void parameter array IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.methodType(int.class, Arrays.asList(int.class, Void.TYPE)),
+                "void parameter List IAE");
+        // void return is legal
+        check(MethodType.methodType(void.class).returnType() == void.class, "void return legal");
+    }
+
+    static void testStructuralMutators() {
+        MethodType mt = MethodType.methodType(int.class, String.class, int.class, boolean.class);
+
+        MethodType changed = mt.changeParameterType(0, Object.class);
+        check(changed.parameterType(0) == Object.class
+                && changed.parameterType(1) == int.class, "changeParameterType");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> mt.changeParameterType(3, Object.class), "changeParameterType OOB");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> mt.changeParameterType(-1, Object.class), "changeParameterType negative");
+        checkThrows(NullPointerException.class,
+                () -> mt.changeParameterType(0, null), "changeParameterType null NPE");
+
+        MethodType insert = mt.insertParameterTypes(0, long.class);
+        check(insert.parameterCount() == 4 && insert.parameterType(0) == long.class,
+                "insertParameterTypes at 0");
+        MethodType insertMid = mt.insertParameterTypes(2, float.class, double.class);
+        check(insertMid.parameterCount() == 5 && insertMid.parameterType(2) == float.class
+                && insertMid.parameterType(3) == double.class
+                && insertMid.parameterType(4) == boolean.class, "insertParameterTypes mid");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> mt.insertParameterTypes(4, int.class), "insertParameterTypes OOB");
+
+        MethodType insertList = mt.insertParameterTypes(1, Arrays.asList(short.class, byte.class));
+        check(insertList.parameterCount() == 5 && insertList.parameterType(1) == short.class,
+                "insertParameterTypes List");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> mt.insertParameterTypes(-1, Collections.<Class<?>>emptyList()),
+                "insertParameterTypes List negative");
+
+        MethodType append = mt.appendParameterTypes(long.class, float.class);
+        check(append.parameterCount() == 5 && append.parameterType(3) == long.class
+                && append.parameterType(4) == float.class, "appendParameterTypes");
+        MethodType appendList = mt.appendParameterTypes(Arrays.asList(short.class));
+        check(appendList.parameterCount() == 4 && appendList.parameterType(3) == short.class,
+                "appendParameterTypes List");
+
+        MethodType drop = mt.dropParameterTypes(1, 2);
+        check(drop.parameterCount() == 2 && drop.parameterType(0) == String.class
+                && drop.parameterType(1) == boolean.class, "dropParameterTypes");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> mt.dropParameterTypes(0, 4), "dropParameterTypes too many");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> mt.dropParameterTypes(1, 4), "dropParameterTypes end OOB");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> mt.dropParameterTypes(-1, 1), "dropParameterTypes negative start");
+        checkThrows(IndexOutOfBoundsException.class,
+                () -> mt.dropParameterTypes(2, 1), "dropParameterTypes start>end");
+
+        MethodType ret = mt.changeReturnType(void.class);
+        check(ret.returnType() == void.class && ret.parameterCount() == 3,
+                "changeReturnType");
+        checkThrows(NullPointerException.class,
+                () -> mt.changeReturnType(null), "changeReturnType null NPE");
+    }
+
+    static void testEraseGenericWrapUnwrap() {
+        MethodType mt = MethodType.methodType(int.class, String.class, int.class);
+        MethodType erased = mt.erase();
+        check(erased.returnType() == int.class && erased.parameterType(0) == Object.class
+                && erased.parameterType(1) == int.class, "erase refs only");
+
+        MethodType generic = mt.generic();
+        check(generic.returnType() == Object.class && generic.parameterType(0) == Object.class
+                && generic.parameterType(1) == Object.class, "generic all Object");
+
+        MethodType prim = MethodType.methodType(int.class, int.class, long.class);
+        MethodType wrapped = prim.wrap();
+        check(wrapped.returnType() == Integer.class
+                && wrapped.parameterType(0) == Integer.class
+                && wrapped.parameterType(1) == Long.class, "wrap primitives");
+
+        MethodType unwrapped = wrapped.unwrap();
+        check(unwrapped.equals(prim), "unwrap round-trips to primitives");
+
+        // wrap/unwrap leave reference types alone
+        MethodType refs = MethodType.methodType(String.class, Object.class);
+        check(refs.wrap().equals(refs) && refs.unwrap().equals(refs),
+                "wrap/unwrap no-op on refs");
+    }
+
+    static void testHasPrimitivesAndWrappers() {
+        check(MethodType.methodType(int.class).hasPrimitives(), "primitive return");
+        check(MethodType.methodType(Object.class, int.class).hasPrimitives(), "primitive param");
+        check(!MethodType.methodType(Object.class, Object.class).hasPrimitives(),
+                "no primitives");
+        check(!MethodType.methodType(Object.class, String.class).hasPrimitives(),
+                "no primitives ref");
+
+        check(MethodType.methodType(Integer.class).hasWrappers(), "wrapper return");
+        check(MethodType.methodType(Object.class, Integer.class).hasWrappers(), "wrapper param");
+        check(!MethodType.methodType(Object.class, Object.class).hasWrappers(), "no wrappers");
+        check(!MethodType.methodType(int.class, int.class).hasWrappers(), "primitives not wrappers");
+
+        MethodType mixed = MethodType.methodType(int.class, Integer.class);
+        check(mixed.hasPrimitives() && mixed.hasWrappers(), "mixed has both");
+    }
+
+    static void testAccessors() {
+        MethodType mt = MethodType.methodType(int.class, String.class, int.class);
+        check(mt.returnType() == int.class, "returnType");
+        check(mt.parameterCount() == 2, "parameterCount");
+        check(mt.parameterType(0) == String.class && mt.parameterType(1) == int.class,
+                "parameterType");
+        checkThrows(IndexOutOfBoundsException.class, () -> mt.parameterType(2),
+                "parameterType OOB");
+        checkThrows(IndexOutOfBoundsException.class, () -> mt.parameterType(-1),
+                "parameterType negative");
+
+        List<Class<?>> list = mt.parameterList();
+        check(list.size() == 2 && list.get(0) == String.class, "parameterList");
+        checkThrows(UnsupportedOperationException.class,
+                () -> list.add(Object.class), "parameterList immutable");
+        checkThrows(UnsupportedOperationException.class,
+                () -> list.set(0, Object.class), "parameterList set UOE");
+
+        Class<?>[] arr = mt.parameterArray();
+        check(arr.length == 2 && arr[0] == String.class && arr[1] == int.class,
+                "parameterArray");
+        arr[0] = Object.class;
+        check(mt.parameterType(0) == String.class, "parameterArray is a copy");
+    }
+
+    static void testEqualsHashCode() {
+        MethodType a = MethodType.methodType(int.class, String.class, int.class);
+        MethodType b = MethodType.methodType(int.class, String.class, int.class);
+        MethodType c = MethodType.methodType(int.class, String.class, long.class);
+        MethodType d = MethodType.methodType(long.class, String.class, int.class);
+        MethodType e = MethodType.methodType(int.class, String.class);
+        check(a.equals(b), "equals same signature");
+        check(a.hashCode() == b.hashCode(), "hashCode same");
+        check(!a.equals(c), "equals different param");
+        check(!a.equals(d), "equals different return");
+        check(!a.equals(e), "equals different arity");
+        check(!a.equals(null), "equals null");
+        check(!a.equals("(String,int)int"), "equals non-MethodType");
+    }
+
+    static void testToString() {
+        check(MethodType.methodType(int.class).toString().equals("()int"), "toString ()int");
+        check(MethodType.methodType(int.class, String.class, int.class).toString()
+                .equals("(String,int)int"), "toString (String,int)int");
+        check(MethodType.methodType(void.class, int.class).toString().equals("(int)void"),
+                "toString (int)void");
+        check(MethodType.genericMethodType(2).toString().equals("(Object,Object)Object"),
+                "toString generic");
+        check(MethodType.genericMethodType(2, true).toString().equals("(Object,Object,Object[])Object"),
+                "toString generic trailing array");
+    }
+
+    static void testDescriptorString() {
+        MethodType mt = MethodType.methodType(int.class, String.class, int.class);
+        String desc = mt.toMethodDescriptorString();
+        check(desc.equals("(Ljava/lang/String;I)I"), "toMethodDescriptorString");
+        MethodType back = MethodType.fromMethodDescriptorString(desc, null);
+        check(back.equals(mt), "descriptor round-trip");
+
+        check(MethodType.fromMethodDescriptorString("()V", null)
+                .equals(MethodType.methodType(void.class)), "()V round-trip");
+        check(MethodType.fromMethodDescriptorString("([I)Ljava/lang/String;", null)
+                .equals(MethodType.methodType(String.class, int[].class)), "([I)String round-trip");
+        check(MethodType.fromMethodDescriptorString("(Ljava/lang/String;)I",
+                MethodTypeTest.class.getClassLoader())
+                .equals(MethodType.methodType(int.class, String.class)),
+                "fromMethodDescriptorString with loader");
+
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.fromMethodDescriptorString("not a descriptor", null),
+                "malformed descriptor IAE");
+        checkThrows(StringIndexOutOfBoundsException.class,
+                () -> MethodType.fromMethodDescriptorString("(I", null),
+                "truncated descriptor StringIndexOutOfBounds (JDK-27)");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.fromMethodDescriptorString("()", null),
+                "empty params descriptor IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.fromMethodDescriptorString("(V)I", null),
+                "void param descriptor IAE");
+        checkThrows(NullPointerException.class,
+                () -> MethodType.fromMethodDescriptorString(null, null),
+                "null descriptor NPE");
+        check(MethodType.fromMethodDescriptorString("()V", null).toString() != null,
+                "parsed method type toString non-null");
+    }
+
+    static void testJdk27Accessors() {
+        MethodType mt = MethodType.methodType(int.class, String.class, int.class, boolean.class);
+        check(mt.lastParameterType() == boolean.class, "lastParameterType");
+        check(MethodType.methodType(int.class).lastParameterType() == void.class,
+                "lastParameterType no params -> void");
+        check(mt.descriptorString().equals("(Ljava/lang/String;IZ)I"), "descriptorString");
+        check(mt.describeConstable().isPresent(), "describeConstable present");
+        check(mt.describeConstable().get().descriptorString().equals(mt.descriptorString()),
+                "describeConstable descriptor round-trip");
+    }
+
+    public static void main(String[] args) {
+        testFactories();
+        testGenericMethodType();
+        testFactoryValidation();
+        testStructuralMutators();
+        testEraseGenericWrapUnwrap();
+        testHasPrimitivesAndWrappers();
+        testAccessors();
+        testEqualsHashCode();
+        testToString();
+        testDescriptorString();
+        testJdk27Accessors();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

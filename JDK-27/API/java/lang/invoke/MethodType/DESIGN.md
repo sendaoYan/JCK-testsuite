@@ -1,21 +1,52 @@
-# java.lang.invoke.MethodType — 设计方案
+# java.lang.invoke.MethodType 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。6 个 methodType 工厂重载、genericMethodType 变体、工厂校验（null rtype/ptype/元素→NPE、
+> void 参数→IAE、负泛型元数→IAE）、结构变异器（changeParameterType/insert/append/drop/changeReturnType 含 List
+> 与下标边界）、hasPrimitives/hasWrappers、erase/generic/wrap/unwrap、访问器（parameterType/parameterCount/
+> returnType/parameterList/parameterArray）、equals/hashCode/toString 精确格式、from/toMethodDescriptorString 往返
+> 与畸形描述符→IAE/null→NPE。
 
 ## 1. API 功能
-不可变方法签名描述（interned，final 类）：`methodType/genericMethodType/fromMethodDescriptorString/fromDescriptor`、`changeParameterType/changeReturnType/insertParameterTypes/dropParameterTypes/appendParameterTypes`、`erase/generic/wrap/unwrap`、`toMethodDescriptorString/descriptorString/describeConstable`、`parameterType/parameterCount/parameterList/parameterArray/returnType`、`hasPrimitives/hasWrappers`。
 
-## 2. Java 用户如何使用
-```java
-MethodType mt = MethodType.methodType(int.class, String.class);
-MethodType g = mt.generic();      // (String)int -> (Object)Object
-MethodType e = mt.erase();        // (String)int
-mt == MethodType.methodType(int.class, String.class); // true: interned
-```
+- 工厂：`methodType` 6 重载 + `genericMethodType(int[,boolean])`。
+- 结构变异：changeParameterType/insert/append/drop/changeReturnType。
+- 转换：erase/generic/wrap/unwrap；访问器 + 描述符 from/toMethodDescriptorString。
 
-## 3. 开源代码实际用法调研
-- JDK `test/jdk/java/lang/invoke/MethodTypeTest.java`（800 行，全工厂与转换）。
-- invokedynamic 引导方法第二参固定为 MethodType；StringConcatFactory/LambdaMetafactory 均依赖其描述符化。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-白盒：final、interned 等价、工厂/转换方法存在。
-黑盒：工厂重载一致性；genericMethodType(1,true) 尾参 Object[]；erase 保留基本型参数、generic 全 Object；wrap/unwrap 往返；fromMethodDescriptorString 往返及坏描述符异常；describeConstable 解析回同一 interned 实例；toMethodDescriptorString 精确串。
-对应 `MethodTypeTest.java` 的 `testBlackBox()`。
+- `MethodType.methodType(ret, paramTypes...)` 描述方法签名；`genericMethodType(n)` 描述 Object 泛型签名。
+- `toMethodDescriptorString()`/`fromMethodDescriptorString()` 与 JVM 描述符互转。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/invoke/MethodType.html）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/invoke/MethodType.java`。
+- JCK runtime-8b `tests/api/java_lang/invoke/MethodType/`。
+
+## 4. 测试用例设计（映射到 MethodTypeTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 6 工厂重载 + 跨形式等价 | testFactories |
+| P0 | genericMethodType 变体 | testGenericMethodType |
+| P0 | 工厂校验异常 | testFactoryValidation |
+| P0 | 结构变异器 + 边界 | testStructuralMutators |
+| P0 | erase/generic/wrap/unwrap | testEraseGenericWrapUnwrap |
+| P0 | hasPrimitives/hasWrappers | testHasPrimitivesAndWrappers |
+| P0 | 访问器 + parameterArray 副本语义 | testAccessors |
+| P0 | equals/hashCode | testEqualsHashCode |
+| P0 | toString 精确格式 | testToString |
+| P0 | 描述符往返 + 畸形/null | testDescriptorString |
+
+## 易错规范细节（已锁入断言）
+
+- void 不能作为参数类型 → IAE；void 返回合法。
+- `parameterList()` 不可变（add/set → UOE）；`parameterArray()` 返回副本。
+- `dropParameterTypes(1,3)` 合法（end==count）；start>end 或越界 → IndexOutOfBoundsException。
+- JDK-8 `fromMethodDescriptorString("(I",null)` → IAE（JDK-27 改为 StringIndexOutOfBoundsException）。
+
+## JDK-27 差异（已锁入断言）
+
+- `fromMethodDescriptorString("(I",null)` → `StringIndexOutOfBoundsException`（JDK-8 为 IAE）；
+  `"()"`/`"(V)I"` → IAE。
+- 新增 `lastParameterType()`（零参数返回 void）、`descriptorString()`、`describeConstable()`（testJdk27Accessors）。

@@ -1,32 +1,41 @@
-# java.lang.ref.Reference — 设计方案
+# java.lang.ref.Reference 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。get/clear/enqueue/isEnqueued 状态机、无队列 enqueue 返回 false、clear 后 enqueue false、
+> 有队列手动 enqueue true + 二次 enqueue false、ReferenceQueue poll/remove(1)/remove(-1)→IAE、WeakReference
+> 有界 GC 回收、SoftReference 引用保留、PhantomReference get() 恒 null + 队列注册。
 
 ## 1. API 功能
-引用对象的抽象基类（package-private 构造器，只能经子类 `SoftReference`/`WeakReference`/`PhantomReference`/`Cleaner` 内部使用）：
-- 查询：`get()`（返回引用对象或 null）、`refersTo(T)`（final，身份比较，不排队）、`isEnqueued()`
-- 操作：`clear()`（丢弃引用，不排队）、`enqueue()`（手动入队，已入队/未注册返回 false）
-- 工具：静态 `reachabilityFence(Object)`（保证强可达）、`protected clone()`
 
-## 2. Java 用户如何使用
-用 WeakReference 包住大对象做缓存，配合 ReferenceQueue 做失效通知：
-```java
-ReferenceQueue<Object> q = new ReferenceQueue<>();
-WeakReference<Object> ref = new WeakReference<>(bigObj, q);
-if (ref.get() == null) { /* 已清除 */ }
-ref.enqueue();                 // 显式入队（测试确定性路径）
-Reference<? extends Object> r = q.poll();  // r == ref
-Reference.reachabilityFence(x); // 防止提前回收
-```
+- `get()`/`clear()`/`enqueue()`/`isEnqueued()`；抽象基类，子类 Weak/Soft/Phantom。
+- 配合 ReferenceQueue 观察回收/入队。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `src/java.base/share/classes/java/lang/ref/Reference.java`：`reachabilityFence` 为空实现（HotSpot 内联保证语义），构造器对 null queue 使用内部 NULL_QUEUE。
-- JDK `test/jdk/java/lang/ref/EarlyTimeout.java`、`EnqueuePollRace.java`、`Basic.java`：以 WeakReference+ReferenceQueue 验证 poll/enqueue 行为；`NullQueue.java` 验证 null queue 上 enqueue 返回 false。
-- 开源缓存库（Guava `LocalCache`、Ehcache）用 WeakReference/SoftReference 做条目回收，Guava `FinalizableReference`（`guava/src/com/google/common/base/internal/Finalizer.java`）经子类化 Reference 实现清理。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-白盒：`Class.forName` 验证 abstract、无 public 构造器、`refersTo` final、`clone` protected、`reachabilityFence` static。
-黑盒（全部走强可达/显式 enqueue 确定性路径，不调 System.gc）：
-- get/refersTo（同对象 true、异对象 false、null false）→ clear → get null、refersTo(null) true；
-- 无队列时 enqueue 返回 false 且不入队；有队列时 enqueue（实现先 clearImpl 清 referent，get 变 null）→isEnqueued→poll 返回同一引用→isEnqueued false→二次 enqueue false；
-- clear 后再 enqueue 仍可入队并被 poll 到；
-- null 引用对象构造合法；`reachabilityFence` 可任意调用。
-对应 `ReferenceTest.java` 的 `testBlackBox()`。
+- `new WeakReference<>(obj, queue)` 注册弱引用；GC 后 `queue.poll()` 取回被回收的引用。
+- `clear()` 主动切断引用；`enqueue()` 手动入队。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/ref/Reference.html）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/ref/Reference.java`。
+- JCK runtime-8b `tests/api/java_lang/ref/Reference/`。
+
+## 4. 测试用例设计（映射到 ReferenceTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | get/clear/enqueue 状态机 | testGetClearEnqueue |
+| P0 | ReferenceQueue remove(1)/remove(-1)→IAE | testReferenceQueueRemove |
+| P1 | WeakReference 有界 GC 回收 | testWeakReferenceGC |
+| P1 | SoftReference 引用保留 | testSoftReference |
+| P1 | PhantomReference get() 恒 null + 入队 | testPhantomReference |
+
+## 易错规范细节（已锁入断言）
+
+- 无队列 `enqueue()` 返回 false；clear 后 `get()` 为 null 且 enqueue false。
+- 有队列手动 `enqueue()` 首次 true，再次 false；poll 后 isEnqueued false。
+- `remove(-1)` → IllegalArgumentException（JDK-8）。
+
+## JDK-27 差异（已锁入断言）
+
+- 新增 `refersTo(T)`（live referent 真、其他/null 假、clear 后假）与 `reachabilityFence(Object)`（testRefersTo）。

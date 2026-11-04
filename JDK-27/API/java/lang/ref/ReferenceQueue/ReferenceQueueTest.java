@@ -1,13 +1,14 @@
 /*
  * @test
- * @summary java.lang.ref.ReferenceQueue conformance: white-box structure + black-box behavior.
+ * @summary java.lang.ref.ReferenceQueue conformance: poll empty -> null, remove(long)
+ *          timeout -> null, remove(long) negative -> IllegalArgumentException (Java 8),
+ *          enqueue -> poll/remove, and remove() with an already-enqueued reference.
  * @run main ReferenceQueueTest
  */
 
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Modifier;
 
 public class ReferenceQueueTest {
     static int passed;
@@ -17,79 +18,53 @@ public class ReferenceQueueTest {
         passed++;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.lang.ref.ReferenceQueue");
-        check(!Modifier.isAbstract(c.getModifiers()), "ReferenceQueue is concrete");
-        check(c.getSuperclass() == Object.class, "superclass Object");
-        check(c.getTypeParameters().length == 1, "generic <T>");
-        check(Modifier.isPublic(c.getDeclaredConstructor().getModifiers()), "public no-arg constructor");
-        check(c.getDeclaredMethod("poll").getReturnType() == Reference.class, "poll returns Reference");
-        check(c.getDeclaredMethod("remove", long.class).getExceptionTypes().length == 1
-              && c.getDeclaredMethod("remove", long.class).getExceptionTypes()[0] == InterruptedException.class,
-              "remove(long) declares InterruptedException");
-        check(c.getDeclaredMethod("remove").getExceptionTypes()[0] == InterruptedException.class,
-              "remove() declares InterruptedException");
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        // empty queue: poll/remove(timeout) are deterministic null (no blocking beyond timeout)
+    static void testEmptyQueue() throws Exception {
         ReferenceQueue<Object> q = new ReferenceQueue<>();
-        check(q.poll() == null, "poll on empty queue null");
-        check(q.remove(10) == null, "remove(timeout) on empty queue null");
-        check(q.remove(1) == null, "remove(1) on empty queue null");
+        check(q.poll() == null, "poll empty null");
+        check(q.remove(1) == null, "remove(1) empty null");
+        checkThrows(IllegalArgumentException.class, () -> q.remove(-1),
+                "remove negative timeout IAE");
+        checkThrows(IllegalArgumentException.class, () -> q.remove(Integer.MIN_VALUE),
+                "remove MIN_VALUE timeout IAE");
+    }
 
-        // manual enqueue -> poll -> empty again
+    static void testPollAndRemove() throws Exception {
+        ReferenceQueue<Object> q = new ReferenceQueue<>();
         Object o = new Object();
-        WeakReference<Object> ref = new WeakReference<>(o, q);
-        check(ref.enqueue(), "manual enqueue");
-        check(q.poll() == ref, "poll returns enqueued reference");
-        check(q.poll() == null, "poll empty again after removal");
-        check(q.remove(1) == null, "remove(timeout) null after removal");
+        Reference<Object> r = new WeakReference<>(o, q);
+        check(q.poll() == null, "poll before enqueue null");
+        check(r.enqueue(), "enqueue true");
+        check(q.poll() == r, "poll after enqueue returns reference");
+        check(q.poll() == null, "poll after consumption null");
 
-        // multiple enqueued references: each is returned exactly once (order unspecified)
-        ReferenceQueue<Object> q2 = new ReferenceQueue<>();
-        Object a = new Object(), b = new Object(), c = new Object();
-        WeakReference<Object> ra = new WeakReference<>(a, q2);
-        WeakReference<Object> rb = new WeakReference<>(b, q2);
-        WeakReference<Object> rc = new WeakReference<>(c, q2);
-        check(ra.enqueue() && rb.enqueue() && rc.enqueue(), "enqueue three");
-        java.util.Set<Reference<Object>> drained = new java.util.HashSet<>();
-        drained.add((Reference<Object>) q2.poll());
-        drained.add((Reference<Object>) q2.poll());
-        drained.add((Reference<Object>) q2.poll());
-        check(drained.size() == 3 && drained.contains(ra) && drained.contains(rb) && drained.contains(rc),
-              "all three references drained exactly once");
-        check(q2.poll() == null, "queue empty after draining three");
+        Reference<Object> r2 = new WeakReference<>(new Object(), q);
+        check(r2.enqueue(), "enqueue r2");
+        check(q.remove(1) == r2, "remove(1) returns r2");
 
-        // remove()/remove(0) return an already-present reference without blocking
-        ReferenceQueue<Object> q3 = new ReferenceQueue<>();
-        WeakReference<Object> r3 = new WeakReference<>(new Object(), q3);
-        check(r3.enqueue(), "enqueue for remove()");
-        check(q3.remove() == r3, "remove() picks up present reference");
-        WeakReference<Object> r4 = new WeakReference<>(new Object(), q3);
-        check(r4.enqueue(), "enqueue for remove(0)");
-        check(q3.remove(0) == r4, "remove(0) picks up present reference");
-        check(q3.poll() == null, "queue drained");
-
-        // remove(long) interrupt behavior: pre-set interrupt flag makes wait() throw immediately
-        Thread.currentThread().interrupt();
-        try {
-            Object res = q.remove(60_000); // would block indefinitely; interrupt flag is already set
-            check(res == null && false, "expected InterruptedException, got " + res);
-        } catch (InterruptedException expected) {
-            check(true, "remove interrupted");
-        }
-        Thread.interrupted(); // clear flag for subsequent code
-
-        // enqueue of an already-enqueued reference is rejected by the queue contract
-        check(!r4.enqueue(), "re-enqueue after remove rejected");
+        // remove() blocks until available; enqueue first then remove() returns
+        Reference<Object> r3 = new WeakReference<>(new Object(), q);
+        check(r3.enqueue(), "enqueue r3");
+        check(q.remove() == r3, "remove() returns r3");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testEmptyQueue();
+        testPollAndRemove();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

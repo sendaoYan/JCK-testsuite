@@ -1,31 +1,41 @@
-# java.lang.reflect.Array — 测试设计（JDK-27）
+# java.lang.reflect.Array 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。newInstance 一维/多维（含负/零/null/void 维度精确异常）、getLength/get/set 全 8 种
+> 基本类型 + Object 数组、装箱/拆箱、错类型→IAE、下标→AIOOBE、null 数组→NPE、非数组→IAE、
+> 对象数组赋值失败语义、多维分量访问。全部离线，无随机/时钟。
 
 ## 1. API 功能
-`Array` 静态工具类，动态创建与访问数组（组件类型运行期才确定）：
-- 创建：`newInstance(Class<?>, int)`、`newInstance(Class<?>, int...)` 多维。
-- 长度：`getLength(Object)`。
-- 取值：`get`（装箱）与 `getBoolean/getByte/getChar/getShort/getInt/getLong/getFloat/getDouble`（宽化读允许、窄化读拒绝）。
-- 存值：`set`（可拆箱）与对应 `setXxx` 系列（宽化写允许）。
-- 异常：`NullPointerException/IllegalArgumentException/ArrayIndexOutOfBoundsException/NegativeArraySizeException`。
 
-## 2. Java 用户如何使用
-组件类型来自配置/反射（`field.getType().getComponentType()`）→ `newInstance` 造数组 → 逐元素 `setXxx/getXxx` 装填/读取 → 用 `getLength` 驱动遍历。泛型算法（对 `Object` 写入未知类型数组）和数组深度拷贝/转换是最常见场景。
+- `newInstance(Class,int)` 与 `newInstance(Class,int...)` 两种工厂。
+- `getLength(Object)`、`get(Object,int)`/`set(Object,int,Object)` 及 8 对基本类型 get/set 访问器。
+- 全部静态方法，类不可实例化（JDK-8 final，构造器私有）。
 
-## 3. 开源代码实际用法调研
-- JDK 自测 `~/git/jdk25u-dev/test/jdk/java/lang/reflect/Array/ExceedMaxDim.java`：`newInstance` 维度限制与 `IllegalArgumentException`。
-- JDK 源码 `~/git/jdk25u-dev/src/java.base/share/classes/java/lang/reflect/Array.java`：native 实现与宽化/窄化规则权威定义。
-- Spring `MethodInvoker`/`ReflectionUtils`：变长参数 invoke 时以 `Array.newInstance+set` 装配参数数组。
-- Commons Lang `ArrayUtils.toPrimitive/toObject` 变长工具的同构组合（创建→逐元素 set→读回，对应场景 2/4）。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-黑盒场景（`ArrayTest.testBlackBox`）：
-1. 创建族：int/boolean/double/String、`Integer[].class` 组件得二维、`newInstance(int.class, 2, 3)` 两种重载形态。
-2. 全类型 get/set 家族：boolean/byte/short/char/int/long/float/double 精确往返 + byte/short/char/float 宽化写入 int[]/double[] 再读回 + 装箱 get/set。
-3. 装箱与宽化读：`set(long[], Integer)`、`getDouble` 读 int 元素、`get` 返回 `Integer`。
-4. 对象数组与嵌套数组元素读写。
-5. 越界：负下标、index==length、对象数组 99 → `ArrayIndexOutOfBoundsException`。
-6. 负长度 → `NegativeArraySizeException`。
-7. 非数组 receiver：`getLength/get/set/setInt` → `IllegalArgumentException`。
-8. 元素类型错配：String 装入 int[]、null 装入 int[]、`setInt` 于 String[]、`setBoolean` 于 int[]、窄化读 `getInt(long[])` 拒绝、`getLong(int[])` 宽化允许。
-9. 零长度数组 + 越界。
-白盒保留原有创建/读写断言 + public final 结构。产出：`ArrayTest.java`（45 断言通过）。
+- 反射式创建运行时才知道类型/维数的数组：`Array.newInstance(componentType, length)`。
+- 反射式读写数组元素：`Array.get(arr,i)` 返回装箱对象，`Array.getInt(arr,i)` 返回原始 int。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/reflect/Array.html）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/reflect/Array.java`（native 校验逻辑）。
+- JCK runtime-8b `~/JDK/testsuite/jck8b/JCK-runtime-8b/tests/api/java_lang/reflect/Array/`。
+
+## 4. 测试用例设计（映射到 ArrayTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 一维 newInstance（基本类型/对象/类恒等/负长/零长/null/void）| testNewInstanceOneDim |
+| P0 | 多维 newInstance（外层/内层长、负内层维、零维、null 组件/维度）| testNewInstanceMultiDim |
+| P0 | getLength（0 长、多维、null→NPE、非数组→IAE）| testGetLength |
+| P0 | 8 基本类型 get/set 往返 + 装箱 | testGetSetPrimitives |
+| P0 | Object 数组 get/set、异构、错类型、null 元素 | testGetSetObject |
+| P0 | 错类型/非数组/null 数组/下标越界异常矩阵 | testExceptions |
+| P1 | 多维分量访问（get 行返回 int[]、set 行替换）| testMultiDimAccess |
+
+## 易错规范细节（已锁入断言）
+
+- 负长度 → `NegativeArraySizeException`（不是 IAE）；null 组件类型 → NPE；`void` 组件 → IAE。
+- `Array.set(String[], Integer)` → IAE（拆箱后赋值不匹配，非 ArrayStoreException）。
+- `Array.set(long[], Integer)` → 拓宽成功；`Array.set(int[], null)` → IAE（拆箱失败，非 NPE）。
+- `get`/`getInt` 等对 null 数组 → NPE；对非数组 → IAE；下标越界 → `ArrayIndexOutOfBoundsException`。

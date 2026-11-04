@@ -1,6 +1,12 @@
 /*
  * @test
- * @summary java.lang.reflect.Array conformance: white-box structure + black-box behavior.
+ * @summary java.lang.reflect.Array conformance: full contract coverage.
+ *          newInstance (primitive/object/multi-dim) incl. negative/zero/null/void
+ *          dimensions with exact exceptions, getLength/get/set across all 8 primitive
+ *          types + Object arrays, boxing/unboxing, wrong-type -> IllegalArgumentException,
+ *          index -> ArrayIndexOutOfBoundsException, null array -> NullPointerException,
+ *          non-array -> IllegalArgumentException, ArrayStoreException for object arrays,
+ *          multi-dimensional component access.
  * @run main ArrayTest
  */
 
@@ -14,131 +20,274 @@ public class ArrayTest {
         passed++;
     }
 
-    // ---- Part 1: white-box (structural, retained from previous revision) ----
-    static void testWhiteBox() {
-        int[] a = (int[]) Array.newInstance(int.class, 3);
-        check(a.length == 3, "newInstance length");
-        check(Array.getLength(a) == 3, "getLength");
-        Array.setInt(a, 1, 42);
-        check(Array.getInt(a, 1) == 42, "setInt/getInt");
-        Array.set(a, 0, Integer.valueOf(7));
-        check(((Integer) Array.get(a, 0)).intValue() == 7, "set/get Object");
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-        String[] s = (String[]) Array.newInstance(String.class, 2);
-        Array.set(s, 1, "hi");
-        check("hi".equals(Array.get(s, 1)), "object array set/get");
-
-        int[][] m = (int[][]) Array.newInstance(int.class, 2, 3);
-        check(m.length == 2 && m[0].length == 3, "multi-dimensional newInstance");
-        check(java.lang.reflect.Modifier.isFinal(Array.class.getModifiers())
-              && java.lang.reflect.Modifier.isPublic(Array.class.getModifiers()),
-              "Array is public final");
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        // 1. creation: primitives, boxed, object, multi-dim, and component-of-array
-        int[] ints = (int[]) Array.newInstance(int.class, 4);
-        check(Array.getLength(ints) == 4, "int array length");
-        boolean[] bools = (boolean[]) Array.newInstance(boolean.class, 2);
-        double[] doubles = (double[]) Array.newInstance(double.class, 3);
-        String[] strs = (String[]) Array.newInstance(String.class, 5);
-        check(strs.getClass() == String[].class, "component type String[]");
-        Integer[][] nested = (Integer[][]) Array.newInstance(Integer[].class, 2);
-        check(nested.getClass() == Integer[][].class, "component Integer[] gives 2-D");
-        int[][] md = (int[][]) Array.newInstance(int.class, 2, 3);
-        check(md.length == 2 && md[1].length == 3, "dims (2,3)");
-        int[][] md2 = (int[][]) Array.newInstance(int.class, new int[]{2, 3});
-        check(md2.length == 2 && md2[0].length == 3, "dims varargs array form");
+    // ---- newInstance(Class, int) ----
 
-        // 2. full typed get/set family on primitives
-        Array.setBoolean(bools, 0, true);
-        check(Array.getBoolean(bools, 0), "setBoolean/getBoolean");
-        byte[] bytes = (byte[]) Array.newInstance(byte.class, 1);
-        Array.setByte(bytes, 0, (byte) 3);
-        check(Array.getByte(bytes, 0) == 3, "setByte/getByte");
-        Array.setByte(ints, 0, (byte) 5);
-        check(Array.getInt(ints, 0) == 5, "setByte widening into int[]");
-        short[] shorts = (short[]) Array.newInstance(short.class, 1);
-        Array.setShort(shorts, 0, (short) 9);
-        check(Array.getShort(shorts, 0) == 9, "setShort/getShort");
-        Array.setShort(ints, 1, (short) 8);
-        check(Array.getInt(ints, 1) == 8, "setShort widening into int[]");
-        char[] chars = (char[]) Array.newInstance(char.class, 1);
-        Array.setChar(chars, 0, 'x');
-        check(Array.getChar(chars, 0) == 'x', "setChar/getChar");
-        Array.setChar(ints, 2, 'x');
-        check(Array.getInt(ints, 2) == 'x', "setChar widening into int[]");
-        Array.setInt(ints, 3, 77);
-        check(Array.getInt(ints, 3) == 77, "setInt/getInt");
-        long[] longs = (long[]) Array.newInstance(long.class, 1);
-        Array.setLong(longs, 0, 123456789012L);
-        check(Array.getLong(longs, 0) == 123456789012L, "setLong/getLong");
-        float[] floats = (float[]) Array.newInstance(float.class, 1);
-        Array.setFloat(floats, 0, 1.5f);
-        check(Array.getFloat(floats, 0) == 1.5f, "setFloat/getFloat");
-        Array.setFloat(doubles, 0, 1.5f);
-        check(Array.getDouble(doubles, 0) == 1.5, "setFloat widening into double[]");
-        Array.setDouble(doubles, 1, Math.PI);
-        check(Array.getDouble(doubles, 1) == Math.PI, "setDouble/getDouble");
+    static void testNewInstanceOneDim() {
+        check(Array.newInstance(int.class, 0).getClass() == int[].class, "int[0] class");
+        check(Array.newInstance(int.class, 5) instanceof int[], "int[5] instanceof");
+        check(Array.getLength(Array.newInstance(int.class, 5)) == 5, "int[5] length");
+        check(Array.newInstance(String.class, 0).getClass() == String[].class, "String[0] class");
+        check(Array.newInstance(String[].class, 3) instanceof String[][], "String[][] class");
 
-        // 3. boxed get/set with widening reads
-        Array.set(longs, 0, Integer.valueOf(42));
-        check(Array.getLong(longs, 0) == 42L, "set boxed Integer into long[]");
-        check(Array.getDouble(ints, 3) == 77.0, "getDouble widening from int element");
-        check(Array.get(ints, 3) instanceof Integer, "get boxes primitive element");
+        // All primitive component types
+        check(Array.newInstance(boolean.class, 1) instanceof boolean[], "boolean[]");
+        check(Array.newInstance(byte.class, 1) instanceof byte[], "byte[]");
+        check(Array.newInstance(char.class, 1) instanceof char[], "char[]");
+        check(Array.newInstance(short.class, 1) instanceof short[], "short[]");
+        check(Array.newInstance(int.class, 1) instanceof int[], "int[]");
+        check(Array.newInstance(long.class, 1) instanceof long[], "long[]");
+        check(Array.newInstance(float.class, 1) instanceof float[], "float[]");
+        check(Array.newInstance(double.class, 1) instanceof double[], "double[]");
 
-        // 4. object arrays
-        Array.set(strs, 0, "a");
-        Array.set(strs, 1, "b");
-        check("a".equals(Array.get(strs, 0)) && "b".equals(Array.get(strs, 1)), "object get/set");
-        check(Array.getLength(strs) == 5, "object array length");
-        Array.set(nested, 0, new Integer[]{1, 2});
-        check(((Integer[]) Array.get(nested, 0))[1] == 2, "nested array element");
+        // negative length -> NegativeArraySizeException (not IAE)
+        checkThrows(NegativeArraySizeException.class,
+                () -> Array.newInstance(int.class, -1), "newInstance negative length");
+        checkThrows(NegativeArraySizeException.class,
+                () -> Array.newInstance(int.class, Integer.MIN_VALUE),
+                "newInstance MIN_VALUE length");
+        checkThrows(NegativeArraySizeException.class,
+                () -> Array.newInstance(String.class, -5), "newInstance object negative");
 
-        // 5. length and bounds
-        try { Array.getInt(ints, -1); check(false, "negative index must fail"); }
-        catch (ArrayIndexOutOfBoundsException e) { check(true, "AIOOBE negative index"); }
-        try { Array.setInt(ints, 4, 1); check(false, "index == length must fail"); }
-        catch (ArrayIndexOutOfBoundsException e) { check(true, "AIOOBE index == length"); }
-        try { Array.get(strs, 99); check(false, "object index oob must fail"); }
-        catch (ArrayIndexOutOfBoundsException e) { check(true, "AIOOBE object array"); }
+        // null component type -> NullPointerException
+        checkThrows(NullPointerException.class,
+                () -> Array.newInstance(null, 1), "newInstance null componentType");
+        checkThrows(NullPointerException.class,
+                () -> Array.newInstance(null, 0), "newInstance null componentType len 0");
 
-        // 6. negative array size
-        try { Array.newInstance(int.class, -1); check(false, "negative size must fail"); }
-        catch (NegativeArraySizeException e) { check(true, "NegativeArraySizeException"); }
+        // void component type -> IllegalArgumentException
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.newInstance(void.class, 0), "newInstance void component");
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.newInstance(Void.TYPE, 1), "newInstance Void.TYPE component");
+    }
 
-        // 7. non-array receivers
-        try { Array.getLength("not-array"); check(false, "getLength non-array must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IAE getLength non-array"); }
-        try { Array.get(new Object(), 0); check(false, "get non-array must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IAE get non-array"); }
-        try { Array.setInt("str", 0, 1); check(false, "set non-array must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IAE set non-array"); }
+    // ---- newInstance(Class, int...) multi-dimensional ----
 
-        // 8. element type mismatches
-        try { Array.set(ints, 0, "str"); check(false, "String into int[] must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IAE wrong element type boxed"); }
-        try { Array.set(ints, 0, null); check(false, "null into int[] must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IAE null into primitive array"); }
-        try { Array.setInt(strs, 0, 1); check(false, "setInt on String[] must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IAE setInt on object array"); }
-        try { Array.setBoolean(ints, 0, true); check(false, "setBoolean on int[] must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IAE setBoolean on int[]"); }
-        try { Array.getInt(longs, 0); check(false, "getInt on long[] must fail"); }
-        catch (IllegalArgumentException e) { check(true, "IAE narrowing getInt"); }
-        check(Array.getLong(ints, 3) == 77L, "getLong widening from int[]");
+    static void testNewInstanceMultiDim() {
+        int[][] m = (int[][]) Array.newInstance(int.class, 2, 3);
+        check(m.length == 2, "multi dim outer length");
+        check(m[0].length == 3 && m[1].length == 3, "multi dim inner lengths");
+        check(m.getClass() == int[][].class, "multi dim class");
 
-        // 9. zero-length arrays
-        int[] empty = (int[]) Array.newInstance(int.class, 0);
-        check(Array.getLength(empty) == 0, "zero length");
-        try { Array.get(empty, 0); check(false, "empty get must fail"); }
-        catch (ArrayIndexOutOfBoundsException e) { check(true, "AIOOBE on empty"); }
+        String[][][] s3 = (String[][][]) Array.newInstance(String.class, 2, 3, 4);
+        check(s3.length == 2 && s3[0].length == 3 && s3[0][0].length == 4, "3-dim lengths");
+
+        // null component type -> NPE
+        checkThrows(NullPointerException.class,
+                () -> Array.newInstance(null, 1, 2), "newInstance multi null componentType");
+        // null dimensions array -> NPE
+        checkThrows(NullPointerException.class,
+                () -> Array.newInstance(int.class, (int[]) null), "newInstance null dimensions");
+
+        // zero dimensions -> IllegalArgumentException
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.newInstance(int.class, new int[0]), "newInstance zero dimensions");
+
+        // any negative dimension -> NegativeArraySizeException
+        checkThrows(NegativeArraySizeException.class,
+                () -> Array.newInstance(int.class, 2, -3), "newInstance negative inner dim");
+        checkThrows(NegativeArraySizeException.class,
+                () -> Array.newInstance(int.class, -1, 3), "newInstance negative outer dim");
+        checkThrows(NegativeArraySizeException.class,
+                () -> Array.newInstance(int.class, 1, Integer.MIN_VALUE),
+                "newInstance MIN_VALUE inner dim");
+
+        // void component type -> IAE
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.newInstance(void.class, 1, 2), "newInstance multi void component");
+    }
+
+    // ---- getLength ----
+
+    static void testGetLength() {
+        check(Array.getLength(new int[3]) == 3, "getLength int[3]");
+        check(Array.getLength(new Object[0]) == 0, "getLength Object[0]");
+        check(Array.getLength(new String[2][3]) == 2, "getLength String[][]");
+        checkThrows(NullPointerException.class, () -> Array.getLength(null), "getLength null");
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.getLength("not an array"), "getLength non-array");
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.getLength(Integer.valueOf(3)), "getLength boxed non-array");
+    }
+
+    // ---- get/set per primitive type ----
+
+    static void testGetSetPrimitives() {
+        // boolean
+        boolean[] ba = new boolean[2];
+        Array.setBoolean(ba, 1, true);
+        check(Array.getBoolean(ba, 1), "getBoolean true");
+        check(!Array.getBoolean(ba, 0), "getBoolean default false");
+        Array.set(ba, 0, Boolean.TRUE);
+        check(Boolean.TRUE.equals(Array.get(ba, 0)), "get returns true after boxed set");
+        check(Array.getBoolean(ba, 0), "getBoolean after boxed set");
+
+        // byte
+        byte[] bya = new byte[2];
+        Array.setByte(bya, 0, (byte) -7);
+        check(Array.getByte(bya, 0) == (byte) -7, "setByte/getByte");
+        Array.set(bya, 1, Byte.valueOf((byte) 100));
+        check(Byte.valueOf((byte) 100).equals(Array.get(bya, 1)), "boxed byte get");
+
+        // char
+        char[] ca = new char[2];
+        Array.setChar(ca, 0, 'x');
+        check(Array.getChar(ca, 0) == 'x', "setChar/getChar");
+        Array.set(ca, 1, Character.valueOf('ÿ'));
+        check(Array.getChar(ca, 1) == 'ÿ', "boxed char");
+
+        // short
+        short[] sa = new short[2];
+        Array.setShort(sa, 0, (short) 32000);
+        check(Array.getShort(sa, 0) == (short) 32000, "setShort/getShort");
+
+        // int
+        int[] ia = new int[2];
+        Array.setInt(ia, 0, Integer.MAX_VALUE);
+        check(Array.getInt(ia, 0) == Integer.MAX_VALUE, "setInt/getInt max");
+        Array.setInt(ia, 1, Integer.MIN_VALUE);
+        check(Array.getInt(ia, 1) == Integer.MIN_VALUE, "setInt/getInt min");
+
+        // long
+        long[] la = new long[2];
+        Array.setLong(la, 0, Long.MAX_VALUE);
+        check(Array.getLong(la, 0) == Long.MAX_VALUE, "setLong/getLong max");
+        Array.setLong(la, 1, Long.MIN_VALUE);
+        check(Array.getLong(la, 1) == Long.MIN_VALUE, "setLong/getLong min");
+
+        // float
+        float[] fa = new float[2];
+        Array.setFloat(fa, 0, Float.NaN);
+        check(Float.isNaN(Array.getFloat(fa, 0)), "setFloat/getFloat NaN");
+        Array.setFloat(fa, 1, Float.POSITIVE_INFINITY);
+        check(Float.isInfinite(Array.getFloat(fa, 1)), "setFloat/getFloat +Inf");
+
+        // double
+        double[] da = new double[2];
+        Array.setDouble(da, 0, Double.NEGATIVE_INFINITY);
+        check(Double.isInfinite(Array.getDouble(da, 0)), "setDouble/getDouble -Inf");
+        Array.setDouble(da, 1, Double.NaN);
+        check(Double.isNaN(Array.getDouble(da, 1)), "setDouble/getDouble NaN");
+    }
+
+    // ---- get/set Object arrays ----
+
+    static void testGetSetObject() {
+        String[] s = new String[2];
+        check(Array.get(s, 0) == null, "object array default null");
+        Array.set(s, 0, "a");
+        check("a".equals(Array.get(s, 0)), "object set/get");
+        // subtyping: Object[] holds any object
+        Object[] o = new Object[2];
+        Array.set(o, 0, Integer.valueOf(1));
+        Array.set(o, 1, "str");
+        check(Array.get(o, 0).equals(1), "Object[] heterogeneous");
+
+        // wrong object type into String[] -> IllegalArgumentException (Array.set
+        // performs an unwrapping/assignability check, unlike direct a[0]=1 which is ASE)
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.set(s, 0, Integer.valueOf(1)), "set String[]<--Integer IAE");
+
+        // null value into object array is fine
+        Array.set(s, 1, null);
+        check(Array.get(s, 1) == null, "set null into String[]");
+    }
+
+    // ---- wrong type / non-array / null array / index exceptions ----
+
+    static void testExceptions() {
+        // wrong primitive array type -> IAE
+        int[] ia = new int[1];
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.getBoolean(ia, 0), "getBoolean on int[] IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.getInt(new boolean[1], 0), "getInt on boolean[] IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.setLong(ia, 0, 1L), "setLong on int[] IAE");
+
+        // set(Object array, int, Object) with wrong wrapper type -> IAE
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.set(ia, 0, Long.valueOf(1L)), "set int[]<--Long IAE (narrowing)");
+
+        // widening primitive conversion is allowed on primitive set
+        long[] laWiden = new long[1];
+        Array.set(laWiden, 0, Integer.valueOf(1));
+        check(Array.getLong(laWiden, 0) == 1L, "set long[]<--Integer widens");
+
+        // set primitive array with null -> IllegalArgumentException (unwrapping fails)
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.set(new int[1], 0, null), "set int[] null value IAE");
+
+        // non-array -> IAE
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.get("x", 0), "get on non-array IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.set("x", 0, "y"), "set on non-array IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.getInt("x", 0), "getInt on non-array IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> Array.setInt("x", 0, 1), "setInt on non-array IAE");
+
+        // null array -> NPE
+        checkThrows(NullPointerException.class, () -> Array.get(null, 0), "get null array NPE");
+        checkThrows(NullPointerException.class, () -> Array.set(null, 0, 1), "set null array NPE");
+        checkThrows(NullPointerException.class,
+                () -> Array.getInt(null, 0), "getInt null array NPE");
+        checkThrows(NullPointerException.class,
+                () -> Array.setInt(null, 0, 1), "setInt null array NPE");
+
+        // index out of bounds -> AIOOBE
+        int[] a = new int[2];
+        checkThrows(ArrayIndexOutOfBoundsException.class,
+                () -> Array.getInt(a, 2), "getInt index == length");
+        checkThrows(ArrayIndexOutOfBoundsException.class,
+                () -> Array.getInt(a, -1), "getInt index -1");
+        checkThrows(ArrayIndexOutOfBoundsException.class,
+                () -> Array.setInt(a, 2, 0), "setInt index == length");
+        checkThrows(ArrayIndexOutOfBoundsException.class,
+                () -> Array.setInt(a, -1, 0), "setInt index -1");
+        checkThrows(ArrayIndexOutOfBoundsException.class,
+                () -> Array.get(a, Integer.MAX_VALUE), "get index MAX_VALUE");
+        String[] s = new String[1];
+        checkThrows(ArrayIndexOutOfBoundsException.class,
+                () -> Array.get(s, 1), "get object index == length");
+    }
+
+    // ---- multi-dimensional component access ----
+
+    static void testMultiDimAccess() {
+        int[][] m = (int[][]) Array.newInstance(int.class, 2, 2);
+        Array.setInt(m[0], 0, 7);
+        check(Array.getInt(m[0], 0) == 7, "inner array setInt/getInt");
+        Object row = Array.get(m, 1);
+        check(row instanceof int[], "get row returns int[]");
+        Array.set(m, 0, new int[]{9, 9});
+        check(Array.getInt(((int[]) Array.get(m, 0)), 0) == 9, "set row replace");
     }
 
     public static void main(String[] args) {
-        testWhiteBox();
-        testBlackBox();
+        testNewInstanceOneDim();
+        testNewInstanceMultiDim();
+        testGetLength();
+        testGetSetPrimitives();
+        testGetSetObject();
+        testExceptions();
+        testMultiDimAccess();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

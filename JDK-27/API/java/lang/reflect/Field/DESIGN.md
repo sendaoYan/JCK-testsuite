@@ -1,35 +1,55 @@
-# java.lang.reflect.Field — 测试设计（JDK-27）
+# java.lang.reflect.Field 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。元数据、8 种基本类型 get/set 往返、静态 vs 实例 null 语义、错对象类型→IAE、
+> 私有访问（未 setAccessible→IAE / setAccessible(true) 后成功）、错基本类型访问器→IAE、final 字段
+> set→IAE、equals/hashCode/toString/toGenericString、isEnumConstant/isSynthetic（含内部类 this$0）、
+> 注解矩阵、getFields/getDeclaredFields 继承语义与 NSEE/NPE 路径。
 
 ## 1. API 功能
-`Field` 表示类/接口上的字段（无 public 构造器，经 `Class.getField/getDeclaredField` 获得）：
-- 元数据：`getName/getDeclaringClass/getModifiers/getType/getGenericType/isSynthetic/isEnumConstant/accessFlags`。
-- 对象访问：`get/set` 与按类型族 `getBoolean/getByte/getChar/getShort/getInt/getLong/getFloat/getDouble` 及对应 `setXxx`，异常 `IllegalAccessException/IllegalArgumentException`。
-- 泛型：`getGenericType/getAnnotatedType`。
-- 注解：`getAnnotation/getAnnotations/getAnnotationsByType/getDeclaredAnnotations`。
-- 相等与展示：`equals/hashCode/toString/toGenericString`；访问控制 `setAccessible/trySetAccessible/canAccess`。
 
-## 2. Java 用户如何使用
-`getField("名")`（public）或 `getDeclaredField`（含私有）→（私有 `setAccessible(true)`）→ `get(obj)/set(obj, val)`（静态字段 obj=null）→ 读回验证。典型链路：
-- ORM/序列化（Hibernate、Jackson 字段模式）：`getDeclaredFields` 遍历 → `setAccessible` → `get` 取值装配 JSON/SQL。
-- 配置/依赖注入按 `getType()` 判断转换；泛型字段经 `getGenericType` 还原 `List<String>` 之类声明。
+- 元数据：getName/getType/getGenericType/getModifiers/getDeclaringClass。
+- 读写：`get`/`set` + 8 对基本类型 get/set；`get(Object)` 装箱返回。
+- 结构：isEnumConstant/isSynthetic/toGenericString；注解 get*Annotations/getAnnotatedType。
+- 继承自 AccessibleObject：setAccessible。
 
-## 3. 开源代码实际用法调研
-- JDK 自测 `~/git/jdk25u-dev/test/jdk/java/lang/reflect/Field/Set.java`：`set` 系列的类型匹配（含窄化拒绝 → `IllegalArgumentException`）。
-- JDK 自测 `Field/NegativeTest.java`：错误 receiver、final 字段写等负路径。
-- JDK 自测 `Field/GenericStringTest.java`：`toGenericString` 输出泛型形态。
-- Spring `ReflectionUtils.getField/setField/makeAccessible`（spring-core）：私有字段注入链路（对应场景 6）。
-- Guava `CommonObjectPropertySubject`/Apache Commons `FieldUtils.readField/writeField`：装箱 `get/set` + 可达性开关（对应场景 1/3/6）。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-黑盒场景（`FieldTest.testBlackBox`，固定实体 `Entity`/顶层类 `FieldSeparate`）：
-1. 全类型族 round-trip：int（装箱+`getLong/getDouble` 宽化读）、byte/short/char/float/long/boolean/String（12+ 断言）。
-2. 窄化拒绝：`setLong` 写 int 字段、`getInt` 读 long 字段 → `IllegalArgumentException`。
-3. 静态字段：`get(null)`/`set(null,v)` + 经类名读回一致性。
-4. final 实例字段写 → `IllegalAccessException`。
-5. 数组字段：`get` 返回活引用、元素改动可见、整体替换。
-6. 跨 nest 私有字段：先 `IllegalAccessException`，`setAccessible(true)` 后 get/set 往返。
-7. receiver 类型错配 → `IllegalArgumentException`。
-8. 泛型字段：`getType()==List.class` 擦除、`getGenericType` 为 `ParameterizedType`（raw/arg/typeName 精确），嵌套 `Map<String,List<Integer>>` typeName 精确，`getAnnotatedType().getType()` 为 PT。
-9. `@Deprecated` 字段注解三查询。
-10. `equals/hashCode` 值语义 + `toString/toGenericString` 形态。
-白盒部分保留原结构断言 + final/Member 接口检查。产出：`FieldTest.java`（57 断言通过）。
+- `C.class.getField(name)` 取 public 字段（含继承），`getDeclaredField` 取声明字段。
+- `f.setAccessible(true)` 后读写私有字段；基本类型用 `getInt/setInt` 避免装箱。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/reflect/Field.html）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/reflect/Field.java`。
+- JCK runtime-8b `tests/api/java_lang/reflect/Field/`。
+
+## 4. 测试用例设计（映射到 FieldTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 元数据/修饰符/泛型类型 | testMetadata |
+| P0 | 8 基本类型 get/set 往返 + 装箱 | testPrimitiveRoundTrip |
+| P0 | 静态 vs 实例 null 语义 | testStaticVsInstanceNull |
+| P0 | 错对象类型→IAE | testWrongObjectType |
+| P0 | 私有字段访问控制 | testAccessibility |
+| P0 | 错基本类型访问器→IAE | testWrongPrimitiveAccessor |
+| P0 | final 字段 set→IAE | testFinalFieldSet |
+| P0 | equals/hashCode/toString/toGenericString | testEqualsHashCodeToString |
+| P1 | isEnumConstant/isSynthetic（this$0）| testEnumConstantAndSynthetic |
+| P1 | 注解矩阵 | testAnnotations |
+| P1 | getFields/getDeclaredFields 继承语义 | testFieldDiscovery |
+
+## 易错规范细节（已锁入断言）
+
+- 实例字段 `get(null)`/`set(null,..)` → NPE；静态字段 `get(null)` 合法。
+- `get` 对 int 字段返回装箱 Integer；错基本类型 getter（如 getBoolean on int）→ IAE。
+- `set` int 字段传 Long/String/null → IAE（拆箱失败）。
+- `getField("priv")` → NoSuchFieldException；`getDeclaredField("priv")` 找到私有。
+- `getField(null)`/`getDeclaredField(null)` → NPE。
+
+## JDK-27 差异（已锁入断言）
+
+- JDK-11+ nestmates 移除内部类合成 `this$0` 字段：`Outer.Inner.class.getDeclaredFields()` 不含 this$0，
+  `getNestHost()` 为顶层类 `FieldTest`；合成字段改为枚举的 `$VALUES`（static final synthetic）。
+- `Field.accessFlags()` 返回 `Set<AccessFlag>`（PUBLIC/PRIVATE/STATIC/FINAL 覆盖）。
+- 私有访问 IAE 路径改用独立顶层类 `ExtField`（非 nestmate，保证需 setAccessible）。

@@ -1,38 +1,49 @@
-# java.lang.reflect.Method — 测试设计（JDK-27）
+# java.lang.reflect.Method 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。返回/参数/异常类型反射（含泛型签名与类型参数）、invoke 实例/静态 + null 语义、
+> 错参数量/类型→IAE、私有访问控制、InvocationTargetException 包装原始异常（cause/targetException 同源）、
+> isVarArgs/isBridge/isSynthetic/isDefault、注解元素 getDefaultValue、注解矩阵、equals/hashCode/toString、
+> getMethods vs getDeclaredMethods 继承语义与 NSME/NPE 路径。
 
 ## 1. API 功能
-`Method` 表示类/接口上的单个方法（无 public 构造器，经 `Class.getMethod/getDeclaredMethod` 获得）：
-- 元数据查询：`getName/getDeclaringClass/getModifiers/getReturnType/getGenericReturnType/getParameterTypes/getParameterCount/getGenericParameterTypes/getExceptionTypes/getGenericExceptionTypes/getTypeParameters/getAnnotatedReturnType/getParameterAnnotations`。
-- 调用：`invoke(Object obj, Object... args)`，可抛 `IllegalAccessException/IllegalArgumentException/InvocationTargetException/NullPointerException`。
-- 形态标记：`isVarArgs/isBridge/isSynthetic/isDefault/isVarArgs`。
-- 注解/默认值：`getDefaultValue/getAnnotation/getDeclaredAnnotations`。
-- 访问控制：继承自 `Executable/AccessibleObject` 的 `setAccessible/trySetAccessible/canAccess`。
-- 相等与展示：`equals/hashCode/toString/toGenericString`。
 
-## 2. Java 用户如何使用
-`Class.getDeclaredMethod("名", 精确参数类型...)` → 检查签名 →（私有方法 `setAccessible(true)`）→ `invoke(实例或 null(静态), 参数...)` → 处理返回值或 `InvocationTargetException.getCause()`。典型链路：
-- 框架（Jackson/Spring `@Autowired` 注入、JUnit `@Test` 发现）按名+参数类型定位 → `invoke` 驱动业务。
-- 序列化库用 `getReturnType/isDefault/getDefaultValue`（注解处理器）驱动配置。
-- `isBridge` 用于泛型擦除产生的桥方法过滤，避免重复处理。
+- 元数据：getReturnType/getParameterTypes/getExceptionTypes/getGeneric*/getTypeParameters/getParameterCount。
+- 调用：`invoke(receiver, args...)`；varargs/bridge/default 判断。
+- 注解：getDefaultValue/getAnnotation/getDeclaredAnnotations/getParameterAnnotations/getAnnotatedReturnType。
 
-## 3. 开源代码实际用法调研
-- JDK 自测 `~/git/jdk25u-dev/test/jdk/java/lang/reflect/Method/IsDefaultTest.java`：接口 default 方法经 `isDefault()` 判定，随后 `invoke` 验证语义。
-- JDK 自测 `Method/Equals.java`、`Method/GenericStringTest.java`：`equals/hashCode/toGenericString` 的值语义与字符串形态断言。
-- JDK 自测 `Method/InheritedMethods.java`：方法表查找与签名匹配。
-- Spring Framework `ReflectionUtils.findMethod/doWithMethods`（spring-core）：精确签名查找 + `makeAccessible` + `invoke` 是其依赖注入/事件分发的核心路径（同构于本测试第 1/2/7 步）。
-- Apache Commons Lang `MethodUtils.invokeMethod`：变长参数匹配 + 可达性设置 + invoke 包装（对应第 6/7 步）。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-黑盒场景（`MethodTest.testBlackBox`，固定业务类 `Biz`/`StringCmp`/`DefaultIface`/`@Marked`/顶层类 `MethodSeparate`）：
-1. 精确签名查找 `add(int,int)` → invoke 2+3=5、负数、装箱返回 `Integer`（3 断言+修饰符/标记/异常表 4 断言）。
-2. 静态方法 `greet`：null receiver、receiver 被忽略（2）。
-3. 泛型方法 `identity<T>`：String/Integer 往返、类型变量 T、`toGenericString` 含 `<T>`（3+）。
-4. 异常包装：`fail()` 抛 `IllegalStateException` → `InvocationTargetException`，cause 精确类型+消息、`getTargetException()==getCause()`。
-5. 重载：`pick(int)`/`pick(String)` 精确定位 + `equals` 区分。
-6. 变长参数：`sum(int...)` 打包数组/空数组调用、`variadic(int,String...)` 尾参数组、源码展开形式必须 `IllegalArgumentException`（JDK-27 行为）。
-7. 跨 nest 私有方法：`MethodSeparate.secret` 先 `IllegalAccessException`，`setAccessible(true)` 后正常返回。
-8. 参数错配：数量/类型/receiver 类型错 `IllegalArgumentException`，实例方法 null receiver `NullPointerException`。
-9. 桥方法：`Comparable<StringCmp>` 的 `compareTo(Object)` isBridge+isSynthetic 且可 invoke；原方法两者皆否。
-10. `isDefault`（接口 default 真、类方法假）与 `getDefaultValue`（注解默认值 "dflt"、普通方法 null）。
-11. `equals/hashCode` 值语义、`toString` 含签名。
-白盒部分（`testWhiteBox`）保留原结构断言 + final/超类检查。产出：`MethodTest.java`（59 断言通过）。
+- `C.class.getMethod(name, paramTypes...)` 按签名取 public 方法（含继承）。
+- `m.invoke(obj, args)` 反射调用；受检异常被包进 InvocationTargetException。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/reflect/Method.html）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/reflect/Method.java`。
+- JCK runtime-8b `tests/api/java_lang/reflect/Method/`。
+
+## 4. 测试用例设计（映射到 MethodTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 元数据/泛型签名/类型参数 | testMetadata / testGenericSignature |
+| P0 | 异常类型反射（顺序）| testExceptionTypes |
+| P0 | invoke 实例/静态 + 错参数/null | testInvoke |
+| P0 | InvocationTargetException cause/targetException 同源 | testInvocationTargetException |
+| P0 | 私有方法访问控制 | testAccessibility |
+| P0 | varargs/bridge/synthetic/default | testVarArgs / testBridgeSynthetic / testDefaultMethod |
+| P0 | 注解元素 getDefaultValue | testAnnotationDefaultValue |
+| P1 | 注解矩阵 | testAnnotations |
+| P1 | equals/hashCode/toString/toGenericString | testEqualsHashCodeToString |
+| P1 | getMethods/getDeclaredMethods 继承语义 | testDiscovery |
+
+## 易错规范细节（已锁入断言）
+
+- `getMethod("add",(Class[])null)` → NSME（null 被当作空数组），非 NPE。
+- bridge 方法 `isBridge()` 且 `isSynthetic()`，参数/返回为擦除后 Object。
+- `InvocationTargetException.getTargetException() == getCause()` 恒等。
+- 实例方法 `invoke(null,..)` → NPE；错参数类型/数量 → IAE。
+
+## JDK-27 差异（已锁入断言）
+
+- JDK-11+ nestmates 使私有成员可被同 nest 反射访问而不需 setAccessible；IAE 路径改用独立顶层类 `ExtMethod`。

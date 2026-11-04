@@ -1,22 +1,50 @@
-# java.lang.invoke.MethodHandles — 设计方案
+# java.lang.invoke.MethodHandles 测试设计案（JDK-27）
+
+> 覆盖目标：完整契约。Lookup（lookup/publicLookup/lookupClass/lookupModes/in/toString）、find（static/virtual/
+> constructor/getter/setter/special/bind）、unreflect（method/constructor/getter/setter）、revealDirect/reflectAs、
+> identity/constant、arrayElementGetter/Setter + 校验矩阵、insertArguments/dropArguments/filterArguments/
+> filterReturnValue/foldArguments/guardWithTest/catchException/throwException/permuteArguments/explicitCastArguments、
+> exactInvoker/invoker/spreadInvoker。
 
 ## 1. API 功能
-方法句柄工厂与组合器集合（final 工具类，全部静态方法）：`lookup/publicLookup`、`identity/constant/zero/empty`、数组构造器/元素访问、`insertArguments/dropArguments/permuteArguments/filterArguments/filterReturnValue/foldArguments`、`guardWithTest/catchException/tryFinally`、`throwException/explicitCastArguments/arrayConstructor/arrayElementGetter`、`reflectAs`。
 
-## 2. Java 用户如何使用
-```java
-MethodHandles.Lookup lk = MethodHandles.lookup();
-MethodHandle add = lk.findStatic(Math.class, "addExact", methodType(int.class, int.class, int.class));
-int r = (int) add.invokeExact(2, 3); // 5
-MethodHandle dbl = MethodHandles.insertArguments(add, 1, 21);
-```
+- Lookup 创建与模式（PUBLIC/PRIVATE/PROTECTED/PACKAGE）、find*/unreflect*/bind。
+- 组合器：insert/drop/filter/fold/guard/catch/throw/permute/explicitCastArguments + invokers。
 
-## 3. 开源代码实际用法调研
-- JDK `src/java.base/share/classes/java/lang/invoke/MethodHandles.java`（实现本体）。
-- JDK `test/jdk/java/lang/invoke/`（698 行为测试：FiltersTest/GuardTest/CatchExceptionTest/TryFinallyTest 等）。
-- Spring/Gradle 运行时与 Mockito/ByteBuddy 用 filterArguments/foldArguments 做调用拦截与 AOP 织入。
+## 2. 用户如何使用
 
-## 4. 测试用例设计 + 自动化实现
-白盒：final/public、无私有构造、组合器方法全存在、reflectAs 签名。
-黑盒：identity/constant/zero/empty 语义；insertArguments/dropArguments/permuteArguments/filterArguments/filterReturnValue 精确结果；foldArguments(add3,dbl)→(int,int)int==9；guardWithTest 真假两分支；catchException(thrower,ISE,常量-99) 捕获后返回；throwException 必抛；explicitCastArguments 宽化；tryFinally cleanup 收尾值；arrayConstructor/arrayElementGetter 组合。
-对应 `MethodHandlesTest.java` 的 `testBlackBox()`。
+- `MethodHandles.lookup()` 得到当前类 Lookup；`findStatic/findVirtual/findConstructor` 解析成员。
+- 组合器把简单 handle 组合成复杂行为（参数插拔、过滤、守卫、异常捕获）。
+
+## 3. 参考来源
+
+- Oracle Java SE 8 javadoc（java/lang/invoke/MethodHandles.html + Lookup）。
+- OpenJDK 8 `~/git/jdk8u-dev/jdk/src/share/classes/java/lang/invoke/MethodHandles.java`。
+- JCK runtime-8b `tests/api/java_lang/invoke/MethodHandles/`。
+
+## 4. 测试用例设计（映射到 MethodHandlesTest.java）
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | Lookup 模式/in/publicLookup | testLookup |
+| P0 | find 全家族 | testFind |
+| P0 | unreflect 全家族 | testUnreflect |
+| P0 | revealDirect/reflectAs | testRevealDirectReflectAs |
+| P0 | identity/constant | testIdentityConstant |
+| P0 | arrayElementGetter/Setter + 校验 | testArrayElementAccessors |
+| P0 | insert/drop/filter/fold | testInsertDropArguments / testFilterArguments / testFilterReturnValue / testFoldArguments |
+| P0 | guardWithTest/catchException/throwException | testGuardWithTest / testCatchException / testThrowException |
+| P0 | permuteArguments/explicitCastArguments | testPermuteArguments / testExplicitCastArguments |
+| P1 | exactInvoker/invoker/spreadInvoker | testInvokers |
+
+## 易错规范细节（已锁入断言）
+
+- `in(String.class)` 丢弃 PRIVATE/PACKAGE 模式；findSpecial 需 `LOOKUP.in(Child.class)`。
+- `bind()` 需方法名（非字段）；`throwException` handle 类型为 `(exType)returnType`。
+- `permuteArguments` reorder.length==旧参数个数；`revealDirect` 对非 direct handle → IAE。
+- JDK-8 publicLookup 仅 PUBLIC 模式（JDK-27 改为 UNCONDITIONAL 0x20）。
+
+## JDK-27 差异（已锁入断言）
+
+- `publicLookup()` 返回 UNCONDITIONAL 模式（0x20），无 PUBLIC 位（JDK-8 为 PUBLIC）。
+- 新增 `zero`/`empty`/`arrayConstructor`、Lookup `MODULE`/`UNCONDITIONAL` 常量、`hasFullPrivilegeAccess`（testJdk27Methods）。
