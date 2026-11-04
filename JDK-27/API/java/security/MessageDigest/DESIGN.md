@@ -1,29 +1,19 @@
-# java.security.MessageDigest 黑盒行为测试设计
+# MessageDigest — 设计案
 
 ## 1. API 功能
-- 工厂：`getInstance(String)` / `getInstance(String,String)` / `getInstance(String,Provider)`（算法名 + 可选 provider）。
-- 核心操作：`update(byte)`、`update(byte[],int,int)`、`update(byte[])`、`update(ByteBuffer)`；`digest()`、`digest(byte[],int,int)`、`digest(byte[])`。
-- 查询：`getAlgorithm()`、`getDigestLength()`、`getProvider()`；`isEqual(byte[],byte[])`（常数时间比较）。
-- 状态管理：`reset()`、`clone()`；`toString()`。
+消息摘要引擎抽象类（extends MessageDigestSpi）。getInstance 工厂 + update/digest/reset/clone/isEqual/getAlgorithm/getProvider/getDigestLength/toString。
 
-## 2. Java 用户如何使用
-典型组合链路：`getInstance("SHA-256")` → 多次 `update(...)` 分片喂入 → `digest()` 取摘要；或一次性 `digest(byte[])`。校验用 `MessageDigest.isEqual(a, b)`。重置用 `reset()`，复制用 `clone()`。
-```java
-MessageDigest md = MessageDigest.getInstance("SHA-256");
-md.update(data, 0, data.length);
-byte[] digest = md.digest();
-if (!MessageDigest.isEqual(digest, expected)) { ... }
-```
+## 2. 使用方式
+`MessageDigest.getInstance("SHA-256")` → `update(byte[])`（或 `update(byte[],off,len)`/`update(ByteBuffer)`）→ `digest()` 得固定长度字节数组；`reset()` 复用；`isEqual` 恒定时比较。
 
-## 3. 开源代码实际用法调研
-- JDK 自带测试 `test/jdk/java/security/MessageDigest/TestDigestIOStream.java`：DigestInputStream/DigestOutputStream 与 MessageDigest 组合。
-- `test/jdk/java/security/MessageDigest/ByteBuffers.java`：`update(ByteBuffer)` 用法。
-- `test/jdk/java/security/MessageDigest/ArgumentSanity.java`：`update`/`digest` 边界参数。
-- 实现权威：`src/java.base/share/classes/java/security/MessageDigest.java`。
+## 3. 参考来源
+- javadoc `java.security.MessageDigest`（异常契约：getInstance→NoSuchAlgorithmException/NoSuchProviderException，digest 短缓冲→DigestException）。
+- OpenJDK `test/jdk/java/security/MessageDigest/`（KnownAnswer、TestDigest 系列）。
+- JCK runtime-8b `api/java_security/MessageDigest/`。
 
-## 4. 测试用例设计 + 自动化实现
-- 已知向量：SHA-256("abc")、SHA-256("")、MD5("abc") 固定 hex 串断言。
-- 分片等价：逐字节 update、offset update 与一次性 digest 结果相等。
-- digest 数组往返：`digest(byte[],int,int)` 写入缓冲区并返回长度。
-- `reset()`、`clone()` 独立性、`isEqual` 边界（null、长度不等）。
-- `getAlgorithm`/`getDigestLength`/`getProvider`/显式 provider `getInstance`。
+## 4. 测试用例设计 + 易错规范细节
+- 工厂矩阵：bogus→NSAE；null 算法→NPE；null Provider/String→IAE；bogus provider→NoSuchProviderException。
+- 已知向量：MD5/SHA-1/SHA-256 的空串与 "abc" 十六进制摘要。
+- 边界：`update(byte[],off,len)` 越界/负 offset/负 len→IAE 或 AIOOBE（JDK-8 实测负值落入 engineUpdate→ArrayIndexOutOfBoundsException）；`update(null)` 单参→NPE、`update(null,0,1)`→IAE；`digest(buf,off,len)` 短缓冲→DigestException。
+- 状态不变量：digest 后自动 reset（连续 digest() 相同）；digest 后 update 可复用；reset 清空；clone 独立性。
+- 易错点：`digest(byte[] input)` 是 update+digest（把入参当数据），不是写输出缓冲；toString 为 "算法 Message Digest from 提供者" 而非 "MessageDigest 算法"；JDK-8 无 "SHA256" 别名（用 "SHA1" 做别名等价）；跨 JDK 负 offset 异常类型一致为 AIOOBE。

@@ -1,99 +1,116 @@
 /*
  * @test
- * @summary java.security.SecureRandom conformance: white-box structure + black-box behavior.
+ * @summary java.security.SecureRandom conformance: full contract coverage.
+ *          getInstance variants + exact exceptions (NoSuchAlgorithmException /
+ *          NullPointerException / IllegalArgumentException / NoSuchProviderException),
+ *          default and SHA1PRNG instances, nextBytes non-trivial (bounded not-all-zero
+ *          check on a fixed-length buffer), nextBytes(null)/setSeed(null) -> NPE,
+ *          generateSeed length + negative -> IllegalArgumentException, setSeed
+ *          reproducibility across two SHA1PRNG instances, and getAlgorithm/getProvider.
  * @run main SecureRandomTest
  */
 
-import java.lang.reflect.Modifier;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.Provider;
 import java.security.SecureRandom;
+import java.security.Security;
 import java.util.Arrays;
 
 public class SecureRandomTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.security.SecureRandom");
-        check(Modifier.isPublic(c.getModifiers()), "public");
-        check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
-        check(c.getSuperclass().getName().equals("java.util.Random"), "extends java.util.Random");
-        checkMethods(c, new String[]{"getInstance", "getProvider", "getAlgorithm", "setSeed",
-            "nextBytes", "generateSeed", "getSeed", "getInstanceStrong", "reseed", "getParameters"});
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        // Seeded constructor: usable, deterministic in *length*, and nextBytes fills the array.
-        byte[] seed = {1, 2, 3, 4, 5, 6, 7, 8};
-        SecureRandom r1 = new SecureRandom(seed);
-        check(r1 != null, "SecureRandom(byte[]) non-null");
-        check(r1.getAlgorithm() != null, "getAlgorithm non-null (seeded)");
-
-        byte[] a = new byte[16];
-        byte[] b = new byte[16];
-        r1.nextBytes(a);
-        SecureRandom r2 = new SecureRandom(seed);
-        r2.nextBytes(b);
-        check(a.length == 16 && b.length == 16, "nextBytes fills 16 bytes");
-        // Content is cryptographically random (NativePRNG mixes OS entropy), so we do not
-        // assert value equality across two seeded instances; instead assert the arrays are
-        // independently populated by distinct draws (length contract only).
-
-        // generateSeed / getSeed lengths are deterministic.
-        SecureRandom sr = new SecureRandom();
-        check(sr.generateSeed(20).length == 20, "generateSeed(20) length 20");
-        check(SecureRandom.getSeed(20).length == 20, "getSeed(20) length 20");
-        check(sr.generateSeed(0).length == 0, "generateSeed(0) length 0");
-
-        // setSeed variants are callable and do not throw.
-        sr.setSeed(seed);
-        sr.setSeed(123456789L);
-        byte[] filled = new byte[32];
-        sr.nextBytes(filled);
-        check(filled.length == 32, "nextBytes after setSeed fills 32");
-
-        // nextLong stays within the full long range contract (Random).
-        long l = sr.nextLong();
-        check(true, "nextLong() returns " + l);
-
-        // getInstance variants (algorithm available in JDK-27 providers).
-        SecureRandom sha1 = SecureRandom.getInstance("SHA1PRNG");
-        check(sha1 != null && "SHA1PRNG".equals(sha1.getAlgorithm()), "getInstance(SHA1PRNG)");
-        byte[] s1 = new byte[8];
-        sha1.nextBytes(s1);
-        check(s1.length == 8, "SHA1PRNG nextBytes fills 8");
-
-        SecureRandom drbg = SecureRandom.getInstance("DRBG");
-        check(drbg != null, "getInstance(DRBG) non-null");
-        drbg.nextBytes(new byte[8]);
-
-        // getInstanceStrong must return a usable, non-null generator.
-        SecureRandom strong = SecureRandom.getInstanceStrong();
-        check(strong != null, "getInstanceStrong non-null");
-        byte[] sb = new byte[16];
-        strong.nextBytes(sb);
-        check(sb.length == 16, "getInstanceStrong nextBytes fills 16");
-
-        // getParameters is null for default algorithm, non-null-or-null tolerated (contract: may be null).
-        check(true, "getParameters() -> " + strong.getParameters());
-    }
-
-    static boolean hasMethod(Class<?> c, String name) {
-        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkMethods(Class<?> c, String[] names) {
-        for (String n : names) check(hasMethod(c, n), "method " + n);
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        // ---- factory + exception matrix ----
+        checkThrows(NoSuchAlgorithmException.class,
+                () -> SecureRandom.getInstance("NoSuchSR_XYZ"), "getInstance(bogus)");
+        checkThrows(NullPointerException.class,
+                () -> SecureRandom.getInstance(null), "getInstance(null)");
+        checkThrows(NullPointerException.class,
+                () -> SecureRandom.getInstance(null, Security.getProvider("SUN")),
+                "getInstance(null, Provider)");
+        checkThrows(IllegalArgumentException.class,
+                () -> SecureRandom.getInstance("SHA1PRNG", (Provider) null),
+                "getInstance(alg, null Provider)");
+        checkThrows(IllegalArgumentException.class,
+                () -> SecureRandom.getInstance("SHA1PRNG", (String) null),
+                "getInstance(alg, null String)");
+        checkThrows(NoSuchProviderException.class,
+                () -> SecureRandom.getInstance("SHA1PRNG", "NoSuchProvider_XYZ"),
+                "getInstance(alg, bogus provider)");
+
+        // ---- metadata ----
+        SecureRandom sr = SecureRandom.getInstance("SHA1PRNG");
+        check("SHA1PRNG".equals(sr.getAlgorithm()), "getAlgorithm SHA1PRNG");
+        check(sr.getProvider() != null, "getProvider non-null");
+        check(new SecureRandom() != null, "no-arg constructor");
+
+        // ---- nextBytes not all zero (bounded on fixed 100-byte buffer) ----
+        SecureRandom gen = new SecureRandom();
+        byte[] buf = new byte[100];
+        gen.nextBytes(buf);
+        boolean allZero = true;
+        for (byte b : buf) if (b != 0) { allZero = false; break; }
+        check(!allZero, "nextBytes(100) not all zero");
+        check(buf.length == 100, "nextBytes fills exact length");
+
+        // ---- nextBytes(null) -> NPE ----
+        final SecureRandom nb = new SecureRandom();
+        checkThrows(NullPointerException.class, () -> nb.nextBytes(null), "nextBytes(null)");
+
+        // ---- setSeed(null) -> NPE, setSeed(byte[]) legal ----
+        final SecureRandom ss = new SecureRandom();
+        checkThrows(NullPointerException.class, () -> ss.setSeed(null), "setSeed(null)");
+        ss.setSeed(new byte[16]);
+        check(true, "setSeed(byte[]) legal");
+
+        // ---- generateSeed ----
+        SecureRandom gs = new SecureRandom();
+        byte[] seed = gs.generateSeed(20);
+        check(seed.length == 20, "generateSeed(20) length");
+        final SecureRandom gsNeg = new SecureRandom();
+        checkThrows(IllegalArgumentException.class, () -> gsNeg.generateSeed(-1),
+                "generateSeed(-1)");
+
+        // ---- setSeed reproducibility across two SHA1PRNG instances ----
+        byte[] fixedSeed = new byte[32];
+        Arrays.fill(fixedSeed, (byte) 7);
+        SecureRandom r1 = SecureRandom.getInstance("SHA1PRNG");
+        r1.setSeed(fixedSeed);
+        SecureRandom r2 = SecureRandom.getInstance("SHA1PRNG");
+        r2.setSeed(fixedSeed);
+        byte[] o1 = new byte[64];
+        byte[] o2 = new byte[64];
+        r1.nextBytes(o1);
+        r2.nextBytes(o2);
+        check(Arrays.equals(o1, o2), "SHA1PRNG setSeed reproducible");
+
+        // ---- SecureRandom(byte[] seed) constructor ----
+        SecureRandom seeded = new SecureRandom(new byte[16]);
+        byte[] sb = new byte[16];
+        seeded.nextBytes(sb);
+        check(sb.length == 16, "SecureRandom(byte[]) nextBytes length");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

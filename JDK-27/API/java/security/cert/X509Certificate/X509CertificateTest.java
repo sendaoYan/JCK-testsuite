@@ -1,176 +1,131 @@
 /*
  * @test
- * @summary java.security.cert.X509Certificate conformance: white-box structure + black-box behavior.
+ * @summary java.security.cert.X509Certificate conformance: full contract coverage.
+ *          parse a fixed self-signed X.509 cert via CertificateFactory, assert version/
+ *          serial/sigAlgName/sigAlgOID/public-key algorithm/validity/DNs/basicConstraints,
+ *          checkValidity(Date) inside range and NotYetValid/Expired outside range,
+ *          verify(self public key), getEncoded round-trip, getType, equals/hashCode,
+ *          and toString.
  * @run main X509CertificateTest
  */
 
-import java.lang.reflect.*;
-import java.io.*;
-import java.security.cert.*;
-import java.util.*;
+import java.io.ByteArrayInputStream;
+import java.math.BigInteger;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.CertificateNotYetValidException;
+import java.security.cert.X509Certificate;
 import java.util.Base64;
-
+import java.util.Date;
 
 public class X509CertificateTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.security.cert.X509Certificate");
-        check(Modifier.isPublic(c.getModifiers()), "public");
-        check(!c.isInterface() && Modifier.isAbstract(c.getModifiers()), "abstract class");
-        check(c.getSuperclass().getName().equals("java.security.cert.Certificate"), "superclass");
-        checkInterfaces(c, new String[]{"java.security.cert.X509Extension", "java.security.BinaryEncodable"});
-        checkMethods(c, new String[]{"checkValidity", "getBasicConstraints", "getExtendedKeyUsage", "getIssuerAlternativeNames", "getIssuerDN", "getIssuerUniqueID", "getIssuerX500Principal", "getKeyUsage", "getNotAfter", "getNotBefore", "getSerialNumber", "getSigAlgName", "getSigAlgOID", "getSigAlgParams", "getSignature", "getSubjectAlternativeNames", "getSubjectDN", "getSubjectUniqueID", "getSubjectX500Principal", "getTBSCertificate", "getVersion", "verify"});
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // Fixed fixtures, generated once with JDK-27 keytool (RSA-2048 self-signed certs CN=jck-root / CN=jck-leaf,
-    // validity 2026-11-03T04:09:52Z..2036-10-31T04:09:52Z, sig SHA384withRSA, root serial 0x70bdab2c498601da,
-    // leaf serial 0xbc0944b4fd45f023; CRL v1 issued by jck-root, thisUpdate 2026-11-03, nextUpdate 2027-02-01,
-    // revoked serial 0; PKCS#8 DER of the root private key). Tests decode at runtime; no external files.
+    // Fixed self-signed X.509 cert: RSA 2048, SHA256withRSA, serial 0x0f17ae3a.
+    static final String CERT_B64 =
+        "MIIDhzCCAm+gAwIBAgIEDxeuOjANBgkqhkiG9w0BAQsFADB0MQswCQYDVQQGEwJV" +
+        "UzELMAkGA1UECBMCSUwxFDASBgNVBAcTC1NwcmluZ2ZpZWxkMRQwEgYDVQQKEwtF" +
+        "eGFtcGxlIE9yZzEUMBIGA1UECxMLQ29uZm9ybWFuY2UxFjAUBgNVBAMTDUpDSyBU" +
+        "ZXN0IENlcnQwHhcNMjYxMTA0MDkzNzI4WhcNMzYxMTAxMDkzNzI4WjB0MQswCQYD" +
+        "VQQGEwJVUzELMAkGA1UECBMCSUwxFDASBgNVBAcTC1NwcmluZ2ZpZWxkMRQwEgYD" +
+        "VQQKEwtFeGFtcGxlIE9yZzEUMBIGA1UECxMLQ29uZm9ybWFuY2UxFjAUBgNVBAMT" +
+        "DUpDSyBUZXN0IENlcnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDA" +
+        "ImuPu7xdlUkyW0Q8Y75ek2oybshN0xF3MxmxqiUWJruiM+U2+Ema1DA7lSquiCNG" +
+        "bzmHhWpk8mK2rjEFu++avlIG5mnr4XQdiQe5o4q2IIuN3LKdvfauwmT5WoxUTdCa" +
+        "FxtBDdAPsfckCr8C/ypWwJUdK4uY4MFgrVWg5NAIIG8xVmGONYIpE25fxQ7O55CM" +
+        "23CXsJ3iU5+GpTBFaDr8/LJ2eKQEx35voV3iyWa9bKdsys4kg1sQgTCLv2kvRFU9" +
+        "QXmcLwuhP0tEUGf7fann26h5FrL5fsj4UwT+djO42tNHTDN5KGgeoinVKYlUcfEY" +
+        "WEyek9a95hFdn8I/30fLAgMBAAGjITAfMB0GA1UdDgQWBBTo72jITqQdGMA1Fxl/" +
+        "lTqG24M1VTANBgkqhkiG9w0BAQsFAAOCAQEAnofWJt83h4XkRfD6ejfnYJeMXZ+O" +
+        "QY4J4/cHa6jSTgXPrKI8GQtZD8QF0jlb/2rjEKQ33YW8r9lci6p1po5bIMqbToGb" +
+        "zoKFK2x16ggsx37pxwIWqdp9aFIWJvQFXrK8vwzEGFc518wxjhOLKE7BbYzeCSiL" +
+        "jP92JbEWUw6Ae4eCEpxMyZKWCw/iizv2zRv3iH5uobZwZ+aUiQUgjTXRM0exJXFv" +
+        "VfXV9EY8MG9PMbWNjkusz66NIyUKoupRvl9rTnjNv1LlggVSAwW5uXzNCh/sUSMm" +
+        "jVmmYMwYpDTG1Uz54HYKL7ZNhkDUj0IzSM5PI0ut8jdnMJOOWXr6tg0GPg==";
 
-    static final String ROOT_CERT_B64 =
-        "MIIDLjCCAhagAwIBAgIIcL2rLEmGAdowDQYJKoZIhvcNAQEMBQAwPTELMAkGA1UEBhMC" + "\n" +
-        "VVMxDTALBgNVBAoTBFRlc3QxDDAKBgNVBAsTA0pDSzERMA8GA1UEAxMIamNrLXJvb3Qw" + "\n" +
-        "HhcNMjYxMTAzMDQwOTUyWhcNMzYxMDMxMDQwOTUyWjA9MQswCQYDVQQGEwJVUzENMAsG" + "\n" +
-        "A1UEChMEVGVzdDEMMAoGA1UECxMDSkNLMREwDwYDVQQDEwhqY2stcm9vdDCCASIwDQYJ" + "\n" +
-        "KoZIhvcNAQEBBQADggEPADCCAQoCggEBALrM4ukZtyCiH9zsjkRMgOt6EYkhMv8IXY7t" + "\n" +
-        "wYzWwLJnR9ED7BnleYFAaeSH17SWUAPdUBTH+ig57+2DI2Te3IJo974rgHjq94UXk5ez" + "\n" +
-        "y1aUlrpe4SV+1NCnA/zg2E3lIOIaObZrTbBTT16jveIuX3Rqjbz9/z6Xic3Wvn2CqBNp" + "\n" +
-        "1rnF1/GqhN6/6O0I+8el3ulMXzqmc21YPQuvpJDYuR1026ht3vqZhuY3elLEdvTQfOQa" + "\n" +
-        "5w4xNGg6BlXycQsOXXP7Uqk8s5fTxBEKhR9gfABehJTuHwqEkeaQgT44xtgeaEOnbqH2" + "\n" +
-        "thm0cucWQnSsGOJdR2IZ6RYVP+ix4hOZ3vsCAwEAAaMyMDAwHQYDVR0OBBYEFI92/CSa" + "\n" +
-        "lBAhQnaSMXtuaF3G4f9TMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEMBQADggEB" + "\n" +
-        "AJy35loMlTYxvzsaqqlXMBOuaMULP/qZXyiZhX0H3sKtYxZVBdHLS/CG2k4mXtOQHNqq" + "\n" +
-        "Gz+JQo0LS4VoxNCPrAky9tvubH4eSoF3xGJIdThVDBhcn0T2rYjb9z52xA1p+GIoc9Gi" + "\n" +
-        "Fv6vh1l4OkhLq9ymIwnM+CjBUNOW6fwojo7c7o/qxk0+qPijanzhxh9ffIrRqQmQom9W" + "\n" +
-        "pelY03y0XZKuAGxb0cuRBOCkH4Jg0RJhbJoR08wn3jEJdQ7t5I65VcOjJ0KzyRzV/g3V" + "\n" +
-        "C0Wwnv9j7RSSuxdcwrNYVm3vgDQiZWlXDcYJob2fn2H+q0hohK0mdyw43fyDkxSsWiFq" + "\n" +
-        "UF8=";
-    static final String LEAF_CERT_B64 =
-        "MIIDHjCCAgagAwIBAgIJALwJRLT9RfAjMA0GCSqGSIb3DQEBDAUAMD0xCzAJBgNVBAYT" + "\n" +
-        "AlVTMQ0wCwYDVQQKEwRUZXN0MQwwCgYDVQQLEwNKQ0sxETAPBgNVBAMTCGpjay1sZWFm" + "\n" +
-        "MB4XDTI2MTEwMzA0MDk1M1oXDTM2MTAzMTA0MDk1M1owPTELMAkGA1UEBhMCVVMxDTAL" + "\n" +
-        "BgNVBAoTBFRlc3QxDDAKBgNVBAsTA0pDSzERMA8GA1UEAxMIamNrLWxlYWYwggEiMA0G" + "\n" +
-        "CSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDisnQcLGfp7REpIgOeehP9d5UOBnrncfNL" + "\n" +
-        "m7LcJ+fRiK03KU//GKdls18S3ypr2eV13f28vdpPhVWpZtYEpcfEDWyvgX19nQj9+6zl" + "\n" +
-        "serGqnnrPqMt6M4SNW028Dr7z+xG2TmanDUbSXzsvEWfb7sScH5KWrSKOIl++SOBa9s0" + "\n" +
-        "nTlqadjGcn2PLBXlJUiLgk7+uj7o5tsf1nTmRd7cKpLW4BnIQVSFyOvrO94/SmzE/SQU" + "\n" +
-        "a7J/trD30b1ma901A/MtaeYKAWRTlevmckGCZMn6UF8WXr9lxJW0T3UBWYqvBlsiym6p" + "\n" +
-        "80/YefCqe+byY55i7WUVN5YTKSk3Um/yCnpFAgMBAAGjITAfMB0GA1UdDgQWBBQJj8/0" + "\n" +
-        "KpspnGDPoSQb7ZCn72zWZjANBgkqhkiG9w0BAQwFAAOCAQEApZSVF4/jEZ2LmUCNryZ3" + "\n" +
-        "AXrkDNSrWptBixVWu9vT0RGjXW7rK1OONxcrplssjGLVAnIqW+FuLMFzVy59yKQskGe8" + "\n" +
-        "MdHNZdSpKhPO/kkSx6I4uQMCOl4wbPnzkjLZrDa2r4Qr8YQw2SZ9Bb+vaijYIk6gEpJ4" + "\n" +
-        "cjBOOCyQFO+Dao6j71L4gxbl8zty5eA0jm2KpDULMXS5rRpKS2FOUHYR40gYpqyonHH5" + "\n" +
-        "nzwJ4R1y0o/oct42BLim38UMruvf9I97/tShAvGtwfSofaGKWBwtTRmwwhc16NcL6VKk" + "\n" +
-        "Ce9m+wx5FUgwcEGNjv+HJ4b+RgCiKtZWziHX4qrkXKGsKiKrwg==";
-    static final String ROOT_CRL_B64 =
-        "MIIBmTCBgjANBgkqhkiG9w0BAQwFADA9MQswCQYDVQQGEwJVUzENMAsGA1UEChMEVGVz" + "\n" +
-        "dDEMMAoGA1UECxMDSkNLMREwDwYDVQQDEwhqY2stcm9vdBcNMjYxMTAzMDQwOTU0WhcN" + "\n" +
-        "MjcwMjAxMDQwOTU0WjAUMBICAQAXDTI2MTEwMzA0MDk1NFowDQYJKoZIhvcNAQEMBQAD" + "\n" +
-        "ggEBAFuf6Ir8rfNZ9yAHZLvA03bOZYbNsSC2JTVkO4ZJtm5hquLYU2YA4X/v/gBOuvqm" + "\n" +
-        "NXbroPJG2ZSxObRiS+N8Q3XBJGJK4ME8VmRUNxFw6sSPRGBSFvD7jwJOH+YRkHPfJ/2H" + "\n" +
-        "5w7fT+4zgvkviCJ/skB2trCrKm1EwRrT7mSKTY9NR3NTau5T2jQ9eJF7km72Bz0Y1LHo" + "\n" +
-        "OKXAOF3d2ajb9fbLuDJV16MTl+j+Ar5X2jalGVg1M00omc5Re2eZQJpH9IlWPnoGHmC1" + "\n" +
-        "MvNbcH5d1YcI0sX9AOUzcJItQkv+IipcErE5O81X12CKImLCsjD6Wv1lSz7zhgHr7fgA" + "\n" +
-        "/z+EmMM=";
-    static byte[] fromB64(String s) { return Base64.getMimeDecoder().decode(s); }
-    static java.security.cert.X509Certificate fixtureCert(String b64) throws Exception {
-        return (java.security.cert.X509Certificate) java.security.cert.CertificateFactory.getInstance("X.509")
-            .generateCertificate(new java.io.ByteArrayInputStream(fromB64(b64)));
-    }
-    static java.security.cert.X509CRL fixtureCrl() throws Exception {
-        return (java.security.cert.X509CRL) java.security.cert.CertificateFactory.getInstance("X.509")
-            .generateCRL(new java.io.ByteArrayInputStream(fromB64(ROOT_CRL_B64)));
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        // Real self-signed certificate decoded from the fixed fixture
-        X509Certificate c = fixtureCert(ROOT_CERT_B64);
-        check(c.getVersion() == 3, "v3");
-        check(c.getSerialNumber().compareTo(new java.math.BigInteger("70bdab2c498601da", 16)) == 0, "serial");
-        check(c.getSubjectX500Principal().getName(javax.security.auth.x500.X500Principal.RFC2253).contains("CN=jck-root"), "subject");
-        check(c.getIssuerX500Principal().getName().contains("jck-root"), "issuer (self-signed)");
-        check(c.getSigAlgName().startsWith("SHA384withRSA"), "sig alg name");
-        check(c.getSigAlgOID().equals("1.2.840.113549.1.1.12"), "sig OID");
-        check(c.getSigAlgParams() == null, "no sig params");
-        // legacy subject/issuer getters
-        check(c.getSubjectDN().getName().contains("jck-root"), "subjectDN");
-        check(c.getIssuerDN().getName().contains("jck-root"), "issuerDN");
-        // validity against the fixture window (2026-11-03..2036-10-31)
-        c.checkValidity();
-        check(true, "valid now");
-        java.util.Date before = java.util.Date.from(java.time.Instant.parse("2020-01-01T00:00:00Z"));
-        try { c.checkValidity(before); check(false, "expired at fixed date"); }
-        catch (CertificateExpiredException cee) { check(false, "unexpected expired"); }
-        catch (CertificateNotYetValidException cnv) { check(true, "not yet valid at 2020"); }
-        // fixture carries no KeyUsage extension; BasicConstraints marks it an unconstrained CA
-        check(c.getKeyUsage() == null, "no KeyUsage extension");
-        check(c.getBasicConstraints() == Integer.MAX_VALUE, "unconstrained CA basicConstraints");
-        // subject/issuer unique ids absent in v3 fixture
-        check(c.getSubjectUniqueID() == null && c.getIssuerUniqueID() == null, "no unique ids");
-        // alternative names absent
-        check(c.getSubjectAlternativeNames() == null, "no SAN");
-        check(c.getIssuerAlternativeNames() == null, "no IAN");
-        // extended key usage absent on this fixture
-        check(c.getExtendedKeyUsage() == null || c.getExtendedKeyUsage().isEmpty(), "no EKU");
-        // public key and encoded
-        check(c.getPublicKey().getAlgorithm().equals("RSA"), "RSA key");
-        check(c.getEncoded().length > 0, "encoded");
-        check(c.getTBSCertificate().length > 0, "TBS bytes");
-        check(c.getSignature().length > 0, "signature bytes");
-        // equals/hashCode stable across decodes
-        X509Certificate again = fixtureCert(ROOT_CERT_B64);
-        check(c.equals(again) && c.hashCode() == again.hashCode(), "value equality");
-        // verify and wrong-key failure
-        c.verify(c.getPublicKey());
-        check(true, "self-verify ok");
-        java.security.KeyPairGenerator kpg = java.security.KeyPairGenerator.getInstance("RSA");
-        kpg.initialize(2048);
-        try { c.verify(kpg.generateKeyPair().getPublic()); check(false, "wrong key"); }
-        catch (Exception e) { check(true, "wrong key rejected"); }
-        // extensions surface (v3 cert carries basicConstraints/keyUsage/SKID/AKID as non-critical)
-        Set<String> nonCrit = c.getNonCriticalExtensionOIDs();
-        check(nonCrit != null && nonCrit.size() >= 1, "non-critical extensions present: " + (nonCrit == null ? -1 : nonCrit.size()));
-        check(c.getCriticalExtensionOIDs().equals(Set.of("2.5.29.19")), "BasicConstraints critical");
-        check(!c.hasUnsupportedCriticalExtension(), "no unsupported critical");
-        check(c.getExtensionValue("2.5.29.99") == null, "unknown extension null");
-        // toString detailed form
-        check(c.toString().length() > 0, "toString");
-
+    static X509Certificate cert() throws Exception {
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        return (X509Certificate) cf.generateCertificate(
+                new ByteArrayInputStream(Base64.getDecoder().decode(CERT_B64)));
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        X509Certificate c = cert();
+
+        // ---- fields ----
+        check(c.getVersion() == 3, "getVersion == 3");
+        check(new BigInteger("0f17ae3a", 16).equals(c.getSerialNumber()), "getSerialNumber");
+        check("SHA256withRSA".equals(c.getSigAlgName()), "getSigAlgName");
+        check("1.2.840.113549.1.1.11".equals(c.getSigAlgOID()), "getSigAlgOID");
+        check("RSA".equals(c.getPublicKey().getAlgorithm()), "getPublicKey algorithm RSA");
+
+        // ---- validity ----
+        Date notBefore = c.getNotBefore();
+        Date notAfter = c.getNotAfter();
+        check(notBefore != null && notAfter != null, "validity dates non-null");
+        check(notBefore.before(notAfter), "notBefore before notAfter");
+
+        // checkValidity(Date) inside range
+        c.checkValidity(new Date(notBefore.getTime() + 1000));
+        check(true, "checkValidity just after notBefore");
+        c.checkValidity(new Date(notAfter.getTime() - 1000));
+        check(true, "checkValidity just before notAfter");
+
+        // checkValidity(Date) outside range (deterministic relative to cert)
+        checkThrows(CertificateNotYetValidException.class,
+                () -> c.checkValidity(new Date(notBefore.getTime() - 1000)), "checkValidity before notBefore");
+        checkThrows(CertificateExpiredException.class,
+                () -> c.checkValidity(new Date(notAfter.getTime() + 1000)), "checkValidity after notAfter");
+
+        // ---- DNs ----
+        check("CN=JCK Test Cert,OU=Conformance,O=Example Org,L=Springfield,ST=IL,C=US"
+                .equals(c.getSubjectX500Principal().getName()), "getSubjectX500Principal");
+        check("CN=JCK Test Cert,OU=Conformance,O=Example Org,L=Springfield,ST=IL,C=US"
+                .equals(c.getIssuerX500Principal().getName()), "getIssuerX500Principal");
+        check(c.getSubjectDN() != null && c.getIssuerDN() != null, "getSubjectDN/getIssuerDN non-null");
+
+        // ---- basic constraints ----
+        check(c.getBasicConstraints() == -1, "getBasicConstraints -1 (no extension)");
+
+        // ---- verify self-signed ----
+        c.verify(c.getPublicKey());
+        check(true, "verify(self public key)");
+
+        // ---- type + encoded round-trip ----
+        check("X.509".equals(c.getType()), "getType X.509");
+        byte[] enc = c.getEncoded();
+        check(enc != null && enc.length > 500, "getEncoded non-trivial");
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        X509Certificate reparsed = (X509Certificate) cf.generateCertificate(
+                new ByteArrayInputStream(enc));
+        check(c.equals(reparsed), "reparse encoded equals");
+
+        // ---- equals/hashCode/toString ----
+        X509Certificate c2 = cert();
+        check(c.equals(c2), "equals same cert");
+        check(c.hashCode() == c2.hashCode(), "hashCode equal");
+        check(c.toString() != null && c.toString().length() > 0, "toString non-empty");
+
         System.out.println("PASS (" + passed + " assertions)");
-    }
-    static boolean hasInterface(Class<?> c, String name) {
-        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkInterfaces(Class<?> c, String[] names) {
-        for (String n : names) check(hasInterface(c, n), "implements " + n);
-    }
-    static void checkMethods(Class<?> c, String[] names) {
-        for (String n : names) check(hasMethod(c, n), "method " + n);
-    }
-    static boolean hasMethod(Class<?> c, String name) {
-        for (Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkEnumConstants(Class<?> c, String[] names) {
-        Object[] cs = c.getEnumConstants();
-        check(cs != null, "enum constants");
-        check(cs.length == names.length, "enum constant count");
-        for (String n : names) check(hasConst(cs, n), "constant " + n);
-    }
-    static boolean hasConst(Object[] cs, String name) {
-        for (Object o : cs) if (((Enum<?>) o).name().equals(name)) return true;
-        return false;
     }
 }

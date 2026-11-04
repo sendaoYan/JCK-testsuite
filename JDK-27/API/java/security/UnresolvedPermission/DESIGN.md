@@ -1,18 +1,16 @@
-# java.security.UnresolvedPermission 黑盒行为测试设计
+# UnresolvedPermission — 设计案
 
 ## 1. API 功能
-- 构造：`UnresolvedPermission(type, name, actions, certs)`；查询 `getUnresolvedType/Name/Actions/Certificates`（getActions 恒空）
+未解析权限（持有底层权限的类名/名称/动作/证书）。构造器 + getUnresolvedType/Name/Actions + getActions(恒 "") + implies(恒 false) + newPermissionCollection。
 
-## 2. Java 用户如何使用
-权限类当时不可用时占位；Permissions.implies 命中时解析为真实权限。
+## 2. 使用方式
+`new UnresolvedPermission("java.io.FilePermission", "read", "read", null)`。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `/data/yansendao/git/jdk27/src/java.base/share/classes/java/security/UnresolvedPermission.java`、`/data/yansendao/git/jdk27/src/java.base/share/classes/java/security/Permissions.java`
-- JDK 测试 `/data/yansendao/git/jdk25u-dev/test/jdk/java/security/UnresolvedPermission/AccessorMethods.java`、`/data/yansendao/git/jdk25u-dev/test/jdk/java/security/PermissionCollection/Concurrent.java`
+## 3. 参考来源
+- javadoc `java.security.UnresolvedPermission`。
+- JCK runtime-8b `api/java_security/UnresolvedPermission/`。
 
-## 4. 测试用例设计 + 自动化实现
-- 正常：4 个 getUnresolved* 精确透传、自身 implies 任何权限为 false、getActions 空
-- 组合：add 进 Permissions 后 implies 匹配权限 → true（解析发生）、不匹配 → false
-- 边界：null certs → getUnresolvedCertificates null
-
-断言入口：`UnresolvedPermissionTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+## 4. 测试用例设计 + 易错规范细节
+- getters：getUnresolvedType=type、getUnresolvedName=name、getUnresolvedActions=actions、getActions=""、getName()==type（构造器 super(type)）。
+- null type→NPE；null name/actions 合法；certs 防御性拷贝。
+- implies 恒 false（含集合 add 后仍 false）；equals/hashCode；toString；newPermissionCollection 非空。

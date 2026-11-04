@@ -1,19 +1,19 @@
-# java.security.BasicPermission 黑盒行为测试设计
+# BasicPermission — 设计案
 
 ## 1. API 功能
-- 构造：`BasicPermission(String)`、`BasicPermission(String, String)`（actions 忽略）
-- 查询：`implies`（名字分层匹配 + `*`/`前缀.*` 通配）、`getActions()` 恒空串、`newPermissionCollection()`
+基础权限抽象类（extends Permission）。name/name+actions 构造器 + getName/getActions(恒 "") + implies + newPermissionCollection。
 
-## 2. Java 用户如何使用
-子类（SecurityPermission 等）只给名字；`a.b.*` 蕴含 `a.b.c`，`*` 蕴含一切。
+## 2. 使用方式
+子类 `class BP extends BasicPermission { BP(String n){ super(n); } }`。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `/data/yansendao/git/jdk27/src/java.base/share/classes/java/security/BasicPermission.java`（JDK-27 只校验 null→NPE、空串→IAE）
-- JDK 测试 `/data/yansendao/git/jdk25u-dev/test/jdk/java/security/PermissionCollection/Concurrent.java`、`AddToReadOnlyPermissionCollection.java`
+## 3. 参考来源
+- javadoc `java.security.BasicPermission`。
+- JCK runtime-8b `api/java_security/BasicPermission/`。
 
-## 4. 测试用例设计 + 自动化实现
-- 正常：自反 equals/hashCode、getActions 空串、通配蕴含矩阵（`jck.*`→`jck.a`、`jck.a.b`；不蕴含 `jck`）
-- 边界：JDK-27 接受 `jck..bad` 与尾点名字且不按通配解释
-- 异常：null 名 NPE、空名 IAE
-
-断言入口：`BasicPermissionTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+## 4. 测试用例设计 + 易错规范细节
+- 抽象类层级；构造器 + getName/getActions。
+- null 名→NPE、空名→IAE。
+- implies：精确匹配、通配 "a.*" 多级（含 a.b.c）、"*" 全匹配、精确不匹配更深的兄弟。
+- equals/hashCode：同子类同名相等、不同子类不相等、非 Permission 不相等。
+- newPermissionCollection：空 implies false、add 后 true。
+- 易错点：BasicPermission.getActions 恒为 ""（忽略 actions）；"a.*" 匹配多级前缀。

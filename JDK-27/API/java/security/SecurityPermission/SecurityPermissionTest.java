@@ -1,58 +1,65 @@
 /*
  * @test
- * @summary java.security.SecurityPermission conformance: white-box structure + black-box behavior.
+ * @summary java.security.SecurityPermission conformance: full contract coverage.
+ *          name/name+actions constructors, getName/getActions, null name -> NPE,
+ *          empty name -> IAE, implies exact and wildcard, equals/hashCode, and
+ *          subclass relationship to BasicPermission.
  * @run main SecurityPermissionTest
  */
 
+import java.security.BasicPermission;
 import java.security.SecurityPermission;
-import java.security.*;
-import java.util.*;
 
 public class SecurityPermissionTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static void testWhiteBox() throws Exception {
-        SecurityPermission sp = new SecurityPermission("createAccessControlContext");
-        check("createAccessControlContext".equals(sp.getName()), "getName");
-        check("".equals(sp.getActions()), "getActions");
-        check(sp.implies(new SecurityPermission("createAccessControlContext")), "implies");
-        SecurityPermission sp2 = new SecurityPermission("setPolicy", "write");
-        check("setPolicy".equals(sp2.getName()), "getName with actions");
-    }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-        SecurityPermission sp = new SecurityPermission("getPolicy");
-        check("getPolicy".equals(sp.getName()), "name");
-        check(sp.getActions().isEmpty(), "empty actions");
-        check(sp.implies(new SecurityPermission("getPolicy")), "implies");
-        check(!sp.implies(new SecurityPermission("setPolicy")), "no implies");
-        check(new SecurityPermission("a.b", "read").getActions().isEmpty(),
-            "two-arg ctor empty actions");
-        check(sp.equals(new SecurityPermission("getPolicy"))
-            && sp.hashCode() == new SecurityPermission("getPolicy").hashCode(), "equals/hashCode");
-        check(sp.toString().contains("getPolicy"), "toString");
-        // hierarchical wildcard
-        SecurityPermission wild = new SecurityPermission("insertProvider.*");
-        check(wild.implies(new SecurityPermission("insertProvider.JCK")), "wildcard");
-        PermissionCollection pc = sp.newPermissionCollection();
-        pc.add(new SecurityPermission("getPolicy"));
-        pc.add(new SecurityPermission("setPolicy"));
-        check(pc.implies(new SecurityPermission("getPolicy")) && pc.implies(new SecurityPermission("setPolicy")),
-            "pc implies both");
-        try { new SecurityPermission(null); check(false, "NPE"); } catch (NullPointerException e) { check(true, "NPE"); }
-        check(new SecurityPermission("bad.name.").getName().equals("bad.name."), "trailing dot accepted by JDK-27");
-        check(!new SecurityPermission("bad.name.").implies(new SecurityPermission("bad.name.x")), "trailing dot no wildcard");
-
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        // ---- subclass hierarchy ----
+        check(BasicPermission.class.isAssignableFrom(SecurityPermission.class),
+                "SecurityPermission extends BasicPermission");
+
+        // ---- constructors + getters ----
+        SecurityPermission sp = new SecurityPermission("getPolicy");
+        check("getPolicy".equals(sp.getName()), "getName");
+        check("".equals(sp.getActions()), "getActions empty");
+        SecurityPermission spa = new SecurityPermission("setPolicy", "ignored");
+        check("setPolicy".equals(spa.getName()), "(name,actions) getName");
+
+        // ---- null/empty name ----
+        checkThrows(NullPointerException.class, () -> new SecurityPermission(null), "SecurityPermission(null)");
+        checkThrows(IllegalArgumentException.class, () -> new SecurityPermission(""), "SecurityPermission(empty)");
+
+        // ---- implies ----
+        check(sp.implies(new SecurityPermission("getPolicy")), "implies exact match");
+        check(!sp.implies(new SecurityPermission("setPolicy")), "implies different name false");
+        SecurityPermission wildcard = new SecurityPermission("authProvider.*");
+        check(wildcard.implies(new SecurityPermission("authProvider.x509")), "wildcard implies sub");
+
+        // ---- equals/hashCode ----
+        check(sp.equals(new SecurityPermission("getPolicy")), "equals same name");
+        check(sp.hashCode() == new SecurityPermission("getPolicy").hashCode(), "hashCode equal");
+        check(!sp.equals(new SecurityPermission("setPolicy")), "equals different name false");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

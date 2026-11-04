@@ -1,19 +1,18 @@
-# java.security.KeyFactory 黑盒行为测试设计
+# KeyFactory — 设计案
 
 ## 1. API 功能
-- 工厂：`getInstance(String)`、`getInstance(String,String)`、`getInstance(String,Provider)`。
-- 转换：`generatePublic(KeySpec)`、`generatePrivate(KeySpec)`、`getKeySpec(Key,Class)`、`translateKey(Key)`。
-- 查询：`getAlgorithm()`、`getProvider()`。
+密钥工厂（密钥规范↔密钥对象转换）。getInstance 工厂 + generatePublic/generatePrivate/getKeySpec/translateKey/getAlgorithm/getProvider。
 
-## 2. Java 用户如何使用
-`KeyFactory.getInstance("RSA")` → `generatePublic(new X509EncodedKeySpec(encoded))` / `generatePrivate(new PKCS8EncodedKeySpec(encoded))`；`getKeySpec(key, RSAPublicKeySpec.class)` 取算法参数。
+## 2. 使用方式
+`KeyFactory.getInstance("RSA")` → `getKeySpec(公钥, X509EncodedKeySpec.class)` → `generatePublic(spec)`；私钥对应 PKCS8EncodedKeySpec。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/java/security/KeyFactory/GenerateRSAPrivateCrtKey.java`：generatePrivate 生成 CRT 私钥。
-- `test/jdk/java/security/KeyFactory/KeyFactoryGetKeySpecForInvalidSpec.java`：getKeySpec 边界。
-- 实现权威：`src/java.base/share/classes/java/security/KeyFactory.java`。
+## 3. 参考来源
+- javadoc `java.security.KeyFactory`（无效 spec→InvalidKeySpecException）。
+- OpenJDK `test/jdk/java/security/KeyFactory/`。
+- JCK runtime-8b `api/java_security/KeyFactory/`。
 
-## 4. 测试用例设计 + 自动化实现
-- RSA：X509/PKCS8 编码经 generatePublic/generatePrivate 往返后 getEncoded 与原始一致；getKeySpec 取 RSAPublicKeySpec 的 modulus/exponent 非空；translateKey 保持编码一致。
-- EC：X509 编码往返。
-- 白盒：concrete，含 getInstance/getProvider/getAlgorithm/generatePublic/generatePrivate/getKeySpec/translateKey。
+## 4. 测试用例设计 + 易错规范细节
+- 工厂矩阵：bogus→NSAE；null→NPE；null Provider/String→IAE；bogus provider→NoSuchProviderException。
+- 往返：getKeySpec(generatePublic(spec)) 与原始公钥 equals；私钥同理；从 getEncoded 重新构造。
+- 异常：getKeySpec 错误 spec 类/空 spec 类/空 key→InvalidKeySpecException 或 NPE；generatePublic/Private(null 或错误 spec)→InvalidKeySpecException；translateKey(null)→InvalidKeyException。
+- 易错点：getKeySpec(public, null class) 需显式泛型 null 避免编译推断失败。

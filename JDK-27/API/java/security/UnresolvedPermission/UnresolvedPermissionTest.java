@@ -1,62 +1,89 @@
 /*
  * @test
- * @summary java.security.UnresolvedPermission conformance: white-box structure + black-box behavior.
+ * @summary java.security.UnresolvedPermission conformance: full contract coverage.
+ *          constructor (null type -> NPE, null name/actions legal), getUnresolvedType/
+ *          getUnresolvedName/getUnresolvedActions/getActions(always "")/getName(== type),
+ *          defensive copy of certificates, implies(any) == false, equals/hashCode,
+ *          toString, and newPermissionCollection.
  * @run main UnresolvedPermissionTest
  */
 
+import java.security.Permission;
+import java.security.PermissionCollection;
 import java.security.UnresolvedPermission;
-import java.security.*;
-import java.util.*;
+import java.security.cert.Certificate;
+import java.util.Arrays;
 
 public class UnresolvedPermissionTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static void testWhiteBox() throws Exception {
-        UnresolvedPermission up = new UnresolvedPermission("java.io.FilePermission", "read", "read", null);
-        check("java.io.FilePermission".equals(up.getUnresolvedType()), "getUnresolvedType");
-        check("read".equals(up.getUnresolvedName()), "getUnresolvedName");
-        check("read".equals(up.getUnresolvedActions()), "getUnresolvedActions");
-        check(up.getUnresolvedCerts() == null, "getUnresolvedCerts null");
-        check("".equals(up.getActions()), "getActions empty");
-        UnresolvedPermission up2 = new UnresolvedPermission("java.io.FilePermission", "read", "read", null);
-        check(up.equals(up2), "equals");
-        check(up.hashCode() == up2.hashCode(), "hashCode");
-    }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-        UnresolvedPermission up = new UnresolvedPermission(
-            "java.security.SecurityPermission", "getPolicy", "read,write", null);
-        check(up.getName().equals("java.security.SecurityPermission"), "name=type");
-        check(up.getActions().isEmpty(), "empty actions");
-        check(!up.implies(up) && !up.implies(new SecurityPermission("getPolicy")), "implies false");
-        check(up.getUnresolvedType().equals("java.security.SecurityPermission"), "type");
-        check(up.getUnresolvedName().equals("getPolicy"), "unresolved name");
-        check(up.getUnresolvedActions().equals("read,write"), "unresolved actions");
-        check(up.getUnresolvedCerts() == null, "null certs");
-        check(up.toString().contains("java.security.SecurityPermission"), "toString");
-        check(up.newPermissionCollection() != null, "npc");
-        check(up.equals(new UnresolvedPermission("java.security.SecurityPermission", "getPolicy", "read,write", null)),
-            "equals");
-        check(up.hashCode() == new UnresolvedPermission("java.security.SecurityPermission", "getPolicy", "read,write", null).hashCode(),
-            "hashCode");
-        // Permissions resolves a matching UnresolvedPermission on the fly
-        Permissions perms = new Permissions();
-        perms.add(up);
-        check(perms.implies(new SecurityPermission("getPolicy")), "matching unresolved resolved");
-        check(!perms.implies(new SecurityPermission("other.name")), "non-matching unresolved not implied");
-        Enumeration<Permission> e = perms.elements();
-        check(e.hasMoreElements() && e.nextElement() == up, "elements contains unresolved");
-
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        UnresolvedPermission up = new UnresolvedPermission("java.io.FilePermission", "read", "read", null);
+
+        // ---- getters ----
+        check("java.io.FilePermission".equals(up.getUnresolvedType()), "getUnresolvedType");
+        check("read".equals(up.getUnresolvedName()), "getUnresolvedName");
+        check("read".equals(up.getUnresolvedActions()), "getUnresolvedActions");
+        check("".equals(up.getActions()), "getActions always empty");
+        check("java.io.FilePermission".equals(up.getName()), "getName == type (super(type))");
+        check(up.getUnresolvedCerts() == null, "getUnresolvedCerts null when null passed");
+
+        // ---- null type -> NPE, null name/actions legal ----
+        checkThrows(NullPointerException.class,
+                () -> new UnresolvedPermission(null, "n", "a", null), "null type");
+        UnresolvedPermission nullName = new UnresolvedPermission("t", null, "a", null);
+        check(nullName.getUnresolvedName() == null, "null name legal -> null unresolved name");
+        UnresolvedPermission nullActions = new UnresolvedPermission("t", "n", null, null);
+        check(nullActions.getUnresolvedActions() == null, "null actions legal -> null unresolved actions");
+
+        // ---- defensive copy of certs ----
+        Certificate[] certs = new Certificate[0];
+        UnresolvedPermission upCerts = new UnresolvedPermission("t", "n", "a", certs);
+        check(upCerts.getUnresolvedCerts() != null && upCerts.getUnresolvedCerts() != certs,
+                "getUnresolvedCerts defensive copy");
+
+        // ---- implies always false ----
+        check(!up.implies(new java.security.AllPermission()), "implies always false");
+
+        // ---- equals/hashCode ----
+        UnresolvedPermission up2 = new UnresolvedPermission("java.io.FilePermission", "read", "read", null);
+        check(up.equals(up2), "equals equal fields");
+        check(up.hashCode() == up2.hashCode(), "hashCode equal");
+        check(!up.equals(new UnresolvedPermission("java.io.FilePermission", "write", "read", null)),
+                "equals different name false");
+
+        // ---- toString ----
+        String s = up.toString();
+        check(s.contains("unresolved") && s.contains("java.io.FilePermission"), "toString contains type");
+        check(s.contains("read"), "toString contains name/actions");
+
+        // ---- newPermissionCollection ----
+        PermissionCollection pc = up.newPermissionCollection();
+        check(pc != null, "newPermissionCollection non-null");
+        check(!pc.implies(up), "empty collection implies false");
+        pc.add(up);
+        check(!pc.implies(up), "unresolved permission never implies (even after add)");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

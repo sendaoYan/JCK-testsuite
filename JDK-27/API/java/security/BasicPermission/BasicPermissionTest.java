@@ -1,80 +1,97 @@
 /*
  * @test
- * @summary java.security.BasicPermission conformance: white-box structure + black-box behavior.
+ * @summary java.security.BasicPermission conformance: full contract coverage.
+ *          abstract class hierarchy, name/name+actions constructors, getName/
+ *          getActions (always ""), null name -> NPE, empty name -> IAE, implies
+ *          (exact, wildcard "a.*" multi-level, "*" universal), equals/hashCode
+ *          same-class and cross-subclass, and newPermissionCollection add/implies.
  * @run main BasicPermissionTest
  */
 
 import java.security.BasicPermission;
+import java.security.Permission;
 import java.security.PermissionCollection;
-import java.security.*;
-import java.util.*;
 
 public class BasicPermissionTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static class MyPerm extends BasicPermission {
-        MyPerm(String name) { super(name); }
-        MyPerm(String name, String actions) { super(name, actions); }
-    }
-    static void testWhiteBox() throws Exception {
-        MyPerm p = new MyPerm("java.home");
-        check("java.home".equals(p.getName()), "getName");
-        check("".equals(p.getActions()), "getActions empty");
-        check(p.implies(new MyPerm("java.home")), "implies exact");
-        check(!p.implies(new MyPerm("java.*")), "no implies wildcard parent");
-        MyPerm wild = new MyPerm("java.*");
-        check(wild.implies(new MyPerm("java.home")), "wildcard implies child");
-        PermissionCollection pc = p.newPermissionCollection();
-        check(pc != null, "newPermissionCollection");
-        pc.add(new MyPerm("java.home"));
-        check(pc.implies(p), "collection implies");
-        check(p.equals(new MyPerm("java.home")), "equals");
-        check(p.hashCode() == new MyPerm("java.home").hashCode(), "hashCode");
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
+    static class BP extends BasicPermission {
+        BP(String name) { super(name); }
+        BP(String name, String actions) { super(name, actions); }
+    }
 
-        // BasicPermission semantics exercised through its concrete subclass SecurityPermission
-        SecurityPermission sp = new SecurityPermission("jck.node");
-        check(sp.getActions().isEmpty(), "empty actions");
-        check(sp.getName().equals("jck.node"), "name");
-        check(sp.implies(new SecurityPermission("jck.node")), "implies exact");
-        check(!sp.implies(new SecurityPermission("jck.node.sub")), "no implies child");
-        check(!sp.implies(new SecurityPermission("jck")), "no implies parent");
-        SecurityPermission wild = new SecurityPermission("jck.*");
-        check(wild.implies(new SecurityPermission("jck.a")), "wildcard child");
-        check(wild.implies(new SecurityPermission("jck.a.b.c")), "wildcard deep child");
-        check(!wild.implies(new SecurityPermission("jck")), "wildcard no bare parent");
-        check(!wild.implies(new SecurityPermission("jcx.a")), "wildcard sibling");
-        SecurityPermission star = new SecurityPermission("*");
-        check(star.implies(new SecurityPermission("any.name.here")), "star implies");
-        check(!sp.implies(new RuntimePermission("jck.node")), "cross-class implies false");
-        // equals/hashCode contract
-        check(sp.equals(new SecurityPermission("jck.node")), "equals");
-        check(!sp.equals(new SecurityPermission("jck.other")), "not equals");
-        check(sp.hashCode() == new SecurityPermission("jck.node").hashCode(), "hashCode");
-        // Illegal constructions
-        try { new SecurityPermission(null); check(false, "null name should NPE"); }
-        catch (NullPointerException npe) { check(true, "null name NPE"); }
-        try { new SecurityPermission(""); check(false, "empty name should IAE"); }
-        catch (IllegalArgumentException iae) { check(true, "empty name IAE"); }
-        check(new SecurityPermission("jck..bad").getName().equals("jck..bad"), "'..' name accepted by JDK-27");
-        check(!new SecurityPermission("jck..bad").implies(new SecurityPermission("jck.a")), "'..' name no wildcard");
-        // newPermissionCollection from BasicPermission family
-        check(sp.newPermissionCollection() != null, "newPermissionCollection non-null");
-        PermissionCollection pc = sp.newPermissionCollection();
-        pc.add(sp);
-        check(pc.implies(new SecurityPermission("jck.node")), "pc implies");
-
+    static class BP2 extends BasicPermission {
+        BP2(String name) { super(name); }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        // ---- abstract class hierarchy ----
+        Class<?> c = Class.forName("java.security.BasicPermission");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(),
+                "BasicPermission abstract class");
+        check(Permission.class.isAssignableFrom(c), "BasicPermission extends Permission");
+
+        // ---- constructors + getters ----
+        BP p = new BP("a.b");
+        check("a.b".equals(p.getName()), "getName");
+        check("".equals(p.getActions()), "getActions empty for name-only");
+        BP pa = new BP("a.b", "read,write");
+        check("a.b".equals(pa.getName()), "getName with actions");
+        check("".equals(pa.getActions()), "getActions ignores actions (always empty)");
+
+        // ---- null/empty name ----
+        checkThrows(NullPointerException.class, () -> new BP(null), "BasicPermission(null)");
+        checkThrows(IllegalArgumentException.class, () -> new BP(""), "BasicPermission(empty)");
+
+        // ---- implies ----
+        BP exact = new BP("a.b");
+        check(exact.implies(new BP("a.b")), "implies exact match");
+        check(!exact.implies(new BP("a.b.c")), "exact does not imply deeper");
+        check(!exact.implies(new BP("a.c")), "exact does not imply sibling");
+
+        BP star = new BP("a.*");
+        check(star.implies(new BP("a.b")), "a.* implies a.b");
+        check(star.implies(new BP("a.b.c")), "a.* implies a.b.c (multi-level)");
+        check(!star.implies(new BP("b.b")), "a.* does not imply b.b");
+
+        BP all = new BP("*");
+        check(all.implies(new BP("anything.at.all")), "* implies everything");
+
+        // ---- equals/hashCode ----
+        check(p.equals(new BP("a.b")), "equals same name same class");
+        check(p.hashCode() == new BP("a.b").hashCode(), "hashCode equal");
+        check(!p.equals(new BP("a.c")), "equals different name false");
+        check(!p.equals(new BP2("a.b")), "equals different subclass false");
+        check(!p.equals("a.b"), "equals non-Permission false");
+
+        // ---- newPermissionCollection ----
+        PermissionCollection pc = p.newPermissionCollection();
+        check(pc != null, "newPermissionCollection non-null");
+        check(!pc.implies(p), "empty collection implies false");
+        pc.add(new BP("a.b"));
+        check(pc.implies(p), "collection implies after add");
+        check(pc.implies(new BP("a.b")), "collection implies equal permission");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

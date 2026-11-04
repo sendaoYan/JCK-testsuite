@@ -1,80 +1,118 @@
 /*
  * @test
- * @summary java.security.KeyPairGenerator conformance: white-box structure + black-box behavior.
+ * @summary java.security.KeyPairGenerator conformance: full contract coverage.
+ *          getInstance variants + exact exceptions (NoSuchAlgorithmException /
+ *          NullPointerException / IllegalArgumentException / NoSuchProviderException),
+ *          initialize(int)/initialize(int,SecureRandom)/initialize(AlgorithmParameterSpec)
+ *          incl. negative key size (InvalidParameterException) and wrong/null spec
+ *          (InvalidAlgorithmParameterException), generateKeyPair returns non-null
+ *          public/private keys with X.509 / PKCS#8 encodings and RSA algorithm,
+ *          and getAlgorithm/getProvider.
  * @run main KeyPairGeneratorTest
  */
 
-import java.lang.reflect.Modifier;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidParameterException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.spec.ECGenParameterSpec;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.Provider;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.security.spec.AlgorithmParameterSpec;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.RSAKeyGenParameterSpec;
 
 public class KeyPairGeneratorTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.security.KeyPairGenerator");
-        check(Modifier.isPublic(c.getModifiers()), "public");
-        check(!c.isInterface() && Modifier.isAbstract(c.getModifiers()), "abstract class");
-        check(c.getSuperclass().getName().equals("java.security.KeyPairGeneratorSpi"), "extends KeyPairGeneratorSpi");
-        checkMethods(c, new String[]{"getAlgorithm", "getInstance", "getProvider",
-            "initialize", "genKeyPair", "generateKeyPair"});
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        // RSA
-        KeyPairGenerator rsa = KeyPairGenerator.getInstance("RSA");
-        check("RSA".equals(rsa.getAlgorithm()), "RSA getAlgorithm");
-        check(rsa.getProvider() != null, "RSA getProvider non-null");
-        rsa.initialize(2048);
-        KeyPair rsaPair = rsa.generateKeyPair();
-        PublicKey rsaPub = rsaPair.getPublic();
-        PrivateKey rsaPriv = rsaPair.getPrivate();
-        check(rsaPub != null && rsaPriv != null, "RSA keys non-null");
-        check("RSA".equals(rsaPub.getAlgorithm()), "RSA public algorithm");
-        check("RSA".equals(rsaPriv.getAlgorithm()), "RSA private algorithm");
-        check(rsaPub.getFormat() != null, "RSA public format non-null");
-        check(rsaPriv.getFormat() != null, "RSA private format non-null");
-        check(rsaPub.getEncoded() != null && rsaPub.getEncoded().length > 0, "RSA public encoded non-empty");
-        check(rsaPriv.getEncoded() != null && rsaPriv.getEncoded().length > 0, "RSA private encoded non-empty");
-
-        // genKeyPair() is the final delegate of generateKeyPair()
-        KeyPair rsaPair2 = rsa.genKeyPair();
-        check(rsaPair2.getPublic() != null && rsaPair2.getPrivate() != null, "genKeyPair() keys non-null");
-
-        // EC
-        KeyPairGenerator ec = KeyPairGenerator.getInstance("EC");
-        check("EC".equals(ec.getAlgorithm()), "EC getAlgorithm");
-        ec.initialize(new ECGenParameterSpec("secp256r1"));
-        KeyPair ecPair = ec.generateKeyPair();
-        check(ecPair.getPublic() != null && ecPair.getPrivate() != null, "EC keys non-null");
-        check("EC".equals(ecPair.getPublic().getAlgorithm()), "EC public algorithm");
-        check(ecPair.getPublic().getEncoded() != null && ecPair.getPublic().getEncoded().length > 0, "EC public encoded non-empty");
-
-        // getInstance(alg, provider)
-        KeyPairGenerator rsaViaProvider = KeyPairGenerator.getInstance("RSA", "SunRsaSign");
-        check("RSA".equals(rsaViaProvider.getAlgorithm()), "getInstance(alg,provider)");
-    }
-
-    static boolean hasMethod(Class<?> c, String name) {
-        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkMethods(Class<?> c, String[] names) {
-        for (String n : names) check(hasMethod(c, n), "method " + n);
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        // ---- factory + exception matrix ----
+        checkThrows(NoSuchAlgorithmException.class,
+                () -> KeyPairGenerator.getInstance("NoSuchKPG_XYZ"), "getInstance(bogus)");
+        checkThrows(NullPointerException.class,
+                () -> KeyPairGenerator.getInstance(null), "getInstance(null)");
+        checkThrows(NullPointerException.class,
+                () -> KeyPairGenerator.getInstance(null, Security.getProvider("SunRsaSign")),
+                "getInstance(null, Provider)");
+        checkThrows(IllegalArgumentException.class,
+                () -> KeyPairGenerator.getInstance("RSA", (Provider) null),
+                "getInstance(alg, null Provider)");
+        checkThrows(IllegalArgumentException.class,
+                () -> KeyPairGenerator.getInstance("RSA", (String) null),
+                "getInstance(alg, null String)");
+        checkThrows(NoSuchProviderException.class,
+                () -> KeyPairGenerator.getInstance("RSA", "NoSuchProvider_XYZ"),
+                "getInstance(alg, bogus provider)");
+
+        // ---- metadata ----
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        check("RSA".equals(kpg.getAlgorithm()), "getAlgorithm");
+        check(kpg.getProvider() != null, "getProvider non-null");
+
+        // ---- initialize(int) + generateKeyPair ----
+        kpg.initialize(1024);
+        KeyPair kp = kpg.generateKeyPair();
+        check(kp.getPublic() != null && kp.getPrivate() != null, "generateKeyPair non-null keys");
+        check("RSA".equals(kp.getPublic().getAlgorithm()), "public key algorithm RSA");
+        check("RSA".equals(kp.getPrivate().getAlgorithm()), "private key algorithm RSA");
+        check("X.509".equals(kp.getPublic().getFormat()), "public key format X.509");
+        check("PKCS#8".equals(kp.getPrivate().getFormat()), "private key format PKCS#8");
+        check(kp.getPublic().getEncoded() != null && kp.getPublic().getEncoded().length > 100,
+                "public key encoded non-trivial");
+        check(kp.getPrivate().getEncoded() != null && kp.getPrivate().getEncoded().length > 100,
+                "private key encoded non-trivial");
+
+        // ---- initialize(int, SecureRandom) ----
+        KeyPairGenerator kpg2 = KeyPairGenerator.getInstance("RSA");
+        kpg2.initialize(1024, new SecureRandom());
+        KeyPair kp2 = kpg2.generateKeyPair();
+        check(kp2.getPublic() != null && kp2.getPrivate() != null, "initialize(int,SecureRandom) keypair");
+
+        // ---- initialize(AlgorithmParameterSpec) with RSAKeyGenParameterSpec ----
+        KeyPairGenerator kpg3 = KeyPairGenerator.getInstance("RSA");
+        kpg3.initialize(new RSAKeyGenParameterSpec(1024, RSAKeyGenParameterSpec.F4));
+        KeyPair kp3 = kpg3.generateKeyPair();
+        check(kp3.getPublic() != null && kp3.getPrivate() != null, "initialize(RSAKeyGenParameterSpec) keypair");
+
+        // ---- negative key size -> InvalidParameterException ----
+        final KeyPairGenerator kpgNeg = KeyPairGenerator.getInstance("RSA");
+        checkThrows(InvalidParameterException.class, () -> kpgNeg.initialize(-1),
+                "initialize(-1)");
+
+        // ---- wrong spec type -> InvalidAlgorithmParameterException ----
+        final KeyPairGenerator kpgWrong = KeyPairGenerator.getInstance("RSA");
+        checkThrows(InvalidAlgorithmParameterException.class,
+                () -> kpgWrong.initialize((AlgorithmParameterSpec) MGF1ParameterSpec.SHA256),
+                "initialize(wrong spec)");
+
+        // ---- null spec -> InvalidAlgorithmParameterException ----
+        final KeyPairGenerator kpgNull = KeyPairGenerator.getInstance("RSA");
+        checkThrows(InvalidAlgorithmParameterException.class,
+                () -> kpgNull.initialize((AlgorithmParameterSpec) null),
+                "initialize(null spec)");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

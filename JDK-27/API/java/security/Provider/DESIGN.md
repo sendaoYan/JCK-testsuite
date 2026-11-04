@@ -1,18 +1,20 @@
-# java.security.Provider 黑盒行为测试设计
+# Provider — 设计案
 
 ## 1. API 功能
-- 继承 `java.util.Properties`，另提供 `getName()`、`getVersion()`、`getVersionStr()`、`getInfo()`。
-- 服务发现：`getService(String type, String algorithm)`、`getServices()`。
-- 属性读取：`getProperty(String)`（只读），以及 `configure(String)`、`isConfigured()`（JDK-27 默认不支持，抛 UnsupportedOperationException）。
+安全提供者抽象类（extends Properties）。构造器(名称,版本,信息) + 继承 Hashtable 的 put/get/remove + getName/getVersion/getInfo + getService/getServices + keys()/elements() + toString。
 
-## 2. Java 用户如何使用
-`Provider p = Security.getProvider("SUN")` → `p.getService("MessageDigest", "SHA-256")` 拿到 Service 再 `newInstance`；`p.getName()/getVersion()/getInfo()` 取元信息。
+## 2. 使用方式
+子类 `class P extends Provider { P(){ super("P",1.0,"info"); } }`；`put("Cipher.AES","com.example.AESImpl")` 注册服务，`getService("Cipher","AES")` 查询。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/java/security/Provider/GetInstance.java`：getService/getServices 用法。
-- `test/jdk/java/security/Provider/ProviderInfoCheck.java`：getName/getVersion/getInfo 校验。
-- 实现权威：`src/java.base/share/classes/java/security/Provider.java`。
+## 3. 参考来源
+- javadoc `java.security.Provider`。
+- OpenJDK `test/jdk/java/security/Provider/`。
+- JCK runtime-8b `api/java_security/Provider/`。
 
-## 4. 测试用例设计 + 自动化实现
-- 从 Security 取 "SUN"/"SunRsaSign" provider：getName/getVersion/getInfo/toString 非空或满足契约；getService(MessageDigest,SHA-256) 非空且 type/algorithm/className/provider 一致；getServices 非空；getProperty(MessageDigest.SHA-256) 非空；SunRsaSign 提供 SHA256withRSA。
-- 白盒：abstract extends Properties，含 getName/getVersion/getInfo/getService/getServices/getProperty/toString。
+## 4. 测试用例设计 + 易错规范细节
+- 抽象类 + extends Properties 层级；子类构造 + getName/getVersion/getInfo。
+- Map 操作：put 新键返回 null、put 旧键返回旧值、get/containsKey/containsValue/remove。
+- null：put(null key)→NPE、put(null value)→NPE。
+- getService：未注册→null；注册后 Service.getType/getAlgorithm/getClassName/getProvider；算法名大小写不敏感、type 大小写敏感；getServices 计数；keys()/elements() 枚举。
+- toString 含名称与版本；equals/hashCode（相同映射相等、不同映射不等）；序列化往返保留 name/version/info 与条目。
+- 易错点：(名称,double版本,信息) 构造器不校验 null/空/负版本（校验在 Java 9+ 的 (name, String version, info) 构造器）；Provider 初始含 Provider.id.* 条目故不断言初始 size 0。
