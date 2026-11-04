@@ -27,3 +27,5 @@ HijrahEra[] all = HijrahEra.values(); // [AH]
 - of(1)=AH。
 - 异常：valueOf 非法名抛 IllegalArgumentException；of(2) 抛 DateTimeException。
 白盒：反射校验 enum、父类 Enum、实现 Era、values/valueOf/of/getValue 方法存在。
+
+- **深化补充（契约级）**：单纪元（values=[AH]、getValue 1）；CLDR 三档显示名 `Anno Hegirae`/`AH`/`AH`（JDK-8 借用公历名）；valueOf 非法 IAE 枚举全名；range(YEAR_OF_ERA) UTE。

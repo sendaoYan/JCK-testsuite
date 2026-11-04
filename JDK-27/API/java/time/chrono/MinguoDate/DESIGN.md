@@ -35,3 +35,5 @@ MinguoDate feb = MinguoDate.of(109, 2, 1);          // leap Feb -> lengthOfMonth
 - 异常：`of(109,2,30)` 抛 DateTimeException。
 - `now()` 仅断非 null。
 白盒：反射校验 final、父类 `ChronoLocalDateImpl`、实现 ChronoLocalDate/Serializable、关键工厂方法。
+
+- **深化补充（契约级）**：1911 偏移双向（113↔2024）；**year 0=BEFORE_ROC 1、-1=BEFORE_ROC 2**（负年在 BEFORE 纪元里递增）；ROC 元年 1912-01-01/边界 1911-12-31=BEFORE_ROC 1-12-31；format('G')=`Minguo 0113-06-15`（JDK-8 是 `R.O.C.`）；feb 30 DTE `Invalid date 'FEBRUARY 30'`。

@@ -226,6 +226,92 @@ public class InstantTest {
         testSerialization();
         testErrors();
         testNullSemantics();
+        testDeepInstant();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepInstant() {
+        Instant i = Instant.ofEpochSecond(1709206530, 123456789);
+        xeq(i.toString(), "2024-02-29T11:35:30.123456789Z", "toString");
+        check(i.getEpochSecond() == 1709206530L, "epochSecond");
+        check(i.getNano() == 123456789, "nano");
+        xeq(Instant.ofEpochMilli(1709206530000L).toString(), "2024-02-29T11:35:30Z", "ofEpochMilli");
+        xeq(Instant.ofEpochMilli(500).toString(), "1970-01-01T00:00:00.500Z", "milli fraction");
+        xeq(Instant.ofEpochSecond(5, 500000).toString(), "1970-01-01T00:00:05.000500Z", "micro fraction");
+        xeq(Instant.EPOCH.toString(), "1970-01-01T00:00:00Z", "EPOCH");
+        xeq(Instant.MIN.toString(), "-1000000000-01-01T00:00:00Z", "MIN");
+        xeq(Instant.MAX.toString(), "+1000000000-12-31T23:59:59.999999999Z", "MAX");
+        xeq(Instant.ofEpochSecond(-1).toString(), "1969-12-31T23:59:59Z", "neg epoch");
+        check(Instant.ofEpochSecond(0, -1).getEpochSecond() == -1, "nano neg borrow");
+        check(Instant.ofEpochSecond(0, -1).getNano() == 999999999, "nano neg rem");
+        check(Instant.ofEpochSecond(59, 60).getNano() == 60, "nano carry lazy");
+        xact(() -> Instant.MAX.plusSeconds(1), DateTimeException.class, "Instant exceeds minimum or maximum instant", "MAX.plusSeconds");
+        xact(() -> Instant.MIN.minusNanos(1), DateTimeException.class, "Instant exceeds minimum or maximum instant", "MIN.minusNanos");
+        xact(() -> Instant.ofEpochSecond(Long.MAX_VALUE), DateTimeException.class, "Instant exceeds minimum or maximum instant", "ofEpochSecond MAX");
+        xact(() -> Instant.ofEpochSecond(Long.MAX_VALUE, 1), DateTimeException.class, "Instant exceeds minimum or maximum instant", "ofEpochSecond MAX,n");
+        xact(() -> Instant.ofEpochSecond(Long.MIN_VALUE / 2 - 1000), DateTimeException.class, "Instant exceeds minimum or maximum instant", "ofEpochSecond min mul");
+        check(Instant.ofEpochMilli(Long.MAX_VALUE).toString().equals("+292278994-08-17T07:12:55.807Z"), "ofEpochMilli MAX ok");
+        xeq(i.truncatedTo(ChronoUnit.SECONDS).toString(), "2024-02-29T11:35:30Z", "trunc SECONDS");
+        xeq(i.truncatedTo(ChronoUnit.MINUTES).toString(), "2024-02-29T11:35:00Z", "trunc MINUTES");
+        xeq(i.truncatedTo(ChronoUnit.MILLIS).toString(), "2024-02-29T11:35:30.123Z", "trunc MILLIS");
+        xeq(i.truncatedTo(ChronoUnit.DAYS).toString(), "2024-02-29T00:00:00Z", "trunc DAYS ok on Instant");
+        xact(() -> i.truncatedTo(ChronoUnit.FOREVER), UnsupportedTemporalTypeException.class,
+            "Unit is too large to be used for truncation", "trunc FOREVER");
+        xeq(i.plusSeconds(1).plusNanos(100).plusMillis(1).toString(), "2024-02-29T11:35:31.124456889Z", "plus chain");
+        xeq(i.minusSeconds(1).minusNanos(1).minusMillis(1).toString(), "2024-02-29T11:35:29.122456788Z", "minus chain");
+        check(i.plus(Duration.ofSeconds(1)).minus(Duration.ofSeconds(1)).equals(i), "dur sym");
+        check(i.getLong(ChronoField.INSTANT_SECONDS) == 1709206530L, "getLong INSTANT_SECONDS");
+        check(Instant.EPOCH.getLong(ChronoField.INSTANT_SECONDS) == 0, "EPOCH seconds");
+        check(Instant.EPOCH.getLong(ChronoField.NANO_OF_SECOND) == 0, "getLong NOS at EPOCH");
+        check(Instant.ofEpochSecond(0, 5).get(ChronoField.NANO_OF_SECOND) == 5, "get nano");
+        check(Instant.ofEpochSecond(0, 5).get(ChronoField.MILLI_OF_SECOND) == 0, "milli of 5ns");
+        xact(() -> Instant.EPOCH.getLong(ChronoField.DAY_OF_MONTH), UnsupportedTemporalTypeException.class,
+            "Unsupported field: DayOfMonth", "getLong DOM");
+        check(Instant.EPOCH.isSupported(ChronoField.INSTANT_SECONDS), "support INSTANT_SECONDS");
+        check(!Instant.EPOCH.isSupported(ChronoField.DAY_OF_MONTH), "no DOM");
+        check(Instant.EPOCH.isSupported(ChronoUnit.DAYS), "support unit DAYS");
+        check(!Instant.EPOCH.isSupported(ChronoField.OFFSET_SECONDS), "no offset field");
+        check(Instant.EPOCH.isBefore(i), "isBefore");
+        check(i.isAfter(Instant.EPOCH), "isAfter");
+        xeq(i.adjustInto(Instant.EPOCH).toString(), "2024-02-29T11:35:30.123456789Z", "adjustInto");
+        check(i.query(TemporalQueries.precision()) == ChronoUnit.NANOS, "precision");
+        check(i.query(TemporalQueries.zoneId()) == null, "zoneId null");
+        check(Instant.parse("2024-02-29T10:15:30Z").equals(Instant.ofEpochSecond(1709201730)), "parse");
+        check(Instant.parse("2024-02-29T10:15:30.123456789Z").getNano() == 123456789, "parse nano");
+        xact(() -> Instant.parse("2024-02-29T10:15:30X"), DateTimeParseException.class,
+            "Text '2024-02-29T10:15:30X' could not be parsed at index 19", "parse bad suffix");
+        check(Instant.ofEpochSecond(100).until(Instant.ofEpochSecond(160), ChronoUnit.SECONDS) == 60, "until SECONDS");
+        check(Instant.ofEpochSecond(100).until(Instant.ofEpochSecond(100, 5), ChronoUnit.NANOS) == 5, "until NANOS");
+        check(Instant.ofEpochSecond(100).until(Instant.ofEpochSecond(160), ChronoUnit.MINUTES) == 1, "until MINUTES");
+        xeq(Instant.EPOCH.atZone(ZoneOffset.ofHours(1)).toString(), "1970-01-01T01:00+01:00", "atZone");
+         xeq(Instant.EPOCH.range(ChronoField.INSTANT_SECONDS).toString(), "-9223372036854775808 - 9223372036854775807", "range JDK8");
+    }
+
 }

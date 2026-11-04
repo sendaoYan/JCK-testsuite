@@ -25,3 +25,5 @@ ZoneRulesProvider.getVersions("UTC");             // NavigableMap<version, ZoneR
 - 黑盒：`getAvailableZoneIds()` 拷贝进 `TreeSet`（排序后确定性断言）并断言含 `UTC`、`Asia/Shanghai`（不断言精确大小/内容）；`getRules("UTC", false)` 固定偏移且 epoch 偏移 ==UTC；`getRules("Asia/Shanghai", false)` epoch 偏移 ==+08:00；`getRules("UTC", true)`（forCaching）同样固定偏移；`getVersions("UTC")` 非空且首项规则非空。
 - 异常：`getRules("Not/AZone", false)` 抛 `ZoneRulesException`。
 - 不调用 `registerProvider`（避免全局状态污染）、无墙钟、headless-safe。
+
+- **深化补充（契约级）**：getRules/getVersions 与 ZoneId 一致且缓存；`+01:00` 偏移式 ID 抛 `Unknown time-zone ID: +01:00`；注册自定义 Provider（MyZone/One +07:00）后可见、getRules/getVersions（版本→ZoneRules 的 NavigableMap）走自定义实现、refresh 咨询 provideRefresh；重复注册 ZRE `Unable to register zone as one already registered with that ID: ...`；registerProvider(null) NPE `provider`；UTC 规则 isFixedOffset。

@@ -24,6 +24,8 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.time.LocalTime;
+import java.time.temporal.UnsupportedTemporalTypeException;
 
 public class DurationTest {
     static int passed;
@@ -207,6 +209,110 @@ public class DurationTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepDuration();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepDuration() {
+        xeq(Duration.ofSeconds(90).toString(), "PT1M30S", "ofSeconds 90");
+        xeq(Duration.ofMinutes(90).toString(), "PT1H30M", "ofMinutes 90");
+        xeq(Duration.ofHours(25).toString(), "PT25H", "ofHours 25");
+        xeq(Duration.ofDays(2).toString(), "PT48H", "ofDays 2");
+        xeq(Duration.ofMillis(1500).toString(), "PT1.5S", "ofMillis");
+        xeq(Duration.ofNanos(1000000000).toString(), "PT1S", "ofNanos");
+        xeq(Duration.ofSeconds(3, 500000000).toString(), "PT3.5S", "ofSeconds s,n");
+        xeq(Duration.ofSeconds(1, -2000000001).toString(), "PT-1.000000001S", "ofSeconds neg nanos normalize");
+        xeq(Duration.ofSeconds(59, 60).toString(), "PT59.00000006S", "nano 60 lazy carry");
+        xeq(Duration.ofMillis(-1).toString(), "PT-0.001S", "ofMillis -1");
+        String[] iso = {"PT20.345S", "PT15M", "PT51H4M5.5S", "PT0S", "PT0.5S"};
+        for (String s : iso) check(Duration.parse(s).toString().equals(s), "parse rt " + s);
+        xeq(Duration.parse("P2DT3H4M5.5S").toString(), "PT51H4M5.5S", "parse folds days into hours");
+        xeq(Duration.parse("-PT6H3M").toString(), "PT-6H-3M", "parse negative");
+        xact(() -> Duration.parse("PT"), DateTimeParseException.class, "Text cannot be parsed to a Duration", "parse PT");
+        xact(() -> Duration.parse("bogus"), DateTimeParseException.class, "Text cannot be parsed to a Duration", "parse bogus");
+        xact(() -> Duration.parse("PT1D"), DateTimeParseException.class, "Text cannot be parsed to a Duration", "parse PT1D");
+        xact(() -> Duration.parse(null), NullPointerException.class, null, "parse null");
+        check(Duration.ofHours(49).toDays() == 2, "toDays");
+        check(Duration.ofHours(49).toHours() == 49, "toHours");
+        check(Duration.ofMinutes(90).toMinutes() == 90, "toMinutes");
+        check(Duration.ofSeconds(90).toMillis() == 90000L, "toMillis");
+        check(Duration.ofSeconds(90).toNanos() == 90000000000L, "toNanos");
+        xact(() -> Duration.ofDays(Long.MAX_VALUE / 86400 + 1).toNanos(), ArithmeticException.class, "long overflow", "toNanos overflow");
+        xact(() -> Duration.ofDays(Long.MAX_VALUE / 24 + 1000), ArithmeticException.class, "long overflow", "ofDays overflow");
+        Duration d = Duration.ofSeconds(90);
+        xeq(d.withSeconds(100).toString(), "PT1M40S", "withSeconds");
+        xeq(d.withNanos(5).toString(), "PT1M30.000000005S", "withNanos");
+        xeq(Duration.ofSeconds(-3, -4).toString(), "PT-3.000000004S", "neg parts");
+        xeq(Duration.ofSeconds(-3).abs().toString(), "PT3S", "abs");
+        xeq(d.negated().toString(), "PT-1M-30S", "negated");
+        xeq(Duration.ofSeconds(10).dividedBy(3).toString(), "PT3.333333333S", "dividedBy trunc");
+        xeq(Duration.ofSeconds(10, 500000000).dividedBy(3).toString(), "PT3.5S", "dividedBy trunc nano");
+        check(d.plus(Duration.ofSeconds(30)).minus(Duration.ofSeconds(30)).equals(d), "sym");
+        check(d.plusDays(1).minusDays(1).equals(d), "days sym");
+        check(d.plusHours(1).minusHours(1).equals(d), "hours sym");
+        check(d.plusMinutes(1).minusMinutes(1).equals(d), "minutes sym");
+        check(d.plusMillis(1).minusMillis(1).equals(d), "millis sym");
+        check(d.plusNanos(1).minusNanos(1).equals(d), "nanos sym");
+        check(Duration.ofSeconds(60).equals(Duration.ofMinutes(1)), "equals cross factory");
+        check(Duration.ofSeconds(60).hashCode() == Duration.ofMinutes(1).hashCode(), "hashCode cross");
+        check(Duration.ZERO.equals(Duration.ofSeconds(0)), "ZERO");
+        check(d.compareTo(Duration.ofMinutes(2)) < 0, "compareTo");
+        check(Duration.ofSeconds(-1).compareTo(Duration.ZERO) < 0, "compareTo neg");
+        xeq(Duration.ofSeconds(1, 1).get(ChronoUnit.SECONDS), 1L, "get SECONDS");
+        xeq(Duration.ofSeconds(1, 1).get(ChronoUnit.NANOS), 1L, "get NANOS");
+        xact(() -> d.get(ChronoUnit.MINUTES), UnsupportedTemporalTypeException.class, "Unsupported unit: Minutes", "get MINUTES");
+        xeq(d.getUnits().toString(), "[Seconds, Nanos]", "units");
+        xeq(Duration.ofHours(1).addTo(LocalTime.NOON).toString(), "13:00", "addTo");
+        xeq(Duration.ofHours(1).subtractFrom(LocalTime.MIDNIGHT).toString(), "23:00", "subtractFrom");
+        xact(() -> Duration.ZERO.plus(null), NullPointerException.class, null, "plus null");
+        xeq(Duration.from(Duration.ofDays(1)).toString(), "PT24H", "from");
+        xeq(Duration.ofSeconds(185).truncatedTo(ChronoUnit.MINUTES).toString(), "PT3M", "truncatedTo MINUTES");
+        xeq(Duration.ofSeconds(185).truncatedTo(ChronoUnit.HOURS).toString(), "PT0S", "truncatedTo HOURS zero");
+        xact(() -> Duration.ofDays(400).truncatedTo(ChronoUnit.YEARS), UnsupportedTemporalTypeException.class,
+            "Unit is too large to be used for truncation", "truncatedTo YEARS");
+        xeq(Duration.ofMinutes(90).toSeconds(), 5400L, "toSeconds");
+        check(Duration.ofSeconds(1, 5).toNanosPart() == 5, "toNanosPart");
+        check(Duration.ofHours(25).toHoursPart() == 1, "toHoursPart pos");
+        check(Duration.ofHours(25).toDaysPart() == 1, "toDaysPart pos");
+        check(Duration.ofSeconds(3690, 5).toHoursPart() == 1 && Duration.ofSeconds(3690, 5).toMinutesPart() == 1 && Duration.ofSeconds(3690, 5).toSecondsPart() == 30, "parts 3690s");
+        check(Duration.ofSeconds(-90).toMinutesPart() == -1, "toMinutesPart neg truncates toward zero");
+        check(Duration.ofSeconds(-90).toSecondsPart() == -30, "toSecondsPart neg");
+        check(Duration.ofSeconds(-90).toHoursPart() == 0, "toHoursPart neg 0");
+        check(Duration.ofHours(-25).toDaysPart() == -1 && Duration.ofHours(-25).toHoursPart() == -1, "neg -25H parts");
+        check(!Duration.ofSeconds(-1).isPositive(), "isPositive neg");
+        check(Duration.ofSeconds(1).isPositive(), "isPositive pos");
+        check(!Duration.ZERO.isPositive(), "isPositive zero");
+        check(Duration.MIN.isNegative(), "MIN negative");
+        check(!Duration.MAX.isNegative(), "MAX positive");
+        xact(() -> Duration.MIN.negated(), ArithmeticException.class, "Exceeds capacity of Duration: 9223372036854775808000000000", "MIN.negated");
+        check(Duration.ofHours(3).dividedBy(Duration.ofMinutes(90)) == 2, "dividedBy(Duration)");
+    }
+
 }

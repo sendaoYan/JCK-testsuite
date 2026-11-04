@@ -29,3 +29,5 @@ JapaneseEra[] all = JapaneseEra.values(); // 含 MEIJI..REIWA（>=4）
 - 异常：`of(99)`/`of(-99)` 抛 DateTimeException。
 - 明确不调用 `valueOf(String)`、不断言 displayName（JDK 19+ 罗马字名会破坏旧常量名假设）。
 白盒：反射校验 final、非 enum、父类 Object、实现 Era/Serializable、`of/getValue/values/valueOf` 方法存在。
+
+- **深化补充（契约级）**：values `[-1 Meiji, 0 Taisho, 1 Showa, 2 Heisei, 3 Reiwa]`；valueOf **驼峰大小写敏感**（`Reiwa` ✓，`REIWA`/`heisei` IAE `japaneseEra is invalid`，null NPE `japaneseEra`）；REIWA 公共常量（JDK-8 中 private）；SHORT `Shōwa`（macron）；range UTE；query(precision)=Eras。

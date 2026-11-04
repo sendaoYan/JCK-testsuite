@@ -25,3 +25,5 @@
 - 白盒：接口、`instant/millis/withZone` 与四个静态工厂签名存在。
 - 黑盒：`fixed/offset/tick/system` 的 instant/millis、`withZone` 返回的 `Clock` 时区与 instant、lambda 自定义 source 的默认方法。
 - 健壮性：固定 `Instant`、固定 `Duration`、固定 `ZoneId.of("UTC")`，不依赖墙钟，headless-safe，不加 `@key`。
+
+- **深化补充（契约级）**：fixed/millis（纳秒截断）；offset 正负偏移；tick 15s/1m 地板且幂等、tick(1ns) 恒等；**withZone 返回 Clock$FixedClock**（接口 default 造钟）；tick 负 IAE `Tick duration must not be negative`；六个 null 参数逐一 NPE（fixedInstant/baseSource/offsetDuration/tickDuration）；withZone(null) helpful NPE message；Clock instanceof InstantSource；lambda 实现与 millis 默认方法。

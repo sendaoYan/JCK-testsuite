@@ -38,3 +38,5 @@ boolean leap = jc.isLeapYear(2020);           // true
 - 往返：`date(HEISEI,6,1,1) -> toEpochDay -> dateEpochDay` 相等；`date(1994,1,1)` 与 `date(HEISEI,6,1,1)` 相等。
 - dateNow() 仅断非 null（不依赖墙钟）。
 白盒部分：Class.forName 反射校验 public/final/非 abstract/非 interface/非 enum、父类 AbstractChronology、实现 Serializable、INSTANCE static+final、关键方法存在。
+
+- **深化补充（契约级）**：eraOf(-1..3) 全映射 + eraOf(6/99) DTE `Invalid era: N`；YEAR_OF_ERA 范围随纪元（Showa `1 - 63`、Reiwa `1 - 292276976`）；dateNow(fixed)；displayName `Japanese Calendar`。

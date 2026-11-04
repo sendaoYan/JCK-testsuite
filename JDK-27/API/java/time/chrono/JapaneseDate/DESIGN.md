@@ -35,3 +35,5 @@ JapaneseDate next = jd.plus(1, ChronoUnit.DAYS);
 - 异常：`of(HEISEI,1,1,1)`（Heisei 元年 1 月 1 日不存在）抛 DateTimeException。
 - `now()` 仅断非 null。
 白盒：反射校验 final、父类 `ChronoLocalDateImpl`、实现 ChronoLocalDate/Serializable、关键工厂方法存在。
+
+- **深化补充（契约级）**：纪元边界矩阵（Reiwa 首日 2019-05-01、Showa 首日 1926-12-25、Heisei 元年、最小 Meiji 6=1873-01-01）；era 工厂越界 DTE `year, month, and day not valid for Era`；**minus(10 年) 跨纪元 = `Japanese Heisei 26-06-15`**；1872 年 DTE `JapaneseDate before Meiji 6 is not supported`；跨日历 equals=false 但 isEqual=true；until 跨日历 5 天。

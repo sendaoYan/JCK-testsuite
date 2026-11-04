@@ -10,6 +10,9 @@ import java.time.format.DateTimeFormatterPatternProvider;
 import java.time.format.FormatStyle;
 import java.util.Locale;
 import java.util.spi.LocaleServiceProvider;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class DateTimeFormatterPatternProviderTest {
     static int passed;
@@ -81,6 +84,62 @@ public class DateTimeFormatterPatternProviderTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepPatternProvider();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepPatternProvider() {
+        // behavioral: concrete SPI returns usable localized patterns; feed them back into ofPattern
+        DateTimeFormatterPatternProvider p = new DateTimeFormatterPatternProvider() {
+            public String getDateTimeFormatterPattern(FormatStyle dateStyle, FormatStyle timeStyle, String calendarType, java.util.Locale locale) {
+                if (dateStyle == FormatStyle.MEDIUM && timeStyle == FormatStyle.MEDIUM && calendarType.equals("iso8601"))
+                    return "MMM d, yyyy h:mm:ss a";
+                return "yyyy-MM-dd";
+            }
+            public String getDateTimeFormatterPattern(String dateStyle, String timeStyle, java.util.Locale locale) {
+                return "d/M/yyyy";
+            }
+            public java.util.Locale[] getAvailableLocales() {
+                return new java.util.Locale[] { java.util.Locale.ENGLISH };
+            }
+        };
+        java.util.Locale en = java.util.Locale.ENGLISH;
+        xeq(p.getDateTimeFormatterPattern(FormatStyle.MEDIUM, FormatStyle.MEDIUM, "iso8601", en), "MMM d, yyyy h:mm:ss a", "4-arg SPI");
+        xeq(p.getDateTimeFormatterPattern("medium", "medium", en), "d/M/yyyy", "3-arg SPI");
+        DateTimeFormatter f = DateTimeFormatter.ofPattern(p.getDateTimeFormatterPattern(FormatStyle.MEDIUM, FormatStyle.MEDIUM, "iso8601", en), en);
+        xeq(LocalDateTime.of(2024, 2, 29, 10, 15, 30).format(f), "Feb 29, 2024 10:15:30 AM", "pattern round trip via ofPattern");
+        DateTimeFormatter f2 = DateTimeFormatter.ofPattern(p.getDateTimeFormatterPattern("medium", "medium", en), en);
+        xeq(LocalDate.of(2024, 2, 29).format(f2), "29/2/2024", "3-arg pattern formats");
+        check(p instanceof java.util.spi.LocaleServiceProvider, "SPI base");
+        check(p.getDateTimeFormatterPattern(null, "medium", en).equals("d/M/yyyy"), "null dateStyle falls to default branch in impl");
+        check(java.util.Arrays.toString(p.getAvailableLocales()).equals("[en]"), "available locales from impl");
+    }
+
 }

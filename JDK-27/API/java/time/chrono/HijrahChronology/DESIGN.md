@@ -36,3 +36,5 @@ HijrahDate d2 = hc.dateEpochDay(d.toEpochDay());     // 往返相等
 - 往返 `date(AH,1437,1,1) -> toEpochDay -> dateEpochDay` 相等（不硬编码 epoch-day 数值）；`date(1437,1,1)` 与 `date(AH,1437,1,1)` 等值。
 - dateNow() 仅断非 null。
 白盒：反射校验 final、父类 AbstractChronology、Serializable、INSTANCE static+final、关键方法。
+
+- **深化补充（契约级）**：YEAR 窗口 `1300 - 1600`、DAY_OF_YEAR `1 - 354`；eraOf(2) DTE `invalid Hijrah era`（小写开头，与其他历不同）；dateEpochDay(19557) 与 HijrahDate.of(1445,1,1).toEpochDay() 互逆；dateNow(fixed)=`Hijrah-umalqura AH 1445-12-09`；displayName FULL `Hijri Calendar (Umm al-Qura)`。

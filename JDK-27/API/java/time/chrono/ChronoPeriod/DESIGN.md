@@ -37,3 +37,5 @@ ChronoPeriod between = ChronoPeriod.between(d1, d2);
   - `addTo`/`subtractFrom`（LocalDate 上往返一致）。
   - `toString` == "P1Y2M3D"。
   - 异常：`addTo(LocalTime)` → `UnsupportedTemporalTypeException`。
+
+- **深化补充（契约级）**：各历 period toString（ISO `P1Y` 无前缀、`Japanese P1Y2M3D`）；between 月末钳制（1-31→3-01=`Minguo P1M1D`）；negated/multipliedBy/plus/minus 算术；跨日历 between 合法；null NPE `startDateInclusive`/`endDateExclusive`。

@@ -25,3 +25,5 @@ try {
 - 黑盒：`new ZoneRulesException("msg")` 的 `getMessage`、`instanceof DateTimeException/RuntimeException`；`new ZoneRulesException("msg", cause)` 的 `getCause`。
 - 组合：`ZoneRulesProvider.getRules("Not/AZone", false)` 抛出 `ZoneRulesException`。
 - 全部固定输入、headless-safe。
+
+- **深化补充（契约级）**：两构造直读 + cause 链 + `instanceof DateTimeException`；`ZoneId.of("Bogus/Zone")`/`of("EST")` → `Unknown time-zone ID: ...` 精确 message；toString 全限定名。

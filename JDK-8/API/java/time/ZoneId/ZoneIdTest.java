@@ -23,6 +23,7 @@ import java.time.format.TextStyle;
 import java.time.zone.ZoneRulesException;
 import java.util.Locale;
 import java.util.Set;
+import java.time.Instant;
 
 public class ZoneIdTest {
     static int passed;
@@ -136,6 +137,84 @@ public class ZoneIdTest {
         testSerialization();
         testErrors();
         testNullSemantics();
+        testDeepZoneId();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepZoneId() {
+        ZoneId ber = ZoneId.of("Europe/Berlin");
+        check(ber.getId().equals("Europe/Berlin") && ber.toString().equals("Europe/Berlin"), "id/toString");
+        check(!ber.getRules().isFixedOffset(), "Berlin not fixed");
+        check(ZoneId.of("UTC").getId().equals("UTC"), "UTC id");
+        xeq(ZoneId.of("UTC").normalized().toString(), "Z", "UTC normalized to Z");
+        xeq(ZoneId.of("GMT").normalized().toString(), "Z", "GMT normalized to Z");
+        check(ZoneId.of("GMT").getRules().isFixedOffset(), "GMT fixed");
+        ZoneId g1 = ZoneId.of("GMT+01:00");
+        check(g1.getId().equals("GMT+01:00") && g1.getRules().isFixedOffset()
+              && g1.getRules().getOffset(Instant.EPOCH).equals(ZoneOffset.ofHours(1)), "GMT+01:00 prefix id");
+        check(ZoneId.of("UTC+01:00").getId().equals("UTC+01:00"), "UTC+01:00 prefix id");
+        xeq(ZoneId.ofOffset("GMT", ZoneOffset.ofHours(-5)).toString(), "GMT-05:00", "ofOffset");
+        xeq(ZoneId.ofOffset("UTC", ZoneOffset.ofHours(3)).toString(), "UTC+03:00", "ofOffset UTC");
+        xact(() -> ZoneId.ofOffset("Bogus", ZoneOffset.ofHours(1)), IllegalArgumentException.class,
+            "prefix should be GMT, UTC or UT, is: Bogus", "ofOffset bad prefix");
+        check(ZoneId.from(ZonedDateTime.ofStrict(LocalDateTime.of(2024, 2, 29, 10, 15, 30),
+              ZoneOffset.ofHours(1), ber)) == ber, "from");
+        xact(() -> ZoneId.of("Bogus/Zone"), ZoneRulesException.class, "Unknown time-zone ID: Bogus/Zone", "unknown region id");
+        xact(() -> ZoneId.of("ABC"), ZoneRulesException.class, "Unknown time-zone ID: ABC", "3-letter id unmapped");
+        xact(() -> ZoneId.of("EST"), ZoneRulesException.class, "Unknown time-zone ID: EST", "EST unmapped without map");
+        xact(() -> ZoneId.of("+01:00:99"), DateTimeException.class,
+            "Zone offset seconds not in valid range: value 99 is not in the range -59 to 59", "offset secs 99");
+        xact(() -> ZoneId.of(null), NullPointerException.class, null, "of null");
+        xact(() -> ZoneId.of(""), DateTimeException.class, "Invalid ID for ZoneOffset, invalid format: ", "empty id falls to offset parse");
+         xeq(ZoneId.SHORT_IDS.get("EST"), "-05:00", "SHORT_IDS EST JDK8");
+         xeq(ZoneId.SHORT_IDS.get("MST"), "-07:00", "SHORT_IDS MST JDK8");
+         xeq(ZoneId.SHORT_IDS.get("HST"), "-10:00", "SHORT_IDS HST JDK8");
+        xeq(ZoneId.SHORT_IDS.get("PST"), "America/Los_Angeles", "SHORT_IDS PST same");
+        xeq(ZoneId.SHORT_IDS.get("JST"), "Asia/Tokyo", "SHORT_IDS JST same");
+        xeq(ZoneId.SHORT_IDS.get("CNT"), "America/St_Johns", "SHORT_IDS CNT same");
+        check(ZoneId.of("EST", ZoneId.SHORT_IDS).getId().equals((String) ZoneId.SHORT_IDS.get("EST")), "of EST with map");
+        xeq(ber.getDisplayName(TextStyle.FULL, java.util.Locale.ENGLISH), "Central European Time", "display FULL EN");
+        xeq(ber.getDisplayName(TextStyle.SHORT, java.util.Locale.ENGLISH), "CET", "display SHORT EN");
+        xeq(ber.getDisplayName(TextStyle.NARROW, java.util.Locale.ENGLISH), "Europe/Berlin", "display NARROW falls back to id");
+        check(ZoneId.getAvailableZoneIds().contains("UTC"), "available UTC");
+        check(ZoneId.getAvailableZoneIds().contains("GMT"), "available GMT");
+        check(ZoneId.getAvailableZoneIds().contains("Europe/Berlin"), "available Berlin");
+        check(ZoneId.getAvailableZoneIds().contains("Asia/Shanghai"), "available Shanghai");
+        check(ZoneId.getAvailableZoneIds().size() > 500, "available size");
+        ZoneId utc = ZoneId.of("UTC");
+        check(ZoneId.of("UTC").equals(ZoneId.of("UTC")), "equals");
+        check(ZoneId.of("UTC").hashCode() == ZoneId.of("UTC").hashCode(), "hashCode");
+        check(ZoneId.systemDefault() != null && ZoneId.systemDefault().getId().length() > 0, "systemDefault nonnull id");
+        check(ZoneId.getAvailableZoneIds().contains(ZoneId.systemDefault().getId()), "systemDefault is available id");
+        xeq(ZoneId.of("+01:00").getId(), "+01:00", "offset id accepted");
+        check(ZoneId.of("+01:00").getRules().isFixedOffset(), "offset id fixed rules");
+    }
+
 }

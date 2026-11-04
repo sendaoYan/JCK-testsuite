@@ -32,3 +32,5 @@ String shortName = ce.getDisplayName(TextStyle.SHORT, Locale.ENGLISH); // "AD"
   - `getDisplayName`：SHORT "AD"/"BC"，FULL "Anno Domini"/"Before Christ"。
   - `adjustInto`：CE 翻转 BCE→CE、BCE 翻转 CE→BCE。
   - 异常：`valueOf("XX")` → `IllegalArgumentException`、`of(2)` → `DateTimeException`。
+
+- **深化补充（契约级）**：values `[BCE, CE]`、值 0/1；**LocalDate.of(-5,...).get(YEAR_OF_ERA)==6**（无 0 年）；display `Anno Domini`/`BC`/`AD`；range(YEAR_OF_ERA) UTE。

@@ -39,3 +39,5 @@ String s = d.format(DateTimeFormatter.ISO_LOCAL_DATE);
   - 排序：`isBefore`/`isAfter`/`isEqual`/`compareTo` + `timeLineOrder` 排序。
   - `format`、`query(localDate)`。
   - 异常：`with(HOUR_OF_DAY)` → `UnsupportedTemporalTypeException`。
+
+- **深化补充（契约级）**：跨日历 compareTo 按日历 id（jp vs mg=-3）而 **timeLineOrder 按时间线（同日=0）**；from(LocalDate/LDT/ZDT) 降 ISO；from(null) NPE `temporal`；isAfter/isBefore/isEqual 跨日历语义；jp format(`G y-MM-d`)=`Reiwa 6-06-15`。

@@ -30,6 +30,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalQueries;
 import java.time.temporal.UnsupportedTemporalTypeException;
 import java.time.temporal.ValueRange;
+import java.time.Duration;
 
 public class LocalTimeTest {
     static int passed;
@@ -225,6 +226,109 @@ public class LocalTimeTest {
         testSerialization();
         testErrors();
         testNullSemantics();
+        testDeepLocalTime();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    // ===== deepening: boundary matrix, wrap-around, truncation, conversions =====
+    static void testDeepLocalTime() {
+        xeq(LocalTime.of(0, 0).toString(), "00:00", "min");
+        xeq(LocalTime.of(23, 59, 59, 999999999).toString(), "23:59:59.999999999", "max");
+        xeq(LocalTime.of(23, 59, 59).toString(), "23:59:59", "hms");
+        xeq(LocalTime.of(12, 30).toString(), "12:30", "hm");
+        xact(() -> LocalTime.of(24, 0), DateTimeException.class,
+            "Invalid value for HourOfDay (valid values 0 - 23): 24", "hour 24");
+        xact(() -> LocalTime.of(-1, 0), DateTimeException.class,
+            "Invalid value for HourOfDay (valid values 0 - 23): -1", "hour -1");
+        xact(() -> LocalTime.of(23, 60), DateTimeException.class,
+            "Invalid value for MinuteOfHour (valid values 0 - 59): 60", "minute 60");
+        xact(() -> LocalTime.of(23, 59, 60), DateTimeException.class,
+            "Invalid value for SecondOfMinute (valid values 0 - 59): 60", "second 60");
+        xact(() -> LocalTime.of(0, 0, 0, 1000000000), DateTimeException.class,
+            "Invalid value for NanoOfSecond (valid values 0 - 999999999): 1000000000", "nano 10^9");
+        xact(() -> LocalTime.ofSecondOfDay(86400), DateTimeException.class,
+            "Invalid value for SecondOfDay (valid values 0 - 86399): 86400", "secondOfDay overflow");
+        xact(() -> LocalTime.ofNanoOfDay(-1), DateTimeException.class,
+            "Invalid value for NanoOfDay (valid values 0 - 86399999999999): -1", "nanoOfDay neg");
+        xeq(LocalTime.MAX.plusNanos(1).toString(), "00:00", "MAX.plusNanos wraps");
+        xeq(LocalTime.MIDNIGHT.minusNanos(1).toString(), "23:59:59.999999999", "MIDNIGHT.minusNanos wraps");
+        xeq(LocalTime.of(23, 0).plusHours(2).toString(), "01:00", "plusHours wrap");
+        xeq(LocalTime.of(1, 0).minusHours(2).toString(), "23:00", "minusHours wrap");
+        xeq(LocalTime.of(23, 59).plusMinutes(1).toString(), "00:00", "plusMinutes wrap");
+        xeq(Duration.ofMillis(-1).getSeconds() + "/" + Duration.ofMillis(-1).getNano(), "-1/999000000", "ofMillis(-1) normalized");
+        xeq(LocalTime.of(10, 15, 30).plusNanos(1500000000L).toString(), "10:15:31.500", "plusNanos 1.5s keeps ms group");
+        LocalTime lt = LocalTime.of(10, 15, 30, 123);
+        check(LocalTime.ofNanoOfDay(lt.toNanoOfDay()).equals(lt), "nanoOfDay rt");
+        check(lt.toNanoOfDay() == 36930000000123L, "nanoOfDay value");
+        check(lt.toSecondOfDay() == 36930, "secondOfDay value");
+        xeq(lt.truncatedTo(ChronoUnit.HOURS).toString(), "10:00", "trunc HOURS");
+        xeq(lt.truncatedTo(ChronoUnit.MINUTES).toString(), "10:15", "trunc MINUTES");
+        xeq(lt.truncatedTo(ChronoUnit.SECONDS).toString(), "10:15:30", "trunc SECONDS");
+        xeq(lt.truncatedTo(ChronoUnit.NANOS).toString(), "10:15:30.000000123", "trunc NANOS");
+        xeq(LocalTime.of(23, 59, 59).truncatedTo(ChronoUnit.HALF_DAYS).toString(), "12:00", "trunc HALF_DAYS pm");
+        xeq(LocalTime.of(10, 0).truncatedTo(ChronoUnit.HALF_DAYS).toString(), "00:00", "trunc HALF_DAYS am");
+        xeq(lt.truncatedTo(ChronoUnit.DAYS).toString(), "00:00", "trunc DAYS -> midnight");
+        xact(() -> lt.truncatedTo(ChronoUnit.FOREVER), UnsupportedTemporalTypeException.class,
+            "Unit is too large to be used for truncation", "trunc FOREVER");
+        xeq(lt.range(ChronoField.HOUR_OF_DAY).toString(), "0 - 23", "range hour");
+        xeq(lt.range(ChronoField.MINUTE_OF_HOUR).toString(), "0 - 59", "range minute");
+        xeq(lt.range(ChronoField.NANO_OF_SECOND).toString(), "0 - 999999999", "range nano");
+        xact(() -> lt.getLong(ChronoField.DAY_OF_YEAR), UnsupportedTemporalTypeException.class,
+            "Unsupported field: DayOfYear", "LT.getLong DOY");
+        xact(() -> lt.plus(1, ChronoUnit.DAYS), UnsupportedTemporalTypeException.class,
+            "Unsupported unit: Days", "LT.plus DAYS");
+        check(!lt.isSupported(ChronoField.DAY_OF_MONTH), "LT not support DOM");
+        check(LocalTime.MIDNIGHT.compareTo(LocalTime.NOON) < 0, "compareTo");
+        check(lt.isBefore(LocalTime.NOON), "isBefore");
+        check(LocalTime.NOON.isAfter(lt), "isAfter");
+        xeq(lt.adjustInto(LocalTime.MIDNIGHT).toString(), "10:15:30.000000123", "adjustInto");
+        xeq(LocalTime.MIDNIGHT.toString(), "00:00", "MIDNIGHT");
+        xeq(LocalTime.NOON.toString(), "12:00", "NOON");
+        xeq(LocalTime.MIN.toString(), "00:00", "MIN");
+        xeq(LocalTime.MAX.toString(), "23:59:59.999999999", "MAX");
+        check(LocalTime.parse("10:15").toString().equals("10:15"), "parse hm");
+        check(LocalTime.parse("10:15:30.123456789").toString().equals("10:15:30.123456789"), "parse nano");
+        xact(() -> LocalTime.parse("10"), DateTimeParseException.class,
+            "Text '10' could not be parsed at index 2", "parse '10'");
+        xact(() -> LocalTime.parse("10:15:70"), DateTimeParseException.class,
+            "Text '10:15:70' could not be parsed: Invalid value for SecondOfMinute (valid values 0 - 59): 70", "parse sec 70");
+        xact(() -> LocalTime.parse(""), DateTimeParseException.class, null, "parse empty");
+        xact(() -> LocalTime.parse(null), NullPointerException.class, null, "parse null");
+        String[] rts = {"00:00", "10:15", "10:15:30", "23:59:59.999999999", "10:15:30.500"};
+        for (String s : rts) check(LocalTime.parse(s).toString().equals(s), "rt " + s);
+        check(LocalTime.parse("10:15:30.5").toString().equals("10:15:30.500"), "parse .5 pads to ms group");
+        ChronoUnit[] symUnits = {ChronoUnit.NANOS, ChronoUnit.MICROS, ChronoUnit.MILLIS, ChronoUnit.SECONDS, ChronoUnit.MINUTES, ChronoUnit.HOURS, ChronoUnit.HALF_DAYS};
+        for (ChronoUnit u : symUnits) check(lt.plus(7, u).minus(7, u).equals(lt), "sym " + u);
+        check(lt.query(TemporalQueries.precision()) == ChronoUnit.NANOS, "precision");
+        check(lt.query(TemporalQueries.localDate()) == null, "localDate null");
+        check(lt.query(TemporalQueries.chronology()) == null, "chronology null");
+    }
+
 }

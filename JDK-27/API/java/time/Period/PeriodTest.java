@@ -24,6 +24,9 @@ import java.time.Period;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.time.DateTimeException;
+import java.time.Duration;
+import java.time.temporal.UnsupportedTemporalTypeException;
 
 public class PeriodTest {
     static int passed;
@@ -188,6 +191,100 @@ public class PeriodTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepPeriod();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepPeriod() {
+        Period pd = Period.of(1, 2, 3);
+        xeq(pd.toString(), "P1Y2M3D", "toString");
+        check(pd.getYears() == 1 && pd.getMonths() == 2 && pd.getDays() == 3, "getters");
+        xeq(Period.ofYears(5).toString(), "P5Y", "ofYears");
+        xeq(Period.ofMonths(5).toString(), "P5M", "ofMonths");
+        xeq(Period.ofDays(5).toString(), "P5D", "ofDays");
+        xeq(Period.ofWeeks(2).toString(), "P14D", "ofWeeks");
+        xeq(Period.ZERO.toString(), "P0D", "ZERO");
+        check(Period.parse("P1Y2M3D").equals(pd), "parse P1Y2M3D");
+        xeq(Period.parse("P1W2D").toString(), "P9D", "parse weeks folded");
+        xeq(Period.parse("P2Y").toString(), "P2Y", "parse P2Y");
+        xeq(Period.parse("-P1Y2M").toString(), "P-1Y-2M", "parse neg prefix");
+        xeq(Period.parse("P-1Y").toString(), "P-1Y", "parse neg element");
+        xact(() -> Period.parse("P"), DateTimeParseException.class, "Text cannot be parsed to a Period", "parse P");
+        xact(() -> Period.parse("P1X"), DateTimeParseException.class, "Text cannot be parsed to a Period", "parse P1X");
+        xact(() -> Period.parse(""), DateTimeParseException.class, null, "parse empty");
+        xact(() -> Period.parse(null), NullPointerException.class, null, "parse null");
+        xeq(Period.ofMonths(13).normalized().toString(), "P1Y1M", "normalized 13M");
+        xeq(Period.ofMonths(-13).normalized().toString(), "P-1Y-1M", "normalized -13M");
+        xeq(Period.of(1, 25, 0).normalized().toString(), "P3Y1M", "normalized 1Y25M");
+        xeq(Period.of(0, 0, 40).normalized().toString(), "P40D", "normalized days untouched");
+        check(pd.toTotalMonths() == 14, "toTotalMonths");
+        check(Period.of(1, 2, 100).toTotalMonths() == 14, "toTotalMonths ignores days");
+        xeq(Period.between(LocalDate.of(2023, 1, 31), LocalDate.of(2024, 3, 1)).toString(), "P1Y1M1D", "between clamp");
+        xeq(Period.between(LocalDate.of(2023, 2, 28), LocalDate.of(2023, 3, 1)).toString(), "P1D", "between 1 day");
+        xeq(Period.between(LocalDate.of(2024, 2, 29), LocalDate.of(2024, 3, 30)).toString(), "P1M1D", "between leap");
+        xeq(Period.between(LocalDate.of(2024, 1, 15), LocalDate.of(2024, 3, 10)).toString(), "P1M24D", "between mid");
+        xeq(Period.between(LocalDate.of(2024, 2, 29), LocalDate.of(2025, 2, 28)).toString(), "P11M30D", "between 364d");
+        xeq(Period.between(LocalDate.of(2024, 3, 31), LocalDate.of(2024, 4, 30)).toString(), "P30D", "between 30d");
+        xeq(Period.between(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 1)).toString(), "P0D", "between self");
+        xact(() -> Period.between(LocalDate.of(2024, 1, 1), null), NullPointerException.class, null, "between null");
+        xeq(pd.withYears(5).toString(), "P5Y2M3D", "withYears");
+        xeq(pd.withMonths(0).toString(), "P1Y3D", "withMonths");
+        xeq(pd.withDays(-1).toString(), "P1Y2M-1D", "withDays");
+        xeq(pd.plus(Period.of(1, 1, 1)).toString(), "P2Y3M4D", "plus");
+        xeq(pd.minus(Period.of(0, 1, 0)).toString(), "P1Y1M3D", "minus");
+        xeq(pd.plusDays(1).toString(), "P1Y2M4D", "plusDays");
+        xeq(pd.plusMonths(1).toString(), "P1Y3M3D", "plusMonths");
+        xeq(pd.plusYears(1).toString(), "P2Y2M3D", "plusYears");
+        xeq(pd.minusDays(1).toString(), "P1Y2M2D", "minusDays");
+        xeq(pd.minusMonths(1).toString(), "P1Y1M3D", "minusMonths");
+        xeq(pd.minusYears(1).toString(), "P2M3D", "minusYears");
+        xeq(pd.multipliedBy(2).toString(), "P2Y4M6D", "multipliedBy");
+        xeq(pd.multipliedBy(0).toString(), "P0D", "multipliedBy 0");
+        xeq(pd.negated().toString(), "P-1Y-2M-3D", "negated");
+        check(!pd.isZero(), "isZero false");
+        check(Period.ZERO.isZero(), "isZero true");
+        check(!pd.isNegative(), "isNegative false");
+        check(Period.of(-1, 0, 0).isNegative(), "isNegative true");
+        xeq(pd.getUnits().toString(), "[Years, Months, Days]", "units");
+        xeq(pd.get(ChronoUnit.YEARS), 1L, "get YEARS");
+        xeq(pd.get(ChronoUnit.MONTHS), 2L, "get MONTHS");
+        xeq(pd.get(ChronoUnit.DAYS), 3L, "get DAYS");
+        xact(() -> pd.get(ChronoUnit.WEEKS), UnsupportedTemporalTypeException.class, "Unsupported unit: Weeks", "get WEEKS");
+        xact(() -> pd.get(null), UnsupportedTemporalTypeException.class, "Unsupported unit: null", "get null unit -> UTE not NPE");
+        xact(() -> pd.plus(Duration.ofDays(1)), DateTimeException.class,
+            "Unit must be Years, Months or Days, but was Seconds", "plus Duration");
+        xeq(pd.addTo(LocalDate.of(2024, 1, 28)).toString(), "2025-03-31", "addTo");
+        xeq(pd.subtractFrom(LocalDate.of(2025, 3, 31)).toString(), "2024-01-28", "subtractFrom");
+        check(pd.equals(Period.ofYears(1).withMonths(2).withDays(3)), "equals paths");
+        check(pd.hashCode() == Period.of(1, 2, 3).hashCode(), "hashCode");
+        check(!pd.equals("P1Y2M3D"), "equals non-Period");
+    }
+
 }

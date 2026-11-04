@@ -33,3 +33,5 @@ o.isValidOffset(ZoneOffset.ofHours(1)); // overlap 时两个偏移都有效
 - 黑盒（overlap = 2024-10-27T03:00 +2→+1）：`isOverlap`/`isGap`、`getDateTimeAfter`、`isValidOffset`（+1/+2 有效、+3 无效）、`toString` 含 "Overlap"。
 - 组合：`compareTo`（gap 早于 overlap）、`equals`/`hashCode`（两个等价 gap 相等，与 overlap 不等）。
 - 全部固定输入，无墙钟、无全局状态、headless-safe。
+
+- **深化补充（契约级）**：锁定 Berlin 2024 gap/overlap 全字段（gap instant `2024-03-31T01:00:00Z`/duration PT1H、overlap duration **PT-1H**）、`toEpochSecond()==1711846800`、isValidOffset 矩阵（gap 全 false、overlap 恰好 before/after 两个 true）、`of(null)` NPE `transition`、`of(相同偏移)` IAE `Offsets must not be equal`。

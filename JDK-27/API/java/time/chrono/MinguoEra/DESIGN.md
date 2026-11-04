@@ -27,3 +27,5 @@ MinguoEra[] all = MinguoEra.values();   // [BEFORE_ROC, ROC]
 - of(1)=ROC、of(0)=BEFORE_ROC。
 - 异常：valueOf 非法名抛 IllegalArgumentException；of(2) 抛 DateTimeException。
 白盒：反射校验 enum、父类 Enum、实现 Era、values/valueOf/of/getValue 方法存在。
+
+- **深化补充（契约级）**：CLDR 显示名 `Minguo`/`Minguo`/`Minguo`（ROC）与 `B.R.O.C.`（BEFORE_ROC，三档全同）（JDK-8 借用 `Anno Domini`/`AD`/`A`/`Before Christ`/`BC`/`B`）；eraOf 身份同一；valueOf 非法 IAE。

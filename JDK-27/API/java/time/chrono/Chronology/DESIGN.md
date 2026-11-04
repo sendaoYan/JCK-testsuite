@@ -41,3 +41,5 @@ Era era = c.eraOf(1);
   - `getAvailableChronologies()` 排序后含 ISO/Japanese/Minguo/ThaiBuddhist/Hijrah-umalqura。
   - `localDateTime`/`zonedDateTime` 往返。
   - 异常：`of("NoSuchChronology")`、`date(LocalTime)` → `DateTimeException`。
+
+- **深化补充（契约级）**：五套 id|calendarType 精确表；of 大小写：`japanese` ✓ 而 `iso` 抛 `Unknown chronology: iso`；ofLocale 需 u-ca 关键字（`th-TH-u-ca-buddhist`→ThaiBuddhist、`ja-JP-u-ca-japanese`→Japanese、`en-US-u-ca-islamic-umalqura`→Hijrah-umalqura、ja-JP-JP variant→Japanese），裸 th_TH→ISO；of/ofLocale null NPE `id`/`locale`；eraOf(5) DTE `Invalid era: 5`。

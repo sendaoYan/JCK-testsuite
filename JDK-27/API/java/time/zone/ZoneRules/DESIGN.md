@@ -32,3 +32,5 @@ sh.getTransitionRules().isEmpty();           // true（中国无 DST）
 - 黑盒（Asia/Shanghai）：epoch 偏移 +08:00、标准偏移 +08:00、非固定、`getTransitionRules()` 空（无 DST）、`getTransitions()` 非空（历史转换）。
 - 黑盒（工厂）：`ZoneRules.of(ZoneOffset.ofHours(2))` 固定偏移。
 - 全部固定输入、无墙钟、无全局状态、headless-safe。
+
+- **深化补充（契约级）**：Berlin gap/overlap/常态三分（gap：validOffsets 空 + transition 非空；**overlap：两个 offsets 且 getTransition 也非 null**；常态一个 offset + transition null）；next/previousTransition 精确串；`getTransitions().size()==63`、`getTransitionRules()` 2 条末位规则精确串（`... at 01:00 UTC ...`）；`getDaylightSavings` PT1H；`ZoneRules.of(null)` 1 参 NPE `offset`、5 参 NPE `baseStandardOffset`；固定规则 toString `ZoneRules[currentStandardOffset=+01:00]`。

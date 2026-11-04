@@ -25,3 +25,5 @@ TimeDefinition.STANDARD.createDateTime(dt, std, wall);  // dt + (wall - std)? �
 - 白盒：反射断言 `isEnum`、`final`、父类 `Enum`、`getEnumConstants().length == 3`。
 - 黑盒：`values().length == 3`；`valueOf` 三常量；`createDateTime(dt, std=+2, wall=+3)` 三种语义（UTC→03:00、STANDARD→01:00、WALL→原样）。
 - 全部固定输入、headless-safe。
+
+- **深化补充（契约级）**：values 序 `[UTC, WALL, STANDARD]`；`createDateTime` 三语义换算表（以 ldt=02:00、std=+01、wall=+02：UTC→04:00=ldt+wall、WALL→02:00、STANDARD→03:00=ldt+(wall-std)；std=-05 时 STANDARD→09:00）；valueOf 非法 IAE 精确枚举全名。

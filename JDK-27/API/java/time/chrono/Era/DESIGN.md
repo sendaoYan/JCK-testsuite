@@ -33,3 +33,5 @@ String name = era.getDisplayName(TextStyle.SHORT, Locale.ENGLISH);    // "AD"
   - `getDisplayName`：SHORT "AD"/"BC"，FULL "Anno Domini"/"Before Christ"（仅英文）。
   - `query`：precision==`ChronoUnit.ERAS`、chronology==null。
   - 异常：`get(YEAR)` → `UnsupportedTemporalTypeException`。
+
+- **深化补充（契约级）**：五历 eras() 有序表；getValue 全映射（JapaneseEra -1..3）；getEra 往返（Reiwa/ROC/BE/CE/AH）；query(precision)=`Eras`；**所有纪元 range(YEAR_OF_ERA) 抛 UTE `Unsupported field: YearOfEra`**；CLDR 显示名按侧锁定（HijrahEra `Anno Hegirae`/`AH`/`AH`、MinguoEra `Minguo`、ThaiBuddhistEra `BE`、Showa SHORT `Shōwa`）。

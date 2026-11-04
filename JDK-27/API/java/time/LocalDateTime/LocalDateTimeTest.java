@@ -35,6 +35,9 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalQueries;
 import java.time.temporal.UnsupportedTemporalTypeException;
 import java.time.temporal.ValueRange;
+import java.time.Duration;
+import java.time.Period;
+import java.time.format.DateTimeFormatter;
 
 public class LocalDateTimeTest {
     static int passed;
@@ -245,6 +248,82 @@ public class LocalDateTimeTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepLocalDateTime();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepLocalDateTime() {
+        LocalDateTime ldt = LocalDateTime.of(2024, 2, 29, 10, 15, 30, 123);
+        xeq(ldt.toString(), "2024-02-29T10:15:30.000000123", "toString nano");
+        xeq(LocalDateTime.of(2024, 2, 29, 10, 15).toString(), "2024-02-29T10:15", "toString hm");
+        xeq(LocalDateTime.of(LocalDate.of(2024, 2, 29), LocalTime.of(10, 15)).toString(), "2024-02-29T10:15", "of(date,time)");
+        xact(() -> LocalDateTime.of(2024, 2, 30, 10, 15), DateTimeException.class,
+            "Invalid date 'FEBRUARY 30'", "invalid date");
+        xact(() -> LocalDateTime.of(2024, 2, 29, 24, 0), DateTimeException.class,
+            "Invalid value for HourOfDay (valid values 0 - 23): 24", "hour 24");
+        xeq(ldt.toLocalDate().toString(), "2024-02-29", "toLocalDate");
+        xeq(ldt.toLocalTime().toString(), "10:15:30.000000123", "toLocalTime");
+        xeq(ldt.toInstant(ZoneOffset.ofHours(1)).toString(), "2024-02-29T09:15:30.000000123Z", "toInstant");
+        check(ldt.toEpochSecond(ZoneOffset.ofHours(1)) == 1709198130L, "toEpochSecond");
+        xeq(ldt.atZone(ZoneOffset.ofHours(2)).toString(), "2024-02-29T10:15:30.000000123+02:00", "atZone");
+        check(LocalDateTime.ofInstant(Instant.ofEpochSecond(0), ZoneOffset.ofHours(1)).toString().equals("1970-01-01T01:00"), "ofInstant");
+        xeq(ldt.truncatedTo(ChronoUnit.HOURS).toString(), "2024-02-29T10:00", "trunc HOURS");
+        xeq(ldt.truncatedTo(ChronoUnit.DAYS).toString(), "2024-02-29T00:00", "trunc DAYS");
+        xeq(ldt.truncatedTo(ChronoUnit.MINUTES).toString(), "2024-02-29T10:15", "trunc MINUTES");
+        xact(() -> ldt.truncatedTo(ChronoUnit.FOREVER), UnsupportedTemporalTypeException.class,
+            "Unit is too large to be used for truncation", "trunc FOREVER");
+        xeq(ldt.withNano(5).toString(), "2024-02-29T10:15:30.000000005", "withNano");
+        xeq(ldt.withDayOfYear(60).toString(), "2024-02-29T10:15:30.000000123", "withDayOfYear 60");
+        xact(() -> ldt.withDayOfYear(367), DateTimeException.class,
+            "Invalid value for DayOfYear (valid values 1 - 365/366): 367", "withDayOfYear 367");
+        xeq(ldt.withYear(2023).toString(), "2023-02-28T10:15:30.000000123", "withYear clamp");
+        xeq(ldt.plusWeeks(1).toString(), "2024-03-07T10:15:30.000000123", "plusWeeks");
+        xeq(LocalDateTime.of(2024, 1, 31, 0, 0).plusMonths(1).toString(), "2024-02-29T00:00", "plusMonths clamp");
+        check(ldt.isSupported(ChronoField.NANO_OF_SECOND), "support nano");
+        check(ldt.isSupported(ChronoUnit.HOURS), "support hours");
+        check(!ldt.isSupported(ChronoField.OFFSET_SECONDS), "no offset field");
+        xact(() -> ldt.getLong(ChronoField.OFFSET_SECONDS), UnsupportedTemporalTypeException.class,
+            "Unsupported field: OffsetSeconds", "getLong offset");
+        xact(() -> ldt.getLong(ChronoField.INSTANT_SECONDS), UnsupportedTemporalTypeException.class,
+            "Unsupported field: InstantSeconds", "getLong instant");
+        check(LocalDateTime.parse("2024-02-29T10:15:30").equals(LocalDateTime.of(2024, 2, 29, 10, 15, 30)), "parse equals of");
+        String[] rts = {"2024-02-29T10:15:30", "2024-02-29T10:15", "1970-01-01T00:00:00.000000001"};
+        for (String s : rts) check(LocalDateTime.parse(s).toString().equals(s), "rt " + s);
+        xeq(ldt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), "2024-02-29T10:15:30.000000123", "format ISO");
+        check(ldt.plus(Duration.ofHours(25)).minus(Duration.ofHours(25)).equals(ldt), "dur sym");
+        check(ldt.plus(Period.ofMonths(1)).minus(Period.ofMonths(1)).equals(ldt), "period sym");
+        check(ldt.plusDays(1).minusDays(1).equals(ldt), "days sym");
+        check(LocalDateTime.of(2024, 1, 1, 0, 0).compareTo(ldt) < 0, "compareTo");
+        check(ldt.isAfter(LocalDateTime.of(2024, 2, 29, 10, 15, 30, 122)), "isAfter nano");
+        check(LocalDateTime.of(2024, 2, 29, 10, 15, 30, 123).hashCode()
+                == LocalDateTime.of(LocalDate.of(2024, 2, 29), LocalTime.of(10, 15, 30, 123)).hashCode(), "hash path eq");
+    }
+
 }

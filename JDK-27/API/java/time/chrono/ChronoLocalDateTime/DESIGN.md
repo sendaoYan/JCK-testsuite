@@ -37,3 +37,5 @@ LocalDate d = dt.toLocalDate();
   - 排序：`isBefore`/`isAfter`/`isEqual`/`compareTo` + `timeLineOrder` 排序。
   - `format(ISO_LOCAL_DATE_TIME)`。
   - 异常：`with(INSTANT_SECONDS)` → `UnsupportedTemporalTypeException`。
+
+- **深化补充（契约级)**：from(LDT) 精确串；from(LocalDate) DTE `Unable to obtain LocalDateTime from TemporalAccessor: 2024-01-01 of type java.time.LocalDate`；atZone(ZoneId.of("UTC")) 带 `[UTC]` 后缀而 atZone(ZoneOffset.UTC) 不带；toEpochSecond=1718445600；JapaneseDate.atTime(NOON)=`Japanese Reiwa 6-06-15T12:00`；timeLineOrder 跨日历。

@@ -38,6 +38,8 @@ import java.time.temporal.TemporalAdjusters;
 import java.time.temporal.TemporalQueries;
 import java.time.temporal.UnsupportedTemporalTypeException;
 import java.time.temporal.ValueRange;
+import java.time.Year;
+import java.time.temporal.JulianFields;
 
 public class LocalDateTest {
     static int passed;
@@ -285,6 +287,184 @@ public class LocalDateTest {
         testSerialization();
         testErrors();
         testNullSemantics();
+        testDeepOfMatrix();
+        testDeepClampAndWith();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    // ===== deepening: of() boundary matrix + exact DTE messages (probe-locked) =====
+    static void testDeepOfMatrix() {
+        check(LocalDate.of(1, 1, 1).toString().equals("0001-01-01"), "of min-ish");
+        check(LocalDate.of(0, 1, 1).toString().equals("0000-01-01"), "year 0 legal ISO");
+        check(LocalDate.of(-44, 1, 1).toString().equals("-0044-01-01"), "negative year padded");
+        check(LocalDate.of(999, 12, 31).toString().equals("0999-12-31"), "3-digit year padded");
+        check(LocalDate.of(999999999, 12, 31).toString().equals("+999999999-12-31"), "MAX year");
+        check(LocalDate.of(-999999999, 1, 1).toString().equals("-999999999-01-01"), "MIN year");
+        int[] dom = {31,29,31,30,31,30,31,31,30,31,30,31};
+        String[] mn = {"JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"};
+        for (int m = 1; m <= 12; m++) {
+            final int mm = m, lim = dom[m-1];
+            check(LocalDate.of(2024, mm, lim).getMonthValue() == mm, "last day of month " + mm);
+            if (lim + 1 > 31)
+                xact(() -> LocalDate.of(2024, mm, lim + 1), DateTimeException.class,
+                    "Invalid value for DayOfMonth (valid values 1 - 28/31): 32", "dom>31 m=" + mm);
+            else
+                xact(() -> LocalDate.of(2024, mm, lim + 1), DateTimeException.class,
+                    "Invalid date '" + mn[mm-1] + " " + (lim + 1) + "'", "dom invalid m=" + mm);
+        }
+        check(!Year.isLeap(1900) && Year.isLeap(2000) && Year.isLeap(2024) && !Year.isLeap(2100), "leap matrix");
+        xact(() -> LocalDate.of(1900, 2, 29), DateTimeException.class,
+            "Invalid date 'February 29' as '1900' is not a leap year", "1900 non-leap");
+        xact(() -> LocalDate.of(2100, 2, 29), DateTimeException.class,
+            "Invalid date 'February 29' as '2100' is not a leap year", "2100 non-leap");
+        xact(() -> LocalDate.of(2024, 2, 30), DateTimeException.class, "Invalid date 'FEBRUARY 30'", "Feb 30");
+        xact(() -> LocalDate.of(2024, 4, 31), DateTimeException.class, "Invalid date 'APRIL 31'", "Apr 31");
+        xact(() -> LocalDate.of(2024, 13, 1), DateTimeException.class,
+            "Invalid value for MonthOfYear (valid values 1 - 12): 13", "month 13");
+        xact(() -> LocalDate.of(2024, 0, 1), DateTimeException.class,
+            "Invalid value for MonthOfYear (valid values 1 - 12): 0", "month 0");
+        xact(() -> LocalDate.of(2024, 1, 0), DateTimeException.class,
+            "Invalid value for DayOfMonth (valid values 1 - 28/31): 0", "day 0");
+        xact(() -> LocalDate.of(999999999 + 1, 1, 1), DateTimeException.class,
+            "Invalid value for Year (valid values -999999999 - 999999999): 1000000000", "year overflow");
+        xact(() -> LocalDate.ofYearDay(2024, 0), DateTimeException.class,
+            "Invalid value for DayOfYear (valid values 1 - 365/366): 0", "doy 0");
+        xact(() -> LocalDate.ofYearDay(2024, 367), DateTimeException.class,
+            "Invalid value for DayOfYear (valid values 1 - 365/366): 367", "doy 367 leap");
+        xact(() -> LocalDate.ofYearDay(2023, 366), DateTimeException.class,
+            "Invalid date 'DayOfYear 366' as '2023' is not a leap year", "doy 366 non-leap");
+        check(LocalDate.ofYearDay(2024, 366).toString().equals("2024-12-31"), "doy 366");
+        check(LocalDate.ofYearDay(2024, 60).toString().equals("2024-02-29"), "doy 60 leap");
+        check(LocalDate.ofYearDay(2023, 60).toString().equals("2023-03-01"), "doy 60 non-leap");
+        xact(() -> LocalDate.of(1, (Month) null, 1), NullPointerException.class, null, "null month");
+    }
+
+
+    // ===== deepening: month-end clamping, with* semantics, until matrix, adjusters =====
+    static void testDeepClampAndWith() {
+        xeq(LocalDate.of(2024, 1, 31).plusMonths(1).toString(), "2024-02-29", "clamp leap");
+        xeq(LocalDate.of(2023, 1, 31).plusMonths(1).toString(), "2023-02-28", "clamp non-leap");
+        xeq(LocalDate.of(2024, 3, 31).minusMonths(1).toString(), "2024-02-29", "clamp minus leap");
+        xeq(LocalDate.of(2024, 2, 29).plusYears(1).toString(), "2025-02-28", "plusYears clamp");
+        xeq(LocalDate.of(2024, 2, 29).plus(Period.ofYears(1)).toString(), "2025-02-28", "plus P1Y clamp");
+        xeq(LocalDate.of(2024, 2, 29).withYear(2023).toString(), "2023-02-28", "withYear clamps silently");
+        xeq(LocalDate.of(2024, 2, 29).with(ChronoField.YEAR, 2023).toString(), "2023-02-28", "with(YEAR) clamps");
+        xeq(LocalDate.of(2024, 1, 30).withMonth(2).toString(), "2024-02-29", "withMonth clamps leap");
+        xeq(LocalDate.of(2023, 1, 30).withMonth(2).toString(), "2023-02-28", "withMonth clamps non-leap");
+        xeq(LocalDate.of(2024, 3, 31).withDayOfMonth(30).toString(), "2024-03-30", "withDayOfMonth simple");
+        xact(() -> LocalDate.of(2024, 4, 10).withDayOfMonth(31), DateTimeException.class,
+            "Invalid date 'APRIL 31'", "withDayOfMonth 31 April");
+        xact(() -> LocalDate.of(2024, 1, 1).withDayOfYear(367), DateTimeException.class,
+            "Invalid value for DayOfYear (valid values 1 - 365/366): 367", "withDayOfYear 367");
+        xeq(LocalDate.of(2024, 2, 29).withDayOfYear(60).toString(), "2024-02-29", "withDayOfYear 60");
+        xact(() -> LocalDate.MAX.plusDays(1), DateTimeException.class,
+            "Invalid value for Year (valid values -999999999 - 999999999): 1000000000", "MAX.plusDays");
+         xact(() -> LocalDate.MIN.minusDays(1), DateTimeException.class,
+             "Invalid value for Year (valid values -999999999 - 999999999): -1000000000", "MIN.minusDays JDK8");
+        LocalDate base = LocalDate.of(2024, 2, 29);
+        Period[] ps = {Period.of(0, 13, 0), Period.of(0, 0, 400), Period.of(0, 0, 1461)};
+        for (int i = 0; i < ps.length; i++) {
+            check(base.plus(ps[i]).minus(ps[i]).equals(base), "period sym " + i);
+            check(base.minus(ps[i]).plus(ps[i]).equals(base), "period sym rev " + i);
+        }
+        // Feb-29 + 1 year clamps and is LOSSY: round-trip does not return to Feb-29
+        xeq(base.plus(Period.ofYears(1)).toString(), "2025-02-28", "Feb29 plus 1Y clamps");
+        xeq(base.plus(Period.ofYears(1)).minus(Period.ofYears(1)).toString(), "2024-02-28", "Feb29 +1Y-1Y lossy");
+        check(LocalDate.of(2024, 2, 28).plus(Period.ofYears(1)).minus(Period.ofYears(1)).equals(LocalDate.of(2024, 2, 28)), "Feb28 year sym");
+        ChronoUnit[] units = {ChronoUnit.DAYS, ChronoUnit.WEEKS, ChronoUnit.MONTHS, ChronoUnit.YEARS, ChronoUnit.DECADES, ChronoUnit.CENTURIES, ChronoUnit.MILLENNIA};
+        for (ChronoUnit u : units)
+            check(LocalDate.of(2024, 2, 28).plus(5, u).minus(5, u).equals(LocalDate.of(2024, 2, 28)), "unit sym " + u);
+        xeq(base.plus(5, ChronoUnit.YEARS).toString(), "2029-02-28", "Feb29 +5 YEARS clamps");
+        xeq(base.plus(5, ChronoUnit.DECADES).toString(), "2074-02-28", "Feb29 +5 DECADES clamps");
+        check(LocalDate.of(2024, 2, 28).until(LocalDate.of(2024, 3, 1), ChronoUnit.DAYS) == 2, "until DAYS leap");
+        check(LocalDate.of(2023, 2, 28).until(LocalDate.of(2023, 3, 1), ChronoUnit.DAYS) == 1, "until DAYS non-leap");
+        check(LocalDate.of(2024, 1, 31).until(LocalDate.of(2024, 3, 1), ChronoUnit.MONTHS) == 1, "until MONTHS clamp");
+        check(LocalDate.of(2024, 1, 31).until(LocalDate.of(2024, 2, 29), ChronoUnit.MONTHS) == 0, "until MONTHS 0");
+        check(LocalDate.of(2023, 3, 1).until(LocalDate.of(2024, 2, 29), ChronoUnit.YEARS) == 0, "until YEARS 0");
+        check(LocalDate.of(2023, 2, 28).until(LocalDate.of(2024, 2, 28), ChronoUnit.YEARS) == 1, "until YEARS 1");
+        check(LocalDate.of(2024, 2, 1).until(LocalDate.of(2024, 2, 29), ChronoUnit.WEEKS) == 4, "until WEEKS");
+        check(LocalDate.of(1924, 1, 1).until(LocalDate.of(2024, 1, 1), ChronoUnit.CENTURIES) == 1, "until CENTURIES");
+        check(LocalDate.of(24, 1, 1).until(LocalDate.of(2024, 1, 1), ChronoUnit.MILLENNIA) == 2, "until MILLENNIA");
+        check(LocalDate.of(2024, 1, 1).until(LocalDate.of(2025, 1, 1), ChronoUnit.ERAS) == 0, "until ERAS 0");
+        check(LocalDate.of(2024, 1, 1).until(LocalDate.of(2024, 1, 1), ChronoUnit.DAYS) == 0, "until self 0");
+        check(LocalDate.of(2024, 1, 1).until(LocalDate.of(2025, 6, 15), ChronoUnit.MONTHS) == 17, "until MONTHS 17");
+        LocalDate b = LocalDate.of(2024, 2, 29);
+        check(b.getDayOfWeek() == DayOfWeek.THURSDAY, "base dow");
+        xeq(b.with(TemporalAdjusters.firstDayOfMonth()).toString(), "2024-02-01", "firstDayOfMonth");
+        xeq(b.with(TemporalAdjusters.lastDayOfMonth()).toString(), "2024-02-29", "lastDayOfMonth");
+        xeq(b.with(TemporalAdjusters.firstDayOfNextMonth()).toString(), "2024-03-01", "firstDayOfNextMonth");
+        xeq(b.with(TemporalAdjusters.firstDayOfYear()).toString(), "2024-01-01", "firstDayOfYear");
+        xeq(b.with(TemporalAdjusters.lastDayOfYear()).toString(), "2024-12-31", "lastDayOfYear");
+        xeq(b.with(TemporalAdjusters.firstDayOfNextYear()).toString(), "2025-01-01", "firstDayOfNextYear");
+        xeq(b.with(TemporalAdjusters.firstInMonth(DayOfWeek.THURSDAY)).toString(), "2024-02-01", "firstInMonth THU");
+        xeq(b.with(TemporalAdjusters.lastInMonth(DayOfWeek.WEDNESDAY)).toString(), "2024-02-28", "lastInMonth WED");
+        xeq(b.with(TemporalAdjusters.dayOfWeekInMonth(2, DayOfWeek.SATURDAY)).toString(), "2024-02-10", "dowInMonth 2 SAT");
+        xeq(b.with(TemporalAdjusters.dayOfWeekInMonth(-1, DayOfWeek.SUNDAY)).toString(), "2024-02-25", "dowInMonth -1 SUN");
+        xeq(b.with(TemporalAdjusters.dayOfWeekInMonth(0, DayOfWeek.MONDAY)).toString(), "2024-01-29", "dowInMonth 0 JAN-29");
+        xeq(b.with(TemporalAdjusters.next(DayOfWeek.MONDAY)).toString(), "2024-03-04", "next MON");
+        xeq(b.with(TemporalAdjusters.nextOrSame(DayOfWeek.THURSDAY)).toString(), "2024-02-29", "nextOrSame THU");
+        xeq(b.with(TemporalAdjusters.previous(DayOfWeek.FRIDAY)).toString(), "2024-02-23", "previous FRI");
+        xeq(b.with(TemporalAdjusters.previousOrSame(DayOfWeek.THURSDAY)).toString(), "2024-02-29", "previousOrSame THU");
+        xact(() -> TemporalAdjusters.dayOfWeekInMonth(1, null), NullPointerException.class, null, "dowInMonth null");
+        xact(() -> TemporalAdjusters.next(null), NullPointerException.class, null, "next null");
+        xact(() -> TemporalAdjusters.previousOrSame(null), NullPointerException.class, null, "previousOrSame null");
+        xact(() -> TemporalAdjusters.ofDateAdjuster(null), NullPointerException.class, null, "ofDateAdjuster null");
+        LocalDate[] samples = {LocalDate.of(2024,2,29), LocalDate.MIN, LocalDate.of(0,1,1), LocalDate.of(1970,1,1), LocalDate.MAX};
+        for (LocalDate d : samples) {
+            check(LocalDate.ofEpochDay(d.toEpochDay()).equals(d), "epochDay rt " + d);
+            check(LocalDate.parse(d.toString()).equals(d), "toString/parse rt " + d);
+        }
+        check(LocalDate.ofEpochDay(0).toString().equals("1970-01-01"), "epochDay 0");
+        check(LocalDate.ofEpochDay(19889).toString().equals("2024-06-15"), "epochDay 19889");
+        xeq(LocalDate.of(2024, 2, 29).range(ChronoField.DAY_OF_MONTH).toString(), "1 - 29", "range DOM Feb leap");
+        xeq(LocalDate.of(2023, 2, 21).range(ChronoField.DAY_OF_MONTH).toString(), "1 - 28", "range DOM Feb");
+        xeq(LocalDate.of(2024, 1, 1).range(ChronoField.DAY_OF_MONTH).toString(), "1 - 31", "range DOM Jan");
+        xeq(LocalDate.of(2024, 1, 1).range(ChronoField.DAY_OF_YEAR).toString(), "1 - 366", "range DOY leap");
+        xeq(LocalDate.of(2023, 1, 1).range(ChronoField.DAY_OF_YEAR).toString(), "1 - 365", "range DOY");
+        xact(() -> LocalDate.of(2024, 1, 1).getLong(ChronoField.NANO_OF_DAY), UnsupportedTemporalTypeException.class,
+            "Unsupported field: NanoOfDay", "LD.getLong NANO_OF_DAY");
+        xact(() -> LocalDate.of(2024, 1, 1).getLong(ChronoField.HOUR_OF_DAY), UnsupportedTemporalTypeException.class,
+            "Unsupported field: HourOfDay", "LD.getLong HOUR");
+        xact(() -> LocalDate.of(2024, 1, 1).plus(1, ChronoUnit.HOURS), UnsupportedTemporalTypeException.class,
+            "Unsupported unit: Hours", "LD.plus hours");
+        check(!LocalDate.of(2024, 1, 1).isSupported(ChronoUnit.HOURS), "LD not support HOURS");
+        check(LocalDate.of(2024, 1, 1).isSupported(ChronoUnit.DAYS), "LD support DAYS");
+        LocalDate jd = LocalDate.of(2024, 2, 29);
+        check(jd.getLong(JulianFields.JULIAN_DAY) == 2460370L, "JULIAN_DAY value");
+        check(jd.getLong(JulianFields.MODIFIED_JULIAN_DAY) == 60369L, "MJD value");
+        check(jd.getLong(JulianFields.RATA_DIE) == 738945L, "RATA_DIE value");
+        check(LocalDate.from(jd.with(JulianFields.JULIAN_DAY, 2460370L)).equals(jd), "julian rt");
+        check(LocalDate.parse("2024-02-29").hashCode() == LocalDate.of(2024, 2, 29).hashCode(), "hash parse/of");
+        check(LocalDate.of(2024, 2, 29).compareTo(LocalDate.of(2024, 3, 1)) < 0, "compareTo month");
+        check(LocalDate.of(-1, 1, 1).compareTo(LocalDate.of(1, 1, 1)) < 0, "compareTo year sign");
+        check(LocalDate.of(2024, 2, 29).equals(LocalDate.ofEpochDay(LocalDate.of(2024, 2, 29).toEpochDay())), "equals epoch");
+    }
+
 }

@@ -30,3 +30,5 @@ boolean same = ac.equals(Chronology.of("ISO"));           // equals 按 ID
   - `equals`/`hashCode`：与 `Chronology.of("ISO")` 相等、与 `Minguo` 不等、hashCode 一致。
   - `toString` == "ISO"。
   - `resolveDate` STRICT：年月日 → `2020-01-01`；`DAY_OF_YEAR=60`（闰年）→ `2020-02-29`；字段缺失 → `DateTimeException`。
+
+- **深化补充（契约级）**：注册表有序 `​[Hijrah-umalqura, ISO, Japanese, Minguo, ThaiBuddhist]`；compareTo 按 id（Japanese vs ThaiBuddhist=-10）；dateNow(null ZoneId/Clock) NPE `zone`/`clock`；date(裸 Instant) DTE `Unable to obtain LocalDate from TemporalAccessor: ... of type java.time.Instant`；resolveDate 部分字段→null、全字段成日期；四历 dateNow(fixed clock) 精确串。

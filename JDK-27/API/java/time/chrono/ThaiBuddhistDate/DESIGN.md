@@ -35,3 +35,5 @@ ThaiBuddhistDate before = ThaiBuddhistDate.of(0, 1, 1); // BEFORE_BE
 - 异常：`of(2563,2,30)` 抛 DateTimeException。
 - `now()` 仅断非 null。
 白盒：反射校验 final、父类 `ChronoLocalDateImpl`、实现 ChronoLocalDate/Serializable、关键工厂方法。
+
+- **深化补充（契约级）**：543 偏移双向（2567↔2024）；year 0/-1=BEFORE_BE 1/2；with(YEAR)、until 年差 1；format('G')=`BE 2567-06-15`（JDK-8 是 `B.E.`）；epochDay 与 ISO 同值。

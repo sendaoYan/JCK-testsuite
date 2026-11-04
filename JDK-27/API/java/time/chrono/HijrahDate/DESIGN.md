@@ -35,3 +35,5 @@ HijrahDate next = hd.plus(1, ChronoUnit.DAYS);
 - 异常：`of(1437,13,1)` 抛 DateTimeException。
 - `now()` 仅断非 null。
 白盒：反射校验 final、父类 `ChronoLocalDateImpl`、实现 ChronoLocalDate/Serializable、关键工厂方法。
+
+- **深化补充（契约级）**：of(1445,12,10) 全字段（lom 30/loy 354/DOY 334）；ISO 双向换算非对称锁死（1445-12-10→2024-06-16，2024-06-15→1445-12-09）；plus 20 天/1 月、firstDayOfNextMonth；窗口边界 1300-01-01/1600-12-30 与三类越界 message（month 13/day 31/窗外年）；epochDay 往返 equals。

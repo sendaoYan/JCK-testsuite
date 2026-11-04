@@ -27,3 +27,5 @@ ThaiBuddhistEra[] all = ThaiBuddhistEra.values(); // [BEFORE_BE, BE]
 - of(1)=BE、of(0)=BEFORE_BE。
 - 异常：valueOf 非法名抛 IllegalArgumentException；of(2) 抛 DateTimeException。
 白盒：反射校验 enum、父类 Enum、实现 Era、values/valueOf/of/getValue 方法存在。
+
+- **深化补充（契约级）**：CLDR 显示名 `BE`/`BE` 与 BEFORE_BE FULL `BC`（JDK-8 借用 `Anno Domini`/`A`/`Before Christ`）；eraOf/date.getEra 身份同一；valueOf 非法 IAE；range UTE。

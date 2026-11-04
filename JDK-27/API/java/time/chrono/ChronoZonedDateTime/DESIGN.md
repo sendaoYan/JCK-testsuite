@@ -36,3 +36,5 @@ ChronoZonedDateTime<?> local = zdt.withZoneSameLocal(sh.getZone());             
   - 排序：`isBefore`/`isAfter`/`isEqual`/`compareTo` + `timeLineOrder`。
   - `format(ISO_ZONED_DATE_TIME)`。
   - 异常：`from(LocalDate)`（无时区）→ `DateTimeException`。
+
+- **深化补充（契约级）**：from(ZDT)=`2024-06-15T10:00Z[UTC]`；from(LocalDate/LDT) DTE 精确 message；toInstant/toEpochSecond；JapaneseDate.atTime().atZone() 精确串；timeLineOrder 按 instant；withZoneSameLocal 保墙钟；getOffset/getZone 区分。

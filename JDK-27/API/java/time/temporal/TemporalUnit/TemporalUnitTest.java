@@ -11,6 +11,7 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
 import java.time.temporal.TemporalUnit;
+import java.time.temporal.UnsupportedTemporalTypeException;
 
 public class TemporalUnitTest {
     static int passed;
@@ -59,6 +60,60 @@ public class TemporalUnitTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepTemporalUnit();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepTemporalUnit() {
+        TemporalUnit u = ChronoUnit.WEEKS;
+        xeq(u.getDuration().toString(), "PT168H", "duration");
+        check(u.isDurationEstimated(), "weeks estimated");
+        check(u.isDateBased(), "date based");
+        xeq(u.addTo(LocalDate.of(2024, 2, 22), 1).toString(), "2024-02-29", "addTo");
+        check(u.between(LocalDate.of(2024, 2, 1), LocalDate.of(2024, 2, 29)) == 4, "between");
+        xact(() -> u.addTo(LocalTime.NOON, 1), UnsupportedTemporalTypeException.class,
+            "Unsupported unit: Weeks", "addTo time");
+        xact(() -> u.between(LocalTime.NOON, LocalTime.MIDNIGHT), UnsupportedTemporalTypeException.class,
+            "Unsupported unit: Weeks", "between times");
+        TemporalUnit min = ChronoUnit.MINUTES;
+        xeq(min.getDuration().toString(), "PT1M", "minutes duration");
+        check(!min.isDurationEstimated(), "minutes exact");
+        check(min.isTimeBased(), "minutes time based");
+        check(!min.isDateBased(), "minutes not date based");
+        check(ChronoUnit.DAYS.between(LocalDate.of(2024, 2, 28), LocalDate.of(2024, 3, 1)) == 2, "days between leap");
+        xeq(ChronoUnit.HOURS.addTo(LocalTime.of(23, 0), 2).toString(), "01:00", "hours addTo wraps");
+        xeq(ChronoUnit.FOREVER.toString(), "Forever", "FOREVER toString");
+        check(ChronoUnit.FOREVER.isDurationEstimated(), "FOREVER estimated");
+        xeq(ChronoUnit.MILLENNIA.getDuration().toString(), "PT8765820H", "millennia duration");
+        xact(() -> ChronoUnit.FOREVER.addTo(LocalDate.of(2024, 1, 1), 1), UnsupportedTemporalTypeException.class,
+            "Unsupported unit: Forever", "FOREVER addTo");
+    }
+
 }

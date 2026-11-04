@@ -38,3 +38,5 @@ IsoEra era = iso.eraOf(1);
   - `localDateTime`/`zonedDateTime`（TemporalAccessor 与 Instant 重载）。
   - `resolveDate` STRICT；`dateNow` 非空。
   - 异常：`eraOf(2)`、`resolveDate` 缺字段 → `DateTimeException`。
+
+- **深化补充（契约级）**：dateYearDay(2024,167)/dateEpochDay(19889)；闰年 4/100/400 矩阵；zonedDateTime(Instant,ZoneId)=`2024-06-15T10:15:30Z`；localDateTime(null) NPE `temporal`；eraOf(0/1/5)。

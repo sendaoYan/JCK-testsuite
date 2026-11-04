@@ -32,6 +32,8 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalQueries;
 import java.time.temporal.UnsupportedTemporalTypeException;
+import java.time.Duration;
+import java.time.Period;
 
 public class ZonedDateTimeTest {
     static int passed;
@@ -234,6 +236,107 @@ public class ZonedDateTimeTest {
         testSerialization();
         testErrors();
         testNullSemantics();
+        testDeepZonedDateTime();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepZonedDateTime() {
+        ZoneId ber = ZoneId.of("Europe/Berlin");
+        ZonedDateTime z = ZonedDateTime.of(2024, 2, 29, 10, 15, 30, 0, ber);
+        xeq(z.toString(), "2024-02-29T10:15:30+01:00[Europe/Berlin]", "toString");
+        check(z.getZone() == ber && z.getOffset().equals(ZoneOffset.ofHours(1)), "zone/offset");
+        check(z.getDayOfYear() == 60, "dayOfYear leap");
+        xeq(z.toLocalDate().toString(), "2024-02-29", "toLocalDate");
+        xeq(z.toLocalTime().toString(), "10:15:30", "toLocalTime");
+        xeq(z.toLocalDateTime().toString(), "2024-02-29T10:15:30", "toLocalDateTime");
+        xeq(z.toInstant().toString(), "2024-02-29T09:15:30Z", "toInstant");
+        check(z.toEpochSecond() == 1709198130L, "toEpochSecond");
+        xeq(z.toOffsetDateTime().toString(), "2024-02-29T10:15:30+01:00", "toOffsetDateTime");
+        xeq(ZonedDateTime.ofInstant(Instant.EPOCH, ZoneOffset.ofHours(1)).toString(), "1970-01-01T01:00+01:00", "ofInstant");
+        xeq(ZonedDateTime.ofLocal(LocalDateTime.of(2024, 2, 29, 10, 15, 30), ber, null).toString(),
+            "2024-02-29T10:15:30+01:00[Europe/Berlin]", "ofLocal");
+        xeq(ZonedDateTime.ofStrict(LocalDateTime.of(2024, 2, 29, 10, 15, 30), ZoneOffset.ofHours(1), ber).toString(),
+            "2024-02-29T10:15:30+01:00[Europe/Berlin]", "ofStrict normal");
+        xact(() -> ZonedDateTime.ofStrict(LocalDateTime.of(2024, 3, 31, 2, 30), ZoneOffset.ofHours(1), ber),
+            DateTimeException.class,
+            "LocalDateTime '2024-03-31T02:30' does not exist in zone 'Europe/Berlin' due to a gap in the local time-line, typically caused by daylight savings",
+            "ofStrict gap");
+        xact(() -> ZonedDateTime.ofStrict(LocalDateTime.of(2024, 2, 29, 10, 15, 30), ZoneOffset.ofHours(5), ber),
+            DateTimeException.class,
+            "ZoneOffset '+05:00' is not valid for LocalDateTime '2024-02-29T10:15:30' in zone 'Europe/Berlin'",
+            "ofStrict wrong offset");
+        xact(() -> ZonedDateTime.ofStrict(LocalDateTime.of(2024, 10, 27, 2, 30), ZoneOffset.ofHours(6), ber),
+            DateTimeException.class,
+            "ZoneOffset '+06:00' is not valid for LocalDateTime '2024-10-27T02:30' in zone 'Europe/Berlin'",
+            "ofStrict overlap wrong offset");
+        // tzdata Berlin 2024: gap 2024-03-31 02:00+01:00 -> 03:00+02:00; overlap 2024-10-27 03:00+02:00 -> 02:00+01:00
+        ZonedDateTime gap = ZonedDateTime.of(LocalDateTime.of(2024, 3, 31, 2, 30), ber);
+        xeq(gap.toString(), "2024-03-31T03:30+02:00[Europe/Berlin]", "gap shifts forward +1h");
+        check(gap.getOffset().equals(ZoneOffset.ofHours(2)), "gap offset");
+        ZonedDateTime ovl = ZonedDateTime.of(LocalDateTime.of(2024, 10, 27, 2, 30), ber);
+        xeq(ovl.toString(), "2024-10-27T02:30+02:00[Europe/Berlin]", "overlap picks earlier offset");
+        xeq(ovl.withLaterOffsetAtOverlap().toString(), "2024-10-27T02:30+01:00[Europe/Berlin]", "withLaterOffsetAtOverlap");
+        xeq(ovl.withEarlierOffsetAtOverlap().toString(), "2024-10-27T02:30+02:00[Europe/Berlin]", "withEarlierOffsetAtOverlap");
+        xeq(z.withZoneSameInstant(ZoneOffset.UTC).toString(), "2024-02-29T09:15:30Z", "withZoneSameInstant UTC");
+        xeq(z.withZoneSameLocal(ZoneId.of("America/New_York")).toString(),
+            "2024-02-29T10:15:30-05:00[America/New_York]", "withZoneSameLocal NY");
+        xeq(z.withZoneSameLocal(ber).withZoneSameInstant(ZoneId.of("America/New_York")).getOffset().toString(),
+            "-05:00", "instant-correct NY offset");
+        xeq(z.withDayOfMonth(1).toString(), "2024-02-01T10:15:30+01:00[Europe/Berlin]", "withDayOfMonth");
+        xeq(z.withDayOfYear(60).toString(), "2024-02-29T10:15:30+01:00[Europe/Berlin]", "withDayOfYear 60");
+        xeq(z.withMonth(1).toString(), "2024-01-29T10:15:30+01:00[Europe/Berlin]", "withMonth");
+        xeq(z.withYear(2023).toString(), "2023-02-28T10:15:30+01:00[Europe/Berlin]", "withYear clamps Feb29");
+        check(z.getLong(ChronoField.OFFSET_SECONDS) == 3600L, "getLong offsetSeconds");
+        check(z.format(DateTimeFormatter.ISO_ZONED_DATE_TIME).equals("2024-02-29T10:15:30+01:00[Europe/Berlin]"), "ISO_ZONED");
+        check(ZonedDateTime.parse("2024-02-29T10:15:30+01:00[Europe/Berlin]").equals(z), "parse rt");
+        check(ZonedDateTime.parse(z.toString()).equals(z), "toString rt");
+        check(z.query(TemporalQueries.zoneId()) == ber, "query zoneId");
+        check(z.query(TemporalQueries.offset()).equals(ZoneOffset.ofHours(1)), "query offset");
+        check(z.query(TemporalQueries.localDate()).toString().equals("2024-02-29"), "query localDate");
+        check(z.isSupported(ChronoField.INSTANT_SECONDS), "support INSTANT_SECONDS");
+        check(z.isSupported(ChronoField.OFFSET_SECONDS), "support OFFSET_SECONDS");
+        check(z.plusDays(1).minusDays(1).equals(z), "days sym");
+        check(z.plusMonths(1).minusMonths(1).equals(z), "months sym");
+        check(z.plus(Duration.ofHours(3)).minus(Duration.ofHours(3)).equals(z), "dur sym");
+        check(z.plus(Period.ofWeeks(1)).minus(Period.ofWeeks(1)).equals(z), "period sym");
+        check(z.plus(1, ChronoUnit.HOURS).equals(ZonedDateTime.of(2024, 2, 29, 11, 15, 30, 0, ber)), "plus hours");
+        xact(() -> ZonedDateTime.of(null, ber), NullPointerException.class, null, "of null ldt");
+        xact(() -> ZonedDateTime.of(LocalDateTime.of(2024, 2, 29, 10, 15, 30), null), NullPointerException.class, "zone", "of null zone");
+        check(z.truncatedTo(ChronoUnit.DAYS).toString().equals("2024-02-29T00:00+01:00[Europe/Berlin]"), "trunc DAYS");
+        check(z.truncatedTo(ChronoUnit.HOURS).toString().equals("2024-02-29T10:00+01:00[Europe/Berlin]"), "trunc HOURS");
+        check(z.compareTo(ZonedDateTime.of(2024, 2, 29, 10, 15, 31, 0, ber)) < 0, "compareTo");
+        check(z.isBefore(ZonedDateTime.of(2024, 3, 1, 0, 0, 0, 0, ber)), "isBefore");
+        check(z.isEqual(ZonedDateTime.of(2024, 2, 29, 4, 15, 30, 0, ZoneId.of("America/New_York"))), "isEqual across zones");
+        check(!z.equals(ZonedDateTime.of(2024, 2, 29, 4, 15, 30, 0, ZoneId.of("America/New_York"))), "equals differs from isEqual");
+        check(z.hashCode() == ZonedDateTime.parse(z.toString()).hashCode(), "hash rt");
+        xeq(z.minusYears(24).toString(), "2000-02-29T10:15:30+01:00[Europe/Berlin]", "minusYears keeps Feb29 across 2 leaps");
+    }
+
 }

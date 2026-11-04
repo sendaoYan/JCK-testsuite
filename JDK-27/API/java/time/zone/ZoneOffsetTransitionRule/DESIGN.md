@@ -28,3 +28,5 @@ ZoneOffsetTransition t = rule.createTransition(2024); // 2024-03-31T02:00
 - 组合：负 `dayOfMonthIndicator`（-1）+ `DayOfWeek.SUNDAY` 求 2024 年三月最后一个周日 == 3 月 31 日。
 - 相等性：两个等价规则 `equals`/`hashCode` 相等，与不同规则不等。
 - 全部固定输入、无墙钟、无全局状态、headless-safe。
+
+- **深化补充（契约级）**：柏林末位规则 dom 25 正向（`on or after MARCH 25`）与 dom -5 负向（`on or before last day minus 4`）逐年 createTransition（2024-03-31/2025-03-30/2024-10-27）；null DayOfWeek=精确日规则；eod=true 打印 `24:00` 且 createTransition 展开到次日；dom 越界 IAE 与 `Time must be midnight when end of day flag is true`；六个 null 参数逐一 NPE（timeDefinition 的 message 已从 JDK-8 的 `timeDefnition` 拼写错误修正）；偏移方向不校验。

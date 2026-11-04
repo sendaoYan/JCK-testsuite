@@ -36,3 +36,5 @@ MinguoDate d2 = mc.dateEpochDay(d.toEpochDay());      // 往返
 - 往返 `date(ROC,109,1,1) -> toEpochDay -> dateEpochDay`；`date(109,1,1)` 与 `date(ROC,109,1,1)` 等值。
 - dateNow() 仅断非 null。
 白盒：反射校验 final、父类 AbstractChronology、Serializable、INSTANCE static+final、关键方法。
+
+- **深化补充（契约级）**：闰年同构 ISO（113 闰/112 平）；eraOf(2) DTE `Invalid era: 2`；dateEpochDay(19889)=`Minguo ROC 113-06-15`；proleptic YEAR 直通；displayName `Minguo Calendar`。

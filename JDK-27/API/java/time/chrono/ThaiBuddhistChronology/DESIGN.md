@@ -36,3 +36,5 @@ ThaiBuddhistDate d2 = tc.dateEpochDay(d.toEpochDay()); // 往返
 - 往返 `date(BE,2563,1,1) -> toEpochDay -> dateEpochDay`；`date(2563,1,1)` 与 `date(BE,2563,1,1)` 等值。
 - dateNow() 仅断非 null。
 白盒：反射校验 final、父类 AbstractChronology、Serializable、INSTANCE static+final、关键方法。
+
+- **深化补充（契约级）**：eraOf(0/1)；isLeapYear(2567)；dateEpochDay(19889)=`ThaiBuddhist BE 2567-06-15`；dateNow(fixed)；displayName `Buddhist Calendar`。

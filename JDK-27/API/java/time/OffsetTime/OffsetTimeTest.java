@@ -20,6 +20,12 @@ import java.time.OffsetTime;
 import java.time.ZoneOffset;
 import java.time.DateTimeException;
 import java.time.format.DateTimeParseException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoField;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalQueries;
+import java.time.temporal.UnsupportedTemporalTypeException;
 
 public class OffsetTimeTest {
     static int passed;
@@ -161,6 +167,73 @@ public class OffsetTimeTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepOffsetTime();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ==== contract deepening harness (appended) ====
+    interface DeepRun { void run() throws Throwable; }
+
+    static void xact(DeepRun r, Class<?> type, String exactMsg, String tag) {
+        try {
+            r.run();
+            throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but nothing was thrown");
+        } catch (AssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
+                        + t.getClass().getName() + ": " + t.getMessage(), t);
+            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+                throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
+                        + "> want <" + exactMsg + ">");
+            passed++;
+        }
+    }
+
+    static void xeq(Object got, Object want, String tag) {
+        if (got == null ? want != null : !got.equals(want))
+            throw new AssertionError(tag + ": got <" + got + "> want <" + want + ">");
+        passed++;
+    }
+
+
+    static void testDeepOffsetTime() {
+        OffsetTime ot = OffsetTime.of(10, 15, 30, 0, ZoneOffset.ofHours(1));
+        xeq(ot.toString(), "10:15:30+01:00", "toString");
+        xeq(ot.toLocalTime().toString(), "10:15:30", "toLocalTime");
+        check(ot.getOffset().equals(ZoneOffset.ofHours(1)), "getOffset");
+        xeq(ot.withHour(5).toString(), "05:15:30+01:00", "withHour");
+        xeq(ot.withOffsetSameLocal(ZoneOffset.ofHours(2)).toString(), "10:15:30+02:00", "withOffsetSameLocal");
+        xeq(ot.withOffsetSameInstant(ZoneOffset.ofHours(2)).toString(), "11:15:30+02:00", "withOffsetSameInstant shifts clock");
+        check(ot.getLong(ChronoField.OFFSET_SECONDS) == 3600L, "getLong offset");
+        check(!ot.isSupported(ChronoField.DAY_OF_MONTH), "no DOM");
+        check(ot.isSupported(ChronoField.OFFSET_SECONDS), "support offset");
+        xact(() -> ot.plus(1, ChronoUnit.DAYS), UnsupportedTemporalTypeException.class,
+            "Unsupported unit: Days", "plus DAYS");
+        xact(() -> ot.getLong(ChronoField.DAY_OF_YEAR), UnsupportedTemporalTypeException.class,
+            "Unsupported field: DayOfYear", "getLong DOY");
+        check(ot.plusHours(1).minusHours(1).equals(ot), "hours sym");
+        check(ot.plusMinutes(45).toString().equals("11:00:30+01:00"), "plusMinutes");
+        check(OffsetTime.parse("10:15:30+01:00").equals(ot), "parse rt");
+        check(ot.format(DateTimeFormatter.ISO_OFFSET_TIME).equals("10:15:30+01:00"), "ISO_OFFSET_TIME");
+        check(ot.truncatedTo(ChronoUnit.MINUTES).toString().equals("10:15+01:00"), "trunc MINUTES");
+        OffsetTime sameInstantOther = OffsetTime.of(5, 15, 30, 0, ZoneOffset.ofHours(-4));
+        check(ot.isEqual(sameInstantOther), "isEqual across offsets");
+        check(!ot.equals(sameInstantOther), "equals differs from isEqual");
+        check(ot.compareTo(OffsetTime.of(10, 15, 30, 0, ZoneOffset.ofHours(2))) > 0, "compareTo equal wall time: later offset sorts first");
+        check(OffsetTime.of(10, 15, 30, 0, ZoneOffset.ofHours(2)).compareTo(ot) < 0, "compareTo mirror");
+        check(ot.query(TemporalQueries.offset()).equals(ZoneOffset.ofHours(1)), "query offset");
+        check(ot.query(TemporalQueries.precision()) == ChronoUnit.NANOS, "precision");
+        xact(() -> OffsetTime.of(24, 0, 0, 0, ZoneOffset.UTC), DateTimeException.class,
+            "Invalid value for HourOfDay (valid values 0 - 23): 24", "hour 24");
+        xact(() -> OffsetTime.of(10, 0, 0, 0, null), NullPointerException.class, "offset", "null offset");
+        xeq(OffsetTime.of(LocalTime.of(10, 0), ZoneOffset.ofHours(-5)).atDate(LocalDate.of(2024, 2, 29)).toString(),
+            "2024-02-29T10:00-05:00", "atDate");
+        check(ot.equals(OffsetTime.of(LocalTime.of(10, 15, 30), ZoneOffset.ofHours(1))), "equals cross factory");
+        check(ot.hashCode() == OffsetTime.parse(ot.toString()).hashCode(), "hash rt");
+        xeq(OffsetTime.from(LocalDateTime.of(2024, 2, 29, 10, 15, 30).atOffset(ZoneOffset.ofHours(1))).toString(),
+            "10:15:30+01:00", "from");
+    }
+
 }
