@@ -21,3 +21,14 @@
 4. public 成员开关操作无异常（对照）。
 5. 构造器面：裸构造 null 消息/cause、消息构造往返、toString 前缀、initCause、按 RuntimeException 捕获。
 白盒保留原有层次断言。产出：`InaccessibleObjectExceptionTest.java`（16 断言通过）。
+
+## 深化批次（2026-11-05）
+新增 Part 3 三个 test 方法（表面经 javap+探针在 JDK 27.0.1 实测）：
+1. `testConstructorAndThrowable`：**公开构造器恰为 () 与 (String)——不存在 (String,Throwable) 重载**（遍历 getConstructors 参数计数实证）；instanceof Serializable；toString 全等 "java.lang.reflect.InaccessibleObjectException: denied"；初始 getSuppressed() 空、addSuppressed 后精确同一元素；initCause 一次成功、二次 → IllegalStateException。
+2. `testPublicMembersNeverRefused`：对照面——无条件导出包（java.lang）的 public 成员 setAccessible(true) 永不抛 IOE（String(String) ctor、Integer.valueOf、System.out），canAccess(null) true，关回 false 后 invoke 仍可用。
+3. `testCatchHierarchy`：可按 RuntimeException/Exception 捕获同一实例；非 Error；直接父类是 RuntimeException。
+产出：`InaccessibleObjectExceptionTest.java` 33 断言通过（旧 16）。
+
+### 易错规范细节
+- cause 只能经 initCause 接线（构造器不支持 cause 参数）；二次 initCause 抛 ISE 是 Throwable 通用契约在此类的体现。
+- "public 成员 setAccessible OK / 私有成员 IOE" 的分界是**包是否无条件导出 + 成员是否需要深反射**，不是"JDK 内部类一律拒绝"。

@@ -26,3 +26,22 @@
 6. default（经 Method 子类型）与 static 标志。
 7. `Executable` 视图与 `Method` 值等价。
 白盒保留原有方法/构造器结构断言 + 抽象类层次。产出：`ExecutableTest.java`（40 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增 9 个 test 方法（41 → 81 断言）：
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | Method+Constructor 双证：参数对象长度/类型对齐/反向引用、注解返回（方法 int、构造器=声明类）、注解参数 | testDualEvidence |
+| P0 | 异常视图：IOException→ClassNotFoundException 顺序、泛型视图、AnnotatedExceptionTypes 类型 | testExceptionTypesView |
+| P0 | 注解矩阵：参数注解行/空行、构造器无声明注解、缺失查询 | testAnnotationMatrix |
+| P0 | accessible 联动：单翻转独立、批量 setAccessible(AccessibleObject[]) | testAccessibleFlagLinkage |
+| P0 | 接收者证据：实例方法非 null、静态方法 null、内部类构造器=外围类、静态嵌套构造器 **null**（JDK-9+ 修正） | testReceiverTypeEvidence |
+| P1 | Member 契约（名字/声明类/修饰符/isSynthetic、构造器名==类名） | testMemberContract |
+| P1 | varargs 两级一致性 + toGenericString 签名片段 | testVarargsConsistency |
+| P1 | `accessFlags()` 精确集合（public static 方法 {PUBLIC, STATIC}、实例方法 {PUBLIC}） | testAccessFlagsContract |
+
+### 锁定的版本差异（本批实测）
+- `Executable.accessFlags()`：JDK-27 有（JDK 20+）、JDK-8 无（8 侧以 NSME 锁定缺失）。
+- 静态嵌套类构造器 `getAnnotatedReceiverType()`：JDK-27 null（JDK-8 为非空退化值）。

@@ -18,3 +18,6 @@ Method mm = (Method) info.reflectAs(Method.class, MethodHandles.lookup());
 白盒：接口、REF_ 常量 1..9、方法齐全。
 黑盒：referenceKindToString 9 种名（getField..invokeInterface）；revealDirect(findStatic/findVirtual) 的 kind/name/declaringClass/methodType/isVarArgsPackagePrivate；getModifiers 静态包私有形态；reflectAs 得到可 invoke 的 Method（21→42）；toString 格式 "REF_invokeStatic..."。
 对应 `MethodHandleInfoTest.java` 的 `testBlackBox()`。
+## 深化批次（2026-11-05）
+
+新增：扩展 kind 矩阵（findSpecial/findGetter/findSetter/findStaticGetter/findStaticSetter/接口 findVirtual=9/unreflectConstructor="<init>"/unreflectGetter/Setter/varargs 0x88 位）、reflectAs Method/Field/Constructor 恒等还原+错型 CCE、info.toString()==四参格式化器、revealDirect 六种组合句柄 IAE "not a direct method handle"+同型 asType 仍 direct、publicLookup 访问负例（package-private IAE/nestmate 私有 IAE）。（21→91 断言）

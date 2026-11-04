@@ -22,4 +22,12 @@
 4. `Map<? extends @Sink String, ? super @Sink Long>` 双通配分别标注、底层 typeName 非空。
 5. 方法签名路径（`take(List<? super @Sink Long>)`）与字段路径一致。
 6. 通配符本体无注解、owner null。
-白盒保留原方法参数断言 + 接口结构。产出：`AnnotatedWildcardTypeTest.java`（24 断言通过）。
+白盒保留原方法参数断言 + 接口结构。
+
+Part 3 补充契约维度（`testSelfAnnotatedWildcard/testUnderlyingContract/testReturnPath/testDeepNesting`，fixture `MoreTypes`）：
+1. **通配符自身注解**：`List<@Sink ?>`：@Sink 在 AWT 自身、界仍隐式 Object 且干净、无下界。
+2. 底层契约交叉：getType() instanceof WildcardType；up 的 raw 上界 Number/下界空；down 的 raw 下界 Integer/raw 上界 Object，且**注解上界镜像隐式 [Object]**（9+ 行为，8 返回空数组——版本差异）。
+3. 方法返回路径：`List<? extends @Sink Number>` 返回类型同构字段。
+4. 深嵌套：`List<List<? super @Sink Integer>>` 内层下界注解仍在、中间层干净。
+
+产出：`AnnotatedWildcardTypeTest.java`（43 断言通过，jtreg 全绿）。

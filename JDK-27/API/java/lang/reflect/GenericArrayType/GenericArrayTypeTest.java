@@ -10,6 +10,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.List;
 
 public class GenericArrayTypeTest {
@@ -93,9 +94,52 @@ public class GenericArrayTypeTest {
         return null;
     }
 
+    static <T> void take(T[] a) {
+    }
+
+    // ---- Part 3: deepened contracts (2026-11-05 batch) ----
+    static class More {
+        List<?>[] wildField;
+        int[] ints;
+    }
+
+    static void testWildcardArraysAndMethodParam() throws Exception {
+        GenericArrayType wArr = (GenericArrayType) More.class.getDeclaredField("wildField")
+                .getGenericType();
+        ParameterizedType wComp = (ParameterizedType) wArr.getGenericComponentType();
+        check(wComp.getRawType() == List.class, "List<?>[] component raw List");
+        check(wComp.getActualTypeArguments()[0] instanceof WildcardType, "component arg is wildcard");
+        check(wComp.getActualTypeArguments()[0].getTypeName().equals("?"), "component arg name ?");
+        check(wArr.getTypeName().equals("java.util.List<?>[]"), "List<?>[] typeName");
+        Method tk = GenericArrayTypeTest.class.getDeclaredMethod("take", Object[].class);
+        Type pt = tk.getGenericParameterTypes()[0];
+        check(pt instanceof GenericArrayType, "T[] parameter is a GAT");
+        check(pt.getTypeName().equals("T[]"), "parameter typeName");
+        Type ints = More.class.getDeclaredField("ints").getGenericType();
+        check(ints == int[].class, "int[] stays a Class");
+        check(!(ints instanceof GenericArrayType), "primitive array not GAT");
+        GenericArrayType mx = (GenericArrayType) Holder.class.getDeclaredField("matrix")
+                .getGenericType();
+        check(mx.getTypeName().endsWith("[]"), "T[][] name suffix");
+        check(((GenericArrayType) mx.getGenericComponentType()).getGenericComponentType()
+              == Holder.class.getTypeParameters()[0], "T[][] innermost component identity");
+    }
+
+    static void testEqualityEdges() throws Exception {
+        GenericArrayType a = (GenericArrayType) Sample.class.getDeclaredField("arr").getGenericType();
+        check(a.equals(a), "equals reflexive");
+        check(!a.equals(null), "not equal to null");
+        check(!a.equals(List.class), "GAT not equal to its raw component");
+        check(!a.equals(Holder.class.getDeclaredField("plain").getGenericType()),
+              "GAT not equal to plain array Class");
+        check(GenericArrayType.class.getDeclaredMethods().length == 1, "single declared accessor");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testWildcardArraysAndMethodParam();
+        testEqualityEdges();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

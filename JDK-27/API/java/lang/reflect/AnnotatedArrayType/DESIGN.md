@@ -22,4 +22,11 @@
 5. `List<String>[]`：分量为 `AnnotatedParameterizedType`、底层 PT、typeName 精确。
 6. 方法返回值与参数两条获取路径（含参数分量注解）。
 7. 数组 `getAnnotatedOwnerType()` null。
-白盒保留原返回类型断言 + 接口结构。产出：`AnnotatedArrayTypeTest.java`（25 断言通过）。
+白盒保留原返回类型断言 + 接口结构。
+
+Part 3 补充契约维度（`testDimensionAnnotations/testPrimitiveFamily/testRawAnnotatedGenericComponent`，自造 `@Mark(TYPE_USE)`，fixture `DimTypes`）：
+1. 维度注解（核心）：`String @Sink [] @Mark []` **最左注解属最外层**（外层 Sink、内层 Mark），三层 `@Sink/@Mark/@Sink` 逐层剥；getType() 逐层精确 `String[][].class`/`String[].class`。
+2. 8 原生家族（bool/byte/char/short/long/float/double，int 已在 Part 2）：精确数组 Class、精确组件、双层干净。
+3. raw 级注解组件：`@Mark List<@Sink String>[]`：@Mark 落在组件 APT 自身、@Sink 在实参、数组层干净。
+
+产出：`AnnotatedArrayTypeTest.java`（63 断言通过，jtreg 全绿）。

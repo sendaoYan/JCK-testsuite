@@ -18,3 +18,6 @@ try {
 白盒：超类是 RuntimeException（非 IllegalArgumentException）、公有构造 4 个、serialVersionUID。
 黑盒：invokeExact 错误静态返回类型→WMTE（非 CCE）；invokeWithArguments 错 arity→WMTE；asType 不可行转换→WMTE；MutableCallSite.dynamicInvoker 错类型→WMTE；message/cause/suppressed 全保留。
 对应 `WrongMethodTypeExceptionTest.java` 的 `testBlackBox()`。
+## 深化批次（2026-11-05）
+
+新增：序列化 round-trip message 保留、initCause "Can't overwrite cause" ISE、toString 全等、27 侧触发消息 "handle's method type X but found Y"（与 8 的 "expected X but found Y" 分侧锁定）。（17→22 断言）

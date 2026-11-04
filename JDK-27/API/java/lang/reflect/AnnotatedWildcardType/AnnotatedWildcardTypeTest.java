@@ -119,9 +119,84 @@ public class AnnotatedWildcardTypeTest {
     static void take(List<? super @Sink Long> xs) {
     }
 
+    // ---- Part 3: self-annotated wildcard, underlying contract, return path, nesting ----
+
+    static class MoreTypes {
+        public List<@Sink ?> selfAnnotated;
+        public List<List<? super @Sink Integer>> deep;
+    }
+
+    public static List<? extends @Sink Number> returnsUp() {
+        return null;
+    }
+
+    // annotation on the wildcard itself (not on its bound)
+    static void testSelfAnnotatedWildcard() throws Exception {
+        AnnotatedWildcardType self = (AnnotatedWildcardType)
+                ((AnnotatedParameterizedType) MoreTypes.class.getField("selfAnnotated")
+                        .getAnnotatedType()).getAnnotatedActualTypeArguments()[0];
+        check(self.getAnnotations().length == 1, "wildcard itself one annotation");
+        check(self.getAnnotation(Sink.class) != null, "wildcard carries Sink");
+        check(self.isAnnotationPresent(Sink.class), "wildcard present");
+        check(self.getAnnotatedUpperBounds()[0].getType() == Object.class,
+              "bounds stay implicit Object");
+        check(self.getAnnotatedUpperBounds()[0].getAnnotation(Sink.class) == null,
+              "bound not annotated");
+        check(self.getAnnotatedLowerBounds().length == 0, "no lower bounds");
+    }
+
+    // the underlying raw WildcardType contract agrees with the annotated view
+    static void testUnderlyingContract() throws Exception {
+        AnnotatedWildcardType up = wildcardArg("up");
+        check(up.getType() instanceof java.lang.reflect.WildcardType, "underlying WildcardType");
+        java.lang.reflect.WildcardType raw = (java.lang.reflect.WildcardType) up.getType();
+        check(raw.getUpperBounds()[0] == Number.class, "raw upper Number");
+        check(raw.getLowerBounds().length == 0, "raw lower empty");
+
+        AnnotatedWildcardType down = wildcardArg("down");
+        java.lang.reflect.WildcardType rawDown =
+                (java.lang.reflect.WildcardType) down.getType();
+        check(rawDown.getLowerBounds()[0] == Integer.class, "raw lower Integer");
+        check(rawDown.getUpperBounds()[0] == Object.class, "raw upper Object");
+        check(down.getAnnotatedUpperBounds().length == 1
+                && down.getAnnotatedUpperBounds()[0].getType() == Object.class,
+              "annotated upper mirrors implicit Object (recorded)");
+    }
+
+    // wildcard through a method return type
+    static void testReturnPath() throws Exception {
+        AnnotatedWildcardType rt = (AnnotatedWildcardType)
+                ((AnnotatedParameterizedType) AnnotatedWildcardTypeTest.class
+                        .getMethod("returnsUp").getAnnotatedReturnType())
+                        .getAnnotatedActualTypeArguments()[0];
+        check(rt.getAnnotatedUpperBounds()[0].getType() == Number.class, "return upper Number");
+        check(rt.getAnnotatedUpperBounds()[0].getAnnotation(Sink.class) != null,
+              "return upper annotated");
+        check(rt.getAnnotatedLowerBounds().length == 0, "return no lower");
+    }
+
+    // wildcard nested one parameterized level deeper keeps annotations
+    static void testDeepNesting() throws Exception {
+        AnnotatedParameterizedType apt = (AnnotatedParameterizedType)
+                MoreTypes.class.getField("deep").getAnnotatedType();
+        AnnotatedParameterizedType inner = (AnnotatedParameterizedType)
+                apt.getAnnotatedActualTypeArguments()[0];
+        AnnotatedWildcardType w = (AnnotatedWildcardType)
+                inner.getAnnotatedActualTypeArguments()[0];
+        check(w.getAnnotatedLowerBounds().length == 1, "deep lower one");
+        check(w.getAnnotatedLowerBounds()[0].getType() == Integer.class, "deep lower Integer");
+        check(w.getAnnotatedLowerBounds()[0].getAnnotation(Sink.class) != null,
+              "deep lower annotated");
+        check(inner.getAnnotations().length == 0, "middle level clean");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSelfAnnotatedWildcard();
+        testUnderlyingContract();
+        testReturnPath();
+        testDeepNesting();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,9 +1,10 @@
 /*
  * @test
- * @summary java.lang.invoke.TypeDescriptor conformance: white-box + black-box behavior.
+ * @summary java.lang.invoke.TypeDescriptor conformance: white-box + black-box behavior, full descriptor matrix for Class/MethodType, descriptor round-trips and parse negatives.
  * @run main TypeDescriptorTest
  */
 
+import java.lang.invoke.MethodType;
 import java.lang.invoke.TypeDescriptor;
 
 public class TypeDescriptorTest {
@@ -70,9 +71,100 @@ public class TypeDescriptorTest {
         check(allValid, "descriptors are non-empty strings");
     }
 
+    // ---- helpers ----
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+            String frag, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) {
+                if (t.getMessage() != null && t.getMessage().contains(frag)) {
+                    passed++; return;
+                }
+                throw new AssertionError(msg + ": expected message fragment \"" + frag
+                        + "\" but got \"" + t.getMessage() + "\"");
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    // ---- Class descriptors: arrays, nesting, all primitives ----
+    static void testClassDescriptorMatrix() {
+        Class<?>[] cs = {
+                byte.class, short.class, char.class, boolean.class, long.class,
+                float.class, double.class, void.class,
+                Object[].class, String[][].class, int[][][].class,
+                java.util.Map.Entry.class, TypeDescriptorTest.class, Simple.class,
+                new java.util.ArrayList<String>().getClass(),
+        };
+        String[] expect = {
+                "B", "S", "C", "Z", "J", "F", "D", "V",
+                "[Ljava/lang/Object;", "[[Ljava/lang/String;", "[[[I",
+                "Ljava/util/Map$Entry;", "LTypeDescriptorTest;", "LTypeDescriptorTest$Simple;",
+                "Ljava/util/ArrayList;",
+        };
+        for (int i = 0; i < cs.length; i++) {
+            check(cs[i].descriptorString().equals(expect[i]),
+                    expect[i] + " == " + cs[i].descriptorString());
+        }
+        check(int[].class.descriptorString().equals("[I"), "[I");
+        check(String[].class.descriptorString().equals("[Ljava/lang/String;"),
+                "[Ljava/lang/String;");
+    }
+
+    // ---- MethodType descriptors and round-trips ----
+    static void testMethodTypeDescriptors() {
+        MethodType[] mts = {
+                MethodType.methodType(void.class),
+                MethodType.methodType(void.class, int.class),
+                MethodType.methodType(Object.class, int.class, String.class),
+                MethodType.methodType(String.class, long.class, boolean.class),
+                MethodType.methodType(int.class, int[].class, String[][].class),
+        };
+        String[] expect = {
+                "()V", "(I)V", "(ILjava/lang/String;)Ljava/lang/Object;",
+                "(JZ)Ljava/lang/String;", "([I[[Ljava/lang/String;)I",
+        };
+        ClassLoader cl = TypeDescriptorTest.class.getClassLoader();
+        for (int i = 0; i < mts.length; i++) {
+            check(mts[i].descriptorString().equals(expect[i]),
+                    expect[i] + " == " + mts[i].descriptorString());
+            check(MethodType.fromMethodDescriptorString(mts[i].descriptorString(), cl)
+                    .equals(mts[i]), expect[i] + " round-trips");
+        }
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodType.fromMethodDescriptorString("(Q)V", cl),
+                "bad signature", "unknown primitive letter rejected");
+        checkThrows(NullPointerException.class,
+                () -> MethodType.fromMethodDescriptorString(null, cl),
+                "null descriptor -> NPE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testClassDescriptorMatrix();
+        testMethodTypeDescriptors();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

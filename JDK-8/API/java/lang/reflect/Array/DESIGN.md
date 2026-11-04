@@ -39,3 +39,31 @@
 - `Array.set(String[], Integer)` → IAE（拆箱后赋值不匹配，非 ArrayStoreException）。
 - `Array.set(long[], Integer)` → 拓宽成功；`Array.set(int[], null)` → IAE（拆箱失败，非 NPE）。
 - `get`/`getInt` 等对 null 数组 → NPE；对非数组 → IAE；下标越界 → `ArrayIndexOutOfBoundsException`。
+
+## 深化批次（2026-11-05）
+
+新增方法（只追加）：testNewInstanceDimsForm / testBoxedGetSetMatrix / testWideningGetters /
+testWideningSetters / testNarrowingRefusalMessages / testNonArrayMessages /
+testIndexBoundsExact / testNullArrayNpeMatrix / testMultiDimModel；新增 checkThrowsMsg 与
+checkAioobe。断言 84→235。
+
+### 覆盖增量
+
+- newInstance(int.class, int[]) 维数组形态：一维/二维/零内层维；String[][] 同。
+- 装箱矩阵：8 原生类型 get→对应包装类 instanceof + 精确值；set 装箱→typed 读回相等。
+- JLS 5.1.2 拓宽格（读+写双侧）：byte→{short,int,long,float,double}、
+  short→{int,long,float,double}、char→{int,long,float,double}、int→{long,float,double}、
+  long→{float,double}、float→{double}；装箱 set 拓宽（Integer→long[]、Byte/Character→int[]、
+  Byte→short[]、Long→double[]）。char→long[] 合法（拓宽），勿当负例。
+- 负例消息：收窄读/写（getInt(long[])、getFloat(double[])、setFloat(int[])、
+  setBoolean(int[])、set(int[],Long/"x")…）→ IllegalArgumentException `argument type mismatch`；
+  非数组 → IllegalArgumentException `Argument is not an array`（getLength/get/set/typed 全family）。
+- 下标越界：ArrayIndexOutOfBoundsException 精确类 + 是 IndexOutOfBoundsException 子类；
+  实测 8/27 两侧消息均为 null（原生 ThrowNew 无 detail），按实测断言 getMessage()==null，
+  覆盖 -1/==length/MAX_VALUE/MIN_VALUE/空数组下标 0。
+- null 数组：typed 全 family NPE。
+- 多维：外层 get→内层 instanceof + 反射 getLength 链；行替换后 Java 读写可见；3 维形状。
+
+### 版本差异
+
+- 无：Array 在 8/27 行为与消息逐字节一致（javap -public 与探针双侧核对），两侧文件同构。

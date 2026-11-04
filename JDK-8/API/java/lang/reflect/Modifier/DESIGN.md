@@ -36,3 +36,33 @@
 - `interfaceModifiers()==0xc0f`（无 FINAL、无 INTERFACE）——已核对源码。
 - `parameterModifiers()==FINAL`；`toString(0x1000|PUBLIC)=="public"`（未知位忽略）。
 - 每个 is* 谓词是纯单比特测试，无关位不影响结果。
+
+## 深化批次（2026-11-05）
+
+新增方法（只追加）：testPredicateTruthTable / testToStringExactOrder /
+testMaskMembershipPerJavadoc / testRealMemberModifiers。断言 80→179。
+
+### 覆盖增量
+
+- 12 个 is* 谓词对全部 4096 个掩码（0x000..0xfff）的穷举真值表（谓词 ≡ (mask & bit)!=0，
+  首个失配掩码进断言消息）；代表组合含全 1 掩码、去位/XOR 近失配、未知高位。
+- toString 规范序精确串：PSF="public static final"（输入顺序无关）、0xfff 全串、
+  "public protected abstract"、"static transient volatile"、"native strictfp"、
+  "strictfp interface"、"private final"、"abstract strictfp"、"transient volatile"、
+  "static final volatile"；同掩码重复调用 equals；constructorModifiers/fieldModifiers
+  掩码 toString 全等。
+- 6 个 *Modifiers() 掩码按 javadoc 成员/排除逐位断言（field 含 volatile/transient、
+  排 synchronized/native/abstract/strict；method 排 volatile/transient/interface；
+  constructor 仅 3 个访问位 ==0x7；interface 无 FINAL/INTERFACE；parameter==FINAL）。
+- 真实成员端到端：String.class="public final"、CharSequence="public abstract interface"、
+  int.class="public abstract final"、Integer.valueOf="public static"、
+  Object.hashCode="public native"、String.value="private final"；自造样本
+  AbsSample(0x409)/IfaceSample(0x609)/MemberSample(0x8) 与源码成员
+  natM(0x109)/syncM(0x29)/sfpM(0x809, javac-8 保留 ACC_STRICT)/tF(0x81)/vF(0x41)/
+  fF(0x11)/SF(0x19) 位与串全等。
+
+### 版本差异（对照 JDK-27，javap+探针实测）
+
+- javap：27 未新增任何方法；Modifier 类在 27 为 final 且无 public 构造器（旧断言已覆盖）。
+- strictfp：javac-8 仍发射 ACC_STRICT（sfpM==0x809，本侧断言）；javac-17+（JEP 306）不再
+  发射，27 侧源码 strictfp 方法 ==0x9，按侧断言。其余掩码/toString/谓词行为逐字节一致。

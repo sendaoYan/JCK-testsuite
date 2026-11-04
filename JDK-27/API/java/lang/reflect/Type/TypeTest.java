@@ -37,6 +37,10 @@ public class TypeTest {
         List<String>[] arrayOfList;
     }
 
+    static class Extra {
+        int[] ints;
+    }
+
     // ---- Part 1: white-box (structural, retained from previous revision) ----
     static void testWhiteBox() throws Exception {
         Field pf = Sample.class.getDeclaredField("plain");
@@ -111,12 +115,62 @@ public class TypeTest {
         check(!(aos.getGenericType() instanceof GenericArrayType), "plain arrays are not GAT");
     }
 
+    // ---- Part 3: deepened contract matrix (2026-11-05 batch) ----
+    static void testContractMatrix() throws Exception {
+        // 1. every flavor of Type from self-made samples is a Type
+        Object[] flavors = {
+            String.class,
+            Sample.class.getDeclaredField("generic").getGenericType(),
+            GenericBox.class.getTypeParameters()[0],
+            ((ParameterizedType) Sample.class.getDeclaredField("bounded").getGenericType())
+                    .getActualTypeArguments()[0],
+            GenericBox.class.getDeclaredField("arrayOfT").getGenericType(),
+        };
+        for (int i = 0; i < flavors.length; i++) {
+            check(flavors[i] instanceof Type, "matrix flavor " + i + " is a Type");
+        }
+        check(flavors[2] instanceof TypeVariable && flavors[3] instanceof WildcardType,
+              "matrix middle flavors are TV and wildcard");
+        check(flavors[4] instanceof GenericArrayType, "matrix last flavor is GAT");
+
+        // 2. nested classes: getTypeName is the binary name ($ separated)
+        check(Map.Entry.class.getTypeName().equals("java.util.Map$Entry"), "Map.Entry typeName");
+        check(TypeTest.class.getTypeName().equals(TypeTest.class.getName()),
+              "typeName equals getName for classes");
+        check(Map.Entry.class.getTypeName().equals(Map.Entry.class.getName()),
+              "nested interface typeName equals getName");
+
+        // 3. interface surface: exactly one declared method, default, no args
+        Method[] ms = Type.class.getDeclaredMethods();
+        check(ms.length == 1 && ms[0].getName().equals("getTypeName"), "single declared method");
+        check(ms[0].getParameterCount() == 0 && ms[0].getReturnType() == String.class,
+              "getTypeName shape");
+
+        // 4. strict equality and hashCode across independent lookups
+        Field g1 = Sample.class.getDeclaredField("generic");
+        Field g2 = Sample.class.getDeclaredField("generic");
+        check(g1.getGenericType().equals(g2.getGenericType()), "strict PT equals");
+        check(g1.getGenericType().hashCode() == g2.getGenericType().hashCode(), "strict PT hashCode");
+
+        // 5. generic array names always end with []
+        check(GenericBox.class.getDeclaredField("arrayOfT").getGenericType().getTypeName()
+              .endsWith("[]"), "T[] suffix");
+        check(GenericBox.class.getDeclaredField("arrayOfList").getGenericType().getTypeName()
+              .endsWith("[]"), "List<String>[] suffix");
+
+        // 6. primitive arrays stay Classes
+        Type ints = Extra.class.getDeclaredField("ints").getGenericType();
+        check(ints == int[].class, "int[] is its Class");
+        check(!(ints instanceof GenericArrayType), "primitive array not GAT");
+    }
+
     public static <X> void swap(X a, X b) {
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractMatrix();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

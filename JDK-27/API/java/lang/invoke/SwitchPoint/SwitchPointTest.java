@@ -1,6 +1,11 @@
 /*
  * @test
  * @summary java.lang.invoke.SwitchPoint conformance: white-box + black-box behavior.
+ *          Deepened: guardWithTest negatives on a still-valid switch point
+ *          (type mismatch IAE message, null target/fallback NPE), invalidateAll
+ *          null matrix, two pre-existing guards flipping together, the
+ *          javadoc-permitted "invalidated switch point may ignore the target"
+ *          behavior, and argument pass-through on both branches.
  * @run main SwitchPointTest
  */
 
@@ -87,10 +92,126 @@ public class SwitchPointTest {
     }
 
     static int seven() { return 7; }
+    static String concat(String a, String b) { return a + b; }
+
+    // ---- Part 3: deepened contract (2026-11-05) ----
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+            String frag, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) {
+                if (t.getMessage() != null && t.getMessage().contains(frag)) {
+                    passed++; return;
+                }
+                throw new AssertionError(msg + ": expected message fragment \"" + frag
+                        + "\" but got \"" + t.getMessage() + "\"");
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    // guardWithTest negatives on a still-valid switch point.
+    static void testNegatives() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodHandle yes = lookup.findStatic(SwitchPointTest.class, "yes",
+                MethodType.methodType(String.class));
+        MethodHandle seven = lookup.findStatic(SwitchPointTest.class, "seven",
+                MethodType.methodType(int.class));
+        SwitchPoint sp = new SwitchPoint();
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> sp.guardWithTest(yes, seven),
+                "target and fallback types must match",
+                "guardWithTest type mismatch IAE message");
+        checkThrows(NullPointerException.class, () -> sp.guardWithTest(null, yes),
+                "guardWithTest(null, y) NPE");
+        checkThrows(NullPointerException.class, () -> sp.guardWithTest(yes, null),
+                "guardWithTest(x, null) NPE");
+        checkThrowsMsg(NullPointerException.class, () -> SwitchPoint.invalidateAll(null),
+                "\"switchPoints\" is null", "invalidateAll(null) NPE message");
+        checkThrows(NullPointerException.class,
+                () -> SwitchPoint.invalidateAll(new SwitchPoint[]{null}),
+                "invalidateAll({null}) NPE");
+        check(!sp.hasBeenInvalidated(), "failed guardWithTest does not invalidate");
+    }
+
+    // Two guards built while valid flip together; a later guard starts on the
+    // fallback branch.
+    static void testTwoGuardsFlipTogether() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodHandle yes = lookup.findStatic(SwitchPointTest.class, "yes",
+                MethodType.methodType(String.class));
+        MethodHandle no = lookup.findStatic(SwitchPointTest.class, "no",
+                MethodType.methodType(String.class));
+        SwitchPoint sp = new SwitchPoint();
+        MethodHandle g1 = sp.guardWithTest(yes, no);
+        MethodHandle g2 = sp.guardWithTest(yes, no);
+        check("yes".equals((String) g1.invokeExact()), "guard1 on target");
+        check("yes".equals((String) g2.invokeExact()), "guard2 on target");
+        SwitchPoint.invalidateAll(new SwitchPoint[]{sp});
+        check("no".equals((String) g1.invokeExact()), "guard1 flipped");
+        check("no".equals((String) g2.invokeExact()), "guard2 flipped");
+        check("no".equals((String) sp.guardWithTest(yes, no).invokeExact()),
+              "post-invalidation guard starts on fallback");
+    }
+
+    // Javadoc: after invalidation guardWithTest may ignore the target; the
+    // observed result is a fallback-typed handle.
+    static void testInvalidatedIgnoresTarget() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodHandle yes = lookup.findStatic(SwitchPointTest.class, "yes",
+                MethodType.methodType(String.class));
+        MethodHandle seven = lookup.findStatic(SwitchPointTest.class, "seven",
+                MethodType.methodType(int.class));
+        SwitchPoint sp = new SwitchPoint();
+        SwitchPoint.invalidateAll(new SwitchPoint[]{sp});
+        MethodHandle guard = sp.guardWithTest(yes, seven);
+        check(guard.type() == seven.type(), "fallback-typed handle returned");
+        check((int) guard.invokeExact() == 7, "fallback value computed");
+    }
+
+    // Arguments flow to the selected branch unchanged.
+    static void testGuardArgumentPassThrough() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodHandle cat = lookup.findStatic(SwitchPointTest.class, "concat",
+                MethodType.methodType(String.class, String.class, String.class));
+        MethodHandle reversed = MethodHandles.permuteArguments(cat,
+                MethodType.methodType(String.class, String.class, String.class), 1, 0);
+        SwitchPoint sp = new SwitchPoint();
+        MethodHandle guard = sp.guardWithTest(cat, reversed);
+        check("ab".equals((String) guard.invokeExact("a", "b")), "ordered args while valid");
+        SwitchPoint.invalidateAll(new SwitchPoint[]{sp});
+        check("ba".equals((String) guard.invokeExact("a", "b")),
+              "same call order on fallback branch");
+    }
 
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testNegatives();
+        testTwoGuardsFlipTogether();
+        testInvalidatedIgnoresTarget();
+        testGuardArgumentPassThrough();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

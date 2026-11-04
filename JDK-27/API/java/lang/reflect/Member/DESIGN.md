@@ -21,3 +21,18 @@
 3. `accessFlags()` 默认方法：字段精确三标志集合、方法含 PUBLIC+SYNCHRONIZED、包私有构造器空集合。
 4. `Member` 视图与底层反射对象 `equals/hashCode` 一致；`instanceof` 分派；`toString` 含成员名。
 白盒保留常量/结构断言，修正 Method/Constructor 经 Executable 间接实现关系。产出：`MemberTest.java`（24 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增 4 个 test 方法（25 → 45 断言）：
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 常量驱动查找语义：PUBLIC 通道见继承公有字段、DECLARED 通道含私有不含继承、继承方法声明类==基类 | testConstantsDriveLookups |
+| P0 | 字段视图：CONST==PUBLIC\|STATIC\|FINAL、接口常量隐式三修饰符+值可读、private/protected 精确 | testFieldViews |
+| P0 | synthetic：泛型子类 bridge、内部类 this$0（夹具引用外围状态以生成字段） | testSyntheticMembers |
+| P1 | `accessFlags()` 默认方法经 Member 视图（JDK 20+；JDK-8 无——8 侧以 NSME 锁定） | testAccessFlagsDefault |
+
+### 锁定的版本差异（本批实测）
+- `Member.accessFlags()` 默认方法仅 JDK-27 存在。
+- JDK-22+ javac 在内部类未使用外围实例时会**省略 this$0 字段**（JDK-8 总是生成）；夹具须真正引用外围成员。

@@ -25,3 +25,17 @@
 6. `newPermissionCollection`：加入后蕴含、未加不蕴含、通配覆盖。
 7. toString 含名字。
 白盒保留原有构造器/名称断言 + 继承层次。产出：`ReflectPermissionTest.java`（30 断言通过；编译期有 deprecation 警告属预期，类在 JDK-27 标记 for removal）。
+
+## 深化批次（2026-11-05）
+
+新增方法（断言 33 → 57）：
+
+| 测试点 | 方法 |
+|---|---|
+| 名字校验消息片段："name can't be null"/"name can't be empty"（与 8 措辞一致）、双参同 | testCanonicalNameValidationMessages |
+| 名中 `*`/`?` 按普通名接受（8/27 一致）、`*` 仍蕴含 | testCanonicalNameValidationMessages |
+| null actions 归一为 ""、与单参 equals/implies 等价 | testActionsIgnoredDeep |
+| final 类、Guard、@Deprecated(forRemoval) 注解存在（JEP 486 版本差异锁定） | testCensusAndForeign |
+| 异型 Permission（RuntimePermission 同名）不等/不蕴含 | testCensusAndForeign |
+| 序列化 round-trip：名称/空 actions/equals/hashCode/implies 对称 | testSerializationRoundTrip |
+| PermissionCollection 枚举恰含已加元素 | testPermissionCollectionEnumeration |

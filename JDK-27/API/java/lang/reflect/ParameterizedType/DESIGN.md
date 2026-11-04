@@ -25,3 +25,11 @@
 5. `getGenericSuperclass`：`StringList extends ArrayList<String>` 参数化超类。
 6. `equals/hashCode/toString` 值语义与重复查找一致性。
 白盒保留原有 Map 字段断言 + 三抽象方法接口结构。产出：`ParameterizedTypeTest.java`（33 断言通过）。
+
+## 深化批次（2026-11-05）
+新增 `testTwoArgSuperclassAndInterface/testRawAndEqualityEdges`（34→52 断言）：
+1. 双实参泛型超类：`SubG extends G<Integer,ArrayList<String>>` 经 getGenericSuperclass() 断言 raw/两个实参/第二实参自身是 PT 再递归（原版仅单实参 ArrayList<String>）。
+2. 泛型接口：`G<T,U> implements Comparable<G<T,U>>` 的 getGenericInterfaces()[0]——raw Comparable、实参递归含类级 TV T/U（新维度）。
+3. raw 使用负例：`List raw` 字段 getGenericType()==List.class 且非 PT——易错：无泛型签名得到 Class。
+4. equals 边界：反射律、equals(null) false、PT 不等于其 raw Class；实参 instanceof Type；typeName 前缀+后缀片段；接口恰三个声明方法（与 javap 一致）。
+

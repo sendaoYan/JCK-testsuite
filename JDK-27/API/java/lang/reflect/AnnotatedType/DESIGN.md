@@ -25,4 +25,12 @@
 5. 参数化底层：`List` 字段底层为 PT 且与 `getGenericType` 一致。
 6. 参数注解类型：`@Sink String` 参数可见。
 7. 默认方法族（byType 空）与 `getAnnotation(null)` NPE。
-白盒保留原返回类型断言 + 接口结构（含 AnnotatedType 不继承 Type 的包装关系）。产出：`AnnotatedTypeTest.java`（29 断言通过）。
+白盒保留原返回类型断言 + 接口结构（含 AnnotatedType 不继承 Type 的包装关系）。
+
+Part 3 补充契约维度（`testSuperclass/testInterfaces/testReceiverType/testNullContract`，fixture：`SubAnno extends @Sink Super`、`SubGen extends ArrayList<@Sink String>`、`ImplTwo implements @Sink Iface1, Iface2`、record `Point`、泛型 `ReceiverHost<T>`、内部类 `InnerHost`）：
+1. 超类全景：注解可见；plain 超类非 null；`Object.class`/接口/注解类型 superclass null；enum 超类是 ParameterizedType raw==Enum；**record 超类 type==java.lang.Record**。
+2. 接口全景：双接口声明序+单侧注解；接口的 getAnnotatedInterfaces 含父接口；注解类型隐式含 Annotation。
+3. 接收者（版本差异记录）：泛型声明类的实例方法 receiver 是 **AnnotatedParameterizedType**（底层 PT raw==声明类）；静态方法 null；顶层式构造器 null；内部类构造器 receiver==外部实例。
+4. null 契约（27 全 NPE）：isAnnotationPresent/byType/declared 系 null 参数全抛（Part 2 已测 getAnnotation）。
+
+产出：`AnnotatedTypeTest.java`（71 断言通过，jtreg 全绿）。

@@ -24,4 +24,12 @@
 5. `Map.Entry` 宿主：`getAnnotatedOwnerType().getType()==Map`。
 6. 方法参数路径的实注解实参。
 7. 全 fixture 实参数组长度与底层 `ParameterizedType` 一致性循环断言。
-白盒保留原返回类型断言 + 接口结构。产出：`AnnotatedParameterizedTypeTest.java`（28 断言通过）。
+白盒保留原返回类型断言 + 接口结构。
+
+Part 3 补充契约维度（`testRawTypeAnnotation/testRawListNotParameterized/testDistinctNestedAnnotations/testAnnotatedReturnPath`，自造 `@Mark(TYPE_USE)`，fixture `MoreTypes`）：
+1. raw 级注解：`@Mark List<String>` 的 @Mark 在 APT 自身（getAnnotation/isAnnotationPresent/getAnnotations），实参干净。
+2. **raw 负例**：raw `List` 字段非 APT、getType()==List.class、getGenericType()==List.class。
+3. 嵌套异构注解：`Map<@Sink String, @Mark List<@Sink Integer>>`：key Sink、value raw 级 Mark、最内实参 Sink，三层互不渗透。
+4. 注解方法返回路径：`Map<@Sink String, @Mark List<Integer>>` 双层注解同构。
+
+产出：`AnnotatedParameterizedTypeTest.java`（47 断言通过，jtreg 全绿）。

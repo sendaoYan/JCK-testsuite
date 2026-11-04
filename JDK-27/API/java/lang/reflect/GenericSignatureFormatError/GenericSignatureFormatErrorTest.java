@@ -1,8 +1,16 @@
 /*
  * @test
  * @summary java.lang.reflect.GenericSignatureFormatError conformance: white-box structure + black-box behavior.
+ *          Deepened batch: LinkageError-level census (never caught by catch(RuntimeException)),
+ *          exact toString forms, initCause allowed, serialization round-trip, printing,
+ *          non-generic accessors stay healthy on the malformed class.
  * @run main GenericSignatureFormatErrorTest
  */
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.ClassModel;
@@ -20,6 +28,14 @@ public class GenericSignatureFormatErrorTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(o);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return ois.readObject();
     }
 
     /** Carries a well-formed class Signature: <T:>Ljava/util/ArrayList<T;>; */
@@ -120,9 +136,88 @@ public class GenericSignatureFormatErrorTest {
         check(caughtAsError, "catchable as Error");
     }
 
+    // ===================== deepened batch (2026-11-05) =====================
+
+    static void testLinkageCensus() {
+        check(LinkageError.class.isAssignableFrom(GenericSignatureFormatError.class),
+              "LinkageError assignable");
+        check(Error.class.isAssignableFrom(GenericSignatureFormatError.class),
+              "Error assignable");
+        check(!RuntimeException.class.isAssignableFrom(GenericSignatureFormatError.class),
+              "!RuntimeException.isAssignableFrom");
+        check(!Exception.class.isAssignableFrom(GenericSignatureFormatError.class),
+              "!Exception.isAssignableFrom");
+        check(java.io.Serializable.class.isAssignableFrom(GenericSignatureFormatError.class),
+              "Serializable via Throwable");
+        boolean asLinkage = false;
+        try {
+            throw new GenericSignatureFormatError("l");
+        } catch (LinkageError e) {
+            asLinkage = e instanceof GenericSignatureFormatError;
+        }
+        check(asLinkage, "catchable as LinkageError");
+        boolean seenRuntimeCatch = false;
+        boolean fellToErrorCatch = false;
+        try {
+            throw new GenericSignatureFormatError("l2");
+        } catch (RuntimeException e) {
+            seenRuntimeCatch = true;
+        } catch (GenericSignatureFormatError e) {
+            fellToErrorCatch = true;
+        }
+        check(!seenRuntimeCatch, "not caught by catch(RuntimeException)");
+        check(fellToErrorCatch, "reaches the sibling Error handler instead");
+    }
+
+    static void testConstructorSurfaceExact() {
+        check("java.lang.reflect.GenericSignatureFormatError".equals(
+                      new GenericSignatureFormatError().toString()),
+              "bare toString exact");
+        check("java.lang.reflect.GenericSignatureFormatError: tagged".equals(
+                      new GenericSignatureFormatError("tagged").toString()),
+              "with-message toString exact");
+        GenericSignatureFormatError e = new GenericSignatureFormatError("c");
+        RuntimeException root = new RuntimeException("late27");
+        e.initCause(root);
+        check(e.getCause() == root, "initCause allowed (cause was unset)");
+        e.addSuppressed(new IllegalArgumentException("gs"));
+        check(e.getSuppressed().length == 1, "suppressed attachable");
+    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        GenericSignatureFormatError orig = new GenericSignatureFormatError("ser-gsfe27");
+        orig.initCause(new IllegalStateException("gsfe-cause27"));
+        Object back = serRoundTrip(orig);
+        check(back instanceof GenericSignatureFormatError, "round-trip exact type");
+        GenericSignatureFormatError res = (GenericSignatureFormatError) back;
+        check("ser-gsfe27".equals(res.getMessage()), "round-trip keeps message");
+        check(res.getCause() instanceof IllegalStateException, "round-trip keeps cause type");
+        check("gsfe-cause27".equals(res.getCause().getMessage()), "round-trip keeps cause message");
+        check(res instanceof java.io.Serializable, "instanceof Serializable");
+    }
+
+    static void testHealthyAccessorsOnMalformedClass() throws Exception {
+        Class<?> loaded = new Loader().define(GenericSignatureFormatErrorTest.class.getName()
+                + "$Generic", withBadSignature());
+        check(loaded.getSuperclass() == java.util.ArrayList.class,
+              "non-generic superclass fine on malformed class");
+        check(loaded.getDeclaredFields().length == 0, "fields fine on malformed class");
+        check(loaded.getDeclaredMethods().length == 0, "methods fine on malformed class");
+        check(!loaded.isInterface(), "kind fine on malformed class");
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new GenericSignatureFormatError("p27").printStackTrace(
+                new java.io.PrintStream(bos, true, "UTF-8"));
+        check(bos.toString("UTF-8").contains("GenericSignatureFormatError"),
+              "stack printing does not throw");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLinkageCensus();
+        testConstructorSurfaceExact();
+        testSerializationRoundTrip();
+        testHealthyAccessorsOnMalformedClass();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

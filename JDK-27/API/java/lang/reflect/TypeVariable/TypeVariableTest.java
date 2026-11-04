@@ -35,6 +35,37 @@ public class TypeVariableTest {
         }
     }
 
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    @java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,
+                                  java.lang.annotation.ElementType.TYPE_PARAMETER})
+    @interface Mark {
+    }
+
+    static class G2<T extends Number, U extends java.util.List<String>> {
+    }
+
+    static class AnnotatedBound<T extends @Mark Number> {
+    }
+
+    static class AnnotatedParam<@Mark T extends Number> {
+    }
+
+    static class DualMarked<T extends @Mark Number & @Mark CharSequence> {
+    }
+
+    static class Named<T> {
+        static <T> void sameName() {
+        }
+    }
+
+    static class CtorHost {
+        CtorHost() {
+        }
+
+        <E extends CharSequence> CtorHost(E seed) {
+        }
+    }
+
     // ---- Part 1: white-box (structural, retained from previous revision) ----
     static void testWhiteBox() {
         TypeVariable<?>[] tvs = Sample.class.getTypeParameters();
@@ -118,9 +149,65 @@ public class TypeVariableTest {
         return t instanceof java.lang.reflect.AnnotatedElement;
     }
 
+    // ---- Part 3: deepened contracts (2026-11-05 batch) ----
+    static void testParameterizedBound() {
+        TypeVariable<?>[] tvs = G2.class.getTypeParameters();
+        check(tvs.length == 2, "G2 declares two variables");
+        TypeVariable<?> u = tvs[1];
+        check("U".equals(u.getName()), "second variable U");
+        check(u.getBounds().length == 1, "U single bound");
+        check(u.getBounds()[0] instanceof ParameterizedType, "U bound is parameterized");
+        ParameterizedType ub = (ParameterizedType) u.getBounds()[0];
+        check(ub.getRawType() == java.util.List.class, "U bound raw List");
+        check(ub.getActualTypeArguments()[0] == String.class, "U bound argument String");
+        check(u.getGenericDeclaration() == G2.class, "U declared by G2");
+        check(u.getAnnotatedBounds()[0].getType() == ub, "annotated bound mirrors the PT bound");
+    }
+
+    static void testAnnotatedBoundsContracts() {
+        TypeVariable<?> a = AnnotatedBound.class.getTypeParameters()[0];
+        AnnotatedType[] abs = a.getAnnotatedBounds();
+        check(abs.length == 1, "one annotated bound");
+        check(abs[0].isAnnotationPresent(Mark.class), "bound annotation visible at runtime");
+        check(abs[0].getAnnotation(Mark.class) != null, "getAnnotation retrieves it");
+        check(abs[0].getType() == Number.class, "annotated bound type preserved");
+        TypeVariable<?> p = AnnotatedParam.class.getTypeParameters()[0];
+        check(p.getAnnotatedBounds()[0].getAnnotation(Mark.class) == null,
+              "parameter-position annotation is not on the bound");
+        TypeVariable<?> d = DualMarked.class.getTypeParameters()[0];
+        AnnotatedType[] dabs = d.getAnnotatedBounds();
+        check(dabs.length == 2, "dual annotated bounds");
+        check(dabs[0].isAnnotationPresent(Mark.class) && dabs[1].isAnnotationPresent(Mark.class),
+              "each bound annotated independently");
+        check(dabs[0].getType() == Number.class && dabs[1].getType() == CharSequence.class,
+              "dual annotated bound types");
+        check(d.getTypeName().equals("T"), "annotated variable typeName unaffected");
+    }
+
+    static void testConstructorAndSameNameVariables() throws Exception {
+        Constructor<?> gc = CtorHost.class.getDeclaredConstructor(CharSequence.class);
+        TypeVariable<?>[] ctvs = gc.getTypeParameters();
+        check(ctvs.length == 1, "generic constructor one variable");
+        check("E".equals(ctvs[0].getName()), "constructor variable E");
+        check(gc.equals(ctvs[0].getGenericDeclaration()), "declared by the constructor");
+        check(ctvs[0].getGenericDeclaration() instanceof Constructor, "declaration kind Constructor");
+        check(ctvs[0].getBounds()[0] == CharSequence.class, "E bound CharSequence");
+        check(CtorHost.class.getDeclaredConstructor().getTypeParameters().length == 0,
+              "plain constructor empty");
+        TypeVariable<?> classT = Named.class.getTypeParameters()[0];
+        TypeVariable<?> methodT = Named.class.getDeclaredMethod("sameName").getTypeParameters()[0];
+        check(classT.getName().equals("T") && methodT.getName().equals("T"),
+              "class and method variables share the name T");
+        check(!classT.equals(methodT), "same name in different declarations unequal");
+        check(!methodT.equals(classT), "inequality is symmetric");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testParameterizedBound();
+        testAnnotatedBoundsContracts();
+        testConstructorAndSameNameVariables();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

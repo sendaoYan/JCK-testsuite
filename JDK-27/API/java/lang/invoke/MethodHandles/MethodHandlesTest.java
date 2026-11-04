@@ -8,6 +8,16 @@
  *          insertArguments/dropArguments/filterArguments/filterReturnValue/
  *          foldArguments/guardWithTest/catchException/throwException/permuteArguments/
  *          explicitCastArguments, and exactInvoker/invoker/spreadInvoker.
+ *          Deepened: identity reference/null semantics, constant edges (same object,
+ *          Object-null allowed, void -> IAE "void type", wrong type -> CCE),
+ *          arrayElementGetter/Setter types + String[] round-trip + AIOOBE,
+ *          publicLookup access denial with exact messages ("member is private",
+ *          "symbolic reference class is not"), Lookup.toString forms,
+ *          collectArguments (type + both positions), explicitCastArguments true
+ *          long->int narrowing (truncation) vs asType refusal, combinator
+ *          validation matrix, insertArguments binding values, fold prepend,
+ *          and JDK-9+ factories arrayLength/arrayConstructor/zero/empty/
+ *          dropArgumentsToMatch/dropReturn with exact values and messages.
  * @run main MethodHandlesTest
  */
 
@@ -16,6 +26,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.invoke.WrongMethodTypeException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -63,6 +74,275 @@ public class MethodHandlesTest {
 
     static MethodHandle stat(String name, MethodType mt) throws Exception {
         return LOOKUP.findStatic(MethodHandlesTest.class, name, mt);
+    }
+
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+            String frag, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) {
+                if (t.getMessage() != null && t.getMessage().contains(frag)) {
+                    passed++;
+                    return;
+                }
+                throw new AssertionError(msg + ": expected message fragment \"" + frag
+                        + "\" but got \"" + t.getMessage() + "\"");
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static int len(String s) { return s.length(); }
+    static String join3(String a, String b, String c) { return a + "-" + b + "-" + c; }
+
+    static void testIdentityReferenceSemantics() throws Throwable {
+        Object v = new Object();
+        MethodHandle id = MethodHandles.identity(Object.class);
+        check(id.invoke(v) == v, "identity returns same reference");
+        check(id.invoke(v) == id.invoke(v), "identity stable across calls");
+        check(id.invoke(null) == null, "identity passes null");
+        check(id.type().equals(MethodType.methodType(Object.class, Object.class)),
+                "identity type");
+        checkThrows(NullPointerException.class,
+                () -> MethodHandles.identity(null), "identity null type NPE");
+    }
+
+    static void testConstantEdges() throws Throwable {
+        // the same constant object comes back on every invoke
+        Object probe = new Object();
+        MethodHandle c = MethodHandles.constant(Object.class, probe);
+        check(c.invoke() == probe && c.invoke() == probe, "constant same object twice");
+        check(c.type().equals(MethodType.methodType(Object.class, Object.class)) == false,
+                "constant type is ()Object");
+        // null is a legal reference constant, but not for primitives (unboxing NPE)
+        check(MethodHandles.constant(Object.class, null).invoke() == null,
+                "constant(Object,null) allowed");
+        // void cannot be a constant type -> IAE with exact message
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodHandles.constant(void.class, null), "void type",
+                "constant(void) IAE message");
+        // wrong-typed constant -> CCE at factory time
+        checkThrowsMsg(ClassCastException.class,
+                () -> MethodHandles.constant(String.class, 42),
+                "Cannot cast java.lang.Integer to java.lang.String",
+                "constant wrong type CCE message");
+        // primitive constants unbox at invoke
+        check((long) MethodHandles.constant(long.class, 5L).invoke() == 5L,
+                "constant long value");
+    }
+
+    static void testArrayElementDeep() throws Throwable {
+        // String[] round-trip through getter/setter
+        MethodHandle get = MethodHandles.arrayElementGetter(String[].class);
+        MethodHandle set = MethodHandles.arrayElementSetter(String[].class);
+        String[] sa = {"a", "b", "c"};
+        set.invoke(sa, 1, "B");
+        check("B".equals(sa[1]) && "a".equals(get.invoke(sa, 0))
+                && "c".equals(get.invoke(sa, 2)), "arrayElementGetter/Setter String[]");
+        // out-of-bounds index -> ArrayIndexOutOfBoundsException (message format differs)
+        MethodHandle iget = MethodHandles.arrayElementGetter(int[].class);
+        MethodHandle iset = MethodHandles.arrayElementSetter(int[].class);
+        checkThrows(ArrayIndexOutOfBoundsException.class,
+                () -> iset.invoke(new int[2], 9, 1), "setter AIOOBE");
+        checkThrows(ArrayIndexOutOfBoundsException.class,
+                () -> iget.invoke(new int[2], -1), "getter negative AIOOBE");
+        // getter/setter handle types: (array,int)elem / (array,int,elem)void
+        check(MethodHandles.arrayElementGetter(int[].class).type()
+                .equals(MethodType.methodType(int.class, int[].class, int.class)),
+                "arrayElementGetter type");
+        check(MethodHandles.arrayElementSetter(int[].class).type()
+                .equals(MethodType.methodType(void.class, int[].class, int.class, int.class)),
+                "arrayElementSetter type");
+    }
+
+    static void testPublicLookupAccess() throws Throwable {
+        MethodHandles.Lookup pub = MethodHandles.publicLookup();
+        // public member of a public class is reachable
+        check((int) pub.findVirtual(String.class, "length",
+                MethodType.methodType(int.class)).invoke("abc") == 3,
+                "publicLookup findVirtual String.length");
+        // a private member is denied even to publicLookup
+        Method m = MethodHandlesTest.class.getDeclaredMethod("add2", int.class, int.class);
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> pub.unreflect(m), "member is private",
+                "publicLookup unreflect private IAE");
+        // the lookup class itself not public -> symbolic reference refused
+        // (8: "is not public", 27: "is not accessible"; common fragment "is not")
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> pub.findVirtual(Box.class, "x", MethodType.methodType(int.class)),
+                "symbolic reference class is not",
+                "publicLookup package-private target class IAE");
+    }
+
+    static void testLookupToStringExact() {
+        MethodHandles.Lookup l = MethodHandles.lookup();
+        check(l.toString().contains("MethodHandlesTest"), "lookup toString names class");
+        // 8: "java.lang.Object/public"; 27: "java.lang.Object/publicLookup"
+        check(MethodHandles.publicLookup().toString().contains("public"),
+                "publicLookup toString contains public");
+        check(MethodHandles.publicLookup().toString().startsWith("java.lang.Object/"),
+                "publicLookup toString starts with lookup class");
+        MethodHandles.Lookup inString = l.in(String.class);
+        check(inString.toString().contains("java.lang.String"),
+                "in(String) toString names new class");
+        check(inString.toString().contains("public"), "in(String) toString has public mode");
+    }
+
+    static void testCollectArguments() throws Throwable {
+        MethodHandle target = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        MethodHandle filter = LOOKUP.findVirtual(String.class, "length",
+                MethodType.methodType(int.class));
+        MethodHandle ca = MethodHandles.collectArguments(target, 0, filter);
+        check(ca.type().equals(MethodType.methodType(int.class, String.class, int.class)),
+                "collectArguments type (String,int)int");
+        check((int) ca.invokeExact("abc", 10) == 13, "collectArguments value");
+        // the collected (filtered) slot disappears from the adapter type
+        MethodHandle ca1 = MethodHandles.collectArguments(target, 1, filter);
+        check(ca1.type().equals(MethodType.methodType(int.class, int.class, String.class)),
+                "collectArguments position 1");
+        check((int) ca1.invokeExact(10, "abc") == 13, "collectArguments position 1 value");
+        checkThrows(NullPointerException.class,
+                () -> MethodHandles.collectArguments(null, 0, filter),
+                "collectArguments null target NPE");
+    }
+
+    static void testExplicitCastNarrowing() throws Throwable {
+        MethodHandle idl = MethodHandles.identity(long.class);
+        // explicitCastArguments performs a REAL narrowing conversion long -> int
+        MethodHandle narrowed = MethodHandles.explicitCastArguments(idl,
+                MethodType.methodType(int.class, long.class));
+        check((int) narrowed.invokeExact(1_000_000_000_000L) == -727379968,
+                "explicitCastArguments narrows long->int (truncation)");
+        // contrast: asType refuses the same narrowing with WMTE
+        checkThrows(WrongMethodTypeException.class,
+                () -> idl.asType(MethodType.methodType(int.class, long.class)),
+                "asType refuses return narrowing WMTE");
+        // reference narrowing is a checked cast at run time
+        MethodHandle ido = MethodHandles.identity(Object.class);
+        MethodHandle toStr = MethodHandles.explicitCastArguments(ido,
+                MethodType.methodType(String.class, Object.class));
+        check("x".equals(toStr.invoke("x")), "explicitCastArguments ref cast");
+        checkThrows(ClassCastException.class,
+                () -> toStr.invoke(42), "explicitCastArguments ref cast CCE");
+    }
+
+    static void testCombinatorValidation() throws Throwable {
+        MethodHandle id = MethodHandles.identity(int.class);
+        // predicate must return boolean
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodHandles.guardWithTest(id, id, id),
+                "guard type is not a predicate",
+                "guardWithTest non-predicate IAE message");
+        // handler must accept the exception as leading argument
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodHandles.catchException(id, IOException.class, id),
+                "catchException bad handler IAE");
+        // combiner return must match target's leading parameter
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodHandles.foldArguments(MethodHandles.identity(String.class), id),
+                "target and combiner types must match",
+                "foldArguments mismatch IAE message");
+        // more filters than trailing parameters
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodHandles.filterArguments(id, 0, id, id),
+                "too many filters", "filterArguments too many filters IAE message");
+        // permute array length must equal target arity (8: "bad reorder array: ...")
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodHandles.permuteArguments(id,
+                        MethodType.methodType(int.class, int.class), 0, 1),
+                "permuteArguments wrong length IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodHandles.permuteArguments(id,
+                        MethodType.methodType(int.class, int.class, int.class), 5),
+                "permuteArguments index OOB IAE");
+    }
+
+    static void testInsertArgumentsValue() throws Throwable {
+        MethodHandle j3 = stat("join3",
+                MethodType.methodType(String.class, String.class, String.class, String.class));
+        MethodHandle mid = MethodHandles.insertArguments(j3, 1, "MID");
+        check(mid.type().parameterCount() == 2, "insertArguments arity reduced");
+        check("a-MID-c".equals((String) mid.invokeExact("a", "c")),
+                "insertArguments value precise");
+        MethodHandle two = MethodHandles.insertArguments(j3, 0, "X", "Y");
+        check(two.type().parameterCount() == 1, "insertArguments multiple values");
+        check("X-Y-z".equals((String) two.invokeExact("z")),
+                "insertArguments multiple values precise");
+    }
+
+    static void testFoldPrependSemantics() throws Throwable {
+        // fold: the combiner's result becomes the target's first argument
+        MethodHandle target = stat("add2", MethodType.methodType(int.class, int.class, int.class));
+        MethodHandle dbl = stat("negate", MethodType.methodType(int.class, int.class));
+        MethodHandle folded = MethodHandles.foldArguments(target, dbl);
+        // adapter(a) = add2(negate(a), a) == a - a == 0
+        check(folded.type().parameterCount() == 1, "fold arity");
+        check((int) folded.invokeExact(7) == 0, "fold negate+add == 0");
+        check((int) folded.invokeExact(-3) == 0, "fold stable for negatives");
+    }
+
+    static void testJdk27FactoryDeep() throws Throwable {
+        // arrayLength: exact counts for primitive and reference arrays
+        MethodHandle al = MethodHandles.arrayLength(int[].class);
+        check(al.type().equals(MethodType.methodType(int.class, int[].class)),
+                "arrayLength type (int[])int");
+        check((int) al.invokeExact(new int[]{7, 8, 9}) == 3, "arrayLength int[]");
+        check((int) MethodHandles.arrayLength(String[].class).invoke(new String[]{"a"}) == 1,
+                "arrayLength String[]");
+        check((int) al.invokeExact(new int[0]) == 0, "arrayLength empty");
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodHandles.arrayLength(int.class), "not an array: int",
+                "arrayLength non-array IAE message");
+        checkThrows(NullPointerException.class,
+                () -> MethodHandles.arrayLength(null), "arrayLength null NPE");
+        // arrayConstructor allocates
+        MethodHandle ac = MethodHandles.arrayConstructor(String[].class);
+        check(ac.type().equals(MethodType.methodType(String[].class, int.class)),
+                "arrayConstructor type");
+        check(((String[]) ac.invoke(2)).length == 2, "arrayConstructor length");
+        // zero: default value for every kind
+        check((int) MethodHandles.zero(int.class).invokeExact() == 0, "zero int");
+        check(MethodHandles.zero(boolean.class).invoke() == Boolean.FALSE, "zero boolean");
+        check(MethodHandles.zero(String.class).invoke() == null, "zero String null");
+        check(MethodHandles.zero(Object.class).invoke() == null, "zero Object null");
+        check(MethodHandles.zero(void.class).type()
+                .equals(MethodType.methodType(void.class)), "zero void type");
+        checkThrows(NullPointerException.class,
+                () -> MethodHandles.zero(null), "zero null NPE");
+        // empty: typed handle that returns defaults without invoking anything
+        MethodHandle e = MethodHandles.empty(MethodType.methodType(int.class, int.class, int.class));
+        check((int) e.invokeExact(3, 4) == 0, "empty returns default");
+        MethodHandles.empty(MethodType.methodType(void.class, int.class)).invokeExact(7);
+        check(MethodHandles.empty(MethodType.methodType(String.class)).invoke() == null,
+                "empty ref default");
+        checkThrows(NullPointerException.class,
+                () -> MethodHandles.empty(null), "empty null NPE");
+        // dropArgumentsToMatch: insert a leading int the target never sees
+        MethodHandle j3 = stat("join3",
+                MethodType.methodType(String.class, String.class, String.class, String.class));
+        MethodHandle d = MethodHandles.dropArgumentsToMatch(j3, 0,
+                Arrays.asList(int.class, String.class, String.class, String.class), 1);
+        check(d.type().equals(MethodType.methodType(String.class, int.class,
+                String.class, String.class, String.class)), "dropArgumentsToMatch type");
+        check("a-b-c".equals((String) d.invokeExact(5, "a", "b", "c")),
+                "dropArgumentsToMatch value");
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodHandles.dropArgumentsToMatch(j3, 0,
+                        Arrays.asList(int.class, String.class), 1),
+                "argument lists do not match",
+                "dropArgumentsToMatch mismatch IAE message");
+        // dropReturn keeps arguments, drops the result
+        MethodHandle dr = MethodHandles.dropArguments(j3, 0, int.class);
+        MethodHandle dropped = MethodHandles.dropReturn(dr);
+        check(dropped.type().equals(MethodType.methodType(void.class, int.class,
+                String.class, String.class, String.class)), "dropReturn type");
+        dropped.invoke(5, "a", "b", "c");
+        check(true, "dropReturn invocation returns normally");
     }
 
     static void testLookup() throws Exception {
@@ -370,7 +650,18 @@ public class MethodHandlesTest {
         testPermuteArguments();
         testExplicitCastArguments();
         testInvokers();
+        testIdentityReferenceSemantics();
+        testConstantEdges();
+        testArrayElementDeep();
+        testPublicLookupAccess();
+        testLookupToStringExact();
+        testCollectArguments();
+        testExplicitCastNarrowing();
+        testCombinatorValidation();
+        testInsertArgumentsValue();
+        testFoldPrependSemantics();
         testJdk27Methods();
+        testJdk27FactoryDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

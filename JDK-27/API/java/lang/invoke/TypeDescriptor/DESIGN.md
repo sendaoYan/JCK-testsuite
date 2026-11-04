@@ -17,3 +17,10 @@ String f = String.class.descriptorString(); // "Ljava/lang/String;"
 白盒：接口本体与两个嵌套接口存在、descriptorString 抽象方法。
 黑盒：Class/ClassDesc/MethodType/MethodTypeDesc 四类实现者的 descriptorString 精确值；多态列表 OfField<?> 装下 Class 与 ClassDesc；OfMethod 的 parameterCount 等派生行为。
 对应 `TypeDescriptorTest.java` 的 `testBlackBox()`。
+
+## 深化批次（2026-11-05）
+新增 `testClassDescriptorMatrix/testMethodTypeDescriptors`（旧 12 断言 → 新 44）：
+- Class 描述符全矩阵：8 基本型+void "B S C Z J F D V"、Object[]/String[][]/int[][][] 多维、Map.Entry 嵌套 "Ljava/util/Map$Entry;"（$ 二进制名）、本类/嵌套 Simple 类、ArrayList 无匿名子类场景 "Ljava/util/ArrayList;"。
+- MethodType 描述符精确 "()V"/"(I)V"/"(ILjava/lang/String;)Ljava/lang/Object;"/"(JZ)Ljava/lang/String;"/"([I[[Ljava/lang/String;)I" + fromMethodDescriptorString round-trip equals。
+- 负例："(Q)V"→IllegalArgumentException "bad signature"；null 描述符→NPE。
+- 版本备注：TypeDescriptor/OfField/OfMethod 为 JDK-12+ API，JDK-8 侧无对应目录。

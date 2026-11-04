@@ -23,3 +23,12 @@
 4. 普通数组 `String[]` 是 Class 非 GAT；`T[][]` 先剥一层仍为 GAT（"T[]"）再到底 TV。
 5. 方法泛型返回类型为 GAT + `equals/hashCode` 值语义。
 白盒保留原有分量判定 + 接口结构。产出：`GenericArrayTypeTest.java`（25 断言通过）。
+
+## 深化批次（2026-11-05）
+新增 `testWildcardArraysAndMethodParam/testEqualityEdges`（27→40 断言）：
+1. 数组位通配符：`List<?>[]` 分量 PT 的实参是 WildcardType（`?` 精确）、typeName `java.util.List<?>[]`——此前未覆盖。
+2. 方法参数位置：静态泛型方法 `take(T[] a)` 的 getGenericParameterTypes()[0] 也是 GAT（原版只有返回值）。
+3. 原生数组：`int[]` 字段 getGenericType==int[].class 非 GAT（补原生类型维度）。
+4. `T[][]` 最内层分量与 `Holder.getTypeParameters()[0]` 是**同一对象**（== 同一性断言）、名恒以 `[]` 结尾。
+5. equals 边界：反射律、equals(null) false、GAT 不等于 raw 组件 Class、不等于普通数组 Class；接口恰一个声明方法（与 javap 一致）。
+

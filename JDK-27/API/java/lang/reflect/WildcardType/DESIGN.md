@@ -23,3 +23,12 @@
 4. 方法签名中的通配与字段侧行为一致。
 5. `equals/hashCode` 值语义：重复查找相等、不同界不等、同形通配相等。
 白盒保留原有上下界断言 + 接口结构。产出：`WildcardTypeTest.java`（30 断言通过）。
+
+## 深化批次（2026-11-05）
+新增 `testArrayAndNestedWildcards/testEqualityEdges`（31→49 断言）：
+1. 数组位通配符：`List<?>[]` 经 GAT→PT→getActualTypeArguments 链取到 WildcardType、typeName `java.util.List<?>[]` 精确——此前未覆盖数组位置。
+2. 嵌套 PT 值位通配 `Map<String, List<? super Long>>`：内层下界 Long/隐式上界 Object/串精确。
+3. 方法参数 `? super Number` 下界通配（原版仅有 `? extends` 方法签名）。
+4. equals 边界：反射律、equals(null) false、通配符不等于其上界 Class 本身。
+5. 交叉负例：上界通配 lower 恒空、下界通配 upper 恒单 Object；extends Type assignable、接口恰两个声明方法（与 javap 一致）。
+

@@ -48,3 +48,20 @@
 
 - `publicLookup()` 返回 UNCONDITIONAL 模式（0x20），无 PUBLIC 位（JDK-8 为 PUBLIC）。
 - 新增 `zero`/`empty`/`arrayConstructor`、Lookup `MODULE`/`UNCONDITIONAL` 常量、`hasFullPrivilegeAccess`（testJdk27Methods）。
+
+## 深化批次（2026-11-05）
+
+与 JDK-8 侧拉平 + JDK-9+ 工厂深化（77→145 断言）：
+- 同步新增 identity 引用语义、constant 边（void IAE `void type`/错类型 CCE 精确消息）、
+  String[] 数组往返 + AIOOBE、publicLookup 拒绝矩阵（`member is private`/`symbolic reference class is not`）、
+  toString 形态、collectArguments 两位置、explicitCastArguments 真收窄 -727379968 vs asType WMTE、
+  组合子校验矩阵、insertArguments 绑定、fold 前置（与 8 侧同内容）。
+- **testJdk27FactoryDeep**（27 独有）：arrayLength（(int[])int 类型、长度 3/1/0、非数组 IAE
+  `not an array: int`、null NPE）；arrayConstructor（类型+分配长度）；zero（int 0/boolean false/
+  String null/void 类型 ()void/null NPE）；empty（(int,int)int invokeExact 返 0、void 正常返回、
+  引用返 null、null NPE）；dropArgumentsToMatch（类型+值 `a-b-c`+不匹配 IAE `argument lists do not match`）；
+  dropReturn（类型 ()void + 正常调用）。
+
+### 版本差异（本批实测）
+- 上述工厂与 dropArgumentsToMatch/dropReturn 均为 JDK-9+ API；JDK-8 无（8 侧 DESIGN 已记录）。
+- publicLookup 模式位与 toString 后缀差异见上。

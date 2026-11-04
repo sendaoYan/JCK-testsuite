@@ -18,3 +18,6 @@ SwitchPoint.invalidateAll(new SwitchPoint[]{ sp }); // 之后 g 走 slowPath
 白盒：final、无私有构造、guardWithTest/invalidateAll/hasBeenInvalidated 存在。
 黑盒：失效前 guard 走 target、invalidateAll 后既有 guard 永久走 fallback；两个独立 SwitchPoint 互不影响；guardWithTest 类型=()String 正确；types 不匹配的两路句柄仍按 target 类型统一。
 对应 `SwitchPointTest.java` 的 `testBlackBox()`。
+## 深化批次（2026-11-05）
+
+新增：有效开关上 guardWithTest 类型不匹配 IAE "target and fallback types must match"、null target/fallback NPE、invalidateAll null 矩阵、两个预生成 guard 同时翻转、失效后可无视 target（返回 fallback 型句柄）、参数透传两分支。（17→33 断言）

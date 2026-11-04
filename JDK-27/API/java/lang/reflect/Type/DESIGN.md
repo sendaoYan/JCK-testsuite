@@ -21,3 +21,12 @@
 4. 类型经重复查找等价；泛型方法参数共享同一方法级类型变量（X）。
 5. 普通数组 `String[]` 的 genericType 即 `Class` 而非 GAT。
 白盒保留原有标记接口断言 + getTypeName 默认方法检查。产出：`TypeTest.java`（31 断言通过）。
+
+## 深化批次（2026-11-05）
+新增 `testContractMatrix`（5→49 断言）：
+1. 五形态一览：自造样本收集 Class/PT/TV/WC/GAT 进 `Object[]` 逐个 `instanceof Type`。
+2. 嵌套类 typeName 即二进制名：`java.util.Map$Entry` 精确串、`typeName==getName()`、`$` 分隔。
+3. 接口面：getDeclaredMethods()==1（getTypeName）、零参、返回 String（与 javap 双侧枚举一致）。
+4. 严格 equals/hashCode：同一字段两次 getGenericType 全等（此前仅弱断言）。
+5. GAT 名恒以 `[]` 结尾；`int[]` 原生数组字段保持 Class 非 GAT（补原生数组维度）。
+

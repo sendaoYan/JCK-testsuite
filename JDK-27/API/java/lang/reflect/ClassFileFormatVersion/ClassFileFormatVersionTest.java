@@ -1,6 +1,8 @@
 /*
  * @test
  * @summary java.lang.reflect.ClassFileFormatVersion conformance: white-box structure + black-box behavior.
+ *          Deepened: exact major table (45..71), runtimeVersion nulls for pre-6 releases,
+ *          fromMajor boundary messages, valueOf(Runtime.Version) map.
  * @run main ClassFileFormatVersionTest
  */
 import java.lang.reflect.ClassFileFormatVersion;
@@ -127,9 +129,88 @@ public class ClassFileFormatVersionTest {
         }
     }
 
+    // ---- Part 3: contract deepening (2026-11-05); every literal probed on JDK 27.0.1 ----
+    static void testExactMajorTable() {
+        // full 28-row major table, locked by probe
+        int[] majors = {45, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+                        61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71};
+        ClassFileFormatVersion[] all = ClassFileFormatVersion.values();
+        check(all.length == majors.length, "table has one row per constant");
+        for (int i = 0; i < majors.length; i++) {
+            check(all[i].major() == majors[i], "major row " + i + ": " + all[i] + " == " + majors[i]);
+            check(all[i].name().equals("RELEASE_" + i), "name RELEASE_" + i);
+            check(all[i].toString().equals("RELEASE_" + i), "toString RELEASE_" + i);
+            check(all[i].ordinal() == i, "ordinal identity " + all[i]);
+            if (i >= 1)
+                check(all[i].major() == 44 + i, "major == 44 + ordinal at " + all[i]);
+        }
+        check(all[0].major() == all[1].major(), "RELEASE_0/1 share major 45");
+        check(ClassFileFormatVersion.RELEASE_0.major() != 44 + 0, "RELEASE_0 breaks the 44+n rule");
+    }
+
+    static void testRuntimeVersionNulls() {
+        // releases before 6 have no Runtime.Version representation (1.x version scheme)
+        ClassFileFormatVersion[] pre = {ClassFileFormatVersion.RELEASE_0,
+              ClassFileFormatVersion.RELEASE_1, ClassFileFormatVersion.RELEASE_2,
+              ClassFileFormatVersion.RELEASE_3, ClassFileFormatVersion.RELEASE_4,
+              ClassFileFormatVersion.RELEASE_5};
+        for (ClassFileFormatVersion v : pre)
+            check(v.runtimeVersion() == null, "runtimeVersion null for " + v);
+        // from RELEASE_6 on, runtimeVersion().feature() equals the release number
+        for (int n = 6; n <= 27; n++)
+            check(ClassFileFormatVersion.valueOf("RELEASE_" + n).runtimeVersion().feature() == n,
+                  "runtimeVersion feature " + n);
+        check(ClassFileFormatVersion.RELEASE_6.runtimeVersion().toString().equals("6"),
+              "RELEASE_6 runtimeVersion string");
+    }
+
+    static void testFromMajorBoundaries() {
+        int[] bad = {44, 0, 72, -1, Integer.MAX_VALUE};
+        for (int m : bad) {
+            try {
+                ClassFileFormatVersion.fromMajor(m);
+                check(false, "fromMajor(" + m + ") must fail");
+            } catch (IllegalArgumentException e) {
+                check(e.getMessage() != null
+                      && e.getMessage().contains("Out of range major class file version"),
+                      "out-of-range message for " + m + ": " + e.getMessage());
+            }
+        }
+        check(ClassFileFormatVersion.fromMajor(45) == ClassFileFormatVersion.RELEASE_1,
+              "lower bound 45 maps to RELEASE_1");
+        check(ClassFileFormatVersion.fromMajor(71) == ClassFileFormatVersion.RELEASE_27,
+              "upper bound 71 maps to RELEASE_27");
+    }
+
+    static void testValueOfRuntimeVersionMap() {
+        check(ClassFileFormatVersion.valueOf(Runtime.Version.parse("6"))
+              == ClassFileFormatVersion.RELEASE_6, "rv 6");
+        check(ClassFileFormatVersion.valueOf(Runtime.Version.parse("5"))
+              == ClassFileFormatVersion.RELEASE_5, "rv 5");
+        check(ClassFileFormatVersion.valueOf(Runtime.Version.parse("26"))
+              == ClassFileFormatVersion.RELEASE_26, "rv 26");
+        check(ClassFileFormatVersion.valueOf(Runtime.Version.parse("27.1"))
+              == ClassFileFormatVersion.RELEASE_27, "rv 27.1 (update ignored)");
+        check(ClassFileFormatVersion.valueOf(Runtime.Version.parse("27+42"))
+              == ClassFileFormatVersion.RELEASE_27, "rv 27+42 (build ignored)");
+        check(ClassFileFormatVersion.valueOf(Runtime.Version.parse("27-pre"))
+              == ClassFileFormatVersion.RELEASE_27, "rv 27-pre (pre ignored)");
+        try {
+            ClassFileFormatVersion.valueOf(Runtime.Version.parse("28"));
+            check(false, "rv 28 must fail");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("RELEASE_28"),
+                  "message names RELEASE_28: " + e.getMessage());
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testExactMajorTable();
+        testRuntimeVersionNulls();
+        testFromMajorBoundaries();
+        testValueOfRuntimeVersionMap();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

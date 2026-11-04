@@ -112,9 +112,93 @@ public class AnnotatedArrayTypeTest {
     static void take(@Sink String[] ss) {
     }
 
+    // ---- Part 3: dimension annotations, primitives, raw-annotated generic component ----
+
+    @Target(ElementType.TYPE_USE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Mark {
+    }
+
+    static class DimTypes {
+        public boolean[] bools;
+        public byte[] bytes;
+        public char[] chars;
+        public short[] shorts;
+        public long[] longs;
+        public float[] floats;
+        public double[] doubles;
+        public String @Sink [] @Mark [] dim2;
+        public String @Sink [] @Mark [] @Sink [] dim3;
+        public @Mark List<@Sink String>[] rawAnnotatedComponent;
+    }
+
+    // leftmost annotation belongs to the outermost dimension; deeper dims peel inward
+    static void testDimensionAnnotations() throws Exception {
+        AnnotatedArrayType outer = (AnnotatedArrayType) DimTypes.class.getField("dim2")
+                .getAnnotatedType();
+        check(outer.getType() == String[][].class, "two-dim exact class");
+        check(outer.getAnnotation(Sink.class) != null, "outer dimension Sink");
+        check(outer.getAnnotation(Mark.class) == null, "outer no Mark");
+        AnnotatedType inner = outer.getAnnotatedGenericComponentType();
+        check(inner instanceof AnnotatedArrayType, "inner still array annotated type");
+        check(inner.getType() == String[].class, "inner exact class");
+        check(inner.getAnnotation(Mark.class) != null, "inner dimension Mark");
+        check(inner.getAnnotation(Sink.class) == null, "inner no Sink");
+        check(((AnnotatedArrayType) inner).getAnnotatedGenericComponentType().getType()
+                == String.class, "innermost String");
+
+        AnnotatedArrayType three = (AnnotatedArrayType) DimTypes.class.getField("dim3")
+                .getAnnotatedType();
+        check(three.getAnnotation(Sink.class) != null, "three-dim outer Sink");
+        AnnotatedType l2 = three.getAnnotatedGenericComponentType();
+        check(l2.getAnnotation(Mark.class) != null, "three-dim middle Mark");
+        AnnotatedType l3 = ((AnnotatedArrayType) l2).getAnnotatedGenericComponentType();
+        check(l3.getAnnotation(Sink.class) != null, "three-dim inner Sink");
+        check(((AnnotatedArrayType) l3).getAnnotatedGenericComponentType().getType()
+                == String.class, "three-dim innermost String");
+    }
+
+    // the full primitive family reports exact array classes and clean components
+    static void testPrimitiveFamily() throws Exception {
+        Object[][] cases = {
+            {"bools", boolean[].class, boolean.class},
+            {"bytes", byte[].class, byte.class},
+            {"chars", char[].class, char.class},
+            {"shorts", short[].class, short.class},
+            {"longs", long[].class, long.class},
+            {"floats", float[].class, float.class},
+            {"doubles", double[].class, double.class},
+        };
+        for (Object[] c : cases) {
+            Field f = DimTypes.class.getField((String) c[0]);
+            AnnotatedArrayType aat = (AnnotatedArrayType) f.getAnnotatedType();
+            check(aat.getType() == c[1], c[0] + " exact array class");
+            check(aat.getAnnotatedGenericComponentType().getType() == c[2],
+                  c[0] + " exact component");
+            check(aat.getAnnotatedGenericComponentType().getAnnotations().length == 0,
+                  c[0] + " component clean");
+        }
+    }
+
+    // annotation on the raw type of a generic component is visible on the component APT
+    static void testRawAnnotatedGenericComponent() throws Exception {
+        AnnotatedArrayType aat = (AnnotatedArrayType) DimTypes.class.getField("rawAnnotatedComponent")
+                .getAnnotatedType();
+        check(aat.getAnnotations().length == 0, "array level clean");
+        AnnotatedType comp = aat.getAnnotatedGenericComponentType();
+        check(comp instanceof AnnotatedParameterizedType, "component is parameterized");
+        check(comp.getAnnotation(Mark.class) != null, "raw-type annotation on component");
+        AnnotatedType arg = ((AnnotatedParameterizedType) comp).getAnnotatedActualTypeArguments()[0];
+        check(arg.getType() == String.class, "component argument String");
+        check(arg.getAnnotation(Sink.class) != null, "component argument annotated");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDimensionAnnotations();
+        testPrimitiveFamily();
+        testRawAnnotatedGenericComponent();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

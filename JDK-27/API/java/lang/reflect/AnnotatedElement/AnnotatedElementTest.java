@@ -148,9 +148,134 @@ public class AnnotatedElementTest {
     record Rec(@Deprecated int x) {
     }
 
+    // ---- Part 3: additional contract dimensions ----
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    @interface Ord1 {
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    @interface Ord2 {
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    @interface Ord3 {
+    }
+
+    @Ord1
+    @Ord2
+    @Ord3
+    static class Ordered {
+    }
+
+    @Tag("s1")
+    static class SingleTag {
+    }
+
+    @Tag("own")
+    static class MixedChild extends Base {
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.PARAMETER)
+    @interface PTag {
+        String value();
+    }
+
+    static class ParamHost {
+        public static void withParam(@PTag("p1") int p) {
+        }
+    }
+
+    // declaration order is stable for directly present annotations
+    static void testDeclarationOrder() {
+        java.lang.annotation.Annotation[] ds = Ordered.class.getDeclaredAnnotations();
+        check(ds.length == 3, "three declared annotations");
+        check(ds[0].annotationType() == Ord1.class, "first is Ord1");
+        check(ds[1].annotationType() == Ord2.class, "second is Ord2");
+        check(ds[2].annotationType() == Ord3.class, "third is Ord3");
+        java.lang.annotation.Annotation[] all = Ordered.class.getAnnotations();
+        check(all.length == 3, "no inherited additions here");
+        check(all[0].annotationType() == Ord1.class, "getAnnotations same order");
+    }
+
+    // three-fold repetition plus the single-occurrence contrast
+    static void testRepeatableDepth() {
+        AnnotatedElement single = SingleTag.class;
+        check(single.getAnnotation(Tag.class) != null, "single occurrence directly present");
+        check("s1".equals(single.getAnnotation(Tag.class).value()), "single value");
+        check(single.getDeclaredAnnotation(Tag.class) != null, "single declared single");
+        check(single.getAnnotationsByType(Tag.class).length == 1, "single byType one");
+        check(single.getAnnotation(Tags.class) == null, "no container for single occurrence");
+
+        AnnotatedElement multi = Multi.class;
+        check(multi.getAnnotationsByType(Tag.class).length == 2, "two flattened");
+        check(multi.getDeclaredAnnotationsByType(Tag.class).length == 2, "declared byType two");
+    }
+
+    // subclass with its own annotation keeps both views distinct
+    static void testInheritedPlusDeclared() {
+        AnnotatedElement mixed = MixedChild.class;
+        check(mixed.getAnnotations().length == 2, "own plus inherited in getAnnotations");
+        check(mixed.getDeclaredAnnotations().length == 1, "only own in getDeclaredAnnotations");
+        check(mixed.getDeclaredAnnotation(Tag.class) != null, "own Tag declared");
+        check(mixed.getAnnotation(Inh.class) != null, "inherited Inh still reachable");
+        check(mixed.getAnnotationsByType(Inh.class).length == 1, "inherited byType one");
+        check(mixed.getDeclaredAnnotationsByType(Inh.class).length == 0, "declared byType zero");
+    }
+
+    // null Class argument throws NPE for every accessor (fixed on modern JDKs)
+    static void testNullContract() throws Exception {
+        final AnnotatedElement p = Plain.class;
+        checkThrowsNPE(() -> p.getAnnotation(null), "getAnnotation(null)");
+        checkThrowsNPE(() -> p.getAnnotationsByType(null), "getAnnotationsByType(null)");
+        checkThrowsNPE(() -> p.getDeclaredAnnotation(null), "getDeclaredAnnotation(null)");
+        checkThrowsNPE(() -> p.getDeclaredAnnotationsByType(null), "getDeclaredAnnotationsByType(null)");
+        checkThrowsNPE(() -> p.isAnnotationPresent(null), "isAnnotationPresent(null)");
+        Field fld = Multi.class.getField("field");
+        checkThrowsNPE(() -> fld.getAnnotation(null), "field getAnnotation(null)");
+        Method mth = Multi.class.getMethod("method");
+        checkThrowsNPE(() -> mth.getAnnotationsByType(null), "method byType(null)");
+        Parameter prm = ParamHost.class.getMethod("withParam", int.class).getParameters()[0];
+        checkThrowsNPE(() -> prm.getAnnotation(null), "parameter getAnnotation(null)");
+        checkThrowsNPE(() -> prm.isAnnotationPresent(null), "parameter present(null)");
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrowsNPE(ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (NullPointerException e) {
+            passed++;
+            return;
+        } catch (Throwable t) {
+            throw new AssertionError(msg + ": got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": nothing thrown");
+    }
+
+    // Parameter is also a carrier of the contract
+    static void testParameterCarrier() throws Exception {
+        AnnotatedElement param = ParamHost.class.getMethod("withParam", int.class).getParameters()[0];
+        check(param.isAnnotationPresent(PTag.class), "parameter present");
+        check("p1".equals(param.getAnnotation(PTag.class).value()), "parameter value");
+        check(param.getAnnotations().length == 1, "parameter one annotation");
+        check(param.getDeclaredAnnotation(PTag.class) != null, "parameter declared single");
+        check(param.getAnnotationsByType(PTag.class).length == 1, "parameter byType one");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeclarationOrder();
+        testRepeatableDepth();
+        testInheritedPlusDeclared();
+        testNullContract();
+        testParameterCarrier();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

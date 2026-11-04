@@ -5,8 +5,10 @@
  */
 
 import java.lang.reflect.Field;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.lang.reflect.WildcardType;
 import java.util.List;
 
@@ -102,9 +104,60 @@ public class WildcardTypeTest {
     static void consume(List<? extends Number> xs) {
     }
 
+    // ---- Part 3: deepened contracts (2026-11-05 batch) ----
+    static class ArrayHost {
+        List<?>[] wildArray;
+        java.util.Map<String, List<? super Long>> nestedWild;
+    }
+
+    static void consumeLower(List<? super Number> xs) {
+    }
+
+    static void testArrayAndNestedWildcards() throws Exception {
+        GenericArrayType gat = (GenericArrayType) ArrayHost.class.getDeclaredField("wildArray")
+                .getGenericType();
+        ParameterizedType comp = (ParameterizedType) gat.getGenericComponentType();
+        check(comp.getRawType() == List.class, "List<?>[] component raw List");
+        check(comp.getActualTypeArguments()[0] instanceof WildcardType, "component arg is wildcard");
+        check(comp.getActualTypeArguments()[0].getTypeName().equals("?"), "component arg name ?");
+        check(gat.getTypeName().equals("java.util.List<?>[]"), "List<?>[] typeName");
+
+        ParameterizedType npt = (ParameterizedType) ArrayHost.class.getDeclaredField("nestedWild")
+                .getGenericType();
+        Type inner = npt.getActualTypeArguments()[1];
+        check(inner instanceof ParameterizedType, "nested value is parameterized");
+        WildcardType iw = (WildcardType) ((ParameterizedType) inner).getActualTypeArguments()[0];
+        check(iw.getLowerBounds().length == 1 && iw.getLowerBounds()[0] == Long.class,
+              "nested wildcard lower Long");
+        check(iw.getUpperBounds()[0] == Object.class, "nested wildcard implicit upper");
+        check(iw.getTypeName().equals("? super java.lang.Long"), "nested wildcard typeName");
+
+        Method m = WildcardTypeTest.class.getDeclaredMethod("consumeLower", List.class);
+        WildcardType mw = (WildcardType) ((ParameterizedType) m.getGenericParameterTypes()[0])
+                .getActualTypeArguments()[0];
+        check(mw.getLowerBounds()[0] == Number.class, "method lower wildcard Number");
+        check(mw.getUpperBounds()[0] == Object.class, "method lower wildcard implicit upper");
+    }
+
+    static void testEqualityEdges() throws Exception {
+        WildcardType up = arg(Sample.class.getDeclaredField("upper"));
+        WildcardType lo = arg(Sample.class.getDeclaredField("lower"));
+        check(up.equals(up), "equals reflexive");
+        check(!up.equals(null), "not equal to null");
+        check(!up.equals(Number.class), "wildcard not equal to its own upper bound class");
+        check(lo.getUpperBounds().length == 1, "lower-bounded keeps exactly one upper");
+        check(up.getLowerBounds().length == 0, "upper-bounded keeps no lower");
+        check(up.toString().equals(up.getTypeName()), "upper toString matches typeName");
+        check(lo.toString().equals(lo.getTypeName()), "lower toString matches typeName");
+        check(Type.class.isAssignableFrom(WildcardType.class), "WildcardType extends Type");
+        check(WildcardType.class.getDeclaredMethods().length == 2, "exactly two declared accessors");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testArrayAndNestedWildcards();
+        testEqualityEdges();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

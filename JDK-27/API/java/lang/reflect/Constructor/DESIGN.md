@@ -46,3 +46,19 @@
 - 私有构造器 IAE 路径改用独立顶层类 `ExtCtor`（非 nestmate）。
 - 静态嵌套类构造器 `getAnnotatedReceiverType()` 返回 null（JDK-8 返回非 null 退化值）；非静态内部类
   构造器返回非 null 且 receiver 类型为外围类（`InnerCtor` 需以 `(外围类,long,String)` 取构造器）。
+
+## 深化批次（2026-11-05）
+
+新增 8 个 test 方法（59 → 96 断言），与 JDK-8 侧同构（见该侧 DESIGN 的批次表），差异点：
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | newInstance 精确类型/字段往返；"argument type mismatch" 与 varargs 散参被拒消息 | testNewInstanceExactType / testNewInstanceMismatchMessages |
+| P0 | enum 反射创建拒绝 "Cannot reflectively create enum objects" | testEnumNewInstance |
+| P0 | 泛型抛异常构造器（E 界/擦除/TypeVariable） | testGenericExceptionConstructor |
+| P0 | 接收者证据：内部类构造器 receiver==外围类、静态嵌套构造器 **null**（JDK-9+ 修正后行为） | testReceiverTypeByKind |
+| P1 | 接口构造器缺失 / hashCode 公式与 NSME "<init>" 消息 / toString 签名片段 | testInterfaceConstructorAbsence / testHashCodeFormulaAndLookup / testToStringForms |
+
+### 锁定的版本差异（本批实测）
+- `getAnnotatedReceiverType()` 静态嵌套构造器：JDK-27 返回 null（JDK-8 为非空退化值）。
+- varargs `Constructor.newInstance` 与 `Method.invoke` 一样**不做散参打包**（两侧一致）：参数个数必须等于形参个数。

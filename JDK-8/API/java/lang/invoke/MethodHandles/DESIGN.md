@@ -43,3 +43,24 @@
 - `bind()` 需方法名（非字段）；`throwException` handle 类型为 `(exType)returnType`。
 - `permuteArguments` reorder.length==旧参数个数；`revealDirect` 对非 direct handle → IAE。
 - JDK-8 publicLookup 仅 PUBLIC 模式（JDK-27 改为 UNCONDITIONAL 0x20）。
+
+## 深化批次（2026-11-05）
+
+新增 9 个 test 方法（69→115 断言）：
+
+| 测试点 | 方法 |
+|---|---|
+| identity 同一引用/跨调用稳定/null 直传/type 精确/null 类型 NPE | testIdentityReferenceSemantics |
+| constant 同一对象两次 invoke 相等；(Object,null) 合法、(int,null) NPE（原有）、(void,null) → IAE `void type` 精确消息、错类型 → CCE `Cannot cast java.lang.Integer to java.lang.String` | testConstantEdges |
+| String[] getter/setter 往返；越界/负下标 → AIOOBE（消息格式两侧不同只断类）；两工厂 handle type 全等 | testArrayElementDeep |
+| publicLookup 可达 String.length；unreflect 私有 → IAE `member is private`；包私有嵌套类符号引用 → IAE `symbolic reference class is not`（8 `is not public`/27 `is not accessible` 公共子串） | testPublicLookupAccess |
+| lookup/publicLookup/in(String) toString 形态（含类名与 public 标记；27 publicLookup 为 `publicLookup` 后缀） | testLookupToStringExact |
+| collectArguments 两位置：类型全等 `(String,int)int`、值 13、null target NPE | testCollectArguments |
+| explicitCastArguments 真收窄 long→int（1e12 截断为 -727379968）vs asType 同收窄 WMTE；引用收窄运行时 CCE | testExplicitCastNarrowing |
+| 组合子校验矩阵：guardWithTest 非谓词 IAE/catchException 坏 handler IAE/foldArguments 类型不匹配 IAE 消息/filterArguments 过滤器过多 IAE/permuteArguments 长度与越界 IAE | testCombinatorValidation |
+| insertArguments 绑定值精确（单位置/多值）；fold 前置语义 negate(a)+a==0 | testInsertArgumentsValue / testFoldPrependSemantics |
+
+### 版本差异（本批实测）
+- JDK-8 无 zero/empty/arrayLength/arrayConstructor/dropArgumentsToMatch/dropReturn/loop 家族/tryFinally/
+  privateLookupIn（javap 双侧确认，仅 27 断言）。
+- publicLookup 模式：8 = PUBLIC；27 = UNCONDITIONAL（无 PUBLIC 位）。

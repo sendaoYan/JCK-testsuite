@@ -1,9 +1,16 @@
 /*
  * @test
  * @summary java.lang.reflect.InvocationTargetException conformance: white-box structure + black-box behavior.
+ *          Deepened batch: hierarchy Serializable census, explicit null-target constructor
+ *          semantics, full serialization round-trip (message/cause/suppressed/target==cause),
+ *          error-type target, toString FQCN prefix.
  * @run main InvocationTargetExceptionTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
@@ -13,6 +20,14 @@ public class InvocationTargetExceptionTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(o);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return ois.readObject();
     }
 
     static class Boom {
@@ -110,9 +125,64 @@ public class InvocationTargetExceptionTest {
               "stack trace rendered with cause");
     }
 
+    // ===================== deepened batch (2026-11-05) =====================
+
+    static void testHierarchySerializable() {
+        check(java.io.Serializable.class.isAssignableFrom(InvocationTargetException.class),
+              "Throwable makes it Serializable");
+        check(InvocationTargetException.class.getSuperclass() == ReflectiveOperationException.class,
+              "direct superclass exact");
+        check(InvocationTargetException.class.getConstructors().length == 2,
+              "two public constructors: (Throwable) and (Throwable,String)");
+    }
+
+    static void testNullTargetExplicit() {
+        InvocationTargetException n = new InvocationTargetException(null);
+        check(n.getCause() == null, "explicit null target: getCause null");
+        check(n.getTargetException() == null, "explicit null target: getTargetException null");
+        check(n.getMessage() == null, "explicit null target: no message");
+        try {
+            n.initCause(new RuntimeException("late"));
+            check(false, "initCause must be refused");
+        } catch (IllegalStateException e) {
+            check(e.getMessage() != null && e.getMessage().contains("Can't overwrite cause"),
+                  "initCause refused with canonical message");
+        }
+    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        RuntimeException root = new RuntimeException("ser-root");
+        InvocationTargetException orig = new InvocationTargetException(root, "ser-msg");
+        orig.addSuppressed(new IllegalStateException("sup-ser"));
+        Object back = serRoundTrip(orig);
+        check(back instanceof InvocationTargetException, "round-trip keeps exact type");
+        InvocationTargetException res = (InvocationTargetException) back;
+        check("ser-msg".equals(res.getMessage()), "round-trip keeps message");
+        check(res.getCause() instanceof RuntimeException, "round-trip keeps cause type");
+        check("ser-root".equals(res.getCause().getMessage()), "round-trip keeps cause message");
+        check(res.getTargetException() == res.getCause(), "round-trip keeps target==cause link");
+        check(res.getSuppressed().length == 1, "round-trip keeps suppressed");
+        check(res.getCause() != root, "cause is a copy, not the same reference");
+        check(res instanceof java.io.Serializable, "instanceof Serializable");
+    }
+
+    static void testErrorTargetAndToString() {
+        OutOfMemoryError oom = new OutOfMemoryError("err-target");
+        InvocationTargetException errWrap = new InvocationTargetException(oom, "e");
+        check(errWrap.getCause() == oom, "error target kept");
+        check(errWrap.getTargetException() == oom, "error target link");
+        check(errWrap.toString().startsWith("java.lang.reflect.InvocationTargetException"),
+              "toString starts with FQCN");
+        check(errWrap.toString().contains("e"), "toString carries message");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testHierarchySerializable();
+        testNullTargetExplicit();
+        testSerializationRoundTrip();
+        testErrorTargetAndToString();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

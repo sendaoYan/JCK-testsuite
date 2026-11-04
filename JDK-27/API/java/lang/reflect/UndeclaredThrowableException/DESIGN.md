@@ -23,3 +23,15 @@
 5. 二次分派仍包装同一引用（确定性）。
 6. `Error` 类型原样传播。
 白盒保留原有构造器断言 + 继承层次。产出：`UndeclaredThrowableExceptionTest.java`（16 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增方法（断言 25 → 35）：
+
+| 测试点 | 方法 |
+|---|---|
+| 构造器普查：恰 2 个公有构造器（无无参 → cause 恒预设）、非受检持有受检 cause | testCensusAndUnchecked |
+| initCause 被拒（"Can't overwrite cause"）、bare toString 精确 | testCauseAlwaysPreset |
+| 序列化 round-trip：undeclared==cause 链保留 | testSerializationRoundTrip |
+| suppressed + printStackTrace | testSuppressedPrinting |
+| Proxy 生成 UTE：消息 null（8/27 一致）、每次分发新实例同 cause | testProxyWrapShape |

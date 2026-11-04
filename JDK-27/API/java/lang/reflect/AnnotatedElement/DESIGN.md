@@ -24,4 +24,13 @@
 4. 缺失类型零返回 + `isAnnotationPresent(null)` NPE。
 5. 容器即直接声明注解且持双值。
 6. record 组件注解按 `@Target` 传播到访问器（组件自身非 METHOD 目标时为 null）。
-白盒保留原简单注解断言（独立 `@Deprecated` 类）。产出：`AnnotatedElementTest.java`（35 断言通过）。
+白盒保留原简单注解断言（独立 `@Deprecated` 类）。
+
+Part 3 补充契约维度（`testDeclarationOrder/testRepeatableDepth/testInheritedPlusDeclared/testNullContract/testParameterCarrier`，自造 `@Ord1..3`/`@PTag(PARAMETER)`）：
+1. 声明顺序：`getDeclaredAnnotations` 按源码序 `[Ord1,Ord2,Ord3]` 精确数组。
+2. 重复注解对照：单次出现 `getAnnotation(Tag)` 非 null 且无容器；重复时展平/声明 byType 均双元素。
+3. 继承+自身并存：子类自身 `@Tag` + 父类 `@Inh` → getAnnotations 2 / getDeclared 1 / 继承 byType 1 declared-byType 0。
+4. null 契约（27 全 NPE）：五个查询方法在 Class/Field/Method/Parameter 载体上 null 参数全抛 NPE。
+5. `Parameter` 载体（注解需 `PARAMETER` 目标，用自造 `@PTag`）：present/取值/长度/declared/byType。
+
+产出：`AnnotatedElementTest.java`（68 断言通过，jtreg 全绿）。

@@ -24,3 +24,22 @@
 5. 行为闭环：`get` 前置 `IllegalAccessException` → `setAccessible(true)` 后 get/set 往返。
 6. 未 open 模块：`String.class.getDeclaredField("value")` 上 `setAccessible(true)` 抛 `InaccessibleObjectException`、`trySetAccessible()` false。
 白盒保留原有开关断言 + 类层次/接口检查。产出：`AccessibleObjectTest.java`（43 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增 7 个 test 方法（45 → 72 断言）：
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | API 面锁定：canAccess/trySetAccessible 存在（8 侧为 NSME） | testApiSurfaceLocked27 |
+| P0 | canAccess 正路径（实例配接收者 true、静态 null true）+ 三类 IAE 消息片段（"null object for"/"is not an instance of"/"non-null object for"） | testCanAccessMessages |
+| P0 | trySetAccessible 失败路径（String.value → false 不抛、标志不动）、成功路径（自身类私有 true）与幂等 | testTrySetAccessiblePaths |
+| P0 | 私有字段 拒绝→放行→再拒绝（IAE "access a member of class"，需非同巢类） | testPrivateFieldDeniedThenAllowed |
+| P0 | static final 写拒绝 "Can not set static final"、值不变 | testStaticFinalFieldSet |
+| P1 | 批量 API 含 Executable 的混合成员 + 标志独立 | testBatchMixedKinds |
+| P1 | @Repeatable 容器语义（byType 展开/getAnnotation null/isAnnotationPresent 不穿透） | testRepeatableAnnotations |
+
+### 锁定的版本差异（本批实测）
+- canAccess IAE 消息（JDK-27）：实例成员传 null → "null object for <方法签名>"；静态成员传非 null → "non-null object for <签名>"；类型错 → "object of type X is not an instance of Y"。
+- `setAccessible(true)` 拒绝消息：JDK-27 为 `class X cannot access a member of class Y with private access`，JDK-8 为 `Class X can not access a member of class Y with modifiers "private"`——公共子串 "access a member of class"。
+- `String.value`：JDK-27 setAccessible 抛 InaccessibleObjectException / trySetAccessible 返回 false；JDK-8 直接成功。

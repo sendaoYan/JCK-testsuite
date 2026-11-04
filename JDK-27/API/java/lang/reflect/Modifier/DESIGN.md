@@ -40,3 +40,27 @@
 ## JDK-27 差异（已锁入断言）
 
 - JDK-27 `Modifier` 为 `final` 类且无 public 构造器（JDK-8 有 public 无参构造器）；由 `testFinalClass` 覆盖。
+
+## 深化批次（2026-11-05）
+
+新增方法（只追加）：testPredicateTruthTable / testToStringExactOrder /
+testMaskMembershipPerJavadoc / testRealMemberModifiers。断言 82→182。
+
+### 覆盖增量
+
+- 12 个 is* 谓词对全部 4096 个掩码穷举真值表；代表组合（全 1 掩码/去位/XOR/未知高位）。
+- toString 规范序精确串（PSF 输入顺序无关、0xfff 全串、六种组合串、同掩码重复调用 equals、
+  constructorModifiers/fieldModifiers 掩码串全等）。
+- 6 个 *Modifiers() 按 javadoc 逐位包含/排除断言。
+- 真实成员端到端（String/CharSequence/int.class/Integer.valueOf/Object.hashCode/
+  String.value + 自造 AbsSample/IfaceSample/MemberSample 与 native/synchronized/
+  transient/volatile/final 成员位与串全等）。
+
+### 版本差异（对照 JDK-8，javap+探针实测）
+
+- javap -public：27 相对 8 无新增方法；Modifier 在 27 为 final 无 public 构造器（旧断言覆盖）。
+- strictfp（关键差异）：javac-17+（JEP 306）不再向 class 文件写 ACC_STRICT —— 源码级
+  `public static strictfp double sfpM(double)` 编译后 getModifiers()==PUBLIC|STATIC(0x9)，
+  toString="public static"（javac-8 则为 0x809/"public static strictfp"）。本侧按实测断言
+  0x9，并保留 STRICT 位/令牌经常量的可观测性断言。
+- 其余（常量位、谓词、toString 串、掩码值）双侧逐字节一致。

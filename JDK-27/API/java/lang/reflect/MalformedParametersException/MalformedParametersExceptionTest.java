@@ -1,9 +1,15 @@
 /*
  * @test
  * @summary java.lang.reflect.MalformedParametersException conformance: white-box structure + black-box behavior.
+ *          Deepened batch: Serializable census, exact bare/with-message toString forms,
+ *          full serialization round-trip keeping message + cause, stack printing.
  * @run main MalformedParametersExceptionTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.MalformedParametersException;
 
 public class MalformedParametersExceptionTest {
@@ -12,6 +18,14 @@ public class MalformedParametersExceptionTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(o);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return ois.readObject();
     }
 
     // ---- Part 1: white-box (structural, retained from previous revision) ----
@@ -72,9 +86,52 @@ public class MalformedParametersExceptionTest {
         check(f.getStackTrace() != null, "stack trace captured");
     }
 
-    public static void main(String[] args) {
+    // ===================== deepened batch (2026-11-05) =====================
+
+    static void testSerializableCensus() {
+        check(java.io.Serializable.class.isAssignableFrom(MalformedParametersException.class),
+              "Serializable via Throwable");
+        check(MalformedParametersException.class.getConstructors().length == 2,
+              "two public constructors since 1.8");
+        check("java.lang.reflect.MalformedParametersException".equals(
+                      new MalformedParametersException().toString()),
+              "bare toString exact");
+        check("java.lang.reflect.MalformedParametersException: tagged".equals(
+                      new MalformedParametersException("tagged").toString()),
+              "with-message toString exact");
+    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        MalformedParametersException orig = new MalformedParametersException("ser-mp");
+        orig.initCause(new IllegalStateException("mp-cause"));
+        orig.addSuppressed(new IllegalArgumentException("mp-sup"));
+        Object back = serRoundTrip(orig);
+        check(back instanceof MalformedParametersException, "round-trip exact type");
+        MalformedParametersException res = (MalformedParametersException) back;
+        check("ser-mp".equals(res.getMessage()), "round-trip keeps message");
+        check(res.getCause() instanceof IllegalStateException, "round-trip keeps cause type");
+        check("mp-cause".equals(res.getCause().getMessage()), "round-trip keeps cause message");
+        check(res.getSuppressed().length == 1, "round-trip keeps suppressed");
+        check(res instanceof java.io.Serializable, "instanceof Serializable");
+    }
+
+    static void testStackPrinting() throws Exception {
+        MalformedParametersException e = new MalformedParametersException("print-mp");
+        e.initCause(new RuntimeException("mp-root"));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        e.printStackTrace(new java.io.PrintStream(bos, true, "UTF-8"));
+        String rendered = bos.toString("UTF-8");
+        check(rendered.contains("MalformedParametersException"), "stack names type");
+        check(rendered.contains("print-mp"), "stack renders message");
+        check(rendered.contains("mp-root"), "stack renders cause");
+    }
+
+    public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerializableCensus();
+        testSerializationRoundTrip();
+        testStackPrinting();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

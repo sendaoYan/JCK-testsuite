@@ -26,3 +26,18 @@
 5. 内部类构造器隐式首参：`isImplicit` true、非 synthetic、类型为外部类、非 public 修饰。
 6. `equals/hashCode` 值语义与外类型不等、plain 参数零修饰符/空 accessFlags/`isImplicit/isSynthetic` false。
 白盒保留原有结构断言。产出：`ParameterTest.java`（42 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增 4 个 test 方法（44 → 55 断言）：
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | 默认编译 argN 锁定：isNamePresent()==false、arg0/arg1、toString=="int arg0" | testNameAbsenceContract |
+| P0 | varargs 位置敏感性：固定参数 false、末位 true、数组类型（getType 与 getParameterizedType） | testVarargsPosition |
+| P1 | 构造器参数视图：合成名/back-reference/toString | testCtorParameterViews |
+| P0 | 内部类构造器 implicit 首参位锁定：modifiers==0x8010（FINAL|MANDATED）、accessFlags=={FINAL, MANDATED} | testInnerCtorParamFlagsLocked |
+
+### 锁定的版本差异（本批实测）
+- 内部类构造器首参（外围实例）：JDK-27 isImplicit()==true、modifiers 0x8010；JDK-8 无 -parameters 时报 false/0。
+- `Parameter.accessFlags()`：JDK-27 有（JDK 20+）、JDK-8 无。

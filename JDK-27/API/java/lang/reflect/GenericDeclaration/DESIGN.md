@@ -23,3 +23,11 @@
 5. 泛型类上的泛型方法：R 属方法作用域且与类级 K 不等（作用域隔离）。
 6. `Class/Method/Constructor` 皆实现该接口（isAssignableFrom 三连）。
 白盒保留原有类/方法变量断言 + 单抽象方法结构。产出：`GenericDeclarationTest.java`（25 断言通过）。
+
+## 深化批次（2026-11-05）
+新增 `testDeclarerKindsMatrix/testGenericConstructorDeclaration`（26→45 断言）：
+1. 声明者矩阵：数组类 `String[]`/原生数组类 `int[]`/枚举类均 instanceof GenericDeclaration 且 getTypeParameters() 空**非 null**；接口本体自身非泛型（空数组）——易错点：空数组不是 null。
+2. 泛型接口声明者：自造 `interface Numbered<I extends Number>` 变量名/界（Number）/声明者回环。
+3. 泛型构造器（新维度）：`<E extends CharSequence> CtorHost(E)` 有自己的类型参数、声明者==那个 Constructor；普通构造器空数组；构造器 TV 与类 TV 不等。
+4. JDK 27 特有：泛型 `record Rec<T>(T value)` 与普通类一样声明类型变量（T 名/界/声明者==Rec.class）——JDK-8 侧无 record，为双侧版本差异维度。
+

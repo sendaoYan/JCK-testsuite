@@ -17,3 +17,6 @@ catch (LambdaConversionException e) { e.getMessage(); }
 白盒：超类 Exception、5 构造存在、serialVersionUID。
 黑盒：message-only 保留消息无 cause；cause-only 消息==cause.toString()；全参(false,false) 栈轨迹为空且 suppressed 被丢弃；默认构造可用；suppressed/stackTrace 默认开；真实触发（工厂类型返回非接口）拿到非空 message。
 对应 `LambdaConversionExceptionTest.java` 的 `testBlackBox()`。
+## 深化批次（2026-11-05）
+
+新增：initCause 规则（构造 cause 不可替换）、序列化 round-trip、27 侧 metafactory 触发消息 "java.lang.String is not an interface"、正确链接对照组。（18→24 断言）

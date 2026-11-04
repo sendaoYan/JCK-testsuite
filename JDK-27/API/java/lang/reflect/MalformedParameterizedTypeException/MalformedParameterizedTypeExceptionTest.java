@@ -1,9 +1,15 @@
 /*
  * @test
  * @summary java.lang.reflect.MalformedParameterizedTypeException conformance: white-box structure + black-box behavior.
+ *          Deepened batch: Serializable census (constructor count 2 here vs 1 on JDK-8),
+ *          full serialization round-trip with cause, bare toString exact, stack printing.
  * @run main MalformedParameterizedTypeExceptionTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.MalformedParameterizedTypeException;
 
 public class MalformedParameterizedTypeExceptionTest {
@@ -12,6 +18,14 @@ public class MalformedParameterizedTypeExceptionTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(o);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        return ois.readObject();
     }
 
     // ---- Part 1: white-box (structural, retained from previous revision) ----
@@ -71,9 +85,52 @@ public class MalformedParameterizedTypeExceptionTest {
               "programmatic stack accepted");
     }
 
-    public static void main(String[] args) {
+    // ===================== deepened batch (2026-11-05) =====================
+
+    static void testSerializableCensus() {
+        check(java.io.Serializable.class.isAssignableFrom(MalformedParameterizedTypeException.class),
+              "Serializable via Throwable");
+        // version difference: JDK-8 exposes exactly one constructor; the String
+        // constructor arrived in JDK 21
+        check(MalformedParameterizedTypeException.class.getConstructors().length == 2,
+              "two public constructors here (one on JDK-8)");
+        check("java.lang.reflect.MalformedParameterizedTypeException".equals(
+                      new MalformedParameterizedTypeException().toString()),
+              "bare toString exact");
+    }
+
+    static void testSerializationRoundTrip() throws Exception {
+        MalformedParameterizedTypeException orig = new MalformedParameterizedTypeException("ser-mz");
+        orig.initCause(new IllegalStateException("mz-cause"));
+        orig.addSuppressed(new IllegalArgumentException("mz-sup"));
+        Object back = serRoundTrip(orig);
+        check(back instanceof MalformedParameterizedTypeException, "round-trip exact type");
+        MalformedParameterizedTypeException res = (MalformedParameterizedTypeException) back;
+        check("ser-mz".equals(res.getMessage()), "round-trip keeps message");
+        check(res.getCause() instanceof IllegalStateException, "round-trip keeps cause type");
+        check("mz-cause".equals(res.getCause().getMessage()), "round-trip keeps cause message");
+        check(res.getSuppressed().length == 1, "round-trip keeps suppressed");
+        check(res instanceof java.io.Serializable, "instanceof Serializable");
+    }
+
+    static void testStackPrinting() throws Exception {
+        MalformedParameterizedTypeException e =
+                new MalformedParameterizedTypeException("print-me");
+        e.initCause(new RuntimeException("printable-root"));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        e.printStackTrace(new java.io.PrintStream(bos, true, "UTF-8"));
+        String rendered = bos.toString("UTF-8");
+        check(rendered.contains("MalformedParameterizedTypeException"), "stack names type");
+        check(rendered.contains("print-me"), "stack renders message");
+        check(rendered.contains("printable-root"), "stack renders cause");
+    }
+
+    public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerializableCensus();
+        testSerializationRoundTrip();
+        testStackPrinting();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

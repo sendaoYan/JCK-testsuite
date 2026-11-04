@@ -10,6 +10,13 @@
  *          getDeclaredAnnotations/getParameterAnnotations/getAnnotatedReturnType,
  *          equals/hashCode/toString/toGenericString, and getMethods vs getDeclaredMethods
  *          inheritance semantics + NoSuchMethodException / NPE paths.
+ *          Deepen batch: exact-arity varargs contract (spread form is rejected),
+ *          receiver/null-argument IAE message fragments, RuntimeException cause
+ *          identity, denied-access message fragment, overload resolution, nested
+ *          generic return type decomposition, interface static/default/abstract
+ *          dispatch, bridge virtual dispatch, documented hashCode formula,
+ *          annotation default kinds (Class/int[]/enum/String[]) and the
+ *          AnnotatedType family on methods.
  * @run main MethodTest
  */
 
@@ -22,6 +29,7 @@ import java.lang.annotation.Target;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 
@@ -43,6 +51,28 @@ public class MethodTest {
             if (t instanceof AssertionError) throw (AssertionError) t;
             throw new AssertionError(msg + ": expected " + expected.getSimpleName()
                     + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+                               String fragment, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            if (!expected.isInstance(t)) {
+                throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                        + " but got " + t.getClass().getName(), t);
+            }
+            String m = t.getMessage();
+            if (m == null || !m.contains(fragment)) {
+                throw new AssertionError(msg + ": message <" + m
+                        + "> does not contain <" + fragment + ">");
+            }
+            passed++;
+            return;
         }
         throw new AssertionError(msg + ": expected " + expected.getSimpleName()
                 + " but nothing was thrown");
@@ -87,6 +117,52 @@ public class MethodTest {
     interface WithDefault {
         default int dflt() { return 7; }
         int abstractM();
+    }
+
+    // ---- fixtures added by the deepen batch ----
+
+    static class Rich {
+        public String concat(String a, String b) { return a + b; }
+        public static String statConcat(String p) { return "[" + p + "]"; }
+        public java.util.Map<String, java.util.List<Integer>> combine() { return null; }
+        public <T extends Number> T pick(T t) { return t; }
+    }
+
+    static class RtSample {
+        public static final IllegalStateException BOOM = new IllegalStateException("rt-boom");
+        public int throwRt() { throw BOOM; }
+    }
+
+    static class Overload {
+        public String m(int x) { return "int:" + x; }
+        public String m(int x, int y) { return "sum:" + (x + y); }
+        public String m(String s) { return "str:" + s; }
+    }
+
+    static class EchoSub extends StringImpl {
+        public String echo(String s) { return "sub:" + s; }
+    }
+
+    interface IStatic {
+        static String stat() { return "stat-v"; }
+    }
+
+    interface IGreet {
+        default String dflt() { return "dflt-v"; }
+        String abs();
+    }
+
+    static class GreetImpl implements IGreet {
+        static int count;
+        public String abs() { count++; return "abs-v"; }
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface RichAnn {
+        Class<?> cls() default Object.class;
+        int[] nums() default {2, 4, 6};
+        RetentionPolicy pol() default RetentionPolicy.RUNTIME;
+        String[] names() default {"a", "b"};
     }
 
     static void testMetadata() throws Exception {
@@ -324,6 +400,222 @@ public class MethodTest {
                 "getMethod null paramTypes treated as empty");
     }
 
+    // ---- tests added by the deepen batch ----
+
+    static void testInvokeExactValues() throws Exception {
+        Rich r = new Rich();
+        Method concat = Rich.class.getMethod("concat", String.class, String.class);
+        check("abcd".equals(concat.invoke(r, "ab", "cd")), "concat exact value");
+        Method statConcat = Rich.class.getMethod("statConcat", String.class);
+        check("[x]".equals(statConcat.invoke(null, "x")), "static concat null receiver");
+        check("[y]".equals(statConcat.invoke(r, "y")), "static concat receiver ignored");
+    }
+
+    static void testInvokeVarargsExactArity() throws Exception {
+        // Method.invoke performs no varargs packing: the argument count must equal
+        // the declared parameter count and the last argument must be the array.
+        Sample s = new Sample();
+        Method sum = Sample.class.getMethod("sum", int[].class);
+        Object a = sum.invoke(s, new Object[]{new int[]{5, 6, 7}});
+        Object b = sum.invoke(s, (Object) new int[]{5, 6, 7});
+        check(a.equals(18) && b.equals(18), "varargs two array forms equal 18");
+        check(sum.invoke(s, new Object[]{new int[0]}).equals(0), "empty varargs array -> 0");
+        check(sum.invoke(s, new Object[]{new int[]{9}}).equals(9), "single element varargs");
+        checkThrowsMsg(IllegalArgumentException.class, () -> sum.invoke(s, 5, 6, 7),
+                "wrong number of arguments", "varargs spread form is rejected");
+        checkThrowsMsg(IllegalArgumentException.class, () -> sum.invoke(s),
+                "wrong number of arguments", "varargs zero args rejected");
+    }
+
+    static void testInvokeReceiverAndNullArg() throws Exception {
+        Sample s = new Sample();
+        Method add = Sample.class.getMethod("add", int.class, int.class);
+        checkThrowsMsg(IllegalArgumentException.class, () -> add.invoke("not-a-Sample", 1, 2),
+                "is not an instance of", "wrong receiver type IAE message");
+        checkThrows(IllegalArgumentException.class, () -> add.invoke(s, null, 1),
+                "null for primitive parameter IAE");
+        checkThrowsMsg(IllegalArgumentException.class, () -> add.invoke(s, 1L, 2),
+                "argument type mismatch", "Long is not narrowed to int");
+    }
+
+    static void testInvokeExceptionIdentity() throws Exception {
+        RtSample r = new RtSample();
+        Method rt = RtSample.class.getMethod("throwRt");
+        try {
+            rt.invoke(r);
+            throw new AssertionError("expected InvocationTargetException");
+        } catch (InvocationTargetException ite) {
+            passed++;
+            check(ite.getCause() == RtSample.BOOM, "RuntimeException cause is the thrown object");
+            check(ite.getTargetException() == ite.getCause(),
+                    "getTargetException == getCause same object");
+            check(ite.getCause().getClass() == IllegalStateException.class, "cause exact class");
+            check("rt-boom".equals(ite.getCause().getMessage()), "cause message preserved");
+        }
+        // a null varargs array is passed through verbatim -> NPE inside -> ITE
+        Sample s = new Sample();
+        Method sum = Sample.class.getMethod("sum", int[].class);
+        try {
+            sum.invoke(s, new Object[]{null});
+            throw new AssertionError("expected InvocationTargetException");
+        } catch (InvocationTargetException ite) {
+            passed++;
+            check(ite.getCause().getClass() == NullPointerException.class,
+                    "null varargs array -> ITE wrapping NPE");
+        }
+    }
+
+    static void testAccessMessage() throws Exception {
+        // Nestmates (JDK-11+) make a nested private member accessible, so the
+        // denied-access path must target the non-nest top-level ExtMethod class.
+        ExtMethod em = new ExtMethod();
+        Method secret = ExtMethod.class.getDeclaredMethod("secret", int.class);
+        try {
+            secret.invoke(em, 4);
+            throw new AssertionError("expected IllegalAccessException");
+        } catch (IllegalAccessException e) {
+            passed++;
+            check(e.getMessage().contains("access a member of class"),
+                    "denied message fragment");
+            check(e.getMessage().contains("ExtMethod"), "denied message names member class");
+        }
+        secret.setAccessible(true);
+        check(secret.invoke(em, 5).equals(10), "private invoke after setAccessible");
+    }
+
+    static void testOverloads() throws Exception {
+        Overload o = new Overload();
+        Method m1 = Overload.class.getMethod("m", int.class);
+        Method m2 = Overload.class.getMethod("m", int.class, int.class);
+        Method m3 = Overload.class.getMethod("m", String.class);
+        check("int:7".equals(m1.invoke(o, 7)), "overload (int) selected");
+        check("sum:3".equals(m2.invoke(o, 1, 2)), "overload (int,int) selected");
+        check("str:z".equals(m3.invoke(o, "z")), "overload (String) selected");
+        check(!m1.equals(m2) && !m2.equals(m3) && !m1.equals(m3),
+                "overloads pairwise unequal");
+        check(m1.getParameterCount() == 1 && m2.getParameterCount() == 2
+                && m3.getParameterCount() == 1, "parameter counts distinguish overloads");
+    }
+
+    static void testGenericReturnTypeDeep() throws Exception {
+        Method combine = Rich.class.getMethod("combine");
+        Type grt = combine.getGenericReturnType();
+        check(grt instanceof ParameterizedType, "Map return is ParameterizedType");
+        ParameterizedType pt = (ParameterizedType) grt;
+        check(pt.getRawType() == java.util.Map.class, "raw type Map");
+        check(pt.getActualTypeArguments().length == 2, "two actual type arguments");
+        check(pt.getActualTypeArguments()[0] == String.class, "first argument String");
+        Type second = pt.getActualTypeArguments()[1];
+        check(second instanceof ParameterizedType, "second argument nested PT");
+        ParameterizedType inner = (ParameterizedType) second;
+        check(inner.getRawType() == java.util.List.class, "nested raw List");
+        check(inner.getActualTypeArguments()[0] == Integer.class, "nested argument Integer");
+        check(pt.getTypeName().equals(
+                "java.util.Map<java.lang.String, java.util.List<java.lang.Integer>>"),
+                "full generic type name");
+
+        Method pick = Rich.class.getMethod("pick", Number.class);
+        check(pick.getGenericReturnType() instanceof TypeVariable, "pick return TypeVariable");
+        TypeVariable<?> tv = (TypeVariable<?>) pick.getGenericReturnType();
+        check("T".equals(tv.getName()), "type variable name T");
+        check(tv.getBounds().length == 1 && tv.getBounds()[0] == Number.class,
+                "type variable bound Number");
+        check(pick.getGenericParameterTypes()[0] instanceof TypeVariable,
+                "pick parameter TypeVariable");
+        check(pick.getAnnotatedReturnType().getType() instanceof TypeVariable,
+                "annotated return keeps the type variable");
+        // JDK-9+ toGenericString prints type-parameter bounds (JDK-8 printed "<T>").
+        check(pick.toGenericString().contains("<T extends java.lang.Number>"),
+                "toGenericString shows bound");
+    }
+
+    static void testInterfaceInvoke() throws Exception {
+        Method stat = IStatic.class.getMethod("stat");
+        check(Modifier.isStatic(stat.getModifiers()), "interface static method flag");
+        check("stat-v".equals(stat.invoke(null)), "interface static invoke null receiver");
+
+        GreetImpl g = new GreetImpl();
+        Method d = IGreet.class.getMethod("dflt");
+        check(d.isDefault(), "default method flag");
+        check("dflt-v".equals(d.invoke(g)), "default body runs via invoke");
+
+        Method abs = IGreet.class.getMethod("abs");
+        check(Modifier.isAbstract(abs.getModifiers()), "abstract interface method flag");
+        int before = GreetImpl.count;
+        check("abs-v".equals(abs.invoke(g)), "abstract dispatches to implementation");
+        check(GreetImpl.count == before + 1, "virtual dispatch ran the impl body");
+        check(abs.getDeclaringClass() == IGreet.class,
+                "abstract method declaring class is the interface");
+    }
+
+    static void testBridgeDispatch() throws Exception {
+        Method bridge = null;
+        for (Method m : EchoSub.class.getMethods()) {
+            if (m.getName().equals("echo") && m.isBridge()) bridge = m;
+        }
+        check(bridge != null, "bridge method found");
+        check("sub:q".equals(bridge.invoke(new EchoSub(), (Object) "q")),
+                "bridge invoke dispatches virtually");
+        check(bridge.getDeclaringClass() == EchoSub.class,
+                "each overriding subclass carries its own bridge");
+        check(bridge.hashCode() == EchoSub.class.getMethod("echo", String.class).hashCode(),
+                "bridge and real method share the name-based hash");
+        check(bridge.getGenericReturnType() == Object.class,
+                "bridge erased return type Object");
+    }
+
+    static void testDefaultValueKinds() throws Exception {
+        check(RichAnn.class.getMethod("cls").getDefaultValue() == Object.class,
+                "Class-valued default");
+        int[] nums = (int[]) RichAnn.class.getMethod("nums").getDefaultValue();
+        check(nums.length == 3 && nums[0] == 2 && nums[1] == 4 && nums[2] == 6,
+                "int[] default contents");
+        check(RichAnn.class.getMethod("pol").getDefaultValue() == RetentionPolicy.RUNTIME,
+                "enum default");
+        String[] names = (String[]) RichAnn.class.getMethod("names").getDefaultValue();
+        check(names.length == 2 && "a".equals(names[0]) && "b".equals(names[1]),
+                "String[] default contents");
+    }
+
+    static void testStringFormsAndHashFormula() throws Exception {
+        Method add = Sample.class.getMethod("add", int.class, int.class);
+        check(add.toString().contains("public int "), "toString modifier and return");
+        check(add.toString().contains(".add(int,int)"), "toString signature");
+        check(add.toGenericString().contains("public int "),
+                "toGenericString modifier and return");
+        check(add.hashCode() == (Sample.class.getName().hashCode() ^ "add".hashCode()),
+                "documented hashCode formula");
+        Method viaDeclared = Sample.class.getDeclaredMethod("add", int.class, int.class);
+        check(add.equals(viaDeclared) && add.hashCode() == viaDeclared.hashCode(),
+                "getMethod equals getDeclaredMethod member");
+        try {
+            Sample.class.getMethod("nonexistent");
+            throw new AssertionError("expected NoSuchMethodException");
+        } catch (NoSuchMethodException e) {
+            passed++;
+            check(e.getMessage().contains("nonexistent()"), "NSME message names the method");
+        }
+    }
+
+    static void testAnnotatedTypeFamily() throws Exception {
+        Method add = Sample.class.getMethod("add", int.class, int.class);
+        check(add.getAnnotatedReturnType().getType() == int.class,
+                "annotated return type for primitive");
+        check(add.getAnnotatedParameterTypes().length == 2, "annotated parameters length");
+        check(add.getAnnotatedParameterTypes()[0].getType() == int.class,
+                "annotated parameter type");
+        check(add.getAnnotatedExceptionTypes().length == 0, "no declared exceptions");
+        check(add.getAnnotatedReceiverType() != null,
+                "instance method has a receiver type");
+        Method stat = Sample.class.getMethod("stat", int.class);
+        check(stat.getAnnotatedReceiverType() == null,
+                "static method receiver type is null");
+        Method thr = Sample.class.getMethod("thrower");
+        check(thr.getAnnotatedExceptionTypes().length == 1
+                && thr.getAnnotatedExceptionTypes()[0].getType() == IOException.class,
+                "annotated exception type");
+    }
+
     public static void main(String[] args) throws Exception {
         testMetadata();
         testGenericSignature();
@@ -338,6 +630,18 @@ public class MethodTest {
         testAnnotations();
         testEqualsHashCodeToString();
         testDiscovery();
+        testInvokeExactValues();
+        testInvokeVarargsExactArity();
+        testInvokeReceiverAndNullArg();
+        testInvokeExceptionIdentity();
+        testAccessMessage();
+        testOverloads();
+        testGenericReturnTypeDeep();
+        testInterfaceInvoke();
+        testBridgeDispatch();
+        testDefaultValueKinds();
+        testStringFormsAndHashFormula();
+        testAnnotatedTypeFamily();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

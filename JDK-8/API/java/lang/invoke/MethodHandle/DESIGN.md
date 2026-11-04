@@ -42,3 +42,27 @@
 - `invokeWithArguments((Object[])null)` → WMTE；null List → NPE。
 - asCollector 要求数组作为尾参；asSpreader 要求 arrayLength<=paramCount，负长→IAE。
 - findStatic 于 varargs 方法默认得 varargs collector。
+
+## 深化批次（2026-11-05）
+
+新增 12 个 test 方法（52→107 断言）：
+
+| 测试点 | 方法 |
+|---|---|
+| (Object)invokeExact 于 (String)String 句柄 → WMTE（消息含 `but found`；asType 适配后 OK）；(long) 于 int 返回 → WMTE | testInvokeExactReturnContract |
+| asType 矩阵：返回拓宽 int→long OK；参数拓宽 int→long → WMTE `cannot convert MethodHandle(int)int to (long)int`；返回收窄/元数不符 → WMTE；asType(原类型) 返回同一句柄 | testAsTypeConversions |
+| invoke 调用点拓宽（int 实参喂 long 形参）、byte/short 拓宽 | testInvokeCallSiteWidening |
+| invokeWithArguments：散参==List 等价；参数过多 → WMTE 精确消息；String 喂 int → CCE `cannot be cast to`；null 原生实参 → NPE | testInvokeWithArgumentsTypes |
+| filterArguments 双过滤器/单位置/类型变换过滤器（(String,String)int）；过滤器过多 → IAE `too many filters` | testFilterArgumentsMulti |
+| foldArguments 组合器结果作首参：concat(tag(s),s)=="a!a"；类型不符 → IAE `target and combiner types must match` | testFoldArgumentsValue |
+| insertArguments 绑定值精确/多值绑定/越界 IAE/值类型错 CCE；dropArguments 前后丢参透传精确 | testInsertDropArgumentsValue |
+| permuteArguments 轮转 (a,b,c)→"c|a|b"、索引重复 "a|a|a"、数组长度/越界 IAE | testPermuteArgumentsValue |
+| guardWithTest 真假分支各走一次（计数器）、type==target type、非 boolean 谓词 → IAE `guard type is not a predicate` | testGuardWithTestBranches |
+| catchException 正常路径值/受检异常进 handler 值/类型不符原样直传（消息全等）/handler 不收异常 → IAE | testCatchExceptionPrecise |
+| bindTo 错类型 → CCE `Cannot cast java.lang.String`；bindTo(null) 构造 OK、invoke 时 NPE；toString 全等 `MethodHandle(Calc,int,int)int`（**不含方法名**，任务书预期修正） | testBindToAndToString |
+| asCollector+asSpreader 往复原类型同值；负长 → IAE `array length is not legal: -1` | testCollectorSpreaderRoundTrip |
+
+### 易错规范细节（本批实测锁定）
+- **asType 不允许参数拓宽**（仅返回可拓宽、参数可装箱/转型）；invoke 调用点转换比 asType 宽（byte→int、int→long 均可）——两者契约差异已锁定。
+- invokeWithArguments 参数不可转换抛 **CCE**（转换路径经 Number），非 WMTE；参数过多才是 WMTE。
+- `int r = mh.invokeExact(...)` 在 try 块中 javac 报 Object→int，须用显式 `(int)` 强转写法。

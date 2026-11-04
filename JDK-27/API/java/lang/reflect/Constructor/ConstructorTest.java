@@ -9,6 +9,13 @@
  *          getParameterAnnotations/getAnnotatedReturnType/getAnnotatedReceiverType,
  *          equals/hashCode/toString/toGenericString, getConstructors vs
  *          getDeclaredConstructors, and NoSuchMethodException/NPE discovery paths.
+ *          Deepen batch: exact-type newInstance round-trip, "argument type mismatch"
+ *          / "wrong number of arguments" message fragments, the exact-arity varargs
+ *          contract (spread form rejected), enum reflective creation denied with
+ *          "Cannot reflectively create enum objects", generic-throwing constructor
+ *          (TypeVariable exception), receiver-type evidence per class kind,
+ *          documented hashCode formula, NSME "<init>" message and interface
+ *          constructor absence.
  * @run main ConstructorTest
  */
 
@@ -46,6 +53,28 @@ public class ConstructorTest {
                 + " but nothing was thrown");
     }
 
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+                               String fragment, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            if (!expected.isInstance(t)) {
+                throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                        + " but got " + t.getClass().getName(), t);
+            }
+            String m = t.getMessage();
+            if (m == null || !m.contains(fragment)) {
+                throw new AssertionError(msg + ": message <" + m
+                        + "> does not contain <" + fragment + ">");
+            }
+            passed++;
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.CONSTRUCTOR)
     @interface CAnn { String value(); }
@@ -75,6 +104,25 @@ public class ConstructorTest {
     }
 
     interface Iface { }
+
+    // ---- fixtures added by the deepen batch ----
+
+    static class Pair {
+        public final int a;
+        public final String b;
+        public Pair(int a, String b) { this.a = a; this.b = b; }
+    }
+
+    static class GenCtor {
+        public <E extends Exception> GenCtor(E e) throws E { }
+    }
+
+    enum Color { RED, GREEN }
+
+    static class VaTarget {
+        public int sum;
+        public VaTarget(int... vs) { for (int v : vs) sum += v; }
+    }
 
     static void testMetadata() throws Exception {
         Constructor<Sample> c = Sample.class.getConstructor(int.class);
@@ -244,6 +292,113 @@ public class ConstructorTest {
                 "getDeclaredConstructor null element NSME");
     }
 
+    // ---- tests added by the deepen batch ----
+
+    static void testNewInstanceExactType() throws Exception {
+        Constructor<Pair> pc = Pair.class.getConstructor(int.class, String.class);
+        Pair p = pc.newInstance(7, "seven");
+        check(p.getClass() == Pair.class, "exact runtime type");
+        check(p.a == 7 && "seven".equals(p.b), "field values round-trip");
+        check(pc.newInstance(0, "").b.isEmpty(), "empty string round-trip");
+    }
+
+    static void testNewInstanceMismatchMessages() throws Exception {
+        Constructor<Sample> ci = Sample.class.getConstructor(int.class);
+        checkThrowsMsg(IllegalArgumentException.class, () -> ci.newInstance("x"),
+                "argument type mismatch", "String for int parameter");
+        checkThrows(IllegalArgumentException.class, () -> ci.newInstance(new Object[]{null}),
+                "null for int parameter IAE");
+        // Constructor.newInstance performs no varargs packing either: the argument
+        // count must equal the declared parameter count.
+        Constructor<VaTarget> vc = VaTarget.class.getConstructor(int[].class);
+        check(vc.isVarArgs(), "VaTarget varargs constructor");
+        checkThrowsMsg(IllegalArgumentException.class, () -> vc.newInstance(1, 2),
+                "wrong number of arguments", "varargs spread form rejected for ctor");
+        VaTarget r1 = vc.newInstance(new Object[]{new int[]{1, 2, 3}});
+        VaTarget r2 = vc.newInstance((Object) new int[]{1, 2, 3});
+        check(r1.sum == 6 && r2.sum == 6, "two array forms equal sum");
+        check(vc.newInstance(new Object[]{new int[0]}).sum == 0, "empty varargs array");
+    }
+
+    static void testEnumNewInstance() throws Exception {
+        Constructor<?>[] ctors = Color.class.getDeclaredConstructors();
+        check(ctors.length == 1, "enum has a single declared ctor");
+        Constructor<?> ec = ctors[0];
+        check(ec.getParameterTypes().length == 2
+                && ec.getParameterTypes()[0] == String.class
+                && ec.getParameterTypes()[1] == int.class,
+                "enum ctor erasure is (String,int)");
+        check(!ec.isSynthetic(), "enum ctor not synthetic");
+        ec.setAccessible(true);
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> ec.newInstance("X", Integer.valueOf(0)),
+                "Cannot reflectively create enum objects",
+                "reflective enum creation denied");
+    }
+
+    static void testGenericExceptionConstructor() throws Exception {
+        Constructor<GenCtor> gc = GenCtor.class.getConstructor(Exception.class);
+        TypeVariable<?>[] tvs = gc.getTypeParameters();
+        check(tvs.length == 1 && "E".equals(tvs[0].getName()), "ctor type parameter E");
+        check(tvs[0].getBounds()[0] == Exception.class, "E bound Exception");
+        check(gc.getExceptionTypes().length == 1
+                && gc.getExceptionTypes()[0] == Exception.class,
+                "erased exception type Exception");
+        check(gc.getGenericExceptionTypes()[0] instanceof TypeVariable,
+                "generic exception type is a TypeVariable");
+        check(gc.toGenericString().contains("GenCtor"),
+                "toGenericString contains class name");
+    }
+
+    static void testReceiverTypeByKind() throws Exception {
+        Constructor<?> ic = InnerCtor.class.getConstructor(ConstructorTest.class,
+                long.class, String.class);
+        java.lang.reflect.AnnotatedType r = ic.getAnnotatedReceiverType();
+        check(r != null && r.getType() == ConstructorTest.class,
+                "inner ctor receiver is the enclosing class");
+        Constructor<Sample> sc = Sample.class.getConstructor(int.class);
+        // JDK-9+ correctly returns null for a static-nested ctor; JDK-8 returned a
+        // degenerate non-null value — locked version difference.
+        check(sc.getAnnotatedReceiverType() == null,
+                "JDK-9+ static-nested ctor receiver null");
+    }
+
+    static void testInterfaceConstructorAbsence() throws Exception {
+        check(Iface.class.getConstructors().length == 0, "interface public ctors none");
+        check(Iface.class.getDeclaredConstructors().length == 0,
+                "interface declared ctors none");
+        checkThrows(NoSuchMethodException.class, () -> Iface.class.getDeclaredConstructor(),
+                "interface ctor lookup NSME");
+    }
+
+    static void testHashCodeFormulaAndLookup() throws Exception {
+        Constructor<Sample> a = Sample.class.getConstructor(int.class);
+        Constructor<Sample> b = Sample.class.getDeclaredConstructor(int.class);
+        check(a.equals(b), "getConstructor equals getDeclaredConstructor member");
+        check(a.hashCode() == b.hashCode(), "same hashCode");
+        check(a.hashCode() == Sample.class.getName().hashCode(),
+                "documented hashCode == declaring class name hash");
+        try {
+            Sample.class.getConstructor(float.class);
+            throw new AssertionError("expected NoSuchMethodException");
+        } catch (NoSuchMethodException e) {
+            passed++;
+            check(e.getMessage().contains("<init>"), "NSME message uses <init>");
+            check(e.getMessage().contains("(float)"), "NSME message shows parameter types");
+        }
+    }
+
+    static void testToStringForms() throws Exception {
+        Constructor<Pair> pc = Pair.class.getConstructor(int.class, String.class);
+        check(pc.toString().contains("public "), "toString visibility");
+        check(pc.toString().contains("Pair(int,java.lang.String)"), "toString signature");
+        check(pc.toGenericString().contains("Pair(int,java.lang.String)"),
+                "toGenericString signature");
+        Constructor<Sample> g = Sample.class.getConstructor(Object.class, boolean.class);
+        check(g.toGenericString().contains("<T>"),
+                "generic ctor toGenericString shows T");
+    }
+
     public static void main(String[] args) throws Exception {
         testMetadata();
         testGenericConstructor();
@@ -255,6 +410,14 @@ public class ConstructorTest {
         testAnnotations();
         testEqualsHashCodeToString();
         testDiscovery();
+        testNewInstanceExactType();
+        testNewInstanceMismatchMessages();
+        testEnumNewInstance();
+        testGenericExceptionConstructor();
+        testReceiverTypeByKind();
+        testInterfaceConstructorAbsence();
+        testHashCodeFormulaAndLookup();
+        testToStringForms();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

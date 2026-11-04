@@ -25,3 +25,10 @@
 4. 构造器：自身零类型参数、参数引用类级 T。
 5. 注解界镜像：`getAnnotatedBounds` 长度与类型一致、无注解时空；TV 是 AnnotatedElement 的注解查询。
 白盒保留原有多界断言 + 接口结构。产出：`TypeVariableTest.java`（36 断言通过）。
+
+## 深化批次（2026-11-05）
+新增三方法（37→62 断言）：
+1. `testParameterizedBound`：`U extends List<String>` 界本身是 PT（raw List + arg String 递归）、annotatedBounds[0].getType() 与 getBounds() 同一对象——补参数化界维度（原版界全是 Class）。
+2. `testAnnotatedBoundsContracts`：自造 RUNTIME `@Mark`（TYPE_USE+TYPE_PARAMETER）实测——`T extends @Mark Number` 界注解运行时可见；`<@Mark T>` 参数位注解**不**落在界上；双界 `@Mark Number & @Mark CharSequence` 各自独立携带注解。
+3. `testConstructorAndSameNameVariables`：泛型构造器 `<E extends CharSequence>` 声明者==那个 Constructor、普通构造器空数组；类 TV `T` 与同名方法 TV `T` 不等且对称。
+

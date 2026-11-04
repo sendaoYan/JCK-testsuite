@@ -21,3 +21,13 @@
 4. 非受检 throw/catch。
 5. 层次：直接子类 RuntimeException；构造即捕获栈、`fillInStackTrace` 返回自身、程序化 `setStackTrace` 生效（固定行号断言）。
 白盒保留原有结构断言。产出：`MalformedParameterizedTypeExceptionTest.java`（16 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增方法（断言 17 → 28）：
+
+| 测试点 | 方法 |
+|---|---|
+| Serializable 普查、构造器数 2（JDK-8 为 1 的版本差异）、bare toString 精确 | testSerializableCensus |
+| 序列化 round-trip：消息/cause/suppressed 保真 | testSerializationRoundTrip |
+| printStackTrace 渲染类型/消息/cause | testStackPrinting |

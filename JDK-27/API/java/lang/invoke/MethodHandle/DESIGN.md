@@ -46,3 +46,23 @@
 ## JDK-27 差异（已锁入断言）
 
 - 新增 `withVarargs(boolean)`：可清除/恢复 varargs collector（testWithVarargs）。
+
+## 深化批次（2026-11-05）
+
+与 JDK-8 侧拉平 + JDK-9+ 组合子（55→119 断言）：
+- 同步新增 testInvokeExactReturnContract / testAsTypeConversions / testInvokeCallSiteWidening /
+  testInvokeWithArgumentsTypes / testFilterArgumentsMulti / testFoldArgumentsValue /
+  testInsertDropArgumentsValue / testPermuteArgumentsValue / testGuardWithTestBranches /
+  testCatchExceptionPrecise / testBindToAndToString / testCollectorSpreaderRoundTrip
+  （内容与 8 侧一致，WMTE 消息子串 `but found`、`cannot convert ...` 两侧相同）。
+- **testTryFinallyCombinator**（27 独有 API）：tryFinally 正常/异常两条路径各触发一次 cleanup
+  （计数==2）、异常原样传播、cleanup 返回类型不符 → IAE `target and return types must match: void != int`。
+- **testLoopCombinators**（27 独有 API）：whileLoop(constant(0), i<5, i+1) 类型 ()int 结果 5；
+  countedLoop(5 次, 累加器 acc+i+1) 结果 15（1..5 求和）。
+
+### 版本差异（本批实测）
+- loop/whileLoop/countedLoop/tryFinally 为 JDK-9+ API，**JDK-8 无**（任务书称"双侧 9+ 都在"，实测 8 侧
+  javap 确认不存在，只在 27 断言）。
+- `(Object)invokeExact` WMTE 消息：8 `expected (Calc,String)String but found ...`；27 `handle's method
+  type (Calc,String)String but found ...`——公共子串 `but found` 已两侧断言。
+- 其余组合子值语义与负例消息两侧一致。

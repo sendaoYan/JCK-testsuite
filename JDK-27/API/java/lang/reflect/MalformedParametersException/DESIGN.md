@@ -23,3 +23,13 @@
 5. 直接继承 RuntimeException（层次）。
 6. `fillInStackTrace` 返回自身且栈已捕获。
 白盒保留原有两构造器断言。产出：`MalformedParametersExceptionTest.java`（19 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增方法（断言 20 → 32）：
+
+| 测试点 | 方法 |
+|---|---|
+| Serializable 普查、bare/带消息 toString 两种精确形态 | testSerializableCensus |
+| 序列化 round-trip：消息/cause/suppressed 保真 | testSerializationRoundTrip |
+| printStackTrace 渲染 | testStackPrinting |

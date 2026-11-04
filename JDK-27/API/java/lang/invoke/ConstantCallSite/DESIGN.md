@@ -17,3 +17,6 @@ cs.setTarget(other); // UnsupportedOperationException
 白盒：final、超类 CallSite、公有构造 2 个（target/target+MethodType）。
 黑盒：type 从 target 推导；setTarget→UOE 且 target 不变；引用类型站点创建与调用正确；dynamicInvoker 与 getTarget() 结果一致。
 对应 `ConstantCallSiteTest.java` 的 `testBlackBox()`。
+## 深化批次（2026-11-05）
+
+新增：permanent-target 恒等（getTarget/dynamicInvoker 同对象）、setTarget 对任意参数 UOE 无消息、null 构造 NPE 消息、protected (MethodType,MethodHandle) 钩子构造全套（钩子一次/接收者恒等/错型 WMTE/空返回 NPE/非句柄 CCE/元数 WMTE/null 钩子 NPE）。（18→38 断言）

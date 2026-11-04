@@ -1,6 +1,8 @@
 /*
  * @test
  * @summary java.lang.reflect.AccessFlag.Location conformance: white-box structure + black-box behavior.
+ *          Deepened: exact flagsMask literals, pre-module RELEASE_8 view, enum plumbing,
+ *          per-location unmatched-bit rejection.
  * @run main LocationTest
  */
 import java.lang.reflect.AccessFlag;
@@ -106,9 +108,91 @@ public class LocationTest {
               "nested in AccessFlag");
     }
 
+    // ---- Part 3: contract deepening (2026-11-05); every literal probed on JDK 27.0.1 ----
+    static void testFlagsMaskLiterals() {
+        check(AccessFlag.Location.CLASS.flagsMask() == 0x0000f631, "CLASS 0xf631");
+        check(AccessFlag.Location.FIELD.flagsMask() == 0x000050df, "FIELD 0x50df");
+        check(AccessFlag.Location.METHOD.flagsMask() == 0x000015ff, "METHOD 0x15ff");
+        check(AccessFlag.Location.INNER_CLASS.flagsMask() == 0x0000761f, "INNER_CLASS 0x761f");
+        check(AccessFlag.Location.METHOD_PARAMETER.flagsMask() == 0x00009010, "METHOD_PARAMETER 0x9010");
+        check(AccessFlag.Location.MODULE.flagsMask() == 0x00009020, "MODULE 0x9020");
+        check(AccessFlag.Location.MODULE_REQUIRES.flagsMask() == 0x00009060, "MODULE_REQUIRES 0x9060");
+        check(AccessFlag.Location.MODULE_EXPORTS.flagsMask() == 0x00009000, "MODULE_EXPORTS 0x9000");
+        check(AccessFlag.Location.MODULE_OPENS.flagsMask() == 0x00009000, "MODULE_OPENS 0x9000");
+        // RELEASE_8 view: CLASS drops MODULE (0x7631); METHOD differs only by STRICT (0x1dff)
+        check(AccessFlag.Location.CLASS.flagsMask(ClassFileFormatVersion.RELEASE_8) == 0x00007631,
+              "CLASS at RELEASE_8 = 0x7631 (no MODULE)");
+        check(AccessFlag.Location.INNER_CLASS.flagsMask(ClassFileFormatVersion.RELEASE_8)
+              == AccessFlag.Location.INNER_CLASS.flagsMask(), "INNER_CLASS stable at RELEASE_8");
+        check(AccessFlag.Location.FIELD.flagsMask(ClassFileFormatVersion.RELEASE_8)
+              == AccessFlag.Location.FIELD.flagsMask(), "FIELD stable at RELEASE_8");
+        check(AccessFlag.Location.METHOD_PARAMETER.flagsMask(ClassFileFormatVersion.RELEASE_8)
+              == 0x00009010, "METHOD_PARAMETER stable at RELEASE_8");
+    }
+
+    static void testModuleLocationsPreJava9() {
+        // the four module-info locations carry no flags at all before the module system
+        AccessFlag.Location[] moduleLocs = {AccessFlag.Location.MODULE,
+              AccessFlag.Location.MODULE_REQUIRES, AccessFlag.Location.MODULE_EXPORTS,
+              AccessFlag.Location.MODULE_OPENS};
+        for (AccessFlag.Location loc : moduleLocs) {
+            check(loc.flags(ClassFileFormatVersion.RELEASE_8).isEmpty(),
+                  "no flags at RELEASE_8: " + loc);
+            check(loc.flagsMask(ClassFileFormatVersion.RELEASE_8) == 0,
+                  "flagsMask 0 at RELEASE_8: " + loc);
+            check(AccessFlag.maskToAccessFlags(0, loc, ClassFileFormatVersion.RELEASE_8).isEmpty(),
+                  "zero mask decodes to empty pre-modules: " + loc);
+            check(!loc.flags().isEmpty(), "populated again at latest: " + loc);
+        }
+    }
+
+    static void testEnumPlumbing() {
+        AccessFlag.Location[] all = AccessFlag.Location.values();
+        check(EnumSet.allOf(AccessFlag.Location.class).size() == all.length,
+              "EnumSet.allOf agrees with values");
+        for (AccessFlag.Location loc : all) {
+            check(AccessFlag.Location.valueOf(loc.name()) == loc, "valueOf round trip " + loc);
+            check(loc.toString().equals(loc.name()), "toString == name " + loc);
+            check(loc.getDeclaringClass() == AccessFlag.Location.class, "declaring class " + loc);
+            check(!loc.flags().isEmpty(), "non-empty flag set " + loc);
+            check(loc.flagsMask() != 0, "non-zero mask " + loc);
+        }
+        check(all[0] == AccessFlag.Location.CLASS, "first constant CLASS");
+        check(all[all.length - 1] == AccessFlag.Location.MODULE_OPENS, "last constant MODULE_OPENS");
+        check(AccessFlag.Location.CLASS.ordinal() == 0
+              && AccessFlag.Location.MODULE_OPENS.ordinal() == 8, "ordinals 0 and 8");
+    }
+
+    static void expectUnmatched(int mask, AccessFlag.Location loc) {
+        try {
+            AccessFlag.maskToAccessFlags(mask, loc);
+            check(false, "mask 0x" + Integer.toHexString(mask) + " must be unmatched at " + loc);
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("Unmatched bit"),
+                  "unmatched-bit IAE at " + loc);
+        }
+    }
+
+    static void testUnmatchedBitPerLocation() {
+        // one provably-absent bit for each of the 9 locations
+        expectUnmatched(0x0008, AccessFlag.Location.CLASS);            // STATIC
+        expectUnmatched(0x0020, AccessFlag.Location.FIELD);            // no 0x20 flag at FIELD
+        expectUnmatched(0x4000, AccessFlag.Location.METHOD);           // ENUM
+        expectUnmatched(0x0020, AccessFlag.Location.INNER_CLASS);      // SUPER
+        expectUnmatched(0x0001, AccessFlag.Location.METHOD_PARAMETER); // PUBLIC
+        expectUnmatched(0x0001, AccessFlag.Location.MODULE);
+        expectUnmatched(0x0001, AccessFlag.Location.MODULE_REQUIRES);
+        expectUnmatched(0x0020, AccessFlag.Location.MODULE_EXPORTS);   // TRANSITIVE only on REQUIRES
+        expectUnmatched(0x0020, AccessFlag.Location.MODULE_OPENS);
+    }
+
     public static void main(String[] args) {
         testWhiteBox();
         testBlackBox();
+        testFlagsMaskLiterals();
+        testModuleLocationsPreJava9();
+        testEnumPlumbing();
+        testUnmatchedBitPerLocation();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

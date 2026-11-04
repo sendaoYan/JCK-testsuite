@@ -21,3 +21,16 @@
 4. 构造器面：裸构造 null 消息、消息构造往返、toString、无 cause。
 5. Error 层语义：可按 `java.lang.Error` 捕获。
 白盒保留原有层次断言。产出：`GenericSignatureFormatErrorTest.java`（16 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增方法（断言 20 → 38）：
+
+| 测试点 | 方法 |
+|---|---|
+| LinkageError 层普查：!RuntimeException/!Exception 静态断言、Error/LinkageError 可捕获、RuntimeException catch 不命中 | testLinkageCensus |
+| 裸/带消息 toString 精确、initCause 允许（cause 未设）、suppressed | testConstructorSurfaceExact |
+| 序列化 round-trip：消息/cause 保真 | testSerializationRoundTrip |
+| 坏签名类上非泛型访问器（superclass/fields/methods/kind）保持健康 | testHealthyAccessorsOnMalformedClass |
+
+JDK-8 侧同批测试用 DataOutputStream 手写 v52 字节码触发，与本侧 classfile API 注入互为印证；两侧消息片段一致（"Signature Parse error"）。

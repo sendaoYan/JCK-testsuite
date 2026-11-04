@@ -1,6 +1,13 @@
 /*
  * @test
- * @summary java.lang.invoke.MethodHandles.Lookup conformance: white-box + black-box behavior.
+ * @summary java.lang.invoke.MethodHandles.Lookup conformance: white-box + black-box behavior,
+ *          deepened with exact access-denial messages ("no such field", "expected a
+ *          non-static field", "unexpected set of a final field", "static final field
+ *          has no write access", "member is private"), nestmate private access
+ *          (findVirtual/findGetter/findConstructor on private members), privateLookupIn
+ *          semantics (null NPE, cross-module IAE "module java.base", full privilege
+ *          transfer, previousLookupClass), dropLookupMode exact mode arithmetic
+ *          (17/25/15), and ensureInitialized/accessClass/findClass contracts.
  * @run main LookupTest
  */
 
@@ -173,9 +180,209 @@ public class LookupTest {
 
     private static int secret() { return 1; }
 
+    // ---- Part 3: deepened contracts (access messages, nests, privateLookupIn) ----
+    public static class NestTarget {
+        private int privField = 21;
+        private NestTarget(int x) { privField = x; }
+        private int privMethod() { return 87; }
+        public static int pubStat = 4;
+        public static final int PUB_CONST = 8;
+        public final int pubFinal = 6;
+        public NestTarget() { }
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+            String frag, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) {
+                if (t.getMessage() != null && t.getMessage().contains(frag)) {
+                    passed++;
+                    return;
+                }
+                throw new AssertionError(msg + ": expected message fragment \"" + frag
+                        + "\" but got \"" + t.getMessage() + "\"");
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void testAccessMessages() throws Throwable {
+        Lookup lookup = MethodHandles.lookup();
+        // wrong field type is reported as NoSuchFieldException naming the sought signature
+        checkThrowsMsg(NoSuchFieldException.class,
+                () -> lookup.findGetter(NestTarget.class, "pubStat", long.class),
+                "no such field", "findGetter wrong type NSFE message");
+        // static field through the instance accessor -> IAE
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> lookup.findGetter(NestTarget.class, "pubStat", int.class),
+                "expected a non-static field", "findGetter static field IAE message");
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> lookup.findSetter(NestTarget.class, "pubStat", int.class),
+                "expected a non-static field", "findSetter static field IAE message");
+        // instance field through the static accessor -> IAE
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> lookup.findStaticGetter(NestTarget.class, "pubFinal", int.class),
+                "expected a static field", "findStaticGetter instance field IAE message");
+        // final field setters are refused
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> lookup.findSetter(NestTarget.class, "pubFinal", int.class),
+                "unexpected set of a final field", "findSetter final IAE message");
+    }
+
+    static void testUnreflectAccessMessages() throws Throwable {
+        Lookup lookup = MethodHandles.lookup();
+        java.lang.reflect.Method pm = NestTarget.class.getDeclaredMethod("privMethod");
+        // nestmates: our own lookup can unreflect a private member directly
+        check((int) lookup.unreflect(pm).invoke(new NestTarget()) == 87,
+                "unreflect private nestmate OK");
+        // publicLookup cannot
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> MethodHandles.publicLookup().unreflect(pm),
+                "member is private", "publicLookup unreflect private IAE message");
+        // downgraded lookup cannot either
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> lookup.in(String.class).unreflect(pm),
+                "member is private", "in(String) unreflect private IAE message");
+        // static final field has no write access through unreflectSetter
+        java.lang.reflect.Field f = NestTarget.class.getField("PUB_CONST");
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> lookup.unreflectSetter(f),
+                "static final field has no write access",
+                "unreflectSetter static final IAE message (JDK-9+ wording)");
+        // instance final field
+        java.lang.reflect.Field fin = NestTarget.class.getField("pubFinal");
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> lookup.unreflectSetter(fin),
+                "unexpected set of a final field", "unreflectSetter final IAE message");
+        // reading the static final through a getter is fine
+        check((int) lookup.unreflectGetter(f).invoke() == 8,
+                "unreflectGetter static final readable");
+    }
+
+    static void testNestPrivateAccess() throws Throwable {
+        Lookup lookup = MethodHandles.lookup();
+        // nests (JDK-11+): private members of our own nested classes resolve and run
+        MethodHandle pm = lookup.findVirtual(NestTarget.class, "privMethod",
+                MethodType.methodType(int.class));
+        check((int) pm.invokeExact(new NestTarget()) == 87,
+                "findVirtual private nestmate (JDK-11+ nests)");
+        MethodHandle pf = lookup.findGetter(NestTarget.class, "privField", int.class);
+        check((int) pf.invoke(new NestTarget()) == 21, "findGetter private nestmate");
+        // private constructor is reachable too, and initializes its field
+        MethodHandle pc = lookup.findConstructor(NestTarget.class,
+                MethodType.methodType(void.class, int.class));
+        check((int) lookup.findGetter(NestTarget.class, "privField", int.class)
+                .invoke((NestTarget) pc.invoke(77)) == 77,
+                "findConstructor private nestmate round-trip");
+    }
+
+    static void testPrivateLookupInDeep() throws Throwable {
+        Lookup lookup = MethodHandles.lookup();
+        // null target class -> NPE
+        try {
+            MethodHandles.privateLookupIn(null, lookup);
+            throw new AssertionError("expected NullPointerException");
+        } catch (NullPointerException e) {
+            passed++;
+        }
+        // a JDK-internal class is not open to our unnamed module -> IAE
+        checkThrowsMsg(IllegalAccessException.class,
+                () -> MethodHandles.privateLookupIn(String.class, lookup),
+                "module java.base", "privateLookupIn cross-module IAE message");
+        // own nested public class: full privilege transfer
+        Lookup into = MethodHandles.privateLookupIn(Holder.class, lookup);
+        check(into.lookupClass() == Holder.class, "privateLookupIn lookupClass");
+        check(into.hasPrivateAccess() && into.hasFullPrivilegeAccess(),
+                "privateLookupIn full privileges");
+        check(into.previousLookupClass() == null,
+                "same-module privateLookupIn keeps previousLookupClass null");
+        check(into.toString().contains("Holder"), "privateLookupIn toString names target");
+        // the transferred lookup can now read a private static field of the previous class
+        check((int) into.findStaticGetter(LookupTest.class, "hiddenMark", int.class)
+                .invoke() == 31337,
+                "privateLookupIn reads private of previous class");
+        // null lookup -> NPE
+        try {
+            MethodHandles.privateLookupIn(Holder.class, null);
+            throw new AssertionError("expected NullPointerException");
+        } catch (NullPointerException e) {
+            passed++;
+        }
+    }
+
+    static void testDropLookupModeExact() throws IllegalAccessException {
+        Lookup lookup = MethodHandles.lookup();
+        int full = lookup.lookupModes(); // PUBLIC|PRIVATE|PROTECTED|PACKAGE|MODULE|ORIGINAL == 95
+        check(full == (Lookup.PUBLIC | Lookup.PRIVATE | Lookup.PROTECTED
+                | Lookup.PACKAGE | Lookup.MODULE | Lookup.ORIGINAL),
+                "full lookup modes == 95: " + full);
+        // dropping PACKAGE also drops PRIVATE/PROTECTED/ORIGINAL -> PUBLIC|MODULE == 17
+        check(lookup.dropLookupMode(Lookup.PACKAGE).lookupModes()
+                == (Lookup.PUBLIC | Lookup.MODULE), "dropLookupMode(PACKAGE) == 17");
+        // dropping PRIVATE also drops PROTECTED/ORIGINAL -> PUBLIC|PACKAGE|MODULE == 25
+        check(lookup.dropLookupMode(Lookup.PRIVATE).lookupModes()
+                == (Lookup.PUBLIC | Lookup.PACKAGE | Lookup.MODULE),
+                "dropLookupMode(PRIVATE) == 25");
+        // dropping MODULE collapses to PUBLIC only (module access underpins the rest)
+        check(lookup.dropLookupMode(Lookup.MODULE).lookupModes() == Lookup.PUBLIC,
+                "dropLookupMode(MODULE) == PUBLIC only");
+        // dropping PUBLIC removes every mode
+        check(lookup.dropLookupMode(Lookup.PUBLIC).lookupModes() == 0,
+                "dropLookupMode(PUBLIC) == 0");
+        // previousLookupClass: null on a fresh lookup, original class after in()
+        check(lookup.previousLookupClass() == null, "fresh lookup previousLookupClass null");
+        check(lookup.in(String.class).previousLookupClass() == LookupTest.class,
+                "in() records previous lookup class");
+        // same-module privateLookupIn leaves previousLookupClass null (no module hop)
+        check(MethodHandles.privateLookupIn(Holder.class, lookup).previousLookupClass()
+                == null, "same-module privateLookupIn previousLookupClass null");
+    }
+
+    static void testEnsureInitializedDeep() throws Throwable {
+        Lookup lookup = MethodHandles.lookup();
+        check(lookup.ensureInitialized(String.class) == String.class,
+                "ensureInitialized returns the class");
+        check(lookup.ensureInitialized(LookupTest.class) == LookupTest.class,
+                "ensureInitialized own class");
+        check(lookup.accessClass(String.class) == String.class, "accessClass public class");
+        check(lookup.findClass("java.lang.invoke.MethodHandles")
+                == MethodHandles.class, "findClass resolves FQCN");
+        checkThrows(ClassNotFoundException.class,
+                () -> lookup.findClass("no.such.Cls"), "findClass missing CNFE");
+    }
+
+    private static int hiddenMark = 31337;
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testAccessMessages();
+        testUnreflectAccessMessages();
+        testNestPrivateAccess();
+        testPrivateLookupInDeep();
+        testDropLookupModeExact();
+        testEnsureInitializedDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

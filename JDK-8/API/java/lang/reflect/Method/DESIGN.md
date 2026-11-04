@@ -43,3 +43,27 @@
 - bridge 方法 `isBridge()` 且 `isSynthetic()`，参数/返回为擦除后 Object。
 - `InvocationTargetException.getTargetException() == getCause()` 恒等。
 - 实例方法 `invoke(null,..)` → NPE；错参数类型/数量 → IAE。
+
+## 深化批次（2026-11-05）
+
+新增 12 个 test 方法（81 → 153 断言），核对 Oracle Java SE 8 javadoc `Method.invoke` 全文后锁定的契约：
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | varargs 精确元数契约：散参形式被拒（IAE "wrong number of arguments"）、数组两种传法结果相等、空数组 → 0 | testInvokeVarargsExactArity |
+| P0 | invoke 精确值（拼接/静态 null 接收者/接收者被忽略） | testInvokeExactValues |
+| P0 | 错接收者类型 IAE 消息含 "is not an instance of"；null 装箱给 int 参数 → IAE；Long 不缩窄 | testInvokeReceiverAndNullArg |
+| P0 | RuntimeException cause 同一对象（ITE.getCause()==getTargetException()==抛出的实例）；null varargs 数组透传 → ITE(NPE) | testInvokeExceptionIdentity |
+| P0 | 私有未 setAccessible → IllegalAccessException 消息含 "access a member of class" + 成员类名（JDK-8 无 nestmate，嵌套私有即触发） | testAccessMessage |
+| P0 | 重载三分辨（int/int,int/String）互不相等、参数个数区分 | testOverloads |
+| P0 | 嵌套泛型返回类型分解：Map<String,List<Integer>> raw/实参递归/typeName 全等；pick 的 TypeVariable 及 bound | testGenericReturnTypeDeep |
+| P0 | 接口 static/default/abstract 经 invoke 真调用 + 虚分派计数 | testInterfaceInvoke |
+| P0 | bridge 虚分派（invoke 到子类覆写）、每个覆写子类自带 bridge、bridge 与真实方法共享按名字 hash | testBridgeDispatch |
+| P1 | getDefaultValue 四种类型（Class/int[]/enum/String[]）内容精确 | testDefaultValueKinds |
+| P1 | hashCode 文档公式 `declaringClass.getName().hashCode() ^ name.hashCode()`；getMethod==getDeclaredMethod；NSME 消息含 "nonexistent()" | testStringFormsAndHashFormula |
+| P1 | AnnotatedType 家族：返回/参数/异常/接收者（实例非 null、静态 null） | testAnnotatedTypeFamily |
+
+### 锁定的 JDK-8 vs JDK-27 差异（本批实测）
+- `toGenericString()`：JDK-8 打印 `<T>`（省略类型参数界），JDK-9+ 打印 `<T extends java.lang.Number>`——两侧各自断言。
+- 异常消息：IAE 元数错误 JDK-8 为 `wrong number of arguments`，JDK-27 为 `wrong number of arguments: N expected: M`（断言公共子串）；错接收者 JDK-8 为 `object is not an instance of declaring class`，JDK-27 为 `object of type X is not an instance of Y`（断言公共子串）。
+- 嵌套类私有访问：JDK-8（无 nestmate）反射拒绝（本文件用它做负例）；JDK-27 允许，负例需非同巢类。

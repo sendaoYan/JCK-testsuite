@@ -44,3 +44,27 @@
 - `parameterList()` 不可变（add/set → UOE）；`parameterArray()` 返回副本。
 - `dropParameterTypes(1,3)` 合法（end==count）；start>end 或越界 → IndexOutOfBoundsException。
 - JDK-8 `fromMethodDescriptorString("(I",null)` → IAE（JDK-27 改为 StringIndexOutOfBoundsException）。
+
+## 深化批次（2026-11-05）
+
+新增 testIndexBoundaryMessages/testDescriptorValidationMessages/testWrapUnwrapMatrix/
+testEraseGenericDeep/testParameterListArrayIndependence/testDescriptorRoundTripMatrix/
+testToStringExactForms（93→160 断言）。
+
+| 新增测试点 | 断言 |
+|---|---|
+| insertParameterTypes(下标==arity) 合法（尾部追加）；越界/负数 → IIOBE 精确消息 `bad index: 4` / `bad index: -1` | testIndexBoundaryMessages |
+| dropParameterTypes from>to / end>arity → IIOBE `start=2 end=1` / `start=0 end=4`；零宽区间恒等 | 同上 |
+| `(I)` → IAE `bad return type`；`(V)I` → IAE `bad argument type`（与 27 公共子串） | testDescriptorValidationMessages |
+| `()Lno/such/Cls;` → TypeNotPresentException（消息含 `no.such.Cls`，双侧一致） | 同上 |
+| null loader 语义：解析 bootstrap 类 `Ljava/lang/String;` OK | 同上 |
+| wrap/unwrap 全表：8 个原生 × 参数+返回互换恒等；void→Void→void；unwrap 主动把包装类转回原生；非包装引用恒等 | testWrapUnwrapMatrix |
+| erase 只擦引用（含包装类），原生与 void 保持；generic 全部转 Object（含 void 返回）；erase/generic 幂等；wrap().erase()==generic() | testEraseGenericDeep |
+| parameterList.equals(Arrays.asList(parameterArray()))；两次 parameterArray 独立；改返回数组不影响 type | testParameterListArrayIndependence |
+| 描述符往返矩阵 `()V`/`(I)V`/`(IJLjava/lang/String;)Z`/`([[D)Ljava/lang/Object;`/`(Ljava/lang/String;[I)J`；genericMethodType(2,true) 描述符全等 `(Ljava/lang/Object;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;` | testDescriptorRoundTripMatrix |
+| toString 全等锁定：`(int,String)Object`、`(Object[])void`、`(byte,double[],String[][])char`、`()boolean` | testToStringExactForms |
+
+### 易错规范细节（本批实测锁定）
+- asType 拓宽仅限返回值；dropParameterTypes(2,1) 抛 IIOBE 而非 IAE（任务书存疑处实测纠正）。
+- `fromMethodDescriptorString("bad")` 消息两侧不同（8 `not a method descriptor: bad` / 27 `bad signature: bad: not a method type`），只断类不断词；`(I)`/`(V)I` 的 `bad return type`/`bad argument type` 两版一致可断子串。
+- `wrap()` 把 void 返回包装为 Void.class（非恒等），`unwrap()` 反向还原。

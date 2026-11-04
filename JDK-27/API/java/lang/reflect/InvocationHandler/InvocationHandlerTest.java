@@ -1,13 +1,20 @@
 /*
  * @test
  * @summary java.lang.reflect.InvocationHandler conformance: white-box structure + black-box behavior.
+ *          Deepened batch: full interface contract reflection (single abstract method,
+ *          static invokeDefault companion, parameter/return types, throws clause,
+ *          not annotated with the FunctionalInterface annotation on this JDK either), invokeDefault
+ *          varargs pass-through, declared-checked relay and undeclared-checked wrap,
+ *          handler exception identity, proxy facts visible inside invoke.
  * @run main InvocationHandlerTest
  */
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class InvocationHandlerTest {
@@ -164,9 +171,142 @@ public class InvocationHandlerTest {
         check("handled:greet".equals(g2.greet("y")), "still answers after reuse");
     }
 
+    // ===================== deepened batch (2026-11-05) =====================
+
+    static void testInterfaceContractDeep() throws Exception {
+        check(InvocationHandler.class.isInterface(), "is an interface");
+        check(InvocationHandler.class.getInterfaces().length == 0, "extends nothing");
+        // functional by shape, but the JDK does not attach the annotation itself
+        check(InvocationHandler.class.getAnnotation(FunctionalInterface.class) == null,
+              "not annotated @FunctionalInterface (shape-functional only)");
+        Method invoke = InvocationHandler.class.getMethod("invoke",
+              Object.class, Method.class, Object[].class);
+        check(Modifier.isPublic(invoke.getModifiers()) && Modifier.isAbstract(invoke.getModifiers()),
+              "invoke public abstract");
+        check(invoke.getReturnType() == Object.class, "invoke returns Object");
+        Class<?>[] pts = invoke.getParameterTypes();
+        check(pts.length == 3 && pts[0] == Object.class && pts[1] == Method.class
+              && pts[2] == Object[].class, "invoke parameter types exact");
+        Class<?>[] ets = invoke.getExceptionTypes();
+        check(ets.length == 1 && ets[0] == Throwable.class, "invoke declares throws Throwable");
+        // JDK-27 surface: exactly invoke (abstract) + invokeDefault (static varargs)
+        Method[] declared = InvocationHandler.class.getDeclaredMethods();
+        check(declared.length == 2, "exactly two declared members on this JDK");
+        Method invokeDefault = InvocationHandler.class.getMethod("invokeDefault",
+              Object.class, Method.class, Object[].class);
+        check(Modifier.isStatic(invokeDefault.getModifiers()), "invokeDefault static");
+        check(invokeDefault.isVarArgs(), "invokeDefault is varargs");
+        check(invokeDefault.getReturnType() == Object.class, "invokeDefault returns Object");
+        check(invokeDefault.getExceptionTypes().length == 1
+              && invokeDefault.getExceptionTypes()[0] == Throwable.class,
+              "invokeDefault declares throws Throwable");
+        int ownAbstract = 0;
+        int ownStatic = 0;
+        int ownDefault = 0;
+        for (Method m : InvocationHandler.class.getMethods()) {
+            if (m.getDeclaringClass() == InvocationHandler.class) {
+                if (Modifier.isStatic(m.getModifiers())) ownStatic++;
+                else if (m.isDefault()) ownDefault++;
+                else ownAbstract++;
+            }
+        }
+        check(ownAbstract == 1 && ownStatic == 1 && ownDefault == 0,
+              "member census: one abstract, one static, no defaults");
+    }
+
+    static void testInvokeDefaultVariants() throws Exception {
+        ClassLoader ld = InvocationHandlerTest.class.getClassLoader();
+        // varargs pass-through: single array form equals spread form
+        InvocationHandler aware = (proxy, method, args) -> {
+            if (method.isDefault()) return InvocationHandler.invokeDefault(proxy, method, args);
+            return "plain";
+        };
+        DefaultSvc svc = (DefaultSvc) Proxy.newProxyInstance(ld,
+              new Class<?>[]{DefaultSvc.class}, aware);
+        check("fallback-body".equals(svc.fallback()), "array form invokeDefault");
+        Method fb = DefaultSvc.class.getMethod("fallback");
+        // direct static call with spread (no) args and with explicit array are equal
+        check("fallback-body".equals(callDefault(svc, fb)), "spread (empty) form");
+        check("fallback-body".equals(callDefault(svc, fb, (Object[]) null)),
+              "explicit null args form");
+        check("fallback-body".equals(callDefault(svc, fb, new Object[0])),
+              "explicit empty array form");
+        // invokeDefault result obeys the declared return type; wrong-typed default body would CCE,
+        // here only the exact contract of a well-typed default is asserted
+        check(fb.getReturnType() == String.class, "default method return type");
+    }
+
+    /** invokeDefault declares throws Throwable; funnel it back into a checked Exception. */
+    static String callDefault(Object proxy, Method m, Object... args) throws Exception {
+        try {
+            return (String) InvocationHandler.invokeDefault(proxy, m, args);
+        } catch (Throwable t) {
+            if (t instanceof Error) throw (Error) t;
+            if (t instanceof Exception) throw (Exception) t;
+            throw new AssertionError("unexpected checked non-Exception throwable", t);
+        }
+    }
+
+    static void testExceptionRelayDeep() throws Exception {
+        ClassLoader ld = InvocationHandlerTest.class.getClassLoader();
+
+        // declared checked exception on the interface method: relayed raw, never wrapped
+        InvocationHandler declared = (p, m, a) -> { throw new java.io.IOException("decl-io"); };
+        Declared d = (Declared) Proxy.newProxyInstance(ld, new Class<?>[]{Declared.class}, declared);
+        try {
+            d.work();
+            check(false, "declared checked must relay raw");
+        } catch (java.io.IOException e) {
+            check("decl-io".equals(e.getMessage()), "declared checked raw message");
+        }
+
+        // undeclared checked exception: wrapped by the proxy machinery
+        InvocationHandler undeclared = (p, m, a) -> { throw new java.io.IOException("und-io"); };
+        Foo f = (Foo) Proxy.newProxyInstance(ld, new Class<?>[]{Foo.class}, undeclared);
+        try {
+            f.bar(1);
+            check(false, "undeclared checked must wrap");
+        } catch (java.lang.reflect.UndeclaredThrowableException e) {
+            check(e.getCause() instanceof java.io.IOException, "wrap cause type");
+            check("und-io".equals(e.getCause().getMessage()), "wrap cause message");
+        }
+
+        // runtime exception relays with identity preserved
+        final IllegalStateException boom = new IllegalStateException("id-relay");
+        InvocationHandler rte = (p, m, a) -> { throw boom; };
+        Foo rf = (Foo) Proxy.newProxyInstance(ld, new Class<?>[]{Foo.class}, rte);
+        try {
+            rf.bar(2);
+            check(false, "runtime must relay");
+        } catch (IllegalStateException e) {
+            check(e == boom, "runtime relayed by identity");
+        }
+    }
+
+    static void testProxyFactsDeep() throws Exception {
+        ClassLoader ld = InvocationHandlerTest.class.getClassLoader();
+        Recorder rec = new Recorder();
+        Foo f = (Foo) Proxy.newProxyInstance(ld, new Class<?>[]{Foo.class}, rec);
+        f.bar(11);
+        check(rec.lastMethod.getParameterCount() == 1, "method parameter count visible");
+        check(rec.lastMethod.getParameterTypes()[0] == int.class, "parameter type visible");
+        check(rec.lastMethod.getReturnType() == String.class, "return type visible");
+        check(Proxy.getInvocationHandler(rec.lastProxy) == rec, "handler recoverable from inside");
+        check(Proxy.isProxyClass(rec.lastProxy.getClass()), "proxy class flag from inside");
+        check(java.util.Arrays.toString(rec.lastArgs).equals("[11]"), "args snapshot exact");
+    }
+
+    interface Declared {
+        String work() throws java.io.IOException;
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testInterfaceContractDeep();
+        testInvokeDefaultVariants();
+        testExceptionRelayDeep();
+        testProxyFactsDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

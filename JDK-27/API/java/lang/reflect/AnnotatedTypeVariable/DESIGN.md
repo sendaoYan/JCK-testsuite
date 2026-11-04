@@ -24,4 +24,12 @@
 5. 无界变量：隐式 `[Object]` 且无注解。
 6. TYPE_USE 使用处注解查询面（空对照）。
 7. 声明处 TV 本身的注解查询空。
-白盒保留原方法参数断言 + 接口结构。产出：`AnnotatedTypeVariableTest.java`（29 断言通过）。
+白盒保留原方法参数断言 + 接口结构。
+
+Part 3 补充契约维度（`testAnnotatedUseSite/testConstructorPath/testMethodTypeParameters/testClassDoubleBound`，fixture：`AnnotatedUse<T>{@Use T tagged}`、`WithCtor<T extends Number>(T)`）：
+1. **使用点注解**：`@Use T tagged` 字段：@Use 在 ATV 自身（四查询）、界仍隐式 Object。
+2. 构造器路径：`WithCtor(T)` 参数 ATV、名 "T"、单界 Number、本体干净。
+3. 方法类型参数表：`m.getTypeParameters()` 名/界注解/界类型；`getGenericDeclaration()` 与 `getMethod` 拷贝用 **equals**（反射对象每次拷贝，9+ 不可用 ==，8 可）。
+4. 类级双界：`Bounded` 的 TV 两界保序、首界 @Bound、次界（PT Comparable）干净、raw getBounds[0]==Number。
+
+产出：`AnnotatedTypeVariableTest.java`（51 断言通过，jtreg 全绿）。

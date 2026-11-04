@@ -5,12 +5,15 @@
  *          array / List / rtype+MethodType), genericMethodType variants, factory
  *          validation (null rtype/ptype/element -> NPE, void parameter -> IAE,
  *          negative generic arity -> IAE), structural mutators (changeParameterType/
- *          insert/append/drop/changeReturnType incl. List forms and index edges),
- *          hasPrimitives/hasWrappers, erase/generic/wrap/unwrap round-trips,
- *          accessors (parameterType/parameterCount/returnType/parameterList/
- *          parameterArray), equals/hashCode/toString exact forms, and
- *          fromMethodDescriptorString/toMethodDescriptorString round-trip with
- *          malformed descriptor -> IAE / null -> NPE.
+ *          insert/append/drop/changeReturnType incl. List forms and index edges with
+ *          exact IndexOutOfBoundsException messages), hasPrimitives/hasWrappers,
+ *          erase/generic/wrap/unwrap round-trips (full 8-primitive wrap matrix,
+ *          void<->Void, idempotence), accessors (parameterType/parameterCount/
+ *          returnType/parameterList/parameterArray + list-vs-array independence),
+ *          equals/hashCode/toString exact forms, and fromMethodDescriptorString/
+ *          toMethodDescriptorString round-trip matrix with malformed descriptors ->
+ *          IAE ("bad return type"/"bad argument type") / unknown class ->
+ *          TypeNotPresentException / null -> NPE.
  * @run main MethodTypeTest
  */
 
@@ -285,6 +288,184 @@ public class MethodTypeTest {
                 "toString generic trailing array");
     }
 
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+            String frag, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) {
+                if (t.getMessage() != null && t.getMessage().contains(frag)) {
+                    passed++;
+                    return;
+                }
+                throw new AssertionError(msg + ": expected message fragment \"" + frag
+                        + "\" but got \"" + t.getMessage() + "\"");
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void testIndexBoundaryMessages() {
+        MethodType mt = MethodType.methodType(int.class, String.class, int.class, boolean.class);
+        // inserting at index == arity appends at the end (legal)
+        check(mt.insertParameterTypes(3, long.class).parameterCount() == 4
+                && mt.insertParameterTypes(3, long.class).parameterType(3) == long.class,
+                "insertParameterTypes at arity appends");
+        // beyond/negative index rejected with the offending index in the message
+        checkThrowsMsg(IndexOutOfBoundsException.class,
+                () -> mt.insertParameterTypes(4, long.class), "bad index: 4",
+                "insert OOB message");
+        checkThrowsMsg(IndexOutOfBoundsException.class,
+                () -> mt.insertParameterTypes(-1, long.class), "bad index: -1",
+                "insert negative message");
+        checkThrowsMsg(IndexOutOfBoundsException.class,
+                () -> mt.dropParameterTypes(2, 1), "start=2 end=1", "drop start>end message");
+        checkThrowsMsg(IndexOutOfBoundsException.class,
+                () -> mt.dropParameterTypes(0, 4), "start=0 end=4", "drop end OOB message");
+        // zero-width ranges are no-ops
+        check(mt.dropParameterTypes(3, 3).equals(mt), "drop zero-width tail is identity");
+        check(mt.dropParameterTypes(1, 1).equals(mt), "drop zero-width middle is identity");
+    }
+
+    static void testDescriptorValidationMessages() {
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodType.fromMethodDescriptorString("(I)", null),
+                "bad return type", "missing return descriptor IAE");
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> MethodType.fromMethodDescriptorString("(V)I", null),
+                "bad argument type", "void argument descriptor IAE");
+        // the wording for a non-descriptor string differs across JDK releases
+        // (8: "not a method descriptor: bad", 27: "bad signature: bad: not a method type")
+        checkThrows(IllegalArgumentException.class,
+                () -> MethodType.fromMethodDescriptorString("bad", null),
+                "non-descriptor IAE (wording differs across releases)");
+        // a well-formed descriptor naming an absent class -> TypeNotPresentException
+        try {
+            MethodType.fromMethodDescriptorString("()Lno/such/Cls;", null);
+            throw new AssertionError("expected TypeNotPresentException");
+        } catch (TypeNotPresentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("no.such.Cls"),
+                    "TypeNotPresentException names missing type");
+        }
+        // null loader defers to the system/boot loader: java.lang.String resolves
+        check(MethodType.fromMethodDescriptorString("(Ljava/lang/String;)V", null)
+                .equals(MethodType.methodType(void.class, String.class)),
+                "null loader resolves bootstrap classes");
+    }
+
+    static void testWrapUnwrapMatrix() {
+        Class<?>[] prims = {byte.class, short.class, char.class, int.class, long.class,
+                float.class, double.class, boolean.class};
+        Class<?>[] wrappers = {Byte.class, Short.class, Character.class, Integer.class,
+                Long.class, Float.class, Double.class, Boolean.class};
+        for (int i = 0; i < prims.length; i++) {
+            MethodType w = MethodType.methodType(prims[i], prims[i]).wrap();
+            check(w.returnType() == wrappers[i] && w.parameterType(0) == wrappers[i],
+                    "wrap " + prims[i].getName());
+            MethodType u = w.unwrap();
+            check(u.returnType() == prims[i] && u.parameterType(0) == prims[i],
+                    "unwrap " + wrappers[i].getSimpleName());
+            check(u.equals(MethodType.methodType(prims[i], prims[i])),
+                    "unwrap round-trip " + prims[i].getName());
+        }
+        // void return wraps to Void and unwraps back to void
+        MethodType vw = MethodType.methodType(void.class).wrap();
+        check(vw.returnType() == Void.class, "void wraps to Void");
+        check(vw.unwrap().returnType() == void.class, "Void unwraps to void");
+        // wrapper types are references: wrap leaves them untouched
+        check(MethodType.methodType(Integer.class, Long.class).wrap()
+                .equals(MethodType.methodType(Integer.class, Long.class)),
+                "wrap on wrappers is identity");
+        // unwrap actively converts wrappers back to primitives
+        check(MethodType.methodType(Integer.class, Long.class).unwrap()
+                .equals(MethodType.methodType(int.class, long.class)),
+                "unwrap converts wrappers to primitives");
+        // non-wrapper references survive unwrap unchanged
+        check(MethodType.methodType(String.class, Object.class).unwrap()
+                .equals(MethodType.methodType(String.class, Object.class)),
+                "unwrap leaves non-wrapper refs");
+        check(MethodType.methodType(String.class, Object.class).wrap()
+                .equals(MethodType.methodType(String.class, Object.class)),
+                "wrap leaves non-wrapper refs");
+    }
+
+    static void testEraseGenericDeep() {
+        // erase replaces reference types by Object but keeps primitives and void
+        MethodType mt = MethodType.methodType(void.class, String.class, int.class);
+        MethodType erased = mt.erase();
+        check(erased.returnType() == void.class && erased.parameterType(0) == Object.class
+                && erased.parameterType(1) == int.class, "erase keeps void and primitives");
+        check(MethodType.methodType(int.class, Integer.class).erase().parameterType(0)
+                == Object.class, "erase wraps wrappers");
+        check(MethodType.methodType(String.class).erase()
+                .equals(MethodType.methodType(Object.class)), "erase return type");
+        check(MethodType.methodType(int.class).erase()
+                .equals(MethodType.methodType(int.class)), "erase primitive identity");
+        // generic turns every type into Object, including primitives and void
+        MethodType g = MethodType.methodType(int.class, long.class, String.class).generic();
+        check(g.returnType() == Object.class && g.parameterType(0) == Object.class
+                && g.parameterType(1) == Object.class
+                && !g.parameterType(0).isPrimitive() && !g.parameterType(1).isPrimitive(),
+                "generic all Object params");
+        check(MethodType.methodType(void.class).generic().returnType() == Object.class,
+                "generic void return becomes Object");
+        // erase/generic are idempotent, and wrap().erase() == generic()
+        check(g.erase().equals(g), "erase idempotent on generic");
+        check(g.generic().equals(g), "generic idempotent");
+        check(MethodType.methodType(int.class, int.class).wrap().erase()
+                .equals(MethodType.methodType(int.class, int.class).generic()),
+                "wrap then erase equals generic");
+    }
+
+    static void testParameterListArrayIndependence() {
+        MethodType mt = MethodType.methodType(int.class, String.class, int.class);
+        check(mt.parameterList().equals(Arrays.asList(mt.parameterArray())),
+                "parameterList matches parameterArray content");
+        Class<?>[] a1 = mt.parameterArray();
+        Class<?>[] a2 = mt.parameterArray();
+        check(a1 != a2 && Arrays.equals(a1, a2), "parameterArray returns fresh copies");
+        List<Class<?>> l1 = mt.parameterList();
+        List<Class<?>> l2 = mt.parameterList();
+        check(l1.equals(l2), "parameterList stable across calls");
+        a1[0] = Object.class;
+        check(mt.parameterType(0) == String.class && mt.parameterArray()[0] == String.class,
+                "type unaffected by caller mutation of returned array");
+    }
+
+    static void testDescriptorRoundTripMatrix() {
+        String[] descs = {"()V", "(I)V", "(IJLjava/lang/String;)Z", "([[D)Ljava/lang/Object;",
+                "(Ljava/lang/String;[I)J"};
+        for (String d : descs) {
+            MethodType back = MethodType.fromMethodDescriptorString(d, null);
+            check(back.toMethodDescriptorString().equals(d), "round-trip " + d);
+        }
+        MethodType varargs = MethodType.genericMethodType(2, true);
+        check(varargs.toMethodDescriptorString().equals(
+                "(Ljava/lang/Object;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"),
+                "generic varargs descriptor exact");
+        check(MethodType.fromMethodDescriptorString(varargs.toMethodDescriptorString(), null)
+                .equals(varargs), "generic varargs descriptor round-trip");
+    }
+
+    static void testToStringExactForms() {
+        check(MethodType.methodType(Object.class, int.class, String.class).toString()
+                .equals("(int,String)Object"), "toString (int,String)Object");
+        check(MethodType.methodType(void.class, Object[].class).toString()
+                .equals("(Object[])void"), "toString array simple name");
+        check(MethodType.methodType(char.class, byte.class, double[].class, String[][].class)
+                .toString().equals("(byte,double[],String[][])char"),
+                "toString nested array params");
+        check(MethodType.methodType(boolean.class).toString().equals("()boolean"),
+                "toString ()boolean");
+        // genericMethodType(2,true): the trailing parameter is a plain Object[] slot
+        check(MethodType.genericMethodType(2, true).parameterList().get(2) == Object[].class,
+                "genericMethodType(2,true) last param Object[]");
+    }
+
     static void testDescriptorString() {
         MethodType mt = MethodType.methodType(int.class, String.class, int.class);
         String desc = mt.toMethodDescriptorString();
@@ -325,6 +506,13 @@ public class MethodTypeTest {
         testEqualsHashCode();
         testToString();
         testDescriptorString();
+        testIndexBoundaryMessages();
+        testDescriptorValidationMessages();
+        testWrapUnwrapMatrix();
+        testEraseGenericDeep();
+        testParameterListArrayIndependence();
+        testDescriptorRoundTripMatrix();
+        testToStringExactForms();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

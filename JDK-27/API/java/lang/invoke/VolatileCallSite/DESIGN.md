@@ -17,3 +17,6 @@ cs.setTarget(a); // 任意线程即刻看到
 白盒：public、构造两个重载、继承 CallSite。
 黑盒：多实例互相独立；换 target 后 dynamicInvoker 直接生效；getTarget 与 setTarget 的值往返；错类型 setTarget→ClassCastException。
 对应 `VolatileCallSiteTest.java` 的 `testBlackBox()`。
+## 深化批次（2026-11-05）
+
+新增：NPE/WMTE 精确消息、占位 ISE、缓存 invoker 跟随 volatile 更新、getTarget 恒等往返、与 MutableCallSite 兄弟关系、两构造 parity。（17→32 断言）

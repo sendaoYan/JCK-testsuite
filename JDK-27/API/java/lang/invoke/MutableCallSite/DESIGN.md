@@ -18,3 +18,6 @@ MutableCallSite.syncAll(new CallSite[]{ cs });
 白盒：public 非 final、构造 (MethodType)/(MethodHandle)、syncAll 静态。
 黑盒：占位 target 类型正确；换 target 立即可见；syncAll 空数组/单元素/多元素均可用；setTarget 错类型→ClassCastException；dynamicInvoker 反复调用跟随最新 target。
 对应 `MutableCallSiteTest.java` 的 `testBlackBox()`。
+## 深化批次（2026-11-05）
+
+新增：JDK-27 NPE helpful 消息（"newTarget"/"target"/"targetType" is null）、占位 target ISE "uninitialized call site"、交替 setTarget/invokeExact 对两个缓存 invoker 可见、getTarget 恒等往返、syncAll({null}) NPE。（19→35 断言）

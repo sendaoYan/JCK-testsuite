@@ -50,3 +50,19 @@
 - `fromMethodDescriptorString("(I",null)` → `StringIndexOutOfBoundsException`（JDK-8 为 IAE）；
   `"()"`/`"(V)I"` → IAE。
 - 新增 `lastParameterType()`（零参数返回 void）、`descriptorString()`、`describeConstable()`（testJdk27Accessors）。
+
+## 深化批次（2026-11-05）
+
+与 JDK-8 侧同步拉平（100→171 断言）：新增 testIndexBoundaryMessages（insert==arity 追加合法、
+`bad index: 4`/`start=2 end=1` 精确 IIOBE 消息）、testDescriptorValidationMessages（`bad return type`/
+`bad argument type` 子串、TypeNotPresentException `no.such.Cls`、null loader 解析）、
+testWrapUnwrapMatrix（8 原生全表 + void↔Void + unwrap 主动转原生）、testEraseGenericDeep（幂等 +
+wrap().erase()==generic()）、testParameterListArrayIndependence、testDescriptorRoundTripMatrix
+（5 描述符往返 + generic varargs 描述符全等）、testToStringExactForms（`(Object[])void` 等）。
+testJdk27Accessors 增补：descriptorString `"()V"`/`"(I)V"`/`"([Ljava/lang/Object;)Ljava/lang/Object;"`
+精确形态、`instanceof TypeDescriptor.OfMethod`。
+
+### 版本差异（本批实测）
+- 截断描述符 `"(I"`：8 → IAE；27 → StringIndexOutOfBoundsException（已有断言保留）。
+- 非描述符 `"bad"`：8 `not a method descriptor: bad`；27 `bad signature: bad: not a method type`（分侧，只断类）。
+- 其余（IIOBE 消息、bad return/argument type、TypeNotPresentException、wrap 矩阵、描述符往返）两侧一致。

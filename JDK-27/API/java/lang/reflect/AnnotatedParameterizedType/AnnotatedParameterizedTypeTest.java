@@ -124,9 +124,80 @@ public class AnnotatedParameterizedTypeTest {
     static void take(List<@Sink String> xs) {
     }
 
+    // ---- Part 3: raw-type annotation, raw use, distinct nested annotations ----
+
+    @Target(ElementType.TYPE_USE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Mark {
+    }
+
+    static class MoreTypes {
+        public @Mark List<String> rawAnnotated;
+        public List rawList;
+        public Map<@Sink String, @Mark List<@Sink Integer>> distinct;
+    }
+
+    public static Map<@Sink String, @Mark List<Integer>> returnsAnnotated() {
+        return null;
+    }
+
+    // annotation on the raw type sits on the parameterized annotated type itself
+    static void testRawTypeAnnotation() throws Exception {
+        AnnotatedParameterizedType apt = (AnnotatedParameterizedType)
+                MoreTypes.class.getField("rawAnnotated").getAnnotatedType();
+        check(apt.getAnnotation(Mark.class) != null, "raw-type annotation present");
+        check(apt.isAnnotationPresent(Mark.class), "raw-type isAnnotationPresent");
+        check(apt.getAnnotations().length == 1, "one annotation at raw level");
+        check(apt.getAnnotatedActualTypeArguments()[0].getAnnotations().length == 0,
+              "argument clean when only raw annotated");
+        check(((ParameterizedType) apt.getType()).getRawType() == List.class, "raw List");
+    }
+
+    // raw use of a generic type is not parameterized at all
+    static void testRawListNotParameterized() throws Exception {
+        Field f = MoreTypes.class.getField("rawList");
+        AnnotatedType at = f.getAnnotatedType();
+        check(!(at instanceof AnnotatedParameterizedType), "raw List not parameterized");
+        check(at.getType() == List.class, "raw List plain interface");
+        check(f.getGenericType() == List.class, "getGenericType agrees raw");
+    }
+
+    // distinct annotation types at nested levels
+    static void testDistinctNestedAnnotations() throws Exception {
+        AnnotatedParameterizedType apt = (AnnotatedParameterizedType)
+                MoreTypes.class.getField("distinct").getAnnotatedType();
+        AnnotatedType k = apt.getAnnotatedActualTypeArguments()[0];
+        AnnotatedType v = apt.getAnnotatedActualTypeArguments()[1];
+        check(k.isAnnotationPresent(Sink.class), "key carries Sink");
+        check(!k.isAnnotationPresent(Mark.class), "key has no Mark");
+        check(v instanceof AnnotatedParameterizedType, "value nested parameterized");
+        check(v.isAnnotationPresent(Mark.class), "value raw level Mark");
+        check(!v.isAnnotationPresent(Sink.class), "value raw level no Sink");
+        AnnotatedType inner = ((AnnotatedParameterizedType) v).getAnnotatedActualTypeArguments()[0];
+        check(inner.getType() == Integer.class, "innermost Integer");
+        check(inner.isAnnotationPresent(Sink.class), "innermost Sink");
+        check(!inner.isAnnotationPresent(Mark.class), "innermost no Mark");
+    }
+
+    // annotated method return path
+    static void testAnnotatedReturnPath() throws Exception {
+        AnnotatedParameterizedType rt = (AnnotatedParameterizedType)
+                AnnotatedParameterizedTypeTest.class.getMethod("returnsAnnotated")
+                        .getAnnotatedReturnType();
+        check(rt.getAnnotatedActualTypeArguments()[0].isAnnotationPresent(Sink.class),
+              "return key annotated");
+        AnnotatedType v = rt.getAnnotatedActualTypeArguments()[1];
+        check(v instanceof AnnotatedParameterizedType, "return value parameterized");
+        check(v.isAnnotationPresent(Mark.class), "return value raw Mark");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRawTypeAnnotation();
+        testRawListNotParameterized();
+        testDistinctNestedAnnotations();
+        testAnnotatedReturnPath();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

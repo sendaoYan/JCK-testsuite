@@ -32,6 +32,24 @@ public class GenericDeclarationTest {
     static class Plain {
     }
 
+    static class CtorHost {
+        CtorHost() {
+        }
+
+        <E extends CharSequence> CtorHost(E seed) {
+        }
+    }
+
+    interface Numbered<I extends Number> {
+    }
+
+    enum Color {
+        RED
+    }
+
+    record Rec<T>(T value) {
+    }
+
     public static <X> void m() {
     }
 
@@ -110,9 +128,49 @@ public class GenericDeclarationTest {
               "Constructor is a GenericDeclaration");
     }
 
+    // ---- Part 3: deepened contracts (2026-11-05 batch) ----
+    static void testDeclarerKindsMatrix() {
+        check(String[].class instanceof GenericDeclaration, "array class declares");
+        check(int[].class instanceof GenericDeclaration, "primitive array class declares");
+        check(Color.class instanceof GenericDeclaration, "enum class declares");
+        check(String[].class.getTypeParameters() != null
+              && String[].class.getTypeParameters().length == 0, "array empty and non-null");
+        check(int[].class.getTypeParameters().length == 0, "primitive array empty");
+        check(Color.class.getTypeParameters().length == 0, "enum empty");
+        check(GenericDeclaration.class.getTypeParameters().length == 0,
+              "the interface itself is not generic");
+        GenericDeclaration iface = Numbered.class;
+        check(iface.getTypeParameters().length == 1, "generic interface declares one");
+        check("I".equals(iface.getTypeParameters()[0].getName()), "interface variable I");
+        check(iface.getTypeParameters()[0].getBounds()[0] == Number.class, "I bound Number");
+        check(iface.getTypeParameters()[0].getGenericDeclaration() == Numbered.class,
+              "I declared by the interface");
+    }
+
+    static void testGenericConstructorDeclaration() throws Exception {
+        Constructor<?> genCtor = CtorHost.class.getDeclaredConstructor(CharSequence.class);
+        TypeVariable<?>[] ctvs = genCtor.getTypeParameters();
+        check(ctvs.length == 1, "generic constructor declares one");
+        check("E".equals(ctvs[0].getName()), "constructor variable E");
+        check(ctvs[0].getBounds()[0] == CharSequence.class, "E bound CharSequence");
+        check(genCtor.equals(ctvs[0].getGenericDeclaration()), "E declared by the constructor");
+        check(CtorHost.class.getDeclaredConstructor().getTypeParameters().length == 0,
+              "plain constructor empty");
+        check(!ctvs[0].equals(Pair.class.getTypeParameters()[0]),
+              "constructor TV distinct from class TV");
+        // records (JDK 27): generic record declares type parameters like any class
+        GenericDeclaration rec = Rec.class;
+        check(rec.getTypeParameters().length == 1, "generic record declares one");
+        check("T".equals(rec.getTypeParameters()[0].getName()), "record variable T");
+        check(rec.getTypeParameters()[0].getGenericDeclaration() == Rec.class,
+              "T declared by the record");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeclarerKindsMatrix();
+        testGenericConstructorDeclaration();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

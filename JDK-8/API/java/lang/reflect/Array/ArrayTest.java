@@ -7,6 +7,11 @@
  *          index -> ArrayIndexOutOfBoundsException, null array -> NullPointerException,
  *          non-array -> IllegalArgumentException, ArrayStoreException for object arrays,
  *          multi-dimensional component access.
+ *          Deepening batch: int[]-dims-array newInstance forms, boxed get/set matrix for
+ *          all 8 primitives, the full JLS widening-getter/widening-setter lattice with
+ *          exact values, narrowing refusals with exact "argument type mismatch" /
+ *          "Argument is not an array" messages, and index-bounds exactness (AIOOBE,
+ *          measured message-null on JDK-8 and JDK-27).
  * @run main ArrayTest
  */
 
@@ -33,6 +38,37 @@ public class ArrayTest {
         }
         throw new AssertionError(msg + ": expected " + expected.getSimpleName()
                 + " but nothing was thrown");
+    }
+
+    /** Exact exception class AND message containing the measured fragment (2 assertions). */
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+            String fragment, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            check(expected.isInstance(t), msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName());
+            check(t.getMessage() != null && t.getMessage().contains(fragment),
+                    msg + ": message [" + t.getMessage() + "] missing \"" + fragment + "\"");
+            return;
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    /** AIOOBE exactly (subclass relationship + measured message-less form). */
+    static void checkAioobe(ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            check(t.getClass() == ArrayIndexOutOfBoundsException.class, msg + " exact AIOOBE class");
+            check(t instanceof IndexOutOfBoundsException, msg + " is an IndexOutOfBoundsException");
+            check(t.getMessage() == null, msg + " carries no message detail (measured)");
+            return;
+        }
+        throw new AssertionError(msg + ": expected ArrayIndexOutOfBoundsException but nothing was thrown");
     }
 
     // ---- newInstance(Class, int) ----
@@ -280,6 +316,276 @@ public class ArrayTest {
         check(Array.getInt(((int[]) Array.get(m, 0)), 0) == 9, "set row replace");
     }
 
+    // ---- deepening batch: newInstance via int[] dimensions ----
+
+    static void testNewInstanceDimsForm() {
+        Object one = Array.newInstance(int.class, new int[]{3});
+        check(one.getClass() == int[].class, "dims-array single-dim class");
+        check(Array.getLength(one) == 3, "dims-array single-dim length");
+        int[][] m = (int[][]) Array.newInstance(int.class, new int[]{2, 3});
+        check(m.getClass() == int[][].class, "dims-array 2-dim class");
+        check(m.length == 2 && m[0].length == 3 && m[1].length == 3, "dims-array 2-dim shape");
+        String[][] sm = (String[][]) Array.newInstance(String.class, new int[]{2, 3});
+        check(sm.getClass() == String[][].class, "dims-array String 2-dim class");
+        check(sm[0] instanceof String[], "dims-array String inner type");
+        Array.set(sm[1], 2, "z");
+        check("z".equals(sm[1][2]), "dims-array element write/read");
+        int[][] zeroInner = (int[][]) Array.newInstance(int.class, new int[]{2, 0});
+        check(zeroInner.length == 2 && zeroInner[0].length == 0, "zero inner dimension allowed");
+    }
+
+    // ---- deepening batch: boxed get/set matrix for all 8 primitives ----
+
+    static void testBoxedGetSetMatrix() {
+        boolean[] ba = {true};
+        check(Array.get(ba, 0) instanceof Boolean && (Boolean) Array.get(ba, 0), "get(boolean[]) boxed");
+        byte[] bya = {(byte) -3};
+        check(Array.get(bya, 0) instanceof Byte
+                && ((Byte) Array.get(bya, 0)).byteValue() == (byte) -3, "get(byte[]) boxed");
+        char[] ca = {'q'};
+        check(Array.get(ca, 0) instanceof Character
+                && ((Character) Array.get(ca, 0)).charValue() == 'q', "get(char[]) boxed");
+        short[] sha = {(short) -300};
+        check(Array.get(sha, 0) instanceof Short
+                && ((Short) Array.get(sha, 0)).shortValue() == (short) -300, "get(short[]) boxed");
+        int[] ia = {-70000};
+        check(Array.get(ia, 0) instanceof Integer
+                && ((Integer) Array.get(ia, 0)).intValue() == -70000, "get(int[]) boxed");
+        long[] la = {-1L << 40};
+        check(Array.get(la, 0) instanceof Long
+                && ((Long) Array.get(la, 0)).longValue() == (-1L << 40), "get(long[]) boxed");
+        float[] fa = {0.25f};
+        check(Array.get(fa, 0) instanceof Float
+                && ((Float) Array.get(fa, 0)).floatValue() == 0.25f, "get(float[]) boxed");
+        double[] da = {0.125};
+        check(Array.get(da, 0) instanceof Double
+                && ((Double) Array.get(da, 0)).doubleValue() == 0.125, "get(double[]) boxed");
+
+        // boxed writes read back through the matching typed accessor
+        Array.set(ba, 0, Boolean.FALSE);
+        check(!Array.getBoolean(ba, 0), "set(boolean[],Boolean) round-trip");
+        Array.set(bya, 0, Byte.valueOf((byte) 9));
+        check(Array.getByte(bya, 0) == 9, "set(byte[],Byte) round-trip");
+        Array.set(ca, 0, Character.valueOf('Z'));
+        check(Array.getChar(ca, 0) == 'Z', "set(char[],Character) round-trip");
+        Array.set(sha, 0, Short.valueOf((short) 1234));
+        check(Array.getShort(sha, 0) == 1234, "set(short[],Short) round-trip");
+        Array.set(ia, 0, Integer.valueOf(-98765));
+        check(Array.getInt(ia, 0) == -98765, "set(int[],Integer) round-trip");
+        Array.set(la, 0, Long.valueOf(Long.MIN_VALUE));
+        check(Array.getLong(la, 0) == Long.MIN_VALUE, "set(long[],Long) round-trip");
+        Array.set(fa, 0, Float.valueOf(6.75f));
+        check(Array.getFloat(fa, 0) == 6.75f, "set(float[],Float) round-trip");
+        Array.set(da, 0, Double.valueOf(-2.25));
+        check(Array.getDouble(da, 0) == -2.25, "set(double[],Double) round-trip");
+    }
+
+    // ---- deepening batch: widening-getter lattice (JLS 5.1.2) ----
+
+    static void testWideningGetters() {
+        byte[] bya = {(byte) -5};
+        check(Array.getShort(bya, 0) == (short) -5, "byte->short");
+        check(Array.getInt(bya, 0) == -5, "byte->int");
+        check(Array.getLong(bya, 0) == -5L, "byte->long");
+        check(Array.getFloat(bya, 0) == -5f, "byte->float");
+        check(Array.getDouble(bya, 0) == -5.0, "byte->double");
+
+        short[] sha = {(short) -1000};
+        check(Array.getInt(sha, 0) == -1000, "short->int");
+        check(Array.getLong(sha, 0) == -1000L, "short->long");
+        check(Array.getFloat(sha, 0) == -1000f, "short->float");
+        check(Array.getDouble(sha, 0) == -1000.0, "short->double");
+
+        char[] ca = {'ሴ'};
+        check(Array.getInt(ca, 0) == 0x1234, "char->int");
+        check(Array.getLong(ca, 0) == 0x1234L, "char->long");
+        check(Array.getFloat(ca, 0) == (float) 0x1234, "char->float");
+        check(Array.getDouble(ca, 0) == (double) 0x1234, "char->double");
+
+        int[] ia = {-100000};
+        check(Array.getLong(ia, 0) == -100000L, "int->long");
+        check(Array.getFloat(ia, 0) == -100000f, "int->float");
+        check(Array.getDouble(ia, 0) == -100000.0, "int->double");
+
+        long[] la = {1L << 33};
+        check(Array.getFloat(la, 0) == (float) (1L << 33), "long->float");
+        check(Array.getDouble(la, 0) == (double) (1L << 33), "long->double");
+
+        float[] fa = {1.5f};
+        check(Array.getDouble(fa, 0) == 1.5, "float->double");
+    }
+
+    // ---- deepening batch: widening-setter lattice + boxed widening ----
+
+    static void testWideningSetters() {
+        long[] la = new long[1];
+        Array.setByte(la, 0, (byte) 1);
+        check(la[0] == 1L, "long[]<--byte");
+        Array.setShort(la, 0, (short) 2);
+        check(la[0] == 2L, "long[]<--short");
+        Array.setChar(la, 0, 'c');
+        check(la[0] == 99L, "long[]<--char");
+        Array.setInt(la, 0, 4);
+        check(la[0] == 4L, "long[]<--int");
+
+        int[] ia = new int[1];
+        Array.setByte(ia, 0, (byte) 5);
+        check(ia[0] == 5, "int[]<--byte");
+        Array.setShort(ia, 0, (short) 6);
+        check(ia[0] == 6, "int[]<--short");
+        Array.setChar(ia, 0, 'x');
+        check(ia[0] == 120, "int[]<--char");
+
+        short[] sa = new short[1];
+        Array.setByte(sa, 0, (byte) 7);
+        check(sa[0] == 7, "short[]<--byte");
+
+        float[] fa = new float[1];
+        Array.setByte(fa, 0, (byte) 1);
+        check(fa[0] == 1f, "float[]<--byte");
+        Array.setShort(fa, 0, (short) 2);
+        check(fa[0] == 2f, "float[]<--short");
+        Array.setChar(fa, 0, 'c');
+        check(fa[0] == 99f, "float[]<--char");
+        Array.setInt(fa, 0, 3);
+        check(fa[0] == 3f, "float[]<--int");
+        Array.setLong(fa, 0, 4L);
+        check(fa[0] == 4f, "float[]<--long");
+
+        double[] da = new double[1];
+        Array.setByte(da, 0, (byte) 1);
+        check(da[0] == 1.0, "double[]<--byte");
+        Array.setShort(da, 0, (short) 2);
+        check(da[0] == 2.0, "double[]<--short");
+        Array.setChar(da, 0, 'c');
+        check(da[0] == 99.0, "double[]<--char");
+        Array.setInt(da, 0, 3);
+        check(da[0] == 3.0, "double[]<--int");
+        Array.setLong(da, 0, 4L);
+        check(da[0] == 4.0, "double[]<--long");
+        Array.setFloat(da, 0, 5.5f);
+        check(da[0] == 5.5, "double[]<--float");
+
+        // boxed widening through Array.set(Object,int,Object)
+        Array.set(la, 0, Integer.valueOf(11));
+        check(la[0] == 11L, "long[]<--Integer box");
+        Array.set(ia, 0, Byte.valueOf((byte) 12));
+        check(ia[0] == 12, "int[]<--Byte box");
+        Array.set(ia, 0, Character.valueOf('x'));
+        check(ia[0] == 120, "int[]<--Character box");
+        Array.set(sa, 0, Byte.valueOf((byte) 13));
+        check(sa[0] == 13, "short[]<--Byte box");
+        Array.set(da, 0, Long.MAX_VALUE);
+        check(da[0] == 9.223372036854776E18, "double[]<--Long box");
+    }
+
+    // ---- deepening batch: narrowing refusals with exact messages ----
+
+    static void testNarrowingRefusalMessages() {
+        long[] la = {1L};
+        double[] da = {1.0};
+        boolean[] ba = {true};
+        int[] ia = {1};
+        byte[] bya = {1};
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.getInt(la, 0),
+                "argument type mismatch", "getInt(long[]) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.getFloat(da, 0),
+                "argument type mismatch", "getFloat(double[]) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.getChar(da, 0),
+                "argument type mismatch", "getChar(double[]) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.getInt(ba, 0),
+                "argument type mismatch", "getInt(boolean[]) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.setBoolean(ia, 0, true),
+                "argument type mismatch", "setBoolean(int[]) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.setFloat(ia, 0, 1f),
+                "argument type mismatch", "setFloat(int[]) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.set(ia, 0, "x"),
+                "argument type mismatch", "set(int[],String) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.set(ia, 0, Long.valueOf(5L)),
+                "argument type mismatch", "set(int[],Long) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.setInt(bya, 0, 1),
+                "argument type mismatch", "setInt(byte[]) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.set(bya, 0, Integer.valueOf(1)),
+                "argument type mismatch", "set(byte[],Integer) message");
+    }
+
+    // ---- deepening batch: non-array argument messages ----
+
+    static void testNonArrayMessages() {
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.getLength("x"),
+                "Argument is not an array", "getLength(String) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.get("x", 0),
+                "Argument is not an array", "get(String) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.set("x", 0, "y"),
+                "Argument is not an array", "set(String) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.getInt("x", 0),
+                "Argument is not an array", "getInt(String) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.getBoolean("x", 0),
+                "Argument is not an array", "getBoolean(String) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.setDouble("x", 0, 1.0),
+                "Argument is not an array", "setDouble(String) message");
+        checkThrowsMsg(IllegalArgumentException.class, () -> Array.getLength(new Object()),
+                "Argument is not an array", "getLength(Object) message");
+        checkThrowsMsg(IllegalArgumentException.class,
+                () -> Array.getLength(java.util.Collections.emptyList()),
+                "Argument is not an array", "getLength(List) message");
+    }
+
+    // ---- deepening batch: index bounds exactness ----
+
+    static void testIndexBoundsExact() {
+        int[] a = {0, 0};
+        checkAioobe(() -> Array.get(a, -1), "get(a, -1)");
+        checkAioobe(() -> Array.set(a, -1, Integer.valueOf(1)), "set(a, -1)");
+        checkAioobe(() -> Array.getInt(a, 2), "getInt(a, 2)");
+        checkAioobe(() -> Array.setInt(a, 2, 0), "setInt(a, 2)");
+        checkAioobe(() -> Array.getBoolean(new boolean[1], -3), "getBoolean neg index");
+        checkAioobe(() -> Array.setDouble(new double[1], 1, 0.0), "setDouble at length");
+        checkAioobe(() -> Array.get(a, Integer.MAX_VALUE), "get MAX_VALUE index");
+        checkAioobe(() -> Array.getInt(a, Integer.MIN_VALUE), "getInt MIN_VALUE index");
+        checkAioobe(() -> Array.get(new String[1], 1), "object array at length");
+        checkAioobe(() -> Array.getChar(new char[0], 0), "empty array index 0");
+    }
+
+    // ---- deepening batch: null array NPE across the full accessor family ----
+
+    static void testNullArrayNpeMatrix() {
+        checkThrows(NullPointerException.class, () -> Array.getBoolean(null, 0), "getBoolean null NPE");
+        checkThrows(NullPointerException.class, () -> Array.getByte(null, 0), "getByte null NPE");
+        checkThrows(NullPointerException.class, () -> Array.getChar(null, 0), "getChar null NPE");
+        checkThrows(NullPointerException.class, () -> Array.getShort(null, 0), "getShort null NPE");
+        checkThrows(NullPointerException.class, () -> Array.getLong(null, 0), "getLong null NPE");
+        checkThrows(NullPointerException.class, () -> Array.getFloat(null, 0), "getFloat null NPE");
+        checkThrows(NullPointerException.class, () -> Array.getDouble(null, 0), "getDouble null NPE");
+        checkThrows(NullPointerException.class, () -> Array.setBoolean(null, 0, true), "setBoolean null NPE");
+        checkThrows(NullPointerException.class, () -> Array.setByte(null, 0, (byte) 1), "setByte null NPE");
+        checkThrows(NullPointerException.class, () -> Array.setChar(null, 0, 'c'), "setChar null NPE");
+        checkThrows(NullPointerException.class, () -> Array.setShort(null, 0, (short) 1), "setShort null NPE");
+        checkThrows(NullPointerException.class, () -> Array.setFloat(null, 0, 1f), "setFloat null NPE");
+        checkThrows(NullPointerException.class, () -> Array.setDouble(null, 0, 1.0), "setDouble null NPE");
+    }
+
+    // ---- deepening batch: multi-dimensional model ----
+
+    static void testMultiDimModel() {
+        String[][][] cube = (String[][][]) Array.newInstance(String.class, new int[]{1, 2, 3});
+        check(cube.length == 1 && cube[0].length == 2 && cube[0][0].length == 3,
+                "3-dim dims-array shape");
+        Object plane = Array.get(cube, 0);
+        check(plane instanceof String[][], "outer get returns String[][]");
+        check(Array.getLength(plane) == 2, "plane length via reflective getLength");
+        Object line = Array.get(plane, 1);
+        check(line instanceof String[] && Array.getLength(line) == 3,
+                "row via chained reflective get");
+        Array.set((Object[]) plane, 0, new String[]{"a", "b", "c"});
+        check("c".equals(cube[0][0][2]), "row replaced via Array.set visible in Java read");
+        double[][] dd = (double[][]) Array.newInstance(double.class, 2, 2);
+        Array.setDouble(dd[1], 1, 0.5);
+        check(Array.getDouble((double[]) Array.get(dd, 1), 1) == 0.5,
+                "nested typed write/read through reflective get");
+        check(Array.get(dd, 0) instanceof double[], "primitive 2-dim outer get type");
+    }
+
     public static void main(String[] args) {
         testNewInstanceOneDim();
         testNewInstanceMultiDim();
@@ -288,6 +594,15 @@ public class ArrayTest {
         testGetSetObject();
         testExceptions();
         testMultiDimAccess();
+        testNewInstanceDimsForm();
+        testBoxedGetSetMatrix();
+        testWideningGetters();
+        testWideningSetters();
+        testNarrowingRefusalMessages();
+        testNonArrayMessages();
+        testIndexBoundsExact();
+        testNullArrayNpeMatrix();
+        testMultiDimModel();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -7,6 +7,7 @@
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,19 @@ public class ParameterizedTypeTest {
     }
 
     static class StringList extends ArrayList<String> {
+    }
+
+    static class G<T extends Number, U extends List<String>> implements Comparable<G<T, U>> {
+        public int compareTo(G<T, U> other) {
+            return 0;
+        }
+    }
+
+    static class SubG extends G<Integer, ArrayList<String>> {
+    }
+
+    static class Raw {
+        List raw;
     }
 
     // ---- Part 1: white-box (structural, retained from previous revision) ----
@@ -116,9 +130,48 @@ public class ParameterizedTypeTest {
         check(!pt.equals(npt), "different PTs not equal");
     }
 
+    // ---- Part 3: deepened contracts (2026-11-05 batch) ----
+    static void testTwoArgSuperclassAndInterface() {
+        ParameterizedType gpt = (ParameterizedType) SubG.class.getGenericSuperclass();
+        check(gpt.getRawType() == G.class, "two-arg superclass raw G");
+        check(gpt.getActualTypeArguments().length == 2, "two superclass arguments");
+        check(gpt.getActualTypeArguments()[0] == Integer.class, "first superclass argument");
+        ParameterizedType uArg = (ParameterizedType) gpt.getActualTypeArguments()[1];
+        check(uArg.getRawType() == ArrayList.class, "second argument raw ArrayList");
+        check(uArg.getActualTypeArguments()[0] == String.class, "second argument nested String");
+
+        ParameterizedType ifc = (ParameterizedType) G.class.getGenericInterfaces()[0];
+        check(ifc.getRawType() == Comparable.class, "generic interface raw Comparable");
+        ParameterizedType garg = (ParameterizedType) ifc.getActualTypeArguments()[0];
+        check(garg.getRawType() == G.class, "interface argument raw G");
+        check(garg.getActualTypeArguments()[0] instanceof TypeVariable,
+              "interface argument holds the class TV");
+        check(((TypeVariable<?>) garg.getActualTypeArguments()[0]).getName().equals("T"),
+              "interface argument TV name T");
+        check(((TypeVariable<?>) garg.getActualTypeArguments()[1]).getName().equals("U"),
+              "interface argument TV name U");
+    }
+
+    static void testRawAndEqualityEdges() throws Exception {
+        Type rawT = Raw.class.getDeclaredField("raw").getGenericType();
+        check(rawT == List.class, "raw use yields the raw Class");
+        check(!(rawT instanceof ParameterizedType), "raw use is not parameterized");
+        ParameterizedType pt = (ParameterizedType) Types.class.getDeclaredField("list")
+                .getGenericType();
+        check(pt.equals(pt), "equals reflexive");
+        check(!pt.equals(null), "not equal to null");
+        check(!pt.equals(List.class), "PT not equal to its raw Class");
+        check(pt.getActualTypeArguments()[0] instanceof Type, "argument is a Type");
+        check(pt.getTypeName().startsWith("java.util.List<"), "typeName prefix");
+        check(pt.getTypeName().endsWith("java.lang.String>"), "typeName suffix");
+        check(ParameterizedType.class.getDeclaredMethods().length == 3, "three declared accessors");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testTwoArgSuperclassAndInterface();
+        testRawAndEqualityEdges();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

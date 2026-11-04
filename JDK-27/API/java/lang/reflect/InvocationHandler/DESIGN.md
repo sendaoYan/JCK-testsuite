@@ -22,3 +22,15 @@
 4. handler 抛运行时异常原样冒泡。
 5. 同一 handler 实例跨代理/跨接口复用：计数与“最后一次分派”状态。
 白盒保留原有分派断言 + 接口/单抽象方法/static invokeDefault 检查。产出：`InvocationHandlerTest.java`（23 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增方法（断言 29 → 51）：
+
+| 测试点 | 方法 |
+|---|---|
+| 接口契约反射：无父接口、invoke 参数/返回/throws Throwable 精确、成员普查（1 抽象 + 1 静态 invokeDefault varargs） | testInterfaceContractDeep |
+| @FunctionalInterface 注解缺失（与 JDK-8 一致，形态函数式） | testInterfaceContractDeep |
+| invokeDefault 三种传参形态等价（空/显式 null/空数组） | testInvokeDefaultVariants |
+| 异常中继：声明受检原样、未声明受检包成 UTE、运行时按同一对象透传 | testExceptionRelayDeep |
+| handler 内 Method 事实：参数计数/类型/返回类型、getInvocationHandler 往返 | testProxyFactsDeep |

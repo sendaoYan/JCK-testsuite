@@ -19,3 +19,6 @@ MethodHandle back = MethodHandleProxies.wrapperInstanceTarget(f);
 白盒：final、无私有访问构造、三方法存在。
 黑盒：public 接口 Runnable 派发执行；equals/hashCode/toString 代理语义；wrapperInstanceTarget/type 还原；isWrapperInstance 判别；非接口→IAE、null→NPE；类型不兼容句柄→IllegalArgumentException|WMTE。
 对应 `MethodHandleProxiesTest.java` 的 `testBlackBox()`。
+## 深化批次（2026-11-05）
+
+新增：Runnable 副作用计数、装箱流（null 装箱 NPE helpful 消息）、同句柄两代理恒等式 equals/hashCode、27 侧 wrapper 是 hidden class 非 Proxy（与 8 分侧断言）、default 方法保留实现、负例消息矩阵（not a public interface/not a single-method interface/cannot convert MethodHandle）。（23→42 断言）

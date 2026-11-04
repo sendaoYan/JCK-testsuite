@@ -1,6 +1,9 @@
 /*
  * @test
- * @summary java.lang.reflect.Parameter conformance: white-box structure + black-box behavior.
+ * @summary java.lang.reflect.Parameter conformance: white-box structure + black-box behavior,
+ *          plus the deepen batch: locked argN naming under default compilation, varargs
+ *          position sensitivity, ctor-parameter views and the inner-constructor implicit
+ *          parameter flag bits (FINAL|MANDATED) with their accessFlags() mapping.
  * @run main ParameterTest
  */
 
@@ -42,6 +45,13 @@ public class ParameterTest {
         class Inner {
             Inner() {
             }
+        }
+    }
+
+    // ---- fixtures added by the deepen batch ----
+
+    static class POver {
+        public void varMixed(int fixed, int... rest) {
         }
     }
 
@@ -134,9 +144,59 @@ public class ParameterTest {
         check(ps[0].accessFlags().isEmpty(), "no access flags on plain param");
     }
 
+    // ---- tests added by the deepen batch ----
+
+    static void testNameAbsenceContract() throws Exception {
+        // jtreg compiles without -parameters, so the argN synthesized names are the
+        // deterministic contract on this toolchain (verified on JDK-27).
+        Method m = Sample.class.getMethod("m", int.class, String.class);
+        Parameter[] ps = m.getParameters();
+        check(!ps[0].isNamePresent(), "name absent without -parameters");
+        check("arg0".equals(ps[0].getName()) && "arg1".equals(ps[1].getName()),
+                "synthesized names arg0/arg1");
+        check("int arg0".equals(ps[0].toString()), "toString is 'int arg0'");
+    }
+
+    static void testVarargsPosition() throws Exception {
+        Method m = POver.class.getMethod("varMixed", int.class, int[].class);
+        Parameter[] ps = m.getParameters();
+        check(ps.length == 2, "two parameters");
+        check(!ps[0].isVarArgs(), "fixed parameter not varargs");
+        check(ps[1].isVarArgs(), "trailing parameter is varargs");
+        check(ps[1].getType() == int[].class, "varargs parameter array type");
+        check(ps[1].getParameterizedType() == int[].class,
+                "varargs parameterized type is the array class");
+    }
+
+    static void testCtorParameterViews() throws Exception {
+        Constructor<Outer.Inner> ic = (Constructor<Outer.Inner>) (Constructor<?>) Outer.Inner.class.getDeclaredConstructor(Outer.class);
+        Parameter[] ps = ic.getParameters();
+        check("arg0".equals(ps[0].getName()), "ctor parameter synthesized name");
+        check(ps[0].getDeclaringExecutable().equals(ic), "ctor back reference");
+        check(ps[0].toString().contains("arg0"), "ctor toString contains arg0");
+    }
+
+    static void testInnerCtorParamFlagsLocked() throws Exception {
+        Constructor<?> ic = Outer.Inner.class.getDeclaredConstructor(Outer.class);
+        Parameter p0 = ic.getParameters()[0];
+        // JDK-9+ derives the implicit outer-instance parameter: modifiers carry the
+        // mandated bit (0x8000) plus final (0x10) — locked version difference vs
+        // JDK-8 (which reported 0 / non-implicit without -parameters).
+        check(p0.getModifiers() == 0x8010,
+                "implicit parameter modifiers FINAL(0x10)|MANDATED(0x8000)");
+        java.util.Set<java.lang.reflect.AccessFlag> af = p0.accessFlags();
+        check(af.size() == 2 && af.contains(java.lang.reflect.AccessFlag.FINAL)
+                && af.contains(java.lang.reflect.AccessFlag.MANDATED),
+                "implicit parameter accessFlags {FINAL, MANDATED}");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNameAbsenceContract();
+        testVarargsPosition();
+        testCtorParameterViews();
+        testInnerCtorParamFlagsLocked();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

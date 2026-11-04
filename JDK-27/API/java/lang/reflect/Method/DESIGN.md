@@ -47,3 +47,21 @@
 ## JDK-27 差异（已锁入断言）
 
 - JDK-11+ nestmates 使私有成员可被同 nest 反射访问而不需 setAccessible；IAE 路径改用独立顶层类 `ExtMethod`。
+
+## 深化批次（2026-11-05）
+
+新增 12 个 test 方法（81 → 152 断言），与 JDK-8 侧同构（见该侧 DESIGN 的批次表），差异点：
+
+| 优先级 | 测试点 | 方法 |
+|---|---|---|
+| P0 | varargs 精确元数契约（散参被拒、两数组形式相等、空数组 → 0） | testInvokeVarargsExactArity |
+| P0 | invoke 精确值 / 错接收者与错参数 IAE 消息片段 | testInvokeExactValues / testInvokeReceiverAndNullArg |
+| P0 | RuntimeException cause 同一对象 + null varargs 数组 → ITE(NPE) | testInvokeExceptionIdentity |
+| P0 | 私有未 setAccessible → IAE 消息 "access a member of class"（需非同巢 ExtMethod：JDK-11+ nestmate 允许同巢私有） | testAccessMessage |
+| P0 | 重载分辨 / 嵌套泛型返回分解 / 接口三分法真调用 / bridge 虚分派 | testOverloads / testGenericReturnTypeDeep / testInterfaceInvoke / testBridgeDispatch |
+| P1 | getDefaultValue 四类型 / hashCode 公式与 NSME 消息 / AnnotatedType 家族 | testDefaultValueKinds / testStringFormsAndHashFormula / testAnnotatedTypeFamily |
+
+### 锁定的版本差异（本批实测）
+- `toGenericString()` 打印类型参数界 `<T extends java.lang.Number>`（JDK-8 省略界）。
+- 嵌套类私有成员经 nestmate 规则可反射访问，拒绝路径必须用非同巢类。
+- IAE 元数/接收者消息更详细（带数量与类型名），断言取两侧公共子串。

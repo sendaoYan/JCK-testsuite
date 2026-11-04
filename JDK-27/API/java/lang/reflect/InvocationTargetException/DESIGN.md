@@ -24,3 +24,16 @@
 5. 已设 cause 再 `initCause` → `IllegalStateException`。
 6. `addSuppressed` + `printStackTrace` 渲染含根因（固定 UTF-8 流）。
 白盒保留原有构造器断言 + 继承层次。产出：`InvocationTargetExceptionTest.java`（22 断言通过）。
+
+## 深化批次（2026-11-05）
+
+新增方法（断言 27 → 41）：
+
+| 测试点 | 方法 |
+|---|---|
+| 层次普查：Serializable、直系父类、恰 2 个公有构造器 | testHierarchySerializable |
+| 显式 null target：getCause/getTargetException/getMessage 均 null、initCause 拒绝 | testNullTargetExplicit |
+| 序列化 round-trip：消息/cause 类型+消息/target==cause 链/suppressed 保留 | testSerializationRoundTrip |
+| Error 型 target、toString FQCN 前缀 | testErrorTargetAndToString |
+
+实测：null target 的 initCause 拒绝消息含 "Can't overwrite cause"，8/27 措辞一致。

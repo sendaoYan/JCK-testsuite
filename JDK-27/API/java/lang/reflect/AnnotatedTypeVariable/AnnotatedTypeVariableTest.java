@@ -116,9 +116,72 @@ public class AnnotatedTypeVariableTest {
         check(free.getAnnotation(Bound.class) == null, "declaration TV bound-annotation null");
     }
 
+    // ---- Part 3: use-site annotation, constructor path, method type parameters ----
+
+    static class AnnotatedUse<T> {
+        public @Use
+        T tagged;
+    }
+
+    static class WithCtor<T extends Number> {
+        public WithCtor(T v) {
+        }
+    }
+
+    // annotation directly on the type variable use site
+    static void testAnnotatedUseSite() throws Exception {
+        AnnotatedType at = AnnotatedUse.class.getField("tagged").getAnnotatedType();
+        check(at instanceof AnnotatedTypeVariable, "annotated use is still type variable");
+        check(at.getAnnotation(Use.class) != null, "use-site annotation visible");
+        check(at.isAnnotationPresent(Use.class), "use-site present");
+        check(at.getAnnotations().length == 1, "use-site one annotation");
+        check(at.getAnnotationsByType(Use.class).length == 1, "use-site byType one");
+        AnnotatedTypeVariable atv = (AnnotatedTypeVariable) at;
+        check(atv.getType() instanceof TypeVariable, "underlying still TypeVariable");
+        check(atv.getAnnotatedBounds()[0].getType() == Object.class, "bounds stay implicit");
+    }
+
+    // constructor parameter of type variable resolves like fields and methods
+    static void testConstructorPath() throws Exception {
+        java.lang.reflect.Constructor<?> ctor = WithCtor.class.getDeclaredConstructor(Number.class);
+        AnnotatedTypeVariable p = (AnnotatedTypeVariable) ctor.getParameters()[0].getAnnotatedType();
+        check(p.getType() instanceof TypeVariable, "ctor param is type variable");
+        check("T".equals(p.getType().getTypeName()), "ctor param name T");
+        check(p.getAnnotatedBounds().length == 1, "ctor param single bound");
+        check(p.getAnnotatedBounds()[0].getType() == Number.class, "ctor param bound Number");
+        check(p.getAnnotations().length == 0, "ctor param clean");
+    }
+
+    // the method's own type parameter table mirrors declaration-site bounds
+    static void testMethodTypeParameters() throws Exception {
+        Method m = AnnotatedTypeVariableTest.class.getMethod("annotatedBound", Number.class);
+        TypeVariable<?>[] tvs = m.getTypeParameters();
+        check(tvs.length == 1, "one method type parameter");
+        check("T".equals(tvs[0].getName()), "method type parameter name");
+        check(tvs[0].getGenericDeclaration().equals(m),
+              "declared by the method (reflection copies compare by equals)");
+        check(tvs[0].getAnnotatedBounds()[0].getAnnotation(Bound.class) != null,
+              "method TV bound annotated");
+        check(tvs[0].getAnnotatedBounds()[0].getType() == Number.class, "method TV bound Number");
+    }
+
+    // class-level double bound seen through the class type parameter
+    static void testClassDoubleBound() {
+        TypeVariable<?> tv = Bounded.class.getTypeParameters()[0];
+        check(tv.getAnnotatedBounds().length == 2, "class TV two bounds");
+        check(tv.getAnnotatedBounds()[0].getAnnotation(Bound.class) != null, "first annotated");
+        check(tv.getAnnotatedBounds()[1].getAnnotation(Bound.class) == null, "second clean");
+        check(tv.getGenericDeclaration() == Bounded.class, "declared by the class");
+        check(tv.getBounds()[0] == Number.class, "raw first bound Number");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testAnnotatedUseSite();
+        testConstructorPath();
+        testMethodTypeParameters();
+        testClassDoubleBound();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

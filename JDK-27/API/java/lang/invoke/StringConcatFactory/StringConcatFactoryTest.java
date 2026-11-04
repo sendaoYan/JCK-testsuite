@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.lang.invoke.StringConcatFactory conformance: white-box + black-box behavior.
+ * @summary java.lang.invoke.StringConcatFactory conformance: white-box + black-box behavior, full primitive matrix, recipe constants, linkage independence and precise StringConcatException negatives.
  * @run main StringConcatFactoryTest
  */
 
@@ -128,9 +128,181 @@ public class StringConcatFactoryTest {
         }
     }
 
+    // ---- helpers ----
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+            String frag, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) {
+                if (t.getMessage() != null && t.getMessage().contains(frag)) {
+                    passed++; return;
+                }
+                throw new AssertionError(msg + ": expected message fragment \"" + frag
+                        + "\" but got \"" + t.getMessage() + "\"");
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static final String SLOT_1 = "\u0001"; // recipe tag: one dynamic argument
+    static final String SLOT_2 = "\u0002"; // recipe tag: one constant from the constants list
+
+    static String concat(MethodType mt, Object... args) throws Throwable {
+        return (String) StringConcatFactory.makeConcat(MethodHandles.lookup(), "concat", mt)
+                .dynamicInvoker().invokeWithArguments(java.util.Arrays.asList(args));
+    }
+
+    // ---- every primitive and reference conversion, exact outputs ----
+    static void testPrimitiveMatrix() throws Throwable {
+        check("x2".equals(concat(MethodType.methodType(String.class, String.class, int.class),
+                "x", 2)), "(String,int) -> x2");
+        check("2x".equals(concat(MethodType.methodType(String.class, int.class, String.class),
+                2, "x")), "(int,String) -> 2x");
+        check("AB".equals(concat(MethodType.methodType(String.class, char.class, char.class),
+                'A', 'B')), "(char,char) -> AB");
+        check("1.52.259falseZ".equals(concat(
+                MethodType.methodType(String.class, float.class, double.class, long.class,
+                        boolean.class, char.class),
+                1.5f, 2.25d, 9L, false, 'Z')),
+                "float/double/long/boolean/char sequence");
+        check("12".equals(concat(MethodType.methodType(String.class, byte.class, short.class),
+                (byte) 1, (short) 2)), "(byte,short) -> 12");
+        Object nil = null;
+        check("xnull".equals(concat(MethodType.methodType(String.class, String.class,
+                Object.class), "x", nil)), "null reference renders as null");
+        check("null".equals(concat(MethodType.methodType(String.class, Object.class), nil)),
+                "lone null renders as null");
+        check("-7true".equals(concat(MethodType.methodType(String.class, int.class,
+                boolean.class), -7, true)), "negative int and true");
+        StringBuilder expect = new StringBuilder();
+        for (int i = 0; i < 10; i++) expect.append(i);
+        Class<?>[] many = new Class<?>[10];
+        for (int i = 0; i < 10; i++) many[i] = int.class;
+        Object[] vals = new Integer[10];
+        for (int i = 0; i < 10; i++) vals[i] = i;
+        check(expect.toString().equals(concat(MethodType.methodType(String.class, many), vals)),
+                "ten dynamic arguments keep their order");
+    }
+
+    // ---- makeConcatWithConstants recipe algebra ----
+    static void testConstantsRecipes() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        CallSite multi = StringConcatFactory.makeConcatWithConstants(lookup, "concat",
+                MethodType.methodType(String.class, String.class),
+                SLOT_1 + "=" + SLOT_2 + "/" + SLOT_2, "A", "B");
+        check("x=A/B".equals((String) multi.dynamicInvoker().invoke("x")),
+                "multiple constants substituted in order");
+        // a tag below \u0002 is ordinary text: no unknown-escape rejection
+        CallSite odd = StringConcatFactory.makeConcatWithConstants(lookup, "concat",
+                MethodType.methodType(String.class, String.class),
+                SLOT_1 + "\u0003");
+        check(("x" + "\u0003").equals((String) odd.dynamicInvoker().invoke("x")),
+                "\\u0003 is a literal, not an error");
+        CallSite empty = StringConcatFactory.makeConcatWithConstants(lookup, "concat",
+                MethodType.methodType(String.class), "");
+        check("".equals((String) empty.dynamicInvoker().invoke()), "empty recipe, no args");
+        CallSite prefix = StringConcatFactory.makeConcatWithConstants(lookup, "concat",
+                MethodType.methodType(String.class, int.class, int.class),
+                "p" + SLOT_1 + "m" + SLOT_2 + "s" + SLOT_1 + "t", "K");
+        check("p1mKs2t".equals((String) prefix.dynamicInvoker().invoke(1, 2)),
+                "text and tags interleave");
+        check(multi.type().equals(MethodType.methodType(String.class, String.class)),
+                "with-constants CallSite type");
+    }
+
+    // ---- linkage identity and name leniency (observed) ----
+    static void testLinkageIdentity() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodType mt = MethodType.methodType(String.class, String.class, String.class);
+        CallSite a = StringConcatFactory.makeConcat(lookup, "concat", mt);
+        CallSite b = StringConcatFactory.makeConcat(lookup, "concat", mt);
+        check(a != b, "same-type linkages are independent CallSites");
+        check(a.type().equals(b.type()) && a.type() == mt,
+                "both CallSites carry the requested type");
+        check("ab".equals((String) a.dynamicInvoker().invoke("a", "b"))
+                && "ab".equals((String) b.dynamicInvoker().invoke("a", "b")),
+                "both linkages compute identically");
+        // name is only null-checked: '.' and '' link fine (observed)
+        CallSite dotted = StringConcatFactory.makeConcat(lookup, "a.b", mt);
+        check("cd".equals((String) dotted.dynamicInvoker().invoke("c", "d")),
+                "dotted name still links (observed)");
+        CallSite bare = StringConcatFactory.makeConcat(lookup, "", mt);
+        check("ef".equals((String) bare.dynamicInvoker().invoke("e", "f")),
+                "empty name still links (observed)");
+    }
+
+    // ---- precise linkage-time failures ----
+    static void testNegativeLinkage() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodType twoStr = MethodType.methodType(String.class, String.class, String.class);
+        checkThrowsMsg(NullPointerException.class,
+                () -> StringConcatFactory.makeConcat(lookup, null, twoStr),
+                "Name is null", "null name -> NPE");
+        checkThrowsMsg(NullPointerException.class,
+                () -> StringConcatFactory.makeConcatWithConstants(lookup, "c", twoStr, null, "K"),
+                "Recipe is null", "null recipe -> NPE");
+        checkThrowsMsg(NullPointerException.class,
+                () -> StringConcatFactory.makeConcatWithConstants(lookup, "c",
+                        MethodType.methodType(String.class, String.class),
+                        SLOT_2, (Object[]) null),
+                "Constants are null", "null constants array -> NPE");
+        checkThrowsMsg(NullPointerException.class,
+                () -> StringConcatFactory.makeConcatWithConstants(lookup, "c",
+                        MethodType.methodType(String.class, String.class),
+                        SLOT_2, new Object[] { null }),
+                "Cannot accept null constants", "null constant element -> NPE");
+        checkThrowsMsg(java.lang.invoke.StringConcatException.class,
+                () -> StringConcatFactory.makeConcatWithConstants(lookup, "c",
+                        MethodType.methodType(String.class, String.class),
+                        SLOT_1 + SLOT_2, "A", "B"),
+                "Mismatched number of concat constants",
+                "more constants than tags -> StringConcatException");
+        checkThrowsMsg(java.lang.invoke.StringConcatException.class,
+                () -> StringConcatFactory.makeConcatWithConstants(lookup, "c",
+                        MethodType.methodType(String.class, String.class),
+                        SLOT_1 + SLOT_2 + SLOT_2, "A"),
+                "Mismatched number of concat constants",
+                "fewer constants than tags -> StringConcatException");
+        checkThrowsMsg(java.lang.invoke.StringConcatException.class,
+                () -> StringConcatFactory.makeConcatWithConstants(lookup, "c",
+                        MethodType.methodType(String.class, int.class, int.class), SLOT_1),
+                "Mismatched number of concat arguments",
+                "slot/arity mismatch -> StringConcatException");
+        checkThrowsMsg(java.lang.invoke.StringConcatException.class,
+                () -> StringConcatFactory.makeConcat(lookup, "c",
+                        MethodType.methodType(Integer.class, String.class, String.class)),
+                "The return type should be compatible with String",
+                "non-String return -> StringConcatException");
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testPrimitiveMatrix();
+        testConstantsRecipes();
+        testLinkageIdentity();
+        testNegativeLinkage();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

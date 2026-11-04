@@ -1,6 +1,12 @@
 /*
  * @test
  * @summary java.lang.invoke.VolatileCallSite conformance: white-box + black-box behavior.
+ *          Deepened: JDK helpful NPE messages for null setTarget/constructor
+ *          arguments, WMTE "should be of type" on type mismatch, placeholder
+ *          invocation IllegalStateException ("uninitialized call site"),
+ *          cached dynamicInvoker follows volatile target updates, getTarget
+ *          identity round-trip, sibling relation to MutableCallSite,
+ *          constructor parity between the two public constructors.
  * @run main VolatileCallSiteTest
  */
 
@@ -89,9 +95,117 @@ public class VolatileCallSiteTest {
 
     static String str() { return "s"; }
 
+    // ---- Part 3: deepened contract (2026-11-05) ----
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrowsMsg(Class<? extends Throwable> expected, ThrowingRunnable r,
+            String frag, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) {
+                if (t.getMessage() != null && t.getMessage().contains(frag)) {
+                    passed++; return;
+                }
+                throw new AssertionError(msg + ": expected message fragment \"" + frag
+                        + "\" but got \"" + t.getMessage() + "\"");
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    // JDK helpful NPE/WMTE messages.
+    static void testNegativeMessages() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodHandle seven = lookup.findStatic(VolatileCallSiteTest.class, "seven",
+                MethodType.methodType(int.class));
+        MethodHandle bad = lookup.findStatic(VolatileCallSiteTest.class, "str",
+                MethodType.methodType(String.class));
+        VolatileCallSite site = new VolatileCallSite(seven);
+        checkThrowsMsg(NullPointerException.class, () -> site.setTarget(null),
+                "\"newTarget\" is null", "setTarget(null) NPE message");
+        checkThrowsMsg(java.lang.invoke.WrongMethodTypeException.class,
+                () -> site.setTarget(bad), "should be of type",
+                "setTarget wrong type WMTE message");
+        check(site.getTarget() == seven, "site intact after failures");
+        checkThrowsMsg(NullPointerException.class, () -> new VolatileCallSite((MethodHandle) null),
+                "\"target\" is null", "(MethodHandle)null ctor NPE message");
+        checkThrowsMsg(NullPointerException.class, () -> new VolatileCallSite((MethodType) null),
+                "\"targetType\" is null", "(MethodType)null ctor NPE message");
+    }
+
+    // MethodType constructor placeholder: right type, refuses invocation with
+    // IllegalStateException until a real target is installed.
+    static void testPlaceholderSemantics() throws Throwable {
+        VolatileCallSite site = new VolatileCallSite(MethodType.methodType(int.class));
+        check(site.getTarget() == site.getTarget(), "placeholder stable until replaced");
+        checkThrowsMsg(IllegalStateException.class,
+                () -> { int v = (int) site.getTarget().invoke(); },
+                "uninitialized call site", "placeholder invoke ISE");
+        checkThrowsMsg(IllegalStateException.class,
+                () -> { int v = (int) site.dynamicInvoker().invoke(); },
+                "uninitialized call site", "placeholder dynamicInvoker ISE");
+        site.setTarget(MethodHandles.constant(int.class, 42));
+        check((int) site.dynamicInvoker().invokeExact() == 42, "usable after setTarget");
+    }
+
+    // Cached dynamicInvoker handles keep re-dispatching through the site
+    // across volatile target updates.
+    static void testCachedInvokerFollowsVolatileUpdates() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodHandle seven = lookup.findStatic(VolatileCallSiteTest.class, "seven",
+                MethodType.methodType(int.class));
+        MethodHandle eight = lookup.findStatic(VolatileCallSiteTest.class, "eight",
+                MethodType.methodType(int.class));
+        VolatileCallSite site = new VolatileCallSite(seven);
+        MethodHandle c1 = site.dynamicInvoker();
+        MethodHandle c2 = site.dynamicInvoker();
+        site.setTarget(eight);
+        check((int) c1.invokeExact() == 8, "c1 follows update");
+        check((int) c2.invokeExact() == 8, "c2 follows update");
+        site.setTarget(seven);
+        check((int) c1.invokeExact() == 7, "switch back visible");
+        check((int) site.getTarget().invokeExact() == 7, "getTarget().invokeExact equal");
+    }
+
+    // getTarget identity semantics across installs.
+    static void testGetTargetIdentityRoundTrip() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        MethodHandle seven = lookup.findStatic(VolatileCallSiteTest.class, "seven",
+                MethodType.methodType(int.class));
+        MethodHandle eight = lookup.findStatic(VolatileCallSiteTest.class, "eight",
+                MethodType.methodType(int.class));
+        VolatileCallSite site = new VolatileCallSite(seven);
+        site.setTarget(eight);
+        check(site.getTarget() == eight, "identity after install");
+        site.setTarget(seven);
+        check(site.getTarget() == seven, "identity restored");
+        check(site.getTarget() == site.getTarget(), "repeatable read");
+    }
+
+    // VolatileCallSite and MutableCallSite are siblings under CallSite.
+    static void testSiblingRelation() {
+        check(!java.lang.invoke.MutableCallSite.class.isAssignableFrom(VolatileCallSite.class)
+              && !VolatileCallSite.class.isAssignableFrom(
+                      java.lang.invoke.MutableCallSite.class),
+              "siblings, not parent/child");
+        check(CallSite.class.isAssignableFrom(VolatileCallSite.class),
+              "CallSite is the shared parent");
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testNegativeMessages();
+        testPlaceholderSemantics();
+        testCachedInvokerFollowsVolatileUpdates();
+        testGetTargetIdentityRoundTrip();
+        testSiblingRelation();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
