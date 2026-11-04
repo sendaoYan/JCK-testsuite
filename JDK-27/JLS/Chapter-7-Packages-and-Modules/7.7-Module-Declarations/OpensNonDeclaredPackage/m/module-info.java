@@ -1,0 +1,3 @@
+module m {
+    opens notdeclared;
+}
