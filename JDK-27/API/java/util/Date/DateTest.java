@@ -48,12 +48,51 @@ public class DateTest {
     }
 
     // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         testEpochAndTime();
         testOrdering();
         testClone();
         testUtcAndInstant();
         testParse();
+        testNullAndSerialization();
+    }
+
+    static void testNullAndSerialization() throws Exception {
+        Date d = new Date(12345L);
+        assertThrows(NullPointerException.class, () -> d.before(null), "before(null) NPE");
+        assertThrows(NullPointerException.class, () -> d.after(null), "after(null) NPE");
+        assertThrows(NullPointerException.class, () -> d.compareTo(null), "compareTo(null) NPE");
+        assertThrows(NullPointerException.class, () -> Date.from(null), "from(null) NPE");
+
+        check(new Date(Long.MAX_VALUE).getTime() == Long.MAX_VALUE, "constructor(MAX_VALUE)");
+        check(new Date(Long.MIN_VALUE).getTime() == Long.MIN_VALUE, "constructor(MIN_VALUE)");
+        check(new Date(Long.MIN_VALUE).toInstant().equals(Instant.ofEpochMilli(Long.MIN_VALUE)),
+              "toInstant(MIN_VALUE)");
+
+        // deprecated field getter/setter round-trips (local timezone independent).
+        Date f = new Date(0);
+        f.setHours(5); check(f.getHours() == 5, "setHours/getHours");
+        f.setMinutes(15); check(f.getMinutes() == 15, "setMinutes/getMinutes");
+        f.setSeconds(30); check(f.getSeconds() == 30, "setSeconds/getSeconds");
+        f.setYear(120); check(f.getYear() == 120, "setYear/getYear");
+        f.setMonth(5); check(f.getMonth() == 5, "setMonth/getMonth");
+        f.setDate(15); check(f.getDate() == 15, "setDate/getDate");
+        check(f.getDay() >= 0 && f.getDay() <= 6, "getDay in [0,6]");
+
+        // Serializable round-trip.
+        Date src = new Date(9876543210L);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(src);
+        }
+        Date revived;
+        try (java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            revived = (Date) ois.readObject();
+        }
+        check(revived != src && revived.equals(src) && revived.getTime() == src.getTime(),
+              "serialization roundtrip preserves time");
+        check(revived.after(new Date(0)), "revived Date still operable");
     }
 
     static void testEpochAndTime() {
