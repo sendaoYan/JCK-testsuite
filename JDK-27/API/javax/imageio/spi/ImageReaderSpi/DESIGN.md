@@ -20,3 +20,10 @@
 - 用真实 PNG 签名字节流经 `ImageIO.createImageInputStream` 后 `canDecodeInput` 返回 true；传入 String 返回 false。
 - `getImageWriterSpiNames()` 非空且首项包含 "PNGImageWriterSpi"。
 - `createReaderInstance()` 与 `createReaderInstance(null)` 均返回 reader，`isOwnReader` 返回 true；`isOwnReader(null)` 抛 `IllegalArgumentException`；最后 `dispose`。
+
+## 5. 契约深化补充（本轮）
+- 真实 PNG SPI 身份：vendor=="Oracle Corporation"/version=="1.0"/`getPluginClassName()` 精确常量；`getInputTypes()` 为 `STANDARD_INPUT_TYPE` 的防御性克隆。
+- `canDecodeInput` 契约：魔数 true、文本 false、**null 返回 false（javadoc 写 IAE——记录偏差）**、**4 字节短流返回 false（JDK-8 抛 `EOFException`——版本差异双侧各自断言）**、JPEG 魔数 false。
+- `isOwnReader`：用嵌套类二进制名构造匹配/不匹配两种情形（实现按 `getClass().getName()` 与 pluginClassName 比较）。
+- 元数据格式访问器：native image 格式名精确 "javax_imageio_png_1.0"；null/未知/标准流格式名 5 组合均 `IllegalArgumentException`。
+- 自写 TinyReaderSpi：全部 getter 往返、构造器 null inputTypes IAE。

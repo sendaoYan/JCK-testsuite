@@ -23,3 +23,8 @@
 - 双参构造：消息与 cause 身份、`instanceof Serializable`。
 - 双参 + null 消息：cause 仍被记录。
 - 白盒部分补齐：public 非抽象、继承 `IOException`、两个构造器、Serializable。
+
+## 5. 深化补充（第 2 轮，全部实测）
+- 序列化：`ObjectStreamClass.lookup` SUID 稳定为 -3216210718638985251L（与 JDK-8 计算值一致，互通）；本 JDK **显式声明** `private static final long serialVersionUID` 字段（JDK-8 无声明，版本差异）；round-trip 后 message 保留、cause 保留为**深拷贝**（非同引用）。
+- Throwable 契约：单参构造后 `initCause` 成功且返回 this、二次抛 IllegalStateException；双参构造后再 initCause 抛 IllegalStateException；addSuppressed/getSuppressed 顺序保留；toString 精确格式；getStackTrace 首帧校验；多态 catch 为 IOException。
+- 白盒补充：无自有 declared methods（纯承载异常）。

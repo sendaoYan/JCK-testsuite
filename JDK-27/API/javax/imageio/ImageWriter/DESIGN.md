@@ -25,3 +25,4 @@
 - progress listener 触发 imageStarted/imageComplete。
 - reset 清空输出、dispose。
 - 白盒：abstract + implements ImageTranscoder + 全部公共方法存在。
+- CORE-B 补充（四个新增方法，双轨制）：真实 PNG 负契约（无输出 write ISE、setOutput 类型 IAE、null IIOImage/RenderedImage IAE、写读往返像素、canWriteRasters false、缩略图 0、convert 元数据边界、locale 非法 IAE、null 监听器 no-op）；能力矩阵（约 20 个无输出 ISE 探针 + 有输出 false/UOE 矩阵，canWriteSequence 不检查输出，endWriteEmpty 两侧 ISE）；StubWriter（provider 输出校验 vs 无 provider 接受任意对象的不对称、write(RenderedImage) 包装 IIOImage(im,null,null)、null 穿透基类直达子类、3 参透传、convert* 透传）；Stub 回调（双监听器计数/移除、abort-from-listener → writeAborted 且无 imageComplete、陈旧 abort 清零、processWarningOccurred(0,null) 仅在有警告监听器时 IAE、locale 与 getDefaultWriteParam 继承）。版本差异：JDK-27 侧 PNG 参数 canWriteCompressed=true 且可设质量（JDK-8 为 false/UOE）。

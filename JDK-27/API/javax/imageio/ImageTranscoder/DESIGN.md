@@ -20,3 +20,8 @@
 - `convertStreamMetadata(null,null)` 返回 null（PNG 无流元数据）。
 - `convertImageMetadata(null, its, null)` 返回非 null 元数据对象。
 - 白盒：isInterface、无父接口、两个公共方法。
+
+## 5. 深化补充（第 2 轮，全部实测）
+- PNG 元数据端到端链：write→read→getImageMetadata(0) 非 null、isStandardMetadataFormatSupported true、格式名含 javax_imageio_png_1.0 与 javax_imageio_1.0、标准树根节点名 javax_imageio_1.0；convertImageMetadata(pngMeta) 返回新对象（非同引用）、非只读、保留原生格式；convertImageMetadata(null) 非 null；PNG getDefaultStreamMetadata 为 null。
+- 内置 writer null 语义（实测精确类）：BMP 两 convert(null) 均返回 null；GIF 两 convert(null) 均抛 IllegalArgumentException("inData == null!")（违反 javadoc 措辞）；JPEG convertStreamMetadata(null) → null 但 convertImageMetadata(null) 抛 NullPointerException；JPEG 接 PNG 元数据跨格式非 null。
+- 接口形状：恰好 2 方法 public abstract、convertImageMetadata 3 参、无常量字段；ImageWriter 实现、ImageReader 不实现；getImageTranscoders(png,png) 空迭代器、null 参数 IAE。

@@ -51,6 +51,76 @@ public class IIOParamControllerTest {
         p.setController(new IIOParamController() { public boolean activate(IIOParam param) { called[0] = true; return false; } });
         check(!p.activateController(), "activateController returns controller's false");
         check(called[0], "activateController invoked the controller");
+
+        // ---- additions (CORE-B) ----
+        testCoreBStructure();
+        testCoreBControllerPlumbing();
+    }
+
+    static void testCoreBStructure() throws Exception {
+        Class<?> c = Class.forName("javax.imageio.IIOParamController");
+        Method m = c.getDeclaredMethods()[0];
+        check(java.lang.reflect.Modifier.isAbstract(m.getModifiers()), "activate is abstract");
+        check(java.lang.reflect.Modifier.isPublic(m.getModifiers()), "activate is public");
+        check(m.getExceptionTypes().length == 0, "activate declares no checked exceptions");
+        check(c.getDeclaredFields().length == 0, "no declared fields");
+        check(c.getDeclaredClasses().length == 0, "no declared member types");
+    }
+
+    static class ParamWithDefaultController extends ImageReadParam {
+        ParamWithDefaultController(IIOParamController dc) {
+            this.defaultController = dc;
+        }
+    }
+
+    static void testCoreBControllerPlumbing() {
+        // no controller: javadoc says "false if none", but both JDKs throw ISE (probed)
+        ImageReadParam bare = new ImageReadParam();
+        check(!bare.hasController(), "no controller by default");
+        check(bare.getController() == null, "getController null by default");
+        boolean bareThrew = false;
+        try { bare.activateController(); } catch (IllegalStateException e) { bareThrew = true; }
+        check(bareThrew, "activateController throws ISE without controller (javadoc divergence)");
+        check(bare.getDefaultController() == null, "defaultController null for plain param");
+
+        // returning true is relayed; setController(null) detaches
+        ImageReadParam p = new ImageReadParam();
+        p.setController(param -> true);
+        check(p.hasController() && p.getController() != null, "controller attached");
+        check(p.activateController(), "activateController relays true");
+        p.setController(null);
+        check(!p.hasController(), "setController(null) detaches");
+
+        // a controller may mutate the param; mutations persist after activation
+        ImageReadParam mut = new ImageReadParam();
+        mut.setController(param -> {
+            param.setSourceSubsampling(2, 2, 0, 0);
+            return true;
+        });
+        check(mut.activateController(), "mutating controller returns true");
+        check(mut.getSourceXSubsampling() == 2 && mut.getSourceYSubsampling() == 2, "controller mutations persist");
+
+        // exceptions raised inside activate() propagate out of activateController unchanged
+        ImageReadParam boom = new ImageReadParam();
+        boom.setController(param -> { throw new IllegalStateException("coreb-relay"); });
+        boolean relayed = false;
+        try { boom.activateController(); } catch (IllegalStateException e) {
+            relayed = "coreb-relay".equals(e.getMessage());
+        }
+        check(relayed, "controller exceptions relayed with message");
+
+        // quirk (probed): defaultController is never consulted by activateController
+        final boolean[] defaultSeen = new boolean[1];
+        ParamWithDefaultController pd = new ParamWithDefaultController(param -> { defaultSeen[0] = true; return true; });
+        check(pd.getDefaultController() != null, "getDefaultController exposes protected field");
+        check(!pd.hasController(), "defaultController does not count as controller");
+        boolean pdThrew = false;
+        try { pd.activateController(); } catch (IllegalStateException e) { pdThrew = true; }
+        check(pdThrew, "activateController throws ISE with only defaultController");
+        check(!defaultSeen[0], "defaultController never activated implicitly");
+        pd.setController(pd.getDefaultController());
+        check(pd.hasController(), "explicit set of default controller");
+        check(pd.activateController() && defaultSeen[0], "explicit default controller runs");
     }
 
     public static void main(String[] args) throws Exception {

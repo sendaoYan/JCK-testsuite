@@ -17,3 +17,10 @@
 - `getInstance()` 单例、标签名/号集合非空且一一对应、每个名称可解析。
 - 精确比对关键标签号（34853/40965/36864/40961）。
 - `ColorSpace`/`ExposureProgram` 的 mnemonic 值名。
+
+## 5. 深化补充（第二批，2026-11-05，断言 19 → 308）
+- 全部 57 个 TAG_ 编号常量精确值表（33434…42016），每个断言集合内可解析 + 号自洽；集合规模精确 57；最小号 33434（ExposureTime）。
+- 实测发现：TAG_GPS_INFO_IFD_POINTER=34853 常量存在但 GPS 指针 tag 不在本集合（属 ExifParent）；TAG_MAKER_NOTE 与 TAG_MARKER_NOTE 为同号别名（37500）。
+- 全部枚举值常量精确值（COLOR_SPACE/COMPONENTS_CONFIGURATION/EXPOSURE_PROGRAM 10 项/METERING_MODE 11 项/LIGHT_SOURCE 22 项/FLASH 值与 8 个掩码/FOCAL_PLANE/SENSING_METHOD/CUSTOM_RENDERED/EXPOSURE_MODE/WHITE_BALANCE/SCENE_CAPTURE/GAIN_CONTROL/CONTRAST/SATURATION/SHARPNESS/SUBJECT_DISTANCE_RANGE）；EXIF_VERSION_2_1="0210"、EXIF_VERSION_2_2="0220"。
+- 值名实测：MeteringMode 0="Unknown"/5="Pattern"、LightSource 1="Daylight"/21="D65"、ExposureProgram 1="Manual"、ColorSpace 1="sRGB"。
+- 类型契约：ExposureTime/FNumber 仅 RATIONAL、ExifVersion 仅 UNDEFINED（拒 ASCII）、DateTimeOriginal ASCII、MakerNote UNDEFINED、ISOSpeedRatings SHORT|LONG、InteroperabilityIFD(40965) isIFDPointer。

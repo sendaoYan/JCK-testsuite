@@ -19,3 +19,8 @@
 - 在默认 `IIORegistry` 上调用 `onRegistration`/`onDeregistration`，断言无异常返回。
 - 通过 `super(null, "1.0")` 与 `super("Vendor", null)` 子类验证构造器 null 校验抛 `IllegalArgumentException`。
 - 断言 `IIOServiceProvider` 实例是 `RegisterableService`。
+
+## 5. 契约深化补充（本轮）
+- 无参构造实测：`getVendorName()`/`getVersion()` 均为 null（javadoc 未声明的记录行为）；空串 `""` 厂商/版本被接受。
+- 回调透传：自写 `RecordingProvider extends ImageInputStreamSpi` 在私有注册表验证 onRegistration/onDeregistration 收到的 registry/category 与注册参数 `==` 相同；同叶类替换触发旧实例 onDeregistration。
+- 真实提供者：png writer SPI vendor=="Oracle Corporation"、version=="1.0"、`getDescription(Locale.US)`==`getDescription(null)`（未本地化）。

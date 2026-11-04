@@ -20,3 +20,11 @@
 - 名称查标签（ImageWidth/BitsPerSample）、号查标签（256/259/262）、未知号返回 null。
 - `getTagNames/getTagNumbers` 非空且一一对应、每个名称都可解析。
 - `Compression` 标签带 mnemonic 值名（`hasValueNames()`、`getValueName(COMPRESSION_NONE)`、`getNamedValues()`）。
+
+## 5. 深化补充（第二批，2026-11-05，断言 37 → 501）
+- 全部 76 个 TAG_ 编号常量与 TIFF 6.0 规范精确比对（254…34675 全表，每个常量同时断言集合内可解析、号自洽、名字非空）；集合规模精确 76。
+- 全部枚举值常量精确值表（NEW_SUBFILE_TYPE/SUBFILE_TYPE/COMPRESSION 10 项/PHOTOMETRIC 9 项/THRESHHOLDING/FILL_ORDER/ORIENTATION 8 项/PLANAR/GRAY_RESPONSE_UNIT/T4/T6/RESOLUTION_UNIT/PREDICTOR/INK_SET/EXTRA_SAMPLES/SAMPLE_FORMAT/JPEG_PROC/Y_CB_CR_POSITIONING）。
+- 值名表实测：Compression namedValues 精确 `[1..8,32773,32946]`、"Uncompressed"/"PackBits"；Photometric 2="RGB"；Planar "Chunky"/"Planar"；Predictor 2="Horizontal Differencing"；ResolutionUnit 2="Inch" 等。
+- 实测发现（实现怪癖）：Orientation 值名仅 1–7 注册（8 无名返回 null，TIFF 规范本有 8 个值）；ICC Profile tag 名为 "ICC Profile"（带空格，getTag("ICCProfile") 返回 null）。
+- 每 tag 类型契约：ImageWidth SHORT|LONG count=1、XResolution 仅 RATIONAL、DateTime/DocumentName/Software ASCII、BitsPerSample/StripOffsets count=-1、ICCProfile UNDEFINED、基线内无任何 IFD 指针 tag、getTagSet 均 null。
+- 编解码集成：BYTE_GRAY 写出后读回的 12 个基线 tag（256..296）号/名/值精确断言，StripByteCounts==w*h。

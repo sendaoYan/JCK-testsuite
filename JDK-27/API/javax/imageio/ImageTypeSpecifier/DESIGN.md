@@ -23,3 +23,9 @@
 - `createGrayscale(8,BYTE,false)` 分量/波段/位深/BYTE_GRAY 类型。
 - equals/hashCode：同布局相等、null 不相等、跨类型不相等。
 - 白盒：两个公共构造器 + 全部工厂/查询方法存在。
+
+## 5. 深化补充（第 2 轮，全部实测）
+- 13 种 TYPE_* 全矩阵（comps/bands/bitsPerBand 精确值表 + createFromBufferedImageType/createFromRenderedImage/createBufferedImage 三重 type 往返，13/13）。
+- 工厂正例矩阵：createPacked 带 alpha → TYPE_INT_ARGB（各 band 8 bits、premult 进 ColorModel、无 alpha → TYPE_INT_RGB）；createInterleaved/createBanded → TYPE_CUSTOM；createGrayscale 1bit→BYTE_BINARY、8bit→BYTE_GRAY、16bit USHORT→USHORT_GRAY，**4 参重载总是带 alpha**（第 4 参仅为 isAlphaPremultiplied）；createIndexed 1/4bit→BYTE_BINARY、8bit→BYTE_INDEXED、null alpha LUT → 3 分量无 alpha。
+- 负例全表（实测均 IAE）：详见测试 testFactoryNegatives（bits 非 1/2/4/8/16、dataType 非法、LUT 长度≠2^bits、mask 不连续、null 参数、getBitsPerBand 越界、getSampleModel/createBufferedImage 非正尺寸）。
+- equals/hashCode：跨实例、跨工厂种类一致；**版本差异**：`createFromRenderedImage(TYPE_BYTE_INDEXED)` 与 canonical 调色板在本 JDK equals=false（JDK-9+ 改了默认调色板；JDK-8 为 true），type 往返仍成立。

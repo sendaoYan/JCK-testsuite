@@ -18,3 +18,10 @@
 - `getImageMetadataFormat(nativeName)` 返回非 null；`getImageMetadataFormat(null)` 抛 `IllegalArgumentException`；流元数据名与额外元数据名均为 null。
 - `getFormatNames()` 返回防御性克隆（修改返回值不影响原数组）。
 - 自定义 `TinyRW` 子类验证构造器对 null/空 names、null pluginClassName 的异常，以及格式名/后缀/MIME/插件类名的往返。
+
+## 5. 契约深化补充（本轮）
+- 真实 PNG 继承访问器：`getNativeImageMetadataFormatName()=="javax_imageio_png_1.0"` 精确常量。
+- 元数据格式负例 5 组合（null/未知/跨流图像访问器）均精确 `IllegalArgumentException`。
+- 16 参全量构造自写 TinyRW：全部 10 个字段 getter 往返（含 lossless、标准格式开关）；null suffixes/MIME → getter 返回 null。
+- 克隆语义：改 `getFileSuffixes()` 返回数组后再取仍含 "png"。
+- 无参构造子类实测：数组 getter 全 null、`getFormatNames()` 触发 `NullPointerException`（记录行为）。

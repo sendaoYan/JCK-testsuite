@@ -20,3 +20,9 @@
 - 记录型控制器 `RecordingController` 分别配置返回 false/true，断言 `activate` 返回值、调用次数、收到的参数身份。
 - lambda 形式：`m -> true` / `m -> false` 验证函数式接口用法。
 - 白盒：public abstract interface，仅一个抽象方法 `activate(IIOMetadata): boolean`。
+
+## 5. 增补（本批深化，实测于 jdk-27.0.1）
+- 记录契约：重复激活、返回值随实现状态变化、`activate(null)` 直达实现、实例间状态独立、方法引用实现形态。
+- 异常中继：控制器抛出的同一 RuntimeException 对象经 `activate` 与经 `activateController` 两条路均原样透传。
+- 接线细节：`activateController()` 回调参数 `==` 元数据自身；控制器可被多个元数据共享（计数累加）；PNG 元数据 `getDefaultController()` null、`setController(getDefaultController())` 后 hasController false。
+- 结构增补：无字段、无注解、未标 @FunctionalInterface、getMethods 恰 1、activate 由接口自身声明且无受检异常。

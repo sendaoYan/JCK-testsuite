@@ -19,3 +19,9 @@
 - 构造器复制语义：入参往返、`getTable()` 返回副本、构造后改入参不影响内部。
 - `getScaledInstance`：`1.0f` 精确保留、`2.0f` 每项翻倍、`forceBaseline` clamp `[1,255]`、非 baseline clamp `[1,32767]`。
 - 非法入参：null、长度 63/65 均抛 `IllegalArgumentException`。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 反射断言公共方法集恰 3 个；**未覆写 equals/hashCode → 同一性语义**（实测）。
+- 构造矩阵：null/63/65 长 → IAE；恰 64 合法；**0/1000/-5 原样存储**（构造不校验数值范围，规范未写）。
+- `getScaledInstance` 取整公式 `(int)(v*scale+0.5f)`：3×0.5→2、5×0.5→3（四舍五入）；clamp `[1,32767]` / forceBaseline `[1,255]`；scale 0/负/NaN → 全 1；+Inf → 32767/255；调用不改 this。
+- 标准表锚点：K1[0]==16、K2[0]==17、K1Div2==逐项 (K1+1)/2 全表断言。

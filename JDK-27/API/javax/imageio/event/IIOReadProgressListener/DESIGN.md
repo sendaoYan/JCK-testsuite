@@ -14,3 +14,9 @@
 - 匿名实现九个方法直接调用均不抛异常。
 - 挂到真实 PNG reader 后 read：断言 imageStarted/imageComplete 各触发一次。
 - 白盒：isInterface、extends EventListener、九个公共方法存在。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 精确签名集断言：9 个方法逐一反射比对（名称/参数/返回/无 default），与方法数恰等。
+- 记录型实现类 `RecReadProgress` 捕获全部回调参数；PNG `readAll(Iterator)` 端到端：`sequenceStarted(0)` → imageStarted/imageProgress/imageComplete → `sequenceComplete`；单图 `read()` 不触发 sequence 事件（实测）。
+- 注册语义：重复 add → 双回调；remove 一次 → 单回调；remove 未注册/null no-op；removeAll 后清零。
+- 异常中继：读路径回调抛 RuntimeException 被 `ImageReader.readAll` 包装为 `javax.imageio.IIOException`（getCause 同一实例）——实测写进断言。

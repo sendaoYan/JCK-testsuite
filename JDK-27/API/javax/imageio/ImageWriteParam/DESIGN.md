@@ -20,3 +20,4 @@
 - 自建子类开启全部能力：tiling mode/setTiling/unsetTiling、progressive mode（MODE_EXPLICIT 抛 IAE）、compression 模式/类型/质量/isCompressionLossless/getBitRate/unsetCompression。
 - 异常：未知压缩类型、质量越界、非法模式、非 EXPLICIT 下访问压缩参数抛 IllegalStateException。
 - 白盒：extends IIOParam + 四个 MODE 常量值 + 全部方法存在。
+- CORE-B 补充（`testCoreBAdditions`）：无能力参数约 25 个 UOE 探针（能力检查先于参数校验，非法模式也 UOE）；MODE 常量 0/1/2/3；tiling 状态机（-1/4 IAE、非 EXPLICIT ISE、w<0/h=0 IAE、无 canOffsetTiles 时偏移 UOE、getPreferredTileSizes 副本）；压缩状态机全链（质量 0/1 边界、getBitRate 参数域、setCompressionType(null) 清空、unsetCompression 保持 EXPLICIT 并清 type、重入 EXPLICIT 清 type、getCompressionTypes 副本）；`FreeTypeParam` 无类型表时 setCompressionType UOE 而 quality 合法。

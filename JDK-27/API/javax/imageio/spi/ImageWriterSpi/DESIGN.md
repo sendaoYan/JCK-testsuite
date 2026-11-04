@@ -21,3 +21,9 @@
 - 用 headless-safe `BufferedImage.TYPE_INT_RGB` 构造 `ImageTypeSpecifier`，断言 `canEncodeImage(spec)` 与 `canEncodeImage(RenderedImage)` 均为 true。
 - `getImageReaderSpiNames()` 非空且首项包含 "PNGImageReaderSpi"。
 - `createWriterInstance()` 与 `createWriterInstance(null)` 均返回 writer，`isOwnWriter` 返回 true；`isOwnWriter(null)` 抛 `IllegalArgumentException`；最后 `dispose`。
+
+## 5. 契约深化补充（本轮）
+- `canEncodeImage` 矩阵：全部 13 个 `BufferedImage.TYPE_*`（1x1）逐个 true；`canEncodeImage(spec)`/`canEncodeImage(image)`/`canEncodeImage(w,h,type)` 三重载结论一致。
+- null 判定精确异常：`canEncodeImage((ImageTypeSpecifier)null)` 抛 `NullPointerException`（javadoc 写 IAE——记录偏差）；`canEncodeImage((RenderedImage)null)` 抛 `IllegalArgumentException`。
+- 自写 TinyWriterSpi（实现全部 5 个抽象方法以兼容两侧 JDK）：getter 往返、`getImageReaderSpiNames()` 可 null、null outputTypes IAE、无损标志往返。
+- `getFileSuffixes()` 防御性克隆语义。

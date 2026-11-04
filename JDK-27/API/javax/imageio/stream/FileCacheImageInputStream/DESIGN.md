@@ -22,3 +22,6 @@
 - 随机读 + 回退：`mark()` → `readFully` → `reset()` 回到标记位；`seek(10)` + `readByte`；`skipBytes(3)`。
 - 丢弃：`flushBefore(5)` + `getFlushedPosition()`，并对 `seek(4)` 断言 `IndexOutOfBoundsException`。
 - finally 中 `close()` 并递归删除临时目录，避免跨平台残留。
+
+## 5. 深化补充（testDeep* 契约覆盖，与 JDK-8 侧同源）
+追加 12 个 testDeep 方法（~130 条断言）：构造矩阵（null stream IAE、cacheDir=null 合法、非目录 IAE("Not a directory!")、无权限目录 → 精确 `java.nio.file.AccessDeniedException`）；缓存文件生命周期（open 时目录 1 条目、close 后 0）；状态矩阵 isCached/!isCachedMemory/isCachedFile；BE/LE 双字节序全基元读；EOF 精度；边界负例精确类；嵌套 mark/reset（入 flushed 区 → 精确 `javax.imageio.IIOException`）；skipBytes 语义；位操作跨字节；close 幂等（二次 close IOException("closed")）。临时目录 imgio-streamimpl-* finally 递归删除。JDK-27 与 JDK-8 行为一致。

@@ -25,3 +25,13 @@
 - `createImageInputStream/createImageOutputStream` 内存流非 null。
 - 写 `ImageOutputStream` 往返。
 - 白盒：final、无公共构造器、关键静态方法存在。
+
+## 5. 深化补充（第 2 轮，全部实测）
+- 插件清单：格式名同时含大小写两种拼写（png/PNG、tiff/TIFF/tif/TIF、jpg/JPG 等）；MIME 含 image/tiff（JDK-9+ 内置 TIFF）；四个清单数组均为防御性拷贝（改元素不污染下次取值）。
+- reader 发现：PNG 魔数 8 字节流 `getImageReaders` 非空且首个 spi `canDecodeInput` true；垃圾流空；`getImageReaders(null)`/`getImageReadersByFormatName(null)` → IAE；迭代器 remove → UnsupportedOperationException；空迭代器 next → NoSuchElementException。
+- writer 能力矩阵实测（getImageWriters(its,format)）：jpg 拒绝 alpha 与 USHORT_GRAY（JDK-9+ 起 ARGB 为 false，JDK-8 为 true——版本差异）；bmp 拒绝 alpha/USHORT_GRAY；png/gif/tiff 全 true；未知 format 空。
+- round-trip 矩阵：PNG 13 type 像素严格相等（回读 type：RGB→5、ARGB/ABGR→6、565/555/BGR→5、GRAY→10、UGRAY→11、BINARY→12、INDEXED→13）；BMP 8 type 像素相等（565 回读 8、555 回读 9），alpha/UGRAY 返回 false；GIF 全 type 可写但量化有损（断尺寸/type）；JPEG 无 alpha 类型有损（断尺寸）；**TIFF（JDK-9+）13 type 全部像素严格相等**（彩色类回读 TYPE_CUSTOM=0）。
+- 负例精确异常（实测）：write(null img/format/output) IAE；未知 format 返回 false；写缺父目录 File → IIOException("Can't create an ImageOutputStream!")；read 4 重载 null → IAE；read(不存在 File) → IIOException("Can't read input file!")；read(空流/垃圾流) → null。
+- 流关闭语义（实测）：read(ImageInputStream) 关流；read(InputStream) 不关底层流。
+- 缓存/工厂（实测）：setCacheDirectory(普通文件/不存在目录) IAE("Not a directory!") 且失败不改状态；null 重置；createImageInputStream(null)/createImageOutputStream(null) → **IAE**（javadoc 暗示 null，实测抛）；useCache 决定 MemoryCache*/FileCache* 实现；File → FileImage*Stream。
+- 大小写不敏感：PNG/Png/GIF/JPG 查找与写入全通过；scanForPlugins 安全；read(file:URL) 像素相等。

@@ -15,3 +15,9 @@
 ## 4. 测试用例设计 + 自动化实现（`ExifInteroperabilityTagSetTest.testBlackBox`）
 - `getInstance()` 单例、标签名/号集合非空且一一对应、每个名称可解析。
 - `InteroperabilityIndex` 标签号 = 1，`getTag(1)` 解析到该标签。
+
+## 5. 深化补充（第二批，2026-11-05，断言 16 → 47）
+- 常量精确值：TAG_INTEROPERABILITY_INDEX=1、R98="R98"、THM="THM"。
+- 唯一 tag 全契约：号 1、名 InteroperabilityIndex、仅 ASCII（拒 SHORT/UNDEFINED）、count=-1、非 IFD 指针、无值名、无 tag set 反向引用。
+- 视图边界：单元素 first==last==1；tag 0/2/"R98"/"" 全部 miss。
+- 集成：R98/THM 字符串字段往返（getAsString/getValueAsString）；getAsNativeNode→createFromMetadataNode 往返；与 ExifTIFFTagSet.TAG_INTEROPERABILITY_IFD_POINTER=40965 常量一致性；TIFFImageReadParam 加/移本集合。

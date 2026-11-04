@@ -16,3 +16,9 @@
 ## 4. 测试用例设计 + 自动化实现（`FilterTest.testBlackBox`）
 - 用 lambda 定义 png 过滤器，直接调用 `filter` 断言接受 png SPI、拒绝非提供者。
 - 用 `getServiceProviders(ImageReaderSpi.class, filter, false)` 过滤默认注册表，断言结果非空、每一项格式名都含 "png"、且过滤后数量小于全部 reader 数量（确实排除了非 png）。
+
+## 5. 契约深化补充（本轮）
+- 精确签名：恰 1 个声明方法 `filter`；返回 boolean；单 `Object` 参数；public abstract；无受检异常；lambda SAM 可用。
+- 调用语义（私有注册表 + 3 个独立叶子类）：getServiceProviders 返回时 filter 已跑 ≥1 次（迭代器预取）；排空后每提供者恰好一次（IdentityHashMap 计数）；仅被接受者可迭代。
+- useOrdering 无关性：acceptAll 在 false/true 两态成员集合相同；true 时尊重偏序。
+- 负例：null filter 两态均 `NullPointerException`；throwing filter 异常实例原样中继（`==`）；rejectAll 空迭代不抛。

@@ -19,3 +19,8 @@
 - `setReadUnknownTags` 往返。
 - `addAllowedTagSet`：重复为 no-op、新标签集增加；`removeAllowedTagSet` 移除（含默认标签集）。
 - null 入参抛 `IllegalArgumentException`。
+
+## 5. 深化补充（第二批，2026-11-05，断言 26 → 61）
+- 实测发现（javadoc 未写明）：`getAllowedTagSets()` 返回**活内部 List**（同一实例），直接 add/remove 立即生效——不是防御性拷贝；`addAllowedTagSet(null)`/`removeAllowedTagSet(null)` 抛 `IllegalArgumentException` "tagSet == null!"；移除从未加过的集合是 no-op；可移除全部默认集合再逐一加回；重复 add 幂等（计数不变）。
+- 继承链契约（ImageReadParam/IIOParam）：setDestinationOffset、setSourceSubsampling（含负参 IAE 实测）、setSourceBands（负 band IAE）、setSourceRegion 往返与 null 清除、canSetSourceRenderSize false。
+- 驱动真实 reader：TIFF 魔数流（II*\0 与 MM\0* 两种字节序）能发现 TIFF reader（format 名 "tif"）；reader 默认 param 即 TIFFImageReadParam（4 个默认 tag set）；手写 param 读取像素相等；清空 allowed tag sets 后基本解码仍可用（实测）。

@@ -19,3 +19,9 @@
 - `Locale` 构造器默认值一致。
 - 继承的压缩状态：默认 `MODE_COPY_FROM_METADATA`、`"BI_RGB"`、`getCompressionTypes()` 含 `BI_RGB`/`BI_RLE8`、显式模式设置 `BI_RGB`。
 - 用真实 BMP `ImageWriter` 做内存写+读往返：验证 `getDefaultWriteParam()` 是 `BMPImageWriteParam`、`setTopDown(true)` 后写出字节可读回、尺寸与像素一致。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 反射断言恰两个公共构造器；压缩类型全集精确 6 个含顺序（BI_RGB/BI_RLE8/BI_RLE4/BI_BITFIELDS/BI_JPEG/BI_PNG），`getCompressionTypes()` 每次新数组。
+- MODE 状态机矩阵：非 EXPLICIT 下 type/quality/unset 全 ISE；未知/大小写错 IAE；quality 越界 IAE（消息文本 JDK-8/27 不同，只断言类）；NaN quality 原样接受（实测）；进入 EXPLICIT 自动 unset（type=null、quality 回 1.0 失败需 set type）；unset 后再 get quality ISE。
+- 渐进：任意 `setProgressiveMode` → UnsupportedOperationException。
+- 端到端：topDown 8x6 像素级往返；BI_RLE8×24bpp → IOException（只断言类）；BI_RLE8×TYPE_BYTE_INDEXED（5x4 奇宽）往返。

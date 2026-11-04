@@ -23,3 +23,8 @@
 - 三参构造：message/getCause/getOffendingNode 三者精确往返。
 - 边界：offendingNode 为 null、cause 为 null 时均按契约返回 null 而不抛异常。
 - 白盒：非接口/非注解/非枚举、public、非 abstract、父类为 `javax.imageio.IIOException`、`offendingNode` 字段为 protected 且类型为 `org.w3c.dom.Node`。
+
+## 5. 增补（本批深化，实测于 jdk-27.0.1）
+- 结构：反射断言恰好 2 个 public 构造器（(String,Node)/(String,Throwable,Node)），无单 String 版本；直接父类 IIOException、祖父 IOException；offendingNode protected Node。
+- cause 生命周期：双参构造后 `initCause` 可后补成功、二次抛 ISE；三参构造已设 cause 后 `initCause` 抛 ISE（"Can't overwrite cause..."）。
+- Throwable 机制：addSuppressed/getSuppressed、fillInStackTrace、toString 前缀、getLocalizedMessage、null message 往返、两实例同参数行为。

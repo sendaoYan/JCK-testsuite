@@ -143,9 +143,110 @@ public class IIOParamTest {
         expectThrows(IllegalStateException.class, () -> p.activateController(), "activateController without controller");
     }
 
+    // ---- additions: exact-exception probes and cross-state contracts ----
+    static void expectExact(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        boolean thrown = false;
+        try { r.run(); } catch (Throwable t) {
+            thrown = true;
+            check(expected == t.getClass(),
+                  msg + " expected exactly " + expected.getSimpleName() + " but got " + t.getClass().getSimpleName());
+        }
+        check(thrown, msg + " should throw " + expected.getSimpleName());
+    }
+
+    // IIOParam subclass exposing the protected defaultController field
+    static class ParamWithDefaultController extends ImageReadParam {
+        ParamWithDefaultController(IIOParamController def) {
+            defaultController = def;
+        }
+    }
+
+    static void testCoreBAdditions() {
+        ImageReadParam p = new ImageReadParam();
+
+        // full invalid-region matrix (each probed: IllegalArgumentException)
+        expectExact(IllegalArgumentException.class, () -> p.setSourceRegion(new Rectangle(0, -1, 4, 4)), "region y<0");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceRegion(new Rectangle(0, 0, -2, 4)), "region w<0");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceRegion(new Rectangle(0, 0, 4, 0)), "region h=0");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceRegion(new Rectangle(0, 0, 4, -1)), "region h<0");
+        p.setSourceRegion(new Rectangle(0, 0, 10000, 20000));
+        check(p.getSourceRegion().width == 10000, "oversized region accepted at param level");
+        Rectangle got = p.getSourceRegion();
+        got.y = 77;
+        check(p.getSourceRegion().y == 0, "getSourceRegion returns defensive copy");
+
+        // baseline subsampling and offset==period / >period probes
+        p.setSourceSubsampling(1, 1, 0, 0);
+        check(p.getSourceXSubsampling() == 1 && p.getSubsamplingYOffset() == 0, "baseline (1,1,0,0)");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceSubsampling(-1, 1, 0, 0), "x period negative");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceSubsampling(1, 0, 0, 0), "y period 0");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceSubsampling(1, -3, 0, 0), "y period negative");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceSubsampling(2, 1, 3, 0), "x offset > x period");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceSubsampling(1, 2, 0, 2), "y offset == y period");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceSubsampling(1, 2, 0, 5), "y offset > y period");
+
+        // cross-state: region vs subsampling throws IllegalStateException, not IAE
+        ImageReadParam x = new ImageReadParam();
+        x.setSourceSubsampling(3, 4, 2, 3);
+        expectExact(IllegalStateException.class, () -> x.setSourceRegion(new Rectangle(0, 0, 2, 5)),
+                    "region width <= subsamplingXOffset -> ISE");
+        expectExact(IllegalStateException.class, () -> x.setSourceRegion(new Rectangle(0, 0, 5, 3)),
+                    "region height <= subsamplingYOffset -> ISE");
+        x.setSourceRegion(new Rectangle(0, 0, 3, 4));
+        check(x.getSourceRegion().width == 3, "region w == xOff+1 accepted");
+        ImageReadParam y = new ImageReadParam();
+        y.setSourceRegion(new Rectangle(0, 0, 5, 5));
+        expectExact(IllegalStateException.class, () -> y.setSourceSubsampling(6, 1, 5, 0),
+                    "subsampling xOffset >= region width -> ISE");
+        expectExact(IllegalStateException.class, () -> y.setSourceSubsampling(1, 7, 0, 5),
+                    "subsampling yOffset >= region height -> ISE");
+        y.setSourceSubsampling(2, 2, 1, 1);
+        check(y.getSourceRegion().width == 5 && y.getSourceXSubsampling() == 2, "legal subsampling keeps region");
+
+        // destination type null clears; negative destination offset is legal
+        p.setDestinationType(null);
+        check(p.getDestinationType() == null, "setDestinationType null clears");
+        p.setDestinationOffset(new Point(-3, -4));
+        check(p.getDestinationOffset().equals(new Point(-3, -4)), "negative destinationOffset legal");
+
+        // zero-length band arrays accepted
+        p.setSourceBands(new int[0]);
+        check(p.getSourceBands() != null && p.getSourceBands().length == 0, "empty band array accepted");
+
+        // controller exception relayed as the same object
+        final RuntimeException marker = new RuntimeException("marker");
+        p.setController(new IIOParamController() {
+            public boolean activate(IIOParam param) { throw marker; }
+        });
+        RuntimeException relayed = null;
+        try { p.activateController(); } catch (RuntimeException e) { relayed = e; }
+        check(relayed == marker, "controller exception relayed unchanged");
+
+        // defaultController alone never satisfies hasController/activateController
+        IIOParamController def = param -> true;
+        ParamWithDefaultController pd = new ParamWithDefaultController(def);
+        check(pd.getDefaultController() == def, "getDefaultController returns protected default");
+        check(pd.getController() == null, "controller null when only default installed");
+        check(!pd.hasController(), "hasController false with only defaultController");
+        expectExact(IllegalStateException.class, () -> pd.activateController(),
+                    "activateController ignores defaultController");
+        pd.setController(def);
+        check(pd.activateController(), "explicit controller activated");
+
+        // failed operations leave unrelated state intact
+        ImageReadParam s = new ImageReadParam();
+        s.setSourceRegion(new Rectangle(1, 1, 10, 10));
+        s.setSourceBands(new int[]{0, 1});
+        try { s.setSourceRegion(new Rectangle(0, 0, 0, 0)); } catch (IllegalArgumentException expected) { }
+        check(s.getSourceRegion().equals(new Rectangle(1, 1, 10, 10)), "bad region leaves region intact");
+        try { s.setSourceBands(new int[]{5, 5}); } catch (IllegalArgumentException expected) { }
+        check(s.getSourceBands().length == 2 && s.getSourceBands()[1] == 1, "bad bands leave bands intact");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCoreBAdditions();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

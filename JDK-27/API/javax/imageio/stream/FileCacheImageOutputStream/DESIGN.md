@@ -22,3 +22,6 @@
 - `mark/reset` 回退；`seek(0)` 后逐个读回 `readByte/readInt/readBoolean/readUTF/readShort`。
 - `seek(5)` + `flushBefore(5)`，断言 `getFlushedPosition()==5`、底层已收到 5 字节且内容正确、`seek(4)` 抛 `IndexOutOfBoundsException`。
 - `close()` 后断言底层流共 15 字节；finally 递归删除缓存目录。
+
+## 5. 深化补充（testDeep* 契约覆盖，与 JDK-8 侧同源）
+追加 8 个 testDeep 方法（~100 条断言）：构造矩阵（null stream IAE、非目录 IAE、无权限 `AccessDeniedException`、cacheDir=null 合法）；状态矩阵；**增量 flush 生命周期**（4/9/12 字节三阶段对底层流逐位断言，含 UTF 标记字节）；LE 数组 28 字节 round-trip；seek 洞填 0；writeBits（0xA0、0xAB 0x81、RMW 0xCF、numBits IAE）；边界负例精确类；EOF readShort 精确 EOFException；close 状态（二次 close → 精确 `NullPointerException`，本类特有；length() 返回 -1 不抛）。临时文件 finally 递归删除。JDK-27 与 JDK-8 行为一致。

@@ -19,3 +19,9 @@
 - 用 3 参重载（`useCache=false`）创建流，`write`/`flush`/`close` 后断言字节写入 `ByteArrayOutputStream`。
 - 用单参便捷重载创建流并 `close`。
 - 错误输出类型（String）抛 `IllegalArgumentException`。
+
+## 5. 契约深化补充（本轮）
+- 注册表实测：≥2 个提供者；outputClass 集合含 File/OutputStream/RandomAccessFile。
+- 负例逐 SPI：`createOutputStreamInstance(null)` 与错误类型均 `IllegalArgumentException`（两重载一致）。
+- 自写 RecordingOutputSpi：默认缓存开关 false/false；三参工厂透传；一参工厂硬编码 `useCache==true` 转发（记录行为）。
+- File SPI 写往返：临时文件 → 写字节+flush → 逐字节一致 → finally 删除。

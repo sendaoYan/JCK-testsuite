@@ -21,3 +21,10 @@
 - 非法入参：null qTables、DC/AC 长度不一致均抛 `IllegalArgumentException`。
 - 继承采样：`setSourceSubsampling(2,3,1,1)` 与 getter 往返。
 - 真实 JPEG 写读往返：`ImageReader.getDefaultReadParam()` 是 `JPEGImageReadParam`，内存读回尺寸一致。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 反射断言声明方法集恰 6 个、无新公共字段。
+- 校验矩阵（全 IAE，消息 "Invalid JPEG table arrays"）：任一 null；q>4；dc>4/ac>4；dc/ac 不等长（2vs1、2vs0）；拒绝后状态保持 false。
+- 防御性拷贝双向：构造后改入参不影响内部；getter 每次新数组。零长度数组合法（areTablesSet==true、长度 0，规范未写实测）。
+- 状态不变量：合法 set → 非法 set 抛 IAE 后旧表完整保留；unset 后可再 set。
+- 端到端：jpeg writer 写 16x12 → `getDefaultReadParam() instanceof JPEGImageReadParam` → 带表解码尺寸往返；param 复用多次读。

@@ -15,3 +15,10 @@
 ## 4. 测试用例设计 + 自动化实现（`ExifParentTIFFTagSetTest.testBlackBox`）
 - `getInstance()` 单例，标签名/号集合非空且一一对应。
 - `ExifIFDPointer`（34665）与 `GPSInfoIFDPointer`（34853）精确比对，`isIFDPointer()` 为 true，`getTag(号)` 解析正确。
+
+## 5. 深化补充（第二批，2026-11-05，断言 19 → 43）
+- 常量精确值：TAG_EXIF_IFD_POINTER=34665、TAG_GPS_INFO_IFD_POINTER=34853；与 ExifTIFFTagSet 的 GPS 指针常量同值一致性断言。
+- 两个指针 tag 契约：均允许 LONG|IFD_POINTER（拒 SHORT）、count=1、isIFDPointer、无值名。
+- 实测发现：带目录的 IFD_POINTER 或 LONG 字段 getAsNativeNode 节点名渲染为 "TIFFIFD"（javadoc 承诺的行为）。
+- 邻居边界（34664/34666/34852/34854）与拼错名 miss；号序 [34665,34853] 精确。
+- 集成：本集合是 TIFFImageReadParam 默认 4 集合之一；param 移除/加回往返。

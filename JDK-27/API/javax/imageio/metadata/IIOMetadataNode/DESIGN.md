@@ -27,3 +27,12 @@
 - userObject 往返；cloneNode 浅/深语义；getElementsByTagName（精确名与 `*`）。
 - 杂项：isSupported false、namespace URI/prefix null、setPrefix/normalize 无副作用。
 - 异常：appendChild/insertBefore/replaceChild/removeChild(null) 抛 `IllegalArgumentException`；removeAttribute 不存在、isEqualNode/getTextContent/getSchemaTypeInfo/setIdAttribute 抛 `DOMException`；非法属性名（`\ufffe`）抛 `DOMException`。
+
+## 5. 增补（本批深化，实测于 jdk-27.0.1）
+- Attr 深契约：getNodeName/getNodeValue/nodeType=ATTRIBUTE_NODE/getSpecified=true/getOwnerElement；`setValue/setNodeValue` 经 `getAttribute` 可见；null 属性值存 null；`removeAttributeNode` 返回同一 Attr 并清 owner；`setAttributeNode` 四路（同 owner→null；他 owner→code 10 INUSE；游离 Attr 重收养→返回旧 Attr；JAXP 外来 Attr→包装）。
+- `getAttributes()` NamedNodeMap：每次新包装但活视图；四个写通道 code=7 NO_MODIFICATION；`item` 越界裸 `List.get` → JDK-27 上负/正越界均为 `IndexOutOfBoundsException`（JDK-8 负索引是 `ArrayIndexOutOfBoundsException`，双侧各自断言）。
+- 外来（非 IIOMetadataNode）节点：append/insert/remove/replace 四路抛包私有 `IIODOMException`，code=4 WRONG_DOCUMENT_ERR（javadoc 未写明 code，实测）。
+- 克隆：深克隆子树独立，但任何层级都不复制属性（实测）；userObject 复制。
+- DOM L3 全家族（16 法）逐一断言 code=9；`removeAttribute` 缺失 code=8；`setAttribute` 非法字符（≥0xFFFE）code=5。
+- `getElementsByTagName` 是快照（加子后长度不变）vs `getChildNodes()==this` 活；`getElementsByTagNameNS` 同义；`"*"` 含自身。
+- 不固化的缺陷（仅记录）：`removeChild(非子女)` 不抛且计数照减、`appendChild(自身)` 不抛成自引用。

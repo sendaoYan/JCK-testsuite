@@ -20,3 +20,6 @@
 - 固定 24 字节（1..24）构造，断言 `isCached/isCachedMemory/!isCachedFile/length()==-1/初始位置 0`。
 - 顺序读 `read/readByte/readUnsignedByte`；`readInt` 大端 `0x01020304`、`setByteOrder(LITTLE_ENDIAN)` 后 `0x04030201`。
 - `mark()+readFully()+reset()`、`skipBytes(10)`、`flushBefore(5)` + `getFlushedPosition()`、`seek(4)` 抛 `IndexOutOfBoundsException`。
+
+## 5. 深化补充（testDeep* 契约覆盖，与 JDK-8 侧同源）
+追加 10 个 testDeep 方法（~120 条精确断言）：构造 null → 精确 `IllegalArgumentException`；缓存状态矩阵 isCached/isCachedMemory/!isCachedFile；BE/LE 双字节序全基元读精确值；EOF 精度（剩 1 字节 readShort → 精确 `EOFException`）；边界负例全部 t.getClass()==X.class（null 数组 NPE、越界 IOOBE、setBitOffset IAE）；嵌套 mark/reset（无 mark → IOException，入 flushed 区 → 精确 `javax.imageio.IIOException`）；flushBefore/seek 边界；skipBytes 返回值（跨 EOF 返回 n、负数 IOOBE）；readBit/readBits 跨字节；close 幂等（二次 close → IOException("closed")，close 后各操作 IOException）。JDK-27 与 JDK-8 行为一致（javap 双侧公开 API 相同）。

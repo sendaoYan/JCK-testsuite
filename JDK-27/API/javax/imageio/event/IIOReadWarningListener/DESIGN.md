@@ -14,3 +14,7 @@
 - 匿名实现直接调用：断言回调触发且警告字符串送达。
 - 挂到真实 PNG reader 做一次干净读取：add/remove/read 不抛异常且无警告。
 - 白盒：isInterface、extends EventListener、单方法签名（void + ImageReader + String）。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 稳定驱动：JPEG EOI 前注入 3 个杂散字节 → 恰 1 条含 "extraneous bytes before marker" 的警告且解码成功（双侧实测一致）。
+- 干净解码（PNG/JPEG/BMP）零警告；注册语义（重复 add/逐次 remove/null no-op/removeAll）；直调契约 `(reader,"w")` 参数原样转交、`(null,null)` 不校验；多监听器顺序分发。

@@ -24,6 +24,23 @@ public class IIOImageTest {
         }
         check(thrown, msg + " should throw " + expected.getSimpleName());
     }
+    interface Act { void run() throws Exception; }
+    static void expectExact(Class<? extends Throwable> expected, Act a, String msg) {
+        try {
+            a.run();
+            check(false, msg + ": expected " + expected.getSimpleName() + " but nothing thrown");
+        } catch (Throwable t) {
+            check(t.getClass() == expected,
+                  msg + ": expected " + expected.getSimpleName() + " but got " + t.getClass().getName());
+        }
+    }
+    static javax.imageio.metadata.IIOMetadata pngStreamMetadata() {
+        javax.imageio.ImageWriter w = javax.imageio.ImageIO.getImageWritersByFormatName("png").next();
+        javax.imageio.metadata.IIOMetadata m =
+            w.getDefaultStreamMetadata(w.getDefaultWriteParam());
+        w.dispose();
+        return m;
+    }
 
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
@@ -102,9 +119,113 @@ public class IIOImageTest {
         expectThrows(IndexOutOfBoundsException.class, () -> iio.getThumbnail(0), "getThumbnail with null list");
     }
 
+    // ---- Part 3 (deep): thumbnail list is a live reference, null stays null ----
+    static void testThumbnailListSemantics() {
+        BufferedImage img = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        // empty (non-null) list is kept as-is: count 0 but reference preserved
+        List<BufferedImage> empty = new ArrayList<BufferedImage>();
+        javax.imageio.IIOImage withEmpty = new javax.imageio.IIOImage(img, empty, null);
+        check(withEmpty.getNumThumbnails() == 0, "empty list -> 0 thumbnails");
+        check(withEmpty.getThumbnails() == empty, "empty list stored by reference");
+        // the stored list is live: external mutation is visible (probed)
+        BufferedImage t0 = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        BufferedImage t1 = new BufferedImage(1, 1, BufferedImage.TYPE_BYTE_GRAY);
+        List<BufferedImage> live = new ArrayList<BufferedImage>();
+        live.add(t0);
+        javax.imageio.IIOImage liv = new javax.imageio.IIOImage(img, live, null);
+        check(liv.getNumThumbnails() == 1, "one thumbnail initially");
+        live.add(t1);
+        check(liv.getNumThumbnails() == 2, "external add is visible through getNumThumbnails (live list)");
+        check(liv.getThumbnail(1) == t1, "getThumbnail(1) sees externally added element");
+        live.remove(0);
+        check(liv.getNumThumbnails() == 1 && liv.getThumbnail(0) == t1, "external remove shifts indices");
+        // precise exception classes (probed on this JDK)
+        expectExact(IndexOutOfBoundsException.class, () -> liv.getThumbnail(1),
+                    "getThumbnail(size) precise class");
+        expectExact(IndexOutOfBoundsException.class, () -> liv.getThumbnail(-1),
+                    "getThumbnail(-1) precise class");
+        // null list: "No thumbnails available!" (probed)
+        javax.imageio.IIOImage nullList = new javax.imageio.IIOImage(img, null, null);
+        check(nullList.getThumbnails() == null, "null thumbnails stay null (not converted to a list)");
+        try {
+            nullList.getThumbnail(0);
+            check(false, "getThumbnail on null list should throw");
+        } catch (IndexOutOfBoundsException e) {
+            check("No thumbnails available!".equals(e.getMessage()), "null-list getThumbnail message");
+        }
+        // setThumbnails with a live list keeps reference semantics too
+        List<BufferedImage> fresh = new ArrayList<BufferedImage>();
+        nullList.setThumbnails(fresh);
+        check(nullList.getThumbnails() == fresh, "setThumbnails stores live reference");
+        fresh.add(t0);
+        check(nullList.getNumThumbnails() == 1, "setThumbnails list is live as well");
+    }
+
+    // ---- Part 3: raster constructor carries thumbnails and metadata ----
+    static void testRasterConstructorState() {
+        BufferedImage img = new BufferedImage(3, 2, BufferedImage.TYPE_INT_ARGB);
+        Raster ras = img.getData();
+        List<BufferedImage> thumbs = new ArrayList<BufferedImage>();
+        thumbs.add(new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB));
+        thumbs.add(new BufferedImage(2, 1, BufferedImage.TYPE_INT_RGB));
+        javax.imageio.metadata.IIOMetadata md = pngStreamMetadata();
+        javax.imageio.IIOImage rasImg = new javax.imageio.IIOImage(ras, thumbs, md);
+        check(rasImg.getRaster() == ras, "raster ctor keeps raster identity");
+        check(rasImg.getThumbnails() == thumbs, "raster ctor keeps thumbnails reference");
+        check(rasImg.getNumThumbnails() == 2, "raster ctor thumbnail count");
+        check(rasImg.getThumbnail(1) == thumbs.get(1), "raster ctor getThumbnail(1)");
+        check(rasImg.getMetadata() == md, "raster ctor keeps metadata reference");
+        // metadata setter round-trip on the same instance
+        javax.imageio.metadata.IIOMetadata md2 = pngStreamMetadata();
+        rasImg.setMetadata(md2);
+        check(rasImg.getMetadata() == md2, "setMetadata replaces reference");
+        rasImg.setMetadata(null);
+        check(rasImg.getMetadata() == null, "setMetadata(null) tolerated");
+        // switching to an image keeps thumbnails and metadata untouched
+        rasImg.setRenderedImage(img);
+        check(rasImg.getNumThumbnails() == 2 && rasImg.getMetadata() == md2,
+              "setRenderedImage leaves thumbnails/metadata intact");
+        expectExact(IllegalArgumentException.class, () -> rasImg.setRaster(null),
+                    "setRaster(null) precise");
+        expectExact(IllegalArgumentException.class, () -> rasImg.setRenderedImage(null),
+                    "setRenderedImage(null) precise");
+        expectExact(IllegalArgumentException.class,
+                    () -> new javax.imageio.IIOImage((RenderedImage) null, thumbs, null),
+                    "image ctor null precise");
+        expectExact(IllegalArgumentException.class,
+                    () -> new javax.imageio.IIOImage((Raster) null, thumbs, null),
+                    "raster ctor null precise");
+    }
+
+    // ---- Part 3: object identity contracts ----
+    static void testMiscContracts() {
+        BufferedImage img = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        javax.imageio.IIOImage a = new javax.imageio.IIOImage(img, null, null);
+        javax.imageio.IIOImage b = new javax.imageio.IIOImage(img, null, null);
+        check(a.equals(b) == false, "equals is not overridden (identity semantics)");
+        check(a.equals(a), "equals self");
+        check(!java.io.Serializable.class.isAssignableFrom(javax.imageio.IIOImage.class),
+              "IIOImage is not Serializable");
+        // independent instances do not share state
+        List<BufferedImage> la = new ArrayList<BufferedImage>();
+        a.setThumbnails(la);
+        check(b.getNumThumbnails() == 0, "instance b unaffected by a's setThumbnails");
+        check(b.getThumbnails() == null, "instance b thumbnails still null");
+        // hasRaster is a view on which slot is filled, not a sticky flag
+        javax.imageio.IIOImage c = new javax.imageio.IIOImage(img, null, null);
+        check(!c.hasRaster(), "image-only instance has no raster");
+        c.setRaster(img.getData());
+        check(c.hasRaster(), "after setRaster hasRaster true");
+        c.setRenderedImage(img);
+        check(!c.hasRaster(), "switching back to image clears raster flag");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testThumbnailListSemantics();
+        testRasterConstructorState();
+        testMiscContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

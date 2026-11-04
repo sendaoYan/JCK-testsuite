@@ -74,6 +74,60 @@ public class IIOInvalidTreeExceptionTest {
         IIOInvalidTreeException e4 = new IIOInvalidTreeException("null node w/ cause", null, null);
         check(e4.getOffendingNode() == null, "null offending node (3-arg ctor)");
         check(e4.getCause() == null, "null cause stays null");
+        // structural contract: exactly two public constructors, no single-String variant (javap)
+        java.lang.reflect.Constructor<?>[] ctors = IIOInvalidTreeException.class.getConstructors();
+        check(ctors.length == 2, "exactly two public constructors");
+        boolean twoArg = false, threeArg = false;
+        for (java.lang.reflect.Constructor<?> k : ctors) {
+            Class<?>[] p = k.getParameterTypes();
+            if (p.length == 2 && p[0] == String.class && p[1] == Node.class) twoArg = true;
+            if (p.length == 3 && p[0] == String.class && p[1] == Throwable.class && p[2] == Node.class) threeArg = true;
+        }
+        check(twoArg, "(String, Node) constructor");
+        check(threeArg, "(String, Throwable, Node) constructor");
+        check(java.io.IOException.class.isAssignableFrom(IIOInvalidTreeException.class), "assignable to IOException");
+        // cause lifecycle
+        RuntimeException late = new RuntimeException("late");
+        check(e1.initCause(late) == e1, "initCause returns this (2-arg ctor leaves cause unset)");
+        check(e1.getCause() == late, "initCause round-trip");
+        try {
+            e1.initCause(new Exception());
+            check(false, "second initCause should throw IllegalStateException");
+        } catch (IllegalStateException expected) {
+            check(true, "second initCause throws IllegalStateException");
+        }
+        try {
+            e2.initCause(null);
+            check(false, "initCause after ctor-supplied cause should throw");
+        } catch (IllegalStateException expected) {
+            check(true, "initCause after constructor-supplied cause throws IllegalStateException");
+        }
+        // Throwable mechanics
+        IIOInvalidTreeException sup = new IIOInvalidTreeException("s", node);
+        sup.addSuppressed(new RuntimeException("r1"));
+        check(sup.getSuppressed().length == 1, "addSuppressed/getSuppressed round-trip");
+        check(e1.toString().startsWith("javax.imageio.metadata.IIOInvalidTreeException: " + msg),
+              "toString format class: message");
+        check(e1.getLocalizedMessage().equals(msg), "getLocalizedMessage equals message");
+        IIOInvalidTreeException nullMsg = new IIOInvalidTreeException(null, node);
+        check(nullMsg.getMessage() == null, "null message round-trips");
+        check(e2.getCause().getMessage().equals("root cause"), "cause message readable");
+        // hierarchy and protected field
+        check(IIOInvalidTreeException.class.getSuperclass() == IIOException.class, "direct superclass IIOException");
+        check(IIOException.class.getSuperclass() == java.io.IOException.class, "IIOException extends IOException");
+        try {
+            java.lang.reflect.Field of = IIOInvalidTreeException.class.getDeclaredField("offendingNode");
+            check(java.lang.reflect.Modifier.isProtected(of.getModifiers()), "offendingNode is protected");
+            check(of.getType() == Node.class, "offendingNode type is Node");
+        } catch (NoSuchFieldException bad) {
+            check(false, "offendingNode field exists: " + bad);
+        }
+        IIOInvalidTreeException a = new IIOInvalidTreeException(msg, node);
+        IIOInvalidTreeException b = new IIOInvalidTreeException(msg, node);
+        check(a != b, "distinct instances");
+        check(a.getMessage().equals(b.getMessage()), "same message");
+        check(a.getOffendingNode() == b.getOffendingNode(), "same offending node reference");
+        check(e1.fillInStackTrace() == e1, "fillInStackTrace returns this");
     }
 
     public static void main(String[] args) throws Exception {

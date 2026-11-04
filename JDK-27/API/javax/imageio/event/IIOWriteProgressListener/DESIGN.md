@@ -14,3 +14,8 @@
 - 匿名实现七个方法直接调用均不抛异常。
 - 挂到真实 PNG writer 后 write：断言 imageStarted/imageComplete 各触发一次。
 - 白盒：isInterface、extends EventListener、七个公共方法存在。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 精确签名集（7 方法）；`ImageIO.getImageWriter(reader)` 配对 + `MemoryCacheImageOutputStream` 端到端。
+- PNG：imageProgress 单调、终点恰 100.0（按行 64 次报告）；JPEG：终点 87.5（**不能断言所有格式终点 100**，实测）。
+- 注册语义；异常中继：写路径回调抛 RuntimeException **原样透传**（同一实例，与读路径的 IIOException 包装相反）。

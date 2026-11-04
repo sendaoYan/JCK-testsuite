@@ -24,3 +24,4 @@
 - 继承 IIOParam 的 setSourceSubsampling 往返。
 - 端到端：真实 PNG 读入指定 destination，像素写入目标图。
 - 白盒：extends IIOParam + 全部方法存在。
+- CORE-B 补充（`testCoreBAdditions`）：setDestinationType(null) 也会清 destination（实测怪癖）；destination 与 destinationType 联动矩阵；pass 区间溢出（minPass+numPasses 上溢）抛 IAE、(MAX_VALUE,1) 合法边界、getSourceMaxProgressivePass=min+num-1；canSetSourceRenderSize 恒 false 时 setSourceRenderSize(null) 仍 UOE；空 destinationBands 数组合法；结构断言（protected 构造器、字段清单）。

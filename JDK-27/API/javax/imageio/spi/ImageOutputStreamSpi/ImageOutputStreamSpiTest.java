@@ -94,6 +94,133 @@ public class ImageOutputStreamSpiTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRegisteredStreamSpiIdentity();
+        testNullAndWrongOutputRejected();
+        testTinySpiDefaultsAndDelegation();
+        testFileSpiRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static void expectExact(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        Throwable caught = null;
+        try { r.run(); } catch (Throwable t) { caught = t; }
+        check(caught != null, msg + ": nothing thrown, expected " + expected.getSimpleName());
+        if (caught == null) return;
+        check(caught.getClass() == expected,
+              msg + ": expected " + expected.getSimpleName() + " but got "
+              + caught.getClass().getName() + " (" + caught.getMessage() + ")");
+    }
+
+    /** Self-written SPI recording the arguments its create method was called with. */
+    static class RecordingOutputSpi extends ImageOutputStreamSpi {
+        int calls; Object lastOutput; Boolean lastUseCache; java.io.File lastCacheDir;
+        RecordingOutputSpi() { super("TinyVendor", "3.5", java.io.OutputStream.class); }
+        public String getDescription(java.util.Locale l) { return "recording output spi"; }
+        public ImageOutputStream createOutputStreamInstance(Object output, boolean useCache, java.io.File cacheDir) {
+            calls++; lastOutput = output; lastUseCache = useCache; lastCacheDir = cacheDir;
+            return new javax.imageio.stream.MemoryCacheImageOutputStream(
+                new java.io.ByteArrayOutputStream());
+        }
+    }
+
+    static java.util.List<ImageOutputStreamSpi> allOutputSpis() {
+        java.util.List<ImageOutputStreamSpi> out = new java.util.ArrayList<ImageOutputStreamSpi>();
+        Iterator<ImageOutputStreamSpi> it =
+            IIORegistry.getDefaultInstance().getServiceProviders(ImageOutputStreamSpi.class, false);
+        while (it.hasNext()) out.add(it.next());
+        return out;
+    }
+
+    static ImageOutputStreamSpi findByOutputClass(Class<?> wanted) {
+        for (ImageOutputStreamSpi sp : allOutputSpis()) if (sp.getOutputClass() == wanted) return sp;
+        throw new AssertionError("no registered spi with output class " + wanted.getName());
+    }
+
+    // identity: output classes, vendor and cache-file flags of the JDK-registered providers
+    static void testRegisteredStreamSpiIdentity() {
+        java.util.List<ImageOutputStreamSpi> all = allOutputSpis();
+        check(all.size() >= 3, "at least three registered ImageOutputStreamSpi (OutputStream/File/RAF)");
+        java.util.Set<Class<?>> outputClasses = new java.util.HashSet<Class<?>>();
+        for (ImageOutputStreamSpi sp : all) {
+            check(sp.getOutputClass() != null, "getOutputClass non-null");
+            outputClasses.add(sp.getOutputClass());
+            check("Oracle Corporation".equals(sp.getVendorName()),
+                  "OpenJDK-built stream spi vendor Oracle Corporation");
+            check(sp.getVersion() != null, "version non-null");
+        }
+        check(outputClasses.contains(java.io.OutputStream.class), "OutputStream output class present");
+        check(outputClasses.contains(java.io.File.class), "File output class present");
+        check(outputClasses.contains(java.io.RandomAccessFile.class), "RandomAccessFile output class present");
+        ImageOutputStreamSpi fileSpi = findByOutputClass(java.io.File.class);
+        check(fileSpi.canUseCacheFile() == false, "File spi canUseCacheFile false");
+        check(fileSpi.needsCacheFile() == false, "File spi needsCacheFile false");
+        ImageOutputStreamSpi rafSpi = findByOutputClass(java.io.RandomAccessFile.class);
+        check(rafSpi.needsCacheFile() == false, "RAF spi needsCacheFile false");
+    }
+
+    // null output and wrong output type are rejected with exactly IllegalArgumentException
+    static void testNullAndWrongOutputRejected() {
+        for (final ImageOutputStreamSpi sp : allOutputSpis()) {
+            expectExact(IllegalArgumentException.class,
+                        () -> sp.createOutputStreamInstance(null, false, null),
+                        "createOutputStreamInstance(null) on " + sp.getClass().getSimpleName());
+            expectExact(IllegalArgumentException.class,
+                        () -> sp.createOutputStreamInstance("not-a-stream", false, null),
+                        "createOutputStreamInstance(wrong type) on " + sp.getClass().getSimpleName());
+            expectExact(IllegalArgumentException.class,
+                        () -> sp.createOutputStreamInstance(null),
+                        "1-arg createOutputStreamInstance(null) on " + sp.getClass().getSimpleName());
+        }
+    }
+
+    // subclass default flags + 1-arg convenience overload delegation
+    static void testTinySpiDefaultsAndDelegation() throws Exception {
+        RecordingOutputSpi sp = new RecordingOutputSpi();
+        check(sp.getOutputClass() == java.io.OutputStream.class, "tiny spi output class round-trips");
+        check(sp.getVendorName().equals("TinyVendor"), "tiny spi vendor round-trips");
+        check(sp.getVersion().equals("3.5"), "tiny spi version round-trips");
+        check(sp.canUseCacheFile() == false, "canUseCacheFile default false in subclass");
+        check(sp.needsCacheFile() == false, "needsCacheFile default false in subclass");
+        check(sp.getDescription(java.util.Locale.US).equals("recording output spi"), "description round-trips");
+        check(sp.getDescription(null).equals("recording output spi"), "description null locale ok");
+
+        ImageOutputStream s3 = sp.createOutputStreamInstance("DST", false, null);
+        check(sp.calls == 1, "3-arg create called once");
+        check("DST".equals(sp.lastOutput), "3-arg passes output unchanged");
+        check(sp.lastUseCache == Boolean.FALSE, "3-arg passes useCache=false");
+        check(sp.lastCacheDir == null, "3-arg passes cacheDir null");
+        s3.writeInt(0x0A0B0C0D);
+        s3.flush();
+        s3.close();
+
+        // 1-arg convenience overload delegates with useCache=true and cacheDir=null (recorded behavior)
+        ImageOutputStream s1 = sp.createOutputStreamInstance("ONE");
+        check(sp.calls == 2, "1-arg delegates to 3-arg");
+        check("ONE".equals(sp.lastOutput), "1-arg passes output unchanged");
+        check(sp.lastUseCache == Boolean.TRUE, "1-arg hardcodes useCache=true");
+        check(sp.lastCacheDir == null, "1-arg hardcodes cacheDir=null");
+        s1.close();
+    }
+
+    static int tmpCounter;
+
+    // FileImageOutputStreamSpi writes to a real temp file
+    static void testFileSpiRoundTrip() throws Exception {
+        ImageOutputStreamSpi fileSpi = findByOutputClass(java.io.File.class);
+        java.io.File f = new java.io.File(System.getProperty("java.io.tmpdir"),
+                          "imgio-spi-ImageOutputStreamSpi-" + (tmpCounter++) + ".bin");
+        try {
+            ImageOutputStream ios = fileSpi.createOutputStreamInstance(f, false, null);
+            check(ios != null, "File spi creates a stream from a File");
+            ios.write(new byte[] { 7, 8, 9 });
+            ios.flush();
+            ios.close();
+            java.io.DataInputStream dis = new java.io.DataInputStream(new java.io.FileInputStream(f));
+            check(dis.read() == 7 && dis.read() == 8 && dis.read() == 9, "written bytes round-trip");
+            check(dis.read() == -1, "exactly three bytes written");
+            dis.close();
+        } finally {
+            f.delete();
+        }
     }
 }

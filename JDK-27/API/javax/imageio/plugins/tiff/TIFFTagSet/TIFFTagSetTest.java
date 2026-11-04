@@ -94,9 +94,134 @@ public class TIFFTagSetTest {
         expectThrows(IllegalArgumentException.class, () -> set.getTag((String) null), "getTag(null)");
     }
 
+    // ---- Part 3 (deepened): exact-exception helper ----
+    static void expectExact(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+            check(false, msg + " should throw " + expected.getSimpleName() + " but nothing was thrown");
+        } catch (Throwable t) {
+            check(t.getClass() == expected,
+                  msg + " expected exactly " + expected.getName() + " but got " + t.getClass().getName());
+        }
+    }
+
+    // ---- Part 3 (deepened): immutability, sorted views, boundary lookups ----
+    static void testDeepened() throws Exception {
+        TIFFTag w = new TIFFTag("ImageWidth", 256, (1 << TIFFTag.TIFF_SHORT) | (1 << TIFFTag.TIFF_LONG), 1);
+        TIFFTag h = new TIFFTag("ImageLength", 257, (1 << TIFFTag.TIFF_SHORT) | (1 << TIFFTag.TIFF_LONG), 1);
+
+        // the constructor copies its input list: later mutation is invisible (probed)
+        List<TIFFTag> src = new ArrayList<TIFFTag>(java.util.Arrays.asList(w, h));
+        TIFFTagSet set = new TIFFTagSet(src);
+        src.clear();
+        check(set.getTag(256) == w && set.getTag(257) == h, "source list mutation invisible");
+
+        // getTagNumbers/getTagNames are unmodifiable views (probed: add/remove -> UOE)
+        expectExact(UnsupportedOperationException.class,
+            () -> set.getTagNumbers().add(Integer.valueOf(999)), "tagNumbers.add UOE");
+        expectExact(UnsupportedOperationException.class,
+            () -> set.getTagNumbers().remove(Integer.valueOf(256)), "tagNumbers.remove UOE");
+        expectExact(UnsupportedOperationException.class,
+            () -> set.getTagNames().add("zzz"), "tagNames.add UOE");
+        expectExact(UnsupportedOperationException.class,
+            () -> set.getTagNames().remove("ImageWidth"), "tagNames.remove UOE");
+        expectExact(UnsupportedOperationException.class,
+            () -> set.getTagNumbers().clear(), "tagNumbers.clear UOE");
+
+        // SortedSet surface: first/last/contains reflect sorted order
+        SortedSet<Integer> nums = set.getTagNumbers();
+        check(nums.first() == 256, "numbers first 256");
+        check(nums.last() == 257, "numbers last 257");
+        check(nums.size() == 2, "numbers size 2");
+        SortedSet<String> names = set.getTagNames();
+        check(names.first().equals("ImageLength"), "names first alphabetical ImageLength");
+        check(names.last().equals("ImageWidth"), "names last alphabetical ImageWidth");
+        check(nums.headSet(257).size() == 1 && nums.headSet(257).contains(256), "headSet view");
+
+        // boundary lookups: number 0, negative numbers, empty string all miss (probed)
+        check(set.getTag(0) == null, "getTag(0) null");
+        check(set.getTag(-5) == null, "getTag(-5) null");
+        check(set.getTag(65535) == null, "getTag(65535) null");
+        check(set.getTag("") == null, "getTag(\"\") null");
+
+        // exact-exception constructor lookups (probed)
+        expectExact(IllegalArgumentException.class, () -> new TIFFTagSet(null), "null list IAE");
+        expectExact(IllegalArgumentException.class,
+            () -> set.getTag((String) null), "getTag(null) IAE");
+
+        // empty tag set: legal, zero-size views, first() -> NoSuchElementException (probed)
+        TIFFTagSet empty = new TIFFTagSet(new ArrayList<TIFFTag>());
+        check(empty.getTagNumbers().isEmpty(), "empty set numbers empty");
+        check(empty.getTagNames().isEmpty(), "empty set names empty");
+        check(empty.getTag(1) == null && empty.getTag("x") == null, "empty set lookups null");
+        expectExact(java.util.NoSuchElementException.class,
+            () -> empty.getTagNumbers().first(), "empty first() NSEE");
+        expectExact(java.util.NoSuchElementException.class,
+            () -> empty.getTagNames().last(), "empty last() NSEE");
+
+        // single-tag set sorted view boundaries
+        TIFFTagSet one = new TIFFTagSet(java.util.Arrays.asList(w));
+        check(one.getTagNumbers().first() == 256 && one.getTagNumbers().last() == 256,
+              "single-tag first==last");
+
+        // duplicate number with distinct name keeps both names but one number key (probed)
+        TIFFTag dup = new TIFFTag("Other", 256, 1 << TIFFTag.TIFF_LONG, 1);
+        TIFFTagSet set2 = new TIFFTagSet(java.util.Arrays.asList(w, dup));
+        check(set2.getTag(256) == dup, "duplicate number last-wins");
+        check(set2.getTagNames().size() == 2, "both names kept");
+        check(set2.getTagNumbers().size() == 1, "single number key");
+        check(set2.getTag("ImageWidth") == w && set2.getTag("Other") == dup,
+              "name lookup not collapsed by duplicate number");
+
+        // tag number 0 participates in sorting (Exif GPS GPSVersionID uses 0)
+        TIFFTag zero = new TIFFTag("Zero", 0, 1 << TIFFTag.TIFF_BYTE, 1);
+        TIFFTagSet zset = new TIFFTagSet(java.util.Arrays.asList(w, zero));
+        check(zset.getTagNumbers().first() == 0, "tag 0 sorts first");
+
+        // list with a null element is rejected (probed)
+        List<TIFFTag> withNull = new ArrayList<TIFFTag>();
+        withNull.add(w);
+        withNull.add(null);
+        expectExact(IllegalArgumentException.class,
+            () -> new TIFFTagSet(withNull), "list containing null IAE");
+    }
+
+    // ---- Part 3 (deepened): connection to the shipped standard tag sets ----
+    static void testStandardSets() throws Exception {
+        // every shipped singleton resolves all of its own names and numbers both ways
+        javax.imageio.plugins.tiff.TIFFTagSet[] sets = {
+            javax.imageio.plugins.tiff.BaselineTIFFTagSet.getInstance(),
+            javax.imageio.plugins.tiff.FaxTIFFTagSet.getInstance(),
+            javax.imageio.plugins.tiff.ExifParentTIFFTagSet.getInstance(),
+            javax.imageio.plugins.tiff.GeoTIFFTagSet.getInstance(),
+        };
+        int[] expectedMin = { 254, 326, 34665, 33550 };
+        for (int i = 0; i < sets.length; i++) {
+            javax.imageio.plugins.tiff.TIFFTagSet s = sets[i];
+            check(s.getTagNumbers().size() > 0, "set " + i + " non-empty");
+            check(s.getTagNumbers().size() == s.getTagNames().size(), "set " + i + " cardinality");
+            check(s.getTagNumbers().first() == expectedMin[i],
+                  "set " + i + " smallest tag " + expectedMin[i]);
+            boolean allResolve = true;
+            for (String name : s.getTagNames()) {
+                javax.imageio.plugins.tiff.TIFFTag t = s.getTag(name);
+                if (t == null || !t.getName().equals(name)
+                    || s.getTag(t.getNumber()) != t) { allResolve = false; break; }
+            }
+            check(allResolve, "set " + i + " every name/number resolves bidirectionally");
+        }
+        // singleton identity: getInstance called twice yields the same object
+        check(javax.imageio.plugins.tiff.BaselineTIFFTagSet.getInstance()
+              == javax.imageio.plugins.tiff.BaselineTIFFTagSet.getInstance(), "baseline singleton identity");
+        check(javax.imageio.plugins.tiff.FaxTIFFTagSet.getInstance()
+              == javax.imageio.plugins.tiff.FaxTIFFTagSet.getInstance(), "fax singleton identity");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepened();
+        testStandardSets();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

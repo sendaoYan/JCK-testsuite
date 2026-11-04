@@ -24,3 +24,4 @@
 - 平铺/缩略图：PNG 非平铺、tileWidth/Height=图像尺寸、不支持缩略图。
 - read(0) 往返像素；progress listener 触发 imageStarted/imageComplete。
 - 白盒：abstract + extends Object + 全部公共方法存在。
+- CORE-B 补充（六个新增方法，双轨制）：真实 PNG 负契约（无输入 ISE、越界 IOOBE、seekForwardOnly+allowSearch ISE、metadata format 分派与未知 format null、raster/tile/thumbnail UOE/IAE、null 监听器 no-op、setInput(null) 保留标志怪癖）；StubReader/StubReaderSpi（getFormatName 无 provider NPE、provider 驱动 inputTypes）；StubMetadata 三类 format 返回同一实例；监听器重复注册/移除与 abort-from-listener（readAborted 且无 imageComplete、陈旧 abort 被清）；readAll 双路径（Iterator 形式 sequence 事件、非 ImageReadParam 元素 IAE、minIndex 下界 IOOBE）；checkReadParamBandSettings/computeRegions 静态契约。

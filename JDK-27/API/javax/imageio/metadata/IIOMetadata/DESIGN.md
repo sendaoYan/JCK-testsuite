@@ -26,3 +26,10 @@
 - 状态：`isReadOnly()==false`、`reset()` 可调用。
 - 控制器生命周期：初始 null、`setController(null)`、无控制器 `activateController` 抛 `IllegalStateException`、false/true 控制器往返、清除。
 - ImageReader 路径：写内存 PNG → 读 `getImageMetadata(0)` 非空且 native/standard 名可用。
+
+## 5. 增补（本批深化，实测于 jdk-27.0.1）
+- mergeTree/setFromTree/getAsTree/getMetadataFormat 错误矩阵（精确类）：未知格式 IAE、null 格式 NPE（PNG 实现 `String.equals` 触发）、null 根 IAE、错误根名 `IIOInvalidTreeException` 且 `getOffendingNode()` 指向坏根（standard/native 两路）；未知子元素被 PNG 实现静默忽略。
+- 标准元数据链路结构断言：8x8 TYPE_INT_RGB PNG 读回的 `getAsTree("javax_imageio_1.0")` 有 5 个顶层子树（Chroma/Compression/Data/Dimension/Transparency）与确定性属性值（ColorSpaceType=RGB、NumChannels=3、CompressionTypeName=deflate、SampleFormat=UnsignedIntegral、BitsPerSample="8 8 8"、PixelAspectRatio=1.0、Alpha=none、无 Palette）。
+- merge→getAsTree 往返：PixelAspectRatio=2.0 写入读回；native 树自合并。
+- protected 构造器 4 种 IAE；无格式时 `getMetadataFormatNames()` null；extra 通道经静态 `getInstance` 加载；类不可加载 `IllegalStateException`；名序 [native,] standard, extra。
+- 子类探针：`setFromTree` 默认实现先 reset 后 mergeTree（计数+参数身份）；`activateController` 回调参数 `== this`。

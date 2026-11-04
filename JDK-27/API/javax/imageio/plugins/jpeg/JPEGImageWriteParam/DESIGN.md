@@ -21,3 +21,11 @@
 - `setOptimizeHuffmanTables` 往返（默认 false）。
 - `setEncodeTables/unsetEncodeTables/areTablesSet` 与三类表往返；null 与 DC/AC 不等长抛异常。
 - 真实 JPEG 写往返：`getDefaultWriteParam()` 是 `JPEGImageWriteParam`，`setCompressionQuality(0.9f)` 后写出字节非空。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 反射断言声明方法集恰 12 个、单 `(Locale)` 构造器。
+- 渐进矩阵：默认 MODE_DISABLED；DEFAULT/DISABLED/COPY_FROM_METADATA 往返；**MODE_EXPLICIT → IllegalArgumentException（不是 UOE，实测）**；mode 9/-1 → IAE。
+- 压缩矩阵：进入 EXPLICIT 自动恢复 type=JPEG/quality=0.75（JPEG 覆写 unsetCompression 的专属默认，非 null）；`setCompressionType("PNG"/"jpeg")` IAE；unset 后 type=JPEG。
+- 质量刻度（Locale.US）：descriptions 长 3、values 长 4 严格递增端点 0/1；非 EXPLICIT 下查询 ISE。
+- encodeTables 矩阵（null/超长/不等长 IAE；防御拷贝双向；零长度合法；unset 幂等）；optimizeHuffmanTables 默认 false 幂等往返。
+- 端到端：progressive+optimize+quality0.9 写出非空、读回尺寸往返。

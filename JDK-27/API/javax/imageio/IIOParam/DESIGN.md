@@ -24,3 +24,4 @@
 - destinationType 引用身份、destinationOffset clone + null 抛 IAE。
 - 控制器：false/true 控制器委托、hasController、接收的参数身份、null 后 activateController 抛 IllegalStateException。
 - 白盒：abstract + protected 构造器 + 全部公共方法存在。
+- CORE-B 补充：region 校验矩阵（x/y<0、w/h<=0 精确 IAE；超尺寸 region 延迟接受）；子采样偏移边界 [0,period-1]（偏移=周期抛 IAE）；region 与子采样跨状态互检 ISE（clearDestinationType 联动）；空 bands 数组合法；控制器异常透传与 defaultController 永不隐式激活（protected 字段注入探测）。

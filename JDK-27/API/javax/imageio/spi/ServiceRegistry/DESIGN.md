@@ -24,3 +24,12 @@
 - `deregisterServiceProvider(T,Class)`/`(Object)`、`registerServiceProvider(Object)`、`registerServiceProviders(Iterator)`、`deregisterAll(Class)`/`deregisterAll()` 的注册/注销往返。
 - 边界：构造 null 类别、非法类别（`String.class`）、未知类别 `getServiceProviders`/`deregisterAll`、null provider 注册、`contains(null)` 均抛 `IllegalArgumentException`。
 - 静态 `lookupProviders` 返回非 null 迭代器，null 参数抛异常。
+
+## 5. 契约深化补充（本轮，探针实测记录行为）
+- 迭代器 remove：providers 迭代器 `remove()` 先于 next 抛 `IllegalStateException`，next 后真删且**绕过 onDeregistration**（回调计数 0）；categories 迭代器 remove 同 ISE、next 后删除类别本身（该类别后续查询 IAE）。
+- fail-fast：注册/deregisterAll 修改后旧迭代器 next 抛精确 `ConcurrentModificationException`；未修改可排空。
+- Filter 机制：构造即预取（filter 已跑 ≥1 次）；排空后每个提供者恰好一次；null filter `NullPointerException`；filter 异常实例原样中继（`==`）。
+- 排序边角：反向 set 替换旧边并翻转迭代；a<b、b<c 传递；never-set unset false；未注册 false；未知类别 set/unset IAE。
+- 查询边角：`getServiceProviderByClass(null)` IAE、非类别/未注册类 null；raw 跨类别注册 `ClassCastException` 且状态不变。
+- 无类别注册：普通对象无副作用、注销 no-op；**同实例重复注册返回 false 但仍触发 dereg+reg 回调（计数 reg=2/dereg=1）**；空类别表合法；`deregisterAll(category)` 逐提供者回调。
+- JDK-27 专属（与 JDK-8 互斥断言）：null 类别元素 IAE；`lookupProviders(String.class)` 两重载 IAE（bug 8068749 收紧）；`finalize()` 已移除（JDK-8 声明）。

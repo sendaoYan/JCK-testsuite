@@ -19,3 +19,9 @@
 - 用 3 参重载（`useCache=false`）创建流，`readFully` 断言字节往返、再 `read()==-1` 断言耗尽，然后 `close`。
 - 用单参便捷重载创建流并 `close`。
 - 错误输入类型（String）抛 `IllegalArgumentException`。
+
+## 5. 契约深化补充（本轮）
+- 注册表实测：该类别 ≥3 个提供者；inputClass 集合含 InputStream/File/RandomAccessFile；vendor=="Oracle Corporation"。
+- 负例逐 SPI：`createInputStreamInstance(null)` 与错误类型在**每个**注册 SPI 上均抛 `IllegalArgumentException`（两重载一致）。
+- 自写 RecordingInputSpi：默认 `canUseCacheFile()`/`needsCacheFile()` 均 false；三参工厂 `(input,useCache,cacheDir)` 透传记录；一参工厂实测以 `useCache==true, cacheDir==null` 硬编码转发（记录行为）。
+- File SPI 往返：临时文件写入 → `createInputStreamInstance(file)` 读回一致 → finally 删除。

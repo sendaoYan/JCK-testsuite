@@ -22,3 +22,6 @@
 - `seek(0)` 读回 `readByte/readInt/readBoolean/readUTF/readShort`。
 - `seek(5)` + `flushBefore(5)`，断言 `getFlushedPosition()==5`、底层流已收到 5 字节且内容正确。
 - `close()` 后断言底层流共 12 字节。
+
+## 5. 深化补充（testDeep* 契约覆盖，与 JDK-8 侧同源）
+追加 10 个 testDeep 方法（~120 条断言）：构造 null IAE；状态矩阵；全类型写 41 字节精确落盘布局（writeUTF 4 字节）；BE/LE 双字节序 + 数组（58 字节）round-trip 经 MemoryCacheImageInputStream 读回；flush()/flushBefore 增量语义与 getFlushedPosition 推进；seek 洞填 0；writeBit/writeBits（0xA0、0xAB 0x81、RMW 0xCF、numBits 65/-1 IAE、64 位满宽）；边界负例精确类（null 数组 NPE、越界 IOOBE）；EOF readShort 精确 EOFException；close 状态（二次 close → 精确 `NullPointerException`，本类特有；close 后操作 IOException；length() 返回 -1 不抛）。JDK-27 与 JDK-8 行为一致。

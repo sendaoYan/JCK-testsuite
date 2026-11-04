@@ -14,3 +14,7 @@
 - 匿名实现直接调用：断言回调触发且 imageIndex/警告字符串送达。
 - 挂到真实 PNG writer 做一次干净写入：add/remove/write 不抛异常且无警告。
 - 白盒：isInterface、extends EventListener、单方法签名（void + ImageWriter + int + String）。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 干净写零回调：PNG/JPEG/BMP + 调色板源（TYPE_BYTE_INDEXED）JPEG；写侧警告无稳定驱动输入（记录为无法稳定驱动，以 add/remove 契约 + 零回调覆盖）。
+- 注册语义（重复 add/逐次 remove/null no-op/removeAll）；直调契约 `(writer,0,"w-1")` 原样转交、`(null,-1,null)` 不校验；多监听器顺序分发。

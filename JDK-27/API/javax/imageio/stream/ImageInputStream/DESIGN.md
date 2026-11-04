@@ -22,3 +22,13 @@
 - 断言默认 `BIG_ENDIAN`、`setByteOrder` 往返、`setBitOffset` 往返、`isCached()`。
 - `mark/reset`、`read(byte[],off,len)`、`readFully(byte[])` 全程往返、`skipBytes(int)`、`length()==-1`。
 - `flushBefore` + `flush` + `getFlushedPosition` 及 `seek` 越界抛 `IndexOutOfBoundsException`。
+
+## 5. 深化补充（第二轮：契约级覆盖）
+在原有白盒+黑盒之上追加 `testSignatures`（重载数 read×3/readFully×8/skipBytes×2、逐方法参数类型/返回类型/throws 子句、mark()/getFlushedPosition()/isCached* 零异常子句）与 `testBehavior`（MemoryCacheImageInputStream 载体）：
+- 字节序读值互换（同 4 字节 BIG/LITTLE 互换）、无符号语义（0xFF/0xFFFF/0xFFFFFFFF）、`setByteOrder(null)` 原样存储。
+- `readUTF` 恒网络序 + 成功/失败（UTFDataFormatException）路径均恢复字节序；`readLine` 全终止符矩阵（含 bare CR 窥探回退的位置断言）。
+- 位读 MSB-first、跨字节 `readBits(8)`@bo4=0xBC、`readBits(0)`/`readBits(64)` 边界、setBitOffset/readBits 参数 IAE。
+- `readBytes` 集成语义：offset 恒 0、每次新数组、EOF 处 length=-1（javadoc 未写，实测）、null NPE、负长度 IOOBE。
+- 越界矩阵全部精确异常类断言（EOF 12 项、readFully 9 种坏 off/len、seek/flushBefore/skipBytes 三向、reset 回已 flush 标记 → javax.imageio.IIOException）。
+- close 契约：close 后 11 类操作 IOException（含二次 close）；length()/getFlushedPosition()/isCached*/getByteOrder()/mark()（静默）不受 close 影响。
+JDK-27 与 JDK-8 的本接口 API 完全一致（javap 双侧对照无差异、无默认方法）。

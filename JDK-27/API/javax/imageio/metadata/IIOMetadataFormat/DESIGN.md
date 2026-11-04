@@ -24,3 +24,8 @@
 - 真实标准格式实例：root 名、CHILD_POLICY_SOME、子节点含 Chroma/Text、Text 为 REPEAT 且 max=Integer.MAX_VALUE。
 - 契约异常：非 REPEAT 取 min/max children、非枚举取 enumerations、未知元素取 childPolicy 均抛 `IllegalArgumentException`。
 - 白盒：接口 public abstract；全部 `CHILD_POLICY_*`/`VALUE_*`/`DATATYPE_*` 常量精确值。
+
+## 5. 增补（本批深化，实测于 jdk-27.0.1）
+- 常量表补全 5 个 RANGE 掩码常量（MASK 4/8、MIN 6、MAX 10、MIN_MAX 14）及 `2|4|8==14` 恒等式；方法集精确 26 个、全 abstract。
+- 标准格式细节：Chroma SOME 且子含 ColorSpaceType/NumChannels；ColorSpaceType 唯一属性 `name`（required/ENUMERATION/STRING/无默认）；NumChannels 唯一属性 `value`；TextEntry EMPTY + 5 属性、value required/arbitrary/string、`getAttributeDescription("TextEntry","value")` 非 null；root 元素描述 null；`canNodeAppear` 对未知元素返回 true（实测，标准实现恒 true）。
+- 负例扩展：非 REPEAT max、非 range min、非 list 长度、未知元素/属性/null、无对象元素的 defaultValue/class 均 IAE；**`getObjectValueType` 对无对象元素不抛而返回 VALUE_NONE**。

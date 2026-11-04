@@ -21,3 +21,9 @@
 - `getServiceProviders(ImageReaderSpi.class, true)` 非空、元素均非空、且包含 png reader（格式名大小写不敏感匹配 "png"）。
 - `getServiceProviders(ImageInputStreamSpi.class, true)` 非空。
 - 取任一 reader SPI，用 `getServiceProviderByClass(spi.getClass())` 反查得到同一实例（`==` 身份相等）。
+
+## 5. 契约深化补充（本轮）
+- 注册/注销往返：自写 `ProbeReaderSpi`（`super(注入 vendorName/version)`）注册进全局注册表 → `onRegistration(registry,category)` 收到精确参数（registry==全局实例、category==ImageReaderSpi.class）→ 迭代器可见 → 注销后不可见、`onDeregistration` 一次；`(Object)` 重载与未注册注销均实测；全局改动 finally 恢复。
+- 排序往返：set true/重复 false/有序下标/unset 首真再假/未注册对 false/`(a,a)` 自环 `IllegalArgumentException`。
+- 过滤器：pngOnly 在 useOrdering 两态下成员一致；rejectAll 空迭代。
+- 负例（精确异常探针）：null 注册（两重载）/null 注销/`contains(null)`/未知类别均 `IllegalArgumentException`；null filter `NullPointerException`；`getServiceProviderByClass(null)` IAE、未知类 null；`registerApplicationClasspathSpis()` 幂等。

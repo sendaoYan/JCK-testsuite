@@ -21,3 +21,6 @@
 - `close()` 后用 `FileImageInputStream` 校验文件长度与 `readByte/readInt`。
 - 用 `RandomAccessFile("rw")` 构造第二个实例写入单字节并 `Files.readAllBytes` 校验。
 - finally 删除临时文件。
+
+## 5. 深化补充（testDeep* 契约覆盖，含 JDK-27 特有断言）
+追加 11 个 testDeep 方法（~130 条断言）：构造矩阵（(File)null/(RandomAccessFile)null IAE、不存在文件创建空文件）；length()/File.length() 未 close 即同步增长；已有文件**不截断**（旧尾部残留实测）；seek 越长洞填 0（55 00 00 00 00 AA）；全类型写 41 字节精确落盘布局；LE 32 字节布局 + 经 FileImageInputStream round-trip；数组 58 字节 round-trip；位写（0xA0、0xAB 0x81、RMW 0xCF、writeBits(x,0) no-op、numBits 65/-1 IAE、64 位满宽）；边界负例精确类（null 数组 NPE、len<0 IOOBE）；EOF 精度（readFully 部分填充保留断言）；flush()/flushBefore 仅推进 flushedPos（越界 IOOBE）；close 状态（二次 close → IOException("closed")、length() 返回 -1 不抛）。**版本差异（JDK-27 特有）**：RandomAccessFile 构造器采纳 RAF 指针（`raf.seek(2)` 后 `getStreamPosition()==2`；JDK-8 实测为 0，bug 5043343，上游回归测试 FileImageStreamPos.java）；两侧各自精确断言。javap 双侧公开 API 相同。

@@ -19,3 +19,10 @@
 - `isDataTypeOK` 位掩码判定、`isIFDPointer` 三种来源（tagSet / IFD_POINTER 类型 / 都不是）。
 - `getSizeOfType` 各类型字节数、`MIN/MAX_DATATYPE`、`UNKNOWN_TAG_NAME`。
 - 非法入参：null 名、负数号、负数 dataTypes、null tagSet、`isDataTypeOK(99)` 越界均抛相应异常。
+
+## 5. 深化补充（第二批，2026-11-05，断言 49 → 141）
+- 数据类型常量精确值全表（TIFF_BYTE=1 … TIFF_IFD_POINTER=13，MIN=1/MAX=13）与 `getSizeOfType` 全 13 项字节宽度表（BYTE/ASCII/SBYTE/UNDEFINED=1，SHORT/SSHORT=2，LONG/SLONG/FLOAT/IFD_POINTER=4，RATIONAL/SRATIONAL/DOUBLE=8）。
+- 边界实测（JDK-27）：`getSizeOfType(0/14/-1)` 与 `isDataTypeOK(0/14/-1)` 均抛 `IllegalArgumentException`；类型号 0 视为未知类型。
+- 实测发现（javadoc 未写）：`dataTypes` 掩码为 0 或包含 bit0 时合法（原样存储）；`count` 任意非正数（0/-1/-5）均合法并原样返回——4 参构造器不校验 count 正负；bit14 及以上或负掩码抛 IAE。
+- IFD 指针构造器精确语义：dataTypes 恒为 `LONG|IFD_POINTER`、count=1、getTagSet 为传入引用；掩码含 IFD_POINTER 的普通 tag `isIFDPointer()==true` 但 tagSet 保持 null。
+- 子类探针：TIFFTag 可通过 public 构造器扩展，行为继承正常。

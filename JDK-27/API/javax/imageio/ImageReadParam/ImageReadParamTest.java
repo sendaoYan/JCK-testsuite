@@ -126,9 +126,61 @@ public class ImageReadParamTest {
         iis.close();
     }
 
+    // ---- additions: exact-exception probes and boundary contracts ----
+    static void expectExact(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        boolean thrown = false;
+        try { r.run(); } catch (Throwable t) {
+            thrown = true;
+            check(expected == t.getClass(),
+                  msg + " expected exactly " + expected.getSimpleName() + " but got " + t.getClass().getSimpleName());
+        }
+        check(thrown, msg + " should throw " + expected.getSimpleName());
+    }
+
+    static void testCoreBAdditions() {
+        ImageReadParam p = new ImageReadParam();
+
+        // destination type null clears the type and (actual behavior) the destination too
+        BufferedImage dest = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        p.setDestination(dest);
+        p.setDestinationType(null);
+        check(p.getDestinationType() == null, "setDestinationType null clears type");
+        check(p.getDestination() == null, "setDestinationType(null) also clears destination");
+        p.setDestination(null);
+        check(p.getDestination() == null, "setDestination null clears");
+
+        // zero-length destination band arrays are accepted
+        p.setDestinationBands(new int[0]);
+        check(p.getDestinationBands() != null && p.getDestinationBands().length == 0,
+              "empty destination band array accepted");
+
+        // setSourceRenderSize(null) also throws UOE (support check precedes null handling)
+        expectExact(UnsupportedOperationException.class, () -> p.setSourceRenderSize(null),
+                    "setSourceRenderSize(null) unsupported");
+
+        // progressive passes: overflow boundary and exact-exception classes
+        expectExact(IllegalArgumentException.class, () -> p.setSourceProgressivePasses(0, -1),
+                    "negative num passes");
+        expectExact(IllegalArgumentException.class, () -> p.setSourceProgressivePasses(Integer.MAX_VALUE, 2),
+                    "minPass + numPasses - 1 overflow");
+        p.setSourceProgressivePasses(Integer.MAX_VALUE, 1);
+        check(p.getSourceMinProgressivePass() == Integer.MAX_VALUE, "min pass MAX_VALUE boundary");
+        check(p.getSourceMaxProgressivePass() == Integer.MAX_VALUE, "max pass MAX_VALUE boundary");
+        check(p.getSourceNumProgressivePasses() == 1, "num passes 1 at boundary");
+        p.setSourceProgressivePasses(0, Integer.MAX_VALUE);
+        check(p.getSourceMaxProgressivePass() == Integer.MAX_VALUE, "max pass MAX_VALUE no overflow");
+
+        // failed band update leaves previous bands intact
+        p.setDestinationBands(new int[]{2, 0});
+        try { p.setDestinationBands(new int[]{1, 1}); } catch (IllegalArgumentException expected) { }
+        check(p.getDestinationBands().length == 2 && p.getDestinationBands()[0] == 2,
+              "failed destination band update leaves state intact");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCoreBAdditions();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

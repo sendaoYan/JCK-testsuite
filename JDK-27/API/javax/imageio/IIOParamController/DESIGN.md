@@ -15,3 +15,4 @@
 - 记录式控制器：断言收到的 param 与传入一致。
 - 端到端：`ImageReadParam.setController` + `activateController()` 分派到控制器并透传返回值。
 - 白盒：isInterface、public、无直接父接口、单抽象方法 `activate` 返回 boolean 且参数为 IIOParam。
+- CORE-B 补充：无控制器时 activateController 实抛 ISE（javadoc 声称返回 false 的文档分歧，双侧一致）；setController(null) 摘除；控制器内修改参数激活后可见；控制器 RuntimeException 连消息穿透；defaultController 仅 informational，显式 setController(getDefaultController()) 后才运行；结构断言（无字段/嵌套类型/无 checked 异常/activate 为 public abstract）。

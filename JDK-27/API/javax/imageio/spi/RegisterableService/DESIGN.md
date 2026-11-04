@@ -15,3 +15,8 @@
 ## 4. 测试用例设计 + 自动化实现（`RegisterableServiceTest.testBlackBox`）
 - 将真实 PNG writer SPI 强转为 `RegisterableService`，在默认 `IIORegistry` 上调用 `onRegistration`/`onDeregistration`，断言无异常。
 - 自定义匿名实现记录回调计数，手动触发后断言各回调恰好派发一次。
+
+## 5. 契约深化补充（本轮）
+- 反射精确签名：恰 2 个声明方法；返回 void；参数 `(ServiceRegistry, Class)`；public abstract；无受检异常。
+- 端到端分派：RecordingSpi 在私有注册表注册/注销，registry/category 逐字透传（`==`）；同叶类替换触发旧实例 onDeregistration；`deregisterAll(category)` 驱动回调。
+- 非类别成员（PlainService）：注册无副作用、回调不触发、`contains` false。

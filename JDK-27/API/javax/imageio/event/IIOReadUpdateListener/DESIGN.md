@@ -14,3 +14,9 @@
 - 匿名实现六个方法直接调用均不抛异常。
 - 挂到真实 PNG reader 后 read：断言 passStarted/passComplete 各触发一次。
 - 白盒：isInterface、extends EventListener、六个公共方法存在。
+
+## 5. 契约深化补充（evtplug，2026-11）
+- 精确签名集断言（含 `int[]`→"[I" 特例处理）；记录型实现类 `RecReadUpdate`。
+- 非交错 PNG：单 pass `passStarted(pass=0, minPass=0, numPasses=6)`（numPasses=6 为实现细节，实测）；Adam7 交错：7 个 pass 精确几何 + 无损像素往返（0xff000000 alpha 处理）。
+- 渐进 JPEG：pass 0..9 递增、解码期间 `numPasses==Integer.MAX_VALUE`；baseline JPEG 单 pass。
+- 注册语义与异常中继（IIOException 包装）同读进度监听器。

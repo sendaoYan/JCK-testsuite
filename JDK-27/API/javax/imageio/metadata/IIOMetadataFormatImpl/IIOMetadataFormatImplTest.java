@@ -188,9 +188,140 @@ public class IIOMetadataFormatImplTest {
         return false;
     }
 
+    // ---- Part 3: resource bundle contract (probed on jdk-27.0.1) ----
+    static class BundleImpl extends IIOMetadataFormatImpl {
+        BundleImpl() { super("root", CHILD_POLICY_EMPTY); }
+        public boolean canNodeAppear(String elementName, ImageTypeSpecifier imageType) { return true; }
+        String rbn() { return getResourceBaseName(); }
+        void setRbn(String s) { setResourceBaseName(s); }
+    }
+    static void testResourceBundle() throws Exception {
+        BundleImpl t = new BundleImpl();
+        check(t.rbn().equals(IIOMetadataFormatImplTest.class.getName() + "$BundleImplResources"),
+              "default resource base name is subclass name + Resources");
+        expectThrows(IllegalArgumentException.class, () -> t.setRbn(null), "setResourceBaseName null");
+        t.setRbn("my.custom.Bundle");
+        check("my.custom.Bundle".equals(t.rbn()), "resource base name round-trip");
+        check(t.getElementDescription("root", Locale.ROOT) == null, "missing bundle description null");
+        check(t.getElementDescription("root", null) == null, "null locale accepted, description null");
+        expectThrows(IllegalArgumentException.class, () -> t.getElementDescription("nope", null),
+                     "getElementDescription unknown element");
+        // standard format descriptions come from the JDK-provided bundle
+        IIOMetadataFormat std = IIOMetadataFormatImpl.getStandardFormatInstance();
+        check(std.getElementDescription("Chroma", Locale.ROOT) != null, "standard Chroma description non-null");
+        check(std.getElementDescription("javax_imageio_1.0", Locale.ROOT) == null, "standard root description null");
+    }
+
+    // ---- Part 4: object value range variant + VALUE_NONE family ----
+    static class ObjImpl extends IIOMetadataFormatImpl {
+        ObjImpl() { super("r", CHILD_POLICY_EMPTY); }
+        public boolean canNodeAppear(String elementName, ImageTypeSpecifier imageType) { return true; }
+        void addRange() { addObjectValue("r", Integer.class, Integer.valueOf(5), Integer.valueOf(0), Integer.valueOf(9), true, false); }
+        void rm() { removeObjectValue("r"); }
+    }
+    static void testObjectValuesDeep() throws Exception {
+        ObjImpl o = new ObjImpl();
+        o.addRange();
+        check(o.getObjectValueType("r") == IIOMetadataFormat.VALUE_RANGE_MIN_INCLUSIVE,
+              "range object VALUE_RANGE_MIN_INCLUSIVE");
+        check(Integer.valueOf(0).compareTo((Integer) o.getObjectMinValue("r")) == 0, "range object min");
+        check(Integer.valueOf(9).compareTo((Integer) o.getObjectMaxValue("r")) == 0, "range object max");
+        o.rm();
+        check(o.getObjectValueType("r") == IIOMetadataFormat.VALUE_NONE, "VALUE_NONE after removeObjectValue");
+        expectThrows(IllegalArgumentException.class, () -> o.getObjectDefaultValue("r"),
+                     "getObjectDefaultValue after remove");
+        expectThrows(IllegalArgumentException.class, () -> o.getObjectClass("r"), "getObjectClass after remove");
+        expectThrows(IllegalArgumentException.class, () -> o.getObjectEnumerations("r"),
+                     "getObjectEnumerations after remove");
+        expectThrows(IllegalArgumentException.class, () -> o.getObjectMinValue("r"),
+                     "getObjectMinValue after remove");
+        expectThrows(IllegalArgumentException.class, () -> o.getObjectArrayMinLength("r"),
+                     "getObjectArrayMinLength after remove");
+    }
+
+    // ---- Part 5: builder/ctor negative matrix + probed quirks ----
+    static class NegImpl extends IIOMetadataFormatImpl {
+        NegImpl() { super("root", CHILD_POLICY_SEQUENCE); addElement("item", "root", 1, 4); }
+        NegImpl(String r, int p) { super(r, p); }
+        NegImpl(String r, int mn, int mx) { super(r, mn, mx); }
+        public boolean canNodeAppear(String elementName, ImageTypeSpecifier imageType) { return true; }
+        void addEl3(String c, String p, int pol) { addElement(c, p, pol); }
+        void addEl4(String c, String p, int mn, int mx) { addElement(c, p, mn, mx); }
+        void addAttrDef(String e, String a, int t, boolean req, String d) { addAttribute(e, a, t, req, d); }
+        void addAttrEnum(String e, String a, int t, boolean req, String d, java.util.List<String> en) { addAttribute(e, a, t, req, d, en); }
+        void addAttrList(String e, String a, int t, boolean req, int mn, int mx) { addAttribute(e, a, t, req, mn, mx); }
+        void addChild(String c, String p) { addChildElement(c, p); }
+    }
+    static void testNegativesDeep() throws Exception {
+        NegImpl t = new NegImpl();
+        expectThrows(IllegalArgumentException.class, () -> t.addEl3("z", "noParent", 0), "addElement unknown parent");
+        expectThrows(IllegalArgumentException.class, () -> t.addEl3("z", "root", 99), "addElement invalid policy");
+        expectThrows(IllegalArgumentException.class,
+                     () -> t.addEl3("z", "root", IIOMetadataFormat.CHILD_POLICY_REPEAT),
+                     "addElement REPEAT not allowed in (String,String,int)");
+        expectThrows(IllegalArgumentException.class, () -> t.addEl4("z", "root", 3, 2), "addElement min > max");
+        expectThrows(IllegalArgumentException.class, () -> t.addEl4("z", "root", -1, 2), "addElement negative min");
+        expectThrows(IllegalArgumentException.class, () -> t.addAttrDef("noelem", "a", 0, true, "d"),
+                     "addAttribute unknown element");
+        expectThrows(IllegalArgumentException.class, () -> t.addAttrDef("item", "a", 99, true, "d"),
+                     "addAttribute invalid dataType");
+        expectThrows(IllegalArgumentException.class, () -> t.addAttrEnum("item", "a", 0, true, "d", null),
+                     "addAttribute enumeration null list");
+        expectThrows(IllegalArgumentException.class,
+                     () -> t.addAttrEnum("item", "a", 0, true, "d", java.util.List.<String>of()),
+                     "addAttribute enumeration empty list");
+        expectThrows(IllegalArgumentException.class,
+                     () -> t.addAttrList("item", "l2", IIOMetadataFormat.DATATYPE_INTEGER, false, 5, 2),
+                     "addAttribute list min > max");
+        expectThrows(IllegalArgumentException.class, () -> t.addChild("z", "noParent"),
+                     "addChildElement unknown parent");
+        // ctor validation
+        expectThrows(IllegalArgumentException.class, () -> new NegImpl("r", 6), "ctor policy 6");
+        expectThrows(IllegalArgumentException.class, () -> new NegImpl("r", -1), "ctor policy -1");
+        expectThrows(IllegalArgumentException.class, () -> new NegImpl("r", IIOMetadataFormat.CHILD_POLICY_REPEAT),
+                     "ctor REPEAT in (String,int)");
+        for (int p = 0; p <= 4; p++) {
+            final int pol = p;
+            NegImpl v = new NegImpl("p" + pol, pol);
+            check(v.getChildPolicy("p" + pol) == pol, "policy " + pol + " accepted by 2-arg ctor");
+        }
+        NegImpl rep = new NegImpl("r", 2, 5);
+        check(rep.getChildPolicy("r") == IIOMetadataFormat.CHILD_POLICY_REPEAT, "3-arg ctor forces REPEAT");
+        check(rep.getElementMinChildren("r") == 2 && rep.getElementMaxChildren("r") == 5, "3-arg ctor bounds");
+        // query-time negatives
+        NegImpl q = new NegImpl();
+        expectThrows(IllegalArgumentException.class, () -> q.getElementMaxChildren("root"),
+                     "getElementMaxChildren non-REPEAT");
+        expectThrows(IllegalArgumentException.class, () -> q.getAttributeMinValue("item", "noattr"),
+                     "getAttributeMinValue unknown attribute");
+        expectThrows(IllegalArgumentException.class, () -> q.getAttributeMaxValue("item", "noattr"),
+                     "getAttributeMaxValue unknown attribute");
+        expectThrows(IllegalArgumentException.class, () -> q.getAttributeListMinLength("item", "noattr"),
+                     "getAttributeListMinLength unknown attribute");
+        expectThrows(IllegalArgumentException.class, () -> q.isAttributeRequired("item", "noattr"),
+                     "isAttributeRequired unknown attribute");
+        expectThrows(IllegalArgumentException.class, () -> q.getAttributeNames("absent"),
+                     "getAttributeNames unknown element");
+        expectThrows(IllegalArgumentException.class, () -> q.getElementDescription("absent", null),
+                     "getElementDescription unknown element");
+        expectThrows(IllegalArgumentException.class, () -> q.getChildPolicy(null), "getChildPolicy null");
+        // duplicate addAttribute: default overwritten, names list grows (probed quirk)
+        NegImpl dup = new NegImpl();
+        dup.addAttrDef("item", "dupattr", IIOMetadataFormat.DATATYPE_STRING, true, "first");
+        dup.addAttrDef("item", "dupattr", IIOMetadataFormat.DATATYPE_STRING, true, "second");
+        check("second".equals(dup.getAttributeDefaultValue("item", "dupattr")), "duplicate addAttribute default overwritten");
+        check(dup.getAttributeNames("item").length == 2, "duplicate addAttribute grows the names list");
+        // element without attributes yields an empty array
+        NegImpl empty = new NegImpl("eroot", IIOMetadataFormat.CHILD_POLICY_EMPTY);
+        check(empty.getAttributeNames("eroot").length == 0, "childless element has empty attribute array");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testResourceBundle();
+        testObjectValuesDeep();
+        testNegativesDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

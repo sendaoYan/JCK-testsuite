@@ -154,9 +154,85 @@ public class IIOMetadataFormatTest {
         return false;
     }
 
+    // ---- Part 3: additional range-mask constants + method set (probed on jdk-27.0.1) ----
+    static void testConstantsAndSignatures() throws Exception {
+        Class<?> c = IIOMetadataFormat.class;
+        check(intConst(c, "VALUE_RANGE_MIN_INCLUSIVE_MASK") == 4, "VALUE_RANGE_MIN_INCLUSIVE_MASK == 4");
+        check(intConst(c, "VALUE_RANGE_MAX_INCLUSIVE_MASK") == 8, "VALUE_RANGE_MAX_INCLUSIVE_MASK == 8");
+        check(intConst(c, "VALUE_RANGE_MIN_INCLUSIVE") == 6, "VALUE_RANGE_MIN_INCLUSIVE == 6");
+        check(intConst(c, "VALUE_RANGE_MAX_INCLUSIVE") == 10, "VALUE_RANGE_MAX_INCLUSIVE == 10");
+        check(intConst(c, "VALUE_RANGE_MIN_MAX_INCLUSIVE") == 14, "VALUE_RANGE_MIN_MAX_INCLUSIVE == 14");
+        check((IIOMetadataFormat.VALUE_RANGE
+              | IIOMetadataFormat.VALUE_RANGE_MIN_INCLUSIVE_MASK
+              | IIOMetadataFormat.VALUE_RANGE_MAX_INCLUSIVE_MASK)
+              == IIOMetadataFormat.VALUE_RANGE_MIN_MAX_INCLUSIVE, "mask composition identity");
+        // exactly 26 abstract methods, all abstract and public
+        check(c.getDeclaredMethods().length == 26, "exactly 26 abstract methods");
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            check(java.lang.reflect.Modifier.isAbstract(m.getModifiers()), "method " + m.getName() + " abstract");
+        }
+    }
+
+    // ---- Part 4: standard format extra details + wider negative matrix ----
+    static void testStandardDetailsAndNegatives() throws Exception {
+        IIOMetadataFormat std = IIOMetadataFormatImpl.getStandardFormatInstance();
+        check(std.getChildPolicy("Chroma") == IIOMetadataFormat.CHILD_POLICY_SOME, "Chroma policy SOME");
+        check(contains(std.getChildNames("Chroma"), "ColorSpaceType"), "Chroma children include ColorSpaceType");
+        check(java.util.Arrays.equals(std.getAttributeNames("ColorSpaceType"), new String[]{"name"}),
+              "ColorSpaceType single attribute name");
+        check(std.isAttributeRequired("ColorSpaceType", "name"), "name required");
+        check(std.getAttributeValueType("ColorSpaceType", "name") == IIOMetadataFormat.VALUE_ENUMERATION,
+              "name is enumeration");
+        check(std.getAttributeDataType("ColorSpaceType", "name") == IIOMetadataFormat.DATATYPE_STRING,
+              "name is string");
+        check(std.getAttributeDefaultValue("ColorSpaceType", "name") == null, "name has no default");
+        check(std.getAttributeNames("NumChannels").length == 1
+              && "value".equals(std.getAttributeNames("NumChannels")[0]), "NumChannels attribute value");
+        check(std.getChildPolicy("TextEntry") == IIOMetadataFormat.CHILD_POLICY_EMPTY, "TextEntry policy EMPTY");
+        check(std.getAttributeNames("TextEntry").length == 5, "TextEntry has 5 attributes");
+        check(contains(std.getAttributeNames("TextEntry"), "keyword"), "TextEntry keyword attribute");
+        check(std.isAttributeRequired("TextEntry", "value"), "TextEntry value required");
+        check(std.getAttributeValueType("TextEntry", "value") == IIOMetadataFormat.VALUE_ARBITRARY,
+              "TextEntry value arbitrary");
+        check(std.getAttributeDescription("TextEntry", "value", java.util.Locale.ROOT) != null,
+              "TextEntry value description from bundle");
+        check(std.getElementDescription("javax_imageio_1.0", java.util.Locale.ROOT) == null,
+              "root element has no description entry");
+        // canNodeAppear of the standard format returns true for any name, including unknown ones
+        check(std.canNodeAppear("no_such_element", null), "canNodeAppear unknown element true (standard impl)");
+
+        IIOMetadataFormat f = new TestFormat();
+        expectThrows(IllegalArgumentException.class, () -> f.getElementMaxChildren("root"),
+                     "getElementMaxChildren on non-REPEAT");
+        expectThrows(IllegalArgumentException.class, () -> f.getChildNames("absent"),
+                     "getChildNames unknown element");
+        expectThrows(IllegalArgumentException.class, () -> f.getAttributeNames("absent"),
+                     "getAttributeNames unknown element");
+        expectThrows(IllegalArgumentException.class, () -> f.getAttributeMinValue("root", "count"),
+                     "getAttributeMinValue on non-range");
+        expectThrows(IllegalArgumentException.class, () -> f.getAttributeListMinLength("root", "count"),
+                     "getAttributeListMinLength on non-list");
+        expectThrows(IllegalArgumentException.class, () -> f.isAttributeRequired("root", "absent"),
+                     "isAttributeRequired unknown attribute");
+        expectThrows(IllegalArgumentException.class, () -> f.getElementDescription("absent", null),
+                     "getElementDescription unknown element");
+        expectThrows(IllegalArgumentException.class, () -> f.getChildPolicy(null),
+                     "getChildPolicy null element");
+        expectThrows(IllegalArgumentException.class, () -> f.getObjectDefaultValue("child"),
+                     "getObjectDefaultValue element without object");
+        expectThrows(IllegalArgumentException.class, () -> f.getObjectClass("child"),
+                     "getObjectClass element without object");
+        // getObjectValueType reports VALUE_NONE instead of throwing for objectless elements
+        check(f.getObjectValueType("child") == IIOMetadataFormat.VALUE_NONE,
+              "getObjectValueType VALUE_NONE for objectless element");
+        check(f.getAttributeNames("child").length == 0, "child has no attributes");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstantsAndSignatures();
+        testStandardDetailsAndNegatives();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
