@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.source.doctree.ErroneousTree conformance: white-box structure + black-box behavior.
+ * @modules jdk.compiler
  * @run main ErroneousTreeTest
  */
 
@@ -37,14 +38,34 @@ public class ErroneousTreeTest {
         javax.tools.JavaCompiler c = javax.tools.ToolProvider.getSystemJavaCompiler();
         javax.tools.DiagnosticCollector<javax.tools.JavaFileObject> diags = new javax.tools.DiagnosticCollector<>();
         javax.tools.StandardJavaFileManager fm = c.getStandardFileManager(diags, java.util.Locale.ROOT, null);
-        com.sun.source.util.JavacTask t = (com.sun.source.util.JavacTask) c.getTask(null, fm, diags, java.util.List.of("-proc:none"), null, null);
-        com.sun.source.util.DocTreeFactory f = com.sun.source.util.DocTrees.instance(t).getDocTreeFactory();
-        javax.lang.model.element.Name nm = t.getElements().getName("x");
-        com.sun.source.doctree.ErroneousTree node = f.newErroneousTree("bad", null);
-        com.sun.source.doctree.ErroneousTree n = node;
-        check(n.getKind() == com.sun.source.doctree.DocTree.Kind.ERRONEOUS, "kind");
+        final String src = "package p; /** @param */ class C {}";
+        com.sun.source.util.JavacTask t = (com.sun.source.util.JavacTask) c.getTask(null, fm, diags, java.util.List.of("-proc:none"), null,
+                java.util.List.of(new javax.tools.SimpleJavaFileObject(java.net.URI.create("string:///C.java"), javax.tools.JavaFileObject.Kind.SOURCE) {
+                    public CharSequence getCharContent(boolean ignore) { return src; }
+                }));
+        com.sun.source.tree.CompilationUnitTree cu = t.parse().iterator().next();
+        t.analyze();
+        javax.lang.model.element.Element el = t.getElements().getTypeElement("p.C");
+        com.sun.source.doctree.DocCommentTree dc = com.sun.source.util.DocTrees.instance(t).getDocCommentTree(el);
+        check(dc != null, "doc comment parsed");
+
+        final java.util.List<com.sun.source.doctree.ErroneousTree> errs = new java.util.ArrayList<>();
+        new com.sun.source.util.DocTreeScanner<Void,Void>() {
+            @Override public Void visitErroneous(com.sun.source.doctree.ErroneousTree node, Void v) {
+                errs.add(node);
+                return super.visitErroneous(node, v);
+            }
+        }.scan(dc, null);
+        check(!errs.isEmpty(), "com.sun.source.doctree.ErroneousTree present in parsed doc");
+        com.sun.source.doctree.ErroneousTree e = errs.get(0);
+        check(e.getKind() == com.sun.source.doctree.DocTree.Kind.ERRONEOUS, "kind == ERRONEOUS");
+
+        javax.tools.Diagnostic<javax.tools.JavaFileObject> d = e.getDiagnostic();
+        check(d != null, "getDiagnostic() non-null");
+        check(d.getMessage(java.util.Locale.ROOT) != null, "getDiagnostic() message non-null");
+
         final boolean[] ok = new boolean[1];
-        n.accept(new com.sun.source.util.SimpleDocTreeVisitor<Void,Void>() {
+        e.accept(new com.sun.source.util.SimpleDocTreeVisitor<Void,Void>() {
             @Override public Void visitErroneous(com.sun.source.doctree.ErroneousTree node, Void v) { ok[0]=true; return null; }
         }, null);
         check(ok[0], "accept dispatches");

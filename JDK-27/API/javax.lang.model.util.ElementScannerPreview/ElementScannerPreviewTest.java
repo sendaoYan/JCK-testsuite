@@ -2,6 +2,7 @@
  * @test
  * @summary javax.lang.model.util.ElementScannerPreview conformance: white-box structure + black-box behavior.
  * @run main/othervm --add-opens java.compiler/javax.lang.model.util=ALL-UNNAMED ElementScannerPreviewTest
+ * @enablePreview
  */
 
 import java.util.*;
@@ -49,6 +50,11 @@ public class ElementScannerPreviewTest {
     }
 
 
+    static final class ES extends javax.lang.model.util.ElementScannerPreview<String, Void> {
+        ES() { super(); }
+        ES(String def) { super(def); }
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.lang.model.util.ElementScannerPreview");
         check(c != null, "javax.lang.model.util.ElementScannerPreview loads");
@@ -78,14 +84,13 @@ record Rec(int x) {}
 enum Color { RED, GREEN }
 """;
         compile(src);
-        Class<?> c = Class.forName("javax.lang.model.util.ElementScannerPreview");
-        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(Object.class);
-        ctor.setAccessible(true);
-        Object v = ctor.newInstance("DEFAULT");
-        check(v instanceof ElementScanner14, "instanceof ElementScanner14");
-        check(v instanceof AbstractElementVisitor6, "instanceof AbstractElementVisitor6");
-        java.lang.reflect.Method m = c.getMethod("scan", Element.class);
-        check("DEFAULT".equals(m.invoke(v, el.getTypeElement("sample.Sample"))), "scan(class) -> DEFAULT");
+        javax.lang.model.util.ElementScannerPreview<String, Void> v0 = new ES();
+        javax.lang.model.util.ElementScannerPreview<String, Void> v1 = new ES("DEFAULT");
+        check(v0 instanceof ElementScanner14, "instanceof ElementScanner14");
+        check(v1 instanceof AbstractElementVisitor6, "instanceof AbstractElementVisitor6");
+        TypeElement sample = el.getTypeElement("sample.Sample");
+        check(v0.scan(sample) == null, "scan(class) -> default null");
+        check("DEFAULT".equals(v1.scan(sample)), "scan(class) -> defaultAction DEFAULT");
     }
 
     public static void main(String[] args) throws Exception {

@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.source.util.TaskListener conformance: white-box structure + black-box behavior.
+ * @modules jdk.compiler
  * @run main TaskListenerTest
  */
 
@@ -56,13 +57,21 @@ public class TaskListenerTest {
         U u = setup("package p; class D { int f; void m(){} }");
         final int[] started = new int[1];
         final int[] finished = new int[1];
-        u.t.addTaskListener(new com.sun.source.util.TaskListener() {
+        com.sun.source.util.TaskListener l = new com.sun.source.util.TaskListener() {
             public void started(com.sun.source.util.TaskEvent e) { started[0]++; }
             public void finished(com.sun.source.util.TaskEvent e) { finished[0]++; }
-        });
+        };
+
+        com.sun.source.util.TaskEvent ev = new com.sun.source.util.TaskEvent(com.sun.source.util.TaskEvent.Kind.PARSE);
+        l.started(ev);
+        check(started[0] == 1, "started direct call");
+        l.finished(ev);
+        check(finished[0] == 1, "finished direct call");
+
+        u.t.addTaskListener(l);
         u.t.analyze();
-        check(started[0] > 0, "started fired");
-        check(finished[0] > 0, "finished fired");
+        check(started[0] > 1, "started fired by compiler");
+        check(finished[0] > 1, "finished fired by compiler");
     }
 
     public static void main(String[] args) throws Exception {

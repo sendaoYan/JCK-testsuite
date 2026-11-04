@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.source.tree.ReturnTree conformance: white-box structure + black-box behavior.
+ * @modules jdk.compiler
  * @run main ReturnTreeTest
  */
 
@@ -79,6 +80,7 @@ public class ReturnTreeTest {
             "        y = Math.max(y, 1);\n" +
             "    }\n" +
             "    void m2() {}\n" +
+            "    int r() { return 1; }\n" +
             "    record Point(int x, int y) {}\n" +
             "    static void pat(Object o) {\n" +
             "        if (o instanceof Point(int px, int py)) { }\n" +
@@ -112,6 +114,15 @@ public class ReturnTreeTest {
         }.scan(cu, null);
         check(!found.isEmpty(), "com.sun.source.tree.ReturnTree present in parsed AST");
         com.sun.source.tree.ReturnTree n = found.get(0);
+
+        boolean sawLiteral = false;
+        for (com.sun.source.tree.ReturnTree r : found) {
+            com.sun.source.tree.ExpressionTree e = r.getExpression();
+            check(e != null, "getExpression() non-null");
+            check(e.getKind() != null, "expression kind non-null");
+            if (e.getKind() == com.sun.source.tree.Tree.Kind.INT_LITERAL) sawLiteral = true;
+        }
+        check(sawLiteral, "return literal expression kind == INT_LITERAL");
 
         final boolean[] accepted = new boolean[1];
         n.accept(new com.sun.source.util.SimpleTreeVisitor<Void,Void>() {

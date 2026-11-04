@@ -2,6 +2,7 @@
  * @test
  * @summary javax.lang.model.util.AbstractAnnotationValueVisitorPreview conformance: white-box structure + black-box behavior.
  * @run main AbstractAnnotationValueVisitorPreviewTest
+ * @enablePreview
  */
 
 import java.util.*;
@@ -9,6 +10,8 @@ import javax.lang.model.*;
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 import javax.lang.model.util.*;
+import javax.tools.*;
+import com.sun.source.util.*;
 
 public class AbstractAnnotationValueVisitorPreviewTest {
     static int passed;
@@ -16,6 +19,35 @@ public class AbstractAnnotationValueVisitorPreviewTest {
     static Set<String> ifaceNames(Class<?> c) { Set<String> s = new HashSet<>(); for (Class<?> i : c.getInterfaces()) s.add(i.getName()); return s; }
     static boolean declares(Class<?> c, String name) { for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true; return false; }
 
+    // ---- compiler harness (headless, deterministic) ----
+    static javax.lang.model.util.Elements el;
+    static javax.lang.model.util.Types ty;
+    static com.sun.source.util.JavacTask jt;
+    static javax.tools.StandardJavaFileManager fm;
+    static java.nio.file.Path tmpDir;
+    static void compile(String source) throws Exception {
+        javax.tools.JavaCompiler c = javax.tools.ToolProvider.getSystemJavaCompiler();
+        tmpDir = java.nio.file.Files.createTempDirectory("jck27bh-langmodel");
+        java.nio.file.Path src = tmpDir.resolve("sample/Sample.java");
+        java.nio.file.Files.createDirectories(src.getParent());
+        java.nio.file.Files.writeString(src, source, java.nio.charset.StandardCharsets.UTF_8);
+        javax.tools.DiagnosticCollector<javax.tools.JavaFileObject> diags = new javax.tools.DiagnosticCollector<>();
+        fm = c.getStandardFileManager(diags, java.util.Locale.ROOT, java.nio.charset.StandardCharsets.UTF_8);
+        Iterable<? extends javax.tools.JavaFileObject> units = fm.getJavaFileObjectsFromFiles(java.util.List.of(src.toFile()));
+        jt = (com.sun.source.util.JavacTask) c.getTask(null, fm, diags, java.util.List.of("-proc:none"), null, units);
+        el = jt.getElements();
+        ty = jt.getTypes();
+        jt.parse();
+        jt.analyze();
+    }
+    static void cleanup() {
+        try { if (fm != null) fm.close(); } catch (java.io.IOException e) {}
+        if (tmpDir != null) {
+            try (java.util.stream.Stream<java.nio.file.Path> s = java.nio.file.Files.walk(tmpDir)) {
+                s.sorted(java.util.Comparator.reverseOrder()).forEach(p -> { try { java.nio.file.Files.deleteIfExists(p); } catch (java.io.IOException e) {} });
+            } catch (java.io.IOException e) {}
+        }
+    }
 
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.lang.model.util.AbstractAnnotationValueVisitorPreview");
@@ -27,19 +59,53 @@ public class AbstractAnnotationValueVisitorPreviewTest {
     }
 
     static void testBlackBox() throws Exception {
-        Class<?> c = Class.forName("javax.lang.model.util.AbstractAnnotationValueVisitorPreview");
-        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "is abstract");
-        check(c.getSuperclass().getName().equals("javax.lang.model.util.AbstractAnnotationValueVisitor14"), "extends AbstractAnnotationValueVisitor14");
-        check(c.getDeclaredMethods().length == 0, "adds no methods over parent");
-        check(c.getDeclaredConstructors().length == 1, "one constructor");
-        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "protected constructor");
-        java.lang.reflect.Method m = c.getMethod("visit", AnnotationValue.class, Object.class);
-        check(java.lang.reflect.Modifier.isPublic(m.getModifiers()) && java.lang.reflect.Modifier.isFinal(m.getModifiers()), "inherits final public visit");
+        String src = """
+package sample;
+/** Doc for Sample. */
+public class Sample implements Runnable {
+    public int field;
+    public java.util.List<String> list;
+    public Sample() {}
+    public Sample(int a) {}
+    public String method(int a) { return null; }
+    public void run() {}
+    public <T> T id(T x) { return x; }
+}
+record Rec(int x) {}
+@Deprecated class Old {}
+@interface Marker { String value(); }
+@Marker("unchecked") class W {}
+enum Color { RED, GREEN }
+""";
+        compile(src);
+        javax.lang.model.util.AbstractAnnotationValueVisitorPreview<String, Void> v =
+            new javax.lang.model.util.AbstractAnnotationValueVisitorPreview<String, Void>() {
+                public String visitBoolean(boolean a, Void p) { return "OK"; }
+                public String visitByte(byte a, Void p) { return "OK"; }
+                public String visitChar(char a, Void p) { return "OK"; }
+                public String visitDouble(double a, Void p) { return "OK"; }
+                public String visitFloat(float a, Void p) { return "OK"; }
+                public String visitInt(int a, Void p) { return "OK"; }
+                public String visitLong(long a, Void p) { return "OK"; }
+                public String visitShort(short a, Void p) { return "OK"; }
+                public String visitString(String a, Void p) { return "OK"; }
+                public String visitType(TypeMirror a, Void p) { return "OK"; }
+                public String visitEnumConstant(VariableElement a, Void p) { return "OK"; }
+                public String visitAnnotation(AnnotationMirror a, Void p) { return "OK"; }
+                public String visitArray(List<? extends AnnotationValue> a, Void p) { return "OK"; }
+            };
+        check(v instanceof javax.lang.model.util.AbstractAnnotationValueVisitor14, "instanceof AbstractAnnotationValueVisitor14");
+        AnnotationValue av = el.getAllAnnotationMirrors(el.getTypeElement("sample.W")).get(0).getElementValues().values().iterator().next();
+        check("OK".equals(v.visit(av)), "visit(annotationValue) dispatches");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
-        System.out.println("PASS (" + passed + " assertions)");
+        try {
+            testWhiteBox();
+            testBlackBox();
+            System.out.println("PASS (" + passed + " assertions)");
+        } finally {
+            cleanup();
+        }
     }
 }

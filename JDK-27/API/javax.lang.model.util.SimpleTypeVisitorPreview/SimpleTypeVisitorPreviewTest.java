@@ -2,6 +2,7 @@
  * @test
  * @summary javax.lang.model.util.SimpleTypeVisitorPreview conformance: white-box structure + black-box behavior.
  * @run main/othervm --add-opens java.compiler/javax.lang.model.util=ALL-UNNAMED SimpleTypeVisitorPreviewTest
+ * @enablePreview
  */
 
 import java.util.*;
@@ -49,6 +50,11 @@ public class SimpleTypeVisitorPreviewTest {
     }
 
 
+    static final class STV extends javax.lang.model.util.SimpleTypeVisitorPreview<String, Void> {
+        STV() { super(); }
+        STV(String def) { super(def); }
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.lang.model.util.SimpleTypeVisitorPreview");
         check(c != null, "javax.lang.model.util.SimpleTypeVisitorPreview loads");
@@ -78,14 +84,13 @@ record Rec(int x) {}
 enum Color { RED, GREEN }
 """;
         compile(src);
-        Class<?> c = Class.forName("javax.lang.model.util.SimpleTypeVisitorPreview");
-        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(Object.class);
-        ctor.setAccessible(true);
-        Object v = ctor.newInstance("DEFAULT");
-        check(v instanceof SimpleTypeVisitor14, "instanceof SimpleTypeVisitor14");
-        check(v instanceof AbstractTypeVisitor6, "instanceof AbstractTypeVisitor6");
-        java.lang.reflect.Method m = c.getMethod("visit", TypeMirror.class);
-        check("DEFAULT".equals(m.invoke(v, el.getTypeElement("java.lang.String").asType())), "visit(declared) -> defaultAction DEFAULT");
+        javax.lang.model.util.SimpleTypeVisitorPreview<String, Void> v0 = new STV();
+        javax.lang.model.util.SimpleTypeVisitorPreview<String, Void> v1 = new STV("DEFAULT");
+        check(v0 instanceof SimpleTypeVisitor14, "instanceof SimpleTypeVisitor14");
+        check(v1 instanceof AbstractTypeVisitor6, "instanceof AbstractTypeVisitor6");
+        TypeMirror str = el.getTypeElement("java.lang.String").asType();
+        check(v0.visit(str) == null, "visit(declared) -> default null");
+        check("DEFAULT".equals(v1.visit(str)), "visit(declared) -> defaultAction DEFAULT");
     }
 
     public static void main(String[] args) throws Exception {

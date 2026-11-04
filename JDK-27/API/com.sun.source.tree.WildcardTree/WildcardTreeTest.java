@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.source.tree.WildcardTree conformance: white-box structure + black-box behavior.
+ * @modules jdk.compiler
  * @run main WildcardTreeTest
  */
 
@@ -112,6 +113,16 @@ public class WildcardTreeTest {
         }.scan(cu, null);
         check(!found.isEmpty(), "com.sun.source.tree.WildcardTree present in parsed AST");
         com.sun.source.tree.WildcardTree n = found.get(0);
+
+        boolean sawUnbounded = false;
+        com.sun.source.tree.Tree bound = null;
+        for (com.sun.source.tree.WildcardTree w : found) {
+            com.sun.source.tree.Tree b = w.getBound();
+            if (b == null) sawUnbounded = true; else bound = b;
+        }
+        check(sawUnbounded, "unbounded wildcard getBound() == null");
+        check(bound != null, "bounded wildcard getBound() non-null");
+        check(bound.getKind() == com.sun.source.tree.Tree.Kind.IDENTIFIER, "? extends Number bound is an identifier");
 
         final boolean[] accepted = new boolean[1];
         n.accept(new com.sun.source.util.SimpleTreeVisitor<Void,Void>() {

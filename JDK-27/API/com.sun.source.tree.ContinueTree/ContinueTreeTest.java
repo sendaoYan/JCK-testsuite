@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.source.tree.ContinueTree conformance: white-box structure + black-box behavior.
+ * @modules jdk.compiler
  * @run main ContinueTreeTest
  */
 
@@ -62,6 +63,7 @@ public class ContinueTreeTest {
             "        for (int i=0;i<3;i++) { y += i; }\n" +
             "        for (int v : arr) { y += v; }\n" +
             "        outer: for (;;) { break outer; }\n" +
+            "        inner: while (true) { continue inner; }\n" +
             "        switch (y) { case 0: y=1; break; case 1: y=2; break; default: y=3; }\n" +
             "        int se = switch (y) { case 0 -> 1; case 1 -> 2; default -> { yield 3; } };\n" +
             "        try { throw new RuntimeException(); } catch (RuntimeException | Error e) { } finally { y = 0; }\n" +
@@ -112,6 +114,15 @@ public class ContinueTreeTest {
         }.scan(cu, null);
         check(!found.isEmpty(), "com.sun.source.tree.ContinueTree present in parsed AST");
         com.sun.source.tree.ContinueTree n = found.get(0);
+
+        boolean sawUnlabeled = false;
+        javax.lang.model.element.Name labeled = null;
+        for (com.sun.source.tree.ContinueTree b : found) {
+            javax.lang.model.element.Name lbl = b.getLabel();
+            if (lbl == null) sawUnlabeled = true; else labeled = lbl;
+        }
+        check(sawUnlabeled, "unlabeled continue getLabel() == null");
+        check(labeled != null && labeled.contentEquals("inner"), "labeled continue getLabel() == inner");
 
         final boolean[] accepted = new boolean[1];
         n.accept(new com.sun.source.util.SimpleTreeVisitor<Void,Void>() {

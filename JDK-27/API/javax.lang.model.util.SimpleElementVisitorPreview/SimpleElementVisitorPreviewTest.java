@@ -2,6 +2,7 @@
  * @test
  * @summary javax.lang.model.util.SimpleElementVisitorPreview conformance: white-box structure + black-box behavior.
  * @run main/othervm --add-opens java.compiler/javax.lang.model.util=ALL-UNNAMED SimpleElementVisitorPreviewTest
+ * @enablePreview
  */
 
 import java.util.*;
@@ -49,6 +50,11 @@ public class SimpleElementVisitorPreviewTest {
     }
 
 
+    static final class SEV extends javax.lang.model.util.SimpleElementVisitorPreview<String, Void> {
+        SEV() { super(); }
+        SEV(String def) { super(def); }
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.lang.model.util.SimpleElementVisitorPreview");
         check(c != null, "javax.lang.model.util.SimpleElementVisitorPreview loads");
@@ -78,15 +84,13 @@ record Rec(int x) {}
 enum Color { RED, GREEN }
 """;
         compile(src);
-        Class<?> c = Class.forName("javax.lang.model.util.SimpleElementVisitorPreview");
-        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(Object.class);
-        ctor.setAccessible(true);
-        Object v = ctor.newInstance("DEFAULT");
-        check(v instanceof SimpleElementVisitor14, "instanceof SimpleElementVisitor14");
-        check(v instanceof AbstractElementVisitor6, "instanceof AbstractElementVisitor6");
+        javax.lang.model.util.SimpleElementVisitorPreview<String, Void> v0 = new SEV();
+        javax.lang.model.util.SimpleElementVisitorPreview<String, Void> v1 = new SEV("DEFAULT");
+        check(v0 instanceof SimpleElementVisitor14, "instanceof SimpleElementVisitor14");
+        check(v1 instanceof AbstractElementVisitor6, "instanceof AbstractElementVisitor6");
         TypeElement sample = el.getTypeElement("sample.Sample");
-        java.lang.reflect.Method m = c.getMethod("visit", Element.class);
-        check("DEFAULT".equals(m.invoke(v, sample)), "visit(type) -> defaultAction DEFAULT");
+        check(v0.visit(sample) == null, "visit(type) -> default null");
+        check("DEFAULT".equals(v1.visit(sample)), "visit(type) -> defaultAction DEFAULT");
     }
 
     public static void main(String[] args) throws Exception {

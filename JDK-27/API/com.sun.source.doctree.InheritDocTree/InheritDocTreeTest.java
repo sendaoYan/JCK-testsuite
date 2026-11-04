@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.source.doctree.InheritDocTree conformance: white-box structure + black-box behavior.
+ * @modules jdk.compiler
  * @run main InheritDocTreeTest
  */
 
@@ -39,10 +40,13 @@ public class InheritDocTreeTest {
         javax.tools.StandardJavaFileManager fm = c.getStandardFileManager(diags, java.util.Locale.ROOT, null);
         com.sun.source.util.JavacTask t = (com.sun.source.util.JavacTask) c.getTask(null, fm, diags, java.util.List.of("-proc:none"), null, null);
         com.sun.source.util.DocTreeFactory f = com.sun.source.util.DocTrees.instance(t).getDocTreeFactory();
-        javax.lang.model.element.Name nm = t.getElements().getName("x");
-        com.sun.source.doctree.InheritDocTree node = f.newInheritDocTree();
+        com.sun.source.doctree.ReferenceTree ref = f.newReferenceTree("java.lang.Object");
+        com.sun.source.doctree.InheritDocTree node = f.newInheritDocTree(ref);
         com.sun.source.doctree.InheritDocTree n = node;
         check(n.getKind() == com.sun.source.doctree.DocTree.Kind.INHERIT_DOC, "kind");
+        check(n.getSupertype() == ref, "getSupertype() returns provided reference");
+        com.sun.source.doctree.InheritDocTree plain = f.newInheritDocTree();
+        check(plain.getSupertype() == null, "getSupertype() defaults to null");
         final boolean[] ok = new boolean[1];
         n.accept(new com.sun.source.util.SimpleDocTreeVisitor<Void,Void>() {
             @Override public Void visitInheritDoc(com.sun.source.doctree.InheritDocTree node, Void v) { ok[0]=true; return null; }

@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.source.util.ParameterNameProvider conformance: white-box structure + black-box behavior.
+ * @modules jdk.compiler
  * @run main ParameterNameProviderTest
  */
 
@@ -53,11 +54,24 @@ public class ParameterNameProviderTest {
         return null;
     }
     static void testBlackBox() throws Exception {
+        U u = setup("package p; class D { void m(int arg) {} }");
+        com.sun.source.tree.ClassTree cls = firstClass(u.cu);
+        check(cls != null, "class found");
+        com.sun.source.tree.MethodTree mt = (com.sun.source.tree.MethodTree) cls.getMembers().get(0);
+        com.sun.source.tree.VariableTree param = (com.sun.source.tree.VariableTree) mt.getParameters().get(0);
+        u.t.analyze();
+        javax.lang.model.element.VariableElement ve = (javax.lang.model.element.VariableElement)
+            u.trees.getElement(u.trees.getPath(u.cu, param));
+        check(ve != null, "parameter element resolved");
+
         com.sun.source.util.ParameterNameProvider p = new com.sun.source.util.ParameterNameProvider() {
             public CharSequence getParameterName(javax.lang.model.element.VariableElement e) { return e.getSimpleName(); }
         };
         check(p != null, "anonymous impl");
         check(p.getClass().getInterfaces().length > 0, "implements interface");
+        CharSequence name = p.getParameterName(ve);
+        check(name != null, "getParameterName non-null");
+        check("arg".equals(name.toString()), "getParameterName(param) == arg");
     }
 
     public static void main(String[] args) throws Exception {

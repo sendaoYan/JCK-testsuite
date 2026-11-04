@@ -2,6 +2,7 @@
  * @test
  * @summary javax.lang.model.util.ElementKindVisitorPreview conformance: white-box structure + black-box behavior.
  * @run main/othervm --add-opens java.compiler/javax.lang.model.util=ALL-UNNAMED ElementKindVisitorPreviewTest
+ * @enablePreview
  */
 
 import java.util.*;
@@ -49,6 +50,11 @@ public class ElementKindVisitorPreviewTest {
     }
 
 
+    static final class EK extends javax.lang.model.util.ElementKindVisitorPreview<String, Void> {
+        EK() { super(); }
+        EK(String def) { super(def); }
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.lang.model.util.ElementKindVisitorPreview");
         check(c != null, "javax.lang.model.util.ElementKindVisitorPreview loads");
@@ -78,15 +84,15 @@ record Rec(int x) {}
 enum Color { RED, GREEN }
 """;
         compile(src);
-        Class<?> c = Class.forName("javax.lang.model.util.ElementKindVisitorPreview");
-        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(Object.class);
-        ctor.setAccessible(true);
-        Object v = ctor.newInstance("DEFAULT");
-        check(v instanceof ElementKindVisitor14, "instanceof ElementKindVisitor14");
-        check(v instanceof AbstractElementVisitor6, "instanceof AbstractElementVisitor6");
-        java.lang.reflect.Method m = c.getMethod("visit", Element.class);
-        check("DEFAULT".equals(m.invoke(v, el.getTypeElement("sample.Sample"))), "visit(class) -> defaultAction DEFAULT");
-        check("DEFAULT".equals(m.invoke(v, el.getTypeElement("sample.Rec"))), "visit(record) -> visitTypeAsRecord defaultAction");
+        javax.lang.model.util.ElementKindVisitorPreview<String, Void> v0 = new EK();
+        javax.lang.model.util.ElementKindVisitorPreview<String, Void> v1 = new EK("DEFAULT");
+        check(v0 instanceof ElementKindVisitor14, "instanceof ElementKindVisitor14");
+        check(v1 instanceof AbstractElementVisitor6, "instanceof AbstractElementVisitor6");
+        TypeElement sample = el.getTypeElement("sample.Sample");
+        TypeElement rec = el.getTypeElement("sample.Rec");
+        check(v0.visit(sample) == null, "visit(class) -> default null");
+        check("DEFAULT".equals(v1.visit(sample)), "visit(class) -> defaultAction DEFAULT");
+        check("DEFAULT".equals(v1.visit(rec)), "visit(record) -> visitTypeAsRecord defaultAction");
     }
 
     public static void main(String[] args) throws Exception {

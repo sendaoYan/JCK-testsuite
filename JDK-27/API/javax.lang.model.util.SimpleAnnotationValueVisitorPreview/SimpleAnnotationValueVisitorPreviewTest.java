@@ -2,6 +2,7 @@
  * @test
  * @summary javax.lang.model.util.SimpleAnnotationValueVisitorPreview conformance: white-box structure + black-box behavior.
  * @run main/othervm --add-opens java.compiler/javax.lang.model.util=ALL-UNNAMED SimpleAnnotationValueVisitorPreviewTest
+ * @enablePreview
  */
 
 import java.util.*;
@@ -49,6 +50,11 @@ public class SimpleAnnotationValueVisitorPreviewTest {
     }
 
 
+    static final class SAV extends javax.lang.model.util.SimpleAnnotationValueVisitorPreview<String, Void> {
+        SAV() { super(); }
+        SAV(String def) { super(def); }
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.lang.model.util.SimpleAnnotationValueVisitorPreview");
         check(c != null, "javax.lang.model.util.SimpleAnnotationValueVisitorPreview loads");
@@ -78,15 +84,13 @@ record Rec(int x) {}
 enum Color { RED, GREEN }
 """;
         compile(src);
-        Class<?> c = Class.forName("javax.lang.model.util.SimpleAnnotationValueVisitorPreview");
-        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(Object.class);
-        ctor.setAccessible(true);
-        Object v = ctor.newInstance("DEFAULT");
-        check(v instanceof SimpleAnnotationValueVisitor14, "instanceof SimpleAnnotationValueVisitor14");
-        check(v instanceof AbstractAnnotationValueVisitor6, "instanceof AbstractAnnotationValueVisitor6");
+        javax.lang.model.util.SimpleAnnotationValueVisitorPreview<String, Void> v0 = new SAV();
+        javax.lang.model.util.SimpleAnnotationValueVisitorPreview<String, Void> v1 = new SAV("DEFAULT");
+        check(v0 instanceof SimpleAnnotationValueVisitor14, "instanceof SimpleAnnotationValueVisitor14");
+        check(v1 instanceof AbstractAnnotationValueVisitor6, "instanceof AbstractAnnotationValueVisitor6");
         AnnotationValue av = el.getAllAnnotationMirrors(el.getTypeElement("sample.W")).get(0).getElementValues().values().iterator().next();
-        java.lang.reflect.Method m = c.getMethod("visit", AnnotationValue.class);
-        check("DEFAULT".equals(m.invoke(v, av)), "visit(annotationValue) -> defaultAction DEFAULT");
+        check(v0.visit(av) == null, "visit(annotationValue) -> default null");
+        check("DEFAULT".equals(v1.visit(av)), "visit(annotationValue) -> defaultAction DEFAULT");
     }
 
     public static void main(String[] args) throws Exception {

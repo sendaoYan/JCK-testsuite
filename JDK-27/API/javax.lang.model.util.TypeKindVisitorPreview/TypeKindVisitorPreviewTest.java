@@ -2,6 +2,7 @@
  * @test
  * @summary javax.lang.model.util.TypeKindVisitorPreview conformance: white-box structure + black-box behavior.
  * @run main/othervm --add-opens java.compiler/javax.lang.model.util=ALL-UNNAMED TypeKindVisitorPreviewTest
+ * @enablePreview
  */
 
 import java.util.*;
@@ -49,6 +50,11 @@ public class TypeKindVisitorPreviewTest {
     }
 
 
+    static final class TKV extends javax.lang.model.util.TypeKindVisitorPreview<String, Void> {
+        TKV() { super(); }
+        TKV(String def) { super(def); }
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.lang.model.util.TypeKindVisitorPreview");
         check(c != null, "javax.lang.model.util.TypeKindVisitorPreview loads");
@@ -78,15 +84,13 @@ record Rec(int x) {}
 enum Color { RED, GREEN }
 """;
         compile(src);
-        Class<?> c = Class.forName("javax.lang.model.util.TypeKindVisitorPreview");
-        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(Object.class);
-        ctor.setAccessible(true);
-        Object v = ctor.newInstance("DEFAULT");
-        check(v instanceof TypeKindVisitor14, "instanceof TypeKindVisitor14");
-        check(v instanceof AbstractTypeVisitor6, "instanceof AbstractTypeVisitor6");
-        java.lang.reflect.Method m = c.getMethod("visit", TypeMirror.class);
-        check("DEFAULT".equals(m.invoke(v, ty.getPrimitiveType(TypeKind.INT))), "visit(int) -> defaultAction DEFAULT");
-        check("DEFAULT".equals(m.invoke(v, el.getModuleElement("java.base").asType())), "visit(module noType) -> defaultAction DEFAULT");
+        javax.lang.model.util.TypeKindVisitorPreview<String, Void> v0 = new TKV();
+        javax.lang.model.util.TypeKindVisitorPreview<String, Void> v1 = new TKV("DEFAULT");
+        check(v0 instanceof TypeKindVisitor14, "instanceof TypeKindVisitor14");
+        check(v1 instanceof AbstractTypeVisitor6, "instanceof AbstractTypeVisitor6");
+        check(v0.visit(ty.getPrimitiveType(TypeKind.INT)) == null, "visit(int) -> default null");
+        check("DEFAULT".equals(v1.visit(ty.getPrimitiveType(TypeKind.INT))), "visit(int) -> defaultAction DEFAULT");
+        check("DEFAULT".equals(v1.visit(el.getModuleElement("java.base").asType())), "visit(module noType) -> defaultAction DEFAULT");
     }
 
     public static void main(String[] args) throws Exception {

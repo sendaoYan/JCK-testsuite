@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.source.tree.BreakTree conformance: white-box structure + black-box behavior.
+ * @modules jdk.compiler
  * @run main BreakTreeTest
  */
 
@@ -112,6 +113,15 @@ public class BreakTreeTest {
         }.scan(cu, null);
         check(!found.isEmpty(), "com.sun.source.tree.BreakTree present in parsed AST");
         com.sun.source.tree.BreakTree n = found.get(0);
+
+        boolean sawUnlabeled = false;
+        javax.lang.model.element.Name labeled = null;
+        for (com.sun.source.tree.BreakTree b : found) {
+            javax.lang.model.element.Name lbl = b.getLabel();
+            if (lbl == null) sawUnlabeled = true; else labeled = lbl;
+        }
+        check(sawUnlabeled, "unlabeled break getLabel() == null");
+        check(labeled != null && labeled.contentEquals("outer"), "labeled break getLabel() == outer");
 
         final boolean[] accepted = new boolean[1];
         n.accept(new com.sun.source.util.SimpleTreeVisitor<Void,Void>() {
