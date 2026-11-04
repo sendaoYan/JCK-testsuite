@@ -23,3 +23,15 @@ JDK 自带测试 `~/git/jdk25u-dev/test/jdk/javax/management` 亦通过 `catch (
 - 白盒：`Class.forName` 校验 public/非接口/非抽象、直接父类为 `OperationsException`、可序列化、存在无参与 `(String)` 构造器。
 - 黑盒：`new ServiceNotFoundException("fixed-message")` 的 `getMessage()` 精确往返；无参与 `(String)null` 构造 `getMessage()` 为 null；`toString()` 含类名；`instanceof` 继承链校验。
 - 确定性：固定输入字符串；只断言规范/实现稳定行为，不断言运行时生成的消息文案。
+
+## 深化（2026-11）
+追加维度：构造链全重载、直接父类、serialVersionUID、序列化 round-trip。
+- 构造：`() ` / `(String)`；直接父类 OperationsException；serialVersionUID = `-3990675661956646827L`（两侧同值）。
+- 真实触发（**仅 JDK-8**）：本地 server 注册 `javax.management.loading.MLet` 后 `getMBeansFromURL(不存在的 mlet 文件 URL)` → 本异常（消息含 URL 文件名）。
+- **版本差异**：JDK-27 已移除 MLet（javap `javax.management.loading.MLet` 不存在），该触发点无法构造，27 侧只保留构造链/层级/序列化。
+
+## 深化（2026-11）版本差异记录（本目录实测，JDK-8u372 vs JDK-27.0.1）
+- 两侧 public API（javap -public）、serialVersionUID、异常类型与消息全部一致（见上文逐项）。
+- 与本目录相关的全局版本差异：
+  - `MBeanServer.registerMBean(null, name)`：JDK-8 抛 `NullPointerException`；JDK-27 抛 `RuntimeOperationsException`(包装 IllegalArgumentException)。
+  - `javax.management.loading.MLet`：JDK-27 已移除（JDK-8 存在）。

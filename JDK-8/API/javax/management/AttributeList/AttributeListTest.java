@@ -225,6 +225,71 @@ public class AttributeListTest {
         check(back.get(1) == null, "round trip null element");
     }
 
+
+    @SuppressWarnings("unchecked")
+    static <T> T deepRoundTripValue(T o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) ois.readObject();
+    }
+
+    // ---- deepened (2026-11): iterator remove / untyped addAll taint / negative capacity / serialVersionUID ----
+
+    static void testDeepIteratorRemove() {
+        AttributeList l = new AttributeList();
+        l.add(new Attribute("A", Integer.valueOf(1)));
+        l.add(new Attribute("B", Integer.valueOf(2)));
+        java.util.Iterator<Attribute> it = l.asList().iterator();
+        check(it.hasNext() && "A".equals(it.next().getName()), "iterator next");
+        it.remove();
+        check(l.size() == 1 && "B".equals(((Attribute) l.get(0)).getName()), "iterator remove writes through");
+        java.util.Iterator<Attribute> it2 = l.asList().iterator();
+        try {
+            it2.remove();
+            check(false, "remove before next must throw IllegalStateException");
+        } catch (IllegalStateException e) {
+            passed++;
+        }
+    }
+
+    static void testDeepUntypedAddAllTaint() {
+        java.util.List<Object> mixed = new java.util.ArrayList<Object>();
+        mixed.add(new Attribute("A", Integer.valueOf(1)));
+        mixed.add("taint");
+        AttributeList l = new AttributeList();
+        check(l.addAll(mixed) && l.size() == 2, "untyped addAll accepts non-Attribute (taints)");
+        try {
+            l.asList();
+            check(false, "addAll-tainted asList() must throw");
+        } catch (IllegalArgumentException e) {
+            passed++;
+        }
+    }
+
+    static void testDeepNegativeCapacity() {
+        try {
+            new AttributeList(-1);
+            check(false, "negative capacity must throw");
+        } catch (IllegalArgumentException e) {
+            passed++;
+        }
+    }
+
+    static void testDeepSerializationExtras() throws Exception {
+        check(java.io.ObjectStreamClass.lookup(AttributeList.class).getSerialVersionUID() == -4077085769279709076L,
+                "serialVersionUID constant");
+        AttributeList one = new AttributeList();
+        one.add(new Attribute("Solo", "v"));
+        AttributeList back = deepRoundTripValue(one);
+        check(back.size() == 1 && back.get(0).equals(new Attribute("Solo", "v")), "round-trip single element");
+        back.add(new Attribute("Added", Integer.valueOf(2)));
+        check(back.size() == 2, "revived list still mutable");
+    }
+
     public static void main(String[] args) throws Exception {
         testBasic();
         testConstructors();
@@ -233,6 +298,10 @@ public class AttributeListTest {
         testTypeSafetyViaAsList();
         testAsListLiveViewAndWriteChannels();
         testSerialization();
+        testDeepIteratorRemove();
+        testDeepUntypedAddAllTaint();
+        testDeepNegativeCapacity();
+        testDeepSerializationExtras();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

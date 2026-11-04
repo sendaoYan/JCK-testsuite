@@ -68,9 +68,49 @@ public class AttributeTest {
         check(a.equals(new Attribute("name", "value")), "new equal instance");
     }
 
+
+    @SuppressWarnings("unchecked")
+    static <T> T deepRoundTripValue(T o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream ois =
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) ois.readObject();
+    }
+
+    // ---- deepened (2026-11): null-name contract / serialVersionUID / serialization matrix ----
+
+    static void testDeepNullNameContract() {
+        try {
+            new Attribute(null, "v");
+            check(false, "Attribute(null, value) must throw");
+        } catch (javax.management.RuntimeOperationsException e) {
+            check(e.getTargetException() instanceof IllegalArgumentException, "wraps IllegalArgumentException");
+        }
+    }
+
+    static void testDeepSerialization() throws Exception {
+        check(java.io.ObjectStreamClass.lookup(Attribute.class).getSerialVersionUID() == 2484220110589082382L,
+                "serialVersionUID constant");
+        Attribute a7 = new Attribute("N", Integer.valueOf(7));
+        Attribute aS = new Attribute("S", "str");
+        Attribute aNull = new Attribute("Null", null);
+        Attribute b7 = deepRoundTripValue(a7);
+        Attribute bS = deepRoundTripValue(aS);
+        Attribute bNull = deepRoundTripValue(aNull);
+        check(b7.equals(a7) && a7.equals(b7), "round-trip Integer value equal");
+        check("N".equals(b7.getName()) && Integer.valueOf(7).equals(b7.getValue()), "round-trip Integer fields");
+        check(bS.equals(aS) && "str".equals(bS.getValue()), "round-trip String value");
+        check(bNull.equals(aNull) && bNull.getValue() == null, "round-trip null value");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepNullNameContract();
+        testDeepSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
