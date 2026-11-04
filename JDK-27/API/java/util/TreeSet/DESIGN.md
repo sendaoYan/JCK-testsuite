@@ -1,35 +1,47 @@
-# java.util.TreeSet 测试方案
+# java.util.TreeSet 测试设计案（JDK-27）
 
-## 1. API 功能（按方法分组）
+> 覆盖目标：**完整契约**，白盒（反射结构）+ 黑盒（行为契约）。构造器矩阵、null 元素语义、
+> NavigableSet 边界、范围视图活对象写通道、倒序视图、迭代器写通道 + fail-fast、toArray 契约、
+> 跨实现 equals、clone/序列化、状态不变量全部补齐；外加 JDK 21+ SequencedSet 特有 `addFirst/addLast`
+> （有序 Set 恒抛 UOE）、`reversed()`。
 
-- 构造器：`TreeSet()`、`TreeSet(Comparator)`、`TreeSet(Collection)`、`TreeSet(SortedSet)`。
-- 核心操作：`add`/`remove`/`contains`/`clear`/`addAll`。
-- 有序查询：`comparator()`、`first()`/`last()`。
-- NavigableSet 上下界：`lower`/`floor`/`ceiling`/`higher`。
-- 删除首尾：`pollFirst()`/`pollLast()`。
-- 视图：`subSet(from,to)`、`headSet(to)`、`tailSet(from)` 及含/不含边界重载；`descendingSet()`、`descendingIterator()`、`reversed()`。
+## 1. API 提供了哪些功能
+
+- **构造器（4）**：`TreeSet()`、`TreeSet(Comparator)`、`TreeSet(Collection)`、`TreeSet(SortedSet)`。
+- **核心操作**：`add/remove/contains/size/isEmpty/clear/addAll`。
+- **NavigableSet 查询**：`first/last`、`lower/floor/ceiling/higher`、`pollFirst/pollLast`。
+- **范围视图**：`subSet/headSet/tailSet`、`descendingSet`、`descendingIterator`。
+- **JDK 21+ SequencedSet**：`addFirst/addLast`（有序 Set 对 TreeSet 恒抛 UOE）、`reversed()`。
+- **契约继承**：`clone()`（浅拷贝）、`Serializable`（`serialVersionUID == -2479143000061671589L`）。
 
 ## 2. Java 用户如何使用
 
-- 构造：`new TreeSet<>()`（自然序）；`new TreeSet<>(Comparator.reverseOrder())`（自定义序）。
-- 典型调用：有序去重集合；`first/last`；`ceiling/floor/higher/lower`；区间视图。
-- 真实组合链路：
-  1. add 乱序 → first/last/迭代有序。
-  2. ceiling/floor/higher/lower（缺失键返回最近或 null）。
-  3. subSet/headSet/tailSet 视图（含/不含边界），视图 add/remove 联动，越界 add 抛 IAE。
-  4. descendingSet/descendingIterator/reversed 倒序 → pollFirst/pollLast。
+- 与 JDK-8 一致：自然序/Comparator 建表、NavigableSet 上下界查询、范围/倒序视图直接改、
+  null 元素抛 NPE、批量运算。
 
-## 3. 开源代码实际用法调研（来源明确，非记忆编造）
+## 3. 参考来源（不凭记忆编造）
 
-- JDK 测试 `test/jdk/java/util/Properties/PropertiesStoreTest.java:257`：`new TreeSet<>(props.stringPropertyNames())` —— 对属性名排序。
-- JDK 测试 `test/jdk/java/util/Properties/PropertiesStoreTest.java:293`：`new TreeSet<>(comparator)` —— 用自定义比较器逆序。
-- JDK 测试 `test/jdk/java/util/Random/EquiDoublesTest.java:181`：`new TreeSet<>()` 收集排序。
+- **Oracle javadoc** `java/util/TreeSet.html`（JDK-8 与 JDK-27）。
+- **OpenJDK 回归** `~/git/jdk8u-dev/jdk/test/java/util/TreeSet` + `~/git/jdk/test/jdk/java/util/TreeSet`。
+- **JCK runtime-8b** `~/JDK/testsuite/jck8b/JCK-runtime-8b/tests/api/java_util/TreeSet`。
 
-## 4. 测试用例设计 + 自动化实现
+## 4. 测试用例设计（映射到 TreeSetTest.java 方法）
 
-实现位置：`TreeSetTest.java`（`testWhiteBox()` + `testNaturalOrder()`/`testComparatorOrder()`/`testNavigable()`/`testRangeViewsAndDescending()`/`testNullRejection()`）。
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 白盒结构：继承 AbstractSet、实现 NavigableSet/Cloneable/Serializable、成员形态 | testWhiteBox |
+| P0 | 构造器矩阵 + null 语义 | testConstructorMatrix、testNullSemantics |
+| P0 | NavigableSet 边界 + 范围视图写通道 + 倒序视图 | testNavigableBoundaries、testRangeViewWriteThrough、testDescendingViews |
+| P0 | 迭代器写通道 + fail-fast | testIteratorWriteChannels、testFailFast |
+| P0 | 跨实现 equals/hashCode | testCrossImplEquals |
+| P1 | toArray 契约、clone、序列化、状态不变量 | testToArrayContract、testClone、testSerialization、testStateInvariants |
+| P1 | JDK 21+ SequencedSet：addFirst/addLast → UOE | testBlackBox（已含） |
 
-- 正常：自然序/Comparator 序 first/last/迭代。
-- 组合：NavigableSet 上下界 + 范围视图联动 + descendingSet/descendingIterator/reversed。
-- 边界/异常：add(null) 抛 NPE；subSet(from,to) from>to 抛 IAE；视图越界 add 抛 IAE。
-- 健壮性：确定性（固定整数）；无全局副作用；无文件/网络；跨平台。headless-safe。
+## 关键规范细节（易错，已锁入断言）
+
+- 同 JDK-8 版；额外：JDK 21+ `addFirst/addLast` 对 TreeSet 恒抛 `UnsupportedOperationException`
+  （有序 Set 由排序决定位置）。
+
+## 注意事项
+
+- 白盒反射只断言公开结构；serialVersionUID 与 JDK-8 相同。
