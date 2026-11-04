@@ -8,6 +8,10 @@
  * @run main ArrayListTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;
@@ -23,12 +27,36 @@ public class ArrayListTest {
         passed++;
     }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
     static void expectIOOBE(Runnable r, String msg) {
         try {
             r.run();
             throw new AssertionError(msg + ": expected IndexOutOfBoundsException");
         } catch (IndexOutOfBoundsException expected) {
             passed++;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> ArrayList<T> roundTrip(ArrayList<T> list) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(list); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (ArrayList<T>) ois.readObject();
         }
     }
 
@@ -172,7 +200,119 @@ public class ArrayListTest {
         check(list.size() == 1 && list.get(0).equals("x"), "ensureCapacity/trimToSize usable");
     }
 
-    public static void main(String[] args) {
+    // ---- deepened contract coverage ----------------------------------------
+
+    static void testConstructorMatrix() {
+        checkThrows(IllegalArgumentException.class, () -> new ArrayList<String>(-1),
+                    "ArrayList(-1) IAE");
+        checkThrows(NullPointerException.class, () -> new ArrayList<String>((java.util.Collection<String>) null),
+                    "ArrayList(null Collection) NPE");
+        ArrayList<String> src = new ArrayList<>(Arrays.asList("a", "b"));
+        ArrayList<String> copy = new ArrayList<>(src);
+        check(copy.equals(src), "ArrayList(Collection) copies");
+        copy.add("c");
+        check(src.size() == 2, "ArrayList(Collection) independent");
+    }
+
+    static void testFailFastChannels() {
+        // structural modification via any channel invalidates active iterators
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        Iterator<String> it = list.iterator();
+        it.next();
+        list.remove(0);
+        checkThrows(ConcurrentModificationException.class, it::next, "CME after remove(int)");
+
+        ArrayList<String> l2 = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        ListIterator<String> lit = l2.listIterator();
+        lit.next();
+        l2.clear();
+        checkThrows(ConcurrentModificationException.class, lit::next, "CME after clear");
+
+        ArrayList<String> l3 = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        Iterator<String> it3 = l3.iterator();
+        it3.next();
+        l3.add("d");
+        checkThrows(ConcurrentModificationException.class, it3::remove, "CME on iterator.remove after add");
+
+        // structural modification through subList also fails fast on backing iterators
+        ArrayList<String> l4 = new ArrayList<>(Arrays.asList("a", "b", "c", "d"));
+        Iterator<String> it4 = l4.iterator();
+        it4.next();
+        l4.subList(0, 2).clear();
+        checkThrows(ConcurrentModificationException.class, it4::next, "CME after subList structural change");
+    }
+
+    static void testListIteratorEdges() {
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a", "b", "c"));
+        ListIterator<String> it = list.listIterator(3);
+        check(it.hasNext() == false && it.hasPrevious(), "listIterator(size) at end");
+        check(it.previous().equals("c"), "previous from end");
+        check(it.nextIndex() == 2 && it.previousIndex() == 1, "indices after previous");
+
+        expectIOOBE(() -> list.listIterator(-1), "listIterator(-1) IOBE");
+        expectIOOBE(() -> list.listIterator(4), "listIterator(size+1) IOBE");
+
+        ListIterator<String> mid = list.listIterator(1);
+        check(mid.nextIndex() == 1 && mid.previousIndex() == 0, "indices at middle");
+        check(mid.next().equals("b"), "next at middle returns b");
+        mid.remove();
+        check(list.equals(Arrays.asList("a", "c")), "listIterator.remove at middle");
+    }
+
+    static void testSubListBounds() {
+        ArrayList<Integer> list = new ArrayList<>(Arrays.asList(1, 2, 3));
+        expectIOOBE(() -> list.subList(-1, 2), "subList(-1,2) IOBE");
+        expectIOOBE(() -> list.subList(0, 4), "subList(0,4) IOBE");
+        checkThrows(IllegalArgumentException.class, () -> list.subList(2, 1), "subList(2,1) IAE");
+
+        // nested subList still reflects backing list
+        List<Integer> sub = list.subList(0, 3).subList(1, 3);
+        check(sub.equals(Arrays.asList(2, 3)), "nested subList");
+        sub.set(0, 20);
+        check(list.get(1) == 20, "nested subList set reflects in backing");
+    }
+
+    static void testNullArgs() {
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a"));
+        checkThrows(NullPointerException.class, () -> list.addAll(null), "addAll(null) NPE");
+        checkThrows(NullPointerException.class, () -> list.addAll(0, null), "addAll(index,null) NPE");
+        checkThrows(NullPointerException.class, () -> list.containsAll(null), "containsAll(null) NPE");
+        checkThrows(NullPointerException.class, () -> list.removeAll(null), "removeAll(null) NPE");
+        checkThrows(NullPointerException.class, () -> list.retainAll(null), "retainAll(null) NPE");
+    }
+
+    static void testListDefaultMethods() {
+        ArrayList<Integer> list = new ArrayList<>(Arrays.asList(3, 1, 2));
+        list.sort(Integer::compareTo);
+        check(list.equals(Arrays.asList(1, 2, 3)), "List.sort");
+
+        ArrayList<Integer> l2 = new ArrayList<>(Arrays.asList(1, 2, 3));
+        l2.replaceAll(x -> x * 10);
+        check(l2.equals(Arrays.asList(10, 20, 30)), "List.replaceAll");
+
+        ArrayList<Integer> l3 = new ArrayList<>(Arrays.asList(1, 2, 3, 4));
+        l3.removeIf(x -> x % 2 == 0);
+        check(l3.equals(Arrays.asList(1, 3)), "Collection.removeIf");
+
+        final int[] sum = {0};
+        l3.forEach(x -> sum[0] += x);
+        check(sum[0] == 4, "Iterable.forEach");
+    }
+
+    static void testSerialization() throws Exception {
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a", "b", null));
+        ArrayList<String> r = roundTrip(list);
+        check(r != list, "round-trip distinct object");
+        check(r.equals(list), "round-trip equals original");
+        check(r.size() == 3 && r.get(2) == null, "round-trip preserves content incl null");
+        r.add("z");
+        check(list.size() == 3, "round-trip result independent");
+
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(ArrayList.class);
+        check(osc.getSerialVersionUID() == 8683452581122892189L, "ArrayList serialVersionUID stable");
+    }
+
+    public static void main(String[] args) throws Exception {
         testConstruction();
         testAddGetSetRemove();
         testContainsIndex();
@@ -183,6 +323,13 @@ public class ArrayListTest {
         testSubList();
         testCloneEqualsHashCode();
         testClearCapacity();
+        testConstructorMatrix();
+        testFailFastChannels();
+        testListIteratorEdges();
+        testSubListBounds();
+        testNullArgs();
+        testListDefaultMethods();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

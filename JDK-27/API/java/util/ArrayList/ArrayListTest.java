@@ -277,6 +277,44 @@ public class ArrayListTest {
         check(ex2.equals(Arrays.asList("p", "q", "r")), "removeRange(from==to) no-op");
     }
 
+    static void testConstructorMatrix() {
+        expect(IllegalArgumentException.class, () -> new ArrayList<String>(-1), "ArrayList(-1) IAE");
+        expect(NullPointerException.class, () -> new ArrayList<String>((java.util.Collection<String>) null),
+              "ArrayList(null Collection) NPE");
+        ArrayList<String> src = new ArrayList<>(Arrays.asList("a", "b"));
+        ArrayList<String> copy = new ArrayList<>(src);
+        check(copy.equals(src), "ArrayList(Collection) copies");
+        copy.add("c");
+        check(src.size() == 2, "ArrayList(Collection) independent");
+    }
+
+    static void testNullArgs() {
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a"));
+        expect(NullPointerException.class, () -> list.addAll(null), "addAll(null) NPE");
+        expect(NullPointerException.class, () -> list.addAll(0, null), "addAll(index,null) NPE");
+        expect(NullPointerException.class, () -> list.containsAll(null), "containsAll(null) NPE");
+        expect(NullPointerException.class, () -> list.removeAll(null), "removeAll(null) NPE");
+        expect(NullPointerException.class, () -> list.retainAll(null), "retainAll(null) NPE");
+    }
+
+    static void testSerialization() throws Exception {
+        ArrayList<String> list = new ArrayList<>(Arrays.asList("a", "b", null));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) { oos.writeObject(list); }
+        ArrayList<String> r;
+        try (java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            r = (ArrayList<String>) ois.readObject();
+        }
+        check(r != list, "round-trip distinct object");
+        check(r.equals(list), "round-trip equals original");
+        check(r.size() == 3 && r.get(2) == null, "round-trip preserves content incl null");
+        r.add("z");
+        check(list.size() == 3, "round-trip result independent");
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(ArrayList.class);
+        check(osc.getSerialVersionUID() == 8683452581122892189L, "ArrayList serialVersionUID stable");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testConstruction();
@@ -289,6 +327,9 @@ public class ArrayListTest {
         testToArray();
         testEqualsHashCodeClear();
         testBlackBox();
+        testConstructorMatrix();
+        testNullArgs();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
