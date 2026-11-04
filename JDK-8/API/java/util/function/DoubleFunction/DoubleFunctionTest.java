@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.function.DoubleFunction API conformance: apply.
+ * @summary java.util.function.DoubleFunction contract: apply maps double to object.
  * @run main DoubleFunctionTest
  */
 
@@ -14,13 +14,30 @@ public class DoubleFunctionTest {
         passed++;
     }
 
-    static void testDoubleFunction() {
-        DoubleFunction<String> f = d -> "v=" + d;
-        check("v=2.5".equals(f.apply(2.5)), "apply");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        DoubleFunction<String> f = Double::toString;
+        check("5.0".equals(f.apply(5.0)), "apply");
+        check("0.0".equals(f.apply(0.0)), "apply zero");
+        check("-3.5".equals(f.apply(-3.5)), "apply negative");
+        DoubleFunction<Double> half = x -> x / 2;
+        check(half.apply(3.0) == 1.5, "apply unary");
+    }
     public static void main(String[] args) {
-        testDoubleFunction();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

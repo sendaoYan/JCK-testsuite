@@ -1,11 +1,9 @@
 /*
  * @test
- * @summary java.util.function.BiConsumer API conformance: accept and andThen composition.
+ * @summary java.util.function.BiConsumer contract: accept and andThen ordering, side effects, null->NPE.
  * @run main BiConsumerTest
  */
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.function.BiConsumer;
 
 public class BiConsumerTest {
@@ -16,18 +14,37 @@ public class BiConsumerTest {
         passed++;
     }
 
-    static void testBiConsumer() {
-        Map<String, Integer> m = new HashMap<>();
-        BiConsumer<String, Integer> put = m::put;
-        put.accept("a", 1);
-        check(m.get("a") == 1, "accept");
-        BiConsumer<String, Integer> putTenMore = (k, v) -> m.put(k, v + 10);
-        put.andThen(putTenMore).accept("b", 2);
-        check(m.get("b") == 12, "andThen");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        final int[] acc = new int[1];
+        BiConsumer<Integer, Integer> add = (a, b) -> { acc[0] += a * b; };
+        add.accept(2, 3);
+        check(acc[0] == 6, "accept");
+        add.accept(0, 100);
+        check(acc[0] == 6, "accept zero");
+        BiConsumer<Integer, Integer> sub = (a, b) -> { acc[0] -= a * b; };
+        add.andThen(sub).accept(2, 3);
+        check(acc[0] == 6, "andThen add then sub -> unchanged");
+        checkThrows(NullPointerException.class, () -> add.andThen(null), "andThen(null)");
+        final int[] order = new int[1];
+        add.andThen((a, b) -> { check(order[0] == 0, "first"); order[0] = 1; }).accept(0, 0);
+        check(order[0] == 1, "order");
+    }
     public static void main(String[] args) {
-        testBiConsumer();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

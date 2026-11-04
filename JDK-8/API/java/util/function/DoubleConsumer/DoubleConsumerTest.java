@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.function.DoubleConsumer API conformance: accept/andThen.
+ * @summary java.util.function.DoubleConsumer contract: accept and andThen ordering, side effects, null->NPE.
  * @run main DoubleConsumerTest
  */
 
@@ -14,17 +14,34 @@ public class DoubleConsumerTest {
         passed++;
     }
 
-    static void testDoubleConsumer() {
-        double[] holder = new double[1];
-        DoubleConsumer c = x -> holder[0] = x;
-        c.accept(9.5);
-        check(holder[0] == 9.5, "accept");
-        c.andThen(x -> holder[0] += x).accept(0.5);
-        check(holder[0] == 1.0, "andThen");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        final double[] log = new double[1];
+        DoubleConsumer inc = x -> { log[0] += x; };
+        inc.accept(5.0);
+        check(log[0] == 5.0, "accept");
+        inc.accept(0);
+        check(log[0] == 5.0, "accept zero");
+        DoubleConsumer dec = x -> { log[0] -= x; };
+        inc.andThen(dec).accept(5.0);
+        check(log[0] == 5.0, "andThen inc then dec unchanged");
+        checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
+    }
     public static void main(String[] args) {
-        testDoubleConsumer();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

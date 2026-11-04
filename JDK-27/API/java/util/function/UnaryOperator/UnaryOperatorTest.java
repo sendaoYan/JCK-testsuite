@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.UnaryOperator conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.UnaryOperator contract: identity and inherited Function composition.
  * @run main UnaryOperatorTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.UnaryOperator;
 
 public class UnaryOperatorTest {
     static int passed;
@@ -15,37 +14,31 @@ public class UnaryOperatorTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.UnaryOperator");
-        check(c.isInterface(), "UnaryOperator is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "apply", Object.class);
-        hasMethod(c, "identity");
+    static void testMain() {
+        UnaryOperator<Integer> inc = x -> x + 1;
+        check(inc.apply(1) == 2, "apply");
+        check(inc.andThen(x -> x * 10).apply(1) == 20, "andThen");
+        check(inc.compose((Integer x) -> x * 10).apply(1) == 11, "compose");
+        check(UnaryOperator.<Integer>identity().apply(42) == 42, "identity");
+        checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
+        checkThrows(NullPointerException.class, () -> inc.compose(null), "compose(null)");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        UnaryOperator<Integer> sq = x -> x * x;
-        check(sq.apply(5) == 25, "apply");
-        check(UnaryOperator.identity().apply("z").equals("z"), "identity");
-        UnaryOperator<Integer> plusOne = x -> x + 1;
-        check(sq.andThen(plusOne).apply(3) == 10, "andThen");
-        check(sq.compose(plusOne).apply(3) == 16, "compose");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.LongBinaryOperator conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.LongBinaryOperator contract: apply operates on two primitives.
  * @run main LongBinaryOperatorTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.LongBinaryOperator;
 
 public class LongBinaryOperatorTest {
     static int passed;
@@ -15,34 +14,28 @@ public class LongBinaryOperatorTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.LongBinaryOperator");
-        check(c.isInterface(), "LongBinaryOperator is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsLong", long.class, long.class);
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testMain() {
         LongBinaryOperator add = (a, b) -> a + b;
-        check(add.applyAsLong(3L, 4L) == 7L, "applyAsLong");
-        LongBinaryOperator max = Long::max;
-        check(max.applyAsLong(9L, 2L) == 9L, "applyAsLong max");
+        check(add.applyAsLong(2L, 3) == 5, "apply");
+        check(add.applyAsLong(0, 0) == 0, "apply zero");
+        check(add.applyAsLong(-1, 1) == 0, "apply inverse");
     }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

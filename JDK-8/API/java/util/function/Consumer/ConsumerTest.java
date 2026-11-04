@@ -1,12 +1,9 @@
 /*
  * @test
- * @summary java.util.function.Consumer API conformance: accept and andThen composition.
+ * @summary java.util.function.Consumer contract: accept and andThen ordering, side effects, null->NPE.
  * @run main ConsumerTest
  */
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.function.Consumer;
 
 public class ConsumerTest {
@@ -17,18 +14,39 @@ public class ConsumerTest {
         passed++;
     }
 
-    static void testConsumer() {
-        List<String> seen = new ArrayList<>();
-        Consumer<String> c = seen::add;
-        c.accept("a");
-        check(seen.equals(Arrays.asList("a")), "accept");
-        Consumer<String> c2 = s -> seen.add(s + "!");
-        c.andThen(c2).accept("b");
-        check(seen.equals(Arrays.asList("a", "b", "b!")), "andThen");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        final int[] log = new int[1];
+        Consumer<Integer> inc = x -> { log[0] += x; };
+        inc.accept(5);
+        check(log[0] == 5, "accept");
+        inc.accept(-2);
+        check(log[0] == 3, "accept negative");
+        Consumer<Integer> dec = x -> { log[0] -= x; };
+        inc.andThen(dec).accept(10);
+        check(log[0] == 3, "andThen: inc then dec -> unchanged");
+        checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
+        final int[] order = new int[1];
+        Consumer<Integer> first = x -> { check(order[0] == 0, "first"); order[0] = 1; };
+        Consumer<Integer> second = x -> { check(order[0] == 1, "second"); order[0] = 2; };
+        first.andThen(second).accept(0);
+        check(order[0] == 2, "order completed");
+    }
     public static void main(String[] args) {
-        testConsumer();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

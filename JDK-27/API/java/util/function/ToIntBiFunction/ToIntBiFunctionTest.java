@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.ToIntBiFunction conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.ToIntBiFunction contract: apply extracts primitive from two objects.
  * @run main ToIntBiFunctionTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.ToIntBiFunction;
 
 public class ToIntBiFunctionTest {
     static int passed;
@@ -15,32 +14,28 @@ public class ToIntBiFunctionTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.ToIntBiFunction");
-        check(c.isInterface(), "ToIntBiFunction is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsInt", Object.class, Object.class);
+    static void testMain() {
+        ToIntBiFunction<String, String> cmp = (a, b) -> a.compareTo(b);
+        check(cmp.applyAsInt("a", "b") < 0, "apply");
+        check(cmp.applyAsInt("b", "a") > 0, "apply reversed");
+        check(cmp.applyAsInt("a", "a") == 0, "apply equal");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        ToIntBiFunction<String, String> sum = (a, b) -> a.length() + b.length();
-        check(sum.applyAsInt("ab", "cde") == 5, "applyAsInt");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.function.IntConsumer API conformance: accept/andThen.
+ * @summary java.util.function.IntConsumer contract: accept and andThen ordering, side effects, null->NPE.
  * @run main IntConsumerTest
  */
 
@@ -14,17 +14,34 @@ public class IntConsumerTest {
         passed++;
     }
 
-    static void testIntConsumer() {
-        int[] holder = new int[1];
-        IntConsumer c = x -> holder[0] = x;
-        c.accept(9);
-        check(holder[0] == 9, "accept");
-        c.andThen(x -> holder[0] += x).accept(5);
-        check(holder[0] == 10, "andThen");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        final int[] log = new int[1];
+        IntConsumer inc = x -> { log[0] += x; };
+        inc.accept(5);
+        check(log[0] == 5, "accept");
+        inc.accept(0);
+        check(log[0] == 5, "accept zero");
+        IntConsumer dec = x -> { log[0] -= x; };
+        inc.andThen(dec).accept(5);
+        check(log[0] == 5, "andThen inc then dec unchanged");
+        checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
+    }
     public static void main(String[] args) {
-        testIntConsumer();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

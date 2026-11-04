@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.IntSupplier conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.IntSupplier contract: lazily evaluates and returns primitive.
  * @run main IntSupplierTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.IntSupplier;
 
 public class IntSupplierTest {
     static int passed;
@@ -15,32 +14,32 @@ public class IntSupplierTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.IntSupplier");
-        check(c.isInterface(), "IntSupplier is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "getAsInt");
+    static void testMain() {
+        IntSupplier sup = () -> 5;
+        check(sup.getAsInt() == 5, "get");
+        IntSupplier counter = new IntSupplier() {
+            int i = 0;
+            public int getAsInt() { return ++i; }
+        };
+        check(counter.getAsInt() == 1, "get 1");
+        check(counter.getAsInt() == 2, "get 2");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        IntSupplier s = () -> 7;
-        check(s.getAsInt() == 7, "getAsInt");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

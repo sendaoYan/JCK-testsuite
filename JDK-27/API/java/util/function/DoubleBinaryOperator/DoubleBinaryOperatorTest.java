@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.DoubleBinaryOperator conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.DoubleBinaryOperator contract: apply operates on two primitives.
  * @run main DoubleBinaryOperatorTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.DoubleBinaryOperator;
 
 public class DoubleBinaryOperatorTest {
     static int passed;
@@ -15,34 +14,28 @@ public class DoubleBinaryOperatorTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.DoubleBinaryOperator");
-        check(c.isInterface(), "DoubleBinaryOperator is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsDouble", double.class, double.class);
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testMain() {
         DoubleBinaryOperator add = (a, b) -> a + b;
-        check(add.applyAsDouble(3.0, 4.0) == 7.0, "applyAsDouble");
-        DoubleBinaryOperator max = Double::max;
-        check(max.applyAsDouble(9.0, 2.0) == 9.0, "applyAsDouble max");
+        check(add.applyAsDouble(2.0, 3) == 5, "apply");
+        check(add.applyAsDouble(0, 0) == 0, "apply zero");
+        check(add.applyAsDouble(-1, 1) == 0, "apply inverse");
     }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

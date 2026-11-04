@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.function.DoubleToLongFunction API conformance: applyAsLong.
+ * @summary java.util.function.DoubleToLongFunction contract: apply converts primitive to primitive.
  * @run main DoubleToLongFunctionTest
  */
 
@@ -14,13 +14,27 @@ public class DoubleToLongFunctionTest {
         passed++;
     }
 
-    static void testDoubleToLongFunction() {
-        DoubleToLongFunction trunc = d -> (long) d;
-        check(trunc.applyAsLong(3.9) == 3L, "applyAsLong");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        DoubleToLongFunction c = x -> (long) x;
+        check(c.applyAsLong(2.9) == 2, "apply");
+        check(c.applyAsLong(0) == 0, "apply zero");
+    }
     public static void main(String[] args) {
-        testDoubleToLongFunction();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.Supplier conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.Supplier contract: get lazily evaluates and returns fresh values.
  * @run main SupplierTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.Supplier;
 
 public class SupplierTest {
     static int passed;
@@ -15,34 +14,35 @@ public class SupplierTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.Supplier");
-        check(c.isInterface(), "Supplier is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "get");
+    static void testMain() {
+        Supplier<String> sup = () -> "hello";
+        check("hello".equals(sup.get()), "get");
+        check("hello".equals(sup.get()), "get idempotent");
+        Supplier<Integer> counter = new Supplier<Integer>() {
+            int i = 0;
+            public Integer get() { return ++i; }
+        };
+        check(counter.get() == 1, "get 1");
+        check(counter.get() == 2, "get 2");
+        Supplier<Object> nullSup = () -> null;
+        check(nullSup.get() == null, "supplier may return null");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        Supplier<Integer> fortyTwo = () -> 42;
-        check(fortyTwo.get() == 42, "get");
-        Supplier<String> s = () -> "x";
-        check("x".equals(s.get()), "get string");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

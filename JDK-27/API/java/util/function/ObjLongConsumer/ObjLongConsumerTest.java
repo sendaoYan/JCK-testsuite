@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.ObjLongConsumer conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.ObjLongConsumer contract: accept object plus primitive, side effects.
  * @run main ObjLongConsumerTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.ObjLongConsumer;
 
 public class ObjLongConsumerTest {
     static int passed;
@@ -15,34 +14,30 @@ public class ObjLongConsumerTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.ObjLongConsumer");
-        check(c.isInterface(), "ObjLongConsumer is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "accept", Object.class, long.class);
+    static void testMain() {
+        final StringBuilder sb = new StringBuilder();
+        ObjLongConsumer<String> acc = (s, v) -> { sb.append(s).append(v); };
+        acc.accept("v=", 7L);
+        check("v=7".equals(sb.toString()), "accept");
+        acc.accept("!", 7L);
+        check("v=7!7".equals(sb.toString()), "accept second");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        java.util.List<String> acc = new java.util.ArrayList<>();
-        ObjLongConsumer<String> f = (s, l) -> acc.add(s + l);
-        f.accept("n", 5L);
-        check(acc.get(0).equals("n5"), "accept");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

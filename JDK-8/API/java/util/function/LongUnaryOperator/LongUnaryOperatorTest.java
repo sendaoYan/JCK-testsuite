@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.function.LongUnaryOperator API conformance: applyAsLong/andThen/compose/identity.
+ * @summary java.util.function.LongUnaryOperator contract: apply, compose/andThen ordering, identity, null->NPE.
  * @run main LongUnaryOperatorTest
  */
 
@@ -14,16 +14,31 @@ public class LongUnaryOperatorTest {
         passed++;
     }
 
-    static void testLongUnaryOperator() {
-        LongUnaryOperator inc = x -> x + 1;
-        check(inc.applyAsLong(5L) == 6L, "applyAsLong");
-        check(inc.andThen(x -> x * 10).applyAsLong(5L) == 60L, "andThen");
-        check(inc.compose(x -> x * 10).applyAsLong(5L) == 51L, "compose");
-        check(LongUnaryOperator.identity().applyAsLong(7L) == 7L, "identity");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        LongUnaryOperator inc = x -> x + 1;
+        check(inc.applyAsLong(1L) == 2, "apply");
+        check(inc.andThen(x -> x * 10).applyAsLong(1L) == 20L, "andThen g(f(x))");
+        check(inc.compose(x -> x * 10).applyAsLong(1L) == 11L, "compose f(g(x))");
+        check(LongUnaryOperator.identity().applyAsLong(1L) == 1L, "identity");
+        checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
+        checkThrows(NullPointerException.class, () -> inc.compose(null), "compose(null)");
+    }
     public static void main(String[] args) {
-        testLongUnaryOperator();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

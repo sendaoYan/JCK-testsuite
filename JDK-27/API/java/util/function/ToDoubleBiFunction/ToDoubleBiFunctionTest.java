@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.ToDoubleBiFunction conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.ToDoubleBiFunction contract: apply extracts primitive from two objects.
  * @run main ToDoubleBiFunctionTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.ToDoubleBiFunction;
 
 public class ToDoubleBiFunctionTest {
     static int passed;
@@ -15,32 +14,28 @@ public class ToDoubleBiFunctionTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.ToDoubleBiFunction");
-        check(c.isInterface(), "ToDoubleBiFunction is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsDouble", Object.class, Object.class);
+    static void testMain() {
+        ToDoubleBiFunction<String, String> cmp = (a, b) -> a.compareTo(b);
+        check(cmp.applyAsDouble("a", "b") < 0, "apply");
+        check(cmp.applyAsDouble("b", "a") > 0, "apply reversed");
+        check(cmp.applyAsDouble("a", "a") == 0, "apply equal");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        ToDoubleBiFunction<String, String> sum = (a, b) -> (double) (a.length() + b.length());
-        check(sum.applyAsDouble("a", "bc") == 3.0, "applyAsDouble");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

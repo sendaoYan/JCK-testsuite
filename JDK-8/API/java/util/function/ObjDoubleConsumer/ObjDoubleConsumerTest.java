@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.function.ObjDoubleConsumer API conformance: accept.
+ * @summary java.util.function.ObjDoubleConsumer contract: accept object plus primitive, side effects.
  * @run main ObjDoubleConsumerTest
  */
 
@@ -14,15 +14,30 @@ public class ObjDoubleConsumerTest {
         passed++;
     }
 
-    static void testObjDoubleConsumer() {
-        final double[] captured = new double[1];
-        ObjDoubleConsumer<String> c = (s, d) -> captured[0] = s.length() + d;
-        c.accept("ab", 3.5);
-        check(captured[0] == 5.5, "accept");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        final StringBuilder sb = new StringBuilder();
+        ObjDoubleConsumer<String> acc = (s, v) -> { sb.append(s).append(v); };
+        acc.accept("v=", 7.0);
+        check("v=7.0".equals(sb.toString()), "accept");
+        acc.accept("!", 7.0);
+        check("v=7.0!7.0".equals(sb.toString()), "accept second");
+    }
     public static void main(String[] args) {
-        testObjDoubleConsumer();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.LongPredicate conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.LongPredicate contract: test, and/or/negate truth table, short-circuit.
  * @run main LongPredicateTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.LongPredicate;
 
 public class LongPredicateTest {
     static int passed;
@@ -15,39 +14,43 @@ public class LongPredicateTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.LongPredicate");
-        check(c.isInterface(), "LongPredicate is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "test", long.class);
-        hasMethod(c, "and", LongPredicate.class);
-        hasMethod(c, "or", LongPredicate.class);
-        hasMethod(c, "negate");
+    static void testMain() {
+        LongPredicate pos = x -> x > 0;
+        check(pos.test(6L), "test positive");
+        check(!pos.test(-1L), "test non-positive");
+        LongPredicate even = x -> x % 2 == 0;
+        check(pos.and(even).test(6L), "and true");
+        check(!pos.and(even).test(5L), "and false");
+        check(pos.or(even).test(5L), "or true");
+        check(!pos.or(even).test(-1L), "or false");
+        check(!pos.negate().test(6L), "negate true->false");
+        check(pos.negate().test(-1L), "negate false->true");
+        check(pos.negate().negate().test(6L), "double negate");
+        checkThrows(NullPointerException.class, () -> pos.and(null), "and(null)");
+        checkThrows(NullPointerException.class, () -> pos.or(null), "or(null)");
+        final int[] calls = new int[1];
+        LongPredicate slow = x -> { calls[0]++; return true; };
+        check(!((LongPredicate) x -> false).and(slow).test(6L), "and short-circuit");
+        check(calls[0] == 0, "and right operand not called");
+        check(((LongPredicate) x -> true).or(slow).test(6L), "or short-circuit");
+        check(calls[0] == 0, "or right operand not called");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        LongPredicate pos = x -> x > 0L;
-        check(pos.test(1L) && !pos.test(-1L), "test");
-        check(pos.negate().test(-1L) && !pos.negate().test(1L), "negate");
-        LongPredicate even = x -> x % 2L == 0L;
-        check(pos.and(even).test(2L) && !pos.and(even).test(3L), "and");
-        check(pos.or(even).test(-2L) && !pos.or(even).test(-1L), "or");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

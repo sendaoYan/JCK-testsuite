@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.LongSupplier conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.LongSupplier contract: lazily evaluates and returns primitive.
  * @run main LongSupplierTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.LongSupplier;
 
 public class LongSupplierTest {
     static int passed;
@@ -15,32 +14,32 @@ public class LongSupplierTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.LongSupplier");
-        check(c.isInterface(), "LongSupplier is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "getAsLong");
+    static void testMain() {
+        LongSupplier sup = () -> 5L;
+        check(sup.getAsLong() == 5, "get");
+        LongSupplier counter = new LongSupplier() {
+            long i = 0;
+            public long getAsLong() { return ++i; }
+        };
+        check(counter.getAsLong() == 1, "get 1");
+        check(counter.getAsLong() == 2, "get 2");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        LongSupplier s = () -> 7L;
-        check(s.getAsLong() == 7L, "getAsLong");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

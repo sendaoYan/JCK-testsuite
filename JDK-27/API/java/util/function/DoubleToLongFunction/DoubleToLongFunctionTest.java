@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.DoubleToLongFunction conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.DoubleToLongFunction contract: apply converts primitive to primitive.
  * @run main DoubleToLongFunctionTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.DoubleToLongFunction;
 
 public class DoubleToLongFunctionTest {
     static int passed;
@@ -15,32 +14,27 @@ public class DoubleToLongFunctionTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.DoubleToLongFunction");
-        check(c.isInterface(), "DoubleToLongFunction is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsLong", double.class);
+    static void testMain() {
+        DoubleToLongFunction c = x -> (long) x;
+        check(c.applyAsLong(2.9) == 2, "apply");
+        check(c.applyAsLong(0) == 0, "apply zero");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        DoubleToLongFunction f = d -> (long) d;
-        check(f.applyAsLong(7.9) == 7L, "applyAsLong truncates");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

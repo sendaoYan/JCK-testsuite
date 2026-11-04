@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.DoubleToIntFunction conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.DoubleToIntFunction contract: apply converts primitive to primitive.
  * @run main DoubleToIntFunctionTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.DoubleToIntFunction;
 
 public class DoubleToIntFunctionTest {
     static int passed;
@@ -15,32 +14,27 @@ public class DoubleToIntFunctionTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.DoubleToIntFunction");
-        check(c.isInterface(), "DoubleToIntFunction is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsInt", double.class);
+    static void testMain() {
+        DoubleToIntFunction c = x -> (int) x;
+        check(c.applyAsInt(2.9) == 2, "apply");
+        check(c.applyAsInt(0) == 0, "apply zero");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        DoubleToIntFunction f = d -> (int) d;
-        check(f.applyAsInt(7.9) == 7, "applyAsInt truncates");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

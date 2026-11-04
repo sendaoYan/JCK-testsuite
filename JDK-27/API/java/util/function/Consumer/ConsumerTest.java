@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.Consumer conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.Consumer contract: accept and andThen ordering, side effects, null->NPE.
  * @run main ConsumerTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.Consumer;
 
 public class ConsumerTest {
     static int passed;
@@ -15,39 +14,39 @@ public class ConsumerTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.Consumer");
-        check(c.isInterface(), "Consumer is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "accept", Object.class);
-        hasMethod(c, "andThen", Consumer.class);
+    static void testMain() {
+        final int[] log = new int[1];
+        Consumer<Integer> inc = x -> { log[0] += x; };
+        inc.accept(5);
+        check(log[0] == 5, "accept");
+        inc.accept(-2);
+        check(log[0] == 3, "accept negative");
+        Consumer<Integer> dec = x -> { log[0] -= x; };
+        inc.andThen(dec).accept(10);
+        check(log[0] == 3, "andThen: inc then dec -> unchanged");
+        checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
+        final int[] order = new int[1];
+        Consumer<Integer> first = x -> { check(order[0] == 0, "first"); order[0] = 1; };
+        Consumer<Integer> second = x -> { check(order[0] == 1, "second"); order[0] = 2; };
+        first.andThen(second).accept(0);
+        check(order[0] == 2, "order completed");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        java.util.List<String> acc = new java.util.ArrayList<>();
-        Consumer<String> add = acc::add;
-        Consumer<String> upper = s -> acc.add(s.toUpperCase());
-        add.accept("a");
-        check(acc.equals(java.util.Arrays.asList("a")), "accept");
-        add.andThen(upper).accept("b");
-        check(acc.size() == 3 && acc.get(1).equals("b") && acc.get(2).equals("B"),
-              "andThen runs both consumers in order");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

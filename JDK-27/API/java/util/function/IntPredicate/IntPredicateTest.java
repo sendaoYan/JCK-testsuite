@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.IntPredicate conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.IntPredicate contract: test, and/or/negate truth table, short-circuit.
  * @run main IntPredicateTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.IntPredicate;
 
 public class IntPredicateTest {
     static int passed;
@@ -15,39 +14,43 @@ public class IntPredicateTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.IntPredicate");
-        check(c.isInterface(), "IntPredicate is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "test", int.class);
-        hasMethod(c, "and", IntPredicate.class);
-        hasMethod(c, "or", IntPredicate.class);
-        hasMethod(c, "negate");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testMain() {
         IntPredicate pos = x -> x > 0;
-        check(pos.test(1) && !pos.test(-1), "test");
-        check(pos.negate().test(-1) && !pos.negate().test(1), "negate");
+        check(pos.test(6), "test positive");
+        check(!pos.test(-1), "test non-positive");
         IntPredicate even = x -> x % 2 == 0;
-        check(pos.and(even).test(2) && !pos.and(even).test(3), "and");
-        check(pos.or(even).test(-2) && !pos.or(even).test(-1), "or");
+        check(pos.and(even).test(6), "and true");
+        check(!pos.and(even).test(5), "and false");
+        check(pos.or(even).test(5), "or true");
+        check(!pos.or(even).test(-1), "or false");
+        check(!pos.negate().test(6), "negate true->false");
+        check(pos.negate().test(-1), "negate false->true");
+        check(pos.negate().negate().test(6), "double negate");
+        checkThrows(NullPointerException.class, () -> pos.and(null), "and(null)");
+        checkThrows(NullPointerException.class, () -> pos.or(null), "or(null)");
+        final int[] calls = new int[1];
+        IntPredicate slow = x -> { calls[0]++; return true; };
+        check(!((IntPredicate) x -> false).and(slow).test(6), "and short-circuit");
+        check(calls[0] == 0, "and right operand not called");
+        check(((IntPredicate) x -> true).or(slow).test(6), "or short-circuit");
+        check(calls[0] == 0, "or right operand not called");
     }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

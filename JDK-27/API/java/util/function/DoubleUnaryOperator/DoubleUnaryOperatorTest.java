@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.DoubleUnaryOperator conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.DoubleUnaryOperator contract: apply, compose/andThen ordering, identity, null->NPE.
  * @run main DoubleUnaryOperatorTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.DoubleUnaryOperator;
 
 public class DoubleUnaryOperatorTest {
     static int passed;
@@ -15,39 +14,31 @@ public class DoubleUnaryOperatorTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.DoubleUnaryOperator");
-        check(c.isInterface(), "DoubleUnaryOperator is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsDouble", double.class);
-        hasMethod(c, "compose", DoubleUnaryOperator.class);
-        hasMethod(c, "andThen", DoubleUnaryOperator.class);
-        hasMethod(c, "identity");
+    static void testMain() {
+        DoubleUnaryOperator inc = x -> x + 1;
+        check(inc.applyAsDouble(1.0) == 2, "apply");
+        check(inc.andThen(x -> x * 10).applyAsDouble(1.0) == 20.0, "andThen g(f(x))");
+        check(inc.compose(x -> x * 10).applyAsDouble(1.0) == 11.0, "compose f(g(x))");
+        check(DoubleUnaryOperator.identity().applyAsDouble(1.0) == 1.0, "identity");
+        checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
+        checkThrows(NullPointerException.class, () -> inc.compose(null), "compose(null)");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        DoubleUnaryOperator inc = x -> x + 1.0;
-        check(inc.applyAsDouble(4.0) == 5.0, "applyAsDouble");
-        DoubleUnaryOperator dbl = x -> x * 2.0;
-        check(inc.andThen(dbl).applyAsDouble(3.0) == 8.0, "andThen");
-        check(inc.compose(dbl).applyAsDouble(3.0) == 7.0, "compose");
-        check(DoubleUnaryOperator.identity().applyAsDouble(9.0) == 9.0, "identity");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

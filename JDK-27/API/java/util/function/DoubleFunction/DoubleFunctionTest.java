@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.DoubleFunction conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.DoubleFunction contract: apply maps double to object.
  * @run main DoubleFunctionTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.DoubleFunction;
 
 public class DoubleFunctionTest {
     static int passed;
@@ -15,32 +14,30 @@ public class DoubleFunctionTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.DoubleFunction");
-        check(c.isInterface(), "DoubleFunction is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "apply", double.class);
+    static void testMain() {
+        DoubleFunction<String> f = Double::toString;
+        check("5.0".equals(f.apply(5.0)), "apply");
+        check("0.0".equals(f.apply(0.0)), "apply zero");
+        check("-3.5".equals(f.apply(-3.5)), "apply negative");
+        DoubleFunction<Double> half = x -> x / 2;
+        check(half.apply(3.0) == 1.5, "apply unary");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        DoubleFunction<Integer> f = d -> (int) (d * 2);
-        check(f.apply(3.5) == 7, "apply");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

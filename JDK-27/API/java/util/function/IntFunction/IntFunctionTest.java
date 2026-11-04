@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.IntFunction conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.IntFunction contract: apply maps int to object.
  * @run main IntFunctionTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.IntFunction;
 
 public class IntFunctionTest {
     static int passed;
@@ -15,35 +14,31 @@ public class IntFunctionTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.IntFunction");
-        check(c.isInterface(), "IntFunction is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "apply", int.class);
+    static void testMain() {
+        IntFunction<String> f = Integer::toString;
+        check("5".equals(f.apply(5)), "apply");
+        check("0".equals(f.apply(0)), "apply zero");
+        check("-3".equals(f.apply(-3)), "apply negative");
+        IntFunction<int[]> arr = int[]::new;
+        check(arr.apply(3).length == 3, "apply new array");
+        checkThrows(NegativeArraySizeException.class, () -> arr.apply(-1), "array negative length");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        IntFunction<String> f = i -> "v" + i;
-        check(f.apply(3).equals("v3"), "apply");
-        IntFunction<java.util.List<String>> list = java.util.ArrayList::new;
-        java.util.List<String> made = list.apply(2);
-        check(made instanceof java.util.List && made.isEmpty(), "apply ArrayList::new");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

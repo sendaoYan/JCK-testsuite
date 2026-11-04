@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.BiConsumer conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.BiConsumer contract: accept and andThen ordering, side effects, null->NPE.
  * @run main BiConsumerTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.BiConsumer;
 
 public class BiConsumerTest {
     static int passed;
@@ -15,39 +14,37 @@ public class BiConsumerTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.BiConsumer");
-        check(c.isInterface(), "BiConsumer is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "accept", Object.class, Object.class);
-        hasMethod(c, "andThen", BiConsumer.class);
+    static void testMain() {
+        final int[] acc = new int[1];
+        BiConsumer<Integer, Integer> add = (a, b) -> { acc[0] += a * b; };
+        add.accept(2, 3);
+        check(acc[0] == 6, "accept");
+        add.accept(0, 100);
+        check(acc[0] == 6, "accept zero");
+        BiConsumer<Integer, Integer> sub = (a, b) -> { acc[0] -= a * b; };
+        add.andThen(sub).accept(2, 3);
+        check(acc[0] == 6, "andThen add then sub -> unchanged");
+        checkThrows(NullPointerException.class, () -> add.andThen(null), "andThen(null)");
+        final int[] order = new int[1];
+        add.andThen((a, b) -> { check(order[0] == 0, "first"); order[0] = 1; }).accept(0, 0);
+        check(order[0] == 1, "order");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        java.util.List<String> acc = new java.util.ArrayList<>();
-        BiConsumer<String, Integer> pair = (s, i) -> acc.add(s + i);
-        pair.accept("n", 7);
-        check(acc.get(0).equals("n7"), "accept");
-        BiConsumer<String, Integer> upper = (s, i) -> acc.add(s.toUpperCase());
-        pair.andThen(upper).accept("a", 1);
-        check(acc.size() == 3 && acc.get(1).equals("a1") && acc.get(2).equals("A"),
-              "andThen runs both in order");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

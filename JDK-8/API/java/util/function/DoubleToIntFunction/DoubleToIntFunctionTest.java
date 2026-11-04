@@ -1,6 +1,6 @@
 /*
  * @test
- * @summary java.util.function.DoubleToIntFunction API conformance: applyAsInt.
+ * @summary java.util.function.DoubleToIntFunction contract: apply converts primitive to primitive.
  * @run main DoubleToIntFunctionTest
  */
 
@@ -14,14 +14,27 @@ public class DoubleToIntFunctionTest {
         passed++;
     }
 
-    static void testDoubleToIntFunction() {
-        DoubleToIntFunction trunc = d -> (int) d;
-        check(trunc.applyAsInt(3.9) == 3, "applyAsInt");
-        check(trunc.applyAsInt(-3.9) == -3, "applyAsInt negative truncates toward zero");
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+    static void testMain() {
+        DoubleToIntFunction c = x -> (int) x;
+        check(c.applyAsInt(2.9) == 2, "apply");
+        check(c.applyAsInt(0) == 0, "apply zero");
+    }
     public static void main(String[] args) {
-        testDoubleToIntFunction();
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

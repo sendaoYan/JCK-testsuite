@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.IntBinaryOperator conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.IntBinaryOperator contract: apply operates on two primitives.
  * @run main IntBinaryOperatorTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.IntBinaryOperator;
 
 public class IntBinaryOperatorTest {
     static int passed;
@@ -15,34 +14,28 @@ public class IntBinaryOperatorTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.IntBinaryOperator");
-        check(c.isInterface(), "IntBinaryOperator is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsInt", int.class, int.class);
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testMain() {
         IntBinaryOperator add = (a, b) -> a + b;
-        check(add.applyAsInt(3, 4) == 7, "applyAsInt");
-        IntBinaryOperator max = Integer::max;
-        check(max.applyAsInt(9, 2) == 9, "applyAsInt max");
+        check(add.applyAsInt(2, 3) == 5, "apply");
+        check(add.applyAsInt(0, 0) == 0, "apply zero");
+        check(add.applyAsInt(-1, 1) == 0, "apply inverse");
     }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

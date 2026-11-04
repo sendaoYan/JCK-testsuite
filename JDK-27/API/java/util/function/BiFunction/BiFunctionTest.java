@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.BiFunction conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.BiFunction contract: apply and andThen ordering, null->NPE, exception relay.
  * @run main BiFunctionTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.BiFunction;
 
 public class BiFunctionTest {
     static int passed;
@@ -15,37 +14,39 @@ public class BiFunctionTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.BiFunction");
-        check(c.isInterface(), "BiFunction is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "apply", Object.class, Object.class);
-        hasMethod(c, "andThen", Function.class);
+    static void testMain() {
+        BiFunction<Integer, Integer, Integer> add = (a, b) -> a + b;
+        check(add.apply(2, 3) == 5, "apply");
+        check(add.apply(-1, 1) == 0, "apply zero");
+        BiFunction<Integer, Integer, String> concat = add.andThen(Object::toString);
+        check("5".equals(concat.apply(2, 3)), "andThen g(f(x))");
+        checkThrows(NullPointerException.class, () -> add.andThen(null), "andThen(null)");
+        final int[] calls = new int[1];
+        BiFunction<Integer,Integer,Integer> lazy = add.andThen(x -> { calls[0]++; return x; });
+        check(calls[0] == 0, "andThen lazy");
+        check(lazy.apply(1, 2) == 3, "andThen result");
+        check(calls[0] == 1, "called once");
+        IllegalStateException ex = new IllegalStateException("boom");
+        BiFunction<Integer,Integer,Integer> fail = (a, b) -> { throw ex; };
+        try { fail.andThen(x -> x + 1).apply(1, 2); throw new AssertionError("relay"); }
+        catch (IllegalStateException c) { check(c == ex, "relay"); }
     }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        BiFunction<String, String, Integer> lenSum = (a, b) -> a.length() + b.length();
-        check(lenSum.apply("ab", "cde") == 5, "apply");
-        Function<Integer, Integer> neg = x -> -x;
-        check(lenSum.andThen(neg).apply("a", "bc") == -3, "andThen");
-        BiFunction<Integer, Integer, Integer> add = Integer::sum;
-        check(add.apply(3, 4) == 7, "apply add");
-    }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

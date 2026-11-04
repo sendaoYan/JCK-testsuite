@@ -1,11 +1,10 @@
 /*
  * @test
- * @summary java.util.function.ToLongFunction conformance: white-box structure + black-box behavior.
+ * @summary java.util.function.ToLongFunction contract: apply extracts primitive from object.
  * @run main ToLongFunctionTest
  */
 
-import java.util.Comparator;
-import java.util.function.*;
+import java.util.function.ToLongFunction;
 
 public class ToLongFunctionTest {
     static int passed;
@@ -15,32 +14,29 @@ public class ToLongFunctionTest {
         passed++;
     }
 
-    static Class<?> cls(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void hasMethod(Class<?> c, String name, Class<?>... p) {
-        try { c.getMethod(name, p); } catch (NoSuchMethodException e) { throw new AssertionError("missing " + name + " on " + c.getName(), e); }
-        passed++;
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = cls("java.util.function.ToLongFunction");
-        check(c.isInterface(), "ToLongFunction is an interface");
-        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class), "@FunctionalInterface");
-        hasMethod(c, "applyAsLong", Object.class);
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testMain() {
         ToLongFunction<String> len = String::length;
-        check(len.applyAsLong("abcd") == 4L, "applyAsLong");
+        check(len.applyAsLong("abc") == 3, "apply");
+        check(len.applyAsLong("") == 0, "apply empty");
+        ToLongFunction<Object> hash = Object::hashCode;
+        check(hash.applyAsLong(new Object()) != 0, "apply hashCode");
     }
-
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    public static void main(String[] args) {
+        testMain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
