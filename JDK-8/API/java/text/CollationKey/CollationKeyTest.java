@@ -126,7 +126,83 @@ public class CollationKeyTest {
                 "independent collator yields consistent key order");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testStructureContract() throws Exception {
+        Class<?> c = Class.forName("java.text.CollationKey");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "CollationKey is abstract");
+        check(java.lang.reflect.Modifier.isProtected(
+                  c.getDeclaredConstructors()[0].getModifiers()), "constructor is protected");
+        check(Comparable.class.isAssignableFrom(c), "implements Comparable");
+        check(!java.io.Serializable.class.isAssignableFrom(c), "not Serializable");
+    }
+
+    static void testCompareMatrixContract() {
+        RuleBasedCollator rbc = (RuleBasedCollator) Collator.getInstance(java.util.Locale.ENGLISH);
+        CollationKey apple = rbc.getCollationKey("apple");
+        CollationKey banana = rbc.getCollationKey("banana");
+        CollationKey apple2 = rbc.getCollationKey("apple");
+        check(apple.compareTo(banana) == rbc.compare("apple", "banana"),
+              "key order mirrors collator.compare");
+        check(apple.compareTo(banana) < 0, "apple < banana");
+        check(banana.compareTo(apple) > 0, "banana > apple (antisymmetry)");
+        check(apple.compareTo(apple2) == 0, "equal strings equal keys");
+        check(apple.equals(apple2) && apple.hashCode() == apple2.hashCode(),
+              "equals/hashCode consistent");
+        check(!apple.equals(banana), "different sources not equal");
+        check(!apple.equals(null) && !apple.equals("apple"), "equals(other types) false");
+    }
+
+    static void testByteRepresentationContract() {
+        RuleBasedCollator rbc = (RuleBasedCollator) Collator.getInstance(java.util.Locale.ENGLISH);
+        byte[] a1 = rbc.getCollationKey("abc").toByteArray();
+        byte[] a2 = rbc.getCollationKey("abc").toByteArray();
+        byte[] b = rbc.getCollationKey("abd").toByteArray();
+        check(a1.length > 0, "toByteArray non-empty");
+        check(java.util.Arrays.equals(a1, a2), "same source -> identical bytes");
+        check(!java.util.Arrays.equals(a1, b), "different sources -> different bytes");
+        check("abc".equals(rbc.getCollationKey("abc").getSourceString()), "getSourceString");
+        expectX(NullPointerException.class,
+                () -> rbc.getCollationKey("abc").compareTo(null), "compareTo(null) -> NPE");
+    }
+
+    static void testSortConsistencyContract() {
+        RuleBasedCollator rbc = (RuleBasedCollator) Collator.getInstance(java.util.Locale.ENGLISH);
+        String[] words = {"banana", "Apple", "apple", "cherry", "Banana", "apple2"};
+        List<CollationKey> keys = new ArrayList<>();
+        for (String w : words) keys.add(rbc.getCollationKey(w));
+        Collections.sort(keys);
+        List<String> byKey = new ArrayList<>();
+        for (CollationKey k : keys) byKey.add(k.getSourceString());
+        List<String> byCompare = new ArrayList<>(Arrays.asList(words.clone()));
+        Collections.sort(byCompare, rbc);
+        check(byKey.equals(byCompare), "sorting by CollationKey == sorting by Collator");
+        rbc.setStrength(Collator.PRIMARY);
+        check(rbc.getCollationKey("Apple").compareTo(rbc.getCollationKey("apple")) == 0,
+              "PRIMARY keys fold case");
+    }
     public static void main(String[] args) throws Exception {
+        testStructureContract();
+        testCompareMatrixContract();
+        testByteRepresentationContract();
+        testSortConsistencyContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

@@ -28,3 +28,12 @@
 - 白盒：final 类、继承 `NumberFormat`、两个公开构造器、关键方法签名存在。
 - 黑盒：直接构造器 format/parse、clone 深拷贝、formatToCharacterIterator、grouping/digit/parse 标志/舍入模式 get-set 组合、toString，并保留工厂实例浅断言。
 - 健壮性：固定 `Locale.US`、固定 compactPatterns，headless-safe，不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- SHORT/LONG 刻度表（1234→1K/1 thousand、1234567→1M/1 million、1200→1K、0、-1234→-1K、999 以下直通、1e10→10B、1500→2K HALF_EVEN）
+- parse 矩阵（1.2K→1200、5K→5000 idx2、小写 5k→5 idx1 err-1、bogus null idx0 err0、LONG "1 thousand"→1000 idx10）
+- 缺省与位数控制（HALF_EVEN、groupingUsed=false、minInt3→002K、maxFrac1→001.2K、minFrac1→001.0K、CEILING 1200→2K）
+- 结构（final、extends NumberFormat、3 参公共构造 + 4 参 pluralRules(String)、无 String[] 第 4 参变体、null pattern→NPE）
+- format(String)→IAE；NaN/∞ 走 symbols；formatToCharacterIterator 文本与 format 全等且带 NumberFormat.Field 属性
+- 工厂 null locale/style→NPE；clone/equals；自定义 compact 数组（下标=10 的幂，无数字占位则只输出字面量）

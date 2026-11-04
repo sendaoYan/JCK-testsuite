@@ -39,3 +39,9 @@
 | 与 ParseException 衔接 | parseObject("xyz") 抛 ParseException 且 getErrorOffset()==errorIndex |
 
 共 5 组场景、约 20 个 check（`testBlackBox()`）。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- index/errorIndex 全生命周期（默认 -1、setIndex/setErrorIndex、负值允许无校验）
+- toString 精确 `java.text.ParsePosition[index=N,errorIndex=M]`
+- 由 DecimalFormat/SimpleDateFormat 解析驱动（成功前进/失败 errorIndex 记录/ParseException.getErrorOffset 镜像）

@@ -38,3 +38,9 @@
 ## 注意事项
 
 - 固定 Locale.US；无墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- index/errorIndex 全生命周期（默认 -1、setIndex/setErrorIndex、负值允许无校验）
+- toString 精确 `java.text.ParsePosition[index=N,errorIndex=M]`
+- 由 DecimalFormat/SimpleDateFormat 解析驱动（成功前进/失败 errorIndex 记录/ParseException.getErrorOffset 镜像）

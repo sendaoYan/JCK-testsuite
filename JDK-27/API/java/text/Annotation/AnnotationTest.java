@@ -88,7 +88,57 @@ public class AnnotationTest {
                 "nested Annotation payload");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testIdentitySemanticsContract() {
+        Annotation s1 = new Annotation("s");
+        Annotation s2 = new Annotation("s");
+        check(!s1.equals(s2), "equals is identity-based (no override)");
+        check(!s1.equals(null), "equals(null) false");
+        check(s1.equals(s1), "reflexive");
+        check(s1.hashCode() != s2.hashCode(),
+              "identity hashCodes differ for equal-valued instances");
+        check("java.text.Annotation[value=s]".equals(s1.toString()),
+              "toString exact format");
+        check("java.text.Annotation[value=null]".equals(new Annotation(null).toString()),
+              "toString null value");
+    }
+
+    static void testNullValueContract() {
+        check(new Annotation(null).getValue() == null, "null value permitted and readable");
+        Annotation boxed = new Annotation(Integer.valueOf(7));
+        check(Integer.valueOf(7).equals(boxed.getValue()), "arbitrary Object value round-trips");
+    }
+
+    static void testAsAttributeValueContract() {
+        AttributedString as = new AttributedString("xyz");
+        as.addAttribute(AttributedCharacterIterator.Attribute.READING, new Annotation("r1"));
+        AttributedCharacterIterator it = as.getIterator();
+        Object v = it.getAttribute(AttributedCharacterIterator.Attribute.READING);
+        check(v instanceof Annotation && "r1".equals(((Annotation) v).getValue()),
+              "Annotation flows through AttributedString unchanged");
+    }
     public static void main(String[] args) throws Exception {
+        testIdentitySemanticsContract();
+        testNullValueContract();
+        testAsAttributeValueContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

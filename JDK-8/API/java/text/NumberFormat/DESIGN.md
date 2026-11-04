@@ -51,3 +51,12 @@
 ## 注意事项
 
 - 固定 Locale.US；无默认 Locale/墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- getInstance/getNumberInstance/getCurrencyInstance/getPercentInstance/getIntegerInstance × Locale 矩阵 + round-trip
+- equals/hashCode 跨工厂一致性；format(long)/format(double)/format(BigDecimal) 精度
+- digit 钳制（minFrac→1.00000、minInt→00000001、maxInt→56）；integerOnly 解析截断
+- parse 错误语义（index 不动 + errorIndex；format(str)→IAE 而非 NPE）
+- 常量 INTEGER_FIELD=0/FRACTION_FIELD=1；工厂可用性（getAvailableLocales 含 ENGLISH）
+- 版本锁定 de/fr/ja locale 数据全等串（每侧断言自己的实际值）

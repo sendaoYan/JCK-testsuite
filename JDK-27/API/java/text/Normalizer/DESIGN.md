@@ -27,3 +27,10 @@
 - 判定：`isNormalized` 对组合/分解形式各取真假。
 - 边界：NFC 幂等、`normalize(null)`/`isNormalized(null)` 抛 `NullPointerException`。
 - 健壮性：纯文本固定、无 Locale/墙钟/随机/全局副作用。headless-safe，不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 11 样本 × 4 Form 全表（é/组合 é/½/Ａ/ﬃ/Ω/が/か+濁点/A+重音/Å 组与预组），含长度与幂等性
+- isNormalized 与 normalize().equals() 对每样本一致
+- Form 枚举序 NFD=0/NFC=1/NFKD=2/NFKC=3、valueOf、null CharSequence/Form→NPE
+- CharSequence 重载（StringBuilder）；空串/纯 ASCII 恒等

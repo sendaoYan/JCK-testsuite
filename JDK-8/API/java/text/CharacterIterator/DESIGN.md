@@ -37,3 +37,10 @@
 ## 注意事项
 
 - 无 Locale/墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- DONE 常量 \uFFFF；接口全抽象 + Cloneable
+- 多态契约（经 AttributedString.getIterator 的另一实现验证同一导航/DONE/clone 表）
+- 范围迭代器（begin=6/end=11、setIndex 越界 IAE、setIndex(end) 合法 DONE）
+- 空/单字符迭代器边界

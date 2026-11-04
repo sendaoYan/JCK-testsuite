@@ -138,7 +138,113 @@ public class CollatorTest {
         expectThrows(() -> col.setDecomposition(999), IllegalArgumentException.class, "setDecomposition(999) IAE");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+    // Latin-1 e with acute: precomposed U+00E9 vs combining sequence e + U+0301
+
+    static void testStrengthMatrixContract() {
+        Collator c = Collator.getInstance(Locale.ENGLISH);
+        check(c instanceof java.text.RuleBasedCollator, "getInstance(ENGLISH) -> RuleBasedCollator");
+        c.setStrength(Collator.PRIMARY);
+        check(c.getStrength() == Collator.PRIMARY, "getStrength PRIMARY");
+        check(c.compare("abc", "abd") == -1, "PRIMARY: different letters still differ");
+        check(c.compare("abc", "ABC") == 0, "PRIMARY: case ignored");
+        check(c.compare("a", "A") == 0, "PRIMARY: a == A");
+        check(c.compare("e", "\u00E9") == 0, "PRIMARY: accents ignored (precomposed)");
+        check(c.compare("e", "e\u0301") == 0, "PRIMARY: accents ignored (combining)");
+        c.setStrength(Collator.SECONDARY);
+        check(c.compare("abc", "ABC") == 0, "SECONDARY: case still ignored");
+        check(c.compare("e", "\u00E9") == -1, "SECONDARY: accent is a difference");
+        check(c.compare("e", "e\u0301") == -1, "SECONDARY: combining accent differs");
+        c.setStrength(Collator.TERTIARY);
+        check(c.compare("abc", "ABC") == -1, "TERTIARY: case is a difference");
+        check(c.compare("a", "A") == -1, "TERTIARY: a < A");
+        check(c.compare("e", "\u00E9") == -1, "TERTIARY: accent differs");
+        c.setStrength(Collator.IDENTICAL);
+        check(c.compare("abc", "ABC") == -1, "IDENTICAL: case differs");
+        check(c.compare("abc", "abc") == 0, "IDENTICAL: equal strings 0");
+        check(c.compare("\u00E9", "e\u0301") != 0,
+              "IDENTICAL + NO_DECOMPOSITION: code-point difference visible");
+        c.setDecomposition(Collator.CANONICAL_DECOMPOSITION);
+        check(c.compare("\u00E9", "e\u0301") == 0,
+              "IDENTICAL + CANONICAL_DECOMPOSITION: canonically equivalent folded to 0");
+        c.setDecomposition(Collator.NO_DECOMPOSITION);
+        check(c.getDecomposition() == Collator.NO_DECOMPOSITION, "decomposition restored");
+    }
+
+    static void testDefaultsContract() {
+        Collator c = Collator.getInstance(Locale.ENGLISH);
+        check(c.getStrength() == Collator.TERTIARY, "default strength TERTIARY");
+        check(c.getDecomposition() == Collator.NO_DECOMPOSITION, "default decomposition NO_DECOMPOSITION");
+        c.setDecomposition(Collator.CANONICAL_DECOMPOSITION);
+        check(c.getDecomposition() == Collator.CANONICAL_DECOMPOSITION, "setDecomposition CANONICAL");
+        check(c.compare("\u00E9", "e\u0301") == 0, "CANONICAL: precomposed == combining");
+        c.setDecomposition(Collator.NO_DECOMPOSITION);
+        check(c.compare("\u00E9", "e\u0301") == 0,
+              "NO_DECOMPOSITION: EN tables still fold the pair (documented behavior)");
+        c.setDecomposition(Collator.FULL_DECOMPOSITION);
+        check(c.getDecomposition() == Collator.FULL_DECOMPOSITION, "FULL_DECOMPOSITION settable");
+    }
+
+    static void testCollationKeyConsistencyContract() {
+        Collator c = Collator.getInstance(Locale.ENGLISH);
+        c.setStrength(Collator.TERTIARY);
+        CollationKey k1 = c.getCollationKey("apple");
+        CollationKey k2 = c.getCollationKey("banana");
+        CollationKey k3 = c.getCollationKey("apple");
+        check(k1.compareTo(k2) < 0, "key order matches collator order");
+        check(k1.compareTo(k3) == 0, "equal sources give equal keys");
+        check(k1.hashCode() == k3.hashCode(), "key hashCode consistent");
+        check("apple".equals(k1.getSourceString()), "getSourceString");
+        byte[] b1 = k1.toByteArray();
+        byte[] b2 = k3.toByteArray();
+        check(b1.length > 0, "toByteArray non-empty");
+        check(java.util.Arrays.equals(b1, b2), "toByteArray deterministic for equal keys");
+        expectX(NullPointerException.class, () -> k1.compareTo(null),
+                "CollationKey.compareTo(null) -> NPE");
+        check(c.getCollationKey(null) == null, "getCollationKey(null) -> null");
+    }
+
+    static void testNullAndEqualityContract() {
+        Collator c = Collator.getInstance(Locale.ENGLISH);
+        expectX(NullPointerException.class, () -> c.compare(null, "a"), "compare(null, x) -> NPE");
+        expectX(NullPointerException.class, () -> c.compare("a", null), "compare(x, null) -> NPE");
+        check(Collator.getInstance(Locale.ENGLISH).equals(Collator.getInstance(Locale.ENGLISH)),
+              "same-locale instances equal");
+        check(c.clone().equals(c), "clone equal");
+        Collator m = Collator.getInstance(Locale.ENGLISH);
+        m.setStrength(Collator.PRIMARY);
+        check(!m.equals(Collator.getInstance(Locale.ENGLISH)), "strength participates in equals");
+        check(Collator.getAvailableLocales().length > 0, "getAvailableLocales non-empty");
+        check(java.util.Arrays.asList(Collator.getAvailableLocales()).contains(Locale.ENGLISH),
+              "available contains ENGLISH");
+        check(Collator.getInstance(Locale.JAPANESE) instanceof java.text.RuleBasedCollator
+              && Collator.getInstance(Locale.FRENCH) instanceof java.text.RuleBasedCollator,
+              "all locales yield RuleBasedCollator");
+        expectX(NullPointerException.class, () -> Collator.getInstance(null),
+                "getInstance(null) -> NPE");
+    }
     public static void main(String[] args) throws Exception {
+        testStrengthMatrixContract();
+        testDefaultsContract();
+        testCollationKeyConsistencyContract();
+        testNullAndEqualityContract();
         testWhiteBox();
         testCompare();
         testStrength();

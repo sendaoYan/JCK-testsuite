@@ -37,3 +37,10 @@
 ## 注意事项
 
 - 无 Locale 依赖（规则显式给出）；无墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 自定义规则序（< b < a → a/b=1；< c < a < b）；getRules 回读
+- 逗号列表（同 primary+secondary，TERTIARY 下先列者在前：A,a=1）与 '=' 全等（a=A）与 '&' reset
+- 非法规则矩阵（尾随关系符 message 以 "missing chars" 开头、无关系符、前导 reset、重复关系→ParseException；null→NPE）
+- getCollationElementIterator(String/CharacterIterator/null NPE)

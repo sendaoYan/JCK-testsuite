@@ -42,3 +42,10 @@ AttributedCharacterIterator it = as.getIterator();` 多段叠加标注后统一�
 | 错误路径 | null 文本/空字符串、非法区间（start>end/负/越界）、null 属性键 |
 
 共 8 组场景、约 27 个 check（`testBlackBox()`）。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 构造矩阵（null String/Map→NPE、Map ctor 全属性全文应用、迭代器拷贝构造保留属性）
+- addAttribute 范围矩阵（start>end/end>length/空范围→IAE、null value 存 null、null attr→NPE）
+- getIterator(null=全部属性、范围越界 IAE、start>end IAE)
+- 文本重建 + 相邻同属性范围恰在边界分裂

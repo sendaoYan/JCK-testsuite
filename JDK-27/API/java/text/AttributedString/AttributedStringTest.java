@@ -180,7 +180,106 @@ public class AttributedStringTest {
                 "empty string yields empty run");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testConstructorMatrixContract() {
+        expectX(NullPointerException.class, () -> new AttributedString("hi",
+                (Map<AttributedCharacterIterator.Attribute, Object>) null),
+                "(String, null Map) -> NPE");
+        Map<AttributedCharacterIterator.Attribute, Object> m = new HashMap<>();
+        m.put(LANG, java.util.Locale.ENGLISH);
+        m.put(READ, "q");
+        AttributedString as = new AttributedString("abcd", m);
+        AttributedCharacterIterator it = as.getIterator();
+        it.setIndex(1);
+        check(java.util.Locale.ENGLISH.equals(it.getAttribute(LANG)) && "q".equals(it.getAttribute(READ)),
+              "Map constructor applies every entry whole-range");
+        check(it.getRunLimit() == 4, "Map-ctor attributes span the entire text");
+        AttributedString fromIterator = new AttributedString(as.getIterator());
+        AttributedCharacterIterator it2 = fromIterator.getIterator();
+        check(java.util.Locale.ENGLISH.equals(it2.getAttribute(LANG)),
+              "(AttributedCharacterIterator) constructor preserves attributes");
+    }
+
+    static void testAddAttributeRangeMatrixContract() {
+        AttributedString base = new AttributedString("hello");
+        expectX(IllegalArgumentException.class, () -> base.addAttribute(LANG, "en", 3, 1),
+                "start > end -> IAE");
+        expectX(IllegalArgumentException.class, () -> base.addAttribute(LANG, "en", 0, 99),
+                "end > length -> IAE");
+        expectX(IllegalArgumentException.class, () -> base.addAttribute(LANG, "en", 2, 2),
+                "empty range -> IAE");
+        AttributedString nullValue = new AttributedString("hi");
+        nullValue.addAttribute(LANG, null);
+        check(nullValue.getIterator().getAttribute(LANG) == null,
+              "addAttribute(attr, null) stores null (removes visible value)");
+        expectX(NullPointerException.class, () -> new AttributedString("hi").addAttribute(null, "en"),
+                "addAttribute(null attr, ...) -> NPE");
+        AttributedString sliced = new AttributedString("abcdef");
+        sliced.addAttribute(LANG, "en", 1, 4);
+        AttributedCharacterIterator si = sliced.getIterator();
+        si.setIndex(2);
+        check("en".equals(si.getAttribute(LANG)) && si.getRunStart() == 1 && si.getRunLimit() == 4,
+              "partial-range addAttribute bounds the run");
+        si.setIndex(5);
+        check(si.getAttribute(LANG) == null, "outside the added range value is null");
+    }
+
+    static void testGetIteratorMatrixContract() {
+        AttributedString as = new AttributedString("hello world");
+        as.addAttribute(LANG, java.util.Locale.FRENCH);
+        as.addAttribute(READ, "r", 0, 5);
+        AttributedCharacterIterator all = as.getIterator(null, 0, 5);
+        check(all.getBeginIndex() == 0 && all.getEndIndex() == 5,
+              "getIterator(null attrs, range): null means all attributes");
+        check("r".equals(all.getAttribute(READ)), "null filter keeps attributes");
+        expectX(IllegalArgumentException.class,
+                () -> as.getIterator(new AttributedCharacterIterator.Attribute[] {LANG}, 0, 99),
+                "getIterator(attrs, 0, 99) -> IAE");
+        expectX(IllegalArgumentException.class,
+                () -> as.getIterator(new AttributedCharacterIterator.Attribute[] {LANG}, 3, 1),
+                "getIterator(attrs, start>end) -> IAE");
+        AttributedCharacterIterator tail = as.getIterator(new AttributedCharacterIterator.Attribute[] {LANG}, 6, 11);
+        check(tail.getBeginIndex() == 6 && tail.first() == 'w',
+              "filtered range iterator positions at 6");
+        check(tail.getAttribute(READ) == null, "filtered range hides unlisted attribute");
+    }
+
+    static void testTextReconstructionContract() {
+        AttributedString as = new AttributedString("0123456789");
+        as.addAttribute(LANG, "en", 0, 4);
+        as.addAttribute(LANG, "fr", 4, 10);
+        as.addAttribute(READ, "r1", 2, 8);
+        AttributedCharacterIterator it = as.getIterator();
+        StringBuilder sb = new StringBuilder();
+        for (char ch = it.first(); ch != CharacterIterator.DONE; ch = it.next()) sb.append(ch);
+        check("0123456789".contentEquals(sb), "iterator reconstructs full text");
+        it.setIndex(4);
+        check("fr".equals(it.getAttribute(LANG)) && it.getRunStart() == 4,
+              "adjacent same-attribute ranges split runs exactly at 4");
+    }
     public static void main(String[] args) throws Exception {
+        testConstructorMatrixContract();
+        testAddAttributeRangeMatrixContract();
+        testGetIteratorMatrixContract();
+        testTextReconstructionContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

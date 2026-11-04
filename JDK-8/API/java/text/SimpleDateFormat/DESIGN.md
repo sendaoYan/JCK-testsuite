@@ -49,3 +49,13 @@
 ## 注意事项
 
 - 固定 Locale.US + UTC + Date(0)；无默认时区/墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- pattern 字母全表 45 pattern（G/y/M/d/H/h/m/s/S/E/D/F/w/W/a/K/z/Z/'）对固定 Date 的全等输出
+- lenient 语义（"2024-02-30" 宽松→3月1日；严格→null + errorIndex 精确 10/19/8）
+- 2 位年窗口（2DigitYearStart=2100 时 99→2199 非 2099）
+- parse 矩阵（前缀解析/index 前进/errorIndex 精确/尾随文本）
+- equals（pattern+locale+tz）/clone/hashCode；symbols 联动（setMonths 后 MMMM 变化）
+- formatToCharacterIterator 属性 run（HOUR_OF_DAY0/ERA 等）
+- 版本锁定 zone 显示名、默认 pattern（JDK-27 时间含 NNBSP）、localized pattern 字母差异（de: uuuu-MM-tt vs yyyy-MM-dd，applyLocalizedPattern 双侧互反）

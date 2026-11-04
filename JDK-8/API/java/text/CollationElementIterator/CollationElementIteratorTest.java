@@ -78,7 +78,67 @@ public class CollationElementIteratorTest {
         check(rev.get(0).equals(fwd.get(2)) && rev.get(2).equals(fwd.get(0)), "previous() reverses order");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testDeterministicOrdersContract() {
+        RuleBasedCollator rbc = (RuleBasedCollator) java.text.Collator.getInstance(java.util.Locale.ENGLISH);
+        CollationElementIterator cei = rbc.getCollationElementIterator("abc");
+        check(0 == cei.getOffset(), "initial offset 0");
+        check(0x520000 == cei.next(), "first order for 'a'");
+        check(1 == cei.getOffset(), "offset advanced to 1");
+        check(0x530000 == cei.next(), "second order for 'b'");
+        check(0x540000 == cei.next(), "third order for 'c'");
+        check(CollationElementIterator.NULLORDER == cei.next(), "exhausted -> NULLORDER");
+        check(CollationElementIterator.NULLORDER == cei.next(), "still NULLORDER after exhaustion");
+        check(0x540000 == cei.previous(), "previous returns last order");
+    }
+
+    static void testOrderDecompositionContract() {
+        check(82 == CollationElementIterator.primaryOrder(0x520000), "primaryOrder extracts high bits");
+        check(0 == CollationElementIterator.secondaryOrder(0x520000), "secondaryOrder middle bits");
+        check(0 == CollationElementIterator.tertiaryOrder(0x520000), "tertiaryOrder low bits");
+        check(0xFFFFFFFF == CollationElementIterator.NULLORDER, "NULLORDER == 0xFFFFFFFF");
+        RuleBasedCollator rbc = (RuleBasedCollator) java.text.Collator.getInstance(java.util.Locale.ENGLISH);
+        CollationElementIterator cei = rbc.getCollationElementIterator("a");
+        int o = cei.next();
+        check(1 == cei.getMaxExpansion(o), "getMaxExpansion for simple letter is 1");
+    }
+
+    static void testOffsetControlContract() {
+        RuleBasedCollator rbc = (RuleBasedCollator) java.text.Collator.getInstance(java.util.Locale.ENGLISH);
+        CollationElementIterator cei = rbc.getCollationElementIterator("abc");
+        cei.next(); cei.next();
+        cei.setOffset(0);
+        check(0x520000 == cei.next(), "setOffset(0) rewinds to first order");
+        expectX(IllegalArgumentException.class, () -> cei.setOffset(99),
+                "setOffset beyond text -> IAE");
+        CollationElementIterator viaIter =
+                rbc.getCollationElementIterator(new java.text.StringCharacterIterator("abc"));
+        check(0x520000 == viaIter.next(), "CharacterIterator variant yields same orders");
+        expectX(NullPointerException.class, () -> rbc.getCollationElementIterator((String) null),
+                "getCollationElementIterator(null) -> NPE");
+    }
     public static void main(String[] args) throws Exception {
+        testDeterministicOrdersContract();
+        testOrderDecompositionContract();
+        testOffsetControlContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

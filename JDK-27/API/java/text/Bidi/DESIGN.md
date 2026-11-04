@@ -28,3 +28,11 @@
 - 混合链路：`"aאb"` 的 isMixed、runCount=3、逐字符 getLevelAt、run start/limit。
 - 工具链路：`requiresBidi` 对 ASCII/希伯来语真假；`reorderVisually` RTL 反转、LTR 不变；`createLineBidi` 取行。
 - 健壮性：纯文本固定、无 Locale/墙钟/随机/全局副作用。headless-safe，不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- run 结构表（纯 LTR/纯 RTL/混合 "abc אב def" 三 run [0,4)L0/[4,6)L1/[6,10)L0）
+- flag 矩阵（DEFAULT_LTR/LTR 同构、RTL 基级别反转 LTR 段升 2 级、数字段基级别 1）
+- getLevelAt 逐位表 00001100000（index 10 为基级别）
+- char[] 六参构造等价；createLineBidi(0,4) 单 run；(-1,2)/(0,99)/(5,2)→IAE；Bidi(null)→IAE；flag 99/-2 容忍不抛
+- requiresBidi(null→NPE、坏区间→IAE、纯 LTR false/混合 true)；AttributedCharacterIterator 构造

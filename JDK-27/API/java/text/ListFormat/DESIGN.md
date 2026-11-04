@@ -27,3 +27,10 @@
 - 白盒：final 类、继承 `Format`、工厂/格式化/解析方法签名存在。
 - 黑盒：SHORT/FULL 列表格式化、parse/parseObject 还原、formatToCharacterIterator 文本、getLocale/getPatterns、hashCode/equals/toString。
 - 健壮性：固定 `Locale.US`，headless-safe，不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- Type×Style 3×3 pattern 表全锁定（STANDARD FULL end "{0}, and {1}"、SHORT "&"、NARROW 无连接词、UNIT/NARROW 空格连接、OR "or"）
+- 元素数行为（1 原样/2 用 two/3 用 three/4 start+middle+end；空数组→IAE；null→NPE；非 String 走 toString；format(List) 与 Object[] 等价）
+- 自定义 5 元 pattern（空 two/three 由 start/end 推导 "x; and y"；getLocale()=Locale.ROOT；<5 pattern→IAE；null→NPE）
+- parse（parseObject 返回 List（Arrays$ArrayList 实现）idx=11；未知文本整体作单元素 err=-1；parse(String) 返回元素表）

@@ -33,3 +33,9 @@
 ## 注意事项
 
 - 纯对象构造，无 Locale/墙钟/全局副作用；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 构造链（message+errorOffset）、getErrorOffset（非 getErrorIndex）
+- errorOffset 镜像 ParsePosition.errorIndex（经 DateFormat 严格解析 "2024-02-30" err=10 实证）
+- serialVersionUID=2703218443322787634；toString 含 message+offset

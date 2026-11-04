@@ -105,7 +105,133 @@ public class DateFormatSymbolsTest {
         check(def.getAmPmStrings() != null && def.getAmPmStrings().length == 2, "no-arg ctor ampm length 2");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testEnglishDataContract() {
+        DateFormatSymbols s = new DateFormatSymbols(Locale.ENGLISH);
+        check("January".equals(s.getMonths()[0]) && "March".equals(s.getMonths()[2])
+              && "December".equals(s.getMonths()[11]) && "".equals(s.getMonths()[12]),
+              "en months table (13th slot empty)");
+        check("Jan".equals(s.getShortMonths()[0]) && "Dec".equals(s.getShortMonths()[11])
+              && "".equals(s.getShortMonths()[12]), "en shortMonths table");
+        check("Sunday".equals(s.getWeekdays()[1]) && "Saturday".equals(s.getWeekdays()[7])
+              && "".equals(s.getWeekdays()[0]), "en weekdays table (index 0 empty)");
+        check("Sun".equals(s.getShortWeekdays()[1]) && "Sat".equals(s.getShortWeekdays()[7]),
+              "en shortWeekdays table");
+        check("AM".equals(s.getAmPmStrings()[0]) && "PM".equals(s.getAmPmStrings()[1]),
+              "en am/pm table");
+        check("BC".equals(s.getEras()[0]) && "AD".equals(s.getEras()[1]), "en eras table");
+        check("GyMdkHmsSEDFwWahKzZ".equals(s.getLocalPatternChars()),
+              "en local pattern chars are the standard set");
+        check(java.util.Arrays.equals(new DateFormatSymbols(Locale.ENGLISH).getMonths(),
+              DateFormatSymbols.getInstance(Locale.ENGLISH).getMonths()),
+              "ctor(Locale) equals getInstance(Locale) data");
+    }
+
+    static void testSettersDriveFormatContract() {
+        Calendar c = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"), Locale.ENGLISH);
+        c.clear(); c.set(2024, Calendar.MARCH, 7, 14, 5, 9);
+        java.util.Date d = c.getTime();
+        DateFormatSymbols s = new DateFormatSymbols(Locale.ENGLISH);
+        String[] months = s.getMonths().clone();
+        months[2] = "MARCHXYZ";
+        s.setMonths(months);
+java.text.SimpleDateFormat f1 = new java.text.SimpleDateFormat("MMMM", s);
+        f1.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        check("MARCHXYZ".equals(f1.format(d)), "setMonths drives MMMM output");
+        s.setShortMonths(new String[]{"J","F","M","A","M","J","J","A","S","O","N","D",""});
+java.text.SimpleDateFormat f2 = new java.text.SimpleDateFormat("MMM", s);
+        f2.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        check("M".equals(f2.format(d)), "setShortMonths drives MMM output");
+        s.setAmPmStrings(new String[]{"ante", "post"});
+java.text.SimpleDateFormat f3 = new java.text.SimpleDateFormat("a", s);
+        f3.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        check("post".equals(f3.format(d)), "setAmPmStrings drives a output");
+        s.setEras(new String[]{"BCE", "CE"});
+java.text.SimpleDateFormat f4 = new java.text.SimpleDateFormat("G", s);
+        f4.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        check("CE".equals(f4.format(d)), "setEras drives G output");
+        s.setWeekdays(new String[]{"", "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"});
+java.text.SimpleDateFormat f5 = new java.text.SimpleDateFormat("EEEE", s);
+        f5.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        check("THU".equals(f5.format(d)), "setWeekdays drives EEEE output");
+        s.setShortWeekdays(new String[]{"", "Sn", "Mo", "Tu", "We", "Th", "Fr", "Sa"});
+java.text.SimpleDateFormat f6 = new java.text.SimpleDateFormat("EEE", s);
+        f6.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        check("Th".equals(f6.format(d)), "setShortWeekdays drives EEE output");
+    }
+
+    static void testZoneStringsContract() {
+        String[][] zs = new DateFormatSymbols(Locale.ENGLISH).getZoneStrings();
+        check(zs != null && zs.length > 0, "getZoneStrings non-empty");
+        boolean found = false;
+        for (String[] row : zs) if ("Asia/Shanghai".equals(row[0])) { found = true; break; }
+        check(found, "zone table contains Asia/Shanghai");
+    }
+
+    static void testEqualsHashCodeCloneContract() {
+        DateFormatSymbols a = new DateFormatSymbols(Locale.ENGLISH);
+        DateFormatSymbols b = new DateFormatSymbols(Locale.ENGLISH);
+        check(a.equals(b) && a.hashCode() == b.hashCode(), "same-locale equals/hashCode");
+        check(a.clone().equals(a), "clone equals");
+        DateFormatSymbols m = (DateFormatSymbols) a.clone();
+        m.setAmPmStrings(new String[]{"x", "y"});
+        check(!m.equals(a), "mutation breaks equality");
+        check(!a.equals(new DateFormatSymbols(Locale.GERMAN)), "different locale not equal");
+        expectX(NullPointerException.class, () -> new DateFormatSymbols(null),
+                "ctor(null) -> NPE");
+        expectX(NullPointerException.class, () -> DateFormatSymbols.getInstance(null),
+                "getInstance(null) -> NPE");
+    }
+
+    static void testVersionLockedLocaleDataContract() {
+        // JDK-8 JRE locale data
+        DateFormatSymbols de = new DateFormatSymbols(Locale.GERMAN);
+        check("M\u00E4rz".equals(de.getMonths()[2]), "de March (JRE)");
+        check(java.util.Arrays.equals(de.getShortMonths(),
+              new String[]{"Jan","Feb","M\u00E4r","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez",""}),
+              "de shortMonths without periods (JRE)");
+        check(java.util.Arrays.equals(de.getShortWeekdays(),
+              new String[]{"","So","Mo","Di","Mi","Do","Fr","Sa"}),
+              "de shortWeekdays without periods (JRE)");
+        check("v. Chr.".equals(de.getEras()[0]) && "n. Chr.".equals(de.getEras()[1]), "de eras (JRE)");
+        check("GuMtkHmsSEDFwWahKzZ".equals(de.getLocalPatternChars()),
+              "de local pattern chars use u/t (JRE)");
+        DateFormatSymbols fr = new DateFormatSymbols(Locale.FRENCH);
+        check("BC".equals(fr.getEras()[0]), "fr BC era is untranslated BC (JRE)");
+        check("GaMjkHmsSEDFwWxhKzZ".equals(fr.getLocalPatternChars()), "fr local pattern chars (JRE)");
+        DateFormatSymbols ja = new DateFormatSymbols(Locale.JAPANESE);
+        check("1".equals(ja.getShortMonths()[0]), "ja shortMonths are bare numbers (JRE)");
+        check("\u7D00\u5143\u524D".equals(ja.getEras()[0]), "ja era (JRE)");
+        DateFormatSymbols root = new DateFormatSymbols(Locale.ROOT);
+        check("January".equals(root.getMonths()[0]), "ROOT months are long names (JRE)");
+        check("BC".equals(root.getEras()[0]) && "AD".equals(root.getEras()[1]), "ROOT eras BC/AD (JRE)");
+        check(new DateFormatSymbols(Locale.ENGLISH).getZoneStrings().length == 589,
+              "en zone table size (JRE data, JDK-8u372)");
+    }
     public static void main(String[] args) throws Exception {
+        testEnglishDataContract();
+        testSettersDriveFormatContract();
+        testZoneStringsContract();
+        testEqualsHashCodeCloneContract();
+        testVersionLockedLocaleDataContract();
         testWhiteBox();
         testUsSymbols();
         testMutation();

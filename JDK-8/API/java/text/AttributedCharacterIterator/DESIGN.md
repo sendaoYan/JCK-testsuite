@@ -39,3 +39,10 @@
 ## 注意事项
 
 - 无 Locale/墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- Attribute 常量 toString 精确 + Format.Field 族子类关系
+- 组合 run 边界表（READING [0,5) + LANG 全文 → runs [0,5)/[5,11)）；缺席属性 run=最大稳定跨度
+- 过滤迭代器（指定属性子集 + 范围 [6,11)：隐藏未列出属性、getAllAttributeKeys 只列已选、setIndex 边界 IAE）
+- Annotation 属性值经迭代器往返

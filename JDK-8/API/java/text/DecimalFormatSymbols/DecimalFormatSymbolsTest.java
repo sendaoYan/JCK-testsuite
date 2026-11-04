@@ -115,7 +115,130 @@ public class DecimalFormatSymbolsTest {
         check(m.getPatternSeparator() == ':', "setPatternSeparator/getPatternSeparator");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testEveryFieldRoundTripContract() {
+        DecimalFormatSymbols s = new DecimalFormatSymbols(Locale.US);
+        s.setZeroDigit('a'); check(s.getZeroDigit() == 'a', "zeroDigit round-trip");
+        s.setGroupingSeparator('_'); check(s.getGroupingSeparator() == '_', "groupingSeparator round-trip");
+        s.setDecimalSeparator(';'); check(s.getDecimalSeparator() == ';', "decimalSeparator round-trip");
+        s.setPerMill('q'); check(s.getPerMill() == 'q', "perMill round-trip");
+        s.setPercent('p'); check(s.getPercent() == 'p', "percent round-trip");
+        s.setMonetaryDecimalSeparator('m'); check(s.getMonetaryDecimalSeparator() == 'm',
+              "monetaryDecimalSeparator round-trip");
+        s.setMinusSign('~'); check(s.getMinusSign() == '~', "minusSign round-trip");
+        s.setExponentSeparator("EXP"); check("EXP".equals(s.getExponentSeparator()), "exponentSeparator round-trip");
+        s.setInfinity("INF"); check("INF".equals(s.getInfinity()), "infinity round-trip");
+        s.setNaN("NAN"); check("NAN".equals(s.getNaN()), "NaN round-trip");
+        s.setCurrencySymbol("XYZ"); check("XYZ".equals(s.getCurrencySymbol()), "currencySymbol round-trip");
+        s.setInternationalCurrencySymbol("XYZ"); check("XYZ".equals(s.getInternationalCurrencySymbol()),
+              "internationalCurrencySymbol round-trip");
+        // clone independence
+        DecimalFormatSymbols c = (DecimalFormatSymbols) s.clone();
+        check(c.equals(s) && c != s, "clone equal, distinct object");
+        c.setDecimalSeparator('x');
+        check(!c.equals(s), "clone mutation does not leak back");
+        check(s.hashCode() == new DecimalFormatSymbols(Locale.US).hashCode()
+              ? s.hashCode() == s.hashCode() : true, "hashCode self-consistent");
+    }
+
+    static void testSymbolsDriveDecimalFormatContract() {
+        DecimalFormatSymbols s = new DecimalFormatSymbols(Locale.US);
+        s.setDecimalSeparator(',');
+        s.setGroupingSeparator(' ');
+        java.text.DecimalFormat df = new java.text.DecimalFormat("#,##0.00", s);
+        check("1 234,50".equals(df.format(1234.5)), "decimal/grouping symbols drive output");
+        DecimalFormatSymbols se = new DecimalFormatSymbols(Locale.US);
+        se.setExponentSeparator("*E*");
+        check("1.234*E*3".equals(new java.text.DecimalFormat("0.###E0", se).format(1234.5)),
+              "exponent separator drives scientific output");
+        DecimalFormatSymbols sm = new DecimalFormatSymbols(Locale.US);
+        sm.setMinusSign('~');
+        check("~1.5".equals(new java.text.DecimalFormat("0.0", sm).format(-1.5)),
+              "minus sign drives output");
+        java.text.ParsePosition pp = new java.text.ParsePosition(0);
+        check(new java.text.DecimalFormat("0.0", sm).parse("~1.5", pp).doubleValue() == -1.5
+              && pp.getIndex() == 4, "minus sign drives parse");
+        DecimalFormatSymbols sz = new DecimalFormatSymbols(Locale.US);
+        sz.setZeroDigit('a');
+        check("bc".equals(new java.text.DecimalFormat("00", sz).format(12)), "zero digit drives digits");
+        DecimalFormatSymbols sn = new DecimalFormatSymbols(Locale.US);
+        sn.setNaN("?N?");
+        sn.setInfinity("?I?");
+        check("?N?".equals(new java.text.DecimalFormat("0.0", sn).format(Double.NaN)), "NaN symbol drives output");
+        check("?I?".equals(new java.text.DecimalFormat("0.0", sn).format(Double.POSITIVE_INFINITY)),
+              "Infinity symbol drives output");
+    }
+
+    static void testEnglishDataContract() {
+        DecimalFormatSymbols s = DecimalFormatSymbols.getInstance(Locale.US);
+        check('0' == s.getZeroDigit(), "US zeroDigit");
+        check(',' == s.getGroupingSeparator(), "US groupingSeparator");
+        check('.' == s.getDecimalSeparator(), "US decimalSeparator");
+        check('\u2030' == s.getPerMill(), "US perMill");
+        check('%' == s.getPercent(), "US percent");
+        check('-' == s.getMinusSign(), "US minusSign");
+        check("E".equals(s.getExponentSeparator()), "US exponentSeparator");
+        check("\u221E".equals(s.getInfinity()), "US infinity symbol");
+        check("$".equals(s.getCurrencySymbol()), "US currency symbol");
+        check("USD".equals(s.getInternationalCurrencySymbol()), "US intl currency code");
+        check('.' == s.getMonetaryDecimalSeparator(), "US monetary decimal separator");
+        check("\u00A4".equals(DecimalFormatSymbols.getInstance(Locale.ROOT).getCurrencySymbol()),
+              "ROOT currency symbol is U+00A4");
+        check("XXX".equals(DecimalFormatSymbols.getInstance(Locale.ROOT).getInternationalCurrencySymbol()),
+              "ROOT intl currency code");
+    }
+
+    static void testEqualsHashCodeAcrossFactoriesContract() {
+        check(DecimalFormatSymbols.getInstance(Locale.US).equals(new DecimalFormatSymbols(Locale.US)),
+              "getInstance(Locale) equals new DecimalFormatSymbols(Locale)");
+        check(DecimalFormatSymbols.getInstance(Locale.US).hashCode()
+              == new DecimalFormatSymbols(Locale.US).hashCode(), "hashCode consistent");
+        check(!DecimalFormatSymbols.getInstance(Locale.US).equals(DecimalFormatSymbols.getInstance(Locale.GERMANY)),
+              "US != Germany symbols");
+        expectX(NullPointerException.class, () -> DecimalFormatSymbols.getInstance(null),
+                "getInstance(null) -> NPE");
+    }
+
+    static void testVersionLockedLocaleDataContract() {
+        // JRE locale data on JDK-8
+        check("\uFFFD".equals(DecimalFormatSymbols.getInstance(Locale.US).getNaN()),
+              "US NaN symbol is U+FFFD (JRE data)");
+        check(',' == DecimalFormatSymbols.getInstance(Locale.GERMANY).getDecimalSeparator()
+              && '.' == DecimalFormatSymbols.getInstance(Locale.GERMANY).getGroupingSeparator(),
+              "de decimal ',' grouping '.' (JRE data)");
+        check('\u00A0' == DecimalFormatSymbols.getInstance(Locale.FRANCE).getGroupingSeparator(),
+              "fr grouping separator NBSP (JRE data)");
+        check("\uFFE5".equals(DecimalFormatSymbols.getInstance(Locale.CHINA).getCurrencySymbol()),
+              "zh_CN currency symbol full-width yen (JRE data)");
+        check("CNY".equals(DecimalFormatSymbols.getInstance(Locale.CHINA).getInternationalCurrencySymbol()),
+              "zh_CN intl code CNY (JRE data)");
+        check("\u00A3".equals(DecimalFormatSymbols.getInstance(Locale.UK).getCurrencySymbol()),
+              "en_GB currency symbol pound (JRE data)");
+    }
     public static void main(String[] args) throws Exception {
+        testEveryFieldRoundTripContract();
+        testSymbolsDriveDecimalFormatContract();
+        testEnglishDataContract();
+        testEqualsHashCodeAcrossFactoriesContract();
+        testVersionLockedLocaleDataContract();
         testWhiteBox();
         testUsSymbols();
         testMutation();

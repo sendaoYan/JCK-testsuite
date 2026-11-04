@@ -44,3 +44,11 @@
 ## 注意事项
 
 - 无 Locale 依赖（数值区间）；无默认 Locale/墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- double[]/String[] 构造等长校验 + format 边界表（limit 含/不含、'< ' vs '#'）
+- nextDouble/previousDouble 全表（含 ±∞/0/MAX/MIN）
+- 特殊值 format（-0.0/NaN/-∞ 取第一段）
+- parse 往返；applyPattern 往返 + 未排序 limits
+- 版本锁定非法 pattern：JDK-8 applyPattern 非法数字 → IllegalArgumentException，JDK-27 → NumberFormatException（差异记录）

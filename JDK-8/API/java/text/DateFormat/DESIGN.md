@@ -43,3 +43,11 @@
 ## 注意事项
 
 - 固定 Locale.US + UTC + EPOCH；无墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 样式常量 FULL=0/LONG=1/MEDIUM=2/SHORT=3/DEFAULT=2 + 全字段常量抽查
+- getDate/getTime/getDateTime × 4 样式 × ENGLISH 输出（每侧全等串锁定）
+- parse 往返（SHORT 文本→1709769600000L）；calendar/timeZone 接线
+- null/非法参数（getDateInstance(-1)→IAE、setCalendar(null)→NPE）
+- 版本锁定：JDK-27 时间样式 NNBSP/逗号、ja FULL 日期带星期几（JDK-8 无）——各自断言

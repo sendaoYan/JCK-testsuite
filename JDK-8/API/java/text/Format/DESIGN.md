@@ -40,3 +40,9 @@
 ## 注意事项
 
 - 固定 Locale.US；自定义子类（UpperFormat）避免依赖具体 format 类；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 自定义子类模板方法链（format(Object, StringBuffer, FieldPosition) 委托、formatToCharacterIterator、parseObject 双参/单参）
+- parseObject 返回 null → ParseException（errorOffset）
+- clone/equals；抽象契约（不可实例化）

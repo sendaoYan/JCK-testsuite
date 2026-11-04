@@ -39,3 +39,10 @@ begin, end, pos)` 限定子区间。链路：first -> current/next 循环 -> DON
 | setIndex 校验 | setIndex(-1)/setIndex(len+1) 抛 IllegalArgumentException |
 
 共 8 组场景、约 25 个 check（`testBlackBox()`）。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- DONE 常量 \uFFFF；接口全抽象 + Cloneable
+- 多态契约（经 AttributedString.getIterator 的另一实现验证同一导航/DONE/clone 表）
+- 范围迭代器（begin=6/end=11、setIndex 越界 IAE、setIndex(end) 合法 DONE）
+- 空/单字符迭代器边界

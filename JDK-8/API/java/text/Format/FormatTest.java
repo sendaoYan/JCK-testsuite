@@ -190,7 +190,74 @@ public class FormatTest {
         }
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testTemplateMethodChainContract() throws java.text.ParseException {
+        Format f = new Format() {
+            public StringBuffer format(Object obj, StringBuffer to, java.text.FieldPosition pos) {
+                return to.append("F").append(obj);
+            }
+            public Object parseObject(String src, java.text.ParsePosition status) {
+                if (status.getIndex() >= src.length()) return null;
+                status.setIndex(1);
+                return "P" + src;
+            }
+        };
+        check("Fx".equals(f.format("x")), "format(Object) delegates to 3-arg format");
+        java.text.ParsePosition pp = new java.text.ParsePosition(0);
+        check("Pq".equals(f.parseObject("q", pp)) && pp.getIndex() == 1,
+              "parseObject(String,PP) drives index");
+        check("Pq".equals(f.parseObject("q")), "parseObject(String) convenience delegates");
+        // returning null with untouched index -> ParseException with errorOffset 0
+        expectX(java.text.ParseException.class, () -> f.parseObject(""),
+                "null result from delegate -> ParseException");
+        check(f.clone() != null && f.clone() instanceof Format, "clone works");
+        check(f.equals(f), "equals self");
+        check(!f.equals(null), "equals(null) false");
+    }
+
+    static void testDefaultFormatToCharacterIteratorContract() {
+        Format f = new Format() {
+            public StringBuffer format(Object obj, StringBuffer to, java.text.FieldPosition pos) {
+                return to.append(obj);
+            }
+            public Object parseObject(String src, java.text.ParsePosition status) { return null; }
+        };
+        AttributedCharacterIterator it = f.formatToCharacterIterator("yz");
+        StringBuilder sb = new StringBuilder();
+        for (char ch = it.first(); ch != AttributedCharacterIterator.DONE; ch = it.next()) sb.append(ch);
+        check("yz".equals(sb.toString()), "default iterator yields format() output");
+        it.first();
+        check(it.getAttributes().isEmpty(), "default iterator carries no attributes");
+    }
+
+    static void testFieldSubclassContract() {
+        java.text.Format.Field a = new java.text.Format.Field("custom") {};
+        check(a.toString() != null, "Format.Field toString non-null");
+        java.text.Format.Field b = new java.text.Format.Field("custom") {};
+        check(!a.equals(b), "Format.Field equality is identity-based");
+    }
     public static void main(String[] args) throws Exception {
+        testTemplateMethodChainContract();
+        testDefaultFormatToCharacterIteratorContract();
+        testFieldSubclassContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

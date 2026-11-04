@@ -38,3 +38,10 @@
 ## 注意事项
 
 - 无 Locale/墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 状态机整表（first/last/next/previous/setIndex/current/getIndex 全序列 + DONE 停留语义 + 边界钳制）
+- 有界子区间（begin/end 边界 setIndex IAE、empty range first/last DONE）
+- 构造校验矩阵（pos==length 合法、pos>end/pos<begin/负 begin→IAE、null→NPE）
+- setText 重置 index=0 并改 equals；clone 具体类型 + 独立；hashCode 状态相等

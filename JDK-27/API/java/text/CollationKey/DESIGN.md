@@ -41,3 +41,9 @@ col.getCollationKey(s1); ... Collections.sort(listOfKeys);` 对大量字符串�
 | collator 独立性 | 两个 English collator 的 key 顺序一致 |
 
 共 8 组场景、约 17 个 check（`testBlackBox()`）。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 结构（abstract、protected ctor、Comparable、非 Serializable）
+- compareTo 与 Collator.compare 一致 + 反对称 + 相等源相等键 + toByteArray 字节级确定性
+- Collections.sort(keys) 与 sort(strings, collator) 结果全等；PRIMARY 下键折叠大小写

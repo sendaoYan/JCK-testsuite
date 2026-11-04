@@ -24,3 +24,11 @@
 - 白盒：抽象类、继承 `LocaleServiceProvider`、无公开构造器、`getInstance(Locale)` 签名存在。
 - 黑盒：匿名子类断言 `getAvailableLocales`、`isSupportedLocale` 真假、`getInstance` 返回非空 `DateFormatSymbols`。
 - 健壮性：固定 `Locale.US/FRANCE`，headless-safe，不加 `@key`。
+
+## 契约深化（本批新增）
+
+- getInstance(Locale) + isSupportedLocale 矩阵 + 每次调用返回独立实例（mutate setMonths 不影响下次）+ months/eras 表与框架全等 + 可驱动 SimpleDateFormat（MMMM→March）
+
+### 版本差异记录
+
+- isSupportedLocale(en-US-u-ca-buddhist) 双侧一致为 true（默认实现剥离 BCP-47 扩展后匹配）；getMethods 名称集合两侧相同（仅声明顺序不同）。

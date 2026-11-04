@@ -28,3 +28,9 @@
 - 白盒：final 类、无公开构造器、`NULLORDER=-1`、迭代/拆解方法签名存在。
 - 黑盒：`next()` 前进、`previous()` 返回前一元素并反向遍历、`reset/setOffset/setText` 归位、`primaryOrder/secondaryOrder/tertiaryOrder/getMaxExpansion` 非负。
 - 健壮性：固定规则 `< a < b < c`、固定输入，headless-safe，不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 确定性 order 表（"abc"→0x520000/0x530000/0x540000，primary=82，NULLORDER=0xFFFFFFFF）
+- offset 控制（next 前进、previous 回退、setOffset(0) 回卷、setOffset(99)→IAE）
+- primary/secondary/tertiary 位分解；getMaxExpansion；CharacterIterator 源等价；null→NPE

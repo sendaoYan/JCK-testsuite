@@ -53,3 +53,9 @@ pos.index/errorIndex -> parseObject(src) -> ParseException.getErrorOffset()`。
 | 序列化 | DecimalFormat 往返后经 Format 引用 format 结果一致 |
 
 共 8 组场景、约 25 个 check（`testBlackBox()`）。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 自定义子类模板方法链（format(Object, StringBuffer, FieldPosition) 委托、formatToCharacterIterator、parseObject 双参/单参）
+- parseObject 返回 null → ParseException（errorOffset）
+- clone/equals；抽象契约（不可实例化）

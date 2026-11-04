@@ -158,7 +158,95 @@ public class AttributedCharacterIteratorTest {
         return 3;
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testAttributeClassContract() {
+        check("java.text.AttributedCharacterIterator$Attribute(language)".equals(LANG.toString()),
+              "LANGUAGE toString exact");
+        check("java.text.AttributedCharacterIterator$Attribute(reading)".equals(READ.toString()),
+              "READING toString exact");
+        check(LANG != READ, "constants are distinct singletons");
+        check(LANG == AttributedCharacterIterator.Attribute.LANGUAGE, "constant identity");
+        check(AttributedCharacterIterator.Attribute.class
+                      .isAssignableFrom(java.text.Format.Field.class),
+              "Format.Field extends Attribute");
+        check(AttributedCharacterIterator.Attribute.class
+                      .isAssignableFrom(java.text.NumberFormat.Field.class)
+              && AttributedCharacterIterator.Attribute.class
+                      .isAssignableFrom(java.text.DateFormat.Field.class)
+              && AttributedCharacterIterator.Attribute.class
+                      .isAssignableFrom(java.text.MessageFormat.Field.class),
+              "all Format field-key subclasses extend Attribute");
+        check(LANG.equals(LANG) && !LANG.equals(READ) && !LANG.equals(null),
+              "Attribute identity equals semantics");
+    }
+
+    static void testAbsentAttributeRunContract() {
+        AttributedString as = new AttributedString("hello world");
+        as.addAttribute(LANG, java.util.Locale.FRENCH);
+        as.addAttribute(READ, "r", 0, 5);
+        AttributedCharacterIterator it = as.getIterator();
+        it.setIndex(7);
+        check(it.getRunStart() == 5 && it.getRunLimit() == 11,
+              "combined run at 7 is [5,11) (READING absent)");
+        check(it.getRunStart(READ) == 5 && it.getRunLimit(READ) == 11,
+              "run of absent attribute = maximal constant span [5,11)");
+        check(it.getRunStart(LANG) == 0 && it.getRunLimit(LANG) == 11,
+              "run of whole-text attribute is [0,11)");
+        check(it.getAttribute(READ) == null, "absent attribute reads null");
+        check(it.getAttribute(null) == null, "getAttribute(null) returns null");
+    }
+
+    static void testFilteredIteratorContract() {
+        AttributedString as = new AttributedString("hello world");
+        as.addAttribute(LANG, java.util.Locale.FRENCH);
+        as.addAttribute(READ, "r", 0, 5);
+        AttributedCharacterIterator it =
+                as.getIterator(new AttributedCharacterIterator.Attribute[] {LANG}, 6, 11);
+        check(it.getBeginIndex() == 6 && it.getEndIndex() == 11, "filtered iterator bounds");
+        check(it.first() == 'w', "filtered first 'w'");
+        check(java.util.Locale.FRENCH.equals(it.getAttribute(LANG)),
+              "filtered iterator keeps listed attribute");
+        check(it.getAttribute(READ) == null, "filtered iterator hides unlisted attribute");
+        check(it.getAllAttributeKeys().size() == 1 && it.getAllAttributeKeys().contains(LANG),
+              "filtered iterator exposes only the listed key");
+        expectX(IllegalArgumentException.class, () -> it.setIndex(5),
+                "filtered setIndex below begin -> IAE");
+        it.setIndex(11);
+        check(it.current() == CharacterIterator.DONE, "filtered setIndex(end) DONE");
+        check(it.getRunStart() == 11 && it.getRunLimit() == 11, "run at end position is empty span");
+    }
+
+    static void testAnnotationValueRoundTripContract() {
+        AttributedString as = new AttributedString("x");
+        as.addAttribute(READ, new java.text.Annotation("secret"));
+        AttributedCharacterIterator it = as.getIterator();
+        Object v = it.getAttribute(READ);
+        check(v instanceof java.text.Annotation, "Annotation survives iteration");
+        check("secret".equals(((java.text.Annotation) v).getValue()), "Annotation value round-trip");
+    }
     public static void main(String[] args) throws Exception {
+        testAttributeClassContract();
+        testAbsentAttributeRunContract();
+        testFilteredIteratorContract();
+        testAnnotationValueRoundTripContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

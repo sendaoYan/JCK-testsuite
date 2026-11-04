@@ -43,3 +43,9 @@ ctor -> 传入 format(...) -> format 填 begin/end -> 按字段切子串 -> equa
   FRACTION 属性 span==[dot+1,len)，且 getFieldAttribute 返回原实例 |
 
 共 5 组场景、约 25 个 check（`testBlackBox()`）。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 构造（int 字段 / Format.Field）+ format 填充 begin/end 精确（1234.56 的 INTEGER [0,6)/FRACTION [7,9) 含符号位）
+- setBeginIndex/setEndIndex 手动；getField/getFieldAttribute；toString 精确格式
+- equals/hashCode（field+attribute+begin+end）

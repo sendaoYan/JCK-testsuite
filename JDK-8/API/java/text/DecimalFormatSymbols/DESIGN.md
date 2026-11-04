@@ -43,3 +43,10 @@
 ## 注意事项
 
 - 固定 Locale.US；无墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 全字段 get/set round-trip（分隔符/minus/percent/perMill/digits/exponent/Infinity/NaN/货币符/货币代码）
+- 符号→DecimalFormat 输出联动实证（改 decimalSeparator 后 format(1.5) 变化）
+- equals/hashCode 跨工厂一致；clone 深拷贝独立
+- 版本锁定 en 数据 + de/fr/ja 全等串（CLDR 差异记录于差异表）

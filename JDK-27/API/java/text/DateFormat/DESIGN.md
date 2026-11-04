@@ -31,3 +31,11 @@
 - 属性链路：`setTimeZone/getTimeZone`、`setCalendar/getCalendar`、`setNumberFormat/getNumberFormat` 的注入与回读。
 - 契约：`clone` 后 `equals` 为真且 `hashCode` 相等；不同样式/日期与日期时间不相等。
 - 健壮性：无墙钟（固定 Date(0)）、固定 locale/timezone、无全局副作用、无文件/网络/端口。headless-safe，不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 样式常量 FULL=0/LONG=1/MEDIUM=2/SHORT=3/DEFAULT=2 + 全字段常量抽查
+- getDate/getTime/getDateTime × 4 样式 × ENGLISH 输出（每侧全等串锁定）
+- parse 往返（SHORT 文本→1709769600000L）；calendar/timeZone 接线
+- null/非法参数（getDateInstance(-1)→IAE、setCalendar(null)→NPE）
+- 版本锁定：JDK-27 时间样式 NNBSP/逗号、ja FULL 日期带星期几（JDK-8 无）——各自断言

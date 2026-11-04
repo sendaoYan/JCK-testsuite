@@ -37,3 +37,9 @@
 ## 注意事项
 
 - 无 Locale 依赖（规则显式给出）；无墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 确定性 order 表（"abc"→0x520000/0x530000/0x540000，primary=82，NULLORDER=0xFFFFFFFF）
+- offset 控制（next 前进、previous 回退、setOffset(0) 回卷、setOffset(99)→IAE）
+- primary/secondary/tertiary 位分解；getMaxExpansion；CharacterIterator 源等价；null→NPE

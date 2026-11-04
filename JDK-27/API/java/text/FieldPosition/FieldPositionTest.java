@@ -137,7 +137,69 @@ public class FieldPositionTest {
                 .equals(na.toString()), "toString field -1");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testFormatDrivenPositionsContract() {
+        DecimalFormat df = new DecimalFormat("#,##0.00", java.text.DecimalFormatSymbols.getInstance(Locale.US));
+        java.text.FieldPosition frac = new java.text.FieldPosition(NumberFormat.Field.FRACTION);
+        StringBuffer out = df.format(1234.56, new StringBuffer(), frac);
+        check("1,234.56".equals(out.toString()), "formatted text");
+        check(frac.getBeginIndex() == 6 && frac.getEndIndex() == 8, "FRACTION [6,8)");
+        java.text.FieldPosition intg = new java.text.FieldPosition(NumberFormat.Field.INTEGER);
+        df.format(-1234.56, new StringBuffer(), intg);
+        check(intg.getBeginIndex() == 1 && intg.getEndIndex() == 6, "INTEGER [1,6) sign excluded");
+        java.text.FieldPosition legacy = new java.text.FieldPosition(NumberFormat.INTEGER_FIELD);
+        df.format(1234.56, new StringBuffer(), legacy);
+        check(legacy.getField() == 0 && legacy.getBeginIndex() == 0 && legacy.getEndIndex() == 5,
+              "legacy int field [0,5)");
+        java.text.FieldPosition sign = new java.text.FieldPosition(NumberFormat.Field.SIGN);
+        df.format(-1234.56, new StringBuffer(), sign);
+        check(sign.getBeginIndex() == 0 && sign.getEndIndex() == 1, "SIGN [0,1)");
+    }
+
+    static void testEqualsHashCodeToStringContract() {
+        java.text.FieldPosition a = new java.text.FieldPosition(NumberFormat.Field.INTEGER);
+        java.text.FieldPosition b = new java.text.FieldPosition(NumberFormat.Field.INTEGER);
+        check(a.equals(b) && a.hashCode() == b.hashCode(), "equal field attrs");
+        check(!a.equals(new java.text.FieldPosition(NumberFormat.Field.FRACTION)),
+              "different field attr not equal");
+        check(!new java.text.FieldPosition(3).equals(new java.text.FieldPosition(4)),
+              "different int field not equal");
+        java.text.FieldPosition f = new java.text.FieldPosition(3);
+        f.setBeginIndex(9); f.setEndIndex(11);
+        check(f.getBeginIndex() == 9 && f.getEndIndex() == 11, "setBeginIndex/setEndIndex");
+        check("java.text.FieldPosition[field=3,attribute=null,beginIndex=9,endIndex=11]"
+              .equals(f.toString()), "toString exact format");
+        check(new java.text.FieldPosition(0).getBeginIndex() == 0
+              && new java.text.FieldPosition(0).getEndIndex() == 0, "default positions 0");
+        check(java.text.FieldPosition.class.getAnnotation(Deprecated.class) == null,
+              "not deprecated");
+        check(!java.io.Serializable.class.isAssignableFrom(java.text.FieldPosition.class),
+              "FieldPosition is not Serializable");
+        check(new java.text.FieldPosition(7).getField() == 7, "int ctor getField");
+        check(new java.text.FieldPosition(NumberFormat.Field.INTEGER).getFieldAttribute()
+              == NumberFormat.Field.INTEGER, "field ctor getFieldAttribute identity");
+    }
     public static void main(String[] args) throws Exception {
+        testFormatDrivenPositionsContract();
+        testEqualsHashCodeToStringContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

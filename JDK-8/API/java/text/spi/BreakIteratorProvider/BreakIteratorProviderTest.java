@@ -46,7 +46,75 @@ public class BreakIteratorProviderTest {
         check(p.getSentenceInstance(Locale.US) != null, "getSentenceInstance");
     }
 
-    public static void main(String[] args) {
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    static void assertSupportedLocaleMatrix(java.util.spi.LocaleServiceProvider p, String tag) {
+        check(p.isSupportedLocale(Locale.US), tag + ": isSupportedLocale(US) true");
+        check(!p.isSupportedLocale(Locale.ENGLISH),
+              tag + ": isSupportedLocale(en) false (only en_US advertised)");
+        check(p.isSupportedLocale(Locale.forLanguageTag("en-US-u-ca-buddhist")),
+              tag + ": language-tag extensions are stripped before matching");
+        check(!p.isSupportedLocale(Locale.FRANCE), tag + ": isSupportedLocale(fr_FR) false");
+        check(!p.isSupportedLocale(new Locale("xx", "YY")), tag + ": unknown locale false");
+        expectX(NullPointerException.class, () -> p.isSupportedLocale(null),
+                tag + ": isSupportedLocale(null) -> NPE");
+    }
+
+    static void testSpiClassStructureContract(Class<?> c, String[] factoryMethods, Class<?>[][] params)
+            throws Exception {
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), c.getName() + " abstract");
+        check(c.getSuperclass().getName().equals("java.util.spi.LocaleServiceProvider"),
+              c.getName() + " extends LocaleServiceProvider");
+        check(c.getConstructors().length == 0, "no public constructor (SPI, not instantiated directly)");
+        for (int i = 0; i < factoryMethods.length; i++) {
+            check(c.getMethod(factoryMethods[i], params[i]) != null,
+                  "declares " + factoryMethods[i] + java.util.Arrays.toString(params[i]));
+        }
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (java.lang.reflect.Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getAvailableLocales") && names.contains("isSupportedLocale"),
+              "inherits LocaleServiceProvider availability protocol");
+    }
+
+    static void testContractDeepening() throws Exception {
+        testSpiClassStructureContract(java.text.spi.BreakIteratorProvider.class,
+                new String[] {"getWordInstance", "getLineInstance", "getCharacterInstance", "getSentenceInstance"},
+                new Class<?>[][] {{Locale.class}, {Locale.class}, {Locale.class}, {Locale.class}});
+
+        java.text.spi.BreakIteratorProvider p = new java.text.spi.BreakIteratorProvider() {
+            public Locale[] getAvailableLocales() { return new Locale[]{Locale.US}; }
+            public java.text.BreakIterator getWordInstance(Locale l) { return java.text.BreakIterator.getWordInstance(Locale.US); }
+            public java.text.BreakIterator getLineInstance(Locale l) { return java.text.BreakIterator.getLineInstance(Locale.US); }
+            public java.text.BreakIterator getCharacterInstance(Locale l) { return java.text.BreakIterator.getCharacterInstance(Locale.US); }
+            public java.text.BreakIterator getSentenceInstance(Locale l) { return java.text.BreakIterator.getSentenceInstance(Locale.US); }
+        };
+        assertSupportedLocaleMatrix(p, "BIP");
+        java.text.BreakIterator wi = p.getWordInstance(Locale.CANADA);
+        wi.setText("Hello, world. Foo.");
+        check(wi.first() == 0 && wi.next() == 5, "word instance returned by provider is functional");
+        check(p.getLineInstance(Locale.CANADA) != null && p.getCharacterInstance(Locale.CANADA) != null
+              && p.getSentenceInstance(Locale.CANADA) != null,
+              "factory methods accept any locale argument (no validation contract)");
+        check(p.getAvailableLocales().length == 1 && p.getAvailableLocales()[0] == Locale.US,
+              "getAvailableLocales returns the advertised array");
+    }
+    public static void main(String[] args) throws Exception {
+        testContractDeepening();
         testBreakIteratorProvider();
         System.out.println("PASS (" + passed + " assertions)");
     }

@@ -109,7 +109,94 @@ public class NormalizerTest {
         check(Normalizer.normalize("ﬃ", Form.NFKC).equals("ffi"), "NFKC ligature -> ffi");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+    // 11-sample table x 4 forms, byte-identical between JDK-8 (legacy ICU) and JDK-27 (CLDR/ICD)
+
+    static void testFormTableContract() {
+        String[][] table = {
+            // {input, NFD, NFC, NFKD, NFKC}
+            {"\u00E9", "e\u0301", "\u00E9", "e\u0301", "\u00E9"},
+            {"e\u0301", "e\u0301", "\u00E9", "e\u0301", "\u00E9"},
+            {"\u00BD", "\u00BD", "\u00BD", "1\u20442", "1\u20442"},
+            {"\uFF21", "\uFF21", "\uFF21", "A", "A"},
+            {"\uFB01", "\uFB01", "\uFB01", "fi", "fi"},
+            {"\u2126", "\u03A9", "\u03A9", "\u03A9", "\u03A9"},
+            {"\u304C", "\u304B\u3099", "\u304C", "\u304B\u3099", "\u304C"},
+            {"\u304B\u3099", "\u304B\u3099", "\u304C", "\u304B\u3099", "\u304C"},
+            {"A\u0300", "A\u0300", "\u00C0", "A\u0300", "\u00C0"},
+            {"\u00C5", "A\u030A", "\u00C5", "A\u030A", "\u00C5"},
+            {"A\u030A", "A\u030A", "\u00C5", "A\u030A", "\u00C5"},
+        };
+        Normalizer.Form[] forms = {Normalizer.Form.NFD, Normalizer.Form.NFC,
+                Normalizer.Form.NFKD, Normalizer.Form.NFKC};
+        for (String[] row : table) {
+            String in = row[0];
+            for (int f = 0; f < 4; f++) {
+                String out = Normalizer.normalize(in, forms[f]);
+                check(out.equals(row[f + 1]),
+                      "normalize(" + escape(in) + "," + forms[f] + ") == " + escape(row[f + 1]));
+                check(out.length() == row[f + 1].length(),
+                      "length under " + forms[f] + " for " + escape(in));
+                check(Normalizer.isNormalized(out, forms[f]),
+                      "normalized output is idempotent under " + forms[f]);
+                check(Normalizer.isNormalized(in, forms[f]) == in.equals(row[f + 1]),
+                      "isNormalized consistent with normalize().equals() for " + escape(in));
+            }
+        }
+    }
+
+    static String escape(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (char c : s.toCharArray()) sb.append(String.format("\\u%04X", (int) c));
+        return sb.toString();
+    }
+
+    static void testFormEnumContract() {
+        Normalizer.Form[] vals = Normalizer.Form.values();
+        check(vals.length == 4, "exactly 4 forms");
+        check(vals[0] == Normalizer.Form.NFD && vals[0].ordinal() == 0, "NFD ordinal 0");
+        check(vals[1] == Normalizer.Form.NFC && vals[1].ordinal() == 1, "NFC ordinal 1");
+        check(vals[2] == Normalizer.Form.NFKD && vals[2].ordinal() == 2, "NFKD ordinal 2");
+        check(vals[3] == Normalizer.Form.NFKC && vals[3].ordinal() == 3, "NFKC ordinal 3");
+        check(Normalizer.Form.valueOf("NFC") == Normalizer.Form.NFC, "valueOf NFC");
+        expectX(IllegalArgumentException.class, () -> Normalizer.Form.valueOf("bogus"),
+                "valueOf(bogus) -> IAE");
+        check("NFD".equals(Normalizer.Form.NFD.name()), "name NFD");
+    }
+
+    static void testCharSequenceOverloadContract() {
+        StringBuilder sb = new StringBuilder("e\u0301");
+        String nfc = Normalizer.normalize(sb, Normalizer.Form.NFC);
+        check(nfc.length() == 1 && nfc.charAt(0) == '\u00E9',
+              "normalize accepts any CharSequence (StringBuilder)");
+        check(Normalizer.isNormalized(new StringBuilder("abc"), Normalizer.Form.NFC),
+              "isNormalized accepts any CharSequence");
+        check("".equals(Normalizer.normalize("", Normalizer.Form.NFKC)), "empty stays empty");
+        check(Normalizer.isNormalized("", Normalizer.Form.NFD), "empty is normalized");
+        check("abc".equals(Normalizer.normalize("abc", Normalizer.Form.NFKC)),
+              "pure ASCII unchanged under all forms");
+    }
     public static void main(String[] args) throws Exception {
+        testFormTableContract();
+        testFormEnumContract();
+        testCharSequenceOverloadContract();
         testWhiteBox();
         testCanonicalComposition();
         testCompatibilityComposition();

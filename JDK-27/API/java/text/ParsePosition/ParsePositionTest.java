@@ -137,7 +137,51 @@ public class ParsePositionTest {
                 .equals(new ParsePosition(Integer.MAX_VALUE).toString()), "toString MAX_VALUE index");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    static void testNonSerializableContract() {
+        check(!java.io.Serializable.class.isAssignableFrom(java.text.ParsePosition.class),
+              "ParsePosition is not Serializable");
+    }
+
+    static void testHashCodeSemanticsContract() {
+        java.text.ParsePosition a = new java.text.ParsePosition(7);
+        a.setErrorIndex(2);
+        java.text.ParsePosition b = new java.text.ParsePosition(7);
+        b.setErrorIndex(3);
+        check(a.hashCode() != b.hashCode(),
+              "hashCode distinguishes errorIndex (equals-compatible)");
+        java.text.ParsePosition c = new java.text.ParsePosition(7);
+        c.setErrorIndex(2);
+        check(a.hashCode() == c.hashCode(), "equal state equal hashCode");
+    }
+
+    static void testDateDrivenErrorIndexContract() throws java.text.ParseException {
+        java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH);
+        f.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        java.text.ParsePosition pp = new java.text.ParsePosition(0);
+        check(f.parse("2024-XX-07", pp) == null && pp.getErrorIndex() == 5,
+              "SDF failure records errorIndex=5 on ParsePosition");
+    }
     public static void main(String[] args) throws Exception {
+        testNonSerializableContract();
+        testHashCodeSemanticsContract();
+        testDateDrivenErrorIndexContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

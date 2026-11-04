@@ -38,3 +38,9 @@
 ## 注意事项
 
 - 固定 Locale.ENGLISH（Collator.getInstance 返回 RuleBasedCollator）；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 结构（abstract、protected ctor、Comparable、非 Serializable）
+- compareTo 与 Collator.compare 一致 + 反对称 + 相等源相等键 + toByteArray 字节级确定性
+- Collections.sort(keys) 与 sort(strings, collator) 结果全等；PRIMARY 下键折叠大小写

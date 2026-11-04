@@ -34,3 +34,11 @@
 - 模式/区域链路：`applyPattern`/`toPattern`、`setLocale`/`getLocale`。
 - 契约：`formatToCharacterIterator` 文本、`clone`/`equals`/`hashCode`。
 - 健壮性：固定 Locale.US、日期用固定 Date(0)+UTC 时区的显式 SimpleDateFormat（不用默认时区的 {time} 子格式，避免跨机差异）。headless-safe，不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 类型化子格式（number/date/time/choice）嵌套全等输出 + tz 钉扎
+- 引号规则（''→'、'{0}' 吞占位符、'{' 原义）
+- 参数越界 {5} 不抛异常保持字面量；applyPattern 非法（未闭合/未知类型）→IAE 精确 message
+- parse（objects[] 类型+索引）、setLocale 后需 applyPattern 才生效
+- getFormatsByArgumentIndex/setFormat；format(Object)/静态 format；Field.ARGUMENT run

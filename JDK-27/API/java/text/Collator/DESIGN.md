@@ -31,3 +31,10 @@
 - 分解链路：`setDecomposition` NO/CANONICAL/FULL 回读。
 - 契约：`clone` 相等、`hashCode` 相等、自反相等。
 - 健壮性：固定 Locale.US、无墙钟/随机/全局副作用。headless-safe，不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- Strength 矩阵（PRIMARY 忽略重音+大小写/SECONDARY 区分重音/TERTIARY 区分大小写/IDENTICAL 码点敏感，é 预组 vs e+U+0301 在 IDENTICAL+NO_DECOMPOSITION 下 !=0（实测 132），+CANONICAL 下 ==0）
+- 默认 TERTIARY/NO_DECOMPOSITION；decomposition 可切换（CANONICAL 折叠组合序列）
+- getCollationKey 与 compare 一致性 + toByteArray 确定性；getCollationKey(null)→null
+- compare(null,·)/getInstance(null)→NPE；equals 含 strength；getAvailableLocales

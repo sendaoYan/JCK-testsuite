@@ -42,3 +42,9 @@ start, end)` 的值：`as.addAttribute(READING, new Annotation("pronunciation"),
 | 嵌套 | Annotation(Annotation("inner")) 双层 getValue |
 
 共 5 组场景、约 16 个 check（`testBlackBox()`）。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 身份语义（equals 不覆写、identity hashCode、toString `java.text.Annotation[value=s]` 精确）
+- null 值合法可读；任意 Object 值往返
+- 作为 AttributedString 属性值无损传递

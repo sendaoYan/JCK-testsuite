@@ -24,3 +24,11 @@
 - 白盒：抽象类、继承 `LocaleServiceProvider`、无公开构造器、三个工厂方法签名存在。
 - 黑盒：匿名子类断言 `getAvailableLocales`、`isSupportedLocale` 真假、三个工厂返回非空 `DateFormat`。
 - 健壮性：固定 `Locale.US/FRANCE`、`DateFormat.SHORT`，headless-safe，不加 `@key`。
+
+## 契约深化（本批新增）
+
+- 抽象结构（getDate/getTime/getDateTime(int,int,Locale) 签名）+ isSupportedLocale 矩阵 + 4 样式输出与框架 ENGLISH 逐样式全等 + date-time 组合含日期部分 + SHORT 时间自身输出可回解析
+
+### 版本差异记录
+
+- isSupportedLocale(en-US-u-ca-buddhist) 双侧一致为 true（默认实现剥离 BCP-47 扩展后匹配）；getMethods 名称集合两侧相同（仅声明顺序不同）。

@@ -41,3 +41,9 @@
 ## 注意事项
 
 - 固定 Locale.US；无墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- word/line/sentence/character 四实例 next/previous 边界整表（36 字符固定文本，双侧逐位一致）
+- following/preceding（following(end)→DONE、following(end+1)/(-1)→IAE、preceding(0)→DONE）
+- next(2)/isBoundary；setText(String/CharacterIterator/null NPE)；getText 回读；clone；getAvailableLocales

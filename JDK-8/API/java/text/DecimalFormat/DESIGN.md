@@ -52,3 +52,14 @@
 ## 注意事项
 
 - 固定 Locale.US + DecimalFormatSymbols；无默认 Locale/墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- pattern 语义矩阵 20 pattern × 8 值（分组/科学计数/百分比/千分率/负子模式/引号转义/¤货币/前后缀）
+- RoundingMode 全枚举 ×7 模式 ×14 值（HALF_UP 2.5→3、HALF_EVEN 2.5→2/3.5→4、FLOOR/CEILING 负数、UNNECESSARY 精确→ArithmeticException）
+- parse 矩阵 20 输入的 value/index/errorIndex 精确断言
+- multiplier（format ×100 / parse ÷100）、min/max digits 钳制（00000001/56 截断）、groupingSize
+- 符号驱动输出（改 decimalSeparator/groupingSeparator/zeroDigit/minus 后 format 变化）
+- 特殊 pattern（空串回退默认、`#,#0` 分组位 0、多小数点）→ IAE
+- toPattern/toLocalizedPattern 规范化回读；formatToCharacterIterator run 区间
+- 版本锁定串：JDK-8 currency toPattern 无负子模式 + NaN 符号 `\uFFFD`；JDK-27 含负子模式 `(\u00A4#,##0.00)` + NaN 为 "NaN"（CLDR 差异，各自断言实际值）

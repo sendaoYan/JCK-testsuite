@@ -39,3 +39,10 @@
 ## 注意事项
 
 - 固定 Locale.US；无墙钟/随机；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- en 全数据（months/shortMonths/weekdays/eras/ampm/zoneStrings 抽查）
+- setter→SimpleDateFormat 输出联动（setMonths/setAmPmStrings/setEras）
+- equals/hashCode/clone 独立性；getAvailableLocales
+- 版本锁定 de/fr/ja/ROOT 数组（CLDR vs JRE 差异：ROOT 月名全称 vs 缩写、eras BCE/CE vs BC/AD、de shortMonths 带点、ja 带月字、zoneStrings 数量 589 vs 632）

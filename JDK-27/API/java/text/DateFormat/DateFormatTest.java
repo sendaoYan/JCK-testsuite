@@ -179,7 +179,156 @@ public class DateFormatTest {
               "getCalendar timezone");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+    // Fixed probe date: 2024-03-07T14:05:09.123Z
+
+    static Date dfmtProbeDate() {
+        Calendar c = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.ENGLISH);
+        c.clear(); c.set(2024, Calendar.MARCH, 7, 14, 5, 9);
+        return c.getTime();
+    }
+
+    static String dfmt(int dateStyle, int timeStyle, Locale l) {
+        DateFormat f = (dateStyle < 0)
+                ? DateFormat.getTimeInstance(timeStyle, l)
+                : DateFormat.getDateTimeInstance(dateStyle, timeStyle, l);
+        if (f instanceof java.text.SimpleDateFormat) ((java.text.SimpleDateFormat) f).setTimeZone(TimeZone.getTimeZone("UTC"));
+        return f.format(dfmtProbeDate());
+    }
+
+    static void testStyleConstantsContract() {
+        check(DateFormat.FULL == 0, "FULL == 0");
+        check(DateFormat.LONG == 1, "LONG == 1");
+        check(DateFormat.MEDIUM == 2, "MEDIUM == 2");
+        check(DateFormat.SHORT == 3, "SHORT == 3");
+        check(DateFormat.DEFAULT == 2, "DEFAULT == MEDIUM");
+        check(DateFormat.ERA_FIELD == 0, "ERA_FIELD == 0");
+        check(DateFormat.YEAR_FIELD == 1, "YEAR_FIELD == 1");
+        check(DateFormat.MINUTE_FIELD == 6, "MINUTE_FIELD == 6");
+        check(DateFormat.AM_PM_FIELD == 14, "AM_PM_FIELD == 14");
+    }
+
+    static void testDateStyleOutputsContract() {
+        check("Thursday, March 7, 2024".equals(withUtc(DateFormat.getDateInstance(DateFormat.FULL, Locale.ENGLISH))),
+              "en FULL date includes weekday (identical in JRE and CLDR)");
+        check("Mar 7, 2024".equals(withUtc(DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.ENGLISH))),
+              "en MEDIUM date");
+        check("3/7/24".equals(withUtc(DateFormat.getDateInstance(DateFormat.SHORT, Locale.ENGLISH))),
+              "en SHORT date (identical in JRE and CLDR)");
+        check("Mar 7, 2024".equals(withUtc(DateFormat.getDateInstance(DateFormat.DEFAULT, Locale.ENGLISH))),
+              "en DEFAULT date == MEDIUM");
+    }
+
+    static String withUtc(DateFormat f) {
+        if (f instanceof java.text.SimpleDateFormat) ((java.text.SimpleDateFormat) f).setTimeZone(TimeZone.getTimeZone("UTC"));
+        return f.format(dfmtProbeDate());
+    }
+
+    static void testParseContract() throws java.text.ParseException {
+        DateFormat full = DateFormat.getDateInstance(DateFormat.FULL, Locale.ENGLISH);
+        ((java.text.SimpleDateFormat) full).setTimeZone(TimeZone.getTimeZone("UTC"));
+        check(full.parse("Thursday, March 7, 2024").getTime() == 1709769600000L,
+              "FULL text -> 2024-03-07T00:00Z");
+        DateFormat shortDf = DateFormat.getDateInstance(DateFormat.SHORT, Locale.ENGLISH);
+        ((java.text.SimpleDateFormat) shortDf).setTimeZone(TimeZone.getTimeZone("UTC"));
+        check(shortDf.parse("3/7/24").getTime() == 1709769600000L, "SHORT text -> same instant");
+        // text missing the weekday is rejected by the FULL pattern
+        expectX(java.text.ParseException.class, () -> full.parse("March 7, 2024"),
+                "text without weekday rejected by FULL pattern");
+        expectX(java.text.ParseException.class, () -> full.parse("zzz"),
+                "garbage -> ParseException");
+    }
+
+    static void testWiringContract() throws java.text.ParseException {
+        DateFormat f = DateFormat.getDateInstance(DateFormat.DEFAULT, Locale.ENGLISH);
+        check(f.getCalendar() != null, "getCalendar non-null");
+        Calendar nc = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.ENGLISH);
+        f.setCalendar(nc);
+        check(f.getCalendar() == nc, "setCalendar/getCalendar same instance");
+        f.setTimeZone(TimeZone.getTimeZone("UTC"));
+        check("UTC".equals(f.getTimeZone().getID()), "setTimeZone/getTimeZone");
+        check(f.getNumberFormat() != null, "getNumberFormat non-null");
+        check(f.isLenient(), "factory instance lenient by default");
+        f.setLenient(false);
+        check(!f.isLenient(), "setLenient(false)");
+        DateFormat strict = DateFormat.getDateInstance(DateFormat.SHORT, Locale.ENGLISH);
+        ((java.text.SimpleDateFormat) strict).setTimeZone(TimeZone.getTimeZone("UTC"));
+        strict.setLenient(false);
+        java.text.ParsePosition pp = new java.text.ParsePosition(0);
+        check(strict.parse("2/30/24", pp) == null && pp.getErrorIndex() == 7 && pp.getIndex() == 0,
+              "strict SHORT parse of 2/30/24: null, errorIndex 7");
+        check(DateFormat.getInstance() instanceof java.text.SimpleDateFormat, "getInstance() -> SimpleDateFormat");
+        check(DateFormat.getDateInstance().clone().equals(DateFormat.getDateInstance()),
+              "clone equals same-style factory instance");
+    }
+
+    static void testNullAndIllegalContract() {
+        expectX(NullPointerException.class, () -> DateFormat.getDateInstance(DateFormat.FULL, null),
+                "getDateInstance(style, null) -> NPE");
+        expectX(IllegalArgumentException.class, () -> DateFormat.getDateInstance(99, Locale.ENGLISH),
+                "style 99 -> IAE");
+        check(DateFormat.getAvailableLocales().length > 0, "getAvailableLocales non-empty");
+        check(java.util.Arrays.asList(DateFormat.getAvailableLocales()).contains(Locale.ENGLISH),
+              "available contains ENGLISH");
+    }
+
+    static void testVersionLockedStyleOutputsContract() {
+        // JDK-27 CLDR data: NNBSP before AM/PM, localized zone names, comma before time
+        check("2:05:09\u202FPM Coordinated Universal Time"
+              .equals(withUtc(DateFormat.getTimeInstance(DateFormat.FULL, Locale.ENGLISH))),
+              "en FULL time (CLDR)");
+        check("2:05:09\u202FPM".equals(withUtc(DateFormat.getTimeInstance(DateFormat.MEDIUM, Locale.ENGLISH))),
+              "en MEDIUM time (CLDR)");
+        check("2:05\u202FPM".equals(withUtc(DateFormat.getTimeInstance(DateFormat.SHORT, Locale.ENGLISH))),
+              "en SHORT time (CLDR)");
+        check("March 7, 2024, 2:05:09\u202FPM"
+              .equals(dfmt(DateFormat.LONG, DateFormat.MEDIUM, Locale.ENGLISH)),
+              "en LONG date + MEDIUM time (CLDR, comma + NNBSP)");
+        check("3/7/24, 2:05\u202FPM".equals(dfmt(DateFormat.SHORT, DateFormat.SHORT, Locale.ENGLISH)),
+              "en SHORT+SHORT (CLDR)");
+        check("14:05:09 Koordinierte Weltzeit"
+              .equals(withUtc(DateFormat.getTimeInstance(DateFormat.FULL, Locale.GERMAN))),
+              "de FULL time has localized zone (CLDR)");
+        check("14:05:09 temps universel coordonn\u00E9"
+              .equals(withUtc(DateFormat.getTimeInstance(DateFormat.FULL, Locale.FRENCH))),
+              "fr FULL time has localized zone (CLDR)");
+        check("MMM d, y".equals(((java.text.SimpleDateFormat)
+              DateFormat.getDateInstance(DateFormat.DEFAULT, Locale.ENGLISH)).toPattern()),
+              "en default toPattern uses y (CLDR)");
+        check("07/03/2024".equals(withUtc(DateFormat.getDateInstance(DateFormat.SHORT, Locale.FRENCH))),
+              "fr SHORT date is 4-digit year (CLDR)");
+        check("dd.MM.y".equals(((java.text.SimpleDateFormat)
+              DateFormat.getDateInstance(DateFormat.DEFAULT, Locale.GERMAN)).toPattern()),
+              "de default toPattern (CLDR)");
+    }
     public static void main(String[] args) throws Exception {
+        testStyleConstantsContract();
+        testDateStyleOutputsContract();
+        testParseContract();
+        testWiringContract();
+        testNullAndIllegalContract();
+
+        check("2024\u5E743\u67087\u65E5\u6728\u66DC\u65E5"
+              .equals(withUtc(DateFormat.getDateInstance(DateFormat.FULL, Locale.JAPANESE))),
+              "ja FULL date appends weekday (CLDR)");
+        testVersionLockedStyleOutputsContract();
         testWhiteBox();
         testFactoryFormatStrings();
         testParseLenientAndProperties();

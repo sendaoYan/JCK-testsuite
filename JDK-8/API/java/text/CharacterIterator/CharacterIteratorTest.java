@@ -110,7 +110,77 @@ public class CharacterIteratorTest {
                 "setIndex beyond end");
     }
 
+
+    // ---- deepening helper (contract-level additions) ----
+    interface TestBlock { void go() throws Exception; }
+
+    static void expectX(Class<? extends Throwable> expected, TestBlock r, String m) {
+        try {
+            r.go();
+        } catch (Throwable x) {
+            if (expected.isInstance(x)) { passed++; return; }
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + x.getClass().getName(), x);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
+    // ================= contract deepening =================
+
+    static void testDoneConstantAndImplContract() {
+        check(CharacterIterator.DONE == (char) 0xFFFF, "DONE constant is \uFFFF (65535)");
+        check(CharacterIterator.DONE != 0, "DONE is not NUL");
+    }
+
+    static void testPolymorphicViaAttributedStringContract() {
+        java.text.AttributedString as = new java.text.AttributedString("abc");
+        CharacterIterator it = as.getIterator();
+        check(it.getBeginIndex() == 0 && it.getEndIndex() == 3, "AS iterator full range");
+        check(it.first() == 'a' && it.getIndex() == 0, "AS first");
+        check(it.last() == 'c' && it.getIndex() == 2, "AS last");
+        check(it.next() == CharacterIterator.DONE && it.getIndex() == 3, "AS next DONE at end");
+        check(it.previous() == 'c', "AS previous from end");
+        it.setIndex(0);
+        check(it.previous() == CharacterIterator.DONE && it.getIndex() == 0,
+              "AS previous DONE clamped at begin");
+        it.setIndex(1);
+        check(it.current() == 'b' && it.next() == 'c', "AS mid navigation");
+        CharacterIterator cl = (CharacterIterator) it.clone();
+        check(cl != it && cl.getIndex() == it.getIndex(), "AS clone preserves index");
+        check(cl.first() == 'a', "AS clone navigable");
+    }
+
+    static void testRangeIteratorContract() {
+        java.text.AttributedString as = new java.text.AttributedString("hello world");
+        CharacterIterator rg = as.getIterator(null, 6, 11);
+        check(rg.getBeginIndex() == 6 && rg.getEndIndex() == 11, "range iterator bounds 6..11");
+        check(rg.first() == 'w', "range first 'w'");
+        check(rg.last() == 'd' && rg.getIndex() == 10, "range last 'd'");
+        expectX(IllegalArgumentException.class, () -> rg.setIndex(5), "range setIndex below begin -> IAE");
+        rg.setIndex(11);
+        check(rg.current() == CharacterIterator.DONE, "range setIndex(end) legal DONE");
+        check(rg.next() == CharacterIterator.DONE, "range next at end DONE");
+    }
+
+    static void testEmptyAndSingleContract() {
+        CharacterIterator empty = new StringCharacterIterator("");
+        check(empty.last() == CharacterIterator.DONE, "empty last DONE");
+        check(empty.next() == CharacterIterator.DONE, "empty next DONE");
+        check(empty.previous() == CharacterIterator.DONE, "empty previous DONE");
+        CharacterIterator single = new StringCharacterIterator("x");
+        check(single.first() == 'x', "single first");
+        check(single.last() == 'x' && single.getIndex() == 0, "single last same position");
+        check(single.next() == CharacterIterator.DONE, "single next DONE");
+        check(single.previous() == 'x', "single previous returns the char");
+        check(single.previous() == CharacterIterator.DONE, "single previous at begin DONE");
+    }
     public static void main(String[] args) throws Exception {
+        testDoneConstantAndImplContract();
+        testPolymorphicViaAttributedStringContract();
+        testRangeIteratorContract();
+        testEmptyAndSingleContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

@@ -37,3 +37,9 @@
 ## 注意事项
 
 - 纯对象构造，无 Locale/墙钟/全局副作用；headless-safe 不加 `@key`。
+
+## 契约深化（本批新增，两侧同构断言）
+
+- 身份语义（equals 不覆写、identity hashCode、toString `java.text.Annotation[value=s]` 精确）
+- null 值合法可读；任意 Object 值往返
+- 作为 AttributedString 属性值无损传递
