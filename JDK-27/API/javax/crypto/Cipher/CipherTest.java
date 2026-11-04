@@ -323,6 +323,31 @@ public class CipherTest {
         check(unwrapped instanceof SecretKey && "AES".equals(unwrapped.getAlgorithm())
                 && Arrays.equals(wrappedKeyBytes, unwrapped.getEncoded()),
                 "unwrapped key equals original SecretKey (encoded + algorithm + type)");
+
+        // ---- ChaCha20-Poly1305 (AEAD, stream cipher: block size 0) ----
+        javax.crypto.spec.ChaCha20ParameterSpec unusedNonce = null; // placeholders keep javac honest
+        if (unusedNonce != null) throw new AssertionError("unreachable");
+        byte[] chachaKey = new byte[32];
+        for (int i = 0; i < 32; i++) chachaKey[i] = (byte) (0x30 + i);
+        byte[] chachaIv = new byte[12];
+        for (int i = 0; i < 12; i++) chachaIv[i] = (byte) (0xB0 + i);
+        javax.crypto.SecretKey cck = new SecretKeySpec(chachaKey, "ChaCha20");
+        Cipher cc = Cipher.getInstance("ChaCha20-Poly1305");
+        check("ChaCha20-Poly1305".equals(cc.getAlgorithm()), "ChaCha20-Poly1305 algorithm name");
+        check(cc.getBlockSize() == 0, "ChaCha20-Poly1305 is a stream AEAD (block size 0)");
+        javax.crypto.spec.IvParameterSpec ccSpec = new javax.crypto.spec.IvParameterSpec(chachaIv);
+        cc.init(Cipher.ENCRYPT_MODE, cck, ccSpec);
+        byte[] ccCt = cc.doFinal(PT37);
+        check(ccCt.length == PT37.length + 16, "ChaCha20-Poly1305 ciphertext = payload + 16-byte tag");
+        Cipher ccD = Cipher.getInstance("ChaCha20-Poly1305");
+        ccD.init(Cipher.DECRYPT_MODE, cck, ccSpec);
+        check(Arrays.equals(PT37, ccD.doFinal(ccCt)), "ChaCha20-Poly1305 round trip");
+        byte[] ccTampered = ccCt.clone();
+        ccTampered[5] ^= 0x40;
+        Cipher ccT = Cipher.getInstance("ChaCha20-Poly1305");
+        ccT.init(Cipher.DECRYPT_MODE, cck, ccSpec);
+        check(throwsType(AEADBadTagException.class, () -> ccT.doFinal(ccTampered)),
+                "ChaCha20-Poly1305 tampered ciphertext -> AEADBadTagException");
     }
 
     public static void main(String[] args) throws Exception {

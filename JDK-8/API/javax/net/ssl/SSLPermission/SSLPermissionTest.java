@@ -1,41 +1,48 @@
 /*
  * @test
- * @summary javax.net.ssl.SSLPermission conformance: white-box structure + black-box behavior.
+ * @summary javax.net.ssl.SSLPermission conformance: BasicPermission semantics.
  * @run main SSLPermissionTest
  */
 import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
 import java.security.*;
 import javax.net.ssl.*;
-@SuppressWarnings("removal")
 public class SSLPermissionTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     interface Act { Object run() throws Exception; }
     static Object expect(Act a) { try { return a.run(); } catch (Throwable t) { return t.getClass().getSimpleName(); } }
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.net.ssl.SSLPermission");
-        check(Modifier.isPublic(c.getModifiers()), "public");
-        check(!c.isInterface(), "not interface");
-        check(Modifier.isFinal(c.getModifiers()), "final");
-        check(Class.forName("javax.net.ssl.SSLPermission").getSuperclass() == Class.forName("java.security.BasicPermission"), "superclass java.security.BasicPermission");
-    }
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        javax.net.ssl.SSLPermission p = new javax.net.ssl.SSLPermission("setHostnameVerifier");
-        check(p.getName().equals("setHostnameVerifier"), "name");
-        check(p.implies(new javax.net.ssl.SSLPermission("setHostnameVerifier")), "implies self");
-        check(!p.implies(new javax.net.ssl.SSLPermission("getSSLSessionContext")), "not implies other");
-        check(new javax.net.ssl.SSLPermission("*").implies(p), "wildcard implies");
-        check(p.getActions().isEmpty(), "empty actions");
-        javax.net.ssl.SSLPermission p2 = new javax.net.ssl.SSLPermission("x", "read");
-        check(p2.getActions().isEmpty(), "actions ignored");
-    }
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.net.ssl.SSLPermission");
+        check(Modifier.isPublic(c.getModifiers()) && Modifier.isFinal(c.getModifiers()), "public final class");
+        check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
+        check(c.getSuperclass().getName().equals("java.security.BasicPermission"), "extends BasicPermission");
+        check(!c.isAnnotationPresent(Deprecated.class),
+                "not deprecated on JDK-8 (deprecated for removal in JDK 24)");
+
+        int pubCtors = 0;
+        for (Constructor<?> k : c.getDeclaredConstructors()) if (Modifier.isPublic(k.getModifiers())) pubCtors++;
+        check(pubCtors == 2, "2 public constructors (String) and (String, String actions)");
+
+        SSLPermission p = new SSLPermission("setHostnameVerifier");
+        check("setHostnameVerifier".equals(p.getName()), "getName");
+        check("".equals(p.getActions()), "single-arg ctor yields empty actions");
+        check("".equals(new SSLPermission("setHostnameVerifier", "read").getActions()),
+                "BasicPermission ignores the actions argument: actions stay empty");
+        check(p.implies(new SSLPermission("setHostnameVerifier")), "implies same-name permission");
+        check(!p.implies(new SSLPermission("setSSLFactory")), "does not imply a different name");
+        SSLPermission wild = new SSLPermission("*");
+        check(wild.implies(p) && wild.implies(new SSLPermission("anything")), "wildcard implies all");
+        check(!p.implies(wild), "specific does not imply wildcard");
+        check(p.equals(new SSLPermission("setHostnameVerifier")), "equals same name");
+        check(!p.equals(new SSLPermission("other")), "not equals different name");
+        check(p.hashCode() == new SSLPermission("setHostnameVerifier").hashCode(), "hashCode consistent");
+        check(new SSLPermission("setHostnameVerifier").newPermissionCollection() != null,
+                "newPermissionCollection non-null");
+        check(expect(() -> new SSLPermission(null)).equals("NullPointerException"),
+                "null name -> NullPointerException");
+        check(expect(() -> new SSLPermission("")).equals("IllegalArgumentException"),
+                "empty name -> IllegalArgumentException");
+        check(p.toString().contains("setHostnameVerifier"), "toString contains the name");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

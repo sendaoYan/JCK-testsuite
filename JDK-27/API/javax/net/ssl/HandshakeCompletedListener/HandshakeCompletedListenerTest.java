@@ -58,9 +58,33 @@ public class HandshakeCompletedListenerTest {
         check(ev.getSocket() == sock, "event socket preserved");
         check(l instanceof java.util.EventListener, "is EventListener");
     }
+    // ---- Part 3: contract deepening (interface surface + registration semantics) ----
+    static void testContract() throws Exception {
+        // exactly one method: handshakeCompleted(HandshakeCompletedEvent)
+        java.lang.reflect.Method[] ms = HandshakeCompletedListener.class.getMethods();
+        check(ms.length == 1 && ms[0].getName().equals("handshakeCompleted")
+                && ms[0].getParameterTypes()[0] == HandshakeCompletedEvent.class
+                && ms[0].getReturnType() == void.class,
+                "single method handshakeCompleted(HandshakeCompletedEvent)");
+        check(java.util.EventListener.class.isAssignableFrom(HandshakeCompletedListener.class),
+                "is assignable to java.util.EventListener");
+        // listener registration rejects null and tolerates duplicate/unregistered removals
+        SSLContext ctx = SSLContext.getDefault();
+        SSLSocket sock = (SSLSocket) ctx.getSocketFactory().createSocket();
+        check(expect(() -> { sock.addHandshakeCompletedListener(null); return "ok"; })
+                .equals("IllegalArgumentException"),
+                "addHandshakeCompletedListener(null) -> IllegalArgumentException");
+        HandshakeCompletedListener l = e -> {};
+        sock.addHandshakeCompletedListener(l);
+        sock.removeHandshakeCompletedListener(l); // removal before any handshake is a no-op
+        check(true, "remove before handshake tolerated");
+        sock.addHandshakeCompletedListener(l);
+        check(sock.getSession() != null, "session query after registration");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

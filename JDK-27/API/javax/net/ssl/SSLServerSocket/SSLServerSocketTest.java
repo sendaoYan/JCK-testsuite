@@ -83,9 +83,43 @@ public class SSLServerSocketTest {
             srv.join(8000);
         }
     }
+    // ---- Part 3: contract deepening (accept timeout + pinned protocol) ----
+    static void testContract() throws Exception {
+        javax.net.ssl.SSLContext ctx = newContext();
+        try (javax.net.ssl.SSLServerSocket ss = (javax.net.ssl.SSLServerSocket) ctx.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            check(ss.getLocalPort() > 0, "ephemeral port bound");
+            check(ss.getInetAddress().isLoopbackAddress(), "loopback address bound");
+            ss.setSoTimeout(300);
+            long t0 = System.currentTimeMillis();
+            Object res = expect(() -> ss.accept());
+            long dt = System.currentTimeMillis() - t0;
+            check(res.equals("SocketTimeoutException"), "accept with SO_TIMEOUT -> SocketTimeoutException, got " + res);
+            check(dt >= 200 && dt < 5000, "accept timeout honored (" + dt + "ms)");
+            ss.setSoTimeout(0);
+        }
+        // server pinned to TLSv1.2 -> the client session reports exactly TLSv1.2
+        javax.net.ssl.SSLContext ctx2 = newContext();
+        try (javax.net.ssl.SSLServerSocket ss = (javax.net.ssl.SSLServerSocket) ctx2.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            ss.setEnabledProtocols(new String[]{"TLSv1.2"});
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            try (javax.net.ssl.SSLSocket c = (javax.net.ssl.SSLSocket) ctx2.getSocketFactory().createSocket(java.net.InetAddress.getLoopbackAddress(), port)) {
+                c.setEnabledProtocols(new String[]{"TLSv1.2"});
+                c.startHandshake();
+                check(c.getSession().getProtocol().equals("TLSv1.2"), "pinned server negotiated TLSv1.2");
+            }
+            srv.join(8000);
+        }
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

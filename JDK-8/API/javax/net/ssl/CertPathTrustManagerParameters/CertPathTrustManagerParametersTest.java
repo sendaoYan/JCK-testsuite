@@ -51,9 +51,41 @@ public class CertPathTrustManagerParametersTest {
         check(cp.getParameters() != cp.getParameters(), "getParameters returns fresh clone");
         check(expect(() -> { new javax.net.ssl.CertPathTrustManagerParameters(null); return "ok"; }).equals("NullPointerException"), "null NPE");
     }
+    // ---- Part 3: contract deepening (clone isolation) ----
+    static void testContract() throws Exception {
+        java.security.cert.X509Certificate cert =
+                (java.security.cert.X509Certificate) keyStore().getCertificate("server");
+        java.security.cert.PKIXBuilderParameters pb = new java.security.cert.PKIXBuilderParameters(
+                java.util.Collections.singleton(new java.security.cert.TrustAnchor(cert, null)),
+                new java.security.cert.X509CertSelector());
+        pb.setMaxPathLength(5);
+        CertPathTrustManagerParameters cp = new CertPathTrustManagerParameters(pb);
+        // values present at construction are visible through the clone
+        java.security.cert.PKIXBuilderParameters got =
+                (java.security.cert.PKIXBuilderParameters) cp.getParameters();
+        check(got.getMaxPathLength() == 5, "maxPathLength carried into the clone");
+        // mutating the source after construction is not observable (defensive clone)
+        pb.setMaxPathLength(-1);
+        pb.addCertStore(java.security.cert.CertStore.getInstance("Collection",
+                new java.security.cert.CollectionCertStoreParameters(new java.util.ArrayList<Object>())));
+        check(((java.security.cert.PKIXBuilderParameters) cp.getParameters()).getMaxPathLength() == 5,
+                "post-construction mutation of the source is not observable");
+        // mutating the returned clone is not observable either
+        java.security.cert.PKIXBuilderParameters clone1 =
+                (java.security.cert.PKIXBuilderParameters) cp.getParameters();
+        clone1.setMaxPathLength(99);
+        check(((java.security.cert.PKIXBuilderParameters) cp.getParameters()).getMaxPathLength() == 5,
+                "mutating a returned clone does not affect the stored copy");
+        // the object is a final ManagerFactoryParameters value object
+        check(!java.lang.reflect.Modifier.isAbstract(CertPathTrustManagerParameters.class.getModifiers()),
+                "concrete class");
+        check(CertPathTrustManagerParameters.class.getConstructors().length == 1,
+                "single public constructor");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

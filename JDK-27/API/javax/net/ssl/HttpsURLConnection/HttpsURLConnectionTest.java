@@ -84,9 +84,47 @@ public class HttpsURLConnectionTest {
         }
         check(javax.net.ssl.HttpsURLConnection.getDefaultSSLSocketFactory() == prevF, "default SSLSocketFactory restored");
     }
+    // ---- Part 3: contract deepening (pre-connect validation + client identity) ----
+    static void testContract() throws Exception {
+        javax.net.ssl.SSLContext ctx = newContext();
+        try (javax.net.ssl.SSLServerSocket ss = (javax.net.ssl.SSLServerSocket) ctx.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getByName("localhost"))) {
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                    java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(s.getInputStream()));
+                    String line;
+                    while ((line = r.readLine()) != null && !line.isEmpty()) {}
+                    byte[] body = "x".getBytes("UTF-8");
+                    s.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Length: " + body.length
+                            + "\r\nConnection: close\r\n\r\n").getBytes("UTF-8"));
+                    s.getOutputStream().write(body); s.getOutputStream().flush();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            HttpsURLConnection con = (HttpsURLConnection) new java.net.URI("https://localhost:" + port + "/").toURL().openConnection();
+            javax.net.ssl.SSLSocketFactory ctxFactory = ctx.getSocketFactory();
+            con.setSSLSocketFactory(ctxFactory);
+            con.setHostnameVerifier((h, s) -> true);
+            check(expect(() -> { con.getCipherSuite(); return "ok"; }).equals("IllegalStateException"),
+                    "getCipherSuite before connect -> IllegalStateException");
+            check(expect(() -> { con.getServerCertificates(); return "ok"; }).equals("IllegalStateException"),
+                    "getServerCertificates before connect -> IllegalStateException");
+            check(expect(() -> { con.setHostnameVerifier(null); return "ok"; }).equals("IllegalArgumentException"),
+                    "setHostnameVerifier(null) -> IllegalArgumentException");
+            check(expect(() -> { con.setSSLSocketFactory(null); return "ok"; }).equals("IllegalArgumentException"),
+                    "setSSLSocketFactory(null) -> IllegalArgumentException");
+            check(con.getResponseCode() == 200, "HTTPS GET 200");
+            check(con.getLocalCertificates() == null, "client local certificates null");
+            check(con.getLocalPrincipal() == null, "client local principal null");
+            con.disconnect();
+            srv.join(8000);
+        }
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -29,9 +29,41 @@ public class TrustManagerFactorySpiTest {
         }
         check(new Probe() != null, "subclassable");
     }
+    // ---- Part 3: contract deepening (spi surface + invocation) ----
+    static void testContract() throws Exception {
+        Class<?> c = Class.forName("javax.net.ssl.TrustManagerFactorySpi");
+        boolean noArg = false;
+        for (Constructor<?> k : c.getDeclaredConstructors())
+            if (k.getParameterCount() == 0) noArg = true;
+        check(noArg, "no-arg constructor present for subclassing");
+        // exactly 3 protected abstract engine methods (two 1-arg engineInit + engineGetTrustManagers)
+        c.getDeclaredMethod("engineInit", java.security.KeyStore.class);
+        c.getDeclaredMethod("engineInit", ManagerFactoryParameters.class);
+        c.getDeclaredMethod("engineGetTrustManagers");
+        int abstractCount = 0;
+        for (Method m : c.getDeclaredMethods()) if (Modifier.isAbstract(m.getModifiers())) abstractCount++;
+        check(abstractCount == 3, "exactly 3 abstract methods, found " + abstractCount);
+        // a probe implementation records the init sequence and serves sentinel managers
+        final TrustManager sentinel = new TrustManager() {};
+        final java.util.List<String> calls = new java.util.ArrayList<String>();
+        class Probe extends TrustManagerFactorySpi {
+            protected void engineInit(java.security.KeyStore ks) { calls.add("ks"); }
+            protected void engineInit(ManagerFactoryParameters p) { calls.add("mfp"); }
+            protected TrustManager[] engineGetTrustManagers() { return new TrustManager[]{sentinel}; }
+        }
+        Probe p = new Probe();
+        p.engineInit((java.security.KeyStore) null);
+        p.engineInit(new ManagerFactoryParameters() {});
+        check(calls.equals(java.util.Arrays.asList("ks", "mfp")),
+                "engineInit overload dispatch recorded: " + calls);
+        TrustManager[] got = p.engineGetTrustManagers();
+        check(got.length == 1 && got[0] == sentinel, "engineGetTrustManagers returns implementation value");
+        check(p.engineGetTrustManagers() != got, "engineGetTrustManagers may return a fresh array per call");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

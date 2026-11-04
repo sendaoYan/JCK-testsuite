@@ -55,9 +55,63 @@ public class SSLServerSocketFactoryTest {
             check(ss.getInetAddress().isLoopbackAddress(), "loopback bound");
         }
     }
+    // ---- Part 3: contract deepening (suite containment + handshake closure) ----
+    static void testContract() throws Exception {
+        javax.net.ssl.SSLServerSocketFactory def =
+                (javax.net.ssl.SSLServerSocketFactory) javax.net.ssl.SSLServerSocketFactory.getDefault();
+        // the supported set contains the default set
+        java.util.Set<String> supported = new java.util.HashSet<String>(java.util.Arrays.asList(def.getSupportedCipherSuites()));
+        int defCount = 0;
+        for (String cs : def.getDefaultCipherSuites()) {
+            check(supported.contains(cs), "default cipher suite " + cs + " is in the supported set");
+            defCount++;
+        }
+        check(defCount > 0, "default cipher suite list non-empty");
+        java.util.Set<String> supProtos = new java.util.HashSet<String>();
+        for (javax.net.ssl.SSLContext any : new javax.net.ssl.SSLContext[]{javax.net.ssl.SSLContext.getDefault()})
+            for (String p : any.getSupportedSSLParameters().getProtocols()) supProtos.add(p);
+        check(!supProtos.isEmpty(), "supported protocol view non-empty");
+        // every factory call mints a fresh instance
+        check(javax.net.ssl.SSLServerSocketFactory.getDefault() != def,
+                "getDefault returns a fresh instance per call");
+        // invalid ports are rejected before binding
+        check(expect(() -> def.createServerSocket(-1)).equals("IllegalArgumentException"),
+                "createServerSocket(-1) -> IllegalArgumentException");
+        check(expect(() -> def.createServerSocket(65536)).equals("IllegalArgumentException"),
+                "createServerSocket(65536) -> IllegalArgumentException");
+        // full accept + handshake + echo through the context factory
+        javax.net.ssl.SSLContext ctx = newContext();
+        javax.net.ssl.SSLServerSocketFactory sf = ctx.getServerSocketFactory();
+        try (javax.net.ssl.SSLServerSocket ss =
+                (javax.net.ssl.SSLServerSocket) sf.createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                    s.getOutputStream().write(s.getInputStream().read()); s.getOutputStream().flush();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            try (javax.net.ssl.SSLSocket c =
+                    (javax.net.ssl.SSLSocket) ctx.getSocketFactory().createSocket(java.net.InetAddress.getLoopbackAddress(), port)) {
+                c.startHandshake();
+                c.getOutputStream().write('F'); c.getOutputStream().flush();
+                check(c.getInputStream().read() == 'F', "factory-made pair handshake + echo round trip");
+            }
+            srv.join(8000);
+        }
+        // factory sockets expose the SSL configuration surface
+        try (javax.net.ssl.SSLServerSocket s2 =
+                (javax.net.ssl.SSLServerSocket) sf.createServerSocket(0)) {
+            check(s2.getSupportedCipherSuites().length >= s2.getEnabledCipherSuites().length,
+                    "supported cipher suites supersets enabled on the socket");
+            check(s2.getSupportedProtocols().length > 0, "supported protocols on the socket");
+        }
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -73,9 +73,46 @@ public class SSLSessionContextTest {
             srv.join(8000);
         }
     }
+    // ---- Part 3: contract deepening (validation matrix + declared exceptions) ----
+    static void testContract() throws Exception {
+        SSLContext ctx = newContext();
+        SSLSessionContext client = ctx.getClientSessionContext();
+        SSLSessionContext server = ctx.getServerSessionContext();
+        check(client != server, "client and server contexts are distinct objects");
+        // negative values are rejected before any state change
+        check(expect(() -> { client.setSessionTimeout(-1); return "ok"; }).equals("IllegalArgumentException"),
+                "setSessionTimeout(-1) -> IllegalArgumentException");
+        check(expect(() -> { client.setSessionCacheSize(-1); return "ok"; }).equals("IllegalArgumentException"),
+                "setSessionCacheSize(-1) -> IllegalArgumentException");
+        // zero is the documented "unlimited" value
+        client.setSessionTimeout(0);
+        check(client.getSessionTimeout() == 0, "setSessionTimeout(0) is legal (unlimited)");
+        client.setSessionCacheSize(0);
+        check(client.getSessionCacheSize() == 0, "setSessionCacheSize(0) is legal (unlimited)");
+        // unknown and null ids resolve to null / NPE without side effects
+        check(client.getSession(new byte[32]) == null, "unknown 32-byte id -> null");
+        check(expect(() -> { client.getSession(null); return "ok"; }).equals("NullPointerException"),
+                "getSession(null) -> NullPointerException");
+        // declared checked exceptions on the setters differ by JDK release
+                for (String n : new String[]{"setSessionTimeout", "setSessionCacheSize"}) {
+            Method m = SSLSessionContext.class.getMethod(n, int.class);
+            check(m.getExceptionTypes().length == 0,
+                    "JDK-27 " + n + " no longer declares checked exceptions");
+        }
+        // id enumeration is live and restartable
+        java.util.Enumeration<byte[]> ids1 = client.getIds();
+        java.util.Enumeration<byte[]> ids2 = client.getIds();
+        check(ids1 != null && ids2 != null && ids1 != ids2, "getIds returns a fresh enumeration per call");
+        // server context honors the same contracts
+        check(expect(() -> { server.setSessionTimeout(-5); return "ok"; }).equals("IllegalArgumentException"),
+                "server context setSessionTimeout(-5) -> IllegalArgumentException");
+        check(expect(() -> { server.setSessionCacheSize(-2); return "ok"; }).equals("IllegalArgumentException"),
+                "server context setSessionCacheSize(-2) -> IllegalArgumentException");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

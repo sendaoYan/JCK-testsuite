@@ -1,39 +1,33 @@
 /*
  * @test
- * @summary javax.net.ssl.SSLEngineResult$HandshakeStatus conformance: white-box structure + black-box behavior.
+ * @summary javax.net.ssl.SSLEngineResult.HandshakeStatus conformance: enum surface.
  * @run main HandshakeStatusTest
  */
 import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.security.*;
 import javax.net.ssl.*;
 public class HandshakeStatusTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
-    interface Act { Object run() throws Exception; }
-    static Object expect(Act a) { try { return a.run(); } catch (Throwable t) { return t.getClass().getSimpleName(); } }
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("javax.net.ssl.SSLEngineResult$HandshakeStatus");
-        check(Modifier.isPublic(c.getModifiers()), "public");
-        check(!c.isInterface(), "not interface");
-        check(Modifier.isFinal(c.getModifiers()), "final");
-        check(Class.forName("javax.net.ssl.SSLEngineResult$HandshakeStatus").getSuperclass() == Class.forName("java.lang.Enum"), "superclass java.lang.Enum");
-    }
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        javax.net.ssl.SSLEngineResult.HandshakeStatus[] vals = javax.net.ssl.SSLEngineResult.HandshakeStatus.values();
-        check(vals.length == 6, "six constants");
-        for (String n : new String[]{"NOT_HANDSHAKING", "FINISHED", "NEED_TASK", "NEED_WRAP", "NEED_UNWRAP", "NEED_UNWRAP_AGAIN"}) {
-            check(javax.net.ssl.SSLEngineResult.HandshakeStatus.valueOf(n) != null, "valueOf " + n);
-        }
-        check(javax.net.ssl.SSLEngineResult.HandshakeStatus.valueOf("FINISHED") == javax.net.ssl.SSLEngineResult.HandshakeStatus.FINISHED, "valueOf identity");
-        check(expect(() -> { javax.net.ssl.SSLEngineResult.HandshakeStatus.valueOf("NOPE"); return "ok"; }).equals("IllegalArgumentException"), "bad valueOf");
-    }
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.net.ssl.SSLEngineResult$HandshakeStatus");
+        check(c.isEnum(), "is enum");
+        check(Modifier.isPublic(c.getModifiers()) && Modifier.isFinal(c.getModifiers()), "public final");
+        check(c.getSuperclass() == java.lang.Enum.class, "extends Enum");
+        SSLEngineResult.HandshakeStatus[] vs = SSLEngineResult.HandshakeStatus.values();
+        check(vs.length == 6, "6 constants, found " + vs.length);
+        java.util.Set<String> names = new java.util.TreeSet<>();
+        for (SSLEngineResult.HandshakeStatus v : vs) names.add(v.name());
+        check(names.containsAll(java.util.Arrays.asList("NOT_HANDSHAKING", "FINISHED", "NEED_TASK", "NEED_WRAP", "NEED_UNWRAP")),
+                "core 5 states present: " + names);
+        check(names.contains("NEED_UNWRAP_AGAIN"), "NEED_UNWRAP_AGAIN present (DTLS 1.3, JDK 9+)");
+        for (SSLEngineResult.HandshakeStatus v : vs) {
+            check(SSLEngineResult.HandshakeStatus.valueOf(v.name()) == v, "valueOf round trip " + v);
+            check(v.compareTo(v) == 0 && v.ordinal() >= 0, "ordinal/compareTo sane " + v);
+            check(v.name().equals(v.toString()), "name == toString for " + v);
+        }
+        Class<?> enclosing = c.getEnclosingClass();
+        check(enclosing != null && enclosing.getName().equals("javax.net.ssl.SSLEngineResult"),
+                "nested in SSLEngineResult");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

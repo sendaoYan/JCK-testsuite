@@ -59,6 +59,111 @@ public class SSLParametersTest {
         javax.net.ssl.SSLParameters q = new javax.net.ssl.SSLParameters(new String[]{"TLSv1.2"});
         check(Arrays.equals(q.getCipherSuites(), new String[]{"TLSv1.2"}), "single-arg ctor is cipherSuites");
         check(q.getProtocols() == null, "single-arg ctor protocols null");
+        testContract();
+    }
+    // ---- Part 3: contract deepening (null semantics / defensive copies / JDK-9+ surface) ----
+    static void testContract() throws Exception {
+        SSLParameters p = new SSLParameters();
+        // constructor surface: exactly 3 public constructors
+        int pubCtors = 0;
+        boolean oneArg = false, twoArg = false;
+        for (Constructor<?> k : SSLParameters.class.getConstructors()) {
+            pubCtors++;
+            if (k.getParameterCount() == 1 && k.getParameterTypes()[0] == String[].class) oneArg = true;
+            if (k.getParameterCount() == 2 && k.getParameterTypes()[0] == String[].class
+                    && k.getParameterTypes()[1] == String[].class) twoArg = true;
+        }
+        check(pubCtors == 3, "exactly 3 public constructors, found " + pubCtors);
+        check(oneArg && twoArg, "declares (String[]) and (String[],String[]) constructors");
+        SSLParameters two = new SSLParameters(new String[]{"A"}, new String[]{"TLSv1.2"});
+        check(Arrays.equals(two.getCipherSuites(), new String[]{"A"})
+                && Arrays.equals(two.getProtocols(), new String[]{"TLSv1.2"}),
+                "two-arg ctor (cipherSuites, protocols) round trip");
+        // fresh-instance defaults beyond the ones above
+        check(p.getApplicationProtocols() != null && p.getApplicationProtocols().length == 0,
+                "fresh getApplicationProtocols is an empty array (never null)");
+        check(p.getServerNames() == null && p.getSNIMatchers() == null,
+                "fresh getServerNames/getSNIMatchers null");
+        check(p.getUseCipherSuitesOrder() == false, "fresh useCipherSuitesOrder false");
+        check(p.getEndpointIdentificationAlgorithm() == null, "fresh endpoint id null");
+        // null-argument semantics: setters that accept null and reset to null ...
+        p.setCipherSuites(null);
+        check(p.getCipherSuites() == null, "setCipherSuites(null) accepted, getter back to null");
+        p.setProtocols(null);
+        check(p.getProtocols() == null, "setProtocols(null) accepted, getter back to null");
+        p.setServerNames(null);
+        check(p.getServerNames() == null, "setServerNames(null) accepted, getter back to null");
+        p.setSNIMatchers(null);
+        check(p.getSNIMatchers() == null, "setSNIMatchers(null) accepted, getter back to null");
+        p.setEndpointIdentificationAlgorithm(null);
+        check(p.getEndpointIdentificationAlgorithm() == null, "setEndpointIdentificationAlgorithm(null) accepted");
+        // ... while setApplicationProtocols(null) is the documented IAE exception
+        final SSLParameters fp = p;
+        check(expect(() -> { fp.setApplicationProtocols(null); return "ok"; }).equals("IllegalArgumentException"),
+                "setApplicationProtocols(null) -> IllegalArgumentException");
+        // empty SNI list is legal and observable (returns empty list, not null)
+        p.setServerNames(new ArrayList<SNIServerName>());
+        check(p.getServerNames() != null && p.getServerNames().isEmpty(),
+                "setServerNames(empty) preserved as empty list");
+        // setter copies the source list: later mutation of the source is not observed
+        List<SNIServerName> src = new ArrayList<>();
+        src.add(new SNIHostName("e.com"));
+        p.setServerNames(src);
+        src.clear();
+        check(p.getServerNames().size() == 1, "setServerNames copies the list (source mutation invisible)");
+        // setter also copies matchers
+        List<SNIMatcher> ms = new ArrayList<>();
+        ms.add(SNIHostName.createSNIMatcher("e.com"));
+        p.setSNIMatchers(ms);
+        ms.clear();
+        check(p.getSNIMatchers().size() == 1, "setSNIMatchers copies the list (source mutation invisible)");
+        // need=false / want=false clear their own flag without touching the other
+        p = new SSLParameters();
+        p.setNeedClientAuth(true);
+        p.setNeedClientAuth(false);
+        check(!p.getNeedClientAuth() && !p.getWantClientAuth(), "setNeedClientAuth(false) clears need only");
+        p.setWantClientAuth(true);
+        p.setWantClientAuth(false);
+        check(!p.getWantClientAuth() && !p.getNeedClientAuth(), "setWantClientAuth(false) clears want only");
+        // protocols array is defensively copied on the getter side too
+        p.setProtocols(new String[]{"TLSv1.2"});
+        String[] gotProto = p.getProtocols();
+        gotProto[0] = "MUT";
+        check(p.getProtocols()[0].equals("TLSv1.2"), "getProtocols returns a fresh copy each call");
+        // ALPN: same empty-array default after a round trip to empty
+        p.setApplicationProtocols(new String[0]);
+        check(p.getApplicationProtocols().length == 0, "setApplicationProtocols(empty) preserved");
+        // ---- JDK-9+ surface: named groups / signature schemes / DTLS packet controls ----
+        check(p.getMaximumPacketSize() == 0, "fresh getMaximumPacketSize 0 (no limit)");
+        check(p.getEnableRetransmissions(), "fresh getEnableRetransmissions true");
+        check(p.getNamedGroups() == null && p.getSignatureSchemes() == null,
+                "fresh getNamedGroups/getSignatureSchemes null (provider default)");
+        p.setMaximumPacketSize(1400);
+        check(p.getMaximumPacketSize() == 1400, "setMaximumPacketSize round trip");
+        final SSLParameters mp = p;
+        check(expect(() -> { mp.setMaximumPacketSize(-1); return "ok"; }).equals("IllegalArgumentException"),
+                "setMaximumPacketSize(-1) -> IllegalArgumentException");
+        p.setEnableRetransmissions(false);
+        check(!p.getEnableRetransmissions(), "setEnableRetransmissions(false) round trip");
+        p.setNamedGroups(new String[]{"x25519", "secp256r1"});
+        check(Arrays.equals(p.getNamedGroups(), new String[]{"x25519", "secp256r1"}),
+                "setNamedGroups round trip");
+        String[] ngSrc = {"x25519"};
+        p.setNamedGroups(ngSrc);
+        ngSrc[0] = "MUT";
+        check(p.getNamedGroups()[0].equals("x25519"), "setNamedGroups defensively copies");
+        p.setNamedGroups(null);
+        check(p.getNamedGroups() == null, "setNamedGroups(null) accepted (back to default)");
+        p.setSignatureSchemes(new String[]{"ecdsa_secp256r1_sha256"});
+        check(Arrays.equals(p.getSignatureSchemes(), new String[]{"ecdsa_secp256r1_sha256"}),
+                "setSignatureSchemes round trip");
+        String[] ssSrc = {"ecdsa_secp256r1_sha256"};
+        p.setSignatureSchemes(ssSrc);
+        ssSrc[0] = "MUT";
+        check(p.getSignatureSchemes()[0].equals("ecdsa_secp256r1_sha256"),
+                "setSignatureSchemes defensively copies");
+        p.setSignatureSchemes(null);
+        check(p.getSignatureSchemes() == null, "setSignatureSchemes(null) accepted (back to default)");
     }
     public static void main(String[] args) throws Exception {
         testWhiteBox();

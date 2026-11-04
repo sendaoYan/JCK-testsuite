@@ -59,9 +59,44 @@ public class X509ExtendedTrustManagerTest {
         check(expect(() -> { xtm.checkServerTrusted(chain, "RSA", eng); return "ok"; }).equals("CertificateException"),
               "engine overload rejects (no client-mode peer chain)");
     }
+    // ---- Part 3: contract deepening (overload parity + role rejection) ----
+    static void testContract() throws Exception {
+        java.security.KeyStore ks = keyStore();
+        java.security.cert.X509Certificate cert = (java.security.cert.X509Certificate) ks.getCertificate("server");
+        java.security.cert.X509Certificate[] chain = new java.security.cert.X509Certificate[]{cert};
+        java.security.KeyStore ts = java.security.KeyStore.getInstance("PKCS12");
+        ts.load(null, null);
+        ts.setCertificateEntry("server", cert);
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance("PKIX");
+        tmf.init(ts);
+        X509ExtendedTrustManager xtm = (X509ExtendedTrustManager) tmf.getTrustManagers()[0];
+        // the three-argument overloads mirror the plain decision for a trusted chain
+        xtm.checkServerTrusted(chain, "RSA", (java.net.Socket) null);
+        xtm.checkServerTrusted(chain, "RSA", (javax.net.ssl.SSLEngine) null);
+        check(true, "socket and engine overloads accept the trusted chain");
+        // a live engine without an active handshake session is rejected
+        javax.net.ssl.SSLEngine engine = newContext().createSSLEngine();
+        check(expect(() -> { xtm.checkServerTrusted(chain, "RSA", engine); return "ok"; })
+                .equals("CertificateException"),
+                "engine without a handshake session -> CertificateException (No handshake session)");
+        // the client role is rejected when the chain cannot be validated as a client cert
+        check(expect(() -> { xtm.checkClientTrusted(chain, "RSA", engine); return "ok"; })
+                .equals("CertificateException"),
+                "engine checkClientTrusted rejects the server-only chain");
+        // argument validation matches the base interface
+        check(expect(() -> { xtm.checkServerTrusted(chain, null, engine); return "ok"; })
+                .equals("IllegalArgumentException"), "null auth type -> IllegalArgumentException");
+        check(expect(() -> { xtm.checkClientTrusted(chain, null, (java.net.Socket) null); return "ok"; })
+                .equals("IllegalArgumentException"), "client overload null auth type -> IllegalArgumentException");
+        // issuer surface matches the base interface contract
+        check(xtm.getAcceptedIssuers().length >= 1, "accepted issuers non-empty");
+        check(xtm.getAcceptedIssuers() != xtm.getAcceptedIssuers(),
+                "getAcceptedIssuers returns a fresh array per call");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

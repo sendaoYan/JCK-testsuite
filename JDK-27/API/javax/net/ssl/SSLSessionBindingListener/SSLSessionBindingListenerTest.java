@@ -59,9 +59,36 @@ public class SSLSessionBindingListenerTest {
         check(ev.getSession() == session, "event session preserved");
         check(l instanceof java.util.EventListener, "is EventListener");
     }
+    // ---- Part 3: contract deepening (interface surface) ----
+    static void testContract() throws Exception {
+        // exactly two methods, both void with one SSLSessionBindingEvent parameter
+        Method bound = SSLSessionBindingListener.class.getMethod("valueBound", SSLSessionBindingEvent.class);
+        Method unbound = SSLSessionBindingListener.class.getMethod("valueUnbound", SSLSessionBindingEvent.class);
+        check(bound.getReturnType() == void.class && unbound.getReturnType() == void.class,
+                "valueBound/valueUnbound are void");
+        check(SSLSessionBindingListener.class.getMethods().length == 2,
+                "interface declares exactly 2 methods");
+        // EventListener inheritance (extends by declaration)
+        check(java.util.EventListener.class.isAssignableFrom(SSLSessionBindingListener.class),
+                "is assignable to java.util.EventListener");
+        // an anonymous implementation is delivered both callbacks in order
+        final java.util.List<String> seq = new java.util.ArrayList<String>();
+        SSLSession s = mockSession();
+        SSLSessionBindingListener l = new SSLSessionBindingListener() {
+            public void valueBound(SSLSessionBindingEvent e) { seq.add("bound:" + e.getName()); }
+            public void valueUnbound(SSLSessionBindingEvent e) { seq.add("unbound:" + e.getName()); }
+        };
+        l.valueBound(new SSLSessionBindingEvent(s, "a"));
+        l.valueUnbound(new SSLSessionBindingEvent(s, "a"));
+        check(seq.equals(java.util.Arrays.asList("bound:a", "unbound:a")), "callbacks delivered in call order");
+        // lambda is impossible (2 abstract methods); assert the interface is not functional
+        check(!SSLSessionBindingListener.class.isAnnotationPresent(FunctionalInterface.class),
+                "not a FunctionalInterface");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

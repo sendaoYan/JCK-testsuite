@@ -60,9 +60,49 @@ public class TrustManagerFactoryTest {
         tmf3.init(ts);
         check(tmf3.getTrustManagers().length >= 1, "custom trust managers");
     }
+    // ---- Part 3: contract deepening (algorithm matrix + parameter objects) ----
+    static void testContract() throws Exception {
+        check("PKIX".equals(TrustManagerFactory.getDefaultAlgorithm()),
+                "default algorithm is PKIX");
+        // for trust managers both SunX509 and X509 resolve (unlike key managers)
+        for (String alg : new String[]{"SunX509", "X509", "PKIX"}) {
+            TrustManagerFactory t = TrustManagerFactory.getInstance(alg);
+            check(t.getAlgorithm().equals(alg), "getInstance(" + alg + ") echoes the algorithm");
+        }
+        check(expect(() -> { TrustManagerFactory.getInstance(null); return "ok"; })
+                .equals("NullPointerException"), "getInstance(null) -> NullPointerException");
+        TrustManagerFactory base = TrustManagerFactory.getInstance("PKIX");
+        TrustManagerFactory byName = TrustManagerFactory.getInstance("PKIX", base.getProvider().getName());
+        check(byName.getProvider().equals(base.getProvider()), "provider-name overload resolves the same provider");
+        TrustManagerFactory byObj = TrustManagerFactory.getInstance("PKIX", base.getProvider());
+        check(byObj.getProvider().equals(base.getProvider()), "provider-object overload keeps the provider");
+        check(expect(() -> { TrustManagerFactory.getInstance("PKIX", "NoSuchProviderXYZ"); return "ok"; })
+                .equals("NoSuchProviderException"), "unknown provider name -> NoSuchProviderException");
+        // PKIX accepts CertPathTrustManagerParameters
+        java.security.cert.X509Certificate cert =
+                (java.security.cert.X509Certificate) keyStore().getCertificate("server");
+        java.security.cert.PKIXBuilderParameters pb = new java.security.cert.PKIXBuilderParameters(
+                java.util.Set.of(new java.security.cert.TrustAnchor(cert, null)),
+                new java.security.cert.X509CertSelector());
+        TrustManagerFactory cpTmf = TrustManagerFactory.getInstance("PKIX");
+        cpTmf.init(new CertPathTrustManagerParameters(pb));
+        check(cpTmf.getTrustManagers().length >= 1, "PKIX accepts CertPathTrustManagerParameters");
+        // a generic ManagerFactoryParameters implementation is rejected
+        TrustManagerFactory gen = TrustManagerFactory.getInstance("PKIX");
+        class MFP implements ManagerFactoryParameters {}
+        check(expect(() -> { gen.init(new MFP()); return "ok"; })
+                .equals("InvalidAlgorithmParameterException"),
+                "generic ManagerFactoryParameters -> InvalidAlgorithmParameterException");
+        // each get call returns a fresh array wrapping the same manager
+        TrustManagerFactory t = TrustManagerFactory.getInstance("PKIX");
+        t.init((java.security.KeyStore) null);
+        TrustManager[] m1 = t.getTrustManagers(), m2 = t.getTrustManagers();
+        check(m1 != m2 && m1[0] == m2[0], "getTrustManagers: fresh array, same manager instance");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

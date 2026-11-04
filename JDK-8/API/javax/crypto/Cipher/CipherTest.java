@@ -323,6 +323,12 @@ public class CipherTest {
         check(unwrapped instanceof SecretKey && "AES".equals(unwrapped.getAlgorithm())
                 && Arrays.equals(wrappedKeyBytes, unwrapped.getEncoded()),
                 "unwrapped key equals original SecretKey (encoded + algorithm + type)");
+
+        // ---- ChaCha20-Poly1305 availability (added in JDK 11; absent on JDK-8) ----
+        check(throwsType(NoSuchAlgorithmException.class, () -> Cipher.getInstance("ChaCha20-Poly1305")),
+                "JDK-8 has no ChaCha20-Poly1305 -> NoSuchAlgorithmException");
+        check(throwsType(NoSuchAlgorithmException.class, () -> Cipher.getInstance("ChaCha20")),
+                "JDK-8 has no ChaCha20 base cipher -> NoSuchAlgorithmException");
     }
 
     public static void main(String[] args) throws Exception {

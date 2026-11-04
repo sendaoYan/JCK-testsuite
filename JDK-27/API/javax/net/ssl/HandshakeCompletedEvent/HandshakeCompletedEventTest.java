@@ -71,9 +71,54 @@ public class HandshakeCompletedEventTest {
             srv.join(8000);
         }
     }
+    // ---- Part 3: contract deepening (event value surface) ----
+    static void testContract() throws Exception {
+        javax.net.ssl.SSLContext ctx = newContext();
+        try (javax.net.ssl.SSLServerSocket ss = (javax.net.ssl.SSLServerSocket) ctx.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                    s.getOutputStream().write(s.getInputStream().read()); s.getOutputStream().flush();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            try (javax.net.ssl.SSLSocket c = (javax.net.ssl.SSLSocket) ctx.getSocketFactory().createSocket(java.net.InetAddress.getLoopbackAddress(), port)) {
+                final javax.net.ssl.HandshakeCompletedEvent[] ev = new javax.net.ssl.HandshakeCompletedEvent[1];
+                final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                c.addHandshakeCompletedListener(e -> { if (ev[0] == null) { ev[0] = e; latch.countDown(); } });
+                c.startHandshake();
+                latch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                javax.net.ssl.HandshakeCompletedEvent event = ev[0];
+                check(event != null, "client-side event captured");
+                // identity equality from EventObject
+                check(event.equals(event), "identity equality");
+                check(!event.equals(new javax.net.ssl.HandshakeCompletedEvent(c, c.getSession())),
+                        "events for the same socket are not equal");
+                // the event mirrors the session state
+                check(event.getSession().isValid(), "event session valid");
+                check(event.getCipherSuite().equals(event.getSession().getCipherSuite()),
+                        "event cipher suite equals session cipher suite");
+                check(event.getSession().getPeerPort() == port, "event session peer port");
+                // client side carries no local certificates
+                check(event.getLocalCertificates() == null, "client event local certificates null");
+                check(event.getPeerCertificates()[0] instanceof java.security.cert.X509Certificate,
+                        "peer certificate is X509");
+                check(event.getPeerPrincipal() != null
+                        && event.getPeerPrincipal().getName().contains("CN=localhost"),
+                        "peer principal CN=localhost");
+                // toString follows the EventObject convention
+                check(event.toString().startsWith("javax.net.ssl.HandshakeCompletedEvent["),
+                        "toString follows EventObject convention");
+                check(event instanceof java.io.Serializable, "event is Serializable");
+            }
+            srv.join(8000);
+        }
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

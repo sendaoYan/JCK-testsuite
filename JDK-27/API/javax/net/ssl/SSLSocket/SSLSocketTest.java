@@ -88,9 +88,60 @@ public class SSLSocketTest {
             check(log.stream().anyMatch(s -> s.startsWith("HCE:")), "handshake completed event fired");
         }
     }
+    // ---- Part 3: contract deepening (validation + pinned protocol) ----
+    static void testContract() throws Exception {
+        javax.net.ssl.SSLContext ctx = newContext();
+        try (javax.net.ssl.SSLServerSocket ss = (javax.net.ssl.SSLServerSocket) ctx.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            try (javax.net.ssl.SSLSocket c = (javax.net.ssl.SSLSocket) ctx.getSocketFactory().createSocket(java.net.InetAddress.getLoopbackAddress(), port)) {
+                c.startHandshake();
+                check(expect(() -> { c.addHandshakeCompletedListener(null); return "ok"; }).equals("IllegalArgumentException"),
+                        "addHandshakeCompletedListener(null) -> IllegalArgumentException");
+                check(expect(() -> { c.setUseClientMode(false); return "ok"; }).equals("IllegalArgumentException"),
+                        "setUseClientMode after handshake -> IllegalArgumentException");
+                check(expect(() -> { c.setEnabledCipherSuites(new String[]{"BOGUS_CIPHER"}); return "ok"; }).equals("IllegalArgumentException"),
+                        "invalid cipher suite rejected");
+                check(expect(() -> { c.setEnabledProtocols(new String[]{"BOGUS_PROTO"}); return "ok"; }).equals("IllegalArgumentException"),
+                        "invalid protocol rejected");
+                javax.net.ssl.SSLParameters sp = c.getSSLParameters();
+                sp.setServerNames(java.util.List.of(new javax.net.ssl.SNIHostName("localhost")));
+                c.setSSLParameters(sp);
+                check(c.getSSLParameters().getServerNames().size() == 1, "socket SSLParameters SNI roundtrip");
+            }
+            srv.join(8000);
+        }
+        // pinned TLSv1.2 pair (deterministic protocol selection)
+        javax.net.ssl.SSLContext ctx2 = newContext();
+        try (javax.net.ssl.SSLServerSocket ss = (javax.net.ssl.SSLServerSocket) ctx2.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            ss.setEnabledProtocols(new String[]{"TLSv1.2"});
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                    s.getOutputStream().write(s.getInputStream().read()); s.getOutputStream().flush();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            try (javax.net.ssl.SSLSocket c = (javax.net.ssl.SSLSocket) ctx2.getSocketFactory().createSocket(java.net.InetAddress.getLoopbackAddress(), port)) {
+                c.setEnabledProtocols(new String[]{"TLSv1.2"});
+                c.startHandshake();
+                check(c.getSession().getProtocol().equals("TLSv1.2"), "pinned TLSv1.2 negotiated");
+                c.getOutputStream().write('P'); c.getOutputStream().flush();
+                check(c.getInputStream().read() == 'P', "pinned-protocol echo roundtrip");
+            }
+            srv.join(8000);
+        }
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

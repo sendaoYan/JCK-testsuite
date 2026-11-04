@@ -58,9 +58,47 @@ public class KeyManagerFactoryTest {
         class MFP implements javax.net.ssl.ManagerFactoryParameters {}
         check(expect(() -> { kmf3.init(new MFP()); return "ok"; }).equals("InvalidAlgorithmParameterException"), "SunX509 rejects generic MFP");
     }
+    // ---- Part 3: contract deepening (algorithm/provider matrix + key recovery) ----
+    static void testContract() throws Exception {
+        // alias matrix: SunX509 / NewSunX509 / PKIX instantiate; bare "X509" does not
+        for (String alg : new String[]{"SunX509", "NewSunX509", KeyManagerFactory.getDefaultAlgorithm()}) {
+            KeyManagerFactory k = KeyManagerFactory.getInstance(alg);
+            check(k.getAlgorithm().equals(alg), "getInstance(" + alg + ") echoes the algorithm");
+        }
+        check(expect(() -> { KeyManagerFactory.getInstance("X509"); return "ok"; })
+                .equals("NoSuchAlgorithmException"), "KMI algorithm X509 -> NoSuchAlgorithmException");
+        check(expect(() -> { KeyManagerFactory.getInstance(null); return "ok"; })
+                .equals("NullPointerException"), "getInstance(null) -> NullPointerException");
+        // provider-name and provider-object overloads
+        KeyManagerFactory base = KeyManagerFactory.getInstance("SunX509");
+        KeyManagerFactory byName = KeyManagerFactory.getInstance("SunX509", base.getProvider().getName());
+        check(byName.getProvider().equals(base.getProvider()), "provider-name overload resolves the same provider");
+        KeyManagerFactory byObj = KeyManagerFactory.getInstance("SunX509", base.getProvider());
+        check(byObj.getProvider().equals(base.getProvider()), "provider-object overload keeps the provider");
+        check(expect(() -> { KeyManagerFactory.getInstance("SunX509", "NoSuchProviderXYZ"); return "ok"; })
+                .equals("NoSuchProviderException"), "unknown provider name -> NoSuchProviderException");
+        // wrong keystore password fails key recovery
+        KeyManagerFactory wrong = KeyManagerFactory.getInstance("SunX509");
+        check(expect(() -> { wrong.init(keyStore(), "wrong".toCharArray()); return "ok"; })
+                .equals("UnrecoverableKeyException"), "wrong password -> UnrecoverableKeyException");
+        // an empty keystore still yields the default number of managers
+        KeyManagerFactory emptyKmf = KeyManagerFactory.getInstance("SunX509");
+        java.security.KeyStore empty = java.security.KeyStore.getInstance("PKCS12");
+        empty.load(null, null);
+        emptyKmf.init(empty, null);
+        check(emptyKmf.getKeyManagers().length == 1,
+                "empty keystore init still returns 1 key manager (empty identity)");
+        // each get call returns a fresh array wrapping the same manager
+        KeyManagerFactory ok = KeyManagerFactory.getInstance("SunX509");
+        ok.init(keyStore(), PASS);
+        KeyManager[] m1 = ok.getKeyManagers(), m2 = ok.getKeyManagers();
+        check(m1 != m2 && m1.length == m2.length && m1[0] == m2[0],
+                "getKeyManagers: fresh array, same manager instance");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

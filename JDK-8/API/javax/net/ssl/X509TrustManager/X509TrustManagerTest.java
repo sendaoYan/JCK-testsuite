@@ -63,9 +63,49 @@ public class X509TrustManagerTest {
         check(expect(() -> { xtmE.checkServerTrusted(chain, null); return "ok"; }).equals("IllegalArgumentException"), "null auth type IAE");
         check(expect(() -> { xtm.checkServerTrusted(new java.security.cert.X509Certificate[0], "RSA"); return "ok"; }).equals("IllegalArgumentException"), "empty chain IAE");
     }
+    // ---- Part 3: contract deepening (trust decisions + issuer surface) ----
+    static void testContract() throws Exception {
+        java.security.KeyStore ks = keyStore();
+        java.security.cert.X509Certificate cert = (java.security.cert.X509Certificate) ks.getCertificate("server");
+        java.security.cert.X509Certificate[] chain = new java.security.cert.X509Certificate[]{cert};
+        java.security.KeyStore ts = java.security.KeyStore.getInstance("PKCS12");
+        ts.load(null, null);
+        ts.setCertificateEntry("server", cert);
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance("PKIX");
+        tmf.init(ts);
+        X509TrustManager xtm = (X509TrustManager) tmf.getTrustManagers()[0];
+        // trusted chain: repeated checks are idempotent
+        xtm.checkServerTrusted(chain, "RSA");
+        xtm.checkServerTrusted(chain, "RSA");
+        check(true, "checkServerTrusted idempotent for a trusted chain");
+        // this end-entity cert is also accepted in the client role (no EKU restriction)
+        xtm.checkClientTrusted(chain, "RSA");
+        check(true, "checkClientTrusted accepts the same chain");
+        // an empty trust store yields no issuers and fails with a runtime wrapping IAE
+        java.security.KeyStore tsE = java.security.KeyStore.getInstance("PKCS12");
+        tsE.load(null, null);
+        TrustManagerFactory tmfE = TrustManagerFactory.getInstance("PKIX");
+        tmfE.init(tsE);
+        X509TrustManager xtmE = (X509TrustManager) tmfE.getTrustManagers()[0];
+        check(xtmE.getAcceptedIssuers().length == 0, "empty trust store -> no accepted issuers");
+        check(expect(() -> { xtmE.checkServerTrusted(chain, "RSA"); return "ok"; })
+                .equals("RuntimeException"),
+                "empty trust store checkServerTrusted -> RuntimeException (wraps InvalidAlgorithmParameterException)");
+        // argument validation
+        check(expect(() -> { xtm.checkServerTrusted(chain, null); return "ok"; })
+                .equals("IllegalArgumentException"), "null auth type -> IllegalArgumentException");
+        check(expect(() -> { xtm.checkServerTrusted(new java.security.cert.X509Certificate[0], "RSA"); return "ok"; })
+                .equals("IllegalArgumentException"), "empty chain -> IllegalArgumentException");
+        check(expect(() -> { xtm.checkServerTrusted(null, "RSA"); return "ok"; })
+                .equals("IllegalArgumentException"), "null chain -> IllegalArgumentException");
+        // getAcceptedIssuers returns a fresh array each call
+        check(xtm.getAcceptedIssuers() != xtm.getAcceptedIssuers(),
+                "getAcceptedIssuers returns a fresh array per call");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -51,9 +51,38 @@ public class X509ExtendedKeyManagerTest {
         check(sa != null, "engine server alias");
         check(ekm.chooseEngineClientAlias(new String[]{"RSA"}, null, newContext().createSSLEngine()) != null, "engine client alias");
     }
+    // ---- Part 3: contract deepening (engine/socket parity) ----
+    static void testContract() throws Exception {
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore(), PASS);
+        X509ExtendedKeyManager ekm = (X509ExtendedKeyManager) kmf.getKeyManagers()[0];
+        javax.net.ssl.SSLEngine engine = newContext().createSSLEngine();
+        // the engine overloads resolve the same alias as the socket overloads
+        String socketAlias = ekm.chooseServerAlias("RSA", null, null);
+        String engineAlias = ekm.chooseEngineServerAlias("RSA", null, engine);
+        check(socketAlias != null && socketAlias.equals(engineAlias),
+                "engine and socket overloads resolve the same server alias");
+        String socketClient = ekm.chooseClientAlias(new String[]{"RSA"}, null, null);
+        String engineClient = ekm.chooseEngineClientAlias(new String[]{"RSA"}, null, engine);
+        check(socketClient != null && socketClient.equals(engineClient),
+                "engine and socket overloads resolve the same client alias");
+        // chain/key accessors are shared with the base interface
+        check(java.util.Arrays.equals(ekm.getCertificateChain(engineAlias),
+                ekm.getCertificateChain(socketAlias)), "engine alias exposes the same chain");
+        check(ekm.getPrivateKey(engineAlias) == ekm.getPrivateKey(socketAlias),
+                "engine alias exposes the same private key");
+        // unsupported key types return null on both surfaces
+        check(ekm.chooseEngineServerAlias("EC", null, engine) == null, "chooseEngineServerAlias EC -> null");
+        check(ekm.chooseEngineClientAlias(new String[]{"EC"}, null, engine) == null,
+                "chooseEngineClientAlias EC -> null");
+        // null engine argument is handled like a socket-less selection
+        check(ekm.chooseEngineServerAlias("RSA", null, null) != null,
+                "chooseEngineServerAlias tolerates a null engine");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -59,9 +59,45 @@ public class X509KeyManagerTest {
         check(xkm.getCertificateChain("nope") == null, "bogus alias chain null");
         check(xkm.getPrivateKey("nope") == null, "bogus alias key null");
     }
+    // ---- Part 3: contract deepening (key/chain consistency + key-type matrix) ----
+    static void testContract() throws Exception {
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore(), PASS);
+        X509KeyManager xkm = (X509KeyManager) kmf.getKeyManagers()[0];
+        String alias = xkm.chooseServerAlias("RSA", null, null);
+        check(alias != null, "RSA alias chosen");
+        // the private key matches the certificate public key (RSA modulus equality)
+        java.security.interfaces.RSAPrivateKey priv =
+                (java.security.interfaces.RSAPrivateKey) xkm.getPrivateKey(alias);
+        java.security.interfaces.RSAPublicKey pub = (java.security.interfaces.RSAPublicKey)
+                xkm.getCertificateChain(alias)[0].getPublicKey();
+        check(priv.getModulus().equals(pub.getModulus()), "private key modulus == certificate public key modulus");
+        check(priv.getModulus().bitLength() == 2048, "2048-bit RSA key material");
+        // issuer filter array is accepted (empty filter)
+        check(xkm.chooseServerAlias("RSA", new javax.security.auth.x500.X500Principal[0], null) != null,
+                "chooseServerAlias with empty issuer filter");
+        // unsupported key types return null across the board
+        check(xkm.chooseServerAlias("EC", null, null) == null, "chooseServerAlias EC -> null");
+        check(xkm.getServerAliases("EC", null) == null, "getServerAliases EC -> null");
+        check(xkm.chooseClientAlias(new String[]{"EC"}, null, null) == null,
+                "chooseClientAlias EC -> null");
+        check(xkm.getClientAliases("EC", null) == null, "getClientAliases EC -> null");
+        // alias lookups are consistent for the same arguments
+        check(java.util.Arrays.asList(xkm.getServerAliases("RSA", null)).contains(alias),
+                "chooseServerAlias picks one of getServerAliases");
+        check(xkm.getCertificateChain(alias).length == xkm.getCertificateChain(alias).length
+                && xkm.getPrivateKey(alias) != null, "chain/key lookups repeatable");
+        // interface method surface
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : X509KeyManager.class.getMethods()) names.add(m.getName());
+        check(names.containsAll(java.util.Arrays.asList("chooseClientAlias", "getClientAliases",
+                "chooseServerAlias", "getServerAliases", "getCertificateChain", "getPrivateKey")),
+                "interface exposes the 6 selector methods");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

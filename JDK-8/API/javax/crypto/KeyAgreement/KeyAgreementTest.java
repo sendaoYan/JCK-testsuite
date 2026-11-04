@@ -190,9 +190,34 @@ public class KeyAgreementTest {
         check("SunEC".equals(kaQ.getProvider().getName()), "getInstance(String,Provider) uses given provider");
     }
 
+
+    // ---- Part 3: contract deepening (version-difference record) ----
+    static void testContract() throws Exception {
+        // XDH (RFC 7748) agreement was added in JDK 11; JDK-8 rejects the names
+        try {
+            javax.crypto.KeyAgreement.getInstance("XDH");
+            check(false, "JDK-8 unexpectedly provides XDH");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            check(true, "JDK-8 has no XDH KeyAgreement -> NoSuchAlgorithmException");
+        }
+        try {
+            java.security.KeyPairGenerator.getInstance("XDH");
+            check(false, "JDK-8 unexpectedly provides an XDH KeyPairGenerator");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            check(true, "JDK-8 has no XDH KeyPairGenerator -> NoSuchAlgorithmException");
+        }
+        try {
+            java.security.KeyPairGenerator.getInstance("X25519");
+            check(false, "JDK-8 unexpectedly provides X25519");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            check(true, "JDK-8 has no X25519 KeyPairGenerator -> NoSuchAlgorithmException");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

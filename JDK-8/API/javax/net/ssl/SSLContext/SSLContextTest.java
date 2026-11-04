@@ -70,9 +70,62 @@ public class SSLContextTest {
         check(sup.getCipherSuites() != null && sup.getCipherSuites().length > 0, "supported ciphers non-empty");
         check(ctx.getClientSessionContext() != null && ctx.getServerSessionContext() != null, "session contexts non-null");
     }
+    // ---- Part 3: contract deepening (factory matrix + default context lifecycle) ----
+    static void testContract() throws Exception {
+        // algorithm matrix (fixed alias set, present on this JDK)
+        for (String alg : new String[]{"TLS", "Default", "TLSv1.2", "TLSv1.3", "TLSv1", "TLSv1.1", "SSLv3"}) {
+            SSLContext c = SSLContext.getInstance(alg);
+            check(c.getProtocol().equals(alg), "getInstance(" + alg + ").getProtocol() echoes the name");
+            check(c.getProvider() != null && "SunJSSE".equals(c.getProvider().getName()),
+                    "getInstance(" + alg + ") resolved by SunJSSE");
+        }
+        check(expect(() -> { SSLContext.getInstance(null); return "ok"; }).equals("NullPointerException"),
+                "getInstance(null) -> NullPointerException");
+        check(expect(() -> { SSLContext.getInstance("NoSuchTLS"); return "ok"; }).equals("NoSuchAlgorithmException"),
+                "unknown protocol -> NoSuchAlgorithmException");
+        // DTLS support differs by JDK release
+                check(expect(() -> { SSLContext.getInstance("DTLS"); return "ok"; }).equals("NoSuchAlgorithmException"),
+                "JDK-8 has no DTLS context -> NoSuchAlgorithmException");
+        // the default context is a lazily created "Default" protocol context
+        check("Default".equals(SSLContext.getDefault().getProtocol()),
+                "default context protocol is Default");
+        SSLContext prev = SSLContext.getDefault();
+        SSLContext mine = SSLContext.getInstance("TLS");
+        mine.init(null, null, null);
+        SSLContext.setDefault(mine);
+        check(SSLContext.getDefault() == mine, "setDefault installs the new default");
+        SSLContext.setDefault(prev);
+        check(SSLContext.getDefault() == prev, "default restored");
+        check(expect(() -> { SSLContext.setDefault(null); return "ok"; }).equals("NullPointerException"),
+                "setDefault(null) -> NullPointerException");
+        // init semantics: null arrays are legal (defaults), re-init is legal
+        SSLContext u = SSLContext.getInstance("TLS");
+        check(expect(() -> { u.createSSLEngine(); return "ok"; }).equals("IllegalStateException"),
+                "createSSLEngine before init -> IllegalStateException");
+        check(expect(() -> { u.getSocketFactory(); return "ok"; }).equals("IllegalStateException"),
+                "getSocketFactory before init -> IllegalStateException");
+        u.init(null, null, null);
+        check(expect(() -> { u.init(null, null, null); return "ok"; }).equals("ok"),
+                "re-init after init is allowed");
+        // factory accessors mint a fresh instance per call
+        SSLContext d = SSLContext.getInstance("TLS"); d.init(null, null, null);
+        check(d.getSocketFactory() != d.getSocketFactory(),
+                "getSocketFactory returns a fresh instance per call");
+        check(d.getClientSessionContext() == d.getClientSessionContext(),
+                "getClientSessionContext returns the same context object");
+        check(d.getClientSessionContext() != d.getServerSessionContext(),
+                "client and server session contexts are distinct");
+        // parameter views: supported is a superset of default, both non-empty
+        SSLParameters dp = d.getDefaultSSLParameters(), sp = d.getSupportedSSLParameters();
+        check(dp.getProtocols() != null && dp.getProtocols().length > 0, "default parameters have protocols");
+        java.util.Set<String> sup = new java.util.HashSet<String>(java.util.Arrays.asList(sp.getProtocols()));
+        for (String p : dp.getProtocols()) check(sup.contains(p), "default protocol " + p + " is supported");
+        check(sp.getCipherSuites() != null && sp.getCipherSuites().length > 0, "supported cipher suites non-empty");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

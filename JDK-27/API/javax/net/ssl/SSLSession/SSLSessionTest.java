@@ -85,9 +85,55 @@ public class SSLSessionTest {
             srv.join(8000);
         }
     }
+    // ---- Part 3: contract deepening (binding semantics + context identity) ----
+    static void testContract() throws Exception {
+        javax.net.ssl.SSLContext ctx = newContext();
+        try (javax.net.ssl.SSLServerSocket ss = (javax.net.ssl.SSLServerSocket) ctx.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                    s.getOutputStream().write(s.getInputStream().read()); s.getOutputStream().flush();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            try (javax.net.ssl.SSLSocket c = (javax.net.ssl.SSLSocket) ctx.getSocketFactory().createSocket(java.net.InetAddress.getLoopbackAddress(), port)) {
+                c.startHandshake();
+                javax.net.ssl.SSLSession sess = c.getSession();
+                check(sess.getSessionContext() == ctx.getClientSessionContext(),
+                        "session context is the client session context");
+                check(sess.getLocalCertificates() == null, "client local certificates null (no client auth)");
+                check(sess.getLocalPrincipal() == null, "client local principal null (no client auth)");
+                // binding listener callbacks: put fires bound, replace fires unbound+bound, remove fires unbound
+                final java.util.List<String> events = new java.util.ArrayList<String>();
+                class Binder implements javax.net.ssl.SSLSessionBindingListener {
+                    public void valueBound(javax.net.ssl.SSLSessionBindingEvent e) { events.add("bound:" + e.getName()); }
+                    public void valueUnbound(javax.net.ssl.SSLSessionBindingEvent e) { events.add("unbound:" + e.getName()); }
+                }
+                sess.putValue("attr", new Binder());
+                sess.putValue("attr", new Binder());
+                sess.removeValue("attr");
+                check(events.stream().filter(s -> s.equals("bound:attr")).count() == 2,
+                        "bound fired on put and on replace");
+                check(events.stream().filter(s -> s.equals("unbound:attr")).count() == 2,
+                        "unbound fired on replace and on remove");
+                // value store overwrite semantics with plain values
+                sess.putValue("k", "v1");
+                sess.putValue("k", "v2");
+                check("v2".equals(sess.getValue("k")), "putValue overwrites");
+                sess.removeValue("missing"); // removing an absent value is a no-op
+                check(true, "removeValue of absent key tolerated");
+                sess.invalidate();
+                check(!sess.isValid(), "invalidate makes session invalid");
+                check(sess.getValueNames() != null, "value names still queryable after invalidate");
+            }
+            srv.join(8000);
+        }
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

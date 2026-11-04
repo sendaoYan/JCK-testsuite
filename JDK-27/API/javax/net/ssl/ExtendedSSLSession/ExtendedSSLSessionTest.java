@@ -86,9 +86,39 @@ public class ExtendedSSLSessionTest {
             srv.join(8000);
         }
     }
+    // ---- Part 3: contract deepening (SNI delivery to the server session) ----
+    static void testContract() throws Exception {
+        javax.net.ssl.SSLContext ctx = newContext();
+        try (javax.net.ssl.SSLServerSocket ss = (javax.net.ssl.SSLServerSocket) ctx.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            final int port = ss.getLocalPort();
+            final java.util.List<String> serverSni = new java.util.ArrayList<String>();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                    javax.net.ssl.ExtendedSSLSession es = (javax.net.ssl.ExtendedSSLSession) s.getSession();
+                    for (javax.net.ssl.SNIServerName n : es.getRequestedServerNames()) serverSni.add(n.toString());
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            try (javax.net.ssl.SSLSocket c = (javax.net.ssl.SSLSocket) ctx.getSocketFactory().createSocket(java.net.InetAddress.getLoopbackAddress(), port)) {
+                javax.net.ssl.SSLParameters p = c.getSSLParameters();
+                p.setServerNames(java.util.List.of(new javax.net.ssl.SNIHostName("localhost")));
+                c.setSSLParameters(p);
+                c.startHandshake();
+                javax.net.ssl.ExtendedSSLSession es =
+                        (javax.net.ssl.ExtendedSSLSession) c.getSession();
+                check(es.getRequestedServerNames().size() == 1,
+                        "client session echoes the single requested name");
+            }
+            srv.join(8000);
+            check(!serverSni.isEmpty() && serverSni.get(0).contains("localhost"),
+                    "server session reports the client SNI host name: " + serverSni);
+        }
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -69,9 +69,75 @@ public class SSLSocketFactoryTest {
             srv.join(8000);
         }
     }
+    // ---- Part 3: contract deepening (suite containment + direct connect closure) ----
+    static void testContract() throws Exception {
+        javax.net.ssl.SSLSocketFactory def =
+                (javax.net.ssl.SSLSocketFactory) javax.net.ssl.SSLSocketFactory.getDefault();
+        // the supported set contains the default set
+        java.util.Set<String> supported = new java.util.HashSet<String>(java.util.Arrays.asList(def.getSupportedCipherSuites()));
+        for (String cs : def.getDefaultCipherSuites())
+            check(supported.contains(cs), "default cipher suite " + cs + " is in the supported set");
+        // every factory call mints a fresh instance
+        check(javax.net.ssl.SSLSocketFactory.getDefault() != def,
+                "getDefault returns a fresh instance per call");
+        check(javax.net.ssl.SSLSocketFactory.getDefault()
+                != javax.net.ssl.SSLContext.getDefault().getSocketFactory(),
+                "getDefault is independent of SSLContext.getDefault().getSocketFactory() instances");
+        // full direct connect + handshake + echo (not the layered path above)
+        javax.net.ssl.SSLContext ctx = newContext();
+        try (javax.net.ssl.SSLServerSocket ss =
+                (javax.net.ssl.SSLServerSocket) ctx.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                    s.getOutputStream().write(s.getInputStream().read()); s.getOutputStream().flush();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            javax.net.ssl.SSLSocketFactory sf = ctx.getSocketFactory();
+            javax.net.ssl.SSLSocket c =
+                    (javax.net.ssl.SSLSocket) sf.createSocket(java.net.InetAddress.getLoopbackAddress(), port);
+            c.startHandshake();
+            c.getOutputStream().write('D'); c.getOutputStream().flush();
+            check(c.getInputStream().read() == 'D', "direct createSocket(InetAddress,int) handshake + echo");
+            check(c.getSession().isValid(), "direct connect produced a valid session");
+            c.close();
+            srv.join(8000);
+        }
+        // host-string overload resolves loopback and handshakes
+        javax.net.ssl.SSLContext ctx2 = newContext();
+        try (javax.net.ssl.SSLServerSocket ss =
+                (javax.net.ssl.SSLServerSocket) ctx2.getServerSocketFactory().createServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            final int port = ss.getLocalPort();
+            Thread srv = new Thread(() -> {
+                try (javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) ss.accept()) {
+                    s.startHandshake();
+                    s.getOutputStream().write(s.getInputStream().read()); s.getOutputStream().flush();
+                } catch (Exception e) {}
+            });
+            srv.setDaemon(true); srv.start();
+            javax.net.ssl.SSLSocket c =
+                    (javax.net.ssl.SSLSocket) ctx2.getSocketFactory().createSocket("localhost", port);
+            c.startHandshake();
+            c.getOutputStream().write('H'); c.getOutputStream().flush();
+            check(c.getInputStream().read() == 'H', "createSocket(String,int) handshake + echo");
+            c.close();
+            srv.join(8000);
+        }
+        // connecting to a closed port on loopback fails inside the IOException family
+        int deadPort;
+        try (java.net.ServerSocket dead = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            deadPort = dead.getLocalPort();
+        }
+        Object res = expect(() -> def.createSocket(java.net.InetAddress.getLoopbackAddress(), deadPort));
+        check(res.equals("ConnectException") || res.equals("IOException"),
+                "connect to closed port -> IOException family, got " + res);
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
