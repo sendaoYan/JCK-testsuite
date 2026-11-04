@@ -20,3 +20,12 @@
 - 健壮性: BAIS 组合，无线程。
 
 产出：`SequenceInputStreamTest.java`（白盒 + 黑盒共 25 断言）。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（23 -> 91）：与 JDK-8 侧镜像（转换即关闭、继承 skip 全矩阵、null 构造时序、close 后状态、mark/reset、len==0 短路、枚举异常双路透传、失败子流 read/available、空中间流、单元素、急切首元素、300 字节内容、区域不跨界）+ JDK-27 差异与 transferTo。
+
+### 版本差异（实测锁定，写入本侧断言）
+- close 不中止：失败子流 close 抛出的 IOException 透传，但剩余流仍全部关闭；多个失败时后续异常 suppressed 挂在首个上（实测 suppressed==1）。
+- read OOB 消息：Objects.checkFromIndexSize "Range [x, x + n) out of bounds for length y"（消息级断言）；ctor((Enumeration)null) NPE 带 ""this.e" is null"。
+- transferTo（覆写）：部分消费跨边界传剩余（实测 4 字节 [2,3,4,5]）后 EOF；空枚举传 0；null out -> NPE（消息 "out"）；下沉异常透传；close 后返回 0。

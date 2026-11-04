@@ -171,9 +171,190 @@ public class ConfigTest {
         }
     }
 
+    // ================= deep additions (contract level) =================
+
+    // ---- empty / null patterns: no patterns -> null filter (documented) ----
+    static void testEmptyOrNullPatterns() throws Exception {
+        check(Config.createFilter("") == null, "empty pattern yields a null filter");
+        check(Config.createFilter(";") == null, "separator-only pattern yields a null filter");
+        try {
+            Config.createFilter(null);
+            check(false, "createFilter(null) must throw");
+        } catch (NullPointerException npe) {
+            check("pattern".equals(npe.getMessage()), "NPE message: " + npe.getMessage());
+        }
+    }
+
+    // ---- malformed patterns: measured exception types and messages ----
+    static void testMalformedPatterns() throws Exception {
+        try {
+            Config.createFilter("maxdepth=abc");
+            check(false, "non-numeric limit must throw");
+        } catch (NumberFormatException nfe) {
+            check("For input string: \"abc\"".equals(nfe.getMessage()),
+                  "NFE message: " + nfe.getMessage());
+        }
+        try {
+            Config.createFilter("maxdepth=-1");
+            check(false, "negative maxdepth must throw");
+        } catch (IllegalArgumentException iae) {
+            check("negative limit: -1".equals(iae.getMessage()), "IAE message: " + iae.getMessage());
+        }
+        try {
+            Config.createFilter("maxrefs=-5");
+            check(false, "negative maxrefs must throw");
+        } catch (IllegalArgumentException iae) {
+            check("negative limit: -5".equals(iae.getMessage()), "IAE message: " + iae.getMessage());
+        }
+        try {
+            Config.createFilter("/java.base");
+            check(false, "module form without a module name must throw");
+        } catch (IllegalArgumentException iae) {
+            check(iae.getMessage() != null && iae.getMessage().contains("module name is missing")
+                      && iae.getMessage().contains("/java.base"),
+                  "IAE message echoes the pattern: " + iae.getMessage());
+        }
+        try {
+            Config.createFilter("java.base/");
+            check(false, "module form without a class/package must throw");
+        } catch (IllegalArgumentException iae) {
+            check(iae.getMessage() != null && iae.getMessage().contains("class or package missing"),
+                  "IAE message: " + iae.getMessage());
+        }
+        try {
+            Config.createFilter(".*");
+            check(false, "package wildcard without a module must throw");
+        } catch (IllegalArgumentException iae) {
+            check(iae.getMessage() != null && iae.getMessage().contains("package missing"),
+                  "IAE message: " + iae.getMessage());
+        }
+    }
+
+    // ---- module/class patterns ----
+    static void testModulePatterns() throws Exception {
+        check(Config.createFilter("java.base/java.lang.String")
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "module/class exact form allows the class");
+        check(Config.createFilter("java.base/*")
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "module/* allows classes of the module");
+        check(Config.createFilter("java.base/java.lang.*")
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "module/package.* allows the package");
+        check(Config.createFilter("nomodule/java.lang.String")
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "wrong module prefix does not match (UNDECIDED)");
+    }
+
+    // ---- first matching pattern wins: order matters ----
+    static void testFirstMatchWins() throws Exception {
+        ObjectInputFilter allowFirst = Config.createFilter("java.lang.String;!*");
+        check(allowFirst.checkInput(info(String.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "earlier allow wins over the later !*");
+        check(allowFirst.checkInput(info(Long.class, -1, 1, 1, 0)) == Status.REJECTED,
+              "!* terminates everything else");
+        ObjectInputFilter rejectFirst = Config.createFilter("!*;java.lang.String");
+        check(rejectFirst.checkInput(info(String.class, -1, 1, 1, 0)) == Status.REJECTED,
+              "earlier reject wins over the later allow (order asymmetry)");
+        check(rejectFirst.checkInput(info(Long.class, -1, 1, 1, 0)) == Status.REJECTED,
+              "and rejects everything else too");
+    }
+
+    // ---- '*' matches reference classes only, never arrays or primitives ----
+    static void testStarScope() throws Exception {
+        ObjectInputFilter star = Config.createFilter("*");
+        check(star.checkInput(info(String.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "* matches an ordinary reference class");
+        check(star.checkInput(info(int[].class, 3, 1, 1, 0)) == Status.UNDECIDED,
+              "* does NOT match an array class");
+        check(star.checkInput(info(long.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "* does NOT match a primitive class");
+        check(star.checkInput(info(void.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "* does NOT match void");
+        check(Config.createFilter("[I").checkInput(info(int[].class, 3, 1, 1, 0))
+                  == Status.UNDECIDED,
+              "array binary name '[I' is not a matching class pattern (recorded behavior)");
+        check(Config.createFilter("java.lang.String[]").checkInput(info(String[].class, 3, 1, 1, 0))
+                  == Status.UNDECIDED,
+              "[]-suffixed pattern does not match an array class");
+    }
+
+    // ---- nested classes: binary '$' names match, dotted forms do not ----
+    static void testNestedClassNameForms() throws Exception {
+        check(Config.createFilter("java.util.Map$Entry")
+                  .checkInput(info(java.util.Map.Entry.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "binary nested name with $ matches");
+        check(Config.createFilter("java.util.Map.Entry")
+                  .checkInput(info(java.util.Map.Entry.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "dotted nested name does not match");
+    }
+
+    // ---- duplicate limits: the LAST occurrence wins ----
+    static void testDuplicateLimitLastWins() throws Exception {
+        ObjectInputFilter dup = Config.createFilter("maxdepth=2;maxdepth=9");
+        check(dup.checkInput(info(null, -1, 3, 1, 0)) == Status.UNDECIDED,
+              "depth 3 passes: the earlier maxdepth=2 is superseded");
+        check(dup.checkInput(info(null, -1, 5, 1, 0)) == Status.UNDECIDED,
+              "depth 5 passes too");
+        check(dup.checkInput(info(null, -1, 10, 1, 0)) == Status.REJECTED,
+              "depth 10 rejected: effective limit is the last one (9)");
+        check("maxdepth=2;maxdepth=9".equals(dup.toString()),
+              "toString echoes both occurrences verbatim");
+    }
+
+    // ---- whitespace, case, negation and odd-but-legal forms ----
+    static void testWhitespaceCaseAndNegation() throws Exception {
+        ObjectInputFilter ws = Config.createFilter(" java.lang.String ");
+        check(ws.checkInput(info(String.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "surrounding whitespace is NOT trimmed (no match)");
+        check(" java.lang.String ".equals(ws.toString()),
+              "toString preserves the whitespace verbatim");
+        check(Config.createFilter("java.lang.string").checkInput(info(String.class, -1, 1, 1, 0))
+                  == Status.UNDECIDED, "class patterns are case sensitive");
+        ObjectInputFilter neg = Config.createFilter("!java.lang.String");
+        check(neg.checkInput(info(String.class, -1, 1, 1, 0)) == Status.REJECTED,
+              "'!' negates the following pattern for the named class");
+        check(neg.checkInput(info(Long.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "negated pattern alone leaves other classes UNDECIDED");
+        check("!java.lang.String".equals(neg.toString()), "negation kept in toString");
+        ObjectInputFilter dot = Config.createFilter(".example.Class");
+        check(".example.Class".equals(dot.toString()), "leading-dot pattern is accepted syntax");
+        check(dot.checkInput(info(String.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "leading-dot pattern never matches an ordinary class name");
+    }
+
+    // ---- maxarray applies only when a length is actually reported ----
+    static void testMaxarrayNotApplicable() throws Exception {
+        ObjectInputFilter f = Config.createFilter("maxarray=4");
+        check(f.checkInput(info(String.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "maxarray ignores non-arrays (arrayLength == -1)");
+        check(f.checkInput(info(int[].class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "maxarray ignores the descriptor stage where the length is not yet known");
+    }
+
+    // ---- read-only factory accessor facts (setters are global state, never called) ----
+    static void testFactoryAccessorsReadonly() throws Exception {
+        check("java.io.ObjectInputFilter$Config$BuiltinFilterFactory"
+                  .equals(Config.getSerialFilterFactory().getClass().getTypeName()),
+              "the default filter factory is the builtin one");
+        check(Config.getSerialFilter() == null
+                  || Config.getSerialFilter() instanceof ObjectInputFilter,
+              "getSerialFilter observes the process-wide filter without modifying it");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEmptyOrNullPatterns();
+        testMalformedPatterns();
+        testModulePatterns();
+        testFirstMatchWins();
+        testStarScope();
+        testNestedClassNameForms();
+        testDuplicateLimitLastWins();
+        testWhitespaceCaseAndNegation();
+        testMaxarrayNotApplicable();
+        testFactoryAccessorsReadonly();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

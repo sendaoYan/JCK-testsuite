@@ -10,6 +10,10 @@
 import java.io.IOException;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class PipedInputStreamTest {
     static int passed;
@@ -17,6 +21,27 @@ public class PipedInputStreamTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    interface ThrowingRunnable { void run() throws Exception; }
+
+    // 深化辅助：断言 op 抛出指定类型（含子类）且消息含精确子串（双侧实测过）
+    static void expect(Class<? extends Throwable> type, String msgSub, String label,
+                       ThrowingRunnable op) {
+        try {
+            op.run();
+        } catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(label + ": wrong type " + t.getClass().getName()
+                        + " (" + t.getMessage() + ")");
+            if (msgSub != null && (t.getMessage() == null || !t.getMessage().contains(msgSub)))
+                throw new AssertionError(label + ": message \"" + t.getMessage()
+                        + "\" lacks \"" + msgSub + "\"");
+            passed++;
+            return;
+        }
+        throw new AssertionError(label + ": expected " + type.getName() + " containing \""
+                + msgSub + "\", but returned normally");
     }
 
     static void testBehavior() throws Exception {
@@ -133,8 +158,234 @@ public class PipedInputStreamTest {
         w8.join(5000);
     }
 
+    // ==================== 深化追加（契约级，批次 ioD） ====================
+
+    // 构造矩阵：pipeSize 边界 IAE、PIPE_SIZE 常量、connect(null)、重复 connect 精确消息、
+    // closed-unconnected 端 connect 成功（字节侧 connect 无 closed 检查，实测 B13）
+    static void testCtorAndConnectMatrix() throws Exception {
+        expect(IllegalArgumentException.class, "Pipe Size <= 0", "pipeSize -1",
+                () -> new PipedInputStream(-1));
+        expect(IllegalArgumentException.class, "Pipe Size <= 0", "pipeSize 0",
+                () -> new PipedInputStream(0));
+        Field f = PipedInputStream.class.getDeclaredField("PIPE_SIZE");
+        f.setAccessible(true);
+        check(f.get(null).equals(Integer.valueOf(1024)), "PIPE_SIZE == 1024");
+        check(Modifier.isStatic(f.getModifiers()) && Modifier.isFinal(f.getModifiers())
+                && Modifier.isProtected(f.getModifiers()), "PIPE_SIZE protected static final");
+
+        final PipedInputStream in = new PipedInputStream();
+        final PipedOutputStream out = new PipedOutputStream(in);
+        expect(NullPointerException.class, null, "connect(null)",
+                () -> in.connect(null));
+        expect(IOException.class, "Already connected", "in.connect(other) after connected",
+                () -> in.connect(new PipedOutputStream()));
+        expect(IOException.class, "Already connected", "out.connect(other) after connected",
+                () -> out.connect(new PipedInputStream()));
+        expect(IOException.class, "Already connected", "third party connect(connected in)",
+                () -> new PipedOutputStream().connect(in));
+        expect(IOException.class, "Already connected", "ctor with already-connected src",
+                () -> new PipedInputStream(out));
+
+        // (src, pipeSize) 构造器连接且缓冲生效
+        PipedOutputStream out2 = new PipedOutputStream();
+        PipedInputStream in2 = new PipedInputStream(out2, 4);
+        out2.write(new byte[]{1, 2, 3, 4}, 0, 4);
+        check(in2.available() == 4, "(src,4) sized buffer exactly full");
+        check(in2.read() == 1 && in2.read() == 2 && in2.read() == 3 && in2.read() == 4,
+                "(src,pipeSize) round-trip");
+        check(in2.available() == 0, "drained");
+
+        // 未连接 close 后仍可 connect（字节侧无 closed 检查，实测 B13），
+        // 但之后读/写都报 "Pipe closed"（closedByReader 已置位）
+        PipedInputStream in3 = new PipedInputStream();
+        in3.close();
+        PipedOutputStream out3 = new PipedOutputStream();
+        out3.connect(in3);
+        passed++; // connect succeeded without exception
+        expect(IOException.class, "Pipe closed", "write into closed-unconnected peer",
+                () -> out3.write(9));
+        expect(IOException.class, "Pipe closed", "read from closed-unconnected self",
+                () -> in3.read());
+    }
+
+    // read(byte[],off,len) 参数校验顺序契约（实测 B02/B04：bounds 与 len==0 先于连接检查）
+    static void testReadBoundsAndZero() throws Exception {
+        final byte[] b = new byte[4];
+        check(new PipedInputStream().read(b, 0, 0) == 0,
+                "len==0 unconnected returns 0 (bounds/len precede connection check)");
+        expect(IndexOutOfBoundsException.class, null, "read(b,-1,0) unconnected is IOOBE not IOE",
+                () -> new PipedInputStream().read(b, -1, 0));
+        expect(IndexOutOfBoundsException.class, null, "read(b,0,-1) unconnected",
+                () -> new PipedInputStream().read(b, 0, -1));
+        expect(NullPointerException.class, null, "read(null,0,1)",
+                () -> new PipedInputStream().read(null, 0, 1));
+        expect(IOException.class, "Pipe not connected", "read(b,0,1) unconnected",
+                () -> new PipedInputStream().read(b, 0, 1));
+
+        PipedInputStream in = new PipedInputStream();
+        new PipedOutputStream(in);
+        expect(IndexOutOfBoundsException.class, null, "read(b,2,3) len>remaining",
+                () -> in.read(b, 2, 3));
+        in.close();
+        check(in.read(b, 0, 0) == 0, "len==0 after own close still 0");
+        expect(IOException.class, "Pipe closed", "read(b,0,1) after own close",
+                () -> in.read(b, 0, 1));
+
+        PipedInputStream in2 = new PipedInputStream();
+        PipedOutputStream out2 = new PipedOutputStream(in2);
+        out2.close();
+        check(in2.read(b, 0, 0) == 0, "len==0 after writer close still 0");
+        check(in2.read(b, 0, 1) == -1, "read(b,0,1) after writer close is EOF");
+    }
+
+    // available()：未连接/closed → 0；缓冲满 → pipeSize；排空 → 0（实测 B05/B27/B45）
+    static void testAvailableContract() throws Exception {
+        check(new PipedInputStream().available() == 0, "unconnected available == 0");
+        PipedInputStream closed = new PipedInputStream();
+        closed.close();
+        check(closed.available() == 0, "closed available == 0");
+        PipedInputStream in = new PipedInputStream(4);
+        PipedOutputStream out = new PipedOutputStream(in);
+        out.write(new byte[]{9, 9, 9, 9}, 0, 4);
+        check(in.available() == 4, "exactly-full buffer reports pipeSize");
+        check(in.read(new byte[4], 0, 4) == 4, "drain 4");
+        check(in.available() == 0, "empty after drain");
+    }
+
+    // protected receive(int) 契约（子类暴露，实测 B40-B42）
+    static class ExposingPipedInputStream extends PipedInputStream {
+        void rx(int b) throws IOException { receive(b); }
+    }
+
+    static void testReceiveProtected() throws Exception {
+        final ExposingPipedInputStream ex = new ExposingPipedInputStream();
+        expect(IOException.class, "Pipe not connected", "receive(int) unconnected",
+                () -> ex.rx(1));
+        ExposingPipedInputStream ex2 = new ExposingPipedInputStream();
+        PipedOutputStream p2 = new PipedOutputStream(ex2);
+        p2.close();
+        expect(IOException.class, "Pipe closed", "receive(int) after writer close",
+                () -> ex2.rx(1));
+        ExposingPipedInputStream ex3 = new ExposingPipedInputStream();
+        new PipedOutputStream(ex3);
+        ex3.rx(7);
+        check(ex3.available() == 1, "receive(int) buffers one byte");
+        check(ex3.read() == 7, "received byte readable");
+    }
+
+    // broken pipe 双向检测（受控 daemon 线程 + latch/join 超时，无时序依赖）：
+    // 写端死亡 → 读端 "Write end dead"（实测 B39）；读端死亡 → 写端 "Read end dead"（实测 B37）
+    static void testBrokenPipeDetection() throws Exception {
+        // Write end dead：writer 线程写 1 字节后死亡（不 close），排空后再读立即抛
+        final PipedInputStream in = new PipedInputStream();
+        final PipedOutputStream out = new PipedOutputStream(in);
+        Thread w = new Thread(() -> {
+            try { out.write(42); } catch (IOException ignored) { }
+        }, "pis-d-writer");
+        w.setDaemon(true);
+        w.start();
+        w.join(15000);
+        check(!w.isAlive(), "writer thread died within bound");
+        check(in.read() == 42, "buffered byte still delivered after writer death");
+        expect(IOException.class, "Write end dead", "read after writer thread death",
+                () -> in.read());
+
+        // Read end dead：reader 线程读 1 字节后死亡（不 close），主线程再写立即抛
+        final PipedInputStream in2 = new PipedInputStream();
+        final PipedOutputStream out2 = new PipedOutputStream(in2);
+        out2.write(43);
+        final CountDownLatch done = new CountDownLatch(1);
+        Thread r = new Thread(() -> {
+            try { in2.read(); } catch (IOException ignored) { }
+            finally { done.countDown(); }
+        }, "pis-d-reader");
+        r.setDaemon(true);
+        r.start();
+        check(done.await(15, TimeUnit.SECONDS), "reader consumed within bound");
+        r.join(15000);
+        check(!r.isAlive(), "reader thread died within bound");
+        expect(IOException.class, "Read end dead", "write after reader thread death",
+                () -> out2.write(44));
+    }
+
+    // markSupported false；InputStream.skip 语义：负/0 → 0、跳过、EOF 后 0（实测 B43/B44）
+    static void testSkipAndMark() throws Exception {
+        PipedInputStream in = new PipedInputStream();
+        PipedOutputStream out = new PipedOutputStream(in);
+        check(!in.markSupported(), "markSupported is false");
+        out.write(new byte[]{1, 2, 3, 4, 5, 6}, 0, 6);
+        check(in.skip(2) == 2, "skip 2");
+        check(in.read() == 3, "read resumes after skip");
+        check(in.skip(-5) == 0, "negative skip returns 0");
+        check(in.skip(0) == 0, "skip(0) returns 0");
+        out.close();
+        check(in.skip(4) == 3, "skip past remaining returns what is left (3)");
+        check(in.skip(3) == 0, "skip at EOF returns 0");
+        check(in.read() == -1, "EOF confirmed");
+    }
+
+    // 单线程写后读（数据在缓冲内时允许，实测 B47/B48）：unsigned 字节、UTF-8 拆批、计数递减
+    static void testSingleThreadAndUtf8() throws Exception {
+        PipedInputStream in = new PipedInputStream();
+        PipedOutputStream out = new PipedOutputStream(in);
+        out.write(0xCA);
+        check(in.read() == 202, "byte delivered unsigned (0xCA -> 202)");
+
+        byte[] utf8 = "héllo".getBytes("UTF-8");
+        out.write(utf8, 0, 1);
+        out.write(utf8, 1, utf8.length - 1);
+        byte[] buf = new byte[32];
+        int n = in.read(buf, 0, buf.length);
+        check(new String(buf, 0, n, "UTF-8").equals("héllo"),
+                "multi-byte UTF-8 across split writes reassembles");
+
+        out.write(new byte[8], 0, 8);
+        check(in.available() == 8, "8 buffered");
+        check(in.read() == 0, "consume one");
+        check(in.available() == 7, "7 left");
+    }
+
+    // 跨线程 latch 同步往返：256 缓冲 × 4096 字节，强制多次回绕与写端背压
+    static void testCrossThreadLatchedRoundTrip() throws Exception {
+        final int n = 4096;
+        final PipedInputStream in = new PipedInputStream(256);
+        final PipedOutputStream out = new PipedOutputStream(in);
+        final CountDownLatch written = new CountDownLatch(1);
+        Thread w = new Thread(() -> {
+            try {
+                byte[] payload = new byte[n];
+                for (int i = 0; i < n; i++) payload[i] = (byte) i;
+                out.write(payload, 0, n);
+                out.close();
+            } catch (IOException ignored) { }
+            finally { written.countDown(); }
+        }, "pis-x-writer");
+        w.setDaemon(true);
+        w.start();
+        int got = 0;
+        boolean ordered = true;
+        int v;
+        while ((v = in.read()) != -1) {
+            if (v != (got & 0xFF)) ordered = false;
+            got++;
+        }
+        check(written.await(15, TimeUnit.SECONDS), "writer finished within bound");
+        w.join(15000);
+        check(!w.isAlive(), "writer joined");
+        check(got == n, "all 4096 bytes delivered: " + got);
+        check(ordered, "order preserved across wraparounds");
+    }
+
     public static void main(String[] args) throws Exception {
         testBehavior();
+        testCtorAndConnectMatrix();
+        testReadBoundsAndZero();
+        testAvailableContract();
+        testReceiveProtected();
+        testBrokenPipeDetection();
+        testSkipAndMark();
+        testSingleThreadAndUtf8();
+        testCrossThreadLatchedRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

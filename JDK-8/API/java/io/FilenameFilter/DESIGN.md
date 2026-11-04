@@ -19,3 +19,20 @@
 5. 无匹配空数组；直接 accept 真/假。
 6. 过滤器抛异常传播；缺失目录 list 返回 null。
 - 健壮性: 无硬编码分隔符；无反射白盒。
+
+## 深化追加（契约级）
+
+> 双侧探针先行，新增 testDirAndNameContract 等 8 个方法，断言 15 → 47。
+
+### 新增维度清单
+1. **(dir,name) 契约**：每次 accept 的 dir 参数**恒等于**被列目录（逐次断言）；name 为裸名（无路径分隔符）且能解析为真实子项；全部条目（文件+目录）各被回调一次。
+2. **调用计数**：ExtFilter（静态嵌套类带计数）每项恰好一次；二次列目录重新回调。
+3. **null 过滤器**：list(null) 与 listFiles((FilenameFilter)null) 均等价全列。
+4. **非目录**：普通文件 list/listFiles → null；缺失 → null；空目录 len 0。
+5. **经典实现**：匿名内部类同时用于 list（String[]）与 listFiles（File[]）。
+6. **接口形状**：@FunctionalInterface + 单抽象方法。
+7. **两视图一致**：同一过滤器下 String[] 名单与 File[] 名单逐位一致，File 以目录为根。
+8. **异常身份**：过滤器抛出的异常对象原样（==）传播。
+
+### JDK-8 vs JDK-27 版本差异
+- 无（双侧行为一致）。

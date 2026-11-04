@@ -4,6 +4,12 @@
  *          black-box contract coverage. Constructors (size<=0->IAE, null delegate->IOException),
  *          read validation (NPE/IOBE), buffering over one-byte-at-a-time source, skip,
  *          available, mark/reset (replay/invalidated/unmarked/close), close idempotent.
+ *          Deepened (contract level): exact closed-state messages ("Stream closed"),
+ *          "Resetting to invalid mark" message, mark valid beyond readlimit while the
+ *          buffer retains it (incl. across refills), fill() requests exactly the buffer
+ *          size (default 8192 observable), available() delegates per call, close
+ *          propagation through one and two layers, skip x buffer interplay (skip is
+ *          bounded by the buffered bytes), transferTo full contract.
  * @run main BufferedInputStreamTest
  */
 
@@ -184,6 +190,240 @@ public class BufferedInputStreamTest {
         checkThrows(IOException.class, () -> in.reset(), "reset after close -> IOException");
     }
 
+    static void checkThrowsMsg(Class<? extends Throwable> expected, String sub, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) {
+                if (String.valueOf(t.getMessage()).contains(sub)) { passed++; return; }
+                throw new AssertionError(msg + ": message <" + t.getMessage()
+                        + "> lacks substring <" + sub + ">");
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    /** Records calls that reach the underlying stream. */
+    static class RecordingIn extends InputStream {
+        final ByteArrayInputStream src;
+        int singleReads, bulkReads, availables, skips;
+        final java.util.ArrayList<Integer> bulkLens = new java.util.ArrayList<Integer>();
+        RecordingIn(byte[] data) { src = new ByteArrayInputStream(data); }
+        public int read() { singleReads++; return src.read(); }
+        public int read(byte[] b, int off, int len) { bulkReads++; bulkLens.add(len); return src.read(b, off, len); }
+        public int available() { availables++; return src.available(); }
+        public long skip(long n) { skips++; return src.skip(n); }
+    }
+
+    /** ByteArrayInputStream that records whether close() reached it. */
+    static class TrackedIn extends ByteArrayInputStream {
+        boolean closed;
+        TrackedIn(byte[] data) { super(data); }
+        public void close() { closed = true; }
+    }
+
+    // ---- 8. exact closed-state messages (measured: "Stream closed" on JDK-8 and JDK-27) ----
+    static void testClosedStateMessages() throws Exception {
+        final BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3}));
+        in.close();
+        checkThrowsMsg(IOException.class, "Stream closed", () -> in.read(), "read after close");
+        checkThrowsMsg(IOException.class, "Stream closed", () -> in.read(new byte[1]),
+                       "read(byte[]) after close");
+        checkThrowsMsg(IOException.class, "Stream closed", () -> in.read(new byte[1], 0, 1),
+                       "read(b,off,len) after close");
+        checkThrowsMsg(IOException.class, "Stream closed", () -> in.available(), "available after close");
+        checkThrowsMsg(IOException.class, "Stream closed", () -> in.skip(1), "skip after close");
+        checkThrowsMsg(IOException.class, "Stream closed", () -> in.reset(), "reset after close");
+        in.mark(5);   // mark after close is a silent no-op (measured)
+        check(true, "mark after close does not throw");
+    }
+
+    // ---- 9. reset invalidation message (measured: "Resetting to invalid mark") ----
+    static void testResetInvalidMarkMessage() throws Exception {
+        checkThrowsMsg(IOException.class, "Resetting to invalid mark",
+                       () -> new BufferedInputStream(new ByteArrayInputStream(new byte[1])).reset(),
+                       "reset without mark");
+        final BufferedInputStream inv = new BufferedInputStream(new ByteArrayInputStream(new byte[200]), 8);
+        inv.mark(2);
+        for (int i = 0; i < 50; i++) inv.read();
+        checkThrowsMsg(IOException.class, "Resetting to invalid mark", () -> inv.reset(),
+                       "reset past readlimit after refill");
+    }
+
+    // ---- 10. mark stays valid beyond readlimit while the buffer retains it ----
+    static void testMarkBeyondReadlimitStillValid() throws Exception {
+        byte[] data = new byte[1000];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) i;
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(data));   // buffer 8192
+        in.mark(2);
+        for (int i = 0; i < 100; i++) in.read();
+        in.reset();
+        check(in.read() == 0 && in.read() == 1,
+              "reset beyond readlimit still works (buffer retained the mark)");
+
+        BufferedInputStream small = new BufferedInputStream(new ByteArrayInputStream(data), 8);
+        small.mark(100);
+        for (int i = 0; i < 30; i++) small.read();
+        small.reset();
+        check(small.read() == 0 && small.read() == 1,
+              "reset after refill within a readlimit that covers the buffer");
+    }
+
+    // ---- 11. fill() asks the underlying stream for exactly the buffer size ----
+    static void testFillRequestsBufferSize() throws Exception {
+        RecordingIn rec = new RecordingIn(new byte[200]);
+        BufferedInputStream in = new BufferedInputStream(rec, 64);
+        in.read();
+        check(rec.bulkReads == 1, "first single read triggers exactly one fill");
+        check(rec.bulkLens.get(0) == 64, "fill requests exactly the buffer size (64)");
+        check(rec.singleReads == 0, "buffered read() is served from the buffer, not read()-by-read()");
+
+        RecordingIn recDefault = new RecordingIn(new byte[20000]);
+        BufferedInputStream def = new BufferedInputStream(recDefault);   // default buffer
+        def.read();
+        check(recDefault.bulkLens.get(0) == 8192, "default buffer size is 8192 (fill request)");
+    }
+
+    // ---- 12. available() delegates to the underlying stream on every call ----
+    static void testAvailableDelegatesEachCall() throws Exception {
+        RecordingIn rec = new RecordingIn(new byte[10]);
+        BufferedInputStream in = new BufferedInputStream(rec, 4);
+        in.read();
+        in.available();
+        in.available();
+        check(rec.availables == 2, "each available() call consults the underlying stream");
+    }
+
+    // ---- 13. available() = underlying available + buffered ----
+    static void testAvailableCombined() throws Exception {
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(new byte[10]), 4);
+        in.read();
+        check(in.available() == 9, "available = underlying (6) + buffered (3)");
+    }
+
+    // ---- 14. read(byte[]) is served from the buffer filled by one bulk request ----
+    static void testReadByteArrayFillsFirst() throws Exception {
+        byte[] data = new byte[10];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) (i + 1);
+        RecordingIn rec = new RecordingIn(data);
+        BufferedInputStream in = new BufferedInputStream(rec, 16);
+        byte[] four = new byte[4];
+        check(in.read(four) == 4, "read(byte[]) count");
+        check(four[0] == 1 && four[3] == 4, "read(byte[]) content");
+        check(rec.bulkReads == 1 && rec.bulkLens.get(0) == 16,
+              "read(byte[]) fills the whole buffer in one bulk request");
+        check(rec.singleReads == 0, "no per-byte reads on the underlying stream");
+    }
+
+    // ---- 15. close propagates to the underlying stream, also through two layers ----
+    static void testClosePropagation() throws Exception {
+        TrackedIn tracked = new TrackedIn(new byte[2]);
+        new BufferedInputStream(tracked).close();
+        check(tracked.closed, "close reaches the underlying stream");
+
+        TrackedIn inner = new TrackedIn(new byte[2]);
+        BufferedInputStream innerBis = new BufferedInputStream(inner);
+        BufferedInputStream outer = new BufferedInputStream(innerBis);
+        outer.close();
+        check(inner.closed, "close propagates through two buffered layers");
+    }
+
+    // ---- 16. skip x buffer interplay ----
+    static void testSkipBufferInterplay() throws Exception {
+        byte[] data = new byte[100];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) i;
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(data), 8);
+        check(in.skip(50) == 50, "skip across chunks");
+        check(in.read() == 50, "read after large skip at exact index");
+
+        // measured on JDK-8 and JDK-27: skip is bounded by the buffered bytes when the
+        // buffer holds data (it does not consult the underlying stream for the rest)
+        BufferedInputStream mix = new BufferedInputStream(new ByteArrayInputStream(data), 8);
+        mix.read();
+        check(mix.skip(10) == 7, "skip bounded by the buffered bytes (7 of 10 requested)");
+        check(mix.read() == 8, "position after bounded skip: refill returns d[8]");
+
+        BufferedInputStream within = new BufferedInputStream(new ByteArrayInputStream(data), 8);
+        within.read();
+        within.read();
+        check(within.skip(3) == 3, "skip within the buffered bytes");
+        check(within.read() == 5, "position after in-buffer skip");
+
+        // at this point 7 bytes are still buffered (d51..d57): skip is bounded by them
+        check(in.skip(1000) == 7, "skip bounded by buffered bytes even for a huge request");
+        check(in.read() == 58, "read after bounded skip refills from the source");
+
+        // a fresh stream with an empty buffer delegates skip to the source (clamped)
+        BufferedInputStream fresh = new BufferedInputStream(new ByteArrayInputStream(data), 8);
+        check(fresh.skip(100000) == 100, "skip past end delegated to source returns all");
+        check(fresh.read() == -1, "EOF after skipping past end");
+    }
+
+    // ---- 17. chunked bulk reads with a size smaller than the buffer ----
+    static void testChunkedReadOddSizes() throws Exception {
+        byte[] data = new byte[1000];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 13);
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(data), 8);
+        byte[] got = new byte[data.length];
+        int off = 0;
+        while (off < got.length) {
+            int n = in.read(got, off, Math.min(7, got.length - off));
+            if (n < 0) break;
+            off += n;
+        }
+        check(off == data.length, "odd-sized chunks consume the stream completely");
+        boolean eq = true;
+        for (int i = 0; i < data.length; i++) if (got[i] != data[i]) { eq = false; break; }
+        check(eq, "odd-sized chunked reads preserve content");
+    }
+
+    // ---- 18. constructor message ----
+    static void testConstructorMessage() {
+        checkThrowsMsg(IllegalArgumentException.class, "Buffer size <= 0",
+                       () -> new BufferedInputStream(new ByteArrayInputStream(new byte[1]), 0),
+                       "size 0 message");
+        checkThrowsMsg(IllegalArgumentException.class, "Buffer size <= 0",
+                       () -> new BufferedInputStream(new ByteArrayInputStream(new byte[1]), -1),
+                       "negative size message");
+    }
+
+    // ---- 19. transferTo full contract (JDK-27 override) ----
+    static void testTransferToContract() throws Exception {
+        byte[] data = new byte[3000];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 11);
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(data), 16);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        check(in.transferTo(out) == data.length, "transferTo count");
+        check(Arrays.equals(out.toByteArray(), data), "transferTo content across refills");
+        check(in.read() == -1, "transferTo leaves the stream at EOF");
+
+        // partially consumed stream: only the remainder is transferred (measured)
+        BufferedInputStream p = new BufferedInputStream(new ByteArrayInputStream(new byte[]{1, 2, 3, 4}), 2);
+        p.read();
+        java.io.ByteArrayOutputStream po = new java.io.ByteArrayOutputStream();
+        check(p.transferTo(po) == 3 && Arrays.equals(po.toByteArray(), new byte[]{2, 3, 4}),
+              "transferTo remainder from a partially consumed stream");
+
+        checkThrows(NullPointerException.class,
+                    () -> new BufferedInputStream(new ByteArrayInputStream(new byte[1])).transferTo(null),
+                    "transferTo(null) -> NPE");
+        checkThrows(IOException.class,
+                    () -> new BufferedInputStream(new ByteArrayInputStream(new byte[2])).transferTo(
+                        new java.io.OutputStream() {
+                            public void write(int b) throws IOException { throw new IOException("sink boom"); }
+                        }),
+                    "transferTo propagates sink IOException");
+        checkThrowsMsg(IOException.class, "Stream closed", () -> {
+            BufferedInputStream c = new BufferedInputStream(new ByteArrayInputStream(new byte[1]));
+            c.close();
+            c.transferTo(new java.io.ByteArrayOutputStream());
+        }, "transferTo after close");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testConstructors();
@@ -193,6 +433,18 @@ public class BufferedInputStreamTest {
         testAvailable();
         testMarkReset();
         testClose();
+        testClosedStateMessages();
+        testResetInvalidMarkMessage();
+        testMarkBeyondReadlimitStillValid();
+        testFillRequestsBufferSize();
+        testAvailableDelegatesEachCall();
+        testAvailableCombined();
+        testReadByteArrayFillsFirst();
+        testClosePropagation();
+        testSkipBufferInterplay();
+        testChunkedReadOddSizes();
+        testConstructorMessage();
+        testTransferToContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -129,9 +129,175 @@ public class SerialTest {
         check(Serial.class.isAnnotation(), "annotation remains usable via reflection on the type");
     }
 
+    // ================= deep additions (contract level) =================
+
+    // ---- exact meta-annotation surface ----
+    static void testMetaExact() throws Exception {
+        Class<?> c = Class.forName("java.io.Serial");
+        check(c.getPackage() != null && "java.io".equals(c.getPackage().getName()),
+              "package is java.io");
+        check(Modifier.isPublic(c.getModifiers()), "public annotation type");
+        check(Modifier.isInterface(c.getModifiers()), "declared as interface");
+        check(c.getDeclaredMethods().length == 0, "marker annotation: no elements");
+        Annotation[] annos = c.getAnnotations();
+        check(annos.length == 2, "exactly two runtime-visible meta-annotations: "
+              + java.util.Arrays.toString(annos));
+        boolean retention = false, target = false;
+        for (Annotation a : annos) {
+            if (a instanceof Retention) retention = true;
+            if (a instanceof Target) target = true;
+        }
+        check(retention && target, "meta-annotations are @Retention and @Target");
+        check(c.getAnnotation(java.lang.annotation.Documented.class) == null,
+              "NOT @Documented");
+        check(c.getAnnotation(java.lang.annotation.Inherited.class) == null,
+              "NOT @Inherited");
+        check(c.getAnnotation(java.lang.annotation.Repeatable.class) == null,
+              "NOT @Repeatable");
+    }
+
+    // ---- @Target: exactly FIELD and METHOD, every other position excluded ----
+    static void testTargetMatrix() throws Exception {
+        Target t = Class.forName("java.io.Serial").getAnnotation(Target.class);
+        check(t != null, "@Target present");
+        java.util.Set<ElementType> allowed = java.util.EnumSet.noneOf(ElementType.class);
+        for (ElementType e : t.value()) allowed.add(e);
+        check(allowed.size() == 2, "exactly two targets");
+        check(allowed.contains(ElementType.FIELD), "FIELD allowed");
+        check(allowed.contains(ElementType.METHOD), "METHOD allowed");
+        for (ElementType e : ElementType.values()) {
+            if (e == ElementType.FIELD || e == ElementType.METHOD) continue;
+            check(!allowed.contains(e), "target " + e + " NOT allowed");
+        }
+    }
+
+    // ---- SOURCE retention: nothing survives into the class file ----
+    static void testRuntimeInvisibility() throws Exception {
+        Field suid = Annotated.class.getDeclaredField("serialVersionUID");
+        check(suid.getDeclaredAnnotations().length == 0,
+              "@Serial leaves no runtime annotation on the field");
+        Method wo = Annotated.class.getDeclaredMethod("writeObject",
+                                                      java.io.ObjectOutputStream.class);
+        check(wo.getDeclaredAnnotations().length == 0,
+              "@Serial leaves no runtime annotation on the method");
+        Method rr = Annotated.class.getDeclaredMethod("readResolve");
+        check(rr.getDeclaredAnnotations().length == 0,
+              "same for readResolve");
+        Field spf = Annotated.class.getDeclaredField("serialPersistentFields");
+        check(spf.getDeclaredAnnotations().length == 0,
+              "same for serialPersistentFields");
+    }
+
+    // ---- the annotated serialPersistentFields shape the descriptor ----
+    static void testAnnotatedSpfShapesDescriptor() throws Exception {
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(Annotated.class);
+        check(osc.getField("v") != null, "declared serialPersistentFields drives the descriptor");
+        check(osc.getField("v").getType() == int.class, "spf field type exposed");
+        check(osc.getFields().length == 1, "only the spf-declared field present");
+        check(osc.getField("notThere") == null, "undeclared name absent");
+    }
+
+    /** Compile one snippet in memory; returns null on success else the first error text. */
+    static String compileExpecting(String className, String source) throws Exception {
+        javax.tools.JavaCompiler jc = javax.tools.ToolProvider.getSystemJavaCompiler();
+        if (jc == null) throw new IllegalStateException("no system compiler in test JDK");
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("serial-" + className);
+        try {
+            javax.tools.DiagnosticCollector<javax.tools.JavaFileObject> dc =
+                    new javax.tools.DiagnosticCollector<>();
+            javax.tools.SimpleJavaFileObject fo =
+                    new javax.tools.SimpleJavaFileObject(
+                            java.net.URI.create("string:///" + className + ".java"),
+                            javax.tools.JavaFileObject.Kind.SOURCE) {
+                        public CharSequence getCharContent(boolean ignoreErrors) { return source; }
+                    };
+            Boolean ok = jc.getTask(null, null, dc,
+                                    java.util.Arrays.asList("-d", dir.toString()),
+                                    null, java.util.Arrays.asList(fo)).call();
+            if (ok) return null;
+            for (javax.tools.Diagnostic<? extends javax.tools.JavaFileObject> d
+                    : dc.getDiagnostics()) {
+                if (d.getKind() == javax.tools.Diagnostic.Kind.ERROR)
+                    return d.getMessage(null);
+            }
+            return "failed without error diagnostics";
+        } finally {
+            java.nio.file.Files.walk(dir)
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .forEach(p -> { try { java.nio.file.Files.delete(p); } catch (Exception e) { } });
+        }
+    }
+
+    // ---- javac placement matrix: canonical members compile, misplaced ones are rejected ----
+    static void testCompileMatrix() throws Exception {
+        String err;
+
+        err = compileExpecting("Sp1", "import java.io.*;\n"
+                + "class Sp1 implements Serializable { @Serial\n"
+                + "    private static final long serialVersionUID = 1L; }");
+        check(err == null, "@Serial on serialVersionUID compiles" + (err == null ? "" : ": " + err));
+
+        err = compileExpecting("Sp2", "import java.io.*;\n"
+                + "class Sp2 implements Serializable { int v; @Serial\n"
+                + "    private void writeObject(ObjectOutputStream o) throws IOException"
+                + " { o.defaultWriteObject(); } }");
+        check(err == null, "@Serial on writeObject compiles" + (err == null ? "" : ": " + err));
+
+        err = compileExpecting("Sp3", "import java.io.*;\n"
+                + "class Sp3 implements Serializable { @Serial\n"
+                + "    private void readObjectNoData() throws ObjectStreamException { } }");
+        check(err == null, "@Serial on readObjectNoData compiles" + (err == null ? "" : ": " + err));
+
+        err = compileExpecting("Sp4", "import java.io.*;\n"
+                + "class Sp4 implements Serializable { @Serial\n"
+                + "    private Object writeReplace() { return this; } }");
+        check(err == null, "@Serial on writeReplace compiles" + (err == null ? "" : ": " + err));
+
+        err = compileExpecting("Sp5", "import java.io.*;\n"
+                + "class Sp5 implements Externalizable { @Serial\n"
+                + "    private static final long serialVersionUID = 1L;\n"
+                + "    public void writeExternal(ObjectOutput o) {}\n"
+                + "    public void readExternal(ObjectInput i) {} }");
+        check(err == null, "@Serial on Externalizable serialVersionUID compiles"
+              + (err == null ? "" : ": " + err));
+
+        err = compileExpecting("Sn1", "import java.io.*;\n"
+                + "@Serial class Sn1 implements Serializable { }");
+        check(err != null && err.contains("not applicable"),
+              "@Serial on a type declaration is rejected: " + err);
+
+        // semantically misplaced (but syntactically FIELD/METHOD) placements compile:
+        // javac enforces the @Target kind here, not the serialization-member semantics
+        err = compileExpecting("Sn2", "import java.io.*;\n"
+                + "class Sn2 implements Serializable { @Serial int v; }");
+        check(err == null, "@Serial on a non-serial member compiles (recording javac behavior)"
+              + (err == null ? "" : ": " + err));
+
+        err = compileExpecting("Sn3", "import java.io.*;\n"
+                + "class Sn3 { @Serial private static final long serialVersionUID = 1L; }");
+        check(err == null, "@Serial in a non-Serializable class compiles (ignored by the mechanism)"
+              + (err == null ? "" : ": " + err));
+
+        err = compileExpecting("Sn4", "import java.io.*;\n"
+                + "class Sn4 implements Serializable { @Serial private void foo() { } }");
+        check(err == null, "@Serial on an arbitrary method compiles (recording javac behavior)"
+              + (err == null ? "" : ": " + err));
+
+        err = compileExpecting("Sn5", "import java.io.*;\n"
+                + "class Sn5 implements Serializable { @Serial\n"
+                + "    private void writeObject(java.io.DataOutput o) { } }");
+        check(err == null, "@Serial on a wrong-signature hook compiles (hook is not invoked)"
+              + (err == null ? "" : ": " + err));
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testMetaExact();
+        testTargetMatrix();
+        testRuntimeInvisibility();
+        testAnnotatedSpfShapesDescriptor();
+        testCompileMatrix();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

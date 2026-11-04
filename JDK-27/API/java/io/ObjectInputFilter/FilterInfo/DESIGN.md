@@ -20,3 +20,14 @@
 - 健壮性: 每流独立 setObjectInputFilter（不动全局 factory/serialFilter）；无线程。
 
 产出：`FilterInfoTest.java`（白盒 + 黑盒共 42 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testNotFunctional`…`testThreeLevelChain`，断言 42 → 59）：
+- **结构**：getDeclaredMethods() 恰 5（无静态/默认方法）；**非** @FunctionalInterface（5 个抽象访问器）。
+- **int[3] 双阶段回调（实测）**：恰 2 次回调 —— 第 1 次 `[I, arrayLength=-1`（描述符阶段，长度未知），第 2 次 `[I, arrayLength=3`（长度阶段）；两次 depth 均 1。
+- **枚举双回调（实测）**：反序列化 DayOfWeek 触发 2 次回调 —— `java.time.DayOfWeek@depth1/refs1` 后 `java.lang.Enum@depth2/refs2`（枚举超类描述符单独过过滤器）。
+- **三级链（实测）**：Node→Node→Node 恰 3 次回调 `[Node d1 r1][null d2 r3][null d3 r4]` —— 同类嵌套实例的回调 **serialClass 为 null**（无新类描述符，仅有类回调携带类）；references 与 streamBytes 随层级**严格递增**。
+- **不适用项**：简报提及的 `existingDepth` 访问器不存在（FilterInfo 只有 5 个访问器，已用结构断言锁死）；String 快捷路径（不过滤）已在原有用例覆盖。
+
+负例矩阵：FilterInfo 为纯数据回调接口，无自身抛异常路径（负例归 ObjectInputFilter/Config 侧）。

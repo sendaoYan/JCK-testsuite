@@ -177,9 +177,97 @@ public class FilterInfoTest {
               "bytes grew between objects");
     }
 
+    // ================= deep additions (contract level) =================
+
+    // ---- exactly five declared methods; not a functional interface ----
+    static void testNotFunctional() throws Exception {
+        check(ObjectInputFilter.FilterInfo.class.getDeclaredMethods().length == 5,
+              "exactly five declared methods (all abstract accessors)");
+        check(ObjectInputFilter.FilterInfo.class
+                  .getAnnotation(java.lang.FunctionalInterface.class) == null,
+              "not @FunctionalInterface (five abstract methods)");
+    }
+
+    // ---- int[3]: the filter is consulted twice (descriptor stage, length stage) ----
+    static void testArrayTwoStages() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(new int[3]);
+        }
+        List<Rec> recs = new ArrayList<>();
+        try (ObjectInputStream ois = new ObjectInputStream(
+                new ByteArrayInputStream(bos.toByteArray()))) {
+            ois.setObjectInputFilter(i -> { recs.add(new Rec(i)); return ObjectInputFilter.Status.ALLOWED; });
+            check(((int[]) ois.readObject()).length == 3, "int[3] read back");
+        }
+        check(recs.size() == 2, "exactly two callbacks for an array: " + recs.size());
+        check(recs.get(0).serialClass == int[].class && recs.get(0).arrayLength == -1,
+              "first callback: array class, length unknown (-1)");
+        check(recs.get(1).serialClass == int[].class && recs.get(1).arrayLength == 3,
+              "second callback: the true length 3");
+        check(recs.get(0).depth == 1 && recs.get(1).depth == 1,
+              "both stages report depth 1");
+    }
+
+    // ---- enum deserialization consults the filter for the enum class and for
+    //      the abstract java.lang.Enum superclass, at increasing depth/refs ----
+    static void testEnumDoubleCallback() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(java.time.DayOfWeek.FRIDAY);
+        }
+        List<Rec> recs = new ArrayList<>();
+        try (ObjectInputStream ois = new ObjectInputStream(
+                new ByteArrayInputStream(bos.toByteArray()))) {
+            ois.setObjectInputFilter(i -> { recs.add(new Rec(i)); return ObjectInputFilter.Status.ALLOWED; });
+            check(ois.readObject() == java.time.DayOfWeek.FRIDAY, "enum read back");
+        }
+        check(recs.size() == 2, "two callbacks for an enum: " + recs.size());
+        check(recs.get(0).serialClass == java.time.DayOfWeek.class
+                  && recs.get(0).depth == 1 && recs.get(0).references == 1,
+              "first callback: DayOfWeek at depth 1, references 1");
+        check(recs.get(1).serialClass == java.lang.Enum.class
+                  && recs.get(1).depth == 2 && recs.get(1).references == 2,
+              "second callback: java.lang.Enum at depth 2, references 2");
+    }
+
+    // ---- a three-level object chain: the nested-instance callbacks carry no class ----
+    static void testThreeLevelChain() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            Node a = new Node();
+            a.next = new Node();
+            a.next.next = new Node();
+            oos.writeObject(a);
+        }
+        List<Rec> recs = new ArrayList<>();
+        try (ObjectInputStream ois = new ObjectInputStream(
+                new ByteArrayInputStream(bos.toByteArray()))) {
+            ois.setObjectInputFilter(i -> { recs.add(new Rec(i)); return ObjectInputFilter.Status.ALLOWED; });
+            ois.readObject();
+        }
+        check(recs.size() == 3, "one callback per level: " + recs.size());
+        check(recs.get(0).serialClass == Node.class && recs.get(0).depth == 1,
+              "root callback carries the class at depth 1");
+        check(recs.get(1).serialClass == null && recs.get(1).depth == 2,
+              "second level: serialClass is null (no new descriptor), depth 2");
+        check(recs.get(2).serialClass == null && recs.get(2).depth == 3,
+              "third level: serialClass null, depth 3");
+        check(recs.get(0).references < recs.get(1).references
+                  && recs.get(1).references < recs.get(2).references,
+              "references strictly increase with each level");
+        check(recs.get(0).streamBytes < recs.get(1).streamBytes
+                  && recs.get(1).streamBytes < recs.get(2).streamBytes,
+              "streamBytes strictly increase with each level");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNotFunctional();
+        testArrayTwoStages();
+        testEnumDoubleCallback();
+        testThreeLevelChain();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -38,3 +38,20 @@
 ## 注意事项
 
 - 无墙钟/随机/默认 Locale 依赖；非 ASCII 显式 UTF-8；headless 安全。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（25 -> 73）：JDK-8 侧全部镜像维度 + JDK-27 独有方法。
+
+### 新增维度（JDK-27 独有）
+- writeBytes(byte[])：等价 write(b,0,len)；空数组无操作；跨容量生长；null -> NPE。
+- toString(Charset)：四种显式字符集（UTF-8/ISO-8859-1/US-ASCII/UTF-16BE）与 toString(String) 重载结果一致；(Charset)null -> NPE。
+
+### 负例精确异常表（实测）
+| 操作 | 类型 | 消息子串 |
+|---|---|---|
+| write(b,0,-1) 等 OOB | ArrayIndexOutOfBoundsException | 类型断言（arraycopy 路径） |
+| toString((Charset)null) | NullPointerException | 类型断言 |
+
+### 版本差异
+- writeBytes/toString(Charset) 仅 JDK-10/11+ 存在；JDK-8 侧文件不引用。

@@ -21,3 +21,13 @@
 - 健壮性: 固定字节数组，无文件无线程。
 
 产出：`FilterInputStreamTest.java`（白盒 + 黑盒共 26 断言）。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（22 -> 78）：与 JDK-8 侧逐条镜像（read(byte[]) 路由、"mark/reset not supported"、委托校验、两层 close 传播与二次 close 实测计数 2、skip/available 委托计数、EOF、in 中途换下沉、六操作失败透传 "inner failure"、六操作 null 下沉、无符号读、区域放置）。
+
+### 负例精确异常表（双侧实测）
+同 JDK-8 侧："mark/reset not supported" 消息双侧一致；OOB/NPE 类型断言。
+
+### 版本差异
+- 本类深化维度双侧行为一致，无新增 API。

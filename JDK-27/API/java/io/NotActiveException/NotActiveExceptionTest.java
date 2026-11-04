@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.NotActiveException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.io.Serial;
@@ -122,9 +123,159 @@ public class NotActiveExceptionTest {
         }
     }
 
+    // ================= 深化追加（契约级） =================
+
+    static byte[] serOf(Object o) throws Exception {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(b)) {
+            oos.writeObject(o);
+        }
+        return b.toByteArray();
+    }
+
+    static Object back(byte[] b) throws Exception {
+        try (ObjectInputStream ois = new ObjectInputStream(new java.io.ByteArrayInputStream(b))) {
+            return ois.readObject();
+        }
+    }
+
+    // ---- Throwable protocol matrix ----
+    static void testThrowableProtocol() {
+        NotActiveException e = new NotActiveException("m");
+        check("m".equals(e.getLocalizedMessage()), "getLocalizedMessage defaults to getMessage");
+        check(e.toString().equals("java.io.NotActiveException: m"),
+              "toString = FQCN + \": \" + message");
+        check(new NotActiveException().toString().equals("java.io.NotActiveException"),
+              "no-arg toString carries no colon");
+        check(new NotActiveException((String) null).getMessage() == null,
+              "null message accepted, getMessage stays null");
+        check(new NotActiveException("").getMessage().isEmpty(),
+              "empty message distinct from null");
+        check(e.fillInStackTrace() == e, "fillInStackTrace returns this");
+        check(e.getStackTrace().length > 0, "stack trace captured");
+        StackTraceElement[] st = {new StackTraceElement("N", "defaultReadObject", "N.java", 8)};
+        e.setStackTrace(st);
+        check(e.getStackTrace().length == 1
+                  && "defaultReadObject".equals(e.getStackTrace()[0].getMethodName()),
+              "setStackTrace/getStackTrace round-trip");
+        e.setStackTrace(new StackTraceElement[0]);
+        check(e.getStackTrace().length == 0, "setStackTrace(empty) yields empty view");
+        try {
+            e.setStackTrace(null);
+            check(false, "setStackTrace(null) must throw NPE");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+        Exception cause = new IllegalStateException("c");
+        check(new NotActiveException("w").initCause(cause).getCause() == cause,
+              "initCause injects a cause on a class with no cause ctor");
+        try {
+            new NotActiveException("w").initCause(cause).initCause(cause);
+            check(false, "second initCause must throw");
+        } catch (IllegalStateException expected) {
+            passed++;
+        }
+        check(new NotActiveException().initCause(null).getCause() == null,
+              "initCause(null) permitted while the cause is unset");
+        NotActiveException sup = new NotActiveException("s");
+        sup.addSuppressed(new Exception("x"));
+        sup.addSuppressed(new Exception("y"));
+        check(sup.getSuppressed().length == 2, "suppressed kept in order");
+        try {
+            sup.addSuppressed(sup);
+            check(false, "self-suppression must throw");
+        } catch (IllegalArgumentException expected) {
+            passed++;
+        }
+        try {
+            sup.addSuppressed(null);
+            check(false, "addSuppressed(null) must throw NPE");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+        check(NotActiveException.class.getSuperclass() == ObjectStreamException.class,
+              "direct child of ObjectStreamException");
+    }
+
+    // ---- serialization contract ----
+    static void testSerializationContract() throws Exception {
+        check(ObjectStreamClass.lookup(NotActiveException.class).getSerialVersionUID()
+                  == -3893467273049808895L, "serialVersionUID == -3893467273049808895");
+        NotActiveException r = (NotActiveException) back(serOf(new NotActiveException("kept")));
+        check("kept".equals(r.getMessage()), "message survives round-trip");
+        check(r.toString().equals("java.io.NotActiveException: kept"),
+              "toString survives round-trip");
+        check(((NotActiveException) back(serOf(new NotActiveException()))).getMessage() == null,
+              "no-arg instance round-trips with null message");
+        NotActiveException chained = new NotActiveException("w");
+        chained.initCause(new RuntimeException("r"));
+        check("r".equals(((NotActiveException) back(serOf(chained))).getCause().getMessage()),
+              "cause survives round-trip");
+    }
+
+    // ---- triggered message precision (实测双侧一致: "stream inactive") ----
+    static void testTriggeredMessage() throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject("payload");
+        }
+        try (ObjectInputStream ois =
+                 new ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            try {
+                ois.registerValidation(() -> {}, 0);
+                check(false, "registerValidation outside readObject must throw");
+            } catch (NotActiveException nae) {
+                check("stream inactive".equals(nae.getMessage()),
+                      "registerValidation message: " + nae.getMessage());
+            }
+            try {
+                ois.readFields();
+                check(false, "readFields outside readObject must throw");
+            } catch (NotActiveException nae) {
+                check("not in call to readObject".equals(nae.getMessage()),
+                      "readFields message: " + nae.getMessage());
+            }
+            try {
+                ois.defaultReadObject();
+                check(false, "defaultReadObject outside readObject must throw");
+            } catch (NotActiveException nae) {
+                check("not in call to readObject".equals(nae.getMessage()),
+                      "defaultReadObject message: " + nae.getMessage());
+            }
+        }
+        // write side: putFields/writeFields/defaultWriteObject outside a writeObject callback
+        try (ObjectOutputStream oos = new ObjectOutputStream(new java.io.ByteArrayOutputStream())) {
+            try {
+                oos.putFields();
+                check(false, "putFields outside writeObject must throw");
+            } catch (NotActiveException nae) {
+                check("not in call to writeObject".equals(nae.getMessage()),
+                      "putFields message: " + nae.getMessage());
+            }
+            try {
+                oos.writeFields();
+                check(false, "writeFields without a PutField must throw");
+            } catch (NotActiveException nae) {
+                check("no current PutField object".equals(nae.getMessage()),
+                      "writeFields message: " + nae.getMessage());
+            }
+            try {
+                oos.defaultWriteObject();
+                check(false, "defaultWriteObject outside writeObject must throw");
+            } catch (NotActiveException nae) {
+                check("not in call to writeObject".equals(nae.getMessage()),
+                      "defaultWriteObject message: " + nae.getMessage());
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testThrowableProtocol();
+        testSerializationContract();
+        testTriggeredMessage();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
+

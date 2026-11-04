@@ -42,3 +42,26 @@
 
 - 全部输入为固定字符串/字符数组，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒 + 黑盒 nullWriter（JDK 11+ 方法）。
+
+## 深化追加（契约级）
+
+实测环境：JDK 8u372 / JDK 27.0.1（行为一致）。
+
+### 新增维度（计数探针子类逐调用验证）
+- **派生形态精确委托**：write(int) → write(cbuf,0,1) 恰一次（len "1,"）且只保留低 16 位（0x10041→'A'、0→NUL 照写）；write(String) → 恰一次 len==s.length()；write(String,off,len) → 恰一次区域写；**零长写仍委托（len 0）但不写内容**。
+- **null 检查先于委托**：write((char[])null)/write((String)null) NPE 且子类零调用；**write(char[],off,len) 是抽象方法 → 基类不做区域预检**，越界异常来自子类（探针证实调用已到达子类）—— 重要的契约细节。
+- write(String,off,len) 完整边界矩阵（-1,1/0,-1/1,3/4,0）→ IOOBE；失败调用零残留。
+- append(csq,s,e) 越界（2,5/3,2）→ IOOBE（subSequence 层）。
+- append(null)/append(null,0,4) 写四字符 "null"；空区域（2,2）写空。
+- 反射白盒：abstract、Appendable+Closeable+Flushable、write(char[],int,int)/flush/close 抽象、protected lock。
+
+### 负例矩阵（双侧实测）
+| 操作 | 异常 | 备注 |
+|---|---|---|
+| write((char[])null)/write((String)null) | NullPointerException | 委托前检查 |
+| write(new char[2],2,1) | IndexOutOfBoundsException | 异常来自子类（抽象形态无基类预检） |
+| write("abc",越界) | IndexOutOfBoundsException | 双侧实际类均 StringIndexOutOfBoundsException |
+| append("abc",越界) | IndexOutOfBoundsException | 同上 |
+
+### 版本差异
+- JDK-27 独有 nullWriter()（本侧不适用，javap-27 确认）。断言 11 → 47。

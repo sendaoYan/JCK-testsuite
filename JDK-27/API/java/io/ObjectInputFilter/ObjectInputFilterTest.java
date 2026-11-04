@@ -199,9 +199,255 @@ public class ObjectInputFilterTest {
         check(Status.values().length == 3, "Status.values length");
     }
 
+    // ================= deep additions (contract level) =================
+
+    /** Snapshot of a FilterInfo taken inside the callback (the live view moves on). */
+    static class Snap {
+        Class<?> c; long arr, d, r, b;
+        Snap(FilterInfo i) { c = i.serialClass(); arr = i.arrayLength();
+                             d = i.depth(); r = i.references(); b = i.streamBytes(); }
+    }
+
+    // ---- static combinator surface: exact signatures ----
+    static void testCombinatorSurface() throws Exception {
+        java.lang.reflect.Method merge = ObjectInputFilter.class
+                .getDeclaredMethod("merge", ObjectInputFilter.class, ObjectInputFilter.class);
+        check(Modifier.isStatic(merge.getModifiers()) && Modifier.isPublic(merge.getModifiers()),
+              "merge(ObjectInputFilter, ObjectInputFilter) is public static");
+        check(ObjectInputFilter.class.getDeclaredMethod("allowFilter",
+                  java.util.function.Predicate.class, Status.class).getReturnType()
+                  == ObjectInputFilter.class,
+              "allowFilter(Predicate<Class<?>>, Status) returns a filter");
+        check(ObjectInputFilter.class.getDeclaredMethod("rejectUndecidedClass",
+                  ObjectInputFilter.class).getReturnType() == ObjectInputFilter.class,
+              "rejectUndecidedClass(ObjectInputFilter) returns a filter");
+        check(ObjectInputFilter.class.getAnnotation(java.lang.FunctionalInterface.class) != null,
+              "@FunctionalInterface: a lambda is a filter");
+        check(ObjectInputFilter.class.getDeclaredMethods().length >= 5,
+              "checkInput + four static combinators declared");
+    }
+
+    // ---- null-argument matrix (measured messages) ----
+    static void testNullArguments() throws Exception {
+        ObjectInputFilter allow = x -> Status.ALLOWED;
+        java.util.function.Predicate<Class<?>> pred = c -> true;
+        try {
+            ObjectInputFilter.merge(null, allow);
+            check(false, "merge(null, f) must throw");
+        } catch (NullPointerException npe) {
+            check("filter".equals(npe.getMessage()), "merge(null, f) NPE message: " + npe.getMessage());
+        }
+        try {
+            ObjectInputFilter.merge(null, null);
+            check(false, "merge(null, null) must throw");
+        } catch (NullPointerException npe) {
+            check("filter".equals(npe.getMessage()), "merge(null, null) NPE message names the first arg");
+        }
+        try {
+            ObjectInputFilter.allowFilter(null, Status.REJECTED);
+            check(false, "allowFilter(null predicate) must throw");
+        } catch (NullPointerException npe) {
+            check("predicate".equals(npe.getMessage()),
+                  "allowFilter null predicate message: " + npe.getMessage());
+        }
+        try {
+            ObjectInputFilter.rejectFilter(null, Status.REJECTED);
+            check(false, "rejectFilter(null predicate) must throw");
+        } catch (NullPointerException npe) {
+            check("predicate".equals(npe.getMessage()),
+                  "rejectFilter null predicate message: " + npe.getMessage());
+        }
+        try {
+            ObjectInputFilter.allowFilter(pred, null);
+            check(false, "allowFilter(pred, null) must throw");
+        } catch (NullPointerException npe) {
+            check("otherStatus".equals(npe.getMessage()),
+                  "allowFilter null status message: " + npe.getMessage());
+        }
+        try {
+            ObjectInputFilter.rejectFilter(pred, null);
+            check(false, "rejectFilter(pred, null) must throw");
+        } catch (NullPointerException npe) {
+            check("otherStatus".equals(npe.getMessage()),
+                  "rejectFilter null status message: " + npe.getMessage());
+        }
+        try {
+            ObjectInputFilter.rejectUndecidedClass(null);
+            check(false, "rejectUndecidedClass(null) must throw");
+        } catch (NullPointerException npe) {
+            check("filter".equals(npe.getMessage()),
+                  "rejectUndecidedClass(null) NPE message: " + npe.getMessage());
+        }
+    }
+
+    // ---- merge semantics: first REJECTED short-circuits, otherwise both run and
+    //      REJECTED > ALLOWED > UNDECIDED dominates; merge(f, null) is the identity ----
+    static void testMergeConsultationOrder() throws Exception {
+        final int[] calls = new int[2];
+        ObjectInputFilter undecided1 = f -> { calls[0]++; return Status.UNDECIDED; };
+        ObjectInputFilter allowed2 = f -> { calls[1]++; return Status.ALLOWED; };
+        check(ObjectInputFilter.merge(undecided1, allowed2)
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "merge: UNDECIDED + ALLOWED -> ALLOWED");
+        check(calls[0] == 1 && calls[1] == 1,
+              "both filters are consulted when the first does not reject");
+
+        // a REJECTED first short-circuits: the second is never invoked
+        calls[0] = 0; calls[1] = 0;
+        ObjectInputFilter rejectFirst = f -> { calls[0]++; return Status.REJECTED; };
+        ObjectInputFilter allowSecond = f -> { calls[1]++; return Status.ALLOWED; };
+        check(ObjectInputFilter.merge(rejectFirst, allowSecond)
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.REJECTED,
+              "merge: REJECTED + ALLOWED -> REJECTED");
+        check(calls[0] == 1 && calls[1] == 0,
+              "a REJECTED first short-circuits: the second filter is not consulted");
+
+        ObjectInputFilter plainAllow = f -> Status.ALLOWED;
+        ObjectInputFilter plainReject = f -> Status.REJECTED;
+        ObjectInputFilter plainUndecided = f -> Status.UNDECIDED;
+        check(ObjectInputFilter.merge(plainAllow, plainReject)
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.REJECTED,
+              "merge: ALLOWED + REJECTED -> REJECTED (the second can still veto)");
+        check(ObjectInputFilter.merge(plainAllow, plainUndecided)
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "merge: ALLOWED + UNDECIDED -> ALLOWED");
+        check(ObjectInputFilter.merge(plainUndecided, plainUndecided)
+                  .checkInput(info(String.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "merge: UNDECIDED + UNDECIDED -> UNDECIDED");
+
+        // merge(filter, null) returns the first filter itself
+        check(ObjectInputFilter.merge(plainReject, null) == plainReject,
+              "merge(f, null) is the identity: the first filter is returned unchanged");
+
+        // a filter returning null status is stopped by requireNonNull
+        try {
+            ObjectInputFilter.merge(f -> null, plainAllow)
+                    .checkInput(info(String.class, -1, 1, 1, 0));
+            check(false, "null status from the first filter must throw");
+        } catch (NullPointerException npe) {
+            check("status".equals(npe.getMessage()), "NPE message: " + npe.getMessage());
+        }
+        try {
+            ObjectInputFilter.merge(plainAllow, f -> null)
+                    .checkInput(info(String.class, -1, 1, 1, 0));
+            check(false, "null status from the second filter must throw");
+        } catch (NullPointerException npe) {
+            check("other status".equals(npe.getMessage()), "NPE message: " + npe.getMessage());
+        }
+    }
+
+    // ---- a throwing predicate propagates out of checkInput unchanged ----
+    static void testPredicateThrowPropagation() throws Exception {
+        ObjectInputFilter throwing = ObjectInputFilter.allowFilter(c -> {
+            throw new IllegalStateException("predboom");
+        }, Status.REJECTED);
+        try {
+            throwing.checkInput(info(String.class, -1, 1, 1, 0));
+            check(false, "predicate exception must propagate from checkInput");
+        } catch (IllegalStateException ise) {
+            check("predboom".equals(ise.getMessage()),
+                  "direct checkInput propagates the predicate's ISE unchanged");
+        }
+    }
+
+    // ---- a filter that throws during a live read is treated as REJECTED ----
+    static void testFilterThrowDuringReadMapped() throws Exception {
+        try (ObjectInputStream ois =
+                 new ObjectInputStream(new ByteArrayInputStream(ser(new Widget())))) {
+            ois.setObjectInputFilter(f -> { throw new IllegalStateException("liveboom"); });
+            try {
+                ois.readObject();
+                check(false, "a throwing filter must abort deserialization");
+            } catch (InvalidClassException ice) {
+                check(ice.getMessage() != null
+                          && ice.getMessage().endsWith("filter status: REJECTED"),
+                      "runtime exception from the filter is mapped to REJECTED, not propagated: "
+                      + ice.getMessage());
+            }
+        }
+    }
+
+    // ---- setObjectInputFilter lifecycle on a live stream ----
+    static void testSetFilterLifecycle() throws Exception {
+        byte[] bytes = ser(new Widget());
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes))) {
+            check(ois.getObjectInputFilter() == null, "no filter before setting");
+            ObjectInputFilter f = x -> Status.ALLOWED;
+            ois.setObjectInputFilter(f);
+            check(ois.getObjectInputFilter() == f, "getObjectInputFilter returns the same instance");
+            try {
+                ois.setObjectInputFilter(x -> Status.ALLOWED);
+                check(false, "a second setObjectInputFilter must throw");
+            } catch (IllegalStateException ise) {
+                check("filter can not be set more than once".equals(ise.getMessage()),
+                      "ISE message: " + ise.getMessage());
+            }
+            ois.readObject();
+            try {
+                ois.setObjectInputFilter(x -> Status.ALLOWED);
+                check(false, "setObjectInputFilter after a read must throw");
+            } catch (IllegalStateException ise) {
+                check("filter can not be set after an object has been read".equals(ise.getMessage()),
+                      "ISE message after a read: " + ise.getMessage());
+            }
+        }
+    }
+
+    // ---- live FilterInfo for int[3]: descriptor stage then length stage ----
+    static void testLiveArrayStages() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(new int[3]);
+        }
+        final java.util.List<Snap> recs = new java.util.ArrayList<>();
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            ois.setObjectInputFilter(f -> { recs.add(new Snap(f)); return Status.ALLOWED; });
+            check(((int[]) ois.readObject()).length == 3, "int[3] read back under an allowing filter");
+        }
+        check(recs.size() == 2, "exactly two callbacks for an array: " + recs.size());
+        check(recs.get(0).c == int[].class && recs.get(0).arr == -1,
+              "descriptor-stage callback: array class known, length not yet");
+        check(recs.get(1).c == int[].class && recs.get(1).arr == 3,
+              "length-stage callback reports the true length 3");
+        check(recs.get(0).d == 1 && recs.get(1).d == 1, "the array stays at depth 1 in both stages");
+    }
+
+    // ---- allowFilter/rejectFilter full otherStatus matrix ----
+    static void testOtherStatusMatrix() throws Exception {
+        ObjectInputFilter a = ObjectInputFilter.allowFilter(c -> c == String.class, Status.UNDECIDED);
+        check(a.checkInput(info(String.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "allowFilter match always yields ALLOWED regardless of otherStatus");
+        check(a.checkInput(info(Long.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "allowFilter miss yields the given otherStatus (UNDECIDED)");
+        ObjectInputFilter r = ObjectInputFilter.rejectFilter(c -> c == String.class, Status.UNDECIDED);
+        check(r.checkInput(info(String.class, -1, 1, 1, 0)) == Status.REJECTED,
+              "rejectFilter match always yields REJECTED");
+        check(r.checkInput(info(Long.class, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "rejectFilter miss yields the given otherStatus");
+        check(r.checkInput(info(null, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "no class -> predicate misses -> otherStatus");
+        ObjectInputFilter a2 = ObjectInputFilter.allowFilter(c -> c == String.class, Status.ALLOWED);
+        check(a2.checkInput(info(Long.class, -1, 1, 1, 0)) == Status.ALLOWED,
+              "allowFilter with otherStatus=ALLOWED lets misses through");
+        check(a2.checkInput(info(null, -1, 1, 1, 0)) == Status.UNDECIDED,
+              "null class forces UNDECIDED regardless of otherStatus");
+        String ts = a.toString();
+        check(ts.startsWith("predicate(") && ts.contains("ifTrue: ALLOWED")
+                  && ts.contains("ifFalse:UNDECIDED"),
+              "PredicateFilter toString exposes both statuses: " + ts);
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCombinatorSurface();
+        testNullArguments();
+        testMergeConsultationOrder();
+        testPredicateThrowPropagation();
+        testFilterThrowDuringReadMapped();
+        testSetFilterLifecycle();
+        testLiveArrayStages();
+        testOtherStatusMatrix();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

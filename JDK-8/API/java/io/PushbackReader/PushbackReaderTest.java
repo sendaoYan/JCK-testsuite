@@ -5,6 +5,11 @@
  *          unread(char[]) / unread(char[],off,len) order, buffer overflow -> IOException,
  *          read(char[],off,len) validation, ready, skip consumes pushback first /
  *          negative->0, markSupported false / mark & reset -> IOException, close.
+ *          Deepened (contract level): exact "Pushback buffer overflow" message on all
+ *          unread forms, "mark/reset not supported" exact message, markSupported never
+ *          delegates, closed-state matrix, skip consumes pushback first, unread at EOF,
+ *          mixed unread(int)/unread(char[]) LIFO order, ready derived from pushback
+ *          (stub Reader with ready()==false), null ctor, empty-array unread.
  * @run main PushbackReaderTest
  */
 
@@ -156,6 +161,169 @@ public class PushbackReaderTest {
         checkThrows(IOException.class, () -> p.unread('u'), "unread after close -> IOException");
     }
 
+    static void checkMsg(Class<? extends Throwable> expected, String sub,
+                         ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t) && t.getMessage() != null && t.getMessage().contains(sub)) {
+                passed++;
+                return;
+            }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " containing \"" + sub + "\" but got " + t, t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " containing \"" + sub + "\" but nothing was thrown");
+    }
+
+    // Stub whose ready() is deliberately false, to prove PushbackReader.ready()
+    // reports pushback-buffer state independent of the wrapped reader.
+    static class NotReadyReader extends java.io.Reader {
+        String data;
+        int pos;
+        NotReadyReader(String d) { data = d; }
+        public int read(char[] c, int off, int len) {
+            if (pos >= data.length()) return -1;
+            int n = Math.min(len, data.length() - pos);
+            data.getChars(pos, pos + n, c, off);
+            pos += n;
+            return n;
+        }
+        public void close() { }
+        public boolean ready() { return false; }
+    }
+
+    // ---- 9. exact overflow message on every unread form ----
+    static void testOverflowMessages() throws Exception {
+        final PushbackReader one = new PushbackReader(new StringReader("q"));
+        one.unread('1');
+        checkMsg(IOException.class, "Pushback buffer overflow", () -> one.unread('2'),
+                 "unread(int) overflow message");
+
+        final PushbackReader two = new PushbackReader(new StringReader("9"), 2);
+        two.unread(new char[]{'x', 'y'});
+        checkMsg(IOException.class, "Pushback buffer overflow", () -> two.unread('z'),
+                 "unread(int) into full size-2 buffer");
+        checkMsg(IOException.class, "Pushback buffer overflow", () -> two.unread(new char[]{'z'}),
+                 "unread(char[]) into full size-2 buffer");
+        // len exceeding capacity manifests as the same overflow IOException
+        final PushbackReader big = new PushbackReader(new StringReader("a"), 8);
+        checkMsg(IOException.class, "Pushback buffer overflow",
+                 () -> big.unread(new char[3], 1, Integer.MAX_VALUE),
+                 "unread(cbuf,off,len) with len>capacity -> overflow");
+
+        // buffer intact after all failed pushes
+        check(two.read() == 'x' && two.read() == 'y' && two.read() == '9',
+              "size-2 buffer intact after failed pushes");
+    }
+
+    // ---- 10. mark/reset: exact message, never delegated ----
+    static void testMarkResetMessages() throws Exception {
+        PushbackReader p = new PushbackReader(new StringReader("a"));   // StringReader supports marks
+        check(!p.markSupported(), "markSupported is false regardless of wrapped reader");
+        checkMsg(IOException.class, "mark/reset not supported", () -> p.mark(10),
+                 "mark message");
+        checkMsg(IOException.class, "mark/reset not supported", () -> p.reset(),
+                 "reset message");
+        check(p.read() == 'a', "reader still usable after failed mark/reset");
+    }
+
+    // ---- 11. closed-state matrix ----
+    static void testClosedMatrix() throws Exception {
+        final PushbackReader p = new PushbackReader(new StringReader("m"));
+        p.close();
+        checkMsg(IOException.class, "Stream closed", () -> p.read(), "closed read()");
+        checkMsg(IOException.class, "Stream closed", () -> p.unread('u'), "closed unread(int)");
+        checkMsg(IOException.class, "Stream closed", () -> p.ready(), "closed ready()");
+        checkMsg(IOException.class, "Stream closed", () -> p.skip(1), "closed skip()");
+        checkMsg(IOException.class, "Stream closed",
+                 () -> p.read(new char[1], 0, 1), "closed read(char[])");
+        checkMsg(IOException.class, "Stream closed",
+                 () -> p.unread(new char[]{'u'}), "closed unread(char[])");
+    }
+
+    // ---- 12. skip ordering and validation ----
+    static void testSkipOrdering() throws Exception {
+        PushbackReader p = new PushbackReader(new StringReader("wxy"));
+        p.unread('v');
+        check(p.skip(1) == 1, "skip returns 1");
+        check(p.read() == 'w', "skip consumed the pushback char first");
+
+        PushbackReader p2 = new PushbackReader(new StringReader("wx"));
+        p2.unread('v');
+        check(p2.skip(100) == 3, "skip past everything returns pushback+source");
+        check(p2.read() == -1, "EOF after skip past end");
+
+        PushbackReader p3 = new PushbackReader(new StringReader("abc"));
+        check(p3.skip(0) == 0, "skip(0) returns 0");
+        check(p3.read() == 'a', "position unchanged after skip(0)");
+        checkMsg(IllegalArgumentException.class, "skip value is negative",
+                 () -> p3.skip(-5), "negative skip message");
+        check(p3.read() == 'b', "failed negative skip did not move");
+    }
+
+    // ---- 13. unread at EOF ----
+    static void testUnreadAtEof() throws Exception {
+        PushbackReader p = new PushbackReader(new StringReader(""));
+        p.unread('z');
+        check(p.read() == 'z', "unread works with exhausted source");
+        check(p.read() == -1, "EOF again after reading pushed char");
+        p.unread('y');
+        check(p.read() == 'y', "second unread cycle at EOF");
+    }
+
+    // ---- 14. mixed unread(int)/unread(char[]) LIFO order ----
+    static void testMixedUnreadOrder() throws Exception {
+        PushbackReader p = new PushbackReader(new StringReader("S"), 3);
+        p.unread('a');
+        p.unread(new char[]{'x', 'y'});
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 4; i++) sb.append((char) p.read());
+        check("xyaS".equals(sb.toString()),
+              "each unread call re-inserts at the front (last push reads first)");
+    }
+
+    // ---- 15. ready() reflects pushback state, not the wrapped reader ----
+    static void testReadyFromPushback() throws Exception {
+        PushbackReader p = new PushbackReader(new NotReadyReader("S"), 2);
+        check(!p.ready(), "ready false when pushback empty and wrapped not ready");
+        p.unread('k');
+        check(p.ready(), "ready true while pushback holds a char (wrapped still not ready)");
+        check(p.read() == 'k', "pushed char readable");
+        check(!p.ready(), "ready false again once pushback drained");
+        check(p.read() == 'S', "wrapped source still readable despite ready()==false");
+        check(!p.ready(), "ready false at EOF of wrapped source");
+    }
+
+    // ---- 16. null constructor and empty-array unread ----
+    static void testNullCtorAndEmptyArray() throws Exception {
+        checkThrows(NullPointerException.class, () -> new PushbackReader(null),
+                    "PushbackReader(null) -> NPE at construction");
+        checkThrows(NullPointerException.class, () -> new PushbackReader(null, 2),
+                    "PushbackReader(null,2) -> NPE at construction");
+
+        PushbackReader full = new PushbackReader(new StringReader("q"));   // size 1
+        full.unread('1');
+        full.unread(new char[0]);              // empty push is a no-op even on a full buffer
+        check(full.read() == '1', "empty-array unread did not disturb the buffer");
+        full.unread(new char[0], 0, 0);
+        check(full.read() == 'q', "empty-region unread also a no-op");
+    }
+
+    // ---- 17. bulk read pulls pushback region then source, with offset ----
+    static void testBulkReadWithPushbackRegion() throws Exception {
+        PushbackReader p = new PushbackReader(new StringReader("def"), 3);
+        p.unread(new char[]{'0', 'a', 'b', 'c', '0'}, 1, 3);
+        char[] out = new char[8];
+        int n = p.read(out, 1, 6);
+        check(n == 6, "bulk read length with offset");
+        check(out[0] == 0 && out[1] == 'a' && out[2] == 'b' && out[3] == 'c'
+              && out[4] == 'd' && out[5] == 'e' && out[6] == 'f' && out[7] == 0,
+              "exact placement: pushback region first, then source");
+    }
+
     public static void main(String[] args) throws Exception {
         testConstructors();
         testUnreadInt();
@@ -165,6 +333,15 @@ public class PushbackReaderTest {
         testReadySkip();
         testMarkReset();
         testClose();
+        testOverflowMessages();
+        testMarkResetMessages();
+        testClosedMatrix();
+        testSkipOrdering();
+        testUnreadAtEof();
+        testMixedUnreadOrder();
+        testReadyFromPushback();
+        testNullCtorAndEmptyArray();
+        testBulkReadWithPushbackRegion();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

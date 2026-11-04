@@ -25,3 +25,19 @@
 - 健壮性: 固定字节序（DataOutput 大端）跨平台一致；内存流。
 
 产出：`ObjectOutputTest.java`（白盒 ~30 + 黑盒 ~15 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testMethodSetExact`…`testOosByteContracts`，断言 26 → 83）：
+- **方法集精确枚举**：ObjectOutput 恰 **17** 个 public 方法（4 自有 + 13 继承自 DataOutput）；排序名集合逐一比对；全部 abstract、无 default；`getInterfaces()` 恰 `[DataOutput, AutoCloseable]`；无常量。
+- **手写第二实现**：CustomOutput 记录 writeObject 捕获队列 + DataOutputStream 字节；writeInt(0x01020304) 字节序为**大端** 01 02 03 04；writeShort 0x0506 → 05 06。
+- **Externalizable 双实现往返**（ExtRec, UID 410L）：writeObject(null) 经接口引用捕获为 null。
+- **OOS 块分帧字节契约**：裸 `write(0x1234)` 输出 `header(4) + 0x77(TC_BLOCKDATA) + 0x01(长度) + 0x34(截断到低 8 位)` 共 7 字节。
+
+负例矩阵：
+| 操作 | 异常 | 消息子串（8/27 一致） |
+|---|---|---|
+| OOS.write((byte[])null) | NullPointerException | — |
+| close 后 writeObject | IOException | 底层 `Stream closed`（本测试用 Strict 流断言类型） |
+
+版本差异：无。

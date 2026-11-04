@@ -21,3 +21,20 @@
 - 健壮性: @SuppressWarnings("removal")；纯对象。
 
 产出：`SerializablePermissionTest.java`（白盒 + 黑盒共 23 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testWildcardMatrix`…`testDeprecation` + `testSerialFilterPermission`，断言 26 → 58）：
+- **通配矩阵**：`*` implies 一切；`a.*` implies `a.b`、`a.b.c`，**不** implies `a`；内部 `*` 为字面量（`a*b` 仅匹配自身）。
+- **类层次**：extends BasicPermission → Permission → 无 checked 异常的 implies；类 final、Serializable。
+- **集合**：newPermissionCollection().add / implies / setReadOnly 可用；PermissionCollection 自身不参与 implies 判定。
+- **名字接受面**：`a/b`、`a..b`、`serialFilter` 均合法（BasicPermission 名规则）；大小写敏感（`A` 不 implies `a`）。
+- **表面**：toString=类名+名字；getActions 恒 ""；null actions 构造器合法；actions 参数被忽略。
+- **弃用标注**：JDK-27 侧 @Deprecated(since="25", forRemoval=true)（实测反射值）。
+- **负例矩阵**：
+| 操作 | 异常 | 消息子串（8/27 一致） |
+|---|---|---|
+| new SerializablePermission(null) | NullPointerException | `name can't be null` |
+| new SerializablePermission("") | IllegalArgumentException | `name can't be empty` |
+
+版本差异：JDK-27 将 SerializablePermission 标记 @Deprecated(since="25", forRemoval=true)，JDK-8 无弃用；其余行为一致。另：JDK-27 可对照 ObjectStreamConstants.SERIAL_FILTER_PERMISSION（"serialFilter"）断言名字一致。

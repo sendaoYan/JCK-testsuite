@@ -41,3 +41,22 @@
 ## 注意事项
 
 - 固定输入，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）在原有结构覆盖上追加契约级断言（50 -> 109）：JDK-8 侧全部镜像维度（构造边界、read 边界钳制、skip×mark、close 无操作、100KB 大缓冲）加上 JDK-27 独有方法契约。
+
+### 新增维度（JDK-27 独有）
+- readAllBytes：空流返回空数组（非 null）；pos 前进到 EOF；mark 跨 readAllBytes 存活；只传剩余部分。
+- readNBytes(byte[],off,len)：精确放置；流尾不足返回实际数；EOF 处 len==0 返回 0；参数校验抛 NPE/IOOBE（不做 read 式钳制——readNBytes 用 Objects 校验，read 才钳制）。
+- readNBytes(int)：返回实际读到的字节数组。
+- transferTo：计数/内容/EOF/剩余；null -> NPE；下沉抛 IOException 透传。
+
+### 负例精确异常表（实测）
+| 操作 | 类型 | 消息子串 |
+|---|---|---|
+| readNBytes(b,0,10) 且 b.length<10 | IndexOutOfBoundsException | "out of bounds for length" |
+| transferTo(null) | NullPointerException | 双侧类型断言（消息来自 Objects.requireNonNull） |
+
+### 版本差异
+- readAllBytes/readNBytes×2/transferTo 仅 JDK-9+ 存在；JDK-8 侧文件不引用。

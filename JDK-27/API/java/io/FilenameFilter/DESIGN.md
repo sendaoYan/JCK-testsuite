@@ -25,3 +25,20 @@
 - 健壮性: 临时目录 finally 全删。
 
 产出：`FilenameFilterTest.java`（白盒 5 + 黑盒 14 断言）。
+
+## 深化追加（契约级）
+
+> 双侧探针先行，新增 testDirAndNameContract 等 8 个方法，断言 20 → 52。
+
+### 新增维度清单（与 JDK-8 侧同构）
+1. (dir,name) 契约：dir 恒等于被列目录；name 裸名可解析为真实子项；全条目各一次回调。
+2. 调用计数 + 二次回调。
+3. null 过滤器等价全列（list 与 listFiles）。
+4. 普通文件/缺失 → null；空目录 len 0。
+5. 匿名内部类双视图使用。
+6. @FunctionalInterface + 单抽象方法。
+7. String[]/File[] 两视图逐位一致。
+8. 异常身份 == 传播。
+
+### JDK-8 vs JDK-27 版本差异
+- 无（双侧行为一致）。

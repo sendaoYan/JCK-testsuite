@@ -24,3 +24,19 @@
 - 健壮性: Files.createTempDirectory + finally 全删。
 
 产出：`FileFilterTest.java`（白盒 5 + 黑盒 13 断言）。
+
+## 深化追加（契约级）
+
+> 双侧探针先行，新增 testInvocationCounting 等 7 个方法，断言 19 → 37。
+
+### 新增维度清单（与 JDK-8 侧同构）
+1. 调用计数：accept 每项恰好一次（含目录项）；二次过滤重新全量回调、结果确定。
+2. 平铺不递归：深层条目绝不交给过滤器。
+3. null 过滤器等价全列。
+4. 普通文件/缺失 → null；空目录 len 0。
+5. 匿名内部类/静态嵌套类/方法引用实现。
+6. @FunctionalInterface + 单抽象方法（反射）。
+7. 异常身份 == 传播。
+
+### JDK-8 vs JDK-27 版本差异
+- 无（双侧行为一致）。

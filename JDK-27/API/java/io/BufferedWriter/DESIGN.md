@@ -22,3 +22,11 @@
 
 ## 关键细节
 - `write(int)` 低 16 位；null 委托构造时 NPE。
+
+## 深化追加（契约级）
+
+新增维度（断言 10 → 61）：与 JDK-8 侧同套（ProbeWriter 探针、size-1 逐字符下沉语义、newLine=lineSeparator、size-4 自动下沉 flushes==0、长写 pass-through、write 边界含 null-0-len 不抛、append 委托 "xABde"、flush 传播、关闭矩阵）。
+
+负例矩阵（实测双侧一致）：null 构造 NPE；"Buffer size <= 0" IAE；关闭后 "Stream closed"；write("abc",1,5) StringIndexOOB；write((char[])null,0,1) NPE。
+
+版本差异：无行为差异；JDK-27 NPE/IOOBE 消息更详细（helpful messages），测试按类型级断言保持两侧同源。

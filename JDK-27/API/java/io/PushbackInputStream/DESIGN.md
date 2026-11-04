@@ -20,3 +20,21 @@
 - 健壮性: BAIS 固定数据。
 
 产出：`PushbackInputStreamTest.java`（白盒 + 黑盒共 31 断言）。
+
+## 深化追加（契约级，批次 ioC）
+
+新增维度清单（与 JDK-8 侧完全镜像 + JDK-27 特有 testTransferToContract）：
+
+1. **回推满精确消息**（三种 unread 形式 → "Push back buffer is full" + 缓冲原样）。
+2. **close 后全操作精确消息**（read/read(b)/unread(int)/unread(arr)/available/skip/skip(负) → "Stream closed"）。
+3. **unread(int) 低 8 位**（0x141→0x41、0→0、-1→255）。
+4. **skip×回推**（队头先耗、恰耗尽、跨区 6、pushback-only）。
+5. **available 算术**。
+6. **超前读 + len==0 no-op**。
+7. **单次 bulk read 跨回推+流（LIFO）**。
+8. **交错 parser 序列**。
+9. **JDK-27 特有（transferTo 覆写，javap 确认为本类声明）**：中途 unread 后 transferTo 计数含回退字节且顺序还原（"abcdef"）、EOF；无回退时只搬剩余；transferTo 排空后仍可 unread 再读。
+
+负例矩阵与消息：同 JDK-8（双侧一致："Push back buffer is full"/"Stream closed"/NPE/IOBE/IAE）。同步修饰差异（mark 非同步）不构成契约差异。
+
+产出：`PushbackInputStreamTest.java` 27 → 82 断言（jtreg Passed）。

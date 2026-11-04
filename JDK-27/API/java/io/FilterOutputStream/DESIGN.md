@@ -20,3 +20,12 @@
 - 健壮性: 纯内存 BAOS。
 
 产出：`FilterOutputStreamTest.java`（白盒 + 黑盒共 15 断言）。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（15 -> 66）：与 JDK-8 侧镜像（逐字节循环、单参路由自身 3 参、两层 close、close 中 flush 失败仍关下沉、write after close、六操作失败透传、截断、out 换绑、500 字节内容、write(b,2,0) 合法）+ JDK-27 差异断言。
+
+### 版本差异（实测锁定，写入本侧断言）
+- closed 标志幂等：二次 close 无操作（flushes==1, closes==1）；失败 close 也置位，其后的 close 不再到达下沉。
+- both-fail close：close 异常为主、flush 异常 suppressed（与 JDK-8 相反）。
+- 帮助消息：OOB "Range [x, x + n) out of bounds for length y"；null 数组 "Cannot read the array length"；null 下沉 ""this.out" is null"（消息级断言）。

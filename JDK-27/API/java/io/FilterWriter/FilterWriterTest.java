@@ -4,6 +4,10 @@
  *          base with protected out) + black-box behavior (a minimal concrete subclass
  *          delegates write(int)/write(char[],int,int)/write(String,int,int)/flush/close
  *          to the wrapped writer; interception; protected field access).
+ *          Deepening: exact delegation targets per overload (write(int) -> out.write(int),
+ *          inherited write(char[])/write(String) -> the 3-arg forms, append routes
+ *          through write(int)/write(String)), null ctor -> NPE, closed underlying
+ *          writer surfaces through the filter, bounds propagation.
  * @run main FilterWriterTest
  */
 
@@ -128,9 +132,123 @@ public class FilterWriterTest {
         }
     }
 
+    /** Probe with separate counters for every underlying write form. */
+    static class Counting extends Writer {
+        int intWrites, bulkWrites, strWrites, flushes, closes;
+        public void write(int c) { intWrites++; }
+        public void write(char[] c, int o, int l) { bulkWrites++; }
+        public void write(String s, int o, int l) { strWrites++; }
+        public void flush() { flushes++; }
+        public void close() { closes++; }
+    }
+
+    // ---- exact delegation targets per overload (verified 1:1) ----
+    static void testDelegationExact() throws Exception {
+        Counting c = new Counting();
+        PassThrough fw = new PassThrough(c);
+        fw.write('x');
+        check(c.intWrites == 1 && c.bulkWrites == 0 && c.strWrites == 0,
+              "write(int) delegates to out.write(int) directly");
+        fw.write(new char[3], 0, 2);
+        check(c.bulkWrites == 1, "write(char[],off,len) delegates to the same-named form");
+        fw.write("ab", 0, 1);
+        check(c.strWrites == 1, "write(String,off,len) delegates to the same-named form");
+        fw.write("full".toCharArray());                 // inherited Writer.write(char[])
+        check(c.bulkWrites == 2 && c.strWrites == 1, "inherited write(char[]) -> out.write(c,0,len)");
+        fw.write("str");                                // inherited Writer.write(String)
+        check(c.strWrites == 2 && c.bulkWrites == 2, "inherited write(String) -> out.write(s,0,len)");
+        // append uses the Writer defaults and routes through the FilterWriter overrides
+        fw.append('A');
+        check(c.intWrites == 2 && c.bulkWrites == 2,
+              "append(char) routes through the write(int) override");
+        fw.append("BC");
+        check(c.strWrites == 3 && c.intWrites == 2,
+              "append(CharSequence) routes through write(String) -> out.write(String,off,len)");
+        fw.append("DEF", 1, 2);
+        check(c.strWrites == 4, "append(csq,s,e) routes through the String region form");
+        check(c.flushes == 0 && c.closes == 0, "no writes imply flush/close");
+        fw.flush();
+        fw.flush();
+        check(c.flushes == 2, "flush delegates 1:1");
+        fw.close();
+        check(c.closes == 1, "close delegates 1:1");
+    }
+
+    // ---- null constructor argument ----
+    static void testNullConstructor() throws Exception {
+        boolean npe = false;
+        try {
+            PassThrough p = new PassThrough(null);      // Writer(Object lock) rejects null
+            p.write('x');
+        } catch (NullPointerException expected) {
+            npe = true;
+        }
+        check(npe, "FilterWriter(null) -> NPE (from the base Writer lock check)");
+    }
+
+    // ---- a closed/failing underlying writer surfaces through the filter ----
+    static class ClosedSink extends Writer {
+        boolean closed;
+        public void write(char[] cbuf, int off, int len) throws IOException {
+            if (closed) throw new IOException("Stream closed");
+        }
+        public void flush() throws IOException {
+            if (closed) throw new IOException("Stream closed");
+        }
+        public void close() { closed = true; }
+    }
+
+    static void testClosedUnderlying() throws Exception {
+        ClosedSink sink = new ClosedSink();
+        PassThrough fw = new PassThrough(sink);
+        fw.write('a');                                  // fine while open
+        fw.close();                                     // delegates close to the sink
+        try {
+            fw.write('b');
+            check(false, "write on a closed filter must throw");
+        } catch (IOException ioe) {
+            check("Stream closed".equals(ioe.getMessage()),
+                  "underlying message surfaces: " + ioe.getMessage());
+        }
+        try {
+            fw.write("xy".toCharArray(), 0, 2);
+            check(false, "bulk write on a closed filter must throw");
+        } catch (IOException ioe) {
+            check("Stream closed".equals(ioe.getMessage()), "bulk write surfaces the message");
+        }
+        try {
+            fw.flush();
+            check(false, "flush on a closed filter must throw");
+        } catch (IOException ioe) {
+            check("Stream closed".equals(ioe.getMessage()), "flush surfaces the message");
+        }
+    }
+
+    // ---- bounds validation propagates through the decorator ----
+    static void testBoundsPropagation() throws Exception {
+        StringWriter sink = new StringWriter();
+        PassThrough fw = new PassThrough(sink);
+        boolean e1 = false;
+        try { fw.write(new char[2], 0, 5); } catch (IndexOutOfBoundsException expected) { e1 = true; }
+        check(e1, "write(char[],off,len) bounds propagate");
+        boolean e2 = false;
+        try { fw.write("abc", 0, 9); } catch (IndexOutOfBoundsException expected) { e2 = true; }
+        check(e2, "write(String,off,len) bounds propagate");
+        boolean e3 = false;
+        try { fw.write((char[]) null, 0, 1); } catch (NullPointerException expected) { e3 = true; }
+        check(e3, "write((char[])null,0,1) NPE propagates");
+        // still usable after the failed calls
+        fw.write('k');
+        check("k".equals(sink.toString()), "filter still usable after failed writes");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDelegationExact();
+        testNullConstructor();
+        testClosedUnderlying();
+        testBoundsPropagation();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -30,3 +30,30 @@
 - 健壮性: 不调用 setSerialFilter/setSerialFilterFactory（JVM 全局状态，避免污染并跑）；全部用受控 FilterInfo 断言，确定性强。
 
 产出：`ConfigTest.java`（白盒 5 + 黑盒 ~24 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testEmptyOrNullPatterns`…`testFactoryAccessorsReadonly`，断言 30 → 71）：
+- **空/ null 模式**：createFilter("") 与 createFilter(";") 返回 **null**（文档化行为，非抛异常）；createFilter(null) → NPE `pattern`。
+- **畸形模式矩阵（实测消息）**：`maxdepth=abc` → NumberFormatException `For input string: "abc"`；`maxdepth=-1`/`maxrefs=-5` → IAE `negative limit: <n>`；`/java.base` → IAE 含 `module name is missing` 且回显模式；`java.base/` → IAE 含 `class or package missing`；`.*` → IAE 含 `package missing`；`bogus=value` → IAE `unknown limit`（原有）。
+- **模块模式**：`java.base/java.lang.String`、`java.base/*`、`java.base/java.lang.*` 对 String 均 ALLOWED；错误模块前缀 `nomodule/...` → UNDECIDED。
+- **首匹配胜出（顺序不对称）**：`String;!*` → String=ALLOWED/Long=REJECTED；`!*;String` → 两者均 REJECTED。
+- **`*` 范围**：匹配普通引用类；**不**匹配数组类（int[].class）、原始类（long.class）、void；`[I` 与 `java.lang.String[]` 形式均不匹配数组（记录行为）。
+- **嵌套名形式**：二进制 `$` 名（java.util.Map$Entry）匹配；点号名（java.util.Map.Entry）不匹配。
+- **重复限制**：`maxdepth=2;maxdepth=9` → 有效限制为**最后一个**（depth 3/5 通过、10 拒绝），toString 原样回显两段。
+- **空白/大小写/取反**：` java.lang.String ` 不去空白（不匹配，toString 原样含空格）；模式大小写敏感；`!java.lang.String` 仅拒 String 其余 UNDECIDED；前导点 `.example.Class` 合法但永不匹配普通类名。
+- **maxarray 适用条件**：arrayLength==-1（非数组或描述符阶段）时 maxarray 不参与判定（UNDECIDED）。
+- **只读访问器**：getSerialFilterFactory().getClass().getTypeName() == `java.io.ObjectInputFilter$Config$BuiltinFilterFactory`；getSerialFilter() 只读观察（null 或过滤器实例）。
+
+负例矩阵：
+| 模式 | 异常 | 消息子串 |
+|---|---|---|
+| null | NullPointerException | `pattern` |
+| maxdepth=abc | NumberFormatException | `For input string: "abc"` |
+| maxdepth=-1 / maxrefs=-5 | IllegalArgumentException | `negative limit: <n>` |
+| /java.base | IllegalArgumentException | `module name is missing` + 回显 |
+| java.base/ | IllegalArgumentException | `class or package missing` |
+| .* | IllegalArgumentException | `package missing` |
+| bogus=value | IllegalArgumentException | `unknown limit` |
+
+硬性约束：**绝不调用 setSerialFilter/setSerialFilterFactory**（全局状态）；JDK-8 无此类，仅 JDK-27 存在。

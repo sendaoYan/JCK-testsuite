@@ -21,3 +21,27 @@
 
 ## 关键细节
 - 构造器负值抛 IAE（非 IOBE）；JDK-8 同。
+
+## 深化追加（契约级）
+
+实测环境：JDK 8u372 / JDK 27.0.1（行为一致）。
+
+### 新增维度
+- **源数组别名（不拷贝）**：构造后修改源 char[] 可见（文档化 buf is not copied）；window 构造器同样别名。
+- ready 深契约：EOF 后 false、空数组 false、skip 越过后 false（对照 StringReader 恒 true）。
+- bulk read 边界：请求多于剩余 → 返回剩余；len==0 在 EOF 处返回 0；off==length+len==0 合法；off+len 溢出 IOOBE；read((char[])null) NPE（基类长度检查先行）；精确适配。
+- skip 极值：skip(0)/skip(Long.MAX_VALUE)==剩余/EOF 处 0/skip(Long.MIN_VALUE)==0；window 构造器把 skip 限制在 [off, off+len)。
+- mark 深契约：readAheadLimit 被忽略（mark(0) 越限后 reset 有效）；skip 越过 mark 后 reset 回退；EOF 处 mark 后 reset 重放；window 构造器未标记 reset 回 window 起点；首读前 mark 可全量重放。
+- close 矩阵：read/read(c,o,l)/skip(±)/ready/mark/reset 全部 IOException("Stream closed")；关闭检查先于越界检查；read((char[])null) 仍 NPE。
+- read(CharBuffer)：填充 remaining、EOF -1、空 reader → -1、零 remaining → 0（JDK-27 侧 CharArrayReader 覆写此方法、JDK-8 侧走 Reader 默认，可观察行为一致）。
+
+### 负例矩阵（双侧实测）
+| 操作 | 异常 | 精确消息 |
+|---|---|---|
+| 构造 null / off 或 len 负 / off>buf.length | NPE / IllegalArgumentException | 已有 |
+| read(null,0,1)/read((char[])null) | NullPointerException | - |
+| read(cbuf,越界/溢出) | IndexOutOfBoundsException | - |
+| close 后任一操作 | IOException | "Stream closed"（逐字） |
+
+### 版本差异
+- 无行为差异。断言 25 → 82。

@@ -27,3 +27,15 @@
 6. 描述符与真实流一致：按该描述符序列化往返值相等。
 7. 枚举（0 字段）描述符。
 - 健壮性: SUID 为规范固定值；字段顺序是序列化规范规定（primitives 先、按声明序），跨平台稳定。
+
+## 深化追加（契约级）
+
+新增维度（`testLookupAnyNonSerializable`…`testModifiers`，断言 21 → 55）：
+- **lookup vs lookupAny**：lookup(非序列化类)=null；lookupAny(非序列化类) 非 null 且 suid=0、fields=0。
+- **自动计算 UID 稳定性**：同结构不同名（Auto1/Auto2）→ 不同 UID；同名同结构两次 lookup → 相同 UID；字段增删改变 UID。
+- **规范字段序**：先原始类型按名排序、后引用类型按名排序（实测序 `aa:B,cc:D,dd:J,zz:I,bb:L,mm:L`）；offset 递增分配。
+- **描述符种类**：Serializable/Externalizable 接口 UID 恒定（1196656838076753133 / -282491828744381764，双侧一致）；`int[].class` 名 `[I`；枚举 lookupAny suid=0。
+- **toString 精确格式**：`Name: static final long serialVersionUID = 403L;` 形态断言。
+- **修饰符**：JDK-8 侧 ObjectStreamClass **非 final**。
+
+版本差异：JDK-27 的 ObjectStreamClass 为 final；JDK-8 不是。

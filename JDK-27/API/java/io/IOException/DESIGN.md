@@ -25,3 +25,25 @@
 - 健壮性: 全内存对象与流，无文件/网络/全局状态。
 
 产出：`IOExceptionTest.java`（白盒 6 + 黑盒 15 断言）。
+
+## 深化追加（契约级）
+追加内容（JDK-27 侧断言数 91，另一侧见对应 DESIGN）。所有行为断言均为双侧 JDK 实测后写入。
+### serialVersionUID 实测值（ObjectStreamClass.lookup，双侧一致）
+- `IOException`：双侧同值 `7818375828146090155L`
+### 新增测试方法
+1. testConstructorEdges（cause 提取规则：(Throwable)→message==cause.toString()；(String,null)→cause 为 null）
+2. testThrowableProtocol（getMessage/getLocalizedMessage/toString/initCause 二次 ISE/initCause(null) 仅未设置时允许/setStackTrace 往返+null NPE/addSuppressed 顺序+自抑制 IAE+null NPE/fillInStackTrace==this）
+3. testSerializationContract（suid + 消息/cause/suppressed 往返）
+4. testFamilyHierarchy（15 个 java.io 异常家族 instanceof 矩阵）
+5. testRealThrowSurfaces（EOFException/FNFE 等真实抛出可作 IOException 捕获）
+
+### 负例与精确异常（操作 → 类型 → 双侧一致 message 子串）
+- initCause 二次 → IllegalStateException「Can't overwrite cause with ...」
+- initCause(this) → IllegalArgumentException「Self-causation not permitted」（在 Throwable 基类层面）
+- addSuppressed(this) → IllegalArgumentException「Self-suppression not permitted」
+- setStackTrace(null) → NullPointerException
+
+### JDK-8 vs JDK-27 差异
+- 无（构造器面、message 文案、serialVersionUID、行为语义双侧一致）。
+### 序列化往返清单
+- 构造实例（message/toString）往返；- cause 往返（深拷贝）；- suppressed 往返；- 真实触发实例再序列化。

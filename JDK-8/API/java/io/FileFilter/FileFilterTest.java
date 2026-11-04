@@ -107,8 +107,166 @@ public class FileFilterTest {
         return true;
     }
 
+    // ================= 深化追加（契约级） =================
+
+    static File freshDir() throws Exception {
+        File d = File.createTempFile("jck-ff2", ".tmp");
+        if (!d.delete() || !d.mkdir()) throw new AssertionError("fresh temp dir");
+        return d;
+    }
+
+    static void touchIn(File dir, String name) throws IOException {
+        if (!new File(dir, name).createNewFile()) throw new AssertionError("touch " + name);
+    }
+
+    // classic pre-lambda implementation style must keep working
+    static class SuffixFilter implements FileFilter {
+        private final String suffix;
+        private int calls;
+        SuffixFilter(String suffix) { this.suffix = suffix; }
+        public boolean accept(File pathname) { calls++; return pathname.getName().endsWith(suffix); }
+    }
+
+    // ---- 9. invocation counting: accept is offered each entry exactly once ----
+    static void testInvocationCounting() throws Exception {
+        File d = freshDir();
+        try {
+            touchIn(d, "a.txt");
+            touchIn(d, "b.txt");
+            touchIn(d, "c.log");
+            new File(d, "sub").mkdir();
+            SuffixFilter f = new SuffixFilter(".txt");
+            File[] got = d.listFiles(f);
+            check(f.calls == 4, "accept offered once per entry (files and dirs)");
+            check(got.length == 2, "only matching entries returned");
+            // filtering again is deterministic and does not double-count state
+            File[] again = d.listFiles(f);
+            check(f.calls == 8, "second listing offers every entry again");
+            check(again.length == 2, "second pass same result size");
+            java.util.Arrays.sort(again, (x, y) -> x.getName().compareTo(y.getName()));
+            check("a.txt".equals(again[0].getName()) && "b.txt".equals(again[1].getName()),
+                  "identical membership on repeat");
+        } finally {
+            for (File k : d.listFiles()) k.delete();
+            d.delete();
+        }
+    }
+
+    // ---- 10. listFiles(FileFilter) is flat: nested entries are never offered ----
+    static void testFlatNoRecursion() throws Exception {
+        File d = freshDir();
+        try {
+            touchIn(d, "top.txt");
+            File sub = new File(d, "sub");
+            if (!sub.mkdir()) throw new AssertionError("mkdir sub");
+            touchIn(sub, "deep.txt");
+            final java.util.List<String> seen = new java.util.ArrayList<String>();
+            File[] got = d.listFiles(x -> { seen.add(x.getName()); return true; });
+            check(got.length == 2, "flat listing returns direct children only");
+            check(seen.size() == 2 && !seen.contains("deep.txt"),
+                  "filter never sees entries below the top level");
+        } finally {
+            new File(d, "sub/deep.txt").delete();
+            new File(d, "sub").delete();
+            for (File k : d.listFiles()) k.delete();
+            d.delete();
+        }
+    }
+
+    // ---- 11. null filter is equivalent to no filter ----
+    static void testNullFilterEquivalence() throws Exception {
+        File d = freshDir();
+        try {
+            touchIn(d, "x");
+            touchIn(d, "y");
+            check(d.listFiles((FileFilter) null).length == d.listFiles().length,
+                  "null FileFilter lists everything");
+        } finally {
+            for (File k : d.listFiles()) k.delete();
+            d.delete();
+        }
+    }
+
+    // ---- 12. non-directory targets yield null (never an exception) ----
+    static void testNullResults() throws Exception {
+        File d = freshDir();
+        try {
+            touchIn(d, "plain");
+            FileFilter t = f -> true;
+            check(d.listFiles(t) != null && d.listFiles(t).length == 1, "dir listing works");
+            check(new File(d, "plain").listFiles(t) == null, "plain file yields null");
+            check(new File(d, "missing").listFiles(t) == null, "missing dir yields null");
+            File empty = new File(d, "empty");
+            check(empty.mkdir(), "mkdir empty");
+            File[] none = empty.listFiles(t);
+            check(none != null && none.length == 0, "empty dir yields length-0 array");
+        } finally {
+            new File(d, "empty").delete();
+            for (File k : d.listFiles()) k.delete();
+            d.delete();
+        }
+    }
+
+    // ---- 13. anonymous-class and method-reference implementations ----
+    static void testClassicImplementations() throws Exception {
+        File d = freshDir();
+        try {
+            touchIn(d, "k.log");
+            touchIn(d, "m.txt");
+            FileFilter anon = new FileFilter() {
+                public boolean accept(File pathname) { return pathname.getName().endsWith(".log"); }
+            };
+            File[] logs = d.listFiles(anon);
+            check(logs.length == 1 && "k.log".equals(logs[0].getName()), "anonymous class filter");
+            FileFilter isFile = File::isFile;
+            check(d.listFiles(isFile).length == 2, "method-reference filter");
+            FileFilter isDir = File::isDirectory;
+            check(d.listFiles(isDir).length == 0, "no subdirectories here");
+        } finally {
+            for (File k : d.listFiles()) k.delete();
+            d.delete();
+        }
+    }
+
+    // ---- 14. interface shape: @FunctionalInterface, single abstract method ----
+    static void testFunctionalInterfaceShape() throws Exception {
+        Class<?> c = Class.forName("java.io.FileFilter");
+        check(c.isAnnotationPresent(java.lang.FunctionalInterface.class),
+              "@FunctionalInterface present");
+        int abstractCount = 0;
+        for (java.lang.reflect.Method m : c.getMethods())
+            if (java.lang.reflect.Modifier.isAbstract(m.getModifiers())
+                    && m.getDeclaringClass() == c) abstractCount++;
+        check(abstractCount == 1, "exactly one abstract method of its own");
+    }
+
+    // ---- 15. filter exceptions propagate with the original exception object ----
+    static void testExceptionIdentity() throws Exception {
+        File d = freshDir();
+        try {
+            touchIn(d, "one");
+            final IllegalStateException bomb = new IllegalStateException("boom-ff");
+            try {
+                d.listFiles(f -> { throw bomb; });
+                check(false, "filter exception must propagate");
+            } catch (IllegalStateException e) {
+                check(e == bomb, "the very same exception instance propagates");
+            }
+        } finally {
+            for (File k : d.listFiles()) k.delete();
+            d.delete();
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testBlackBox();
+        testInvocationCounting();
+        testFlatNoRecursion();
+        testNullFilterEquivalence();
+        testNullResults();
+        testClassicImplementations();
+        testFunctionalInterfaceShape();
+        testExceptionIdentity();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

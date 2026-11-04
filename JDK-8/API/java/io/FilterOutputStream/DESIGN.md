@@ -46,3 +46,29 @@
 
 - 全部输入为固定字节数组，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒（public 构造器、protected out 字段）。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（8 -> 62）。
+
+### 新增维度
+- write(b,off,len) 逐字节循环 write(int)（singles=n, bulk=0，双侧实测）；write(byte[0]) 零下沉；中途失败前 2 字节已交付。
+- write(byte[]) 路由到自身 3 参（子类 bulk 覆写胜出：bulk=1, singles=0）。
+- close = flush + close 精确一次；二次 close 重新执行（JDK-8 无 closed 标志，实测 2/2）。
+- 两层 close：下沉 flush=2/close=1；二次 4/2（JDK-8）。
+- close 中 flush 失败：异常透传但下沉仍被 close（closes=1）；失败后的 close 重试整链（3/2）。
+- both-fail close：flush 异常为主、close 异常 suppressed（JDK-8 try-with-resources 语义，实测与 JDK-27 相反）。
+- write after close 宽容下沉可达；六操作失败下沉 "sink broken" 透传；null 下沉五操作 NPE；write(int) 截断；out 中途换下沉；500 字节循环内容一致。
+- OOB：裸 IndexOutOfBoundsException（JDK-8 位运算校验，消息 null）；write(b,2,0) 合法、write(b,3,0) 拒绝。
+
+### 负例精确异常表（双侧实测）
+| 操作 | 类型 | 消息子串 |
+|---|---|---|
+| write(b,3,1)/(b,0,-1)/(b,1,2)/(b,3,0) | IndexOutOfBoundsException | JDK-8 消息 null；JDK-27 "Range [x, x + n) out of bounds for length y" |
+| write(null,0,1)/write((byte[])null) | NullPointerException | JDK-8 null；JDK-27 "Cannot read the array length" |
+| null 下沉五操作 | NullPointerException | JDK-8 null；JDK-27 ""this.out" is null" |
+| both-fail close | IOException | 主 F + suppressed C（JDK-8）/ 主 C + suppressed F（JDK-27） |
+
+### 版本差异（实测锁定）
+- 二次 close：JDK-8 重执行（2/2）；JDK-27 无操作（1/1）。
+- 异常消息：JDK-27 全部带帮助文本；JDK-8 均为 null。

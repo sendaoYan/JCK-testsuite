@@ -109,9 +109,165 @@ public class LineNumberInputStreamTest {
         check(in.read() == 'q', "unread data still served after close (wrapped BAIS is close-tolerant)");
     }
 
+    // ---- 深化追加（契约级），行为全部经 JDK-27 实测锁定 ----
+
+    /** 底层第一次 read 正常、第二次抛 IOException 的源。 */
+    static class OneThenBoom extends java.io.InputStream {
+        boolean boomed;
+        public int read() throws IOException {
+            if (boomed) throw new IOException("mid-boom");
+            boomed = true;
+            return 'A';
+        }
+    }
+
+    /** 构造 null 不抛（FilterInputStream 纯赋值），NPE 延迟到首次使用底层。 */
+    static void testConstructorDeep() throws Exception {
+        LineNumberInputStream nullIn = new LineNumberInputStream(null);
+        boolean npe = false;
+        try { nullIn.read(); } catch (NullPointerException expected) { npe = true; }
+        check(npe, "read on null underlying -> NPE");
+        LineNumberInputStream nullClose = new LineNumberInputStream(null);
+        boolean npe2 = false;
+        try { nullClose.close(); } catch (NullPointerException expected) { npe2 = true; }
+        check(npe2, "close on null underlying -> NPE");
+        check(ln("ab").markSupported(), "markSupported delegates to underlying BAIS (true)");
+    }
+
+    /** available 公式：(pushBack==-1) ? avail/2 : avail/2+1（javadoc 的 k/2 契约）。 */
+    static void testAvailableFormula() throws Exception {
+        LineNumberInputStream in = ln("a\rb");
+        check(in.available() == 1, "initial available == 3/2 == 1");
+        in.read();
+        check(in.available() == 1, "after 'a': 2/2 == 1");
+        in.read();                                       // '\r' → '\n'，pushBack='b'
+        check(in.available() == 1, "pushback path: 0/2+1 == 1");
+        check(in.read() == 'b', "pushed-back byte served next");
+        check(in.available() == 0, "empty at end");
+
+        LineNumberInputStream pair = ln("ab\r\n");
+        check(pair.available() == 2, "4/2 == 2");
+        pair.read();
+        pair.read();
+        check(pair.available() == 1, "remaining \\r\\n estimated as 1");
+        pair.read();
+        check(pair.available() == 0, "pair consumed, available 0");
+    }
+
+    /** bulk read 吞掉中途 IOException 返回部分计数；单字节 read() 透传异常。 */
+    static void testIOExceptionSemantics() throws Exception {
+        LineNumberInputStream bulk = new LineNumberInputStream(new OneThenBoom());
+        byte[] buf = new byte[4];
+        int n = bulk.read(buf, 0, 4);
+        check(n == 1 && buf[0] == 'A',
+              "bulk read swallows mid-stream IOException and returns partial count");
+        LineNumberInputStream single = new LineNumberInputStream(new OneThenBoom());
+        check(single.read() == 'A', "first read served");
+        try {
+            single.read();
+            check(false, "single read() must propagate IOException");
+        } catch (IOException expected) {
+            passed++;
+        }
+    }
+
+    /** read(b,off,len) 参数矩阵。 */
+    static void testReadBounds() throws Exception {
+        LineNumberInputStream in = ln("abcdef");
+        byte[] buf = new byte[3];
+        try { in.read(buf, 1, 3); check(false, "must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        try { in.read(buf, -1, 0); check(false, "must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        try { in.read(buf, 0, -1); check(false, "must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        try { in.read(null, 0, 1); check(false, "must throw"); }
+        catch (NullPointerException expected) { passed++; }
+        check(in.read(buf, 0, 0) == 0, "read(b,0,0) == 0");
+        check(in.read(buf, 0, 3) == 3 && buf[0] == 'a' && buf[2] == 'c', "region read content");
+    }
+
+    /** skip：负数 0、跨 \r\n 计一行、纯 \r 计一行、越过 EOF 夹紧。 */
+    static void testSkipDeep() throws Exception {
+        LineNumberInputStream in = ln("1\r\n2\n");
+        check(in.skip(-3) == 0 && in.skip(0) == 0, "negative/zero skip 0");
+        check(in.skip(2) == 2, "skip(2) consumes merged \\r\\n");
+        check(in.getLineNumber() == 1, "line 1 after crossing \\r\\n");
+        check(in.read() == '2', "position after skip");
+        check(in.skip(99) == 1, "skip past EOF clamps to remaining merged byte");
+        check(in.getLineNumber() == 2, "second terminator counted by skip");
+
+        LineNumberInputStream cr = ln("1\r2");
+        check(cr.skip(2) == 2 && cr.getLineNumber() == 1, "lone \\r counted by skip");
+        LineNumberInputStream empty = ln("");
+        check(empty.skip(5) == 0, "empty source skip 0");
+    }
+
+    /** 行号计数深分支：负 setLineNumber、EOF 不加行、单独 \r 计行。 */
+    static void testLineNumberDeep() throws Exception {
+        LineNumberInputStream in = ln("ab");
+        in.setLineNumber(-7);
+        check(in.getLineNumber() == -7, "negative line number kept");
+        in.read();
+        in.read();
+        check(in.getLineNumber() == -7, "no terminator read: line number unchanged");
+        check(in.read() == -1, "EOF");
+        check(in.getLineNumber() == -7, "EOF itself never increments");
+
+        LineNumberInputStream cr = ln("a\r");
+        check(cr.read() == 'a', "lead-in byte");
+        check(cr.read() == '\n', "lone \\r delivered as \\n");
+        check(cr.getLineNumber() == 1, "\\r at EOF counts a line");
+        check(cr.read() == -1, "EOF after lone \\r");
+    }
+
+    /** mark/reset 恢复行号与 pushBack 状态。 */
+    static void testMarkResetDeep() throws Exception {
+        LineNumberInputStream in = ln("x\r\ny");
+        check(in.read() == 'x', "x");
+        check(in.read() == '\n' && in.getLineNumber() == 1, "merged pair consumed");
+        in.mark(4);
+        check(in.read() == 'y', "read past mark");
+        in.reset();
+        check(in.getLineNumber() == 1, "reset restores line number");
+        check(in.read() == 'y', "reset restores position after the pair");
+
+        LineNumberInputStream mid = ln("p\rq");
+        mid.read();                                      // 'p'
+        check(mid.read() == '\n', "\\r consumed");
+        mid.mark(4);
+        mid.read();                                      // 'q'
+        mid.reset();
+        check(mid.read() == 'q', "reset restores pending pushback byte");
+    }
+
+    /** 逐字节读 \r\n 的合并语义与空流矩阵。 */
+    static void testByteByByteAndEmpty() throws Exception {
+        LineNumberInputStream in = ln("1\r\n2");
+        StringBuilder sb = new StringBuilder();
+        int c;
+        while ((c = in.read()) != -1) sb.append((char) c);
+        check(sb.toString().equals("1\n2"), "byte-by-byte collapses pair to one \\n");
+        check(in.getLineNumber() == 1, "one line counted");
+        check(in.read() == -1, "repeated EOF reads stay -1");
+
+        LineNumberInputStream empty = ln("");
+        check(empty.read() == -1 && empty.available() == 0 && empty.skip(2) == 0,
+              "empty source matrix");
+        check(empty.getLineNumber() == 0, "empty source line 0");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstructorDeep();
+        testAvailableFormula();
+        testIOExceptionSemantics();
+        testReadBounds();
+        testSkipDeep();
+        testLineNumberDeep();
+        testMarkResetDeep();
+        testByteByByteAndEmpty();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

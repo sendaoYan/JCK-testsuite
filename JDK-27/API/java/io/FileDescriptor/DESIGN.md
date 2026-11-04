@@ -22,3 +22,16 @@
 - 健壮性: 临时文件 finally 删除；不对 stdin 做任何操作。
 
 产出：`FileDescriptorTest.java`（白盒 + 黑盒共 24 断言）。
+
+## 深化追加（契约级）
+
+新增维度（全部经 JDK-27 实测锁定）：
+- 三静态字段身份与类型；toString 格式；hashCode 稳定
+- bare 构造器：sync → SyncFailedException("sync failed")（与 8 同文案）
+- RAF FD 生命周期：valid→invalid、getFD 同实例、closed fd sync 抛 "sync failed"
+- FIS/FOS FD 互异与失效；sync 幂等；HashSet 身份；err.sync 容错
+- 白盒：sync() 在 JDK-27 已非 native；无接口；直接子类 Object
+
+负例矩阵：bare sync SyncFailedException("sync failed") / closed fd sync SyncFailedException("sync failed")。
+
+版本差异记录：sync() 修饰符 8 native vs 27 非 native（反射断言各自锁定）；"sync failed" 消息与 valid 生命周期双侧一致（JDK-8 时代注释「close 不复位 fd」经实测已不成立：双侧 close 后 valid() 均为 false）。

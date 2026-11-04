@@ -20,3 +20,18 @@
 - 健壮性: 每流独立 filter；无全局设置。
 
 产出：`StatusTest.java`（白盒 + 黑盒共 24 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testEnumMachinery`，断言 24 → 36）：
+- **valueOf 消息**：未知常量 IAE 消息为**全限定** `No enum constant java.io.ObjectInputFilter.Status.nope`（逐字实测）。
+- **声明类**：常量与 valueOf 所得常量的 getDeclaringClass() 均 == Status.class；常量 getClass()==Status.class（无常量专属类体）。
+- **泛型枚举机制**：Enum.valueOf(Status.class,"ALLOWED") 可用；EnumSet.range(UNDECIDED,REJECTED) 尺寸 3；EnumSet.complementOf 尺寸 2；EnumMap 三键齐收。
+- **可比较性**：常量同时实现 Comparable 与 Serializable；compareTo 全序 UNDECIDED < ALLOWED < REJECTED（三对全断言）；values() 顺序与 ordinal 一致。
+- **switch 穷尽**：三常量 switch 各自命中分支（运行时穷尽性证明）。
+
+负例矩阵：
+| 操作 | 异常 | 消息子串 |
+|---|---|---|
+| Status.valueOf("nope") | IllegalArgumentException | `No enum constant java.io.ObjectInputFilter.Status.nope` |
+| Status.valueOf("rejected")（大小写） | IllegalArgumentException | 同上形式 |

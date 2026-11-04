@@ -20,3 +20,22 @@
 - 健壮性: 全内存流。
 
 产出：`ObjectInputValidationTest.java`（白盒 5 + 黑盒 4 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testInterfaceStructure`…`testEqualPriorityLifo`，断言 10 → 35）：
+- **优先级矩阵**：`[10,5,1,0,-7]` 回调顺序严格**降序**（负优先级合法且最后执行）。
+- **同优先级 LIFO**：同级 a/b/c 注册序 → 回调序 `[c,b,a]`（栈语义，实测锁定）。
+- **回调时点图完整性**：回调触发时整张对象图（含嵌套对象字段）已填充完毕。
+- **null 回调**：registerValidation(null, prio) → InvalidClassException 消息恰 `null callback`（非 NPE，先实测后写入）。
+- **异常传播**：回调抛 ISE（运行时）→ 原样传出；抛 IOException → 包装为 InvalidObjectException 且**保留 cause 链**（可用 InvalidObjectException(String,Throwable) 直接构造）；回调抛 InvalidObjectException → 原样传出。
+- **作用域**：仅当前 readObject 调用内有效；读之间计数器清零；readObject 之外调用 registerValidation → NotActiveException。
+
+负例矩阵：
+| 操作 | 异常 | 消息子串（8/27 一致） |
+|---|---|---|
+| registerValidation(null, p) | InvalidObjectException | `null callback` |
+| 非 readObject 期间注册 | NotActiveException | — |
+| 回调抛受检 IOException | InvalidObjectException | cause 为原始异常 |
+
+版本差异：JDK-27 新增 InvalidObjectException(String,Throwable) 构造器；JDK-8 需 initCause 补 cause。

@@ -5,6 +5,11 @@
  *          invokes close exactly once, close is idempotent for implementors that choose
  *          so, a close failure propagates out of try-with-resources, JDK classes used
  *          through the interface).
+ *          Deepening: suppressed exceptions (body vs close, and two failing closes),
+ *          reverse-order closing for three resources, nested try-with-resources,
+ *          explicit close inside the body followed by the implicit close,
+ *          AutoCloseable-not-Closeable boundary, JDK reader/writer behavior
+ *          through the interface.
  * @run main CloseableTest
  */
 
@@ -107,9 +112,123 @@ public class CloseableTest {
         }
     }
 
+    static class Failing implements Closeable {
+        final String name;
+        Failing(String n) { name = n; }
+        public void close() throws IOException { throw new IOException("close-" + name); }
+    }
+
+    // ---- close failure is suppressed when the body throws ----
+    static void testSuppressedException() throws Exception {
+        try (Closeable c = new Failing("x")) {
+            throw new IllegalStateException("body");
+        } catch (IllegalStateException e) {
+            check("body".equals(e.getMessage()), "the body exception propagates");
+            check(e.getSuppressed().length == 1
+                  && e.getSuppressed()[0] instanceof IOException,
+                  "the close failure is attached as a suppressed exception");
+            check("close-x".equals(e.getSuppressed()[0].getMessage()),
+                  "suppressed exception keeps its message");
+        }
+    }
+
+    // ---- two failing closes: the first close exception wins, later ones are suppressed ----
+    static void testTwoFailingCloses() throws Exception {
+        try (Closeable c1 = new Failing("outer");
+             Closeable c2 = new Failing("inner")) {
+            passed++;
+        } catch (IOException e) {
+            // resources close in reverse order: c2 ("inner") closes first and wins
+            check("close-inner".equals(e.getMessage()),
+                  "the exception from the first resource closed propagates");
+            check(e.getSuppressed().length == 1
+                  && "close-outer".equals(e.getSuppressed()[0].getMessage()),
+                  "the later close failure is suppressed");
+        }
+    }
+
+    // ---- three resources close in exact reverse declaration order ----
+    static void testThreeResources() throws Exception {
+        java.util.List<String> order = new java.util.ArrayList<>();
+        try (Closeable a = () -> order.add("a");
+             Closeable b = () -> order.add("b");
+             Closeable c = () -> order.add("c")) {
+            check(order.isEmpty(), "nothing closed inside the block");
+        }
+        check(order.equals(java.util.List.of("c", "b", "a")),
+              "reverse declaration order for three resources");
+    }
+
+    // ---- nested try-with-resources: inner resources close first ----
+    static void testNestedTry() throws Exception {
+        final java.util.List<String> order = new java.util.ArrayList<>();
+        try (Closeable outer = () -> order.add("outer")) {
+            try (Closeable inner = () -> order.add("inner")) {
+                check(order.isEmpty(), "nothing closed yet");
+            }
+            check(order.equals(java.util.List.of("inner")),
+                  "the inner resource closed when its block ended");
+        }
+        check(order.equals(java.util.List.of("inner", "outer")),
+              "then the outer resource closed");
+    }
+
+    // ---- an explicit close() in the body is still followed by the implicit close ----
+    static void testExplicitCloseInsideBody() throws Exception {
+        Counting c = new Counting();
+        try (Counting r = c) {
+            r.close();                                  // explicit close inside the body
+            check(c.closes == 1, "explicit close counted");
+        }
+        check(c.closes == 2, "the implicit close still runs after an explicit one");
+    }
+
+    // ---- AutoCloseable vs Closeable boundary ----
+    static void testAutoCloseableBoundary() throws Exception {
+        AutoCloseable ac = new AutoCloseable() {
+            public void close() { }
+        };
+        check(!(ac instanceof Closeable), "a plain AutoCloseable is NOT a Closeable");
+        Closeable c = new Counting();
+        check(c instanceof AutoCloseable, "every Closeable is an AutoCloseable");
+        boolean[] ran = {false};
+        Closeable quiet = () -> ran[0] = true;
+        quiet.close();
+        check(ran[0], "a no-throw lambda implementation works");
+    }
+
+    // ---- JDK readers/writers through the interface: close has real effects ----
+    static void testJdkImplementors() throws Exception {
+        java.io.StringReader sr = new java.io.StringReader("q");
+        try (Closeable r = sr) {
+            check(sr.read() == 'q', "StringReader usable while managed by the interface");
+        }
+        try {
+            sr.read();
+            check(false, "closed StringReader must throw on read");
+        } catch (IOException expected) {
+            check("Stream closed".equals(expected.getMessage()),
+                  "the JDK close contract is observable through the interface");
+        }
+        java.io.StringWriter sw = new java.io.StringWriter();
+        try (Closeable w = sw) {
+            w.hashCode();                               // resource is non-null
+        }
+        sw.write("still-open");                         // StringWriter.close is a no-op
+        check("still-open".equals(sw.toString()),
+              "StringWriter close no-op observable through the interface");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSuppressedException();
+        testTwoFailingCloses();
+        testThreeResources();
+        testNestedTry();
+        testExplicitCloseInsideBody();
+        testAutoCloseableBoundary();
+        testJdkImplementors();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

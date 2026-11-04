@@ -20,3 +20,19 @@
 - 健壮性: BAIS 固定数据；@Deprecated API 用引用不触发 removal 错误。
 
 产出：`LineNumberInputStreamTest.java`（白盒 + 黑盒共 33 断言）。
+
+## 深化追加（契约级）
+
+新增维度（全部经 JDK-27 实测锁定）：
+- 构造 null 不抛 NPE；NPE 延迟到首次使用底层（read/close）
+- available 公式（pushBack==-1 ? avail/2 : avail/2+1）："a\rb" 与 "ab\r\n" 序列验证
+- bulk read 吞中途 IOException 返回部分计数；单字节 read() 透传
+- read(b,off,len) 参数矩阵
+- skip：负/0 → 0；跨 \r\n 与纯 \r 计行；越过 EOF 夹紧到合并后剩余（skip(99)=1）
+- 行号深分支：负 setLineNumber、非终止符不加行、EOF 不加行、单独 \r 计行
+- mark/reset 恢复行号+位置+pushBack 状态
+- 逐字节合并语义与空流矩阵
+
+负例矩阵：read on null underlying NPE / close on null underlying NPE / read(b,1,3) IOOBE / read(null,0,1) NPE / read() 透传底层 IOException。
+
+版本差异记录：与 JDK-8 行为完全一致；27 侧越界 IOOBE 消息为 Range 风格、8 为 null（断类型级）。

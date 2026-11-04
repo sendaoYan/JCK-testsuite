@@ -6,6 +6,9 @@
  *          (NPE/IndexOutOfBoundsException) + exact-offset/partial/zero-length
  *          semantics, skip (negative->0, past-end), available, mark/reset
  *          (replay, unmarked reset, offset-constructor mark), close() no-op.
+ *          Deepened (contract level): constructor corner cases (unvalidated off ->
+ *          available()/EOF semantics), read boundary placement and clamping,
+ *          skip x mark interaction, mark/reset after close, large-buffer reads.
  * @run main ByteArrayInputStreamTest
  */
 
@@ -195,6 +198,89 @@ public class ByteArrayInputStreamTest {
         check(in.read() == 1, "reset after close still works");
     }
 
+    // ---- 9. constructor corner cases (offset not validated; implementation-observed,
+    //         identical on JDK-8 and JDK-27: count = min(off+len, buf.length), pos = off) ----
+    static void testConstructorCorners() {
+        // off > buf.length: count clamps to buf.length while pos stays at off
+        ByteArrayInputStream past = new ByteArrayInputStream(new byte[]{1, 2, 3}, 4, 1);
+        check(past.available() == -1, "off beyond buf.length: available() = count - pos = -1");
+        check(past.read() == -1, "off beyond buf.length: pos >= count -> immediate EOF");
+
+        // negative offset is not validated either; read() touches buf[-1]
+        ByteArrayInputStream neg = new ByteArrayInputStream(new byte[]{1, 2, 3}, -1, 2);
+        check(neg.available() == 2, "negative offset: available() = count - pos");
+        checkThrows(IndexOutOfBoundsException.class, () -> neg.read(),
+                    "negative offset read -> ArrayIndexOutOfBoundsException");
+    }
+
+    // ---- 10. read(byte[],off,len) boundary placement ----
+    static void testReadBoundary() {
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[]{1, 2, 3, 4});
+        check(in.read(new byte[4], 4, 0) == 0, "off == b.length with len == 0 is legal");
+        check(in.read(new byte[4], 0, 4) == 4, "full drain in a single call");
+        check(in.available() == 0, "drained after full read");
+
+        // request larger than remaining is clamped to the remaining count
+        ByteArrayInputStream p = new ByteArrayInputStream(new byte[]{1, 2, 3});
+        byte[] b = new byte[10];
+        check(p.read(b, 2, 8) == 3, "len clamped to remaining");
+        check(b[2] == 1 && b[3] == 2 && b[4] == 3 && b[5] == 0, "clamped placement, beyond untouched");
+    }
+
+    // ---- 11. skip x mark interaction (mark records position; skip advances it) ----
+    static void testSkipMarkInteraction() {
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5});
+        in.read();                         // pos = 1
+        in.mark(0);                        // mark = 1 (readAheadLimit ignored for this class)
+        in.skip(2);                        // pos = 3
+        in.reset();                        // pos = 1
+        check(in.read() == 2 && in.read() == 3, "reset after skip returns to marked position");
+
+        ByteArrayInputStream z = new ByteArrayInputStream(new byte[]{9, 8, 7});
+        z.read();
+        z.mark(5);
+        z.skip(0);                         // does not move position or disturb mark
+        z.reset();
+        check(z.read() == 8, "skip(0) keeps mark");
+
+        // skipping past EOF invalidates nothing: reset still returns to the mark
+        ByteArrayInputStream e = new ByteArrayInputStream(new byte[]{1, 2});
+        e.mark(0);
+        e.skip(100);
+        e.reset();
+        check(e.read() == 1, "reset after skip past end returns to mark");
+    }
+
+    // ---- 12. close() does not affect mark/reset ----
+    static void testCloseMarkReset() throws Exception {
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[]{1, 2, 3});
+        in.read();
+        in.close();
+        in.mark(0);                        // marking after close is fine (close is a no-op)
+        in.read();
+        in.reset();
+        check(in.read() == 2, "mark after close + reset replays");
+        in.close();
+        in.reset();
+        check(in.read() == 2, "reset after double close returns to mark");
+    }
+
+    // ---- 13. large buffer ----
+    static void testLargeBuffer() {
+        byte[] data = new byte[100000];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 31);
+        ByteArrayInputStream in = new ByteArrayInputStream(data);
+        check(in.available() == data.length, "large buffer available");
+        byte[] part = new byte[70000];
+        check(in.read(part, 0, part.length) == part.length, "large single read");
+        boolean eq = true;
+        for (int i = 0; i < part.length; i++) if (part[i] != data[i]) { eq = false; break; }
+        check(eq, "large single read content");
+        check(in.skip(1) == 1, "skip within large buffer");
+        check(in.read() == (data[70001] & 0xFF), "read after skip at exact index");
+        check(in.available() == data.length - 70002, "remaining after partial consumption");
+    }
+
     public static void main(String[] args) throws Exception {
         testConstructors();
         testReadSingleByte();
@@ -204,6 +290,11 @@ public class ByteArrayInputStreamTest {
         testAvailable();
         testMarkReset();
         testCloseNoOp();
+        testConstructorCorners();
+        testReadBoundary();
+        testSkipMarkInteraction();
+        testCloseMarkReset();
+        testLargeBuffer();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

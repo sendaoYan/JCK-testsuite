@@ -19,3 +19,21 @@
 - 边界: 打开不存在文件抛 `FileNotFoundException`；空文件 EOF。
 - 健壮性: 独立临时目录 + finally 清理；显式 UTF-8 Charset 构造。
 - 白盒 `testWhiteBox`: 继承 InputStreamReader、read/close 存在。
+
+## 深化追加（契约级）
+
+新增维度（断言 11 → 66）：与 JDK-8 侧同套（构造负例含目录/缺失 FNFE 精确子串、FileInputStream-FD 构造、关闭矩阵 4 操作 "Stream closed"、read 越界含 int 溢出、字节级分块写回、200 字符混合读+skip、ready/独立位置/负 skip）。
+
+JDK-27 专属：testCharsetCtors——(File,Charset)/(String,Charset)：UTF-16BE "ABé" 精确解码；getEncoding()=="UnicodeBigUnmarked"；bulk offset 读；null Charset NPE ×2；(File,Charset) 缺失文件/目录 FNFE 精确子串；UTF-8 "héllo 世界" 多文字解码。
+
+负例矩阵（实测双侧一致）：
+| 操作 | 异常 | 精确子串 |
+|---|---|---|
+| null File/String/null Charset | NullPointerException | 类型级（JDK-27 NPE 带具名消息） |
+| 打开目录（含 Charset 构造） | FileNotFoundException | Is a directory |
+| 缺失文件（含 Charset 构造） | FileNotFoundException | No such file or directory |
+| 关闭后 4 操作 | IOException | Stream closed |
+| skip(负数) | IllegalArgumentException | skip value is negative |
+| read(cbuf,off,len) 越界 | IndexOutOfBoundsException | 类型级 |
+
+版本差异：JDK-11+ 增加 2 个 Charset 构造（JDK-8 侧无）；JDK-27 默认 charset UTF-8（JEP 400），显式 Charset 构造规避差异。

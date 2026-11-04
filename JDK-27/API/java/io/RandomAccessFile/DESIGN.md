@@ -26,3 +26,32 @@
 - 健壮性: createTempFile + finally close/delete；无全局文件副作用。
 
 产出：`RandomAccessFileTest.java`（白盒 + 黑盒共 82 断言）。
+
+## 深化追加（契约级）
+
+> 双侧探针先行（JDK-8 / JDK-27 实测），新增 testCtorNullsAndEquivalence 等 14 个方法，
+> 断言 52 → 169。除特别标注外消息为双侧相同子串。
+
+### 新增维度清单（与 JDK-8 侧同构）
+1. 构造 null 矩阵（name/File/mode null → NPE ×4）+ (String,String)≡(File,String)。
+2. 近失模式 "rw "/"rwS"/"RWS"/"r ws"/"rwsx"/"rws " → IAE 精确消息。
+3. 缺失/目录：r 缺失 FNFE 含路径；rw/rws 缺失创建；r/rw 目录 FNFE "(Is a directory)"。
+4. r 模式：write "Bad file descriptor"、setLength "Invalid argument"。
+5. close 后 read/write/seek/getFilePointer/length/readUTF 均 "Stream Closed"；FD invalid；close 幂等。
+6. seek(-1)/MIN "Negative seek offset"；seek 超长 read -1 指针不动。
+7. setLength(-1) → IOException "Invalid argument"（非 IAE，双侧实测）；截断钳指针；扩展零填充。
+8. 线格式 BIG-endian 原始字节断言（boolean/short/int/long/char/UTF/chars/bytes）。
+9. modified-UTF-8：""、NUL 2 字节、代理对、70000 字节 UTFDataFormatException、损坏字节 UTFDataFormatException。
+10. EOF 类型化读 → EOFException。
+11. 索引边界 → IndexOutOfBoundsException（普通型）；off==len len==0 合法。
+12. 通道互操作：position 同步、channel.read 推进 getFilePointer。
+13. readLine 孤立 '\r' 行界。
+14. 碎片读 offset 区间、readUnsignedShort 不符号扩展。
+
+### 负例精确异常表（双侧实测）
+（同 JDK-8 侧 DESIGN 的完整表。）
+
+### JDK-8 vs JDK-27 版本差异
+- **getChannel() 在 close 之后首次创建**：JDK-27 isOpen()==false（JDK-8 为 true，实测 quirk）；先建后 close 双侧均 false。测试按版本各自断言。
+- writeUTF 过长消息：27 多出字符串预览前缀（断言公共子串 "too long: 70000 bytes"）。
+- mode null NPE：27 带 helpful 提示。

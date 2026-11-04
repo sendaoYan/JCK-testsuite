@@ -42,3 +42,17 @@
 
 - 全部输入为固定字节数组，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒（抽象类、Closeable、read 抽象）+ 黑盒 readAllBytes/readNBytes/skipNBytes/transferTo/nullInputStream（JDK 9+/11+ 方法）。
+
+## 深化追加（契约级）
+
+新增维度（全部经 JDK-8 实测锁定）：
+- read(byte[]) → read(byte[],int,int) 委托证明（Spy 子类探针）
+- 参数矩阵：read(b,3,0)/read(b,1,Integer.MAX_VALUE) → IOOBE；read(b,b.length,0) 合法边界；JDK-8 基类 IOOBE/NPE 消息均为 null
+- skip 默认实现矩阵：skip(0)/skip(-1)/skip(Long.MIN_VALUE)=0、skip(5000) 大跳精确、越过返回剩余、空源 0
+- reset 精确消息 "mark/reset not supported"
+- EOF×零长度交叉：EOF 处零长读仍返回 0（与 SBIS 覆写实现不同）
+- close 默认 no-op 三连后仍可读
+
+负例矩阵：read(null) NPE / read(null,0,1) NPE / read(b,-1,1) IOOBE / read(b,0,-1) IOOBE / read(b,0,3) IOOBE / read(b,2,1) IOOBE / read(b,1,MAX) IOOBE / reset IOException("mark/reset not supported")。
+
+版本差异（8 vs 27）：JDK-27 基类 read 越界消息为 "Range [o, o + l) out of bounds for length n"、NPE 消息指名 "b"（JDK-8 均为 null）；JDK-27 另有 readAllBytes/readNBytes/skipNBytes/transferTo/nullInputStream（8 侧无）。

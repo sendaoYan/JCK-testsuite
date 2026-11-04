@@ -20,3 +20,19 @@
 6. 直接对 File 调用 accept 的真/假。
 7. 过滤器抛异常从 listFiles 传播。
 - 健壮性: 无硬编码分隔符；无反射白盒。
+
+## 深化追加（契约级）
+
+> 双侧探针先行，新增 testInvocationCounting 等 7 个方法，断言 14 → 32。
+
+### 新增维度清单
+1. **调用计数**：accept 对每个目录项恰好一次（含子目录项）；二次过滤重新全量回调且结果确定。
+2. **平铺不递归**：listFiles(FileFilter) 只把直接子项交给过滤器，深层条目绝不出现。
+3. **null 过滤器**：`listFiles((FileFilter)null)` 等价全列。
+4. **非目录**：普通文件/缺失目录 → null；空目录 → len 0 数组。
+5. **经典实现**：匿名内部类与静态嵌套类（SuffixFilter，带调用计数）照常工作；方法引用（File::isFile / File::isDirectory）。
+6. **接口形状**：@FunctionalInterface 注解存在；自declared抽象方法恰 1 个。
+7. **异常身份**：过滤器抛出的异常对象**原样**（==）从 listFiles 传播。
+
+### JDK-8 vs JDK-27 版本差异
+- 无（双侧行为一致）。

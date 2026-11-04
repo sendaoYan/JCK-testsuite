@@ -23,3 +23,18 @@
 
 ## 关键细节
 - `skip(负数)`/`mark(-1)` 抛 IAE；null 委托构造时 NPE。
+
+## 深化追加（契约级）
+
+新增维度（断言 22 → 95）：与 JDK-8 侧同套（readLine 行界矩阵、混读位置、跨缓冲长行/CRLF 跨 refill、mark/reset 全契约、关闭矩阵 7 操作 + lines() UncheckedIOException cause、read 越界含 int 溢出、lines 计数）。
+
+负例矩阵（实测，与 JDK-8 一致的精确子串）：
+| 操作 | 异常 | 精确子串 |
+|---|---|---|
+| mark 越限后 reset | IOException | Mark invalid |
+| 未标记 reset | IOException | Stream not marked |
+| mark(-1) | IllegalArgumentException | Read-ahead limit |
+| 关闭后 7 操作 | IOException | Stream closed |
+| 关闭后 lines() 消费 | UncheckedIOException | cause 含 Stream closed |
+
+版本差异：JDK-27 NPE 带 helpful 具名参数消息（如 read(null)），测试只断言类型级；行为契约（行界/mark/关闭）两版完全一致。

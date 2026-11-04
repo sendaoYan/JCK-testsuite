@@ -22,3 +22,22 @@
 - 健壮性: 自定义 Reader 固定第 2 次调用失败，确定性强；无真实 I/O。
 
 产出：`UncheckedIOExceptionTest.java`（白盒 5 + 黑盒 6 断言）。
+
+## 深化追加（契约级）
+追加内容（JDK-27 侧断言数 44，另一侧见对应 DESIGN）。所有行为断言均为双侧 JDK 实测后写入。
+### serialVersionUID 实测值（ObjectStreamClass.lookup，双侧一致）
+- `UncheckedIOException`：双侧同值 `-8134305061645241065L`
+### 新增测试方法
+1. testConstructorRules（(IOException) message==cause.toString() 快照；(null String,cause) 合法；双 null → NPE 无消息；构造器签名反射钉死两个且尾参 IOException）
+2. testCauseProtocol（协变 getCause 返回 IOException；initCause 二次/null 均 ISE；suppressed/栈协议）
+3. testSerializationContract（message/suppressed 保留，cause 深拷贝非同引）
+4. testLinesTriggerDetail（limit(1) 惰性不触发；count() 触发包装；forEach 先交付好元素再抛）
+
+### 负例与精确异常（操作 → 类型 → 双侧一致 message 子串）
+- (null, null) → NullPointerException 且 message 为 null
+- lines() 触发实例 cause 即原始 IOException（message 保留）
+
+### JDK-8 vs JDK-27 差异
+- 无（构造器面、message 文案、serialVersionUID、行为语义双侧一致）。
+### 序列化往返清单
+- 构造实例（message/toString）往返；- cause 往返（深拷贝）；- suppressed 往返；- 真实触发实例再序列化。

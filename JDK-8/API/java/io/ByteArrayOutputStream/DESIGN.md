@@ -45,3 +45,24 @@
 
 - 无墙钟/随机/默认 Locale 依赖；非 ASCII 显式 UTF-8；headless 安全。
 - JDK-27 侧额外保留反射白盒 + `writeBytes(byte[])`（JDK 11+）/`toString(Charset)`（JDK 10+）。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（24 -> 60）。
+
+### 新增维度
+- write(int) 截断：-1/-256/0x100/0x141 -> 0xFF/0x00/0x00/0x41（低 8 位）。
+- writeTo 委托录制：Recording 下沉精确 1 次 bulk 写、0 次单字节写；下沉抛 IOException 透传。
+- writeTo(self)：内容翻倍（3 -> 6）。
+- toString 字符集矩阵：ISO-8859-1 往返；US-ASCII 替换字符实测为 U+FFFD（双侧一致，非 '?'）；UTF-16BE；默认字符集用动态期望 new String(bytes, Charset.defaultCharset())；非法 charset 名抛 NPE（JDK-8 消息 null）且状态不变；toString(int) 高字节掩码（0x101 == 0x01）。
+- 生长语义：跨 32 初始容量、reset 后重新生长、失败写入后状态不变。
+- write OOB：AIOOBE（arraycopy 路径）。
+
+### 负例精确异常表（双侧实测）
+| 操作 | 类型 | 消息子串 |
+|---|---|---|
+| write(b,0,-1) / write(b,3,1) / write(b,-1,1) | ArrayIndexOutOfBoundsException | 双侧消息含 "arraycopy" 类（JDK-8 无保证文本，类型断言） |
+| toString(null) | NullPointerException | 双侧消息 null |
+
+### 版本差异
+- JDK-27 新增 writeBytes(byte[]) 与 toString(Charset)；JDK-8 不得引用。

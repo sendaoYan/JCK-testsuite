@@ -4,6 +4,11 @@
  *          root: Appendable + Closeable + Flushable) + black-box behavior (default
  *          write(int)/write(String)/write(String,off,len)/append(...) derived from
  *          write(char[],int,int); append returns this; nullWriter; null checks).
+ *          Deepening: exact delegation shapes with a counting probe (write(int) ->
+ *          one write(char[],0,1) call carrying the low 16 bits; write(String) one call
+ *          with len == s.length(); zero-length writes still delegate), null checks
+ *          happen before delegation, append(null) writes "null", bounds matrix,
+ *          nullWriter full contract (append identity, null/OOB/close matrix).
  * @run main WriterTest
  */
 
@@ -129,9 +134,145 @@ public class WriterTest {
         check("one!".contentEquals(sw.getBuffer()), "StringWriter via Writer ref");
     }
 
+    /** Probe that records every write(char[],int,int) delegation. */
+    static class Counting extends Writer {
+        final StringBuilder data = new StringBuilder();
+        int calls;
+        final StringBuilder lens = new StringBuilder();
+        @Override public void write(char[] cbuf, int off, int len) {
+            calls++;
+            lens.append(len).append(',');
+            data.append(cbuf, off, len);
+        }
+        @Override public void flush() { }
+        @Override public void close() { }
+    }
+
+    // ---- exact delegation shapes ----
+    static void testDelegationShapes() throws Exception {
+        Counting w = new Counting();
+        w.write('h');
+        check(w.calls == 1 && "1,".equals(w.lens.toString()),
+              "write(int) delegates one call with len 1");
+        check("h".contentEquals(w.data), "write(int) content");
+        w.write(0x10041);                       // low 16 bits = 'A'
+        check("hA".contentEquals(w.data), "write(int) truncates to the low 16 bits");
+        w.write(0);                             // NUL is written, not skipped
+        check(w.data.charAt(2) == 0, "write(0) writes the NUL char");
+        w.write("ij");
+        check(w.calls == 4 && "1,1,1,2,".equals(w.lens.toString()),
+              "write(String) delegates one call with len == s.length()");
+        w.write("XYZ", 1, 1);
+        check(w.calls == 5 && "1,1,1,2,1,".equals(w.lens.toString()),
+              "write(String,off,len) delegates the region as one call");
+        check("hA\u0000ijY".contentEquals(w.data), "all content correct");
+        // zero-length writes delegate with len 0 (and write nothing)
+        w.write("q", 0, 0);
+        w.write(new char[1], 0, 0);
+        check(w.calls == 7 && w.data.length() == 6, "zero-length writes delegate with len 0");
+    }
+
+    // ---- null checks happen before any delegation; bounds matrix ----
+    static void testNullBeforeDelegation() throws Exception {
+        final Counting w = new Counting();
+        try { w.write((char[]) null); check(false, "write(null char[]) must throw"); }
+        catch (NullPointerException expected) { passed++; }
+        check(w.calls == 0, "the null char[] never reached the subclass");
+        try { w.write((String) null); check(false, "write(null String) must throw"); }
+        catch (NullPointerException expected) { passed++; }
+        check(w.calls == 0, "the null String never reached the subclass");
+        try { w.write(new char[2], 2, 1); check(false, "out-of-bounds write must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        // write(char[],off,len) is abstract: the base does NOT pre-check the region,
+        // so the subclass sees the call and the exception comes from the delegate
+        check(w.calls == 1, "the abstract form reaches the subclass unvalidated");
+        try { w.write("abc", -1, 1); check(false, "write(String,-1,1) must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        try { w.write("abc", 0, -1); check(false, "write(String,0,-1) must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        try { w.write("abc", 1, 3); check(false, "write(String,1,3) must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        try { w.write("abc", 4, 0); check(false, "write(String,4,0) must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        check(w.data.length() == 0, "failed writes left nothing behind");
+        try { w.append("abc", 2, 5); check(false, "append end > length must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+        try { w.append("abc", 3, 2); check(false, "append start > end must throw"); }
+        catch (IndexOutOfBoundsException expected) { passed++; }
+    }
+
+    // ---- append null CharSequence / null region ----
+    static void testAppendNullDeep() throws Exception {
+        Counting w = new Counting();
+        w.append((CharSequence) null);
+        check("null".contentEquals(w.data), "append(null) writes the four-char \"null\"");
+        Counting r = new Counting();
+        r.append((CharSequence) null, 0, 4);
+        check("null".contentEquals(r.data), "append(null,0,4) writes \"null\"");
+        Counting p = new Counting();
+        p.append("abc", 1, 3);
+        check("bc".contentEquals(p.data), "append region semantics [start,end)");
+        p.append("abc", 2, 2);
+        check("bc".contentEquals(p.data), "append empty region writes nothing");
+    }
+
+    // ---- nullWriter full contract ----
+    static void testNullWriterDeep() throws Exception {
+        Writer nw = Writer.nullWriter();
+        // every write/append form is discarded without complaint
+        nw.write('x');
+        nw.write("str");
+        nw.write(new char[]{'c'});
+        nw.write("abc", 1, 1);
+        nw.write(new char[0]);
+        nw.append('A');
+        nw.append("BC");
+        nw.append((CharSequence) null);          // default append converts to "null"
+        nw.append("DEF", 1, 2);
+        nw.flush();
+        check(nw.append('z') == nw, "append returns the nullWriter itself");
+        check(nw.append("xy") == nw, "append(CharSequence) returns the nullWriter itself");
+        // null arguments are still rejected
+        Throwable n1 = tryCatch(() -> nw.write((String) null));
+        check(n1 instanceof NullPointerException, "nullWriter write((String)null) -> NPE");
+        Throwable n2 = tryCatch(() -> nw.write((char[]) null));
+        check(n2 instanceof NullPointerException, "nullWriter write((char[])null) -> NPE");
+        // bounds are still validated
+        Throwable b1 = tryCatch(() -> nw.write("abc", 0, 9));
+        check(b1 instanceof IndexOutOfBoundsException, "nullWriter write OOB -> IndexOutOfBoundsException");
+        Throwable b2 = tryCatch(() -> nw.write(new char[2], 0, 9));
+        check(b2 instanceof IndexOutOfBoundsException, "nullWriter write(char[],OOB) -> IndexOutOfBoundsException");
+        // close: writes/flushes fail afterwards with the standard message, close idempotent
+        Writer closed = Writer.nullWriter();
+        closed.close();
+        closed.close();
+        String msg = "Stream closed";
+        Throwable c1 = tryCatch(() -> closed.write('y'));
+        check(c1 instanceof IOException && msg.equals(c1.getMessage()), "closed write(int): \"Stream closed\"");
+        Throwable c2 = tryCatch(() -> closed.write("s"));
+        check(c2 instanceof IOException && msg.equals(c2.getMessage()), "closed write(String): \"Stream closed\"");
+        Throwable c3 = tryCatch(() -> closed.write(new char[1]));
+        check(c3 instanceof IOException && msg.equals(c3.getMessage()), "closed write(char[]): \"Stream closed\"");
+        Throwable c4 = tryCatch(() -> closed.append('a'));
+        check(c4 instanceof IOException && msg.equals(c4.getMessage()), "closed append(char): \"Stream closed\"");
+        Throwable c5 = tryCatch(() -> closed.flush());
+        check(c5 instanceof IOException && msg.equals(c5.getMessage()), "closed flush(): \"Stream closed\"");
+    }
+
+    interface Op { void run() throws Exception; }
+
+    static Throwable tryCatch(Op r) {
+        try { r.run(); } catch (Throwable t) { return t; }
+        return null;
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDelegationShapes();
+        testNullBeforeDelegation();
+        testAppendNullDeep();
+        testNullWriterDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

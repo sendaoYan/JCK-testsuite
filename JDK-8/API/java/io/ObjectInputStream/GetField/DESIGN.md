@@ -21,3 +21,19 @@
 4. 类型不匹配 get("i",1.0)→IAE 精确消息 "no such field i with type double"；未知字段同理。
 5. 对象读尽后流 -1。
 - 健壮性: 固定单对象流；JDK-8 为黑盒（无反射白盒）；catch 仅 `IOException`（JDK 8 无 CNFE 声明）。
+
+## 深化追加（契约级）— GetField 读端字段契约（批次 ioI）
+
+### 覆盖维度
+1. **字段演进（同一类名模拟旧流）**：不走双类加载器，直接对序列化字节做手术 `removeIntField`（从首个 TC_CLASSDESC 删除字段描述符、字段计数减一、并删除其 4 字节数据；布局见 ObjectInputStream DESIGN「serialVersionUID 字节布局」）。旧流(a,b) 对新类(a,b,c)：present 字段照常恢复，流缺字段 `get("c",默认)` 返回**调用方默认值**，`defaulted("c")==true`、`defaulted("a")==false`；修剪后的流仍干净终止（read()==-1）。
+2. **defaulted() 全类型**：九种类型字段全部在流中 → 全部 false。
+3. **IAE 精确消息表（6 条实测）**：`no such field i with type long` / `no such field z with type int` / `no such field o with type int` / `no such field j with type int` / `no such field d with type float` / `no such field missing with type class java.lang.Object`。要点：**原始重载优先的重载决议**——`get("o", 5)`（对象字段配 int 默认值）解析到 `get(String,int)` 而非 Object 重载。
+4. **getObjectStreamClass()**：与 `ObjectStreamClass.lookup(cls)` 名称/UID 一致；`lookup(Object.class)==null`（非 Serializable 无描述符）。
+5. **极值往返**：NaN、-0.0（doubleToRawLongBits 位级断言）。
+6. **readFields 上下文规则**：二次 readFields、readFields 之后 defaultReadObject → NotActiveException `not in readObject invocation or fields already read`。
+7. **对象字段图身份**：同一节点写入两个字段 → 读回 rx==ry；**字段在流中但值为 null ≠ 字段缺失**（前者 get 返回 null 且 defaulted=false，后者返回默认值且 defaulted=true）。
+
+### 版本差异（8 vs 27）
+- `GetField.get(String,Object)` 自 JDK-9 起声明 `throws ClassNotFoundException`，27 侧测试须同时捕获 CNFE；行为与消息完全一致。
+
+产出：`GetFieldTest.java` 18 → 62 断言（jtreg 双侧通过）。

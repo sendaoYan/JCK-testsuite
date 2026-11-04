@@ -23,3 +23,20 @@
 4. close 走接口（AutoCloseable/TWR）；关后 readObject 抛 IOException。
 5. ClassNotFoundException 从 readObject 传播（resolveClass 钩子触发）。
 - 健壮性: 内存流固定字节序；无全局状态。
+
+## 深化追加（契约级）
+
+新增维度（`testMethodSetExact`…`testByteLevelContracts`，断言 14 → 49）：
+- **方法集精确枚举**：ObjectInput 恰 **22** 个 public 方法（7 自有 + 15 继承自 DataInput）；排序后方法名集合逐一比对；全部 abstract、无 default 方法；`getInterfaces()` 恰为 `[DataInput, AutoCloseable]`；无常量。
+- **手写第二实现**（CustomInput/CustomOutput 双实现对照）：纯手写 ObjectInput/ObjectOutput 驱动 Externalizable（ExtPoint, UID 310L）完整往返，全程不经过 OIS/OOS —— 证明接口本身足以承载协议。
+- **字节级契约**：`read(null)` → NullPointerException；`close()` 幂等；`readLine()` 按 `\n` 切行（"ab"/"cd"）。
+- **ClassNotFoundException 表面**：resolveClass 抛 CNFE → readObject 透传且消息携带流内类名。
+
+负例矩阵：
+| 操作 | 异常 | 消息子串（8/27 一致） |
+|---|---|---|
+| OIS.read(null) | NullPointerException | — |
+| close 后 readObject | IOException | — |
+| 流内类不可解析 | ClassNotFoundException | 流内类二进制名 |
+
+版本差异：无；JDK-8 侧 CustomInput 的 readLine 需 `@SuppressWarnings("deprecation")`，27 侧同。

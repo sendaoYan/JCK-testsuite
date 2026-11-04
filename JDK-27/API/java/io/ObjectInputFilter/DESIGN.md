@@ -28,3 +28,32 @@
 - 健壮性: 只用**每流** setObjectInputFilter（不动全局 factory/serialFilter），无跨用例污染。
 
 产出：`ObjectInputFilterTest.java`（白盒 ~16 + 黑盒 ~22 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testCombinatorSurface`…`testOtherStatusMatrix`，断言 31 → 77）：
+- **组合器表面**：merge(ObjectInputFilter,ObjectInputFilter) public static；allowFilter(Predicate,Status)/rejectUndecidedClass 返回类型校验；接口带 @FunctionalInterface。
+- **null 参数矩阵（实测消息）**：merge(null,*) NPE `filter`；allowFilter/rejectFilter null 谓词 NPE `predicate`；null otherStatus NPE `otherStatus`；rejectUndecidedClass(null) NPE `filter`。
+- **merge 语义（源码+实测修正）**：
+  - 第一过滤器返回 REJECTED → **短路**，第二不被调用（计数器实证）；
+  - 否则两过滤器**都被咨询**，优势格 REJECTED > ALLOWED > UNDECIDED（五种组合全断言）；
+  - `merge(f, null)` 返回 **f 本身**（同一性，引用相等断言）；
+  - 过滤器返回 null 状态 → NPE `status`（第一）/ `other status`（第二）。
+- **谓词异常**：allowFilter 谓词抛 ISE → 经 checkInput 直接调用**原样传播**；但经真实 OIS 读取时运行时异常被**映射为 REJECTED**（InvalidClassException 消息 `filter status: REJECTED`，不透传）。
+- **setObjectInputFilter 生命周期**：初始 getObjectInputFilter()==null；设置后返回同一实例；二次设置 ISE `filter can not be set more than once`；读过对象后设置 ISE `filter can not be set after an object has been read`。
+- **int[3] 双阶段**：恰 2 次回调（描述符阶段 len=-1，长度阶段 len=3，均 depth 1）。
+- **otherStatus 矩阵**：null 类恒 UNDECIDED（不问 otherStatus，实测修正）；PredicateFilter.toString 形如 `predicate(..., ifTrue: ALLOWED, ifFalse:UNDECIDED)`（注意 ifFalse 后**无空格**，实测）。
+
+负例矩阵：
+| 操作 | 异常 | 消息子串 |
+|---|---|---|
+| merge(null, f) | NullPointerException | `filter` |
+| allowFilter(null, s) / rejectFilter(null, s) | NullPointerException | `predicate` |
+| allowFilter(p, null) / rejectFilter(p, null) | NullPointerException | `otherStatus` |
+| rejectUndecidedClass(null) | NullPointerException | `filter` |
+| merge 的过滤器返回 null | NullPointerException | `status` / `other status` |
+| 二次 setObjectInputFilter | IllegalStateException | `filter can not be set more than once` |
+| 读取后 setObjectInputFilter | IllegalStateException | `filter can not be set after an object has been read` |
+| 抛运行时异常的过滤器（真实读） | InvalidClassException | `filter status: REJECTED` |
+
+硬性约束：**绝不调用 Config.setSerialFilter / setSerialFilterFactory**（进程级全局状态）。

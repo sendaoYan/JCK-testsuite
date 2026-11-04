@@ -32,3 +32,13 @@
 ## 注意事项
 
 - 无墙钟/随机/默认 Locale 依赖；headless 安全。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（11 -> 61）：JDK-8 侧全部镜像维度（自动刷新边界、数组路径矩阵含 partial-fit、默认 8192、flush 委托、close 顺序 W1/F/C、write-after-close、截断、构造面、10KB 内容、子区域）。
+
+### 版本差异（实测锁定，写入本侧断言）
+- close 幂等：JDK-27 的 FilterOutputStream 基类有 closed 标志，第二次 close 为无操作（closes==1, flushes==1）；JDK-8 为 2/2。双侧各自断言实测行为。
+
+### 负例精确异常表（双侧实测）
+同 JDK-8 侧（AIOOBE arraycopy 路径 / NPE / "Buffer size <= 0"）。

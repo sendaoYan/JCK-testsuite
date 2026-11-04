@@ -49,3 +49,23 @@
 
 - 全部输入为固定字节数组，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒（继承 InputStream、readAllBytes/readNBytes/transferTo 存在）+ 黑盒 readAllBytes/transferTo/readNBytes（JDK 9+ 方法）。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）在原有结构覆盖上追加契约级断言（43 -> 68）。
+
+### 新增维度
+- 构造边界：off 越过 buf.length（available() 返回负数、read() 返回 -1，不抛异常——len 被钳制到 0）；负 offset 在 read 时才抛 AIOOBE。
+- read 边界：off == b.length 且 len == 0 合法返回 0；len 钳制到剩余量（len 超出只返回剩余）。
+- skip × mark 交互：skip 移动 pos 但不动 mark；mark 后 skip 再 reset 回放。
+- close 后 mark/reset/read 全部正常（close 是无操作，对象状态不变）。
+- 大缓冲（100KB）遍历 + 内容一致性。
+
+### 负例精确异常表（双侧实测）
+| 操作 | 类型 | 消息子串 |
+|---|---|---|
+| new BAIS(buf, -1, 2) 后 read() | ArrayIndexOutOfBoundsException | 双侧消息为 null（JVM 抛出） |
+| read(b, -1, 1) / read(b, 0, -1) / read(b, 0, len+b.length) | IndexOutOfBoundsException（JDK-8 为 AIOOBE） | null |
+
+### 版本差异（已 javap/实测锁定）
+- JDK-27 新增 readAllBytes/readNBytes(byte[],int,int)/readNBytes(int)/transferTo，JDK-8 无；本侧文件不得引用。

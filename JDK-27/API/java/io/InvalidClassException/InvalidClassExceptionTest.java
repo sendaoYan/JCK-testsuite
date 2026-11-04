@@ -16,6 +16,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectInputFilter;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.io.Serial;
@@ -119,9 +120,146 @@ public class InvalidClassExceptionTest {
         }
     }
 
+    // ================= 深化追加（契约级） =================
+
+    static byte[] serOf(Object o) throws Exception {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(b)) {
+            oos.writeObject(o);
+        }
+        return b.toByteArray();
+    }
+
+    static Object back(byte[] b) throws Exception {
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(b))) {
+            return ois.readObject();
+        }
+    }
+
+    /** Fixed-UID class whose stream descriptor we corrupt to force a mismatch. */
+    static class UidVersion implements Serializable {
+        private static final long serialVersionUID = 0xBEEFL;
+        int v = 7;
+    }
+
+    // ---- message composition corners (实测双侧一致) ----
+    static void testMessageComposition() {
+        InvalidClassException e = new InvalidClassException("Cn", "reason");
+        check(e.getMessage().equals(e.getLocalizedMessage()),
+              "getLocalizedMessage delegates to the composed getMessage");
+        check(e.toString().equals("java.io.InvalidClassException: Cn; reason"),
+              "toString = FQCN + \": \" + composed message");
+        check("Cn; null".equals(new InvalidClassException("Cn", (String) null).getMessage()),
+              "null reason string-concatenates as \"null\"");
+        check("r".equals(new InvalidClassException(null, "r").getMessage()),
+              "null classname falls back to the bare reason");
+        check(((InvalidClassException) new InvalidClassException(null, "r")).classname == null,
+              "classname field stays null");
+        check(new InvalidClassException((String) null, (String) null).getMessage() == null,
+              "both-null: classname null falls back to the null reason");
+        // classname is a public live field: reassigning it changes getMessage()
+        InvalidClassException mut = new InvalidClassException("Before", "reason");
+        mut.classname = "After";
+        check("After; reason".equals(mut.getMessage()),
+              "getMessage reads the current classname field");
+        check(mut.toString().contains("After; reason"), "toString reflects the mutation");
+    }
+
+    // ---- Throwable protocol matrix ----
+    static void testThrowableProtocol() {
+        InvalidClassException e = new InvalidClassException("c", "r");
+        check(e.fillInStackTrace() == e, "fillInStackTrace returns this");
+        check(e.getStackTrace().length > 0, "stack trace captured");
+        StackTraceElement[] st = {new StackTraceElement("K", "m", "K.java", 1)};
+        e.setStackTrace(st);
+        check(e.getStackTrace().length == 1, "setStackTrace/getStackTrace round-trip");
+        try {
+            e.setStackTrace(null);
+            check(false, "setStackTrace(null) must throw NPE");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+        check(e.getSuppressed().length == 0, "suppressed empty by default");
+        e.addSuppressed(new Exception("s"));
+        check(e.getSuppressed().length == 1, "addSuppressed appends");
+        try {
+            e.addSuppressed(e);
+            check(false, "self-suppression must throw");
+        } catch (IllegalArgumentException expected) {
+            passed++;
+        }
+        try {
+            e.addSuppressed(null);
+            check(false, "addSuppressed(null) must throw NPE");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+        // JDK-8 has no cause ctors; initCause is available but a second call fails
+        Exception cause = new IllegalStateException("c");
+        check(new InvalidClassException("w").initCause(cause).getCause() == cause,
+              "initCause injects a cause");
+        try {
+            new InvalidClassException("w2").initCause(cause).initCause(cause);
+            check(false, "second initCause must throw");
+        } catch (IllegalStateException expected) {
+            passed++;
+        }
+        check(new InvalidClassException("w3").initCause(null).getCause() == null,
+              "initCause(null) permitted while the cause is unset");
+    }
+
+    // ---- serialization contract: the public classname field is part of the serial form ----
+    static void testSerializationContract() throws Exception {
+        check(ObjectStreamClass.lookup(InvalidClassException.class).getSerialVersionUID()
+                  == -4333316296251054416L, "serialVersionUID == -4333316296251054416");
+        InvalidClassException r = (InvalidClassException) back(serOf(new InvalidClassException("Klass", "why")));
+        check("Klass".equals(r.classname), "classname survives round-trip");
+        check("Klass; why".equals(r.getMessage()), "composed message survives round-trip");
+        check(r.toString().equals("java.io.InvalidClassException: Klass; why"),
+              "toString survives round-trip");
+        InvalidClassException reasonOnly = (InvalidClassException) back(serOf(new InvalidClassException("just")));
+        check(reasonOnly.classname == null && "just".equals(reasonOnly.getMessage()),
+              "reason-only instance round-trips");
+    }
+
+    // ---- real trigger: stream serialVersionUID != local serialVersionUID ----
+    static void testUidMismatchTrigger() throws Exception {
+        byte[] s = serOf(new UidVersion());
+        // locate the class-name bytes in the class descriptor, the 8-byte suid follows
+        String name = "InvalidClassExceptionTest$UidVersion";
+        int nameStart = -1;
+        for (int i = 0; i <= s.length - name.length(); i++) {
+            boolean match = true;
+            for (int j = 0; j < name.length(); j++) {
+                if (s[i + j] != (byte) name.charAt(j)) { match = false; break; }
+            }
+            if (match) { nameStart = i; break; }
+        }
+        check(nameStart > 0, "class name located in the stream descriptor");
+        s[nameStart + name.length()] ^= 0x7F;           // flip a suid byte
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(s))) {
+            ois.readObject();
+            check(false, "suid mismatch must abort deserialization");
+        } catch (InvalidClassException ice) {
+            check(ice.getMessage() != null
+                      && ice.getMessage().contains("local class incompatible"),
+                  "mismatch message: " + ice.getMessage());
+            check(ice.getMessage().contains("stream classdesc serialVersionUID")
+                      && ice.getMessage().contains("local class serialVersionUID"),
+                  "both UIDs reported: " + ice.getMessage());
+            check("InvalidClassExceptionTest$UidVersion".equals(ice.classname),
+                  "classname field carries the offending class");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testMessageComposition();
+        testThrowableProtocol();
+        testSerializationContract();
+        testUidMismatchTrigger();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
+

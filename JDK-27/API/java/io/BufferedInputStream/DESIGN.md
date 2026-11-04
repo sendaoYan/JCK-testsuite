@@ -36,3 +36,16 @@
 ## 注意事项
 
 - 无墙钟/随机/默认 Locale 依赖；headless 安全。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（21 -> 80）：JDK-8 侧全部镜像维度（关闭态消息、invalid mark 消息、mark 超限仍有效、fill 请求精确缓冲大小、available 组合、skip 有界语义、close 传播、跨块内容）+ transferTo。
+
+### 新增维度（JDK-27 独有）
+- transferTo（BIS 覆写）：3000 字节/16 缓冲计数与内容；部分消费流只传剩余（实测 3 字节）；null -> NPE；下沉异常透传；close 后 "Stream closed"（实测同 read 路径）。
+
+### 负例精确异常表（双侧实测）
+同 JDK-8 侧：close 态 "Stream closed"、invalid mark "Resetting to invalid mark"、size<=0 "Buffer size <= 0" 三组消息双侧一致。
+
+### 版本差异
+- transferTo 覆写仅 JDK-9+ 存在。

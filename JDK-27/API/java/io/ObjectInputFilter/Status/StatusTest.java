@@ -120,9 +120,61 @@ public class StatusTest {
         }
     }
 
+    // ================= deep additions (contract level) =================
+
+    static String decisiveness(Status s) {
+        switch (s) {
+            case UNDECIDED: return "none";
+            case ALLOWED:   return "yes";
+            case REJECTED:  return "no";
+            default:        return "??";
+        }
+    }
+
+    // ---- enum machinery: valueOf message, declaring class, comparability ----
+    static void testEnumMachinery() throws Exception {
+        try {
+            Status.valueOf("nope");
+            check(false, "unknown constant must throw");
+        } catch (IllegalArgumentException iae) {
+            check("No enum constant java.io.ObjectInputFilter.Status.nope"
+                      .equals(iae.getMessage()),
+                  "valueOf IAE message is fully qualified: " + iae.getMessage());
+        }
+        check(Status.ALLOWED.getDeclaringClass() == Status.class,
+              "getDeclaringClass of a constant");
+        check(Status.valueOf("REJECTED").getDeclaringClass() == Status.class,
+              "getDeclaringClass of a valueOf'd constant");
+        check(Enum.valueOf(Status.class, "ALLOWED") == Status.ALLOWED,
+              "Enum.valueOf works through the generic form");
+        check(Status.ALLOWED instanceof Comparable && Status.ALLOWED instanceof java.io.Serializable,
+              "Status constants are Comparable and Serializable");
+        check(Status.values()[0].getClass() == Status.class,
+              "no constant-specific class bodies (getClass is Status)");
+        check(java.util.EnumSet.range(Status.UNDECIDED, Status.REJECTED).size() == 3,
+              "EnumSet.range spans all three");
+        check(java.util.EnumSet.complementOf(java.util.EnumSet.of(Status.ALLOWED)).size() == 2,
+              "EnumSet.complementOf leaves two");
+        check(Status.UNDECIDED.compareTo(Status.ALLOWED) < 0
+                  && Status.ALLOWED.compareTo(Status.REJECTED) < 0
+                  && Status.UNDECIDED.compareTo(Status.REJECTED) < 0,
+              "compareTo order UNDECIDED < ALLOWED < REJECTED (all pairs)");
+        check("none".equals(decisiveness(Status.UNDECIDED))
+                  && "yes".equals(decisiveness(Status.ALLOWED))
+                  && "no".equals(decisiveness(Status.REJECTED)),
+              "switch over all three constants is exhaustive");
+        java.util.EnumMap<Status, Integer> m = new java.util.EnumMap<>(Status.class);
+        for (Status s : Status.values()) m.put(s, s.ordinal());
+        check(m.size() == 3 && m.get(Status.REJECTED) == 2, "EnumMap keyed by all constants");
+        check(Status.values()[0].ordinal() == 0 && Status.values()[1].ordinal() == 1
+                  && Status.values()[2].ordinal() == 2,
+              "values() order matches the ordinals");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEnumMachinery();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

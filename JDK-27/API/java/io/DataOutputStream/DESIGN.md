@@ -36,3 +36,21 @@
 ## 注意事项
 
 - 无墙钟/随机/默认 Locale 依赖；headless 安全。
+
+## 深化追加（契约级，批次 ioC）
+
+新增维度清单（与 JDK-8 侧完全镜像 + JDK-27 特有追加 testNullOutputStreamSink）：
+
+1. **逐 writeXxx 边界字节精确**（82 字节镜像：MIN/MAX/'\u0000'/'￿'/0.0/-0.0/NaN/±Inf 逐字节点检）。
+2. **writeXxx(int) 低位置截断**（34 / 56 78）。
+3. **size() 全操作矩阵 + flush/close 不清零 + 写穿透**。
+4. **IEEE 754 位直通**（float/double 位型逐字节 + 往返）。
+5. **writeUTF 编码长度边界**（65535 ASCII / 21845 中文合法；65536 / 21846 中文 / 32768 NUL 抛 UTFDataFormatException）。
+6. **flush 传播探针计数** + close 幂等。
+7. **文件 sink close 后写** IOException "Stream Closed" 且文件不变长。
+8. **writeUTF 与 ObjectOutputStream 块数据互操作**（AC ED 00 05 77 05 + writeUTF 帧）。
+9. **JDK-27 特有**：`OutputStream.nullOutputStream()`（JDK-11+ 静态工厂）作 sink——计数器照常累加、flush/close 无异常。
+
+负例矩阵与消息子串：与 JDK-8 侧相同；版本差异同 JDK-8 记录（writeUTF 超长消息预览、二次 close 的 sink 传播次数 2 vs 1）。
+
+产出：`DataOutputStreamTest.java` 22 → 94 断言（jtreg Passed）。

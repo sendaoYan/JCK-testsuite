@@ -23,3 +23,17 @@
 - 健壮性: 全内存。
 
 产出：`OutputStreamTest.java`（白盒 10 + 黑盒 14 断言）。
+
+## 深化追加（契约级）
+
+新增维度（全部经 JDK-27 实测锁定）：
+- write(byte[]) 委托 write(byte[],int,int)（Spy 探针）；JDK-27 精确消息（Range/NPE 指名 b）
+- write(int) 透传 int 不截断；默认循环符号扩展（0x80 → -128）
+- 默认循环顺序/区域保真；异常逐字透传已写部分保留；子类 flush/close 可抛
+- try-with-resources 恰好一次 close
+- nullOutputStream 全矩阵：write(int)/write(byte[])/write(b,off,len)/flush 全吞；write(null) NPE("b" is null)、write(null,0,1) NPE、write(b,0,3) IOOBE(Range)；close 幂等；关闭后 write(int)/write(byte[])/write(b,off,len) → IOException("Stream closed")；关闭后 flush 仍允许（空实现）
+- 白盒：nullOutputStream 静态工厂存在、write(byte[],int,int) 具体
+
+负例矩阵：write(null) NPE / write(b,3,0) IOOBE(Range 消息) / write(b,1,MAX) IOOBE / nullOutputStream 关闭后三种 write IOException("Stream closed") / nullOutputStream write(null) NPE。
+
+版本差异记录：越界消息 JDK-8 null vs 27 "Range [...]"；NPE 消息 8 null vs 27 指名 "b"；nullOutputStream 仅 27 侧存在；nullOutputStream 关闭后 write 抛 "Stream closed" 而 flush 不抛（与 FileOutputStream 同型）。

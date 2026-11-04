@@ -5,12 +5,17 @@
  *          clamping, null->NPE), read() 0..255 + EOF -1, read(byte[],off,len) validation
  *          (NPE/IndexOutOfBoundsException) + exact-offset/partial/zero-length semantics,
  *          skip (negative->0, past-end), available, mark/reset, close no-op, plus JDK 9+
- *          readAllBytes/readNBytes/transferTo.
+ *          readAllBytes/readNBytes/transferTo. Deepened (contract level): constructor
+ *          corner cases, read boundary placement, skip x mark, mark/reset after close,
+ *          large-buffer reads, and full readAllBytes/readNBytes(byte[],int,int)/
+ *          readNBytes(int)/transferTo contracts incl. null/throwing sink.
  * @run main ByteArrayInputStreamTest
  */
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 
@@ -219,6 +224,187 @@ public class ByteArrayInputStreamTest {
         check(nb.readNBytes(nbuf, 0, 3) == 1 && nbuf[0] == 4, "readNBytes partial at end");
     }
 
+    // ---- 9b. constructor corner cases (offset not validated; implementation-observed,
+    //          identical on JDK-8 and JDK-27: count = min(off+len, buf.length), pos = off) ----
+    static void testConstructorCorners() {
+        ByteArrayInputStream past = new ByteArrayInputStream(new byte[]{1, 2, 3}, 4, 1);
+        check(past.available() == -1, "off beyond buf.length: available() = count - pos = -1");
+        check(past.read() == -1, "off beyond buf.length: pos >= count -> immediate EOF");
+
+        ByteArrayInputStream neg = new ByteArrayInputStream(new byte[]{1, 2, 3}, -1, 2);
+        check(neg.available() == 2, "negative offset: available() = count - pos");
+        checkThrows(IndexOutOfBoundsException.class, () -> neg.read(),
+                    "negative offset read -> ArrayIndexOutOfBoundsException");
+    }
+
+    // ---- 9c. read(byte[],off,len) boundary placement ----
+    static void testReadBoundary() {
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[]{1, 2, 3, 4});
+        check(in.read(new byte[4], 4, 0) == 0, "off == b.length with len == 0 is legal");
+        check(in.read(new byte[4], 0, 4) == 4, "full drain in a single call");
+        check(in.available() == 0, "drained after full read");
+
+        ByteArrayInputStream p = new ByteArrayInputStream(new byte[]{1, 2, 3});
+        byte[] b = new byte[10];
+        check(p.read(b, 2, 8) == 3, "len clamped to remaining");
+        check(b[2] == 1 && b[3] == 2 && b[4] == 3 && b[5] == 0, "clamped placement, beyond untouched");
+
+        // JDK-27 read validates before the EOF check: out-of-range args still throw at EOF
+        final ByteArrayInputStream eof = new ByteArrayInputStream(new byte[]{1});
+        check(eof.read() == 1, "drain");
+        checkThrows(IndexOutOfBoundsException.class, () -> eof.read(new byte[2], 0, 3),
+                    "read(b,0,3) at EOF -> IndexOutOfBoundsException");
+    }
+
+    // ---- 9d. skip x mark interaction ----
+    static void testSkipMarkInteraction() {
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5});
+        in.read();
+        in.mark(0);
+        in.skip(2);
+        in.reset();
+        check(in.read() == 2 && in.read() == 3, "reset after skip returns to marked position");
+
+        ByteArrayInputStream z = new ByteArrayInputStream(new byte[]{9, 8, 7});
+        z.read();
+        z.mark(5);
+        z.skip(0);
+        z.reset();
+        check(z.read() == 8, "skip(0) keeps mark");
+
+        ByteArrayInputStream e = new ByteArrayInputStream(new byte[]{1, 2});
+        e.mark(0);
+        e.skip(100);
+        e.reset();
+        check(e.read() == 1, "reset after skip past end returns to mark");
+    }
+
+    // ---- 9e. close() does not affect mark/reset ----
+    static void testCloseMarkReset() throws Exception {
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[]{1, 2, 3});
+        in.read();
+        in.close();
+        in.mark(0);
+        in.read();
+        in.reset();
+        check(in.read() == 2, "mark after close + reset replays");
+        in.close();
+        in.reset();
+        check(in.read() == 2, "reset after double close returns to mark");
+    }
+
+    // ---- 9f. large buffer ----
+    static void testLargeBuffer() {
+        byte[] data = new byte[100000];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 31);
+        ByteArrayInputStream in = new ByteArrayInputStream(data);
+        check(in.available() == data.length, "large buffer available");
+        byte[] part = new byte[70000];
+        check(in.read(part, 0, part.length) == part.length, "large single read");
+        check(Arrays.equals(part, 0, part.length, data, 0, part.length), "large single read content");
+        check(in.skip(1) == 1, "skip within large buffer");
+        check(in.read() == (data[70001] & 0xFF), "read after skip at exact index");
+        check(in.available() == data.length - 70002, "remaining after partial consumption");
+    }
+
+    // ---- 10. readAllBytes full contract ----
+    static void testReadAllBytesContract() {
+        check(new ByteArrayInputStream(new byte[0]).readAllBytes().length == 0,
+              "readAllBytes on empty stream -> empty array");
+
+        byte[] data = new byte[5000];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 3);
+        ByteArrayInputStream in = new ByteArrayInputStream(data);
+        check(Arrays.equals(in.readAllBytes(), data), "readAllBytes content");
+        check(in.read() == -1, "readAllBytes advances position to EOF");
+        check(in.readAllBytes().length == 0, "second readAllBytes -> empty");
+        check(in.available() == 0, "available 0 after readAllBytes");
+
+        // mark survives readAllBytes (mark is untouched): reset replays
+        ByteArrayInputStream m = new ByteArrayInputStream(new byte[]{1, 2, 3});
+        m.mark(10);
+        check(m.readAllBytes().length == 3, "readAllBytes with mark set");
+        m.reset();
+        check(m.read() == 1, "reset after readAllBytes replays (mark preserved)");
+
+        // on a partially consumed stream only the remainder is returned
+        ByteArrayInputStream p = new ByteArrayInputStream(new byte[]{1, 2, 3, 4});
+        p.read();
+        check(Arrays.equals(p.readAllBytes(), new byte[]{2, 3, 4}),
+              "readAllBytes returns only the remainder");
+    }
+
+    // ---- 11. readNBytes(byte[],int,int) full contract (BAIS override: single read step) ----
+    static void testReadNBytesArray() {
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5});
+        byte[] b = new byte[6];
+        check(in.readNBytes(b, 1, 3) == 3, "readNBytes count");
+        check(b[0] == 0 && b[1] == 1 && b[2] == 2 && b[3] == 3 && b[4] == 0,
+              "readNBytes placement at off, beyond untouched");
+        byte[] room = new byte[10];
+        check(in.readNBytes(room, 0, 10) == 2 && room[0] == 4 && room[1] == 5,
+              "readNBytes returns fewer bytes at end of stream");
+
+        // at EOF the BAIS override maps the -1 of its single read to 0
+        ByteArrayInputStream eof = new ByteArrayInputStream(new byte[0]);
+        check(eof.readNBytes(new byte[1], 0, 0) == 0, "readNBytes len==0 at EOF -> 0");
+        check(eof.readNBytes(new byte[1], 0, 1) == 0, "readNBytes len>0 at EOF -> 0");
+
+        checkThrows(NullPointerException.class, () -> new ByteArrayInputStream(new byte[1]).readNBytes(null, 0, 1),
+                    "readNBytes(null,0,1) -> NPE");
+        checkThrows(IndexOutOfBoundsException.class,
+                    () -> new ByteArrayInputStream(new byte[1]).readNBytes(new byte[1], 0, 2),
+                    "readNBytes(b,0,2) too long -> IndexOutOfBoundsException");
+    }
+
+    // ---- 12. readNBytes(int) (inherited from InputStream, exact count semantics) ----
+    static void testReadNBytesCount() throws Exception {
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[]{1, 2, 3, 4});
+        byte[] three = in.readNBytes(3);
+        check(three.length == 3 && three[0] == 1 && three[2] == 3, "readNBytes(3) exact");
+        check(in.read() == 4, "stream continues after readNBytes(3)");
+        check(in.readNBytes(0).length == 0, "readNBytes(0) -> empty array");
+
+        ByteArrayInputStream part = new ByteArrayInputStream(new byte[]{7, 8});
+        byte[] rest = part.readNBytes(10);
+        check(rest.length == 2 && rest[0] == 7 && rest[1] == 8, "readNBytes(n) over end -> remaining");
+
+        ByteArrayInputStream drained = new ByteArrayInputStream(new byte[]{1});
+        drained.read();
+        check(drained.readNBytes(5).length == 0, "readNBytes(5) on drained stream -> empty");
+    }
+
+    // ---- 13. transferTo full contract ----
+    static void testTransferToContract() throws Exception {
+        byte[] data = new byte[3000];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 11);
+        ByteArrayInputStream in = new ByteArrayInputStream(data);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        check(in.transferTo(out) == data.length, "transferTo returns byte count");
+        check(Arrays.equals(out.toByteArray(), data), "transferTo content");
+        check(in.read() == -1, "transferTo leaves stream at EOF");
+
+        // only the remainder is transferred from a partially consumed stream
+        ByteArrayInputStream p = new ByteArrayInputStream(new byte[]{1, 2, 3, 4});
+        p.read(); p.read();
+        ByteArrayOutputStream po = new ByteArrayOutputStream();
+        check(p.transferTo(po) == 2 && Arrays.equals(po.toByteArray(), new byte[]{3, 4}),
+              "transferTo remainder");
+
+        check(new ByteArrayInputStream(new byte[0]).transferTo(new ByteArrayOutputStream()) == 0,
+              "transferTo on empty stream -> 0");
+
+        checkThrows(NullPointerException.class,
+                    () -> new ByteArrayInputStream(new byte[]{1}).transferTo(null),
+                    "transferTo(null) -> NPE");
+        checkThrows(IOException.class,
+                    () -> new ByteArrayInputStream(new byte[]{1, 2}).transferTo(
+                        new OutputStream() {
+                            public void write(int b) throws IOException { throw new IOException("sink boom"); }
+                        }),
+                    "transferTo propagates sink IOException");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testConstructors();
@@ -230,6 +416,15 @@ public class ByteArrayInputStreamTest {
         testMarkReset();
         testCloseNoOp();
         testJdk9Plus();
+        testConstructorCorners();
+        testReadBoundary();
+        testSkipMarkInteraction();
+        testCloseMarkReset();
+        testLargeBuffer();
+        testReadAllBytesContract();
+        testReadNBytesArray();
+        testReadNBytesCount();
+        testTransferToContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

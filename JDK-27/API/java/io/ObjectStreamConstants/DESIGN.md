@@ -28,3 +28,19 @@
 - 健壮性: 纯内存流 + 固定魔数（协议常量跨 JDK 稳定，规范固定值）。
 
 产出：`ObjectStreamConstantsTest.java`（白盒 ~27 + 黑盒 ~20 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testEachConstantValue`…`testProtocolVersionRejects`，断言 23 → 101）：
+- **逐常量断言**：PROTOCOL_VERSION_1/2、STREAM_MAGIC(-21267=0xACED)、STREAM_VERSION(5)、TC_NULL..TC_LONGSTRING 全部标签、baseWireHandle(8257536=0x7E0000)、SC_* 五标志位 —— 每个常量单独断言（javap -constants 权威值先行）；SC 位集恰为 0x1F。
+- **真实流头**：OOS 默认输出前 4 字节 `AC ED 00 05`。
+- **真实流 flags**：普通类 0x02、带 writeObject 0x03、Externalizable 0x0C、枚举 0x12（解析 TC_OBJECT/TC_ENUM 后的 TC_CLASSDESC 帧实证，双侧一致）。
+- **权限常量**：SUBSTITUTION_PERMISSION/SUBCLASS_IMPLEMENTATION_PERMISSION 名称精确；JDK-27 新增 SERIAL_FILTER_PERMISSION（"serialFilter"），8 侧不存在。
+- **useProtocolVersion 拒绝矩阵**：0/3/-1/Integer.MAX_VALUE → StreamCorruptedException 消息 `unknown version: N`（逐字实测）。
+
+负例矩阵：
+| 操作 | 异常 | 消息子串（8/27 一致） |
+|---|---|---|
+| useProtocolVersion(0 或 3 或 -1) | StreamCorruptedException | `unknown version: <n>` |
+
+版本差异：JDK-27 新增 SERIAL_FILTER_PERMISSION 常量；其余常量与行为双侧一致。

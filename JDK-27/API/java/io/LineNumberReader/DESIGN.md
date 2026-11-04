@@ -21,3 +21,16 @@
 - 健壮性: StringReader 固定文本。
 
 产出：`LineNumberReaderTest.java`（白盒 + 黑盒共 45 断言）。
+
+## 深化追加（契约级）
+
+新增维度（断言 41 → 114）：与 JDK-8 侧同套（行界矩阵、bulk 原始 \r\n 但行号照计、buffer 4 跨界无双计、setLineNumber 跳变、skip 先耗行内/跨行计数、构造 "Buffer size <= 0"）。
+
+负例矩阵（实测双侧一致）：
+| 操作 | 异常 | 精确子串 |
+|---|---|---|
+| skip(-1) | IllegalArgumentException | skip() value is negative |
+| size<=0 构造 | IllegalArgumentException | Buffer size <= 0 |
+| 关闭后 read/skip/readLine | IOException | Stream closed |
+
+**版本差异（实测分叉）**：EOF 尾行计数——JDK-27 的 read()/skip() 到 EOF 把最后未终止行计入行号（1/4/4），JDK-8 不计（0/3/3）；readLine() 两版都计。测试按 JDK 分支断言。

@@ -36,3 +36,23 @@
 ## 注意事项
 
 - 无墙钟/随机/默认 Locale 依赖；headless 安全。
+
+## 深化追加（契约级，批次 ioC）
+
+新增维度清单（与 JDK-8 侧完全镜像 + JDK-27 特有追加，方法名一致）：
+
+1. **边界值往返矩阵**（MIN/MAX/'\u0000'/'￿'/+0.0/-0.0 位级/NaN/±Inf）。
+2. **大端序精确**（readInt {12 34 56 78} 等 10 项手写字节断言）。
+3. **readUTF 手工解码矩阵**（ASCII/两字节 é/三字节 中文/修改版 NUL {C0 80}/CESU-8 孤立代理/长度 0/尾字节保留 + 非法/截断负例）。
+4. **writeUTF 编码长度边界**（65535 合法、65536/32768 NUL 抛、32767 NUL 合法、代理对 6 字节 CESU-8）。
+5. **readFully 前缀保留 + len==0 no-op + 精确区域 + 越界/null**。
+6. **skipBytes 负/零/部分**。
+7. **readLine 行界矩阵**（\r、\r\n 合一、\n、EOF null、无终结符尾行）。
+8. **close 后行为**（FIS 支撑：read/readInt/readLine/available → IOException "Stream Closed"；skipBytes 类型级）。
+9. **委托与双层 DataInputStream**。
+10. **static readUTF(RandomAccessFile) 跨实现**。
+11. **JDK-27 特有（JDK-9+ 继承 API 经子类引用）**：readAllBytes 排空 + EOF、readNBytes(b,off,len) 区域与剩余、transferTo 只搬未读剩余并 EOF。
+
+负例矩阵与消息子串：与 JDK-8 侧相同（见 JDK-8 同名文件表）；两处版本差异——close 后 skipBytes JDK-27 为 "Bad file descriptor"（JDK-8 "Stream Closed"）、writeUTF 超长消息 JDK-27 含字符串预览（共同子串 "too long: N bytes"）。javap-27 确认本类自身无新增公有方法，差异全部来自继承的 InputStream（readAllBytes/readNBytes/transferTo）。
+
+产出：`DataInputStreamTest.java` 28 → 149 断言（jtreg Passed）。

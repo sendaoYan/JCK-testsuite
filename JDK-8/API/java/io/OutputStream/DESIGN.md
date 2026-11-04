@@ -42,3 +42,19 @@
 
 - 全部输入为固定字节数组，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒 + 黑盒 nullOutputStream（JDK 11+ 方法）。
+
+## 深化追加（契约级）
+
+新增维度（全部经 JDK-8 实测锁定）：
+- write(byte[]) → write(byte[],int,int) 委托证明（Spy 探针）；零长数组仍走委托但不写
+- 参数矩阵：write(b,3,0)/write(b,1,MAX) → IOOBE；write(b,b.length,0) 合法边界；write(empty) no-op；JDK-8 IOOBE/NPE 消息为 null
+- write(int) 原样透传 int（不截断）——截断到低 8 位是子类契约；默认循环对 byte 符号扩展后传给 write(int)（0x80 → -128），子类需自行 & 0xFF
+- 默认循环顺序/区域保真：off/len 区域两端与内部、零长跳过循环
+- 异常传播：循环中 write(int) 的 IOException 逐字透传，已写部分保留
+- 子类 flush/close 允许抛 IOException
+- try-with-resources 恰好一次 close
+- 白盒：write(byte[],int,int) 在 JDK-8 即具体方法（循环实现，非 abstract）；JDK-8 无 nullOutputStream 工厂（反射断言）；抽象类拒绝实例化（InstantiationException）
+
+负例矩阵：write(null) NPE / write(null,0,1) NPE / write(b,2,1) IOOBE / write(b,-1,1) IOOBE / write(b,0,-1) IOOBE / write(b,3,0) IOOBE。
+
+版本差异（8 vs 27）：JDK-27 越界消息 "Range [...]"、NPE 指名 "b"（JDK-8 均为 null）；JDK-27 另有 nullOutputStream（8 侧无，见 27 侧 DESIGN）。

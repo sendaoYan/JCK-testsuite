@@ -19,3 +19,13 @@
 - 边界: EOF read()==-1；空输入。
 - 健壮性: 固定 UTF-8 字节；显式 Charset 不依赖默认编码。
 - 白盒 `testWhiteBox`: 继承 Reader、getEncoding/ready 存在。
+
+## 深化追加（契约级）
+
+新增维度（断言 7 → 78）：与 JDK-8 侧同套（getEncoding 历史名、UEE/NPE 构造负例、malformed 替换、4 charset 往返矩阵、UTF-16BE 显式字节、ready、skip 按字符、增补代理对、ProbeInputStream 关闭探针、关闭后 skip(-1) 仍 IAE、read 越界）。
+
+JDK-27 专属：testReadCharBuffer——**read(CharBuffer) 覆写**（反射确认方法存在）：5 字符精确解码；remaining==0 返回 0；null → NPE；只读缓冲 → ReadOnlyBufferException；关闭后 → IOException "Stream closed"。
+
+负例矩阵（实测双侧一致）：同 JDK-8 表；另 read(CharBuffer) 只读 → ReadOnlyBufferException、null → NPE。
+
+版本差异：JDK-27 覆写 read(CharBuffer)（JDK-8 走 Reader 默认实现，仍可用但无覆写）；NPE helpful 消息按类型级断言。

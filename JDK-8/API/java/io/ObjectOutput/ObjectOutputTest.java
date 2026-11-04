@@ -131,11 +131,141 @@ public class ObjectOutputTest {
         check(b4.size() > 0, "flush twice is safe");
     }
 
+    // ================= deep additions (contract level) =================
+
+    /** A fully hand-written ObjectOutput: proves the interface is implementable
+     *  independently of ObjectOutputStream (dual-implementation comparison). */
+    static class CustomOutput implements ObjectOutput {
+        final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        final java.io.DataOutputStream d = new java.io.DataOutputStream(bos);
+        final java.util.List<Object> objects = new java.util.ArrayList<Object>();
+        boolean closed, flushed;
+        public void writeObject(Object o) { objects.add(o); }
+        public void write(int b) throws IOException { d.write(b); }
+        public void write(byte[] b) throws IOException { d.write(b); }
+        public void write(byte[] b, int off, int len) throws IOException { d.write(b, off, len); }
+        public void flush() { flushed = true; }
+        public void close() { closed = true; }
+        public void writeBoolean(boolean v) throws IOException { d.writeBoolean(v); }
+        public void writeByte(int v) throws IOException { d.writeByte(v); }
+        public void writeShort(int v) throws IOException { d.writeShort(v); }
+        public void writeChar(int v) throws IOException { d.writeChar(v); }
+        public void writeInt(int v) throws IOException { d.writeInt(v); }
+        public void writeLong(long v) throws IOException { d.writeLong(v); }
+        public void writeFloat(float v) throws IOException { d.writeFloat(v); }
+        public void writeDouble(double v) throws IOException { d.writeDouble(v); }
+        public void writeBytes(String s) throws IOException { d.writeBytes(s); }
+        public void writeChars(String s) throws IOException { d.writeChars(s); }
+        public void writeUTF(String s) throws IOException { d.writeUTF(s); }
+    }
+
+    static class ExtRec implements java.io.Externalizable {
+        private static final long serialVersionUID = 410L;   // fixed for cross-version stability
+        int i; String s;
+        public ExtRec() { }
+        ExtRec(int i, String s) { this.i = i; this.s = s; }
+        public void writeExternal(ObjectOutput out) throws IOException {
+            out.writeInt(i); out.writeUTF(s); out.writeObject(null);
+        }
+        public void readExternal(ObjectInput in)
+                throws IOException, ClassNotFoundException {
+            i = in.readInt(); s = in.readUTF();
+            if (in.readObject() != null) throw new java.io.StreamCorruptedException("expected null");
+        }
+    }
+
+    // ---- interface method set: exactly 17 methods, all abstract, no defaults ----
+    static void testMethodSetExact() throws Exception {
+        java.lang.reflect.Method[] ms = ObjectOutput.class.getMethods();
+        String[] names = new String[ms.length];
+        for (int i = 0; i < ms.length; i++) names[i] = ms[i].getName();
+        java.util.Arrays.sort(names);
+        check(ms.length == 17, "ObjectOutput exposes exactly 17 methods: " + ms.length);
+        String[] expected = {"close", "flush", "write", "write", "write", "writeBoolean",
+                             "writeByte", "writeBytes", "writeChar", "writeChars",
+                             "writeDouble", "writeFloat", "writeInt", "writeLong",
+                             "writeObject", "writeShort", "writeUTF"};
+        java.util.Arrays.sort(expected);
+        check(java.util.Arrays.equals(names, expected), "exact method name set: "
+              + java.util.Arrays.toString(names));
+        boolean anyDefault = false;
+        for (java.lang.reflect.Method m : ms) {
+            check(java.lang.reflect.Modifier.isAbstract(m.getModifiers()),
+                  "abstract: " + m.getName());
+            if (m.isDefault()) anyDefault = true;
+        }
+        check(!anyDefault, "no default methods on the interface");
+        Class<?>[] ifs = ObjectOutput.class.getInterfaces();
+        check(ifs.length == 2 && ifs[0] == java.io.DataOutput.class
+              && "java.lang.AutoCloseable".equals(ifs[1].getName()),
+              "extends exactly DataOutput and AutoCloseable");
+        check(ObjectOutput.class.getFields().length == 0, "no constants");
+    }
+
+    // ---- hand-written implementation: byte layout + Externalizable round-trip ----
+    static void testCustomImplementation() throws Exception {
+        CustomOutput out = new CustomOutput();
+        out.writeInt(0x01020304);
+        byte[] head = out.bos.toByteArray();
+        check(head.length == 4 && (head[0] & 0xff) == 0x01 && (head[1] & 0xff) == 0x02
+              && (head[2] & 0xff) == 0x03 && (head[3] & 0xff) == 0x04,
+              "writeInt lays out big-endian bytes in the custom implementation");
+        out.writeShort((short) 0x0506);
+        check((out.bos.toByteArray()[4] & 0xff) == 0x05
+              && (out.bos.toByteArray()[5] & 0xff) == 0x06, "writeShort big-endian");
+
+        out.objects.clear();
+        out.bos.reset();
+        new ExtRec(7, "seven").writeExternal(out);
+        out.flush();
+        check(out.flushed, "flush recorded");
+        check(out.objects.size() == 1 && out.objects.get(0) == null,
+              "writeObject(null) captured as null through the interface");
+
+        // read back with a plain DataInputStream + scripted object queue
+        java.io.DataInputStream din = new java.io.DataInputStream(
+                new java.io.ByteArrayInputStream(out.bos.toByteArray()));
+        final java.util.LinkedList<Object> objs = new java.util.LinkedList<Object>(out.objects);
+        ExtRec back = new ExtRec();
+        back.i = din.readInt();
+        back.s = din.readUTF();
+        back.s = (objs.poll() == null) ? back.s : "corrupt";
+        check(back.i == 7 && "seven".equals(back.s),
+              "Externalizable restored from hand-written ObjectOutput bytes");
+        din.close();
+    }
+
+    // ---- byte-level framing contracts through ObjectOutputStream ----
+    static void testOosByteContracts() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.write(0x1234);                          // only the low byte is written
+        oos.close();
+        byte[] b = bos.toByteArray();
+        check(b.length == 7, "header(4) + TC_BLOCKDATA + length(1) + one data byte: " + b.length);
+        check((b[4] & 0xff) == 0x77, "raw write framed with TC_BLOCKDATA");
+        check((b[5] & 0xff) == 1, "block length is 1");
+        check((b[6] & 0xff) == 0x34, "write(int) truncates to the low 8 bits: 0x34");
+
+        ObjectOutputStream oos2 = new ObjectOutputStream(new ByteArrayOutputStream());
+        try {
+            oos2.write((byte[]) null);
+            check(false, "write(null) must throw NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        } finally {
+            oos2.close();
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testFullSurface();
         testNullObject();
         testClosePropagation();
         testFlushIdempotent();
+        testMethodSetExact();
+        testCustomImplementation();
+        testOosByteContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -19,3 +19,13 @@
 - 边界: 空字符串写 0 字节；非 ASCII 字符多字节正确。
 - 健壮性: 显式 UTF-8 Charset；内存流目标；无默认编码依赖。
 - 白盒 `testWhiteBox`: 继承 Writer、getEncoding/flush/close 存在。
+
+## 深化追加（契约级）
+
+新增维度（断言 7 → 79）：与 JDK-8 侧同套（getEncoding 历史名、构造负例、精确字节编码矩阵、CountingStream 缓冲实测〔写不落底层、flush 才下沉〕、flush/close 传播计数、关闭矩阵 + getEncoding null、write 越界 + 低 16 位、append null 契约 "cABnullnuXYZYZ"、往返矩阵、单字符矩阵、大写、区域矩阵）。
+
+JDK-27 专属：testAppendOverrides——**append(CharSequence)/append(CharSequence,int,int) 覆写**（反射确认两覆写存在）+ null 契约保持（append(null) 仍写 "null"）。
+
+负例矩阵（实测双侧一致）：同 JDK-8 表。
+
+版本差异：JDK-27 覆写 2 个 append 重载（JDK-8 用 Writer 默认实现，行为等价）；NPE helpful 消息按类型级断言。

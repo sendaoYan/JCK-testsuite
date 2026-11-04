@@ -8,6 +8,7 @@
  * @run main SerializablePermissionTest
  */
 
+import java.io.ObjectStreamConstants;
 import java.io.SerializablePermission;
 
 public class SerializablePermissionTest {
@@ -92,9 +93,115 @@ public class SerializablePermissionTest {
         }
     }
 
+
+    // ================= deep additions (contract level) =================
+
+    // ---- BasicPermission wildcard semantics (name grammar of the base class) ----
+    static void testWildcardMatrix() {
+        SerializablePermission star = new SerializablePermission("*");
+        check(star.implies(new SerializablePermission("enableSubstitution")),
+              "'*' implies any specific name");
+        check(star.implies(new SerializablePermission("a.b.c")), "'*' implies dotted names");
+        check(star.implies(star), "'*' implies itself");
+        SerializablePermission dotted = new SerializablePermission("a.*");
+        check(dotted.implies(new SerializablePermission("a.b")),
+              "'a.*' implies a direct child");
+        check(dotted.implies(new SerializablePermission("a.b.c")),
+              "'a.*' implies deep children");
+        check(!dotted.implies(new SerializablePermission("a")),
+              "'a.*' does not imply the bare parent name");
+        check(!dotted.implies(new SerializablePermission("b.a")),
+              "'a.*' does not imply names outside the subtree");
+        SerializablePermission midStar = new SerializablePermission("enable*ables");
+        check(!midStar.implies(new SerializablePermission("enableXables")),
+              "an internal '*' is a literal character, not a wildcard");
+        check(midStar.implies(new SerializablePermission("enable*ables")),
+              "the literal name implies only itself");
+        check(!new SerializablePermission("a.b").implies(dotted),
+              "a specific name does not imply the wildcard");
+    }
+
+    // ---- class hierarchy and finality ----
+    static void testHierarchy() {
+        check(java.security.BasicPermission.class.isAssignableFrom(SerializablePermission.class),
+              "extends BasicPermission");
+        check(java.security.Permission.class.isAssignableFrom(SerializablePermission.class),
+              "therefore extends Permission");
+        check(java.lang.reflect.Modifier.isFinal(SerializablePermission.class.getModifiers()),
+              "the class is final");
+        check(java.io.Serializable.class.isAssignableFrom(SerializablePermission.class),
+              "permissions are serializable");
+    }
+
+    // ---- permission collections ----
+    static void testCollection() {
+        java.security.PermissionCollection pc =
+                new SerializablePermission("enableSubstitution").newPermissionCollection();
+        check(pc != null, "newPermissionCollection returns a collection");
+        pc.add(new SerializablePermission("enableSubstitution"));
+        check(pc.implies(new SerializablePermission("enableSubstitution")),
+              "collection implies the held permission");
+        check(!pc.implies(new SerializablePermission("enableSubstitution2")),
+              "collection does not imply an unrelated name");
+        check(!pc.isReadOnly(), "fresh collection is writable");
+        pc.setReadOnly();
+        check(pc.isReadOnly(), "setReadOnly flips the flag");
+    }
+
+    // ---- name acceptance and case sensitivity ----
+    static void testNameAcceptance() {
+        check(new SerializablePermission("a/b") != null, "'/' accepted in names");
+        check(new SerializablePermission("a..b") != null, "'..' accepted in names");
+        check(new SerializablePermission("serialFilter") != null,
+              "'serialFilter' is a legal name on every JDK");
+        check(!new SerializablePermission("X").implies(new SerializablePermission("x")),
+              "names are case sensitive");
+        check(!new SerializablePermission("enableSubstitution")
+                  .equals(new SerializablePermission("EnableSubstitution")),
+              "case difference breaks equals");
+    }
+
+    // ---- toString/getActions surface ----
+    static void testSurface() {
+        SerializablePermission p = new SerializablePermission("enableSubstitution", "read,write");
+        String ts = p.toString();
+        check(ts.contains("java.io.SerializablePermission"), "toString carries the class name");
+        check(ts.contains("enableSubstitution"), "toString carries the name");
+        check("".equals(p.getActions()), "getActions is empty regardless of the ctor argument");
+        check(p.equals(new SerializablePermission("enableSubstitution")),
+              "actions argument does not affect equality");
+        check(new SerializablePermission("a", null) != null,
+              "null actions are accepted and ignored");
+    }
+
+    // ---- deprecation status (JDK-25+: deprecated for removal) ----
+    static void testDeprecation() {
+        Deprecated d = SerializablePermission.class.getAnnotation(Deprecated.class);
+        check(d != null, "deprecated on JDK-25+");
+        check(d.since().equals("25"), "@Deprecated(since=25)");
+        check(d.forRemoval(), "@Deprecated(forRemoval=true)");
+    }
+
+    // ---- the JDK-9+ serialFilter permission is a known name ----
+    static void testSerialFilterPermission() {
+        SerializablePermission p = new SerializablePermission("serialFilter");
+        check("serialFilter".equals(p.getName()), "'serialFilter' constructs");
+        check(ObjectStreamConstants.SERIAL_FILTER_PERMISSION.getName().equals("serialFilter"),
+              "ObjectStreamConstants.SERIAL_FILTER_PERMISSION matches it");
+        check(p.implies(new SerializablePermission("serialFilter")),
+              "implies itself");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testWildcardMatrix();
+        testHierarchy();
+        testCollection();
+        testNameAcceptance();
+        testSurface();
+        testDeprecation();
+        testSerialFilterPermission();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

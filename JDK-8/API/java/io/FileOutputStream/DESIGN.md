@@ -22,3 +22,18 @@
 5. String 构造 + append。
 6. 目录作为目标 → FileNotFoundException。
 - 健壮性: 临时目录 + finally 递归清理。
+
+## 深化追加（契约级）
+
+新增维度（全部经 JDK-8 实测锁定）：
+- 构造负例矩阵：null File/String/(String,null,true)/(File,null,false) NPE；目录 FNFE 消息精确 "<path> (Is a directory)"（含 append 变体）；缺失父目录 FNFE 含路径 + "(No such file or directory)"（File/String/String,bool 三变体）
+- close 语义：double close 幂等；write(int)/write(byte[])/write(b,off,len) 关闭后 IOException("Stream Closed")；**flush 关闭后不抛（FOS.flush 为空实现）**；fd.valid open true → close false；getFD 同实例
+- write(int) 低 8 位矩阵：0x1FF→0xFF、0x141→0x41、0x100→0x00
+- write(b,off,len) 参数矩阵：(b,2,1)/(b,-1,1)/(b,0,-1)/(b,3,0) IOOBE、null NPE、(b,b.length,0) 合法、空数组 no-op、失败检查零写入
+- append 定位：三个构造变体（File,true / String,true）追加顺序 1,2,3,4；truncate：默认构造与 (File,false)/(String,false) 均覆盖截断（长写短写后长度=短）
+- 写后可见性：不 close 文件长度即更新；回读需新开 FileInputStream
+- channel position 随写前进；经 OutputStream 基类引用写
+
+负例矩阵：null 四变体 NPE / 目录 FNFE / 缺失父目录 FNFE / write 越界三种 IOOBE / write(null) NPE / 关闭后 write IOException("Stream Closed")。
+
+版本差异（8 vs 27）：null 构造 NPE 消息 27 侧指名 "file"（8 为 null）；write(null) 消息 27 指名 "b"；其余消息双侧一致（"Stream Closed"/"(Is a directory)"/"(No such file or directory)"）。JDK-8 侧另有白盒断言 nullOutputStream 不存在（属 OutputStream 目录）。

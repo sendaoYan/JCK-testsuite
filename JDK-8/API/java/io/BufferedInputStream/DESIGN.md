@@ -40,3 +40,26 @@
 
 - 无墙钟/随机/默认 Locale 依赖；headless 安全。
 - JDK-27 侧同源 + 反射白盒 + readAllBytes。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（18 -> 66）。
+
+### 新增维度
+- 关闭态消息：close 后 read/read(byte[])/read(b,off,len)/available/skip/reset 全部 "Stream closed"（6 处，双侧实测同文）；mark after close 无害无操作。
+- "Resetting to invalid mark"：无 mark 与跨 readlimit 重填后 reset 的精确消息。
+- mark 超过 readlimit 仍有效：缓冲区持有数据时（默认 8192 缓冲 mark(2) 读 100；8 缓冲 mark(100) 读 30 跨重填）。
+- fill 语义：向下层精确请求缓冲区大小（64 可测；默认 8192 经委托录制可观测）；read(byte[]) 一次填满缓冲再切。
+- available 每次调用都咨询下层；available = 下层 + 已缓冲。
+- skip × 缓冲交互（双侧实测关键语义）：缓冲区内有数据时 skip 只用缓冲字节（skip(10) 只有 7 个已缓冲返回 7，不向下层要差额）；空缓冲直接委托（100000 -> 100 全跳）。
+- close 传播：一层/两层；跨块（64 缓冲 10KB）内容一致；奇数块 7 字节循环读。
+
+### 负例精确异常表（双侧实测）
+| 操作 | 类型 | 消息子串 |
+|---|---|---|
+| close 后 6 种操作 | IOException | "Stream closed"（双侧一致） |
+| reset 无 mark / 越限 | IOException | "Resetting to invalid mark"（双侧一致） |
+| 构造 size<=0 | IllegalArgumentException | "Buffer size <= 0"（双侧一致） |
+
+### 版本差异
+- transferTo 仅 JDK-9+；JDK-8 侧不引用。

@@ -21,3 +21,22 @@
 7. 空输入、read EOF、close 幂等 + 关闭后 readLine 抛 IOException("Stream closed")。
 8. 超默认缓冲区长行正确计数。
 - 健壮性: 内存 StringReader；无反射白盒。
+
+## 深化追加（契约级）
+
+新增维度（断言 36 → 103）：
+- 行界矩阵："L1\nL2\rL3\r\nL4\r\rL5" → readLine 6 行且行号精确。
+- bulk read 传递**原始 \r\n**（不翻译成 \n）但行号照计——易错契约。
+- 跨缓冲（buffer 4）"ab\r\ncdefgh"：\r\n 分跨 refill 边界只计 1 行（无双计，关键历史坑，实测）。
+- setLineNumber 跳变 + 后续 readLine 正确计；getLineNumber 关闭后仍可用（不查 open）。
+- skip 语义：先耗当前行剩余、跨行计数；skip(100) 只返回实际 3。
+- 构造 "Buffer size <= 0"。
+
+负例矩阵（实测双侧一致）：
+| 操作 | 异常 | 精确子串 |
+|---|---|---|
+| skip(-1) | IllegalArgumentException | skip() value is negative（带括号，区别于基类 Reader 的 "skip value is negative"） |
+| size<=0 构造 | IllegalArgumentException | Buffer size <= 0 |
+| 关闭后 read/skip/readLine | IOException | Stream closed |
+
+**版本差异（实测分叉，分别固化断言）**：EOF 处最后未终止行的行号计数——JDK-8 的 read()/skip() 读到 EOF **不**把尾行计入行号（0/3/3 序列），JDK-27 **计入**（1/4/4 序列）；readLine() 在两版都计尾行。测试按 JDK 分支断言。

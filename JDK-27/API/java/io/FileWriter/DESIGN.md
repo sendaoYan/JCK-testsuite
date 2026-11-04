@@ -19,3 +19,27 @@
 - 边界: 默认覆盖截断旧内容；空写不新增。
 - 健壮性: 独立临时目录 + finally 清理；显式 UTF-8 Charset。
 - 白盒 `testWhiteBox`: 继承 OutputStreamWriter、write/append/flush/close 存在。
+
+## 深化追加（契约级）
+
+新增维度（断言 8 → 67）：与 JDK-8 侧同套（构造负例〔null ×4 形式、缺失父目录 FNFE、目录 FNFE 含 append〕、FileDescriptor 构造、关闭矩阵 "Stream closed"、truncate vs append 全组合、write 越界、write(int) 低 16 位、flush 可见性、逐字符/500 字符大写、append null→"null" 与 "de" 区间、4 写形式一致、继承 getEncoding、重开语义 + no-op 矩阵）。
+
+JDK-27 专属：testCharsetCtors——4 个 Charset 构造：
+- (File,UTF_16BE) 写 "ABé" → 6 字节无 BOM，读回精确；
+- (String,UTF_16BE) append(CharSequence) 同编码；
+- (File,UTF_16BE,true) 追加 2+2 字节；
+- **null Charset 4 形式全 NPE 且消息含 "charset"**；
+- (File,UTF_8) "héllo 世界" 精确字节长度；
+- 继承 getEncoding()=="UnicodeBigUnmarked"。
+
+负例矩阵（实测）：
+| 操作 | 异常 | 精确子串 |
+|---|---|---|
+| null Charset（4 形式） | NullPointerException | charset（JDK-27 helpful 消息） |
+| null File/String | NullPointerException | 类型级 |
+| 缺失父目录 | FileNotFoundException | No such file or directory |
+| 打开目录 | FileNotFoundException | Is a directory |
+| 关闭后 write/flush | IOException | Stream closed |
+| write("abc",1,5) | StringIndexOutOfBoundsException | 类型级 |
+
+版本差异与实测副作用：**null-Charset 构造先打开/截断目标文件再抛 NPE**（构造链顺序），null 测试一律用一次性文件并断言截断副作用；JDK-8 侧无 Charset 构造。

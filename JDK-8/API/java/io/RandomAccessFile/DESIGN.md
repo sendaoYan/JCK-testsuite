@@ -51,3 +51,46 @@
 
 - 全部操作在 `File.createTempFile` 隔离文件内，finally 关闭并删除；无墙钟/随机/Locale/Charset/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒（实现 DataInput/DataOutput/Closeable、final getFD、方法枚举）。
+
+## 深化追加（契约级）
+
+> 双侧探针先行（JDK-8 / JDK-27 实测），新增 testCtorNullsAndEquivalence 等 14 个方法，
+> 断言 37 → 132。除特别标注外消息为双侧相同子串。
+
+### 新增维度清单
+1. **构造 null 矩阵**：name null NPE、File null NPE、mode null NPE（两个构造器各测）；(String,String) 与 (File,String) 等价（length/pointer/首字节）。
+2. **近失模式**："rw "、"rwS"、"RWS"、"r ws"、"rwsx"、"rws " 全部 IAE，精确消息 `Illegal mode "<mode>" must be one of "r", "rw", "rws", or "rwd"`（大小写敏感，无 trim）。
+3. **缺失/目录**：r 缺失 → FNFE（消息含完整路径 + "(No such file or directory)"）；rw/rws 缺失 → 创建空文件；r/rw 打开目录 → FNFE "(Is a directory)"。
+4. **r 模式失败消息**：write/writeInt → IOException "Bad file descriptor"；setLength → IOException "Invalid argument"；FD valid、channel isOpen（打开时）。
+5. **close 后统一 "Stream Closed"**：read/write/seek/getFilePointer/length/readUTF 六操作；getFD() 仍可用且 valid()==false；close 幂等。
+6. **seek 边界**：-1 与 Long.MIN_VALUE → IOException "Negative seek offset"；seek 超长合法、read → -1 且指针不动。
+7. **setLength 边界**：**setLength(-1) 双侧均为 IOException "Invalid argument"（注意：不是 javadoc 早期版本暗示的 IAE）**；截断后指针钳到新长度（seek(8)+setLength(4)→pointer 4）；扩展区读 0。
+8. **线格式（BIG-endian，原始字节断言）**：boolean true→01；short 0xBEEF→BE EF；int→4 字节大端；long→8 字节大端；char 'Z'→00 5A；writeUTF("A")→00 01 41（2 字节大端长度前缀）；writeChars("AB")→00 41 00 42；writeBytes 保留低 8 位（'é'→0xE9）。
+9. **modified-UTF-8 边界**："" 往返；"\u0000" 编码 2 字节（00 02）且往返；代理对往返；70000 字节 → UTFDataFormatException "too long: 70000 bytes"；损坏字节（0xFF）→ UTFDataFormatException "malformed input around byte 0"。
+10. **EOF 类型化读**：readBoolean/readInt/readUTF/readFully 在 EOF → EOFException。
+11. **索引边界**：read/write/readFully 的 (b,-1,0)/(b,0,-1)/(b,3,2) → IndexOutOfBoundsException（普通型，非 Array 子类）；(b,4,0) off==len 且 len==0 合法返回 0/无操作。
+12. **通道互操作**：seek 后 getChannel().position() 同步；channel.read 推进 getFilePointer。
+13. **readLine**：孤立 '\r' 亦为行界（"a\rb\rc"→a/b/c/null）。
+14. **碎片读**：read 尾部返回剩余数；read(b,off,len)/readFully(b,off,len) 只动 off..off+len 区间；readUnsignedShort(0xBEEF)==48879 不符号扩展。
+
+### 负例精确异常表（双侧实测）
+| 操作 | 异常 | 消息（子串） |
+|---|---|---|
+| ctor name/File/mode null | NullPointerException | —（类型级） |
+| mode "rw "/"rwS"/"RWS"/"r ws"/"rwsx"/"rws " | IllegalArgumentException | `Illegal mode "<m>" must be one of "r", "rw", "rws", or "rwd"` |
+| "r" 打开缺失文件 | FileNotFoundException | 含路径 + "No such file or directory" |
+| "r"/"rw" 打开目录 | FileNotFoundException | "Is a directory" |
+| r 模式 write/writeInt | IOException | "Bad file descriptor" |
+| r 模式 setLength | IOException | "Invalid argument" |
+| seek(-1)/seek(Long.MIN_VALUE) | IOException | "Negative seek offset" |
+| setLength(-1) | IOException | "Invalid argument"（**非 IAE**） |
+| close 后 6 种操作 | IOException | "Stream Closed" |
+| read/write/readFully 越界索引 | IndexOutOfBoundsException | —（普通型） |
+| EOF 处 readBoolean/readInt/readUTF/readFully | EOFException | — |
+| writeUTF 70000 字节 | UTFDataFormatException | "too long: 70000 bytes" |
+| readUTF 损坏字节 | UTFDataFormatException | "malformed input around byte 0" |
+
+### JDK-8 vs JDK-27 版本差异
+- **getChannel() 在 close 之后首次创建**：JDK-8 返回的 channel isOpen()==true（懒建通道对象未经历 close，实测 quirk）；JDK-27 为 false（已修复）。测试双侧各自断言并在用例注释记录。先建后 close 的通道双侧均 isOpen()==false。
+- writeUTF 过长消息：8=`encoded string too long: 70000 bytes`，27=`encoded string (aaa…) too long: 70000 bytes`（断言公共子串 "too long: 70000 bytes"）。
+- mode null NPE 消息：27 带 helpful 提示，8 为 null（类型级断言）。

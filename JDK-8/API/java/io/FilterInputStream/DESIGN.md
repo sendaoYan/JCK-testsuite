@@ -42,3 +42,28 @@
 
 - 全部输入为固定字节数组，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒（protected 构造器、protected volatile in 字段）。
+
+## 深化追加（契约级）
+
+本轮（批次 ioA）追加契约级断言（13 -> 66）。
+
+### 新增维度
+- read(byte[]) 路由：经自身 3 参 read 下沉为 1 次 bulk、0 次单字节；空数组仍委托一次返回 0；read(null) NPE。
+- 不支持 mark 的下沉 reset -> IOException "mark/reset not supported"（双侧一致）；mark 无害无操作。
+- 参数校验委托给下沉（OOB/NPE 由下沉抛出，流仍可用）。
+- close 传播：一层/两层；第二次 close 仍到达下沉（双侧实测 closes==2，FIS 无 closed 标志）。
+- skip 语义：skip(0)/skip(-5) 委托返回 0；skip(2) 委托。
+- available 每次调用计数委托。
+- EOF 语义四操作；protected in 中途换下沉（读 1 后换，续读 9）。
+- 下沉全操作失败透传（read/read(byte[])/read(b,off,len)/skip/available/close 六路 "inner failure"）。
+- null 下沉六操作全 NPE；无符号读（0xFF->255）；区域精确放置。
+
+### 负例精确异常表（双侧实测）
+| 操作 | 类型 | 消息子串 |
+|---|---|---|
+| reset（下沉不支持 mark） | IOException | "mark/reset not supported"（双侧一致） |
+| read(b,-1,1) 等经委托 | IndexOutOfBoundsException | 消息由下沉决定（BAIS 路径 null） |
+| 六操作 × null 下沉 | NullPointerException | 双侧消息 null |
+
+### 版本差异
+- 本类行为双侧一致（close 计数 2 亦双侧实测一致）。

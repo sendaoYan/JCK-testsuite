@@ -20,3 +20,32 @@
 - 健壮性: 每场景独立管道、daemon+join 收尾。
 
 产出：`PipedReaderTest.java`（白盒 + 黑盒共 24 断言）。
+
+## 5. 深化追加（契约级，批次 ioD；双侧探针实测后固化）
+
+新增维度（对应新增方法）：
+1. `testCtorAndConnectMatrix`：pipeSize IAE 消息 "Pipe size <= 0"（与字节版 "Pipe Size <= 0" 大小写不同）；connect(null) NPE（27 带 helpful message）；双向重复 connect / 第三者 / 已连接构造器 → "Already connected"；**字符版特有 closed 检查：未连接 close 后 connect → "Pipe closed"（字节版是 connect 成功）**；writer 的 connect 与构造器对 closed-unconnected reader → "Pipe closed"；was-connected writer close 后 connect(other) → "Already connected"；`(src, 4)` 构造缓冲生效。
+2. `testReadBoundsAndOrder`：**校验顺序与字节版相反——连接/关闭检查先于 bounds 与 len==0**：`read(c,0,0)`/`read(c,-1,0)` 未连接抛 "Pipe not connected"；connected 越界 IOOBE（27 消息含 "out of bounds"）；close 后 len==0 也抛 "Pipe closed"；writer close 后 read(c,0,1) = -1。
+3. `testReadyContract`：未连接/closed 抛；空 false；缓冲 true；排空 false；EOF false。
+4. `testBrokenPipeDetection`：受控 daemon 线程：写线程死亡 → read()/read(c,0,1)/ready() 三入口均 "Write end dead"；读线程死亡 → write "Read end dead"。
+5. `testSkipContract`：skip(1) 未连接 "Pipe not connected"；skip(-3) IAE "skip value is negative"（与 InputStream.skip 返回 0 的族差异）；skip(0)=0、EOF 0、越余量实际值。
+6. `testCharRange`：0x1234/0xFFFF 16 位全域无损。
+7. `testCrossThreadLatchedRoundTrip`：64 缓冲 × 2048 字符多回绕 + 背压。
+
+负例精确异常表（操作 | 类型 | JDK-8 实测消息 | JDK-27 实测消息）：
+| 未连接 read()/ready()/skip()/read(c,0,0) | IOException | Pipe not connected | 同 |
+| 重复 connect | IOException | Already connected | 同 |
+| close 后 read/ready（含 len==0） | IOException | Pipe closed | 同 |
+| closed-unconnected 端 connect | IOException | Pipe closed | 同（字节版此场景为成功） |
+| 写线程死亡后 read/read(c)/ready | IOException | Write end dead | 同 |
+| 读线程死亡后 write | IOException | Read end dead | 同 |
+| pipeSize -1/0 | IllegalArgumentException | Pipe size <= 0 | 同 |
+| read 越界（connected） | IndexOutOfBoundsException | null | `Range [x, x+y) out of bounds for length n`（Objects.checkFromIndexSize） |
+| skip(负数) | IllegalArgumentException | skip value is negative | 同 |
+| pr.connect(null) | NullPointerException | null | `Cannot invoke "java.io.PipedWriter.connect(java.io.PipedReader)" because "src" is null` |
+
+JDK-27 特有断言/差异：
+- IOOBE 消息含 "out of bounds"、pr.connect(null) NPE 含 'because "src" is null'（27 侧专属断言；8 侧只断类型）。
+- 行为与 IOException/IAE 消息与 JDK-8 完全一致。
+- PipedReader.receive 包私有，无法子类暴露直测（经 PipedWriter.write 间接触发）。
+

@@ -27,3 +27,24 @@
 ## 关键细节
 - `skip(负数)` 抛 IAE；`mark(-1)` 抛 IAE；`Reader(Object lock)` 使 null 委托在构造时 NPE（区别于 FilterInputStream 系）。
 - JDK-27 侧同源 + 反射白盒。
+
+## 深化追加（契约级）
+
+新增维度（断言 20 → 87）：
+- readLine 行界矩阵：孤 `\r`、连续空行、空源 null、尾部无换行、`\r\r`、纯 CRLF 全组合。
+- readLine 与 read() 混读的位置语义（"ab\ncde\nf"）。
+- 跨缓冲长行（buffer 5，23 字符行）与 CRLF 跨 refill 边界（buffer 4）。
+- mark 契约：mark(2) 越限后 reset → IOException "Mark invalid"；界内跨 refill reset 成功；mark(0) 语义；未标记 reset → IOException "Stream not marked"；mark(-1) → IllegalArgumentException "Read-ahead limit"。
+- 关闭矩阵 7 操作全 "Stream closed"；lines() 在关闭流上触发 UncheckedIOException，cause 消息 "Stream closed"。
+- read(char[],off,len) 越界含 off+len int 溢出 → IOOBE；lines() 精确计数。
+
+负例矩阵（实测双侧一致）：
+| 操作 | 异常 | 精确子串 |
+|---|---|---|
+| mark 越限后 reset | IOException | Mark invalid |
+| 未标记 reset | IOException | Stream not marked |
+| mark(-1) | IllegalArgumentException | Read-ahead limit |
+| 关闭后 7 操作 | IOException | Stream closed |
+| 关闭后 lines() 消费 | UncheckedIOException | cause 含 Stream closed |
+
+版本差异：JDK-27 有 helpful NPE（具名参数），测试对 null 输入只断言类型级；上述子串两版一致。

@@ -23,3 +23,23 @@
 - 健壮性: SOURCE 保留策略下反射只断言"不可见"，不依赖编译器告警文本。
 
 产出：`SerialTest.java`（白盒 8 + 黑盒 ~9 断言）。
+
+## 深化追加（契约级）
+
+新增维度（`testMetaExact`…`testCompileMatrix`，断言 16 → 56）：
+- **元注解表面精确化**：恰 2 个运行时可见元注解（@Retention + @Target）；**非** @Documented / @Inherited / @Repeatable；零元素（`getDeclaredMethods().length == 0`，标记注解）；包 java.io、public。
+- **@Target 精确矩阵**：仅 FIELD+METHOD；对 ElementType 其余每一项显式断言"不允许"（逐项循环断言，10 项缺位）。
+- **SOURCE 保留实证**（修正简报：简报写 RUNTIME，**实测为 SOURCE**）：serialVersionUID/writeObject/readResolve/serialPersistentFields 上的 @Serial 在 class 文件中零残留（getDeclaredAnnotations().length == 0）。
+- **注解驱动的 serialPersistentFields**：声明形状描述符（getField("v") 非 null、类型 int、恰 1 字段、未声明名返回 null）。
+- **javac 放置矩阵**（ToolProvider 内存编译，临时目录 finally 递归删除）：
+  - 正例 OK1-OK5：serialVersionUID / writeObject / readObjectNoData / writeReplace / Externalizable 的 serialVersionUID —— 全部零错误编译。
+  - 负例 Sn1：@Serial 放在类上 → 编译错误含 `not applicable`。
+  - Sn2-Sn5：@Serial 放普通字段 / 非 Serializable 类的 UID / 任意私有方法 / 错误签名 writeObject(DataOutput) —— **均编译通过**（javac 只强制 @Target 种类，不校验序列化成员语义；记录该编译器行为）。
+
+负例矩阵：
+| 操作 | 结果 | 消息子串 |
+|---|---|---|
+| @Serial class X | javac 编译错误 | `not applicable to this kind of declaration` |
+| @Serial 语义误置（字段/方法种类内） | 编译通过 | —（记录行为） |
+
+不适用项：JDK-8 无 java.io.Serial，本目录仅 JDK-27 存在；@Serial 运行时不可见（SOURCE），无运行时行为可测。

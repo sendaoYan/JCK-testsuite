@@ -6,6 +6,10 @@
  *          auto-grow preserving content, toByteArray copy semantics, size/reset,
  *          toString()/toString(String) incl. UnsupportedEncodingException,
  *          toString(int hibyte), writeTo copy + null->NPE, close() no-op.
+ *          Deepened (contract level): writeTo delegation shape (single bulk call),
+ *          writeTo to self, writeTo to failing sink, explicit charset matrix +
+ *          default-charset dynamic comparison, write(int) boundary values,
+ *          grow across the initial capacity, state invariant after failed writes.
  * @run main ByteArrayOutputStreamTest
  */
 
@@ -175,6 +179,169 @@ public class ByteArrayOutputStreamTest {
         check(out.toByteArray()[1] == 66, "content after close");
     }
 
+    // ---- 10. write(int) boundary values (only low 8 bits kept) ----
+    static void testWriteIntBoundaries() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(0);
+        out.write(255);
+        out.write(256);                 // -> 0x00
+        out.write(-1);                  // -> 0xFF
+        out.write(-256);                // -> 0x00
+        out.write(0x141);               // -> 0x41 ('A')
+        out.write(Integer.MAX_VALUE);   // -> 0xFF
+        byte[] b = out.toByteArray();
+        check(out.size() == 7, "boundary write count");
+        check((b[0] & 0xFF) == 0 && (b[1] & 0xFF) == 255 && (b[2] & 0xFF) == 0,
+              "write(int) low 8 bits: 0/255/256");
+        check((b[3] & 0xFF) == 0xFF && (b[4] & 0xFF) == 0x00,
+              "write(int) negatives truncate");
+        check((b[5] & 0xFF) == 0x41 && (b[6] & 0xFF) == 0xFF, "write(int) large values");
+    }
+
+    // ---- 11. one-arg write(byte[]) full contract ----
+    static void testWriteByteArrayOneArg() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(new byte[]{5, 6, 7});
+        check(out.size() == 3, "write(byte[]) writes whole array");
+        check(out.toByteArray()[2] == 7, "write(byte[]) content");
+        out.write(new byte[0]);         // no-op
+        check(out.size() == 3, "write(empty array) is a no-op");
+    }
+
+    // ---- 12. grow across the initial capacity (impl detail: 32; data integrity observable) ----
+    static void testGrowAcrossCapacity() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();   // initial capacity 32
+        for (int i = 0; i < 40; i++) out.write(i);
+        check(out.size() == 40, "default-capacity grow: size");
+        byte[] b = out.toByteArray();
+        boolean eq = b.length == 40;
+        for (int i = 0; eq && i < 40; i++) if ((b[i] & 0xFF) != i) eq = false;
+        check(eq, "default-capacity grow preserves all content");
+
+        ByteArrayOutputStream one = new ByteArrayOutputStream(1);
+        byte[] many = new byte[1000];
+        for (int i = 0; i < many.length; i++) many[i] = (byte) (i * 7);
+        one.write(many, 0, many.length);
+        check(one.size() == many.length, "capacity-1 grow via single large write");
+
+        ByteArrayOutputStream zero = new ByteArrayOutputStream(0);
+        for (int i = 0; i < 100; i++) zero.write(i);
+        check(zero.size() == 100, "capacity-0 grow via single writes");
+    }
+
+    // ---- 13. state invariant after failed writes ----
+    static void testStateInvariantAfterFailedWrite() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(new byte[]{1, 2, 3}, 0, 3);
+        try { out.write(new byte[4], 0, -1); } catch (IndexOutOfBoundsException expected) { }
+        try { out.write(new byte[4], 2, 3); } catch (IndexOutOfBoundsException expected) { }
+        try { out.write(null, 0, 1); } catch (NullPointerException expected) { }
+        check(out.size() == 3, "failed writes leave size unchanged");
+        check(out.toByteArray()[0] == 1 && out.toByteArray()[2] == 3,
+              "failed writes leave content unchanged");
+    }
+
+    // ---- 14. reset after grow ----
+    static void testResetAfterGrow() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(4);
+        byte[] many = new byte[500];
+        for (int i = 0; i < many.length; i++) many[i] = (byte) (i * 3);
+        out.write(many, 0, many.length);
+        out.reset();
+        check(out.size() == 0, "reset after grow: size 0");
+        out.write(new byte[]{9, 9}, 0, 2);
+        check(out.size() == 2 && out.toByteArray()[0] == 9 && out.toByteArray()[1] == 9,
+              "reset after grow: buffer reusable with new content only");
+    }
+
+    // ---- 15. toString charset matrix (explicit charsets only; default compared dynamically) ----
+    static void testToStringCharsetMatrix() throws Exception {
+        // ISO-8859-1: exact 1:1 byte->char round trip
+        ByteArrayOutputStream iso = new ByteArrayOutputStream();
+        iso.write("héllo".getBytes(StandardCharsets.ISO_8859_1), 0, 5);
+        check("héllo".equals(iso.toString("ISO-8859-1")), "toString(ISO-8859-1) round trip");
+
+        // US-ASCII: unmappable bytes decode to U+FFFD (measured on JDK-8 and JDK-27)
+        ByteArrayOutputStream ascii = new ByteArrayOutputStream();
+        ascii.write(new byte[]{0x41, (byte) 0xE9, 0x42}, 0, 3);
+        String asciiStr = ascii.toString("US-ASCII");
+        check(asciiStr.length() == 3 && asciiStr.charAt(0) == 'A'
+              && asciiStr.charAt(1) == '�' && asciiStr.charAt(2) == 'B',
+              "toString(US-ASCII) replacement char U+FFFD");
+
+        // toString() decodes with the platform default charset (dynamic expectation)
+        ByteArrayOutputStream def = new ByteArrayOutputStream();
+        def.write("héllo".getBytes(StandardCharsets.UTF_8), 0, 6);
+        check(def.toString().equals(new String(def.toByteArray(),
+              java.nio.charset.Charset.defaultCharset())),
+              "toString() uses the platform default charset");
+
+        // UTF-16BE explicit round trip
+        ByteArrayOutputStream u16 = new ByteArrayOutputStream();
+        u16.write("héllo".getBytes(StandardCharsets.UTF_16BE), 0, 10);
+        check("héllo".equals(u16.toString("UTF-16BE")), "toString(UTF-16BE) round trip");
+
+        // failed charset does not disturb state
+        ByteArrayOutputStream before = new ByteArrayOutputStream();
+        before.write(new byte[]{1}, 0, 1);
+        try { before.toString("no-such-charset-xyz"); } catch (UnsupportedEncodingException expected) { }
+        check(before.size() == 1, "failed toString(charset) leaves state unchanged");
+
+        // toString(String) with null name -> NPE
+        checkThrows(NullPointerException.class, () -> def.toString((String) null),
+                    "toString((String) null) -> NPE");
+    }
+
+    // ---- 16. writeTo delegation shape: exactly one bulk write(buf, 0, count) ----
+    static void testWriteToDelegation() throws Exception {
+        final int[] singleCalls = {0};
+        final int[] bulkCalls = {0};
+        final ByteArrayOutputStream sinkData = new ByteArrayOutputStream();
+        class RecSink extends OutputStream {
+            public void write(int b) { singleCalls[0]++; sinkData.write(b); }
+            public void write(byte[] b, int off, int len) {
+                bulkCalls[0]++;
+                sinkData.write(b, off, len);
+            }
+        }
+        ByteArrayOutputStream src = new ByteArrayOutputStream();
+        src.write(new byte[]{10, 20, 30, 40}, 0, 4);
+        src.writeTo(new RecSink());
+        check(bulkCalls[0] == 1, "writeTo makes exactly one bulk write to the sink");
+        check(singleCalls[0] == 0, "writeTo never writes byte-by-byte");
+        check(sinkData.size() == 4 && sinkData.toByteArray()[3] == 40, "writeTo sink content");
+
+        // writeTo to a failing sink propagates the IOException with the original message
+        ByteArrayOutputStream failing = new ByteArrayOutputStream();
+        failing.write(new byte[]{1}, 0, 1);
+        checkThrows(java.io.IOException.class, () -> failing.writeTo(
+                new OutputStream() {
+                    public void write(int b) throws java.io.IOException {
+                        throw new java.io.IOException("sink write failed");
+                    }
+                }), "writeTo propagates sink IOException");
+    }
+
+    // ---- 17. writeTo(this) appends a copy of the current contents (impl-observed,
+    //          identical on JDK-8 and JDK-27) ----
+    static void testWriteToSelf() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(new byte[]{1, 2, 3}, 0, 3);
+        out.writeTo(out);
+        check(out.size() == 6, "writeTo(this) doubles the content");
+        byte[] b = out.toByteArray();
+        check(b[0] == 1 && b[2] == 3 && b[3] == 1 && b[5] == 3, "writeTo(this) content duplicated");
+    }
+
+    // ---- 18. toString(int hibyte) masks hibyte to 8 bits ----
+    static void testToStringHibyteMask() {
+        ByteArrayOutputStream hib = new ByteArrayOutputStream();
+        hib.write(new byte[]{0x41}, 0, 1);
+        String masked = hib.toString(0x101);            // (hibyte & 0xff) == 1
+        String plain = hib.toString(0x01);
+        check(masked.charAt(0) == plain.charAt(0), "toString(hibyte) masks hibyte to low 8 bits");
+    }
+
     public static void main(String[] args) throws Exception {
         testConstructors();
         testWriteInt();
@@ -185,6 +352,15 @@ public class ByteArrayOutputStreamTest {
         testToString();
         testWriteTo();
         testCloseNoOp();
+        testWriteIntBoundaries();
+        testWriteByteArrayOneArg();
+        testGrowAcrossCapacity();
+        testStateInvariantAfterFailedWrite();
+        testResetAfterGrow();
+        testToStringCharsetMatrix();
+        testWriteToDelegation();
+        testWriteToSelf();
+        testToStringHibyteMask();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

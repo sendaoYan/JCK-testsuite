@@ -11,6 +11,10 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.lang.reflect.Constructor;
@@ -102,9 +106,144 @@ public class InterruptedIOExceptionTest {
         }
     }
 
+    // ================= 深化追加（契约级） =================
+
+    static byte[] serOf(Object o) throws Exception {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(b)) {
+            oos.writeObject(o);
+        }
+        return b.toByteArray();
+    }
+
+    static Object back(byte[] b) throws Exception {
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(b))) {
+            return ois.readObject();
+        }
+    }
+
+    // ---- Throwable protocol + bytesTransferred public-field semantics ----
+    static void testThrowableProtocolAndField() {
+        InterruptedIOException e = new InterruptedIOException("m");
+        check("m".equals(e.getLocalizedMessage()), "getLocalizedMessage defaults to getMessage");
+        check(e.toString().equals("java.io.InterruptedIOException: m"),
+              "toString = FQCN + \": \" + message");
+        check(e.fillInStackTrace() == e, "fillInStackTrace returns this");
+        // bytesTransferred: public mutable data field defaulting to 0
+        check(new InterruptedIOException().bytesTransferred == 0, "default 0 (no-arg)");
+        check(new InterruptedIOException("m").bytesTransferred == 0, "default 0 ((String))");
+        e.bytesTransferred = 65535;
+        check(e.bytesTransferred == 65535, "assignable to max int value");
+        e.bytesTransferred = -1;
+        check(e.bytesTransferred == -1, "negative values are not rejected (plain field)");
+        e.bytesTransferred = 0;
+        check(e.toString().equals("java.io.InterruptedIOException: m"),
+              "toString does not expose bytesTransferred");
+        StackTraceElement[] st = {new StackTraceElement("I", "read", "I.java", 9)};
+        e.setStackTrace(st);
+        check(e.getStackTrace().length == 1 && "read".equals(e.getStackTrace()[0].getMethodName()),
+              "setStackTrace/getStackTrace round-trip");
+        try {
+            e.setStackTrace(null);
+            check(false, "setStackTrace(null) must throw NPE");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+        Exception cause = new IllegalStateException("c");
+        check(new InterruptedIOException("w").initCause(cause).getCause() == cause,
+              "initCause injects a cause on a class with no cause ctor");
+        try {
+            new InterruptedIOException("w").initCause(cause).initCause(cause);
+            check(false, "second initCause must throw");
+        } catch (IllegalStateException expected) {
+            passed++;
+        }
+        check(new InterruptedIOException().initCause(null).getCause() == null,
+              "initCause(null) permitted while the cause is unset");
+        InterruptedIOException sup = new InterruptedIOException("s");
+        sup.addSuppressed(new Exception("x"));
+        check(sup.getSuppressed().length == 1, "suppressed kept");
+        try {
+            sup.addSuppressed(sup);
+            check(false, "self-suppression must throw");
+        } catch (IllegalArgumentException expected) {
+            passed++;
+        }
+        try {
+            sup.addSuppressed(null);
+            check(false, "addSuppressed(null) must throw NPE");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+        check(InterruptedIOException.class.getSuperclass() == IOException.class,
+              "direct child of IOException");
+    }
+
+    // ---- serialization: bytesTransferred is a serialized public field ----
+    static void testSerializationContract() throws Exception {
+        check(ObjectStreamClass.lookup(InterruptedIOException.class).getSerialVersionUID()
+                  == 4020568460727500567L, "serialVersionUID == 4020568460727500567");
+        InterruptedIOException sent = new InterruptedIOException("mid");
+        sent.bytesTransferred = 512;
+        InterruptedIOException r = (InterruptedIOException) back(serOf(sent));
+        check("mid".equals(r.getMessage()), "message survives round-trip");
+        check(r.bytesTransferred == 512, "bytesTransferred survives round-trip (non-transient field)");
+        check(r.toString().equals("java.io.InterruptedIOException: mid"),
+              "toString survives round-trip");
+        check(((InterruptedIOException) back(serOf(new InterruptedIOException()))).bytesTransferred == 0,
+              "default 0 survives round-trip");
+        InterruptedIOException chained = new InterruptedIOException("w");
+        chained.initCause(new RuntimeException("r"));
+        check("r".equals(((InterruptedIOException) back(serOf(chained))).getCause().getMessage()),
+              "cause survives round-trip");
+    }
+
+    // ---- deterministic single-threaded trigger: pre-set interrupt flag ----
+    static void testDeterministicTrigger() throws Exception {
+        PipedInputStream in = new PipedInputStream();
+        PipedOutputStream out = new PipedOutputStream(in);
+        // 数据可用时：读取成功，不触发（中断标志不影响非阻塞读）
+        out.write(new byte[]{1, 2, 3});
+        Thread.currentThread().interrupt();
+        try {
+            int n = in.read(new byte[8], 0, 8);
+            check(n == 3, "available data still readable under an interrupt flag: " + n);
+        } finally {
+            Thread.interrupted();                       // clear for the next section
+        }
+        // 无数据且已置中断标志：阻塞读立即以 InterruptedIOException 失败（实测双侧一致）
+        Thread.currentThread().interrupt();
+        try {
+            in.read();
+            check(false, "interrupted blocked read must throw");
+        } catch (InterruptedIOException iio) {
+            check(iio.bytesTransferred == 0, "bytesTransferred 0 (nothing arrived)");
+            check(iio.getMessage() == null, "pipe-triggered instance has a null message");
+            check(!Thread.currentThread().isInterrupted(),
+                  "interrupt is consumed by the throw");
+        }
+        check(!Thread.currentThread().isInterrupted(), "flag cleared after the throw");
+        // 相同触发路径对字节批量读也成立
+        Thread.currentThread().interrupt();
+        try {
+            in.read(new byte[4], 0, 4);
+            check(false, "interrupted bulk read must throw");
+        } catch (InterruptedIOException iio) {
+            check(iio.bytesTransferred == 0, "bulk trigger: bytesTransferred 0");
+            passed++;
+        }
+        check(!Thread.currentThread().isInterrupted(), "flag cleared again");
+        out.close();
+        in.close();
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testThrowableProtocolAndField();
+        testSerializationContract();
+        testDeterministicTrigger();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
+

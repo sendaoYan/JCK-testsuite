@@ -22,3 +22,18 @@
 - 健壮性: 全内存 + 临时文件 finally 删除。
 
 产出：`DataOutputTest.java`（白盒 18 + 黑盒 34 断言）。
+
+## 深化追加（契约级，批次 ioC）
+
+新增维度清单（与 JDK-8 侧完全镜像；javap-27 确认本接口仍为 14 个 abstract 方法、无 static/default，无 JDK-27 特有 API）：
+
+1. **跨实现边界镜像逐字节相等**（68 字节 Arrays.equals + RAF 长度 + 逐点断言 + DataInput 端到端读回）。
+2. **writeXxx(int) 截断 parity**（双实现 34 / 56 78）。
+3. **writeUTF 65535/65536/空串 parity**。
+4. **writeUTF/writeBytes/writeChars(null) 与 RAF close 后写/读** parity（IOException "Stream Closed"）。
+5. **write(int) 低 8 位 parity**。
+6. **接口形态**（14 方法全 abstract、无 static/default）。
+
+负例矩阵与消息：同 JDK-8（无版本差异）。
+
+产出：`DataOutputTest.java` 29 → 98 断言（jtreg Passed）。

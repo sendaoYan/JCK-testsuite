@@ -47,3 +47,30 @@
 
 - 全部输入为固定字节数组，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒（继承 FilterInputStream、protected buf/pos、transferTo 存在）+ 黑盒 transferTo（JDK 9+ 方法）。
+
+## 深化追加（契约级，批次 ioC）
+
+新增维度清单（testUnreadExactMessages / testClosedMessages / testUnreadHighBits / testSkipPushbackInteraction / testAvailableCounting / testRereadPattern / testBulkReadSpansPushbackAndStream / testInterleavedSequence + checkThrowsMsg）：
+
+1. **回推满精确消息**：unread(int)/unread(byte[],off,len)/unread(byte[]) 三种形式超容量均 → IOException **"Push back buffer is full"**（双侧逐字实测一致）；失败后缓冲内容原样（1,2,9 顺序读回）。
+2. **close 后全操作精确消息**：close 幂等（双 close 不抛）；read/read(b,off,len)/unread(int)/unread(b,off,len)/available/skip/skip(负) 全部 → IOException **"Stream closed"**（注意与 FileInputStream 的 "Stream Closed" 大小写不同——这是 PushbackInputStream 自身的 ensureOpen 消息）。
+3. **unread(int) 低 8 位截断**：unread(0x141)→0x41、unread(0)→0（与 EOF -1 可区分）、unread(-1)→255。
+4. **skip×回推交互**：skip 先耗尽回推区**队头**（跳过 'x' 后读 'y'）；skip 恰耗尽回推区后接流字节；skip(10) 跨回推(3)+流(3)=6 且随后 EOF；pushback-only 流上 skip 只动缓冲。
+5. **available 算术**：= 流剩余 + 回退计数；读走一个回退字节计数减一；批量回退加 len；空流空缓冲 0。
+6. **超前读模式**：read→unread→重读同字节；unread(b,off,0) no-op。
+7. **单次 bulk read 跨回推+流**：n=5 且回退字节 LIFO 在前（b,a,c,d,e）；len < 回退数时只填区域、余序不乱。
+8. **交错序列（parser 走查）**：a,b 读出后回退 b,a 再依序读回，接 c、EOF。
+
+负例矩阵（双侧实测）：
+
+| 操作 | 异常 | 消息子串（双侧一致） |
+|---|---|---|
+| unread 超（三种形式） | IOException | Push back buffer is full |
+| close 后 read/unread/available/skip | IOException | Stream closed |
+| unread((byte[])null)/read(null) | NullPointerException | — |
+| unread(b,off,len) 越界（缓冲未满时） | IndexOutOfBoundsException | — |
+| 构造 size<=0 | IllegalArgumentException | — |
+
+版本差异：无（行为与消息双侧逐字节一致）。javap 差异仅同步修饰：JDK-8 mark/reset/close 均 synchronized，JDK-27 仅 reset/close synchronized、mark 非同步（不影响契约断言）。transferTo 覆写仅 JDK-27 存在（JDK-8 InputStream 无该方法），见 JDK-27 DESIGN。
+
+产出：`PushbackInputStreamTest.java` 18 → 73 断言（jtreg Passed）。

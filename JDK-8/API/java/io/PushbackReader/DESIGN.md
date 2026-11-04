@@ -46,3 +46,27 @@
 
 - 全部输入为固定字符串，无墙钟/随机/Locale/Charset/文件/网络依赖，headless 安全。
 - JDK-27 侧同目录额外保留反射白盒（继承 FilterReader、构造器、方法枚举）。
+
+## 深化追加（契约级）
+
+新增维度（断言 18 → 71）：
+- 回推超限矩阵：unread(int)/unread(char[])/unread(char[],off,len)/（构造后）4 种形式全 IOException **"Pushback buffer overflow"**；unread(cbuf,off,len) 的 len>capacity 报 overflow 而非 IOOBE（先查容量后查边界——实测）。
+- mark 与 reset **同一消息** IOException "mark/reset not supported"；markSupported() 恒 false，不委托底层 Reader。
+- 关闭矩阵 6 操作全 "Stream closed"。
+- skip 次序：先耗尽回推区再读底层；skip(100) 只返回实际 3；负 skip IAE "skip value is negative"。
+- EOF 处 unread 合法，下次 read 先出回推字符。
+- 混合 unread 次序：unread('a') + unread({x,y}) → LIFO 读出 "xyaS"。
+- NotReadyReader 探针（底层 ready()=false）：回推区有字符时 ready() 返回 true（不查底层）。
+- null Reader 构造即 NPE（FilterReader 构造链）；满缓冲上 unread(new char[0]) 不抛（len=0 短路）。
+- bulk read 与回推区交互（先回推区后底层拼接）。
+
+负例矩阵（实测双侧一致）：
+| 操作 | 异常 | 精确子串 |
+|---|---|---|
+| 4 种 unread 超容 | IOException | Pushback buffer overflow |
+| mark() / reset() | IOException | mark/reset not supported |
+| 关闭后 6 操作 | IOException | Stream closed |
+| skip(负数) | IllegalArgumentException | skip value is negative |
+| null Reader 构造 | NullPointerException | 类型级（JDK-27 有具名消息） |
+
+版本差异：行为契约两版一致；JDK-27 NPE 消息带参数名，按类型级断言。

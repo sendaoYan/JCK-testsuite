@@ -21,3 +21,18 @@
 5. FileDescriptor.out.sync() 成功或 SyncFailedException 均接受（非 fsync 目标平台允许失败）。
 6. equals 自反/null/裸实例互异；toString 非空。
 - 健壮性: 无环境依赖；临时文件 finally 删除。
+
+## 深化追加（契约级）
+
+新增维度（全部经 JDK-8 实测锁定）：
+- 三静态字段：二次访问同一实例（static final 身份）、类型恰为 FileDescriptor
+- toString 格式 "java.io.FileDescriptor@<hex>"；hashCode 同实例稳定
+- bare 构造器：sync → SyncFailedException 精确消息 "sync failed"；与 stdin 不等；与无关对象不等
+- RAF FD 生命周期：open valid、getFD 同实例、写后 sync 不抛、close 后 invalid、**closed fd 的 sync → SyncFailedException("sync failed")**
+- FIS/FOS 的 FD：两流 FD 互不相等（equals false）、与 stdout 不等、close 后双双 invalid
+- sync 幂等（活 fd 连续两次成功）；HashSet 身份包含；err.sync 与 out.sync 同样容错两分支
+- 白盒：final 类、sync() 在 JDK-8 是 native（27 改非 native）、in 是 static final、无接口、直接子类 Object
+
+负例矩阵：bare sync SyncFailedException("sync failed") / closed fd sync SyncFailedException("sync failed")。
+
+版本差异（8 vs 27）：sync() 的 native 修饰（8 native / 27 非 native）；其余行为（valid 生命周期、"sync failed" 消息、身份语义）双侧一致。
