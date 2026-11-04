@@ -52,6 +52,61 @@ public class Base64Test {
         testWrapStream();
         testInvalidDecode();
         testBoundaryEquivalence();
+        testNullAndDstMatrix();
+    }
+
+    static void testNullAndDstMatrix() {
+        assertThrows(NullPointerException.class, () -> Base64.getEncoder().encode((byte[]) null),
+                "encode(null) NPE");
+        assertThrows(NullPointerException.class, () -> Base64.getEncoder().encodeToString(null),
+                "encodeToString(null) NPE");
+        assertThrows(NullPointerException.class, () -> Base64.getDecoder().decode((byte[]) null),
+                "decode(null byte[]) NPE");
+        assertThrows(NullPointerException.class, () -> Base64.getDecoder().decode((String) null),
+                "decode(null String) NPE");
+        assertThrows(NullPointerException.class, () -> Base64.getEncoder().wrap(null),
+                "wrap(null OutputStream) NPE");
+        assertThrows(NullPointerException.class, () -> Base64.getDecoder().wrap(null),
+                "wrap(null InputStream) NPE");
+
+        // encode/decode into destination array (IAE when too small).
+        byte[] src = "hello".getBytes(StandardCharsets.UTF_8);
+        byte[] dst = new byte[8];
+        check(Base64.getEncoder().encode(src, dst) == 8, "encode(src,dst) returns 8");
+        check("aGVsbG8=".equals(new String(dst, StandardCharsets.US_ASCII)), "encode(src,dst) content");
+        assertThrows(IllegalArgumentException.class,
+                () -> Base64.getEncoder().encode(src, new byte[7]), "encode(src,dst) too small IAE");
+        byte[] enc = "aGVsbG8=".getBytes(StandardCharsets.US_ASCII);
+        byte[] out = new byte[5];
+        check(Base64.getDecoder().decode(enc, out) == 5, "decode(src,dst) returns 5");
+        check("hello".equals(new String(out, StandardCharsets.UTF_8)), "decode(src,dst) content");
+        assertThrows(IllegalArgumentException.class,
+                () -> Base64.getDecoder().decode(enc, new byte[4]), "decode(src,dst) too small IAE");
+
+        // ByteBuffer roundtrip.
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8));
+        java.nio.ByteBuffer e = Base64.getEncoder().encode(bb);
+        byte[] eb = new byte[e.remaining()];
+        e.get(eb);
+        check("aGVsbG8=".equals(new String(eb, StandardCharsets.US_ASCII)), "encode(ByteBuffer)");
+        java.nio.ByteBuffer d = Base64.getDecoder().decode(java.nio.ByteBuffer.wrap(eb));
+        byte[] db = new byte[d.remaining()];
+        d.get(db);
+        check("hello".equals(new String(db, StandardCharsets.UTF_8)), "decode(ByteBuffer)");
+
+        // MIME custom line length/separator; null separator NPE; base64-char separator IAE.
+        byte[] data = new byte[20];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) i;
+        byte[] sep = {'|'};
+        String custom = Base64.getMimeEncoder(4, sep).encodeToString(data);
+        check(custom.contains("|"), "custom MIME separator used");
+        check(Arrays.equals(data, Base64.getMimeDecoder().decode(custom)), "custom MIME roundtrip");
+        String noSep = Base64.getMimeEncoder(0, sep).encodeToString(data);
+        check(!noSep.contains("|") && !noSep.contains("\r\n"), "lineLength<=0 no separator");
+        assertThrows(NullPointerException.class, () -> Base64.getMimeEncoder(76, null),
+                "MIME null separator NPE");
+        assertThrows(IllegalArgumentException.class,
+                () -> Base64.getMimeEncoder(76, new byte[]{'a'}), "MIME base64-char separator IAE");
     }
 
     static void testBasic() {
