@@ -1,6 +1,7 @@
 /*
  * @test
- * @summary java.lang.annotation.ElementType conformance: white-box structure + black-box behavior.
+ * @summary java.lang.annotation.ElementType conformance: white-box structure + black-box behavior,
+ *          exact 12-constant set (JDK 27 with MODULE/RECORD_COMPONENT).
  * @run main ElementTypeTest
  */
 
@@ -55,7 +56,11 @@ public class ElementTypeTest {
             check(true, "valueOf unknown throws IAE");
         }
 
-        // ordinals are stable positions in the declaration order
+        // ordinal for every constant equals its declaration index
+        for (int i = 0; i < ElementType.values().length; i++) {
+            check(ElementType.values()[i].ordinal() == i, "ordinal " + i + " for "
+                  + ElementType.values()[i]);
+        }
         check(ElementType.TYPE.ordinal() == 0, "TYPE ordinal 0");
         check(ElementType.PACKAGE.ordinal() == 7, "PACKAGE ordinal 7");
         check(ElementType.MODULE.ordinal() == 10, "MODULE ordinal 10");
@@ -69,6 +74,7 @@ public class ElementTypeTest {
 
         // equals is identity for enum constants
         check(ElementType.valueOf("TYPE").equals(ElementType.TYPE), "equals identity");
+        check(ElementType.valueOf("TYPE") == ElementType.TYPE, "== identity");
 
         // values are usable inside @Target arrays (compile-time domain); spot-check runtime
         // membership semantics used by frameworks
@@ -78,6 +84,27 @@ public class ElementTypeTest {
             if (v == ElementType.RECORD_COMPONENT) hasRecord = true;
         }
         check(hasModule && hasRecord, "MODULE and RECORD_COMPONENT present");
+
+        // switch covers the JDK 27 superset
+        for (ElementType v : ElementType.values()) {
+            String bucket;
+            switch (v) {
+                case TYPE:            bucket = "t"; break;
+                case FIELD:           bucket = "f"; break;
+                case METHOD:          bucket = "m"; break;
+                case PARAMETER:       bucket = "p"; break;
+                case CONSTRUCTOR:     bucket = "c"; break;
+                case LOCAL_VARIABLE:  bucket = "l"; break;
+                case ANNOTATION_TYPE: bucket = "a"; break;
+                case PACKAGE:         bucket = "pk"; break;
+                case TYPE_PARAMETER:  bucket = "tp"; break;
+                case TYPE_USE:        bucket = "tu"; break;
+                case MODULE:          bucket = "mo"; break;
+                case RECORD_COMPONENT: bucket = "rc"; break;
+                default: throw new AssertionError("unexpected " + v);
+            }
+            check(bucket != null, "switch covers " + v);
+        }
     }
 
     public static void main(String[] args) throws Exception {

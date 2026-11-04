@@ -1,27 +1,29 @@
-# java.lang.annotation.AnnotationTypeMismatchException — 设计方案
+# java.lang.annotation.AnnotationTypeMismatchException — 设计方案（JDK 27）
 
 ## 1. API 功能
-RuntimeException：注解元素在类被编译后类型发生变化（重编译注解类型但使用方未重编译）时，反射读取该元素抛出：
-- 构造：`(Method element, String foundType)`
-- 查询：`element()`（发生类型不匹配的注解元素 Method）、`foundType()`（classfile 中实际发现的类型描述符）
+RuntimeException：注解元素类型在编译后变化，反射读取时抛出。
+- 唯一 public 构造器：`(Method element, String foundType)`
+- `element()`、`foundType()`
+- `serialVersionUID = 8125925355765570191L`
 
 ## 2. Java 用户如何使用
 ```java
 catch (AnnotationTypeMismatchException e) {
-    Method m = e.element();      // 哪个成员变了
-    String t = e.foundType();    // 旧类型描述符，如 "I"
+    Method m = e.element();   // 哪个成员变了
+    String t = e.foundType(); // classfile 实际发现类型描述符
 }
 ```
 
 ## 3. 开源代码实际用法调研
-- JDK `src/java.base/share/classes/sun/reflect/annotation/AnnotationType.java`：`matchToMethod` 匹配失败时抛出该异常，携带 foundType 描述符。
-- JDK `test/jdk/java/lang/annotation/AnnotationTypeMismatchException/`（编译新版注解+旧版使用类）验证真实触发路径。
-- Spring `AnnotationUtils` 对注解属性读取会透传该异常给调用方处理版本漂移。
+- JDK `sun/reflect/annotation/AnnotationType.matchToMethod`。
+- JDK `test/jdk/java/lang/annotation/AnnotationTypeMismatchException/` 双版本触发。
+- Spring `AnnotationUtils` 透传。
 
 ## 4. 测试用例设计 + 自动化实现
-白盒：RuntimeException 子类、`element()`/`foundType()` 返回类型、public 构造器签名。
-黑盒（真实触发需双版本类重编译，超出单文件确定性范围，故按规范直接构造断言读取语义）：
-- `element()` 返回传入的同一 Method 实例、`foundType()` 精确回读；
-- RuntimeException 家族可捕获；两个实例互异；
-- foundType 为描述符形态；suppression/stackTrace 机制可用。
-对应 `AnnotationTypeMismatchExceptionTest.java` 的 `testBlackBox()`。
+白盒：RuntimeException 子类、`element()`/`foundType()` 返回类型、唯一 public 构造器。
+黑盒：`element()`/`foundType()` 精确回读；message 前缀 `Incorrectly typed data found for annotation element`；null element/foundType 合法；RuntimeException 捕获；两实例互异；suppression/stackTrace。
+序列化：serialVersionUID 稳定；**JDK 27 element 为 transient** → round-trip 后 element()==null、foundType 存活。
+
+## 易错规范细节（JDK 27）
+- JDK 27 的 `element` 字段 transient：序列化 round-trip 成功且 `element()` 返回 null（javadoc：序列化后可能不可用）；JDK 8 非 transient，带真实 Method 序列化抛 NotSerializableException。
+- message 自动生成，不断言完整 message（含 Method.toString() 实现相关）。

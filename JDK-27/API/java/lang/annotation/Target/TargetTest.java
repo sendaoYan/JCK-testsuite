@@ -1,9 +1,12 @@
 /*
  * @test
- * @summary java.lang.annotation.Target conformance: white-box structure + black-box behavior.
+ * @summary java.lang.annotation.Target conformance: white-box structure + black-box behavior,
+ *          ElementType[] value(), self-targeted to ANNOTATION_TYPE, and permissive/restrictive
+ *          target semantics.
  * @run main TargetTest
  */
 
+import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -55,10 +58,10 @@ public class TargetTest {
         check(c.isAnnotationPresent(Retention.class), "has @Retention");
         check(c.getAnnotation(Retention.class).value() == RetentionPolicy.RUNTIME,
               "@Retention(RUNTIME)");
+        check(c.isAnnotationPresent(Documented.class), "@Documented on Target");
         check(c.getDeclaredMethods().length == 1, "single member");
         check(c.getDeclaredMethod("value").getReturnType() == ElementType[].class,
               "value() returns ElementType[]");
-        // self-targeted to ANNOTATION_TYPE only
         Target self = Target.class.getAnnotation(Target.class);
         check(self != null, "self-annotated");
         check(self.value().length == 1 && self.value()[0] == ElementType.ANNOTATION_TYPE,
@@ -67,7 +70,6 @@ public class TargetTest {
 
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() throws Exception {
-        // restricted annotation IS present on permitted targets
         Field f = Carrier.class.getDeclaredField("field");
         check(f.getAnnotation(OnlyField.class) != null, "@Target(FIELD) usable on field");
 
@@ -79,11 +81,9 @@ public class TargetTest {
         check(m.getParameters()[0].getAnnotation(MethodOrParam.class).value().equals("p"),
               "parameter member value");
 
-        // unrestricted annotation usable on type (no @Target = any target)
         check(TypeUse.class.getAnnotation(Anywhere.class) != null,
               "no @Target: usable on type");
 
-        // reading the Target value from the annotation declarations
         Target tf = OnlyField.class.getAnnotation(Target.class);
         check(tf != null && tf.value().length == 1 && tf.value()[0] == ElementType.FIELD,
               "OnlyField declared targets readable");
@@ -94,8 +94,6 @@ public class TargetTest {
         check(Anywhere.class.getAnnotation(Target.class) == null,
               "Anywhere has no @Target (unrestricted)");
 
-        // wrong-target usage is a compile-time error, so at runtime we verify the
-        // positive space only; assert annotations did NOT leak to other elements
         check(Carrier.class.getAnnotation(OnlyField.class) == null,
               "field-only annotation absent from class");
         check(f.getAnnotation(Anywhere.class) == null, "Anywhere not used on this field");

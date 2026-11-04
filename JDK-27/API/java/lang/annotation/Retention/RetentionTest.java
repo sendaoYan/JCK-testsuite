@@ -1,10 +1,12 @@
 /*
  * @test
- * @summary java.lang.annotation.Retention conformance: white-box structure + black-box behavior.
+ * @summary java.lang.annotation.Retention conformance: white-box structure + black-box behavior,
+ *          single member value(), and three retention policies driving runtime visibility.
  * @run main RetentionTest
  */
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -72,6 +74,12 @@ public class RetentionTest {
         Retention self = Retention.class.getAnnotation(Retention.class);
         check(self != null && self.value() == RetentionPolicy.RUNTIME,
               "Retention itself is @Retention(RUNTIME)");
+
+        // Retention is @Documented @Target(ANNOTATION_TYPE)
+        check(Retention.class.isAnnotationPresent(Documented.class), "Retention is @Documented");
+        Target t = Retention.class.getAnnotation(Target.class);
+        check(t != null && t.value().length == 1 && t.value()[0] == ElementType.ANNOTATION_TYPE,
+              "Retention is @Target(ANNOTATION_TYPE)");
 
         // retention policy drives reflection visibility:
         // SOURCE and CLASS usages are invisible to AnnotatedElement at runtime

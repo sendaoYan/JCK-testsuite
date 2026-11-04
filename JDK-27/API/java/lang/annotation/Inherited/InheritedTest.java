@@ -1,14 +1,19 @@
 /*
  * @test
- * @summary java.lang.annotation.Inherited conformance: white-box structure + black-box behavior.
+ * @summary java.lang.annotation.Inherited conformance: white-box structure + black-box behavior,
+ *          class-only inheritance, no propagation through interface implementation or method
+ *          overriding.
  * @run main InheritedTest
  */
 
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.lang.reflect.Method;
 
 public class InheritedTest {
     static int passed;
@@ -57,6 +62,25 @@ public class InheritedTest {
     static class Impl implements IfaceBase {
     }
 
+    // @Inherited does not propagate through method overriding
+    @Inherited
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.METHOD)
+    @interface MethodTag {
+    }
+
+    static class MethodBase {
+        @MethodTag
+        void work() {
+        }
+    }
+
+    static class MethodSub extends MethodBase {
+        @Override
+        void work() {
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.annotation.Inherited");
@@ -64,13 +88,16 @@ public class InheritedTest {
         check(c.getDeclaredMethods().length == 0, "marker annotation: no members");
         check(c.isAnnotationPresent(Documented.class), "@Documented on Inherited");
         check(c.isAnnotationPresent(java.lang.annotation.Target.class), "@Target on Inherited");
+        Target t = c.getAnnotation(Target.class);
+        check(t.value().length == 1 && t.value()[0] == ElementType.ANNOTATION_TYPE,
+              "@Target(ANNOTATION_TYPE)");
         check(c.isAnnotationPresent(Retention.class)
               && c.getAnnotation(Retention.class).value() == RetentionPolicy.RUNTIME,
               "@Retention(RUNTIME)");
     }
 
     // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
+    static void testBlackBox() throws Exception {
         // direct presence
         check(Base.class.getAnnotation(Tag.class) != null, "Tag on Base");
         check("onBase".equals(Base.class.getAnnotation(Tag.class).value()), "Base tag value");
@@ -114,6 +141,13 @@ public class InheritedTest {
               "IfaceTag present on the interface itself");
         check(Impl.class.getAnnotation(IfaceTag.class) == null,
               "interface inheritance not applicable");
+
+        // @Inherited does not propagate through method overriding
+        Method base = MethodBase.class.getDeclaredMethod("work");
+        Method sub = MethodSub.class.getDeclaredMethod("work");
+        check(base.getAnnotation(MethodTag.class) != null, "MethodTag on base method");
+        check(sub.getAnnotation(MethodTag.class) == null,
+              "method annotation not inherited by overriding method");
     }
 
     public static void main(String[] args) throws Exception {

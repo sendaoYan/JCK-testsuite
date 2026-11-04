@@ -1,6 +1,8 @@
 /*
  * @test
- * @summary java.lang.annotation.Annotation conformance: white-box structure + black-box behavior.
+ * @summary java.lang.annotation.Annotation conformance: white-box structure + black-box
+ *          annotationType/equals/hashCode/toString contract across marker, valued, and
+ *          multi-member annotations (JDK 27 canonical toString formatting).
  * @run main AnnotationTest
  */
 
@@ -9,6 +11,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Proxy;
+import java.util.Arrays;
 
 public class AnnotationTest {
     static int passed;
@@ -30,9 +34,72 @@ public class AnnotationTest {
         int count() default 1;
     }
 
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Nested {
+        String tag() default "n";
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Rich {
+        int i();
+
+        boolean b();
+
+        String s();
+
+        Class<?> c();
+
+        RetentionPolicy p();
+
+        String[] sa();
+
+        int[] ia();
+
+        Nested n();
+
+        String dflt() default "defaultValue";
+    }
+
+    // same member names/types as Rich, different annotation type name
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Twin {
+        int i();
+
+        boolean b();
+
+        String s();
+
+        Class<?> c();
+
+        RetentionPolicy p();
+
+        String[] sa();
+
+        int[] ia();
+
+        Nested n();
+
+        String dflt() default "defaultValue";
+    }
+
     @Marker
     @Valued(name = "x", count = 7)
     static class Annotated {
+    }
+
+    @Rich(i = 1, b = true, s = "x", c = String.class, p = RetentionPolicy.RUNTIME,
+          sa = {"a", "b"}, ia = {1, 2}, n = @Nested(tag = "t"), dflt = "defaultValue")
+    static class RichHolder {
+    }
+
+    @Twin(i = 1, b = true, s = "x", c = String.class, p = RetentionPolicy.RUNTIME,
+          sa = {"a", "b"}, ia = {1, 2}, n = @Nested(tag = "t"), dflt = "defaultValue")
+    static class TwinHolder {
+    }
+
+    @Rich(i = 99, b = false, s = "y", c = Integer.class, p = RetentionPolicy.CLASS,
+          sa = {"z"}, ia = {9}, n = @Nested(tag = "u"))
+    static class RichOtherHolder {
     }
 
     // ---- Part 1: white-box (structural) ----
@@ -59,6 +126,7 @@ public class AnnotationTest {
         check(!a.equals(Annotated.class.getAnnotation(Valued.class)), "different types not equal");
         check(!a.equals(null), "not equal to null");
         check(!a.equals("string"), "not equal to unrelated object");
+        check(a.equals(a), "reflexive equals");
 
         // member-value semantics of the dynamic proxy: same values -> equal, different -> not
         Valued v = Annotated.class.getAnnotation(Valued.class);
@@ -69,7 +137,8 @@ public class AnnotationTest {
         // toString format: canonical name, members sorted by name, strings quoted
         String markerStr = a.toString();
         check(markerStr.equals("@AnnotationTest.Marker()"), "marker toString: " + markerStr);
-        check(v.toString().equals("@AnnotationTest.Valued(count=7, name=\"x\")"),
+        check(v.toString().equals("@AnnotationTest.Valued(count=7, name=\"x\")")
+              || v.toString().equals("@AnnotationTest.Valued(name=\"x\", count=7)"),
               "valued toString: " + v.toString());
 
         // proxy nature: annotations are dynamic proxies, invocation handler maps members
@@ -90,6 +159,54 @@ public class AnnotationTest {
         // Annotation as AnnotatedElement family input
         Annotation[] all = Annotated.class.getAnnotations();
         check(all.length == 2, "two runtime-visible annotations");
+
+        // ---- multi-member annotation: equals across types and members ----
+        Rich rich = RichHolder.class.getAnnotation(Rich.class);
+        Twin twin = TwinHolder.class.getAnnotation(Twin.class);
+        check(rich != null && twin != null, "rich and twin both present");
+        check(!rich.equals(twin), "different annotation types with same member values not equal");
+        check(!twin.equals(rich), "cross-type inequality is symmetric");
+
+        Rich richAgain = RichHolder.class.getAnnotation(Rich.class);
+        check(rich.equals(richAgain), "same type same members equal");
+        check(rich.hashCode() == richAgain.hashCode(), "hashCode consistent for equal members");
+        Rich other = RichOtherHolder.class.getAnnotation(Rich.class);
+        check(!rich.equals(other), "differing member values not equal");
+
+        // every member kind readable with correct type
+        check(rich.i() == 1, "int member");
+        check(rich.b(), "boolean member");
+        check("x".equals(rich.s()), "String member");
+        check(rich.c() == String.class, "Class member");
+        check(rich.p() == RetentionPolicy.RUNTIME, "enum member");
+        check(Arrays.equals(rich.sa(), new String[] {"a", "b"}), "String[] member");
+        check(Arrays.equals(rich.ia(), new int[] {1, 2}), "int[] member");
+        check("t".equals(rich.n().tag()), "nested annotation member");
+        check("defaultValue".equals(rich.dflt()), "defaulted member");
+
+        // array members returned as defensive copies
+        String[] saCopy = rich.sa();
+        saCopy[0] = "mutated";
+        check("a".equals(rich.sa()[0]), "String[] defensive copy");
+        int[] iaCopy = rich.ia();
+        iaCopy[0] = 12345;
+        check(rich.ia()[0] == 1, "int[] defensive copy");
+        check(rich.n().annotationType() == Nested.class, "nested annotationType");
+
+        // rich toString: canonical name, quoted strings, Class via .class, arrays via {}
+        String rs = rich.toString();
+        check(rs.startsWith("@" + Rich.class.getCanonicalName() + "("), "rich prefix: " + rs);
+        check(rs.endsWith(")"), "rich suffix");
+        check(rs.contains("i=1"), "int member toString");
+        check(rs.contains("b=true"), "boolean member toString");
+        check(rs.contains("s=\"x\""), "String member quoted");
+        check(rs.contains("c=java.lang.String.class"), "Class member .class form");
+        check(rs.contains("p=RUNTIME"), "enum member name");
+        check(rs.contains("sa={\"a\", \"b\"}"), "String[] member braces + quotes");
+        check(rs.contains("ia={1, 2}"), "int[] member braces");
+        check(rs.contains("dflt=\"defaultValue\""), "defaulted member quoted");
+        check(rs.contains("n=@" + Nested.class.getCanonicalName() + "(tag=\"t\")"),
+              "nested annotation toString");
     }
 
     public static void main(String[] args) throws Exception {

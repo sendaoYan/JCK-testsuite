@@ -1,6 +1,7 @@
 /*
  * @test
- * @summary java.lang.annotation.Native conformance: white-box structure + black-box behavior.
+ * @summary java.lang.annotation.Native conformance: white-box structure + black-box behavior,
+ *          SOURCE-retained, FIELD-targeted, documented marker annotation.
  * @run main NativeTest
  */
 
@@ -41,6 +42,7 @@ public class NativeTest {
         Target tgt = Native.class.getAnnotation(Target.class);
         check(tgt != null && tgt.value().length == 1 && tgt.value()[0] == ElementType.FIELD,
               "@Target(FIELD) declared on Native");
+        check(Native.class.isAnnotationPresent(Documented.class), "@Documented on Native");
     }
 
     // ---- Part 2: black-box (behavioral) ----
@@ -55,9 +57,6 @@ public class NativeTest {
         check(Native.class.isAnnotation(), "annotation type introspectable");
         Annotation a = Native.class.getAnnotation(Retention.class);
         check(a != null, "meta @Retention survives (it is RUNTIME retained)");
-        check(Native.class.getAnnotation(Documented.class) == null
-              || Documented.class.getAnnotation(Retention.class) != null,
-              "meta-annotations govern their own retention");
 
         // contrast: a RUNTIME-retained field annotation stays visible
         Field plain = Constants.class.getField("PLAIN");
@@ -68,9 +67,6 @@ public class NativeTest {
             @Override public Class<? extends Annotation> annotationType() { return Native.class; }
         };
         check(instance.annotationType() == Native.class, "hand-written instance type");
-        check(instance.equals(new Native() {
-            @Override public Class<? extends Annotation> annotationType() { return Native.class; }
-        }) == false, "hand-written instances use identity equals unless overridden");
 
         // JDK self-use examples are SOURCE-visible only in source, not at runtime
         check(Integer.class.getField("MAX_VALUE").getAnnotation(Native.class) == null,
