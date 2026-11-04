@@ -21,7 +21,13 @@
  *    copyInto 目标数组过小抛 ArrayIndexOutOfBoundsException；setSize 变大填 null、变小截断。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Enumeration;
 import java.util.Iterator;
@@ -175,6 +181,60 @@ public class VectorTest {
         expect(ConcurrentModificationException.class, () -> sub.get(0), "subList fail-fast");
     }
 
+    @SuppressWarnings("unchecked")
+    static <E> Vector<E> roundTrip(Vector<E> v) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(v); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (Vector<E>) ois.readObject();
+        }
+    }
+
+    // ---- contract deep-dive (constructor matrix / null allowance /
+    //      serialization / cross-impl equals) -------------------------------
+
+    static void testConstructorMatrix() {
+        expect(IllegalArgumentException.class, () -> new Vector<String>(-1), "Vector(-1) IAE");
+        expect(IllegalArgumentException.class, () -> new Vector<String>(-1, 0), "Vector(-1,0) IAE");
+        expect(NullPointerException.class, () -> new Vector<String>((Collection<String>) null),
+              "Vector(null Collection) NPE");
+        Vector<String> zero = new Vector<>(0);
+        zero.add("k");
+        check(zero.size() == 1 && zero.get(0).equals("k"), "Vector(0) usable");
+        Vector<String> copy = new Vector<>(Arrays.asList("a", "b"));
+        check(copy.equals(Arrays.asList("a", "b")), "Vector(Collection) copies");
+    }
+
+    static void testNullAllowance() {
+        Vector<String> v = new Vector<>();
+        v.add(null);
+        v.addElement(null);
+        check(v.size() == 2 && v.get(0) == null && v.get(1) == null, "add/addElement accept null");
+        check(v.contains(null) && v.indexOf(null) == 0 && v.lastIndexOf(null) == 1, "null query");
+        v.insertElementAt(null, 0);
+        check(v.size() == 3 && v.get(0) == null, "insertElementAt null");
+        check(v.set(0, "x") == null, "set null returns old null");
+    }
+
+    static void testSerialization() throws Exception {
+        Vector<Integer> v = new Vector<>(Arrays.asList(1, 2, 3));
+        Vector<Integer> r = roundTrip(v);
+        check(r != v && r.equals(v), "round-trip distinct and equal");
+        r.add(4);
+        check(r.size() == 4 && v.size() == 3, "round-trip result independent");
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(Vector.class);
+        check(osc.getSerialVersionUID() == -2767605614048989439L, "Vector serialVersionUID stable");
+    }
+
+    static void testCrossImplEquals() {
+        Vector<Integer> v = new Vector<>(Arrays.asList(1, 2, 3));
+        ArrayList<Integer> al = new ArrayList<>(Arrays.asList(1, 2, 3));
+        check(v.equals(al) && al.equals(v), "Vector/ArrayList equals");
+        check(v.hashCode() == al.hashCode(), "hashCode equal across implementations");
+        al.add(4);
+        check(!v.equals(al), "!equals different content");
+    }
+
     static void testIteratorFailFast() {
         Vector<String> v = new Vector<>(Arrays.asList("a", "b"));
         Iterator<String> it = v.iterator();
@@ -261,6 +321,10 @@ public class VectorTest {
         testEqualsHashCodeSubList();
         testIteratorFailFast();
         testBlackBox();
+        testConstructorMatrix();
+        testNullAllowance();
+        testSerialization();
+        testCrossImplEquals();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

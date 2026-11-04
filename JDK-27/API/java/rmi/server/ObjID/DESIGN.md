@@ -1,22 +1,27 @@
-# java.rmi.server.ObjID 行为测试设计
+# java.rmi.server.ObjID 测试设计案
+
+> 覆盖目标：完整契约（final + Serializable、三个常量、no-arg 唯一、well-known、hashCode==objNum、toString、write/read round-trip）。
 
 ## 1. API 功能
-- 构造器：`ObjID()`（生成主机内唯一 ID）、`ObjID(int objNum)`（生成 well-known ID）。
-- 查询/转换：`hashCode()`（返回对象号）、`equals(Object)`（比较 objNum + space）、`toString()`。
-- 序列化：`write(ObjectOutput)` 写 objNum + UID；`static ObjID read(ObjectInput)` 回读。
 - 常量：`REGISTRY_ID=0`、`ACTIVATOR_ID=1`、`DGC_ID=2`。
+- 构造：`ObjID()`（唯一）、`ObjID(int objNum)`（well-known）。
+- `hashCode`/`equals`/`toString`；`write(ObjectOutput)`/`static read(ObjectInput)`。
 
-## 2. Java 用户如何使用
-- `new ObjID()` 用于导出远程对象时分配对象号；`new ObjID(42)` 用于 well-known 对象。
-- `objid.write(out)` / `ObjID.read(in)` 在 stub 中编解码对象标识。
-- `equals`/`hashCode` 用于把远程对象放入 `Hashtable` 等。
+## 2. 使用方式
+- 远程对象导出时的对象标识。
 
-## 3. 开源代码实际用法调研
-- JDK 源码 `src/java.rmi/share/classes/java/rmi/server/ObjID.java`：`hashCode()` 返回 `(int) objNum`，`toString()` 返回 `"[" + space(可选) + objNum + "]"`。
-- JDK 测试 `test/jdk/java/rmi/server/ObjID/randomIDs/RandomIDs.java`：`new ObjID().write(new ObjectOutputStream(...))` 校验随机 ID 的序列化。
-- JDK 测试 `test/jdk/java/rmi/registry/interfaceHash/InterfaceHash.java`：用 `ObjID` 标识注册表对象。
+## 3. 参考来源
+- Java SE 8/27 javadoc（`java/rmi/server/ObjID.html`）。
+- OpenJDK `test/jdk/java/rmi/server/ObjID`；JCK `api/java_rmi/server/ObjID`。
 
-## 4. 测试用例设计 + 自动化实现
-- 白盒：public final、Serializable、三常量值。
-- 黑盒：无参唯一（两实例不等）；`ObjID(42)` 定值 equals/hashCode==42/toString `"[0:0:0, 42]"`；非 ObjID/null 不等；marshal write/read 往返；Java 序列化往返。
-- 实现见 `ObjIDTest.java`。
+## 4. 测试用例设计
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | 常量 + final + Serializable | testConstantsAndStructure |
+| P0 | no-arg 唯一、equals self | testUniqueness |
+| P0 | well-known：相等、hashCode==objNum、toString 格式、null/非本类 | testWellKnown |
+| P1 | write/read round-trip（普通 + well-known） | testRoundTrip |
+
+## 关键规范细节
+- well-known `ObjID` 的 space 为 `new UID((short)0)`，故 `new ObjID(7).toString()` == `"[0:0:0, 7]"`，`hashCode() == 7`（`(int)objNum`）。
+- no-arg `ObjID` 的 space 是共享本地地址空间，toString 省略 space（形如 `[<objNum>]`）。

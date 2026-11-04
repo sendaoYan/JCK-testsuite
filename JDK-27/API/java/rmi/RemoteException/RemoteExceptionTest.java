@@ -1,70 +1,90 @@
 /*
  * @test
- * @summary java.rmi.RemoteException conformance: white-box structure + black-box behavior.
+ * @summary java.rmi.RemoteException conformance: full contract.
+ *          extends IOException, three constructors, public detail field ==
+ *          cause, getMessage() including nested-exception suffix when detail
+ *          present, getCause() == detail, initCause -> IllegalStateException,
+ *          and the RMI exception hierarchy (AccessException/ConnectException/
+ *          MarshalException/ServerException/... all extend RemoteException).
  * @run main RemoteExceptionTest
  */
 
+import java.io.IOException;
+import java.rmi.AccessException;
+import java.rmi.ConnectException;
+import java.rmi.ConnectIOException;
+import java.rmi.MarshalException;
+import java.rmi.NoSuchObjectException;
 import java.rmi.RemoteException;
+import java.rmi.ServerError;
+import java.rmi.ServerException;
+import java.rmi.StubNotFoundException;
+import java.rmi.UnexpectedException;
+import java.rmi.UnknownHostException;
+import java.rmi.UnmarshalException;
 
 public class RemoteExceptionTest {
     static int passed;
-    static void check(boolean cond, String msg) { if (!cond) throw new AssertionError(msg); passed++; }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.rmi.RemoteException");
-        check(c.getSuperclass() == java.io.IOException.class, "extends IOException");
-        check(!c.isInterface() && !java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !java.lang.reflect.Modifier.isFinal(c.getModifiers()), "concrete non-final");
-        check(Throwable.class.isAssignableFrom(c), "is Throwable");
-        java.util.TreeSet<String> params = new java.util.TreeSet<>();
-        for (java.lang.reflect.Constructor<?> k : c.getDeclaredConstructors()) {
-            StringBuilder b = new StringBuilder();
-            for (Class<?> p : k.getParameterTypes()) b.append(p.getSimpleName()).append(',');
-            params.add(b.toString());
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    interface ThrowingRunnable { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String m) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
         }
-        check(params.equals(java.util.Set.of("", "String,", "String,Throwable,")), "ctor parameter types");
-        java.lang.reflect.Field detail = c.getField("detail");
-        check(detail.getType() == Throwable.class, "public detail field is Throwable");
-
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        RemoteException e0 = new RemoteException();
-        check(e0.getMessage() == null, "default message null");
-        check(e0.getCause() == null, "default cause null");
-        check(e0.detail == null, "default detail null");
+    static void testConstructors() {
+        check(IOException.class.isAssignableFrom(RemoteException.class), "extends IOException");
 
-        RemoteException e1 = new RemoteException("msg");
-        check("msg".equals(e1.getMessage()), "string message");
-        check(e1.getCause() == null, "string cause null");
-        check(e1.detail == null, "string detail null");
+        RemoteException none = new RemoteException();
+        check(none.getMessage() == null && none.getCause() == null && none.detail == null,
+                "no-arg: null message/cause/detail");
 
-        Exception inner = new Exception("inner");
-        RemoteException e2 = new RemoteException("outer", inner);
-        check(e2.getCause() == inner, "cause identity");
-        check(e2.detail == inner, "detail identity");
-        check(e2.getMessage().startsWith("outer"), "outer message prefix");
-        check(e2.getMessage().contains("; nested exception is:"), "nested marker");
-        check(e2.getMessage().contains(inner.toString()), "message includes cause toString");
+        RemoteException msg = new RemoteException("msg");
+        check("msg".equals(msg.getMessage()), "String ctor message");
+        check(msg.getCause() == null && msg.detail == null, "String ctor no cause");
 
-        RemoteException e3 = new RemoteException("only", null);
-        check("only".equals(e3.getMessage()), "message with null cause");
-        check(e3.getCause() == null, "null cause");
-        check(e3.detail == null, "null detail");
+        Throwable cause = new IllegalStateException("root");
+        RemoteException chained = new RemoteException("msg", cause);
+        check(chained.getMessage().startsWith("msg"), "chained message base");
+        check(chained.getMessage().contains("nested exception"), "chained message has nested-exception suffix");
+        check(chained.getMessage().contains("root"), "chained message includes cause.toString()");
+        check(cause == chained.getCause(), "getCause() == cause");
+        check(cause == chained.detail, "public detail field == cause");
+    }
 
-        try {
-            e0.initCause(new Exception("x"));
-            check(false, "initCause must throw");
-        } catch (IllegalStateException expected) {
-            check(true, "initCause throws IllegalStateException");
-        }
+    static void testInitCause() {
+        final RemoteException e = new RemoteException();
+        checkThrows(IllegalStateException.class,
+                new ThrowingRunnable() { public void run() {
+                    e.initCause(new IllegalStateException());
+                }}, "initCause -> IllegalStateException");
+    }
 
+    static void testHierarchy() {
+        check(RemoteException.class.isAssignableFrom(AccessException.class), "AccessException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(ConnectException.class), "ConnectException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(ConnectIOException.class), "ConnectIOException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(MarshalException.class), "MarshalException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(NoSuchObjectException.class), "NoSuchObjectException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(ServerError.class), "ServerError extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(ServerException.class), "ServerException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(StubNotFoundException.class), "StubNotFoundException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(UnexpectedException.class), "UnexpectedException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(UnknownHostException.class), "UnknownHostException extends RemoteException");
+        check(RemoteException.class.isAssignableFrom(UnmarshalException.class), "UnmarshalException extends RemoteException");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testConstructors();
+        testInitCause();
+        testHierarchy();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

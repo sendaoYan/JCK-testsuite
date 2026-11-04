@@ -18,6 +18,10 @@
  *    search 用 equals（非 ==）判等。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.EmptyStackException;
 import java.util.Iterator;
 import java.util.Stack;
@@ -41,6 +45,15 @@ public class StackTest {
                 throw new AssertionError(msg + ": expected " + type.getSimpleName()
                         + " but got " + t.getClass().getName(), t);
             }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <E> Stack<E> roundTrip(Stack<E> s) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(s); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (Stack<E>) ois.readObject();
         }
     }
 
@@ -110,6 +123,63 @@ public class StackTest {
         check(s.capacity() >= 3, "inherited capacity");
     }
 
+    // ---- contract deep-dive (equals-based search / null allowance / clone /
+    //      serialization) ----------------------------------------------------
+
+    static final class Key {
+        final String v;
+        Key(String v) { this.v = v; }
+        public boolean equals(Object o) { return o instanceof Key && ((Key) o).v.equals(v); }
+        public int hashCode() { return v.hashCode(); }
+    }
+
+    static void testSearchSemantics() {
+        Stack<Key> s = new Stack<>();
+        s.push(new Key("a"));
+        s.push(new Key("b"));
+        s.push(new Key("k"));
+        check(s.search(new Key("k")) == 1, "search uses equals, not identity");
+        check(s.search(new Key("b")) == 2, "search middle by equals");
+        check(s.search(new Key("zz")) == -1, "search missing by equals");
+
+        Stack<String> n = new Stack<>();
+        n.push("a");
+        n.push(null);
+        n.push("b");
+        check(n.search(null) == 2, "search(null) finds null element position");
+    }
+
+    static void testNullAllowance() {
+        Stack<String> s = new Stack<>();
+        check(s.push(null) == null, "push(null) allowed returns null");
+        check(s.pop() == null, "pop returns pushed null");
+    }
+
+    static void testClone() {
+        Stack<Integer> s = new Stack<>();
+        s.push(1);
+        s.push(2);
+        @SuppressWarnings("unchecked")
+        Stack<Integer> clone = (Stack<Integer>) s.clone();
+        check(clone != s, "clone distinct object");
+        check(clone.equals(s) && clone.size() == 2, "clone content equal");
+        clone.push(3);
+        check(clone.size() == 3 && s.size() == 2, "clone structural independence");
+    }
+
+    static void testSerialization() throws Exception {
+        Stack<Integer> s = new Stack<>();
+        s.push(1);
+        s.push(2);
+        s.push(3);
+        Stack<Integer> r = roundTrip(s);
+        check(r != s && r.equals(s), "round-trip distinct and equal");
+        check(r.pop() == 3 && r.pop() == 2 && r.pop() == 1, "round-trip preserves LIFO");
+        check(r.empty(), "round-trip drained");
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(Stack.class);
+        check(osc.getSerialVersionUID() == 1224463164541339165L, "Stack serialVersionUID stable");
+    }
+
     
     static void testBlackBox() throws Exception {
         testPushPop();
@@ -120,6 +190,10 @@ public class StackTest {
 public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSearchSemantics();
+        testNullAllowance();
+        testClone();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

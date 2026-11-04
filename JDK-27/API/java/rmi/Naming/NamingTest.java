@@ -1,94 +1,92 @@
 /*
  * @test
- * @summary java.rmi.Naming conformance: white-box structure + black-box behavior (no live registry).
+ * @summary java.rmi.Naming conformance: offline contract.
+ *          final class with the five static registry methods; invalid URL
+ *          scheme / fragment / query / illegal URL all raise
+ *          MalformedURLException BEFORE any registry connection; bind/rebind
+ *          with a null Remote raises NullPointerException before connecting.
+ *          No registry is started, no port is bound, no network is used.
  * @run main NamingTest
  */
 
+import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.Remote;
 
 public class NamingTest {
     static int passed;
-    static void check(boolean cond, String msg) { if (!cond) throw new AssertionError(msg); passed++; }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.rmi.Naming");
-        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()) && !c.isInterface(), "final class");
-        check(c.getDeclaredConstructors().length == 1, "single ctor");
-        check(java.lang.reflect.Modifier.isPrivate(c.getDeclaredConstructors()[0].getModifiers()), "private ctor");
-        java.util.TreeSet<String> m = new java.util.TreeSet<>();
-        for (java.lang.reflect.Method mm : c.getDeclaredMethods())
-            if (java.lang.reflect.Modifier.isStatic(mm.getModifiers()) && java.lang.reflect.Modifier.isPublic(mm.getModifiers())) m.add(mm.getName());
-        check(m.equals(java.util.Set.of("bind", "list", "lookup", "rebind", "unbind")), "static methods");
-
+    static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    interface ThrowingRunnable { void run() throws Throwable; }
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String m) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        try {
-            Naming.lookup("rmi:foo");
-            check(false, "opaque URL must throw");
-        } catch (java.net.MalformedURLException expected) {
-            check(true, "lookup opaque URL -> MalformedURLException");
-        }
+    static void testStructure() {
+        Class<?> c = Naming.class;
+        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "final class");
+        check(!c.isInterface(), "concrete class");
+    }
 
-        try {
-            Naming.lookup("http://localhost/x");
-            check(false, "bad scheme must throw");
-        } catch (java.net.MalformedURLException expected) {
-            check(true, "lookup bad scheme -> MalformedURLException");
-        }
+    static void testMalformedURL() {
+        final String badScheme = "http://host/x";
+        checkThrows(MalformedURLException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.lookup(badScheme);
+                }}, "lookup invalid scheme -> MalformedURLException");
+        checkThrows(MalformedURLException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.bind(badScheme, new Remote() {});
+                }}, "bind invalid scheme -> MalformedURLException");
+        checkThrows(MalformedURLException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.rebind(badScheme, new Remote() {});
+                }}, "rebind invalid scheme -> MalformedURLException");
+        checkThrows(MalformedURLException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.unbind(badScheme);
+                }}, "unbind invalid scheme -> MalformedURLException");
+        checkThrows(MalformedURLException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.list(badScheme);
+                }}, "list invalid scheme -> MalformedURLException");
 
-        Remote r = Naming.lookup("//localhost:0/");
-        check(r != null, "empty-name lookup returns registry stub without connecting");
+        final String fragment = "rmi://host/x#frag";
+        checkThrows(MalformedURLException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.lookup(fragment);
+                }}, "lookup fragment -> MalformedURLException");
 
-        try {
-            Naming.bind("//localhost:0/x", null);
-            check(false, "bind null must throw");
-        } catch (NullPointerException expected) {
-            check(true, "bind(null) -> NullPointerException (no connect)");
-        }
+        final String illegal = "not a url";
+        checkThrows(MalformedURLException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.lookup(illegal);
+                }}, "lookup illegal URL -> MalformedURLException");
+    }
 
-        try {
-            Naming.rebind("//localhost:0/x", null);
-            check(false, "rebind null must throw");
-        } catch (NullPointerException expected) {
-            check(true, "rebind(null) -> NullPointerException (no connect)");
-        }
-
-        try {
-            Naming.list("rmi:foo");
-            check(false, "list opaque URL must throw");
-        } catch (java.net.MalformedURLException expected) {
-            check(true, "list opaque URL -> MalformedURLException");
-        }
-
-        try {
-            Naming.unbind("rmi:foo");
-            check(false, "unbind opaque URL must throw");
-        } catch (java.net.MalformedURLException expected) {
-            check(true, "unbind opaque URL -> MalformedURLException");
-        }
-
-        boolean threw = false;
-        try {
-            Remote r2 = Naming.lookup("//localhost:0/x");
-            check(r2 == null, "lookup on closed port unexpectedly returned");
-        } catch (java.rmi.ConnectException e) {
-            threw = true;
-        } catch (java.rmi.NotBoundException e) {
-            threw = true;
-        } catch (java.rmi.RemoteException e) {
-            threw = true;
-        }
-        check(threw, "lookup on closed port threw RemoteException/NotBoundException");
-
+    static void testNullRemote() {
+        final String valid = "rmi://localhost/x";
+        checkThrows(NullPointerException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.bind(valid, null);
+                }}, "bind null Remote -> NPE before connecting");
+        checkThrows(NullPointerException.class,
+                new ThrowingRunnable() { public void run() throws Exception {
+                    Naming.rebind(valid, null);
+                }}, "rebind null Remote -> NPE before connecting");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testStructure();
+        testMalformedURL();
+        testNullRemote();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

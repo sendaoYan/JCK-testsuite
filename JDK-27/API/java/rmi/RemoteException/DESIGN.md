@@ -1,25 +1,27 @@
-# java.rmi.RemoteException 行为测试设计
+# java.rmi.RemoteException 测试设计案
+
+> 覆盖目标：完整契约（extends IOException、三构造器、public detail、getMessage 嵌套后缀、initCause 禁止、RMI 异常层次）。
 
 ## 1. API 功能
-`RemoteException` 是 RMI 通信相关异常的公共父类，继承 `java.io.IOException`。
-- 构造器：`RemoteException()`、`RemoteException(String)`、`RemoteException(String, Throwable)`。
-- 公共字段 `detail`（Throwable）：构造时传入的 cause；`getCause()` 返回 `detail`。
-- `getMessage()`：无 cause 时返回父类消息；有 cause 时返回「消息 + "; nested exception is: \n\t" + detail.toString()」。
-- `initCause()` 恒抛 `IllegalStateException`（构造器已调用 `initCause(null)` 禁止后续设置）。
+- 构造：`()`、`(String)`、`(String, Throwable)`。
+- 字段：`public Throwable detail`；`getMessage()`、`getCause()`。
 
-## 2. Java 用户如何使用
-- 自定义远程接口方法 `throws RemoteException`；实现里 `throw new RemoteException("op failed", e);`。
-- 客户端 `catch (RemoteException e) { e.getCause(); e.getMessage(); }`。
+## 2. 使用方式
+- 远程调用失败的公共超类；带 cause 时 detail 字段保存被包裹异常。
 
-## 3. 开源代码实际用法调研
-- JDK 测试 `test/jdk/java/rmi/RemoteException/chaining/Chaining.java`（bug 4416970）：断言 `detail` 字段 == cause、`getCause()` == cause、`initCause` 抛 `IllegalStateException`，并验证「消息 = 前缀 + "; nested exception is: \n\t" + cause」。
-- 类定义 `src/java.rmi/share/classes/java/rmi/RemoteException.java`。
+## 3. 参考来源
+- Java SE 8/27 javadoc（`java/rmi/RemoteException.html`）。
+- JCK `api/java_rmi/RemoteException` + 各子类目录。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒部分（RemoteExceptionTest.testBlackBox）覆盖：
-- 无参构造：message/cause/detail 均为 null。
-- String 构造：message 等于入参、cause/detail 为 null。
-- (String, Throwable) 构造：cause==detail==同一对象、消息前缀 + 嵌套标记 + 含 cause.toString()。
-- (String, null)：等价 String 构造。
-- `initCause()` 抛 `IllegalStateException`。
-白盒部分验证继承 IOException、非抽象/非 final、三个构造器形态、公共 `detail` 字段类型为 Throwable。
+## 4. 测试用例设计
+| 优先级 | 测试点 | 用例方法 |
+|---|---|---|
+| P0 | extends IOException + 三构造器 + message/detail/cause | testConstructors |
+| P0 | 带 cause 时 getMessage 含 "nested exception" 后缀 | testConstructors |
+| P0 | initCause→IllegalStateException | testInitCause |
+| P1 | RMI 异常层次（Access/Connect/Marshal/Server 等均 extends RemoteException） | testHierarchy |
+
+## 关键规范细节
+- `RemoteException(String, Throwable)` 置 `detail=cause`；`getCause()` 返回 `detail`。
+- 有 detail 时 `getMessage()` 返回 `"msg; nested exception is: \n\t" + detail.toString()`（不是裸 msg）。
+- 构造器内部 `initCause(null)` 禁止后续 `initCause`，再调用 `initCause` 抛 `IllegalStateException`。
