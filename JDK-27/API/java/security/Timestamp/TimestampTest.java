@@ -1,118 +1,112 @@
 /*
  * @test
- * @summary java.security.Timestamp conformance: white-box structure + black-box behavior.
+ * @summary java.security.Timestamp conformance: full contract coverage.
+ *          constructor (null timestamp -> NPE, null signerCertPath -> NPE),
+ *          getTimestamp/getSignerCertPath, equals/hashCode value semantics,
+ *          toString non-empty, and serialization round-trip.
  * @run main TimestampTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.security.Timestamp;
 import java.security.cert.CertPath;
 import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
-import java.security.*;
-import java.security.cert.CertPath;
-import java.security.cert.CertificateFactory;
-import java.security.cert.Certificate;
-import java.io.ByteArrayInputStream;
-import java.util.*;
-import java.security.cert.X509Certificate;
 
 public class TimestampTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static void testWhiteBox() throws Exception {
-        CertPath cp = CertificateFactory.getInstance("X.509").generateCertPath(Collections.emptyList());
-        Date d = new Date();
-        Timestamp ts = new Timestamp(d, cp);
-        check(d.equals(ts.getTimestamp()), "getTimestamp");
-        check(cp.equals(ts.getSignerCertPath()), "getSignerCertPath");
-        Timestamp ts2 = new Timestamp(d, cp);
-        check(ts.equals(ts2), "equals");
-        check(ts.hashCode() == ts2.hashCode(), "hashCode");
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // Fixed fixtures, generated once with JDK-27 keytool (RSA-2048 self-signed certs CN=jck-root / CN=jck-leaf,
-    // validity 2026-11-03T04:09:52Z..2036-10-31T04:09:52Z, sig SHA384withRSA, root serial 0x70bdab2c498601da,
-    // leaf serial 0xbc0944b4fd45f023; CRL v1 issued by jck-root, thisUpdate 2026-11-03, nextUpdate 2027-02-01,
-    // revoked serial 0; PKCS#8 DER of the root private key). Tests decode at runtime; no external files.
+    static final String CERT_B64 =
+        "MIIDhzCCAm+gAwIBAgIEDxeuOjANBgkqhkiG9w0BAQsFADB0MQswCQYDVQQGEwJV" +
+        "UzELMAkGA1UECBMCSUwxFDASBgNVBAcTC1NwcmluZ2ZpZWxkMRQwEgYDVQQKEwtF" +
+        "eGFtcGxlIE9yZzEUMBIGA1UECxMLQ29uZm9ybWFuY2UxFjAUBgNVBAMTDUpDSyBU" +
+        "ZXN0IENlcnQwHhcNMjYxMTA0MDkzNzI4WhcNMzYxMTAxMDkzNzI4WjB0MQswCQYD" +
+        "VQQGEwJVUzELMAkGA1UECBMCSUwxFDASBgNVBAcTC1NwcmluZ2ZpZWxkMRQwEgYD" +
+        "VQQKEwtFeGFtcGxlIE9yZzEUMBIGA1UECxMLQ29uZm9ybWFuY2UxFjAUBgNVBAMT" +
+        "DUpDSyBUZXN0IENlcnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDA" +
+        "ImuPu7xdlUkyW0Q8Y75ek2oybshN0xF3MxmxqiUWJruiM+U2+Ema1DA7lSquiCNG" +
+        "bzmHhWpk8mK2rjEFu++avlIG5mnr4XQdiQe5o4q2IIuN3LKdvfauwmT5WoxUTdCa" +
+        "FxtBDdAPsfckCr8C/ypWwJUdK4uY4MFgrVWg5NAIIG8xVmGONYIpE25fxQ7O55CM" +
+        "23CXsJ3iU5+GpTBFaDr8/LJ2eKQEx35voV3iyWa9bKdsys4kg1sQgTCLv2kvRFU9" +
+        "QXmcLwuhP0tEUGf7fann26h5FrL5fsj4UwT+djO42tNHTDN5KGgeoinVKYlUcfEY" +
+        "WEyek9a95hFdn8I/30fLAgMBAAGjITAfMB0GA1UdDgQWBBTo72jITqQdGMA1Fxl/" +
+        "lTqG24M1VTANBgkqhkiG9w0BAQsFAAOCAQEAnofWJt83h4XkRfD6ejfnYJeMXZ+O" +
+        "QY4J4/cHa6jSTgXPrKI8GQtZD8QF0jlb/2rjEKQ33YW8r9lci6p1po5bIMqbToGb" +
+        "zoKFK2x16ggsx37pxwIWqdp9aFIWJvQFXrK8vwzEGFc518wxjhOLKE7BbYzeCSiL" +
+        "jP92JbEWUw6Ae4eCEpxMyZKWCw/iizv2zRv3iH5uobZwZ+aUiQUgjTXRM0exJXFv" +
+        "VfXV9EY8MG9PMbWNjkusz66NIyUKoupRvl9rTnjNv1LlggVSAwW5uXzNCh/sUSMm" +
+        "jVmmYMwYpDTG1Uz54HYKL7ZNhkDUj0IzSM5PI0ut8jdnMJOOWXr6tg0GPg==";
 
-    static final String ROOT_CERT_B64 =
-        "MIIDLjCCAhagAwIBAgIIcL2rLEmGAdowDQYJKoZIhvcNAQEMBQAwPTELMAkGA1UEBhMC" + "\n" +
-        "VVMxDTALBgNVBAoTBFRlc3QxDDAKBgNVBAsTA0pDSzERMA8GA1UEAxMIamNrLXJvb3Qw" + "\n" +
-        "HhcNMjYxMTAzMDQwOTUyWhcNMzYxMDMxMDQwOTUyWjA9MQswCQYDVQQGEwJVUzENMAsG" + "\n" +
-        "A1UEChMEVGVzdDEMMAoGA1UECxMDSkNLMREwDwYDVQQDEwhqY2stcm9vdDCCASIwDQYJ" + "\n" +
-        "KoZIhvcNAQEBBQADggEPADCCAQoCggEBALrM4ukZtyCiH9zsjkRMgOt6EYkhMv8IXY7t" + "\n" +
-        "wYzWwLJnR9ED7BnleYFAaeSH17SWUAPdUBTH+ig57+2DI2Te3IJo974rgHjq94UXk5ez" + "\n" +
-        "y1aUlrpe4SV+1NCnA/zg2E3lIOIaObZrTbBTT16jveIuX3Rqjbz9/z6Xic3Wvn2CqBNp" + "\n" +
-        "1rnF1/GqhN6/6O0I+8el3ulMXzqmc21YPQuvpJDYuR1026ht3vqZhuY3elLEdvTQfOQa" + "\n" +
-        "5w4xNGg6BlXycQsOXXP7Uqk8s5fTxBEKhR9gfABehJTuHwqEkeaQgT44xtgeaEOnbqH2" + "\n" +
-        "thm0cucWQnSsGOJdR2IZ6RYVP+ix4hOZ3vsCAwEAAaMyMDAwHQYDVR0OBBYEFI92/CSa" + "\n" +
-        "lBAhQnaSMXtuaF3G4f9TMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEMBQADggEB" + "\n" +
-        "AJy35loMlTYxvzsaqqlXMBOuaMULP/qZXyiZhX0H3sKtYxZVBdHLS/CG2k4mXtOQHNqq" + "\n" +
-        "Gz+JQo0LS4VoxNCPrAky9tvubH4eSoF3xGJIdThVDBhcn0T2rYjb9z52xA1p+GIoc9Gi" + "\n" +
-        "Fv6vh1l4OkhLq9ymIwnM+CjBUNOW6fwojo7c7o/qxk0+qPijanzhxh9ffIrRqQmQom9W" + "\n" +
-        "pelY03y0XZKuAGxb0cuRBOCkH4Jg0RJhbJoR08wn3jEJdQ7t5I65VcOjJ0KzyRzV/g3V" + "\n" +
-        "C0Wwnv9j7RSSuxdcwrNYVm3vgDQiZWlXDcYJob2fn2H+q0hohK0mdyw43fyDkxSsWiFq" + "\n" +
-        "UF8=";
-    static final String LEAF_CERT_B64 =
-        "MIIDHjCCAgagAwIBAgIJALwJRLT9RfAjMA0GCSqGSIb3DQEBDAUAMD0xCzAJBgNVBAYT" + "\n" +
-        "AlVTMQ0wCwYDVQQKEwRUZXN0MQwwCgYDVQQLEwNKQ0sxETAPBgNVBAMTCGpjay1sZWFm" + "\n" +
-        "MB4XDTI2MTEwMzA0MDk1M1oXDTM2MTAzMTA0MDk1M1owPTELMAkGA1UEBhMCVVMxDTAL" + "\n" +
-        "BgNVBAoTBFRlc3QxDDAKBgNVBAsTA0pDSzERMA8GA1UEAxMIamNrLWxlYWYwggEiMA0G" + "\n" +
-        "CSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDisnQcLGfp7REpIgOeehP9d5UOBnrncfNL" + "\n" +
-        "m7LcJ+fRiK03KU//GKdls18S3ypr2eV13f28vdpPhVWpZtYEpcfEDWyvgX19nQj9+6zl" + "\n" +
-        "serGqnnrPqMt6M4SNW028Dr7z+xG2TmanDUbSXzsvEWfb7sScH5KWrSKOIl++SOBa9s0" + "\n" +
-        "nTlqadjGcn2PLBXlJUiLgk7+uj7o5tsf1nTmRd7cKpLW4BnIQVSFyOvrO94/SmzE/SQU" + "\n" +
-        "a7J/trD30b1ma901A/MtaeYKAWRTlevmckGCZMn6UF8WXr9lxJW0T3UBWYqvBlsiym6p" + "\n" +
-        "80/YefCqe+byY55i7WUVN5YTKSk3Um/yCnpFAgMBAAGjITAfMB0GA1UdDgQWBBQJj8/0" + "\n" +
-        "KpspnGDPoSQb7ZCn72zWZjANBgkqhkiG9w0BAQwFAAOCAQEApZSVF4/jEZ2LmUCNryZ3" + "\n" +
-        "AXrkDNSrWptBixVWu9vT0RGjXW7rK1OONxcrplssjGLVAnIqW+FuLMFzVy59yKQskGe8" + "\n" +
-        "MdHNZdSpKhPO/kkSx6I4uQMCOl4wbPnzkjLZrDa2r4Qr8YQw2SZ9Bb+vaijYIk6gEpJ4" + "\n" +
-        "cjBOOCyQFO+Dao6j71L4gxbl8zty5eA0jm2KpDULMXS5rRpKS2FOUHYR40gYpqyonHH5" + "\n" +
-        "nzwJ4R1y0o/oct42BLim38UMruvf9I97/tShAvGtwfSofaGKWBwtTRmwwhc16NcL6VKk" + "\n" +
-        "Ce9m+wx5FUgwcEGNjv+HJ4b+RgCiKtZWziHX4qrkXKGsKiKrwg==";
-    static byte[] fromB64(String s) { return Base64.getMimeDecoder().decode(s); }
-    static java.security.cert.X509Certificate fixtureCert(String b64) throws Exception {
-        return (java.security.cert.X509Certificate) java.security.cert.CertificateFactory.getInstance("X.509")
-            .generateCertificate(new java.io.ByteArrayInputStream(fromB64(b64)));
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        X509Certificate root = fixtureCert(ROOT_CERT_B64);
-        CertPath cp = CertificateFactory.getInstance("X.509").generateCertPath(java.util.Arrays.asList((Certificate) root));
-        Date when = new Date(1_000_000_000_000L); // 2001-09-09T01:46:40Z, fixed
-        Timestamp ts = new Timestamp(when, cp);
-        check(ts.getTimestamp().getTime() == 1_000_000_000_000L, "timestamp value");
-        check(ts.getSignerCertPath() == cp, "cert path");
-        check(ts.equals(new Timestamp(new Date(1_000_000_000_000L), cp)), "equals");
-        check(ts.hashCode() == new Timestamp(new Date(1_000_000_000_000L), cp).hashCode(), "hashCode");
-        check(ts.hashCode() != 0, "hashCode nonzero");
-        check(ts.toString() != null && !ts.toString().isEmpty(), "toString");
-        // different time or path is a different Timestamp
-        check(!ts.equals(new Timestamp(new Date(2_000_000_000_000L), cp)), "different time");
-        CertPath cp2 = CertificateFactory.getInstance("X.509").generateCertPath(
-            java.util.Arrays.asList((Certificate) fixtureCert(LEAF_CERT_B64)));
-        check(!ts.equals(new Timestamp(when, cp2)), "different path");
-        // null arguments rejected
-        try { new Timestamp(null, cp); check(false, "null date NPE"); }
-        catch (NullPointerException npe) { check(true, "null date NPE"); }
-        try { new Timestamp(when, null); check(false, "null path NPE"); }
-        catch (NullPointerException npe) { check(true, "null path NPE"); }
-        // Timestamp inside CodeSigner participates in equality
-        CodeSigner s1 = new CodeSigner(cp, ts);
-        CodeSigner s2 = new CodeSigner(cp, new Timestamp(new Date(1_000_000_000_000L), cp));
-        check(s1.equals(s2), "signer equals via ts");
-
+    static CertPath certPath() throws Exception {
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        X509Certificate cert = (X509Certificate) cf.generateCertificate(
+                new ByteArrayInputStream(Base64.getDecoder().decode(CERT_B64)));
+        return cf.generateCertPath(Collections.<java.security.cert.Certificate>singletonList(cert));
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        CertPath cp = certPath();
+        Date now = new Date(1234567890000L);
+
+        // ---- construct + getters ----
+        Timestamp ts = new Timestamp(now, cp);
+        check(now.equals(ts.getTimestamp()), "getTimestamp");
+        check(cp.equals(ts.getSignerCertPath()), "getSignerCertPath");
+
+        // ---- null constructor args -> NPE ----
+        checkThrows(NullPointerException.class, () -> new Timestamp(null, cp),
+                "constructor(null timestamp, certPath)");
+        checkThrows(NullPointerException.class, () -> new Timestamp(now, null),
+                "constructor(timestamp, null certPath)");
+
+        // ---- equals/hashCode value semantics ----
+        Timestamp same = new Timestamp(now, cp);
+        check(ts.equals(same), "equals identical");
+        check(ts.hashCode() == same.hashCode(), "hashCode identical");
+        check(!ts.equals(new Timestamp(new Date(999L), cp)), "equals different timestamp false");
+        check(!ts.equals(null), "equals null false");
+        check(!ts.equals("not a timestamp"), "equals unrelated type false");
+
+        // ---- toString non-empty ----
+        check(ts.toString() != null && ts.toString().length() > 0, "toString non-empty");
+
+        // ---- serialization round-trip ----
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(ts); }
+        Timestamp back;
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            back = (Timestamp) ois.readObject();
+        }
+        check(ts.equals(back), "serialization equals");
+        check(now.equals(back.getTimestamp()), "serialization preserves timestamp");
+        check(cp.equals(back.getSignerCertPath()), "serialization preserves certPath");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

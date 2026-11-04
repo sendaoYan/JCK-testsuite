@@ -1,19 +1,20 @@
-# java.security.AlgorithmParameterGenerator 黑盒行为测试设计
+# AlgorithmParameterGenerator — 设计案
 
 ## 1. API 功能
-- 工厂：`getInstance(String)`、`getInstance(String,String)`、`getInstance(String,Provider)`。
-- 初始化：`init(int)`、`init(int,SecureRandom)`、`init(AlgorithmParameterSpec)`、`init(AlgorithmParameterSpec,SecureRandom)`。
-- 生成：`generateParameters()`；查询 `getAlgorithm()`、`getProvider()`。
+生成算法参数（AlgorithmParameters）。getInstance(算法[, 提供者]) + getAlgorithm/getProvider + init(大小/参数规范[, SecureRandom]) + generateParameters。
 
-## 2. Java 用户如何使用
-`AlgorithmParameterGenerator.getInstance("DSA")` → `init(2048)` → `generateParameters()` 得到 AlgorithmParameters，再 `getParameterSpec(DSAParameterSpec.class)`。
+## 2. 使用方式
+`AlgorithmParameterGenerator.getInstance("DiffieHellman")` 或 `"DSA"`（JDK-8 标准实现仅支持这两种），init 后 `generateParameters()`。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/java/security/...` 及 `test/jdk/com/sun/crypto/provider/...` 用 `AlgorithmParameterGenerator` 生成 DH/DSA 参数。
-- 实现权威：`src/java.base/share/classes/java/security/AlgorithmParameterGenerator.java`。
+## 3. 参考来源
+- javadoc `java.security.AlgorithmParameterGenerator`。
+- JCK runtime-8b `api/java_security/AlgorithmParameterGenerator/`。
 
-## 4. 测试用例设计 + 自动化实现
-- DSA：`init(2048)` 后 `generateParameters()` 非空、算法名 "DSA"；`getParameterSpec(DSAParameterSpec.class)` 的 p/q/g 非空且 p 位长 2048。
-- `init(int,SecureRandom)` 变体、显式 provider getInstance。
-- 白盒：concrete，含 getAlgorithm/getInstance/getProvider/init/generateParameters。
-- 注：JDK-27 中 "AES"/"EC" 无 AlgorithmParameterGenerator（实测 NoSuchAlgorithmException），故用 "DSA"。
+## 4. 测试用例设计 + 易错规范细节
+- 标准算法：DiffieHellman（SunJCE）、DSA（SUN）；AES/DES/RSA 无 AlgorithmParameterGenerator 实现。
+- getInstance(null)→NPE；getInstance("")→NoSuchAlgorithmException；getInstance("NoSuch")→NoSuchAlgorithmException。
+- getInstance(算法, (Provider)null)→IllegalArgumentException；getInstance(null, "SUN")→NPE。
+- init(int)+generateParameters（DH 512 / DSA 1024）；init(DHGenParameterSpec)（DH）；init(int, SecureRandom)（DSA）。
+- 生成参数 getAlgorithm 分别为 "DH"/"DSA"；DSA 参数可解出 DSAParameterSpec（p/q/g 非空、p 位数=请求值）。
+- init((AlgorithmParameterSpec)null)→InvalidAlgorithmParameterException；init(-1)→InvalidParameterException。
+- 易错点：DHGenParameterSpec 在 javax.crypto.spec 包；getInstance 的 provider 重载为 IllegalArgumentException 而非 NPE。

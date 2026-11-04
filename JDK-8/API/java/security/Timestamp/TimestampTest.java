@@ -1,8 +1,23 @@
 /*
  * @test
- * @summary java.security.Timestamp conformance: class hierarchy and methods.
+ * @summary java.security.Timestamp conformance: full contract coverage.
+ *          constructor (null timestamp -> NPE, null signerCertPath -> NPE),
+ *          getTimestamp/getSignerCertPath, equals/hashCode value semantics,
+ *          toString non-empty, and serialization round-trip.
  * @run main TimestampTest
  */
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.security.Timestamp;
+import java.security.cert.CertPath;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.Date;
 
 public class TimestampTest {
     static int passed;
@@ -12,15 +27,86 @@ public class TimestampTest {
         passed++;
     }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    static final String CERT_B64 =
+        "MIIDhzCCAm+gAwIBAgIEDxeuOjANBgkqhkiG9w0BAQsFADB0MQswCQYDVQQGEwJV" +
+        "UzELMAkGA1UECBMCSUwxFDASBgNVBAcTC1NwcmluZ2ZpZWxkMRQwEgYDVQQKEwtF" +
+        "eGFtcGxlIE9yZzEUMBIGA1UECxMLQ29uZm9ybWFuY2UxFjAUBgNVBAMTDUpDSyBU" +
+        "ZXN0IENlcnQwHhcNMjYxMTA0MDkzNzI4WhcNMzYxMTAxMDkzNzI4WjB0MQswCQYD" +
+        "VQQGEwJVUzELMAkGA1UECBMCSUwxFDASBgNVBAcTC1NwcmluZ2ZpZWxkMRQwEgYD" +
+        "VQQKEwtFeGFtcGxlIE9yZzEUMBIGA1UECxMLQ29uZm9ybWFuY2UxFjAUBgNVBAMT" +
+        "DUpDSyBUZXN0IENlcnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDA" +
+        "ImuPu7xdlUkyW0Q8Y75ek2oybshN0xF3MxmxqiUWJruiM+U2+Ema1DA7lSquiCNG" +
+        "bzmHhWpk8mK2rjEFu++avlIG5mnr4XQdiQe5o4q2IIuN3LKdvfauwmT5WoxUTdCa" +
+        "FxtBDdAPsfckCr8C/ypWwJUdK4uY4MFgrVWg5NAIIG8xVmGONYIpE25fxQ7O55CM" +
+        "23CXsJ3iU5+GpTBFaDr8/LJ2eKQEx35voV3iyWa9bKdsys4kg1sQgTCLv2kvRFU9" +
+        "QXmcLwuhP0tEUGf7fann26h5FrL5fsj4UwT+djO42tNHTDN5KGgeoinVKYlUcfEY" +
+        "WEyek9a95hFdn8I/30fLAgMBAAGjITAfMB0GA1UdDgQWBBTo72jITqQdGMA1Fxl/" +
+        "lTqG24M1VTANBgkqhkiG9w0BAQsFAAOCAQEAnofWJt83h4XkRfD6ejfnYJeMXZ+O" +
+        "QY4J4/cHa6jSTgXPrKI8GQtZD8QF0jlb/2rjEKQ33YW8r9lci6p1po5bIMqbToGb" +
+        "zoKFK2x16ggsx37pxwIWqdp9aFIWJvQFXrK8vwzEGFc518wxjhOLKE7BbYzeCSiL" +
+        "jP92JbEWUw6Ae4eCEpxMyZKWCw/iizv2zRv3iH5uobZwZ+aUiQUgjTXRM0exJXFv" +
+        "VfXV9EY8MG9PMbWNjkusz66NIyUKoupRvl9rTnjNv1LlggVSAwW5uXzNCh/sUSMm" +
+        "jVmmYMwYpDTG1Uz54HYKL7ZNhkDUj0IzSM5PI0ut8jdnMJOOWXr6tg0GPg==";
+
+    static CertPath certPath() throws Exception {
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        X509Certificate cert = (X509Certificate) cf.generateCertificate(
+                new ByteArrayInputStream(Base64.getDecoder().decode(CERT_B64)));
+        return cf.generateCertPath(Collections.<java.security.cert.Certificate>singletonList(cert));
+    }
+
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.security.Timestamp");
-        check(!c.isInterface(), "is class");
-        check(java.io.Serializable.class.isAssignableFrom(c), "implements Serializable");
-        check(c.getSuperclass() == java.lang.Object.class, "extends Object");
-        java.util.Set<String> ms = new java.util.HashSet<String>();
-        for (java.lang.reflect.Method m : c.getDeclaredMethods()) ms.add(m.getName());
-        check(ms.contains("getTimestamp"), "declares getTimestamp");
-        check(ms.contains("getSignerCertPath"), "declares getSignerCertPath");
+        CertPath cp = certPath();
+        Date now = new Date(1234567890000L);
+
+        // ---- construct + getters ----
+        Timestamp ts = new Timestamp(now, cp);
+        check(now.equals(ts.getTimestamp()), "getTimestamp");
+        check(cp.equals(ts.getSignerCertPath()), "getSignerCertPath");
+
+        // ---- null constructor args -> NPE ----
+        checkThrows(NullPointerException.class, () -> new Timestamp(null, cp),
+                "constructor(null timestamp, certPath)");
+        checkThrows(NullPointerException.class, () -> new Timestamp(now, null),
+                "constructor(timestamp, null certPath)");
+
+        // ---- equals/hashCode value semantics ----
+        Timestamp same = new Timestamp(now, cp);
+        check(ts.equals(same), "equals identical");
+        check(ts.hashCode() == same.hashCode(), "hashCode identical");
+        check(!ts.equals(new Timestamp(new Date(999L), cp)), "equals different timestamp false");
+        check(!ts.equals(null), "equals null false");
+        check(!ts.equals("not a timestamp"), "equals unrelated type false");
+
+        // ---- toString non-empty ----
+        check(ts.toString() != null && ts.toString().length() > 0, "toString non-empty");
+
+        // ---- serialization round-trip ----
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(ts); }
+        Timestamp back;
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            back = (Timestamp) ois.readObject();
+        }
+        check(ts.equals(back), "serialization equals");
+        check(now.equals(back.getTimestamp()), "serialization preserves timestamp");
+        check(cp.equals(back.getSignerCertPath()), "serialization preserves certPath");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
