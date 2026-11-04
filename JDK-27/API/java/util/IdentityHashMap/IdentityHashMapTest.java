@@ -15,6 +15,10 @@
  * 5. 边界：null key 允许；equals 的 key 但不同引用视为不同条目。
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
@@ -29,6 +33,30 @@ public class IdentityHashMapTest {
     static boolean hasMethod(Class<?> c, String name, Class<?>... p) {
         try { c.getMethod(name, p); return true; }
         catch (NoSuchMethodException e) { return false; }
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <K, V> IdentityHashMap<K, V> roundTrip(IdentityHashMap<K, V> m) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) { oos.writeObject(m); }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return (IdentityHashMap<K, V>) ois.readObject();
+        }
     }
 
     static void testWhiteBox() throws Exception {
@@ -104,6 +132,31 @@ public class IdentityHashMapTest {
         check(!a.equals(c), "!equals when key/value differ by reference");
     }
 
+    static void testConstructorMatrix() {
+        checkThrows(IllegalArgumentException.class, () -> new IdentityHashMap<String, String>(-1),
+                    "IdentityHashMap(-1) IAE");
+        checkThrows(NullPointerException.class, () -> new IdentityHashMap<String, String>((Map<String, String>) null),
+                    "IdentityHashMap(null Map) NPE");
+    }
+
+    static void testSerialization() throws Exception {
+        IdentityHashMap<String, String> m = new IdentityHashMap<>();
+        String k = new String("k");
+        m.put(k, "v");
+        IdentityHashMap<String, String> r = roundTrip(m);
+        check(r != m, "round-trip distinct object");
+        check(r.size() == 1, "round-trip preserves size");
+        check(!r.equals(m), "identity equals broken after round-trip");
+        check(r.get(k) == null, "original key reference no longer retrievable");
+        Map.Entry<String, String> e = r.entrySet().iterator().next();
+        check(e.getKey() != k, "deserialized key is a distinct reference");
+        check(e.getValue().equals("v"), "deserialized value present");
+        r.put(new String("k2"), "v2");
+        check(r.size() == 2 && m.size() == 1, "round-trip result independent");
+        java.io.ObjectStreamClass osc = java.io.ObjectStreamClass.lookup(IdentityHashMap.class);
+        check(osc.getSerialVersionUID() == 8188218128353913216L, "IdentityHashMap serialVersionUID stable");
+    }
+
     static void testBlackBox() {
         IdentityHashMap<String, String> sized = new IdentityHashMap<>(16);
         sized.put("k", "v");
@@ -160,6 +213,8 @@ public class IdentityHashMapTest {
         testNullKeyAndViews();
         testEqualsUsesIdentity();
         testBlackBox();
+        testConstructorMatrix();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

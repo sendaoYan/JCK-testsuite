@@ -30,6 +30,21 @@ public class WeakHashMapTest {
         catch (NoSuchMethodException e) { return false; }
     }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.WeakHashMap");
         check(!c.isInterface() && !c.isEnum() && !c.isAnnotation(), "concrete class");
@@ -99,6 +114,24 @@ public class WeakHashMapTest {
         check(m.isEmpty(), "clear");
     }
 
+    static void testConstructorMatrix() {
+        checkThrows(IllegalArgumentException.class, () -> new WeakHashMap<String, Integer>(-1),
+                    "WeakHashMap(-1) IAE");
+        checkThrows(IllegalArgumentException.class, () -> new WeakHashMap<String, Integer>(1, 0.0f),
+                    "WeakHashMap(1, 0.0f) IAE");
+        checkThrows(IllegalArgumentException.class, () -> new WeakHashMap<String, Integer>(1, Float.NaN),
+                    "WeakHashMap(1, NaN) IAE");
+        checkThrows(NullPointerException.class, () -> new WeakHashMap<String, Integer>((Map<String, Integer>) null),
+                    "WeakHashMap(null Map) NPE");
+    }
+
+    static void testStructuralFacts() {
+        check(java.io.ObjectStreamClass.lookup(WeakHashMap.class) == null,
+              "WeakHashMap is NOT Serializable");
+        check(!java.lang.Cloneable.class.isAssignableFrom(WeakHashMap.class),
+              "WeakHashMap does NOT implement Cloneable");
+    }
+
     static void testBlackBox() {
         WeakHashMap<String, Integer> a = new WeakHashMap<>(16, 0.75f);
         a.put("x", 1);
@@ -141,6 +174,8 @@ public class WeakHashMapTest {
         testNullSemantics();
         testViewsAndEquals();
         testBlackBox();
+        testConstructorMatrix();
+        testStructuralFacts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
