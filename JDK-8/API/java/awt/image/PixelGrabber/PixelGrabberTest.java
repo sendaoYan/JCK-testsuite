@@ -1,8 +1,11 @@
 /*
  * @test
- * @summary java.awt.image.PixelGrabber conformance: class reflection.
+ * @summary java.awt.image.PixelGrabber conformance: class reflection + grab contract.
  * @run main PixelGrabberTest
  */
+
+import java.awt.image.BufferedImage;
+import java.awt.image.PixelGrabber;
 
 public class PixelGrabberTest {
     static int passed;
@@ -18,7 +21,7 @@ public class PixelGrabberTest {
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.awt.image.PixelGrabber");
         check(!c.isInterface() && !c.isEnum(), "is class");
         check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");
@@ -41,6 +44,116 @@ public class PixelGrabberTest {
         check(hasMethod(c, "setPixels"), "method setPixels");
         check(hasMethod(c, "imageComplete"), "method imageComplete");
         check(hasMethod(c, "status"), "method status");
+    }
+
+    static BufferedImage sampleImage() {
+        BufferedImage bi = new BufferedImage(3, 2, BufferedImage.TYPE_INT_RGB);
+        bi.setRGB(0, 0, 0xFF000000);
+        bi.setRGB(1, 1, 0xFF336699);
+        bi.setRGB(2, 0, 0xFFFFFFFF);
+        return bi;
+    }
+
+    static void testGrabIntPixels() throws Exception {
+        BufferedImage bi = sampleImage();
+        // forceRGB=true always produces an int[] in the default RGB model.
+        PixelGrabber pg = new PixelGrabber(bi, 0, 0, 3, 2, true);
+        check(pg.getStatus() == 0, "status is 0 before any grabbing");
+        check(pg.getWidth() == 3 && pg.getHeight() == 2, "dims known from constructor");
+        check(pg.getPixels() == null, "no pixels before grab");
+        boolean ok = pg.grabPixels();
+        check(ok, "grabPixels returns true on success");
+        int st = pg.getStatus();
+        check((st & java.awt.image.ImageObserver.WIDTH) != 0
+              && (st & java.awt.image.ImageObserver.HEIGHT) != 0
+              && (st & java.awt.image.ImageObserver.SOMEBITS) != 0
+              && (st & java.awt.image.ImageObserver.FRAMEBITS) != 0,
+              "status reports WIDTH|HEIGHT|SOMEBITS|FRAMEBITS after grab");
+        check(pg.getWidth() == 3 && pg.getHeight() == 2, "grabbed dims 3x2");
+        Object pixels = pg.getPixels();
+        check(pixels instanceof int[], "forceRGB grab yields int[]");
+        int[] p = (int[]) pixels;
+        check(p.length == 6, "3x2 grab yields 6 pixels");
+        check(p[0] == 0xFF000000, "pixel (0,0) exact");
+        check(p[4] == 0xFF336699, "pixel (1,1) exact (row-major layout)");
+        check(p[2] == 0xFFFFFFFF, "pixel (2,0) exact");
+        check(pg.getColorModel() != null, "color model available after grab");
+    }
+
+    static void testGrabRegionAndSync() throws Exception {
+        BufferedImage bi = sampleImage();
+        // A sub-region grab of one pixel.
+        PixelGrabber pg = new PixelGrabber(bi, 1, 1, 1, 1, true);
+        check(pg.grabPixels(1000L), "timed grabPixels succeeds");
+        int[] p = (int[]) pg.getPixels();
+        check(p.length == 1 && p[0] == 0xFF336699, "1x1 region grab exact");
+        // Timed grab with a negative timeout returns as soon as data arrives.
+        PixelGrabber pg2 = new PixelGrabber(bi, 0, 0, 2, 1, true);
+        check(pg2.grabPixels(-1), "negative timeout accepted");
+        // Asynchronous startGrabbing + join via grabPixels.
+        PixelGrabber pg3 = new PixelGrabber(bi, 0, 0, 2, 2, true);
+        pg3.startGrabbing();
+        check(pg3.grabPixels(500L), "startGrabbing followed by timed grab succeeds");
+        check(((int[]) pg3.getPixels())[0] == 0xFF000000, "async grab reads pixels");
+        // abortGrabbing after completion only adds the ABORT flag.
+        int before = pg3.getStatus();
+        pg3.abortGrabbing();
+        check(pg3.getStatus() == (before | java.awt.image.ImageObserver.ABORT),
+              "abortGrabbing ORs the ABORT flag");
+    }
+
+    static void testNonForcedGrab() throws Exception {
+        BufferedImage bi = sampleImage();
+        // forceRGB=false keeps the image's own (default RGB) model here.
+        PixelGrabber pg = new PixelGrabber(bi, 0, 0, 3, 2, false);
+        check(pg.grabPixels(), "non-forced grab succeeds");
+        check(pg.getPixels() instanceof int[], "int image still yields int[]");
+    }
+
+    static void testProducerGrabber() throws Exception {
+        // The ImageProducer-based constructor fills a caller-supplied buffer.
+        java.awt.image.MemoryImageSource src = new java.awt.image.MemoryImageSource(
+                2, 2, new int[] { 0xFF010203, 0xFF040506, 0xFF070809, 0xFF0A0B0C }, 0, 2);
+        int[] buf = new int[4];
+        PixelGrabber pg = new PixelGrabber(src, 0, 0, 2, 2, buf, 0, 2);
+        check(pg.grabPixels(), "producer grab succeeds");
+        check(pg.getWidth() == 2 && pg.getHeight() == 2, "producer grab dims");
+        check(buf[0] == 0xFF010203 && buf[3] == 0xFF0A0B0C, "producer grab fills buffer exact");
+        check(pg.getPixels() == buf, "getPixels returns the caller buffer");
+    }
+
+    static void testBufferGrabber() throws Exception {
+        // The Image-based buffer constructor honors offset and scansize:
+        // buffer index = off + y*scansize + x for image pixel (x, y).
+        BufferedImage bi = new BufferedImage(3, 2, BufferedImage.TYPE_INT_RGB);
+        bi.setRGB(2, 1, 0xFFABCDEF);
+        int[] buf = new int[8];
+        PixelGrabber pg = new PixelGrabber(bi, 0, 0, 3, 2, buf, 1, 3);
+        check(pg.grabPixels(), "buffer grab succeeds");
+        check(buf[6] == 0xFFABCDEF, "pixel (2,1) lands at off+scansize+2");
+        check(buf[0] == 0, "offset bytes before the image stay untouched");
+        check(pg.getPixels() == buf, "getPixels exposes the provided buffer");
+    }
+
+    static void testStatusAliasAndDefaultCtor() throws Exception {
+        BufferedImage bi = sampleImage();
+        // forceRGB=false keeps the image's own model.
+        PixelGrabber pg = new PixelGrabber(bi, 0, 0, 3, 2, false);
+        check(pg.grabPixels(), "default-flag grab succeeds");
+        check(pg.getPixels() instanceof int[], "int image yields int[] without forceRGB");
+        // status() is the documented alias of getStatus().
+        check(pg.status() == pg.getStatus(), "status() alias equals getStatus()");
+        check(pg.status() != 0, "status() nonzero after successful grab");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testGrabIntPixels();
+        testGrabRegionAndSync();
+        testNonForcedGrab();
+        testProducerGrabber();
+        testBufferGrabber();
+        testStatusAliasAndDefaultCtor();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

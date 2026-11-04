@@ -1,8 +1,15 @@
 /*
  * @test
- * @summary java.awt.image.WritableRenderedImage conformance: interface reflection.
+ * @summary java.awt.image.WritableRenderedImage conformance: interface reflection + BufferedImage behavior.
  * @run main WritableRenderedImageTest
  */
+
+import java.awt.Point;
+import java.awt.image.BufferedImage;
+import java.awt.image.Raster;
+import java.awt.image.TileObserver;
+import java.awt.image.WritableRaster;
+import java.awt.image.WritableRenderedImage;
 
 public class WritableRenderedImageTest {
     static int passed;
@@ -18,7 +25,7 @@ public class WritableRenderedImageTest {
         return false;
     }
 
-    public static void main(String[] args) throws Exception {
+    static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.awt.image.WritableRenderedImage");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");
@@ -34,6 +41,67 @@ public class WritableRenderedImageTest {
         check(hasMethod(c, "getWritableTileIndices"), "method getWritableTileIndices");
         check(hasMethod(c, "hasTileWriters"), "method hasTileWriters");
         check(hasMethod(c, "setData"), "method setData");
+        // BufferedImage implements WritableRenderedImage.
+        check(WritableRenderedImage.class.isAssignableFrom(BufferedImage.class),
+              "BufferedImage is a WritableRenderedImage");
+    }
+
+    static void testWritableTiles() {
+        WritableRenderedImage wi = new BufferedImage(4, 3, BufferedImage.TYPE_INT_RGB);
+        BufferedImage bi = (BufferedImage) wi;
+        bi.setRGB(2, 1, 0xFF102030);
+        // Checking out the single writable tile yields the live raster.
+        WritableRaster wt = wi.getWritableTile(0, 0);
+        check(wt != null, "getWritableTile returns raster");
+        check(wi.isTileWritable(0, 0), "checked-out tile is writable");
+        check(wi.hasTileWriters(), "hasTileWriters true while checked out");
+        Point[] idx = wi.getWritableTileIndices();
+        check(idx != null && idx.length >= 1 && idx[0].x == 0 && idx[0].y == 0,
+              "writable tile indices list (0,0)");
+        // Writing through the writable tile modifies the image.
+        wt.setPixel(0, 0, new int[] { 5, 10, 15 });
+        check(bi.getRGB(0, 0) == 0xFF050A0F, "write through writable tile visible");
+        // Releasing the checkout is legal and repeatable; BufferedImage treats its
+        // single tile as always writable, so isTileWritable stays true.
+        wi.releaseWritableTile(0, 0);
+        check(wi.isTileWritable(0, 0), "BufferedImage tile always writable");
+        wi.releaseWritableTile(0, 0);
+        check(true, "double release tolerated");
+        // BufferedImage ignores the tile indices of its single tile.
+        check(wi.getWritableTile(0, 0) == wt, "repeat checkout returns the same raster");
+    }
+
+    static void testSetData() {
+        WritableRenderedImage wi = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        BufferedImage bi = (BufferedImage) wi;
+        // setData copies a source raster's samples into the image.
+        WritableRaster src = Raster.createWritableRaster(bi.getSampleModel(), new Point(0, 0));
+        src.setPixel(0, 0, new int[] { 1, 2, 3 });
+        src.setPixel(1, 1, new int[] { 10, 11, 12 });
+        wi.setData(src);
+        check(bi.getRGB(0, 0) == 0xFF010203, "setData copies first pixel");
+        check(bi.getRGB(1, 1) == 0xFF0A0B0C, "setData copies last pixel");
+        check(bi.getRGB(1, 0) == 0xFF000000, "untouched pixels remain zero");
+    }
+
+    static void testTileObserver() {
+        WritableRenderedImage wi = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        TileObserver obs = new TileObserver() {
+            public void tileUpdate(WritableRenderedImage src, int tx, int ty, boolean writable) { }
+        };
+        wi.addTileObserver(obs);
+        check(true, "addTileObserver accepted");
+        wi.removeTileObserver(obs);
+        check(true, "removeTileObserver accepted");
+        wi.removeTileObserver(obs);   // removing an unregistered observer is tolerated
+        check(true, "removeTileObserver of unknown observer tolerated");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testWritableTiles();
+        testSetData();
+        testTileObserver();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
