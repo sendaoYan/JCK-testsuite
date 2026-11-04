@@ -1,20 +1,38 @@
 # javax.swing.JLayer 测试设计
 
 ## 1. API 功能
-- 构造器：`JLayer()`（view null）、`JLayer(V view)`、`JLayer(V view, LayerUI<V> ui)`。
-- 视图/玻璃面板：`getView/setView`、`getGlassPane/setGlassPane`、`createGlassPane()`。
-- UI：`setUI(LayerUI)/getUI`。
-- 事件：`setLayerEventMask(long)/getLayerEventMask()`。
-- 委托：`setBorder/getBorder` 委托给 view（view 为 JComponent 时）。
-- 不支持：`setLayout(非 null)` 抛 `IllegalArgumentException`。
+装饰层容器（final，JComponent + Scrollable/PropertyChangeListener/Accessible）：
+包裹一个 view 组件，把绘制/事件拦截委托给 LayerUI；持有 glassPane；
+`setLayerEventMask` 决定截获的事件位掩码；setLayout 被禁用。
 
 ## 2. Java 用户如何使用
-典型组合：`new JLayer<JPanel>(panel, new LayerUI<JPanel>())` 装饰已有组件；`setLayerEventMask(AWTEvent.KEY_EVENT_MASK)` 让 LayerUI 接收键盘事件；自定义装饰时 `setView`/`setGlassPane` 组合内容与覆盖层。
+`JLayer<JPanel> l = new JLayer<>(panel, new MyLayerUI()); frame.add(l);`
+典型：气泡提示、绘图装饰、事件/焦点审计。`l.setView(newPanel)` 换视图。
 
-## 3. 开源代码实际用法调研
-- JDK 自带测试 `test/jdk/javax/swing/JRootPane/RootPaneDecorationSize.java`、`JToolTip/TestTooltipBackgroundColor.java`：在 JLayer 装饰的组件上验证绘制/尺寸。
-- JDK 源码 `javax.swing.plaf.LayerUI`：与 JLayer 配合，通过 `processXxxEvent` 拦截事件，说明 layerEventMask 的用途。
-- Oracle JLayer 教程示例用 `JLayer` 为组件叠加玻璃面板与动画效果。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`src/java.desktop/share/classes/javax/swing/JLayer.java`；
+`test/jdk/javax/swing/JLayer/`（6730930 等 bug 回归）。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒覆盖：空/带 view/带 view+ui 三种构造器；`getView/setView` 往返与父子关系、`setView(null)` 移除旧 view；glassPane 往返、createGlassPane 非 null 且不透明；eventMask 往返；`setUI/getUI` 往返；`setLayout(非 null)` 抛 `IllegalArgumentException`、`setLayout(null)` 正常；`setBorder/getBorder` 委托到 view；`updateUI` 可调用。见 `JLayerTest.java` 的 `testBlackBox()`。
+## 4. 测试用例设计 + 易错细节
+- 构造器：`new JLayer()`（view=null，UI 是共享 LayerUI 实例）、`new JLayer(view)`、
+  `new JLayer(null, ui)`、`new JLayer(view, ui)` 全部合法；getView/getUI 恒等往返。
+- view 父子关系：view 的 parent 就是 layer；setView(newView) 后新 view 挂上、
+  旧 view parent==null；setView(null) 合法。
+- glassPane：默认非 null、是 JPanel、不透明 false；setGlassPane 往返；
+  **setGlassPane(null) 合法（getGlassPane()==null）**——与 JRootPane 的 NPE 行为相反。
+- LayerUI：getUIClassID()=="ComponentUI"（不是 LayerUI！）；setUI 触发
+  propertyName=="UI" 的 PropertyChangeEvent（oldValue==旧 UI、newValue==新 UI）；
+  updateUI 不抛。
+- setLayerEventMask 默认 0，任意 long 往返。
+- **setLayout(non-null)→IllegalArgumentException**（"JLayer.setLayout() not supported"，
+  断类型）；setLayout(null) 合法。
+- **版本差异（重点）**：JDK-8 `setBorder(non-null)→IllegalArgumentException`
+  （"JLayer.setBorder() not supported"，直接拒绝）；JDK-27（及 jdk25u 源）委托给 view
+  （`view.setBorder(b)` 生效、getBorder() 读 view 的 border）。本侧断言委托生效；
+  公共部分：setBorder(null) 合法、getBorder() 无 view 时返回 null。
+- 泛型坑：`JLayer<V>.getUI()` 返回 `LayerUI<? super V>`，接收变量要用 `LayerUI<?>`。
+- 环境：headless 下 Metal LaF 先装；组件操作 EDT（runOnEDT 包装）；异常只断类型。
+
+自动化实现位于同目录 `JLayerTest.java`（runOnEDT 包装 EDT 纪律）：
+`check(boolean,msg)` 计数断言，`main` 结尾打印 `PASS (N assertions)`；
+jtreg `@run main` 直接驱动。

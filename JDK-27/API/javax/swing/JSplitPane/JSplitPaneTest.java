@@ -1,7 +1,8 @@
 /*
  * @test
- * @summary javax.swing.JSplitPane conformance: white-box structure + black-box behavior.
- * @key headful
+ * @summary javax.swing.JSplitPane conformance: white-box structure + black-box behavior
+ *          + constants/defaults, lastDividerLocation sequence, weight matrix
+ *          (headless-safe, Metal LaF).
  * @run main JSplitPaneTest
  */
 
@@ -11,6 +12,8 @@ import java.lang.reflect.Modifier;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JSplitPane;
+import javax.swing.UIManager;
+import javax.swing.plaf.metal.MetalLookAndFeel;
 
 public class JSplitPaneTest {
     static int passed;
@@ -161,9 +164,58 @@ public class JSplitPaneTest {
         check(s.getRightComponent() == null, "setRightComponent(null)");
     }
 
+    // ---- Part 3: constants, defaults, lastDividerLocation sequence, weight matrix ----
+    static void testContractExtras() throws Exception {
+        check(JSplitPane.HORIZONTAL_SPLIT == 1, "HORIZONTAL_SPLIT 1");
+        check(JSplitPane.VERTICAL_SPLIT == 0, "VERTICAL_SPLIT 0");
+
+        JSplitPane fresh = new JSplitPane();
+        check(fresh.isContinuousLayout() == false, "default continuousLayout false");
+        check(fresh.isOneTouchExpandable() == false, "default oneTouchExpandable false");
+        check(fresh.getDividerSize() == 10, "default dividerSize 10");
+        check("MetalSplitPaneUI".equals(fresh.getUI().getClass().getSimpleName()), "Metal installs MetalSplitPaneUI");
+        check(fresh.getMinimumDividerLocation() >= 0, "minimum divider location non-negative");
+
+        // lastDividerLocation: 0 by default, -1 right after the first move,
+        // then the previous location after subsequent moves.
+        JSplitPane s = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, false);
+        check(s.getLastDividerLocation() == 0, "default lastDividerLocation 0");
+        s.setDividerLocation(40);
+        check(s.getLastDividerLocation() == -1, "lastDividerLocation -1 after first move");
+        s.setDividerLocation(60);
+        check(s.getLastDividerLocation() == 40, "lastDividerLocation tracks previous");
+        s.setDividerLocation(0.5);
+        check(true, "setDividerLocation(0.5) legal");
+        s.setDividerLocation(-5);
+        check(true, "setDividerLocation(-5) no-throw");
+
+        try {
+            s.setResizeWeight(1.5);
+            check(false, "setResizeWeight(1.5) should throw IAE");
+        } catch (IllegalArgumentException expected) {
+            check(true, "setResizeWeight(1.5) IAE");
+        }
+        try {
+            s.setResizeWeight(-0.1);
+            check(false, "setResizeWeight(-0.1) should throw IAE");
+        } catch (IllegalArgumentException expected) {
+            check(true, "setResizeWeight(-0.1) IAE");
+        }
+        s.setResizeWeight(0.0);
+        check(s.getResizeWeight() == 0.0, "setResizeWeight boundary 0.0");
+        s.setResizeWeight(1.0);
+        check(s.getResizeWeight() == 1.0, "setResizeWeight boundary 1.0");
+    }
+
     public static void main(String[] args) throws Exception {
+        try {
+            UIManager.setLookAndFeel(new MetalLookAndFeel());
+        } catch (Exception e) {
+            throw new AssertionError("cannot install Metal LaF", e);
+        }
         runOnEDT(JSplitPaneTest::testWhiteBox);
         runOnEDT(JSplitPaneTest::testBlackBox);
+        runOnEDT(JSplitPaneTest::testContractExtras);
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

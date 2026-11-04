@@ -23,3 +23,12 @@
 5. borderPainted/borderPaintedFlat 往返。
 6. text/tooltip/actionCommand 链路；enabled 链：禁用 doClick 不改选中态、恢复后可用。
 7. 装入 JFrame 后 displayable/visible 断言。
+
+## 5. 组件层深化批（`testContract`，Metal LaF）
+- 完整 8 构造器矩阵（含 `(null, null, true)` 的 null 容忍变体）。
+- Metal 默认：**borderPainted=false**（与普通按钮 true 相反）、rolloverEnabled=true、
+  focusPainted=true；模型继承 ToggleButtonModel；`CheckBoxUI`/`MetalCheckBoxUI`。
+- doClick 翻转 + ItemEvent SELECTED/DESELECTED 各一次。
+- 组内互斥 + 移除语义（移除后成员保留自身状态）。
+- mnemonic 与 text 匹配时 **UI 自动派生 displayedMnemonicIndex**（'C' vs "check" → 0）；
+  `setDisplayedMnemonicIndex(-1)` 显式清除。

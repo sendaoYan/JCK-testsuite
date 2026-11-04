@@ -1,6 +1,7 @@
 /*
  * @test
- * @summary javax.swing.JList conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.JList conformance: white-box structure + black-box behavior
+ *          + deep component-layer contracts (event-count matrices, clamp/no-op rules, UI binding).
  * @key headful
  * @run main JListTest
  */
@@ -179,9 +180,97 @@ public class JListTest {
         }
     }
 
+    // ---- Part 3: deep component-layer contracts (event-count matrices, headless-shaped negatives) ----
+    static void testDeepContracts() throws Exception {
+        // defaults on a never-shown list: no geometry, no selection state
+        JList<String> fresh = new JList<>(new String[]{"a", "b", "c"});
+        check(fresh.getAnchorSelectionIndex() == -1, "default anchor -1");
+        check(fresh.getLeadSelectionIndex() == -1, "default lead -1");
+        check(fresh.getSelectionModel().getSelectionMode() == ListSelectionModel.MULTIPLE_INTERVAL_SELECTION,
+                "default selection mode MULTIPLE_INTERVAL_SELECTION");
+        check(fresh.getVisibleRowCount() == 8, "default visible row count 8");
+        check(fresh.getFixedCellWidth() == -1 && fresh.getFixedCellHeight() == -1, "default fixed cell size -1");
+        check(!fresh.getDragEnabled(), "default dragEnabled false");
+        check(fresh.getFirstVisibleIndex() == -1, "unshown first visible index -1");
+        check(fresh.getLastVisibleIndex() == -1, "unshown last visible index -1");
+        check(fresh.getVisibleRect().equals(new java.awt.Rectangle(0, 0, 0, 0)), "unshown visible rect empty");
+        fresh.ensureIndexIsVisible(1);
+        check(true, "ensureIndexIsVisible tolerated on unshown list");
+
+        // drag enablement succeeds headful (contrast: headless throws HeadlessException)
+        fresh.setDragEnabled(true);
+        check(fresh.getDragEnabled(), "setDragEnabled(true) roundtrip headful");
+
+        // exact event-count algebra per operation
+        final int[] n = new int[1];
+        final ListSelectionEvent[] lastEvt = new ListSelectionEvent[1];
+        JList<String> list = new JList<>(new String[]{"a", "b", "c"});
+        list.addListSelectionListener(new ListSelectionListener() {
+            public void valueChanged(ListSelectionEvent e) { n[0]++; lastEvt[0] = e; }
+        });
+        list.setSelectedIndex(1);
+        check(n[0] == 1, "setSelectedIndex fires one event");
+        check(list.getAnchorSelectionIndex() == 1 && list.getLeadSelectionIndex() == 1, "anchor==lead==1");
+        n[0] = 0;
+        list.setSelectedIndices(new int[]{2, 0});
+        check(n[0] == 3, "setSelectedIndices({2,0}) fires 3 events (clear+2 adds)");
+        check(list.getSelectedIndices().length == 2
+                && list.getSelectedIndices()[0] == 0 && list.getSelectedIndices()[1] == 2,
+                "getSelectedIndices sorted ascending");
+        check(lastEvt[0].getFirstIndex() == 0 && lastEvt[0].getLastIndex() == 2, "last event range 0..2");
+        n[0] = 0;
+        list.clearSelection();
+        check(n[0] == 1, "clearSelection fires one event");
+
+        // benign no-ops: out-of-range index, absent value, no events
+        n[0] = 0;
+        list.setSelectedIndex(99);
+        check(list.getSelectedIndex() == -1 && n[0] == 0, "setSelectedIndex(99) no-throw no-change no-event");
+        list.setSelectedValue("nope", false);
+        check(list.getSelectedIndex() == -1 && n[0] == 0, "setSelectedValue(absent) no-throw no-change no-event");
+        list.setSelectedValue("b", false);
+        check(list.getSelectedIndex() == 1 && n[0] == 1, "setSelectedValue(b) selects 1, one event");
+        // JList contrast with JComboBox: -1 does NOT clear an existing selection
+        n[0] = 0;
+        list.setSelectedIndex(-1);
+        check(list.getSelectedIndex() == 1 && n[0] == 0, "setSelectedIndex(-1) keeps selection, no event");
+        list.setSelectionInterval(0, 0);
+        n[0] = 0;
+        list.setSelectionInterval(0, 0);
+        check(n[0] == 0, "re-set same interval fires nothing");
+
+        // visible row count: 0 stored, negative clamped to 0 — both no-throw
+        list.setVisibleRowCount(0);
+        check(list.getVisibleRowCount() == 0, "setVisibleRowCount(0) stored");
+        list.setVisibleRowCount(-1);
+        check(list.getVisibleRowCount() == 0, "setVisibleRowCount(-1) clamped to 0");
+
+        // setModel(null) message
+        try {
+            new JList<String>().setModel(null);
+            check(false, "setModel(null) must throw");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("non null"), "setModel(null) message mentions non null");
+        }
+
+        // setListData(Vector) variant + UI binding
+        Vector<String> v = new Vector<>();
+        v.add("v1"); v.add("v2");
+        list.setListData(v);
+        check(list.getModel().getSize() == 2, "setListData(vector) size 2");
+        check(list.getSelectedIndex() == -1, "setListData resets selection");
+        check(list.getUI() != null && list.getUI().getClass().getName().endsWith("BasicListUI"),
+                "Metal binding installs BasicListUI");
+        check("ListUI".equals(list.getUIClassID()), "getUIClassID ListUI");
+        list.updateUI();
+        check(list.getUI() != null, "updateUI no-throw");
+        check(list.getSelectedValuesList() != null, "getSelectedValuesList never null");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(JListTest::testWhiteBox);
         runOnEDT(JListTest::testBlackBox);
+        runOnEDT(JListTest::testDeepContracts);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

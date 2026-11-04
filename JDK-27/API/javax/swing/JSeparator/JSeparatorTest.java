@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary javax.swing.JSeparator conformance: white-box structure + black-box behavior.
- * @key headful
+ * @summary javax.swing.JSeparator conformance: white-box structure + black-box behavior
+ *          + ctor IAE, orientation event, UI delegate (headless-safe, Metal LaF).
  * @run main JSeparatorTest
  */
 
@@ -11,6 +11,8 @@ import java.awt.EventQueue;
 import java.lang.reflect.Modifier;
 import javax.swing.JSeparator;
 import javax.swing.SwingConstants;
+import javax.swing.UIManager;
+import javax.swing.plaf.metal.MetalLookAndFeel;
 
 public class JSeparatorTest {
     static int passed;
@@ -35,8 +37,14 @@ public class JSeparatorTest {
     }
 
     public static void main(String[] args) throws Exception {
+        try {
+            UIManager.setLookAndFeel(new MetalLookAndFeel());
+        } catch (Exception e) {
+            throw new AssertionError("cannot install Metal LaF", e);
+        }
         runOnEDT(JSeparatorTest::testWhiteBox);
         runOnEDT(JSeparatorTest::testBlackBox);
+        runOnEDT(JSeparatorTest::testContractExtras);
         System.out.println("PASS (" + passed + " assertions)");
     }
 
@@ -115,5 +123,28 @@ public class JSeparatorTest {
 
         s.setName("sepname");
         check("sepname".equals(s.getName()), "name set");
+    }
+
+    // ---- Part 3: ctor IAE, orientation event, UI delegate, accessible ----
+    static void testContractExtras() throws Exception {
+        check("MetalSeparatorUI".equals(new JSeparator().getUI().getClass().getSimpleName()),
+                "Metal installs MetalSeparatorUI");
+        check(new JSeparator().getAccessibleContext() != null, "accessible context non-null");
+        try {
+            new JSeparator(99);
+            check(false, "JSeparator(99) should throw IAE");
+        } catch (IllegalArgumentException expected) {
+            check(true, "JSeparator(99) ctor IAE");
+        }
+        JSeparator e = new JSeparator();
+        java.util.concurrent.atomic.AtomicReference<java.beans.PropertyChangeEvent> ev =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        e.addPropertyChangeListener((java.beans.PropertyChangeEvent p) -> {
+            if ("orientation".equals(p.getPropertyName())) ev.set(p);
+        });
+        e.setOrientation(SwingConstants.VERTICAL);
+        check(ev.get() != null, "setOrientation fires orientation event");
+        check(Integer.valueOf(SwingConstants.VERTICAL).equals(ev.get().getNewValue()),
+                "orientation event new value");
     }
 }

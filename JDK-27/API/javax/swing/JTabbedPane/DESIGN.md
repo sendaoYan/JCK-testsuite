@@ -1,39 +1,49 @@
-# javax.swing.JTabbedPane 黑盒行为测试设计
+# javax.swing.JTabbedPane 测试设计
 
 ## 1. API 功能
-JTabbedPane 是选项卡容器，继承 JComponent，实现 Serializable、Accessible、SwingConstants，内部用 SingleSelectionModel 管理选中页。
-
-- 构造器：`JTabbedPane()`、`JTabbedPane(int tabPlacement)`、`JTabbedPane(int tabPlacement, int tabLayoutPolicy)`；默认 TOP + WRAP_TAB_LAYOUT。
-- 选项卡：`addTab(String, Component)`、`addTab(String, Icon, Component)`、`insertTab(...)`、`removeTabAt`、`getTabCount`。
-- 标题/组件/图标：`getTitleAt/setTitleAt`、`getComponentAt/setComponentAt`、`getIconAt/setIconAt`、`getDisabledIconAt/setDisabledIconAt`。
-- 索引：`indexOfTab(String/Icon)`、`indexOfComponent`。
-- 选择：`getSelectedIndex/setSelectedIndex`、`getSelectedComponent/setSelectedComponent`（找不到组件抛 IAE）。
-- 页属性：`setEnabledAt/isEnabledAt`、`setMnemonicAt/getMnemonicAt`、`setToolTipTextAt/getToolTipTextAt`、`setBackgroundAt/getBackgroundAt`、`setForegroundAt/getForegroundAt`。
-- 布局：`getTabPlacement/setTabPlacement`、`getTabLayoutPolicy/setTabLayoutPolicy`（非法策略抛 IAE）。
+多页签容器（JComponent + Serializable/Accessible/SwingConstants）：单选模型驱动的
+tab 集合（addTab/insertTab/removeTabAt/removeAll）、每 tab 的
+title/icon/tip/component/enabled/mnemonic/background/foreground 属性、placement
+（TOP/BOTTOM/LEFT/RIGHT）与 layout policy（WRAP/SCROLL）两种布局策略、
+ChangeListener 通知，UI 委托（getUIClassID=="TabbedPaneUI"，Metal→MetalTabbedPaneUI）。
 
 ## 2. Java 用户如何使用
-- `JTabbedPane tp = new JTabbedPane(); tp.addTab("编辑", editorPanel); tp.addTab("预览", previewPanel);` 添加选项卡。
-- `tp.setSelectedIndex(0);` 切换选中；`tp.setEnabledAt(1, false);` 禁用某页。
-- `tp.setMnemonicAt(0, KeyEvent.VK_E);` 设置快捷键助记符。
-- `tp.indexOfTab("预览")` 反查索引；`tp.setTitleAt(0, "新标题")` 改名。
+`JTabbedPane tp = new JTabbedPane(); tp.addTab("Main", panel); tp.setSelectedIndex(0);`
+向导/设置页/浏览器页签；`tp.add("C", comp)`（Container.add(String,Component) 路由成标题页签）；
+`tp.getModel().setSelectedIndex(i)` 与 pane 双向同步。
 
-## 3. 开源代码实际用法调研
-JDK 自带测试（`~/git/jdk25u-dev/test/jdk`）：
-- `test/jdk/java/awt/a11y/AccessibleJTabbedPaneTest.java` 用 `new JTabbedPane()` + `addTab("Tab 1", panel1)` 做无障碍断言。
-- `test/jdk/java/awt/Container/FindComponentTest.java` 用 JTabbedPane 做组件查找。
-- `test/jdk/java/awt/image/multiresolution/MultiresolutionIconTest.java` 用 JTabbedPane 展示多分辨率图标。
-以上来源为 `~/git/jdk25u-dev/test/jdk`。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/JTabbedPane.java`；
+`test/jdk/javax/swing/JTabbedPane/`；IDE/NetBeans 设置对话框典型用法。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒场景（`JTabbedPaneTest.testBlackBox()`）：
-1. 默认值：tabCount 0 / selectedIndex -1 / selectedComponent null / TOP / WRAP。
-2. addTab 首项自动选中、标题/组件往返。
-3. indexOfTab/indexOfComponent（含缺失返回 -1）。
-4. setSelectedIndex/getSelectedComponent/setSelectedComponent（未知组件 IAE）。
-5. setTitleAt 改名后 indexOfTab 生效。
-6. setEnabledAt/isEnabledAt、setMnemonicAt/getMnemonicAt（默认 -1）。
-7. setToolTipTextAt/setBackgroundAt/setForegroundAt 往返。
-8. setComponentAt 替换组件。
-9. setIconAt/getIconAt/indexOfTab(Icon)。
-10. setTabPlacement/setTabLayoutPolicy 往返 + 非法策略 IAE。
-11. removeTabAt 缩减并移位。
+## 4. 测试用例设计 + 易错细节
+- 默认契约：tabCount=0/selectedIndex=-1/placement=TOP/policy=WRAP/tabRunCount=0/
+  model 默认 DefaultSingleSelectionModel 且 selected=-1；空 pane 上 indexOfTab(String/Icon/
+  Component) 全 -1，indexOfTab((String)null) 也是 -1（null 标题按找不到处理，不抛）。
+- 构造器 `new JTabbedPane(BOTTOM, SCROLL_TAB_LAYOUT)` 两参均生效。
+- 增查改：addTab 四参/两参；getComponentAt 的 view 的 parent 就是 pane 本身；
+  setTitleAt/setToolTipTextAt/setIconAt/setDisabledIconAt/setEnabledAt 全往返（Icon 用固定
+  尺寸匿名实现，避免资源依赖）；insertTab(…,0) 插入后原 tab 后移；removeTabAt 后回移；
+  add(String,Component) 走 addImpl 变成标题页签。
+- **removeAll 后 selectedIndex==-1；再 addTab 第一个自动选中（选中恢复到 0）**。
+- 选中/事件语义：首个 addTab 自动选中 0；ChangeListener 只在真正变化时触发
+  （重复 setSelectedIndex(同值) 不再触发）；pane↔model 双向同步（model.setSelectedIndex
+  同样触发 pane 上的 listener）。
+- **删除选中 tab 的迁移规则**（JDK-8/27 一致）：删非末位选中 tab → 选中索引保持
+  （邻居内容顶上）；删末位选中 tab → 退到前一个索引。
+- 助记符：getMnemonicAt 默认 -1；setMnemonicAt('T') 往返；
+  **setDisplayedMnemonicIndexAt(0,0) 只有 title 对应字符与 mnemonic 匹配才成功**。
+- 反例矩阵（精确异常类型）：getTitleAt/setTitleAt/getComponentAt/setEnabledAt/
+  setSelectedIndex/removeTabAt/setMnemonicAt/setDisplayedMnemonicIndexAt 越界（5 或 -1）
+  →IndexOutOfBoundsException；setSelectedIndex(-2) 同抛，但 **setSelectedIndex(-1) 合法**
+  （清空选择）；setTabPlacement(99)/setTabLayoutPolicy(99)/setDisplayedMnemonicIndexAt(0,99)
+  →IllegalArgumentException。
+- 易错：getTabRunCount 依赖 UI 布局（未显示 pane 上只有空 pane 的 0 可靠，加了 tab 后
+  不断言）；JTabbedPane.getUI()（返回 TabbedPaneUI）在 JDK-8 就存在（与 JDK-27 新增的
+  JComponent.getUI() 不同），两侧可同断言 MetalTabbedPaneUI。
+- 环境：headless 下 Metal LaF 先装（UIManager.setLookAndFeel(new MetalLookAndFeel())），
+  所有组件操作 EDT（SwingUtilities.invokeAndWait）；NPE/Headless 只断类型。
+
+自动化实现位于同目录 `JTabbedPaneTest.java`：`check(boolean,msg)` 计数断言、
+`checkThrows(Class,Runnable)` 校验精确异常类型，`main` 结尾打印 `PASS (N assertions)`；
+jtreg `@run main` 直接驱动。

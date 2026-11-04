@@ -36,3 +36,12 @@ JDK 自带测试（`~/git/jdk25u-dev/test/jdk`）：
 6. setModel/getModel 往返（新模型默认选中第一项）。
 7. ItemListener 选择变化触发 DESELECTED+SELECTED 序列。
 8. getSelectedObjects 返回单选结果。
+
+## 5. 深化部分（`JComboBoxTest.testDeepContracts`，ActionEvent 计数 + 边界矩阵 + 固定模型拒绝）
+1. ActionEvent 精确计数：setSelectedIndex/setSelectedItem/setSelectedIndex(-1) 各触发 1 次、命令恒为 "comboBoxChanged"、source 为组合框；setEditable 不触发；addActionListener(null) 无异常容忍。
+2. 编辑器：可编辑时 getEditor 非空；setEditor(同一实例) 身份保持。setMaximumRowCount(0) 合法（无校验）；setRenderer 身份往返。
+3. 索引边界矩阵：getItemAt(99)/(-1) 返回 null 不抛；removeItemAt(99)/(-1)、insertItemAt(x,99) 抛 ArrayIndexOutOfBoundsException，计数不变。
+4. removeAllItems 触发恰好 1 次 ActionEvent 并清空选择。
+5. **非 Mutable 模型**（自定义固定 ComboBoxModel）：addItem/removeItem/removeAllItems/insertItemAt 均抛 RuntimeException("Cannot use this method with a non-Mutable data model")，计数不变；而数组/Vector/默认构造器的模型都是 DefaultComboBoxModel（可变）。
+6. setModel(null) 抛 NPE（注意：实例被置脏，不可复用——后续 getItemAt 直接 NPE，测试用一次性实例）。
+7. UI 绑定：MetalComboBoxUI / getUIClassID=="ComboBoxUI"。

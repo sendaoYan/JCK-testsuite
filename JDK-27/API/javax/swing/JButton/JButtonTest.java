@@ -163,9 +163,74 @@ public class JButtonTest {
         check(!frame.isVisible(), "frame not visible after dispose");
     }
 
+    // ---- Part 3: deep contract additions under Metal ----
+    static void testContract() throws Exception {
+        // UI delegate identity
+        check("ButtonUI".equals(new JButton().getUIClassID()), "getUIClassID ButtonUI");
+        check("javax.swing.plaf.metal.MetalButtonUI".equals(new JButton().getUI().getClass().getName()),
+                "Metal installs MetalButtonUI");
+
+        // iconTextGap / margin / multiClickThreshhold defaults under Metal
+        JButton d = new JButton();
+        check(d.getIconTextGap() == 4, "iconTextGap default 4");
+        java.awt.Insets m = d.getMargin();
+        check(m != null && m.top == 2 && m.left == 14 && m.bottom == 2 && m.right == 14,
+                "Metal margin [2,14,2,14]");
+        check(d.getMultiClickThreshhold() == 0, "multiClickThreshhold default 0");
+        d.setMultiClickThreshhold(500);
+        check(d.getMultiClickThreshhold() == 500, "multiClickThreshhold round trip");
+        d.setIconTextGap(-1);
+        check(d.getIconTextGap() == -1, "buttons accept negative iconTextGap");
+
+        // alignment setters reject illegal values
+        try { new JButton("x").setHorizontalAlignment(99); check(false, "IAE hAlign"); }
+        catch (IllegalArgumentException expected) { passed++; }
+        try { new JButton("x").setVerticalAlignment(99); check(false, "IAE vAlign"); }
+        catch (IllegalArgumentException expected) { passed++; }
+        try { new JButton("x").setHorizontalTextPosition(99); check(false, "IAE hTextPos"); }
+        catch (IllegalArgumentException expected) { passed++; }
+        try { new JButton("x").setVerticalTextPosition(99); check(false, "IAE vTextPos"); }
+        catch (IllegalArgumentException expected) { passed++; }
+
+        // unset actionCommand falls back to the current text
+        JButton f = new JButton("go");
+        f.setActionCommand("cmd");
+        check("cmd".equals(f.getActionCommand()), "explicit actionCommand wins");
+        List<String> cmds = new ArrayList<>();
+        f.addActionListener(e -> cmds.add(e.getActionCommand()));
+        f.setActionCommand(null);
+        f.doClick();
+        check(cmds.size() == 1 && "go".equals(cmds.get(0)), "unset actionCommand falls back to text");
+        f.doClick(10);
+        check(cmds.size() == 2, "doClick(ms) variant fires too");
+
+        // disabled icon derivation: ImageIcon only, derived on query, explicit wins
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(4, 3, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        javax.swing.ImageIcon imgIcon = new javax.swing.ImageIcon(img);
+        JButton db = new JButton("d", imgIcon);
+        Icon derived = db.getDisabledIcon();
+        check(derived != null && derived != imgIcon, "ImageIcon gets a LaF-derived disabledIcon");
+        check(derived.getIconWidth() == 4 && derived.getIconHeight() == 3,
+                "derived disabledIcon keeps source dimensions");
+        JButton dn = new JButton("d2", fixedIcon());
+        check(dn.getDisabledIcon() == null, "plain Icon implementation gets no derived disabledIcon");
+        db.setDisabledIcon(imgIcon);
+        check(db.getDisabledIcon() == imgIcon, "explicit setDisabledIcon beats derivation");
+
+        // updateUI is a no-throw hook even after swapping the model
+        JButton u = new JButton("u");
+        u.setModel(new DefaultButtonModel());
+        u.updateUI();
+        passed++; // reaching here means updateUI survived
+        check("javax.swing.plaf.metal.MetalButtonUI".equals(u.getUI().getClass().getName()),
+                "updateUI reinstalls MetalButtonUI");
+    }
+
     public static void main(String[] args) throws Exception {
+        javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
         runOnEDT(JButtonTest::testWhiteBox);
         runOnEDT(JButtonTest::testBlackBox);
+        runOnEDT(JButtonTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

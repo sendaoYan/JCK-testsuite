@@ -1,36 +1,43 @@
-# javax.swing.JSplitPane 黑盒行为测试设计
+# javax.swing.JSplitPane 测试设计
 
 ## 1. API 功能
-JSplitPane 是双面板分隔容器，继承 JComponent，实现 Accessible。
-
-- 常量：`HORIZONTAL_SPLIT=1`、`VERTICAL_SPLIT=0`，及 `LEFT/RIGHT/TOP/BOTTOM/DIVIDER` 与 `*_PROPERTY` 字符串常量。
-- 构造器：`JSplitPane()`、`JSplitPane(int orientation)`、`JSplitPane(int, boolean continuousLayout)`、`JSplitPane(int, Component, Component)`、`JSplitPane(int, boolean, Component, Component)`；非法方向抛 IAE。
-- 方向：`getOrientation/setOrientation`。
-- 子组件：`getLeftComponent/setLeftComponent`、`getRightComponent/setRightComponent`、`getTopComponent/setTopComponent`（映射 left）、`getBottomComponent/setBottomComponent`（映射 right）。
-- 分隔条：`getDividerSize/setDividerSize`、`getDividerLocation/setDividerLocation(int)`、`setDividerLocation(double)`（0..1 外抛 IAE）、`getMinimumDividerLocation/getMaximumDividerLocation`、`getLastDividerLocation/setLastDividerLocation`。
-- 行为：`isContinuousLayout/setContinuousLayout`、`isOneTouchExpandable/setOneTouchExpandable`、`getResizeWeight/setResizeWeight`、`resetToPreferredSizes`。
-- UI：`getUIClassID()` 返回 "SplitPaneUI"。
+双区可调分割容器（JComponent + Accessible）：HORIZONTAL_SPLIT=1/VERTICAL_SPLIT=0
+两种方向；left/right 与 top/bottom 是同一对槽位的别名（VERTICAL 语义）；
+divider（分隔条尺寸/位置 int 或比例 double）、resizeWeight（空间再分配权重
+[0,1]）、oneTouchExpandable/continuousLayout 开关；默认构造器自动装两个
+JButton 占位。
 
 ## 2. Java 用户如何使用
-- `JSplitPane sp = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, rightPanel);` 左右布局。
-- `sp.setDividerLocation(200);` 固定分隔位置；`sp.setResizeWeight(0.5);` 平分额外空间。
-- `sp.setOneTouchExpandable(true);` 显示一键收起按钮。
-- `sp.setContinuousLayout(true);` 拖动时实时刷新。
+`JSplitPane sp = new JSplitPane(JSplitPane.VERTICAL_SPLIT, true, tree, detail);`
+主从布局（文件管理器/邮件客户端）；`sp.setOneTouchExpandable(true)` 加收起按钮；
+`sp.setResizeWeight(0.5)` 平分多余空间。
 
-## 3. 开源代码实际用法调研
-JDK 自带测试（`~/git/jdk25u-dev/test/jdk`）：
-- `test/jdk/java/awt/Mixing/AWT_Mixing/JSplitPaneOverlapping.java` 用 JSplitPane 做重叠混合绘制。
-- `test/jdk/java/awt/Component/DimensionEncapsulation/*` 遍历 JSplitPane 验证尺寸封装。
-- `test/jdk/java/awt/regtesthelpers/PassFailJFrame.java` 用 JSplitPane 作为测试脚手架布局。
-以上来源为 `~/git/jdk25u-dev/test/jdk`。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`src/java.desktop/share/classes/javax/swing/JSplitPane.java`；
+`test/jdk/javax/swing/JSplitPane/`（414 browsertest 等）。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒场景（`JSplitPaneTest.testBlackBox()`）：
-1. 默认构造：HORIZONTAL_SPLIT / 左右默认按钮 / resizeWeight 0.0 / getUIClassID。
-2. 方向构造器、组件构造器（左右组件往返）、continuousLayout 构造器。
-3. 非法方向 IAE。
-4. setLeftComponent/setRightComponent/setTopComponent/setBottomComponent 往返（top/bottom 映射 left/right）。
-5. setDividerSize 往返 + 负数忽略。
-6. setOneTouchExpandable/setLastDividerLocation/setResizeWeight/setContinuousLayout 往返。
-7. setDividerLocation(int) 往返；setDividerLocation(double) 越界 IAE。
-8. resetToPreferredSizes 不抛；setLeftComponent(null)/setRightComponent(null) 清空。
+## 4. 测试用例设计 + 易错细节
+- 常量：HORIZONTAL_SPLIT=1/VERTICAL_SPLIT=0（与多数 Swing 方向常量 0=水平不同，
+  易混）。
+- 默认契约：水平方向、**默认构造器装 left/right 两个 JButton 占位**（不是空）、
+  continuousLayout false、oneTouch false、resizeWeight 0.0、dividerSize 10、
+  getUIClassID=="SplitPaneUI"、Metal→MetalSplitPaneUI、
+  getMinimumDividerLocation()>=0（具体值随布局，不锁）。
+- 构造器矩阵：(orient)/(orient,bool)/(orient,l,r)/(orient,bool,l,r) 全语义；
+  new JSplitPane(999)→IllegalArgumentException。
+- **槽位别名**：setTopComponent 更新 getLeftComponent（同一引用），bottom↔right；
+  setLeft/RightComponent(null) 合法清空。
+- **lastDividerLocation 序列（状态机）**：默认 0 → 第一次 setDividerLocation 后
+  变 **-1** → 第二次后是前一次位置（0→-1→40）；setLastDividerLocation 直接往返。
+- divider 位置：int 往返（未显示时字段直存）；setDividerLocation(0.5) 合法、
+  (-5) 不抛；**越界比例 1.5/-0.1→IllegalArgumentException**。
+- resizeWeight：**1.5/-0.1→IAE（"weight must be between 0 and 1" 断类型）**；
+  边界 0.0/1.0 合法。
+- **setDividerSize(-1) 版本差异**：JDK-8 原样存 -1（无校验）；JDK-27 拒负保持
+  10。两侧各按各自行为断言；0 两侧都接受。
+- 方法名坑：是 isContinuousLayout()（无 getContinuousLayout）。
+- 环境：headless 下 Metal LaF 先装；EDT 操作。
+
+自动化实现位于同目录 `JSplitPaneTest.java`：`check(boolean,msg)` 计数断言、
+`checkThrows(Class,Runnable)` 校验精确异常类型，`main` 结尾打印
+`PASS (N assertions)`；jtreg `@run main` 直接驱动。

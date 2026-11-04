@@ -16,3 +16,11 @@
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒覆盖：默认方向/浮动/滚动/边框/空工具栏状态；各构造器；`add` 与 `getComponentIndex/getComponentAtIndex`（含越界与未知组件返回 -1/null）；`setFloatable/setRollover/setOrientation/setBorderPainted/setMargin` 往返；非法 orientation 抛 `IllegalArgumentException`；`addSeparator()` 与 `addSeparator(Dimension)` 产生 `JSeparator` 且横向工具栏分隔条为 VERTICAL；`add(Action)` 返回 JButton、文本取自 Action、`doClick()` 触发 actionPerformed。见 `JToolBarTest.java` 的 `testBlackBox()`。
+
+
+## 5. 深化部分（`JToolBarTest.testDeepContracts`，Action 装配 + 分隔条 + 方向反例）
+1. add(Action) 契约：返回 JButton、text 同步自 Action 名、getAction() 身份一致；action.setEnabled(false/true) 双向传播到按钮；doClick 经 Action 派发。
+2. 索引访问边沿：getComponentIndex(外来按钮)==-1、getComponentAtIndex(count/99/-1)==null。
+3. addSeparator()/addSeparator(Dimension) 各 +1 子组件，分隔条类名为 JToolBar$Separator（非 JSeparator）。
+4. setMargin 往返；setOrientation(99)/(-5) 均 IAE 且拒绝后方向保持。
+5. UI 绑定：MetalToolBarUI / getUIClassID=="ToolBarUI"。

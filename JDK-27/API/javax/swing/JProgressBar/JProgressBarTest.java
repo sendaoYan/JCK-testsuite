@@ -1,6 +1,8 @@
 /*
  * @test
- * @summary javax.swing.JProgressBar conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.JProgressBar conformance: white-box structure + black-box behavior
+ *          + deep component-layer contracts (derived strings, event counting, null-model quirk).
+ *          + deep component-layer contracts (derived strings, event counting, null-model quirk).
  * @key headful
  * @run main JProgressBarTest
  */
@@ -36,7 +38,83 @@ public class JProgressBarTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JProgressBarTest::testWhiteBox);
         runOnEDT(JProgressBarTest::testBlackBox);
+        runOnEDT(JProgressBarTest::testDeepContracts);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: deep component-layer contracts (derived strings, event counting, null-model quirk) ----
+    static void testDeepContracts() throws Exception {
+        // 2-arg ctor starts at min
+        check(new JProgressBar(5, 15).getValue() == 5, "min-max ctor value starts at min");
+
+        JProgressBar pb = new JProgressBar();
+        check("0%".equals(pb.getString()), "default derived string 0%");
+        pb.setValue(50);
+        check("50%".equals(pb.getString()), "derived string 50% at midpoint");
+        check(Math.abs(pb.getPercentComplete() - 0.5) < 1e-9, "percent 0.5");
+        pb.setValue(500);
+        check(pb.getValue() == 100 && "100%".equals(pb.getString()), "clamp to max derives 100%");
+        check(Math.abs(pb.getPercentComplete() - 1.0) < 1e-9, "percent 1.0 at clamp");
+        pb.setValue(-9);
+        check(pb.getValue() == 0 && "0%".equals(pb.getString()), "clamp to min derives 0%");
+
+        pb.setValue(25);
+        pb.setString("done");
+        check("done".equals(pb.getString()), "custom string overrides derived");
+        pb.setValue(75);
+        check("done".equals(pb.getString()), "custom string stable across value changes");
+        pb.setString(null);
+        check("75%".equals(pb.getString()), "null string restores derived");
+
+        pb.setStringPainted(true);
+        check(pb.isStringPainted(), "setStringPainted(true)");
+        pb.setIndeterminate(true);
+        check(pb.isIndeterminate(), "setIndeterminate(true)");
+        pb.setIndeterminate(false);
+        check(!pb.isIndeterminate(), "setIndeterminate(false)");
+        check(pb.isStringPainted(), "stringPainted kept across indeterminate toggle");
+
+        // ChangeEvent counting + propagation
+        final int[] n = new int[1];
+        final javax.swing.event.ChangeEvent[] last = new javax.swing.event.ChangeEvent[1];
+        pb.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent e) { n[0]++; last[0] = e; }
+        });
+        pb.setValue(40);
+        check(n[0] == 1 && last[0].getSource() == pb, "setValue fires one ChangeEvent, source bar");
+        pb.setValue(40);
+        check(n[0] == 1, "same-value setValue fires nothing");
+        DefaultBoundedRangeModel m = new DefaultBoundedRangeModel(7, 0, 0, 9);
+        pb.setModel(m);
+        check(pb.getModel() == m && pb.getValue() == 7, "model swap identity and value");
+        check(n[0] == 1, "model swap itself fires no ChangeEvent");
+        n[0] = 0;
+        m.setValue(8);
+        check(pb.getValue() == 8 && n[0] == 1, "model mutation propagates one ChangeEvent");
+        pb.setModel(pb.getModel());
+        check(n[0] == 1, "same-model re-set fires nothing");
+
+        // setModel(null) is ACCEPTED here (contrast with JSlider NPE); later ops NPE
+        JProgressBar nb = new JProgressBar();
+        nb.setModel(null);
+        check(nb.getModel() == null, "setModel(null) accepted, getModel null");
+        try {
+            nb.setValue(3);
+            check(false, "setValue after null model must throw");
+        } catch (NullPointerException e) { check(true, "setValue after null model NPE"); }
+
+        // orientation negative
+        pb.setOrientation(SwingConstants.VERTICAL);
+        check(pb.getOrientation() == SwingConstants.VERTICAL, "setOrientation(VERTICAL)");
+        try {
+            pb.setOrientation(99);
+            check(false, "setOrientation(99) must throw");
+        } catch (IllegalArgumentException e) { check(true, "setOrientation(99) IAE"); }
+        check(pb.getOrientation() == SwingConstants.VERTICAL, "orientation kept after rejection");
+
+        check(pb.getUI() != null && pb.getUI().getClass().getName().endsWith("MetalProgressBarUI"),
+                "Metal binding installs MetalProgressBarUI");
+        check("ProgressBarUI".equals(pb.getUIClassID()), "getUIClassID ProgressBarUI");
     }
 
     static void testWhiteBox() throws Exception {

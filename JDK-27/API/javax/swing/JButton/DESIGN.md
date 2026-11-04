@@ -23,3 +23,15 @@
 3. doClick：一次 ActionEvent、command 跟随 NAME、模型 ChangeEvent 计数（armed/pressed 4 次）、普通按钮无 ItemEvent；禁用 doClick 无事件。
 4. setModel 往返 + 共享 DefaultButtonModel 无组 + actionCommand 委托模型。
 5. rollover/defaultCapable 往返；根窗格 setDefaultButton/isDefaultButton 链（装入 JFrame 后）。
+
+## 5. 组件层深化批（`testContract`，Metal LaF）
+- UI 身份：`getUIClassID()=="ButtonUI"`；Metal 下 `MetalButtonUI`；
+  `UIManager.setLookAndFeel` 重设后已有按钮 UI 更新。
+- Metal 默认：iconTextGap=4、margin=InsetsUIResource[2,14,2,14]、multiClickThreshhold=0
+  （setMultiClickThreshhold 往返）；按钮侧 `setIconTextGap(-1)` 不抛。
+- 4 个对齐 setter 传 99 抛 IllegalArgumentException。
+- actionCommand 回退链：显式覆盖 → `setActionCommand(null)` → doClick 事件命令回到
+  当前 text；`doClick(ms)` 变体同样触发。
+- **disabledIcon 派生只对 ImageIcon 生效**（GrayFilter 灰度副本、查询时派生、
+  保留源尺寸）；自定义 Icon 无派生；显式 setDisabledIcon 优先。
+- 换模型后 updateUI 不抛并重装 MetalButtonUI。

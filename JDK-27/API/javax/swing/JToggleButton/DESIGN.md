@@ -21,3 +21,14 @@
 3. ItemEvent 记录：select 一次 SELECTED、冗余 setSelected 静默、deselect DESELECTED；doClick 切换 + 一次 ItemEvent。
 4. setText 触发 PropertyChangeEvent（old/new 值）+ setMnemonic 触发 "mnemonic"。
 5. 禁用链：禁用 doClick 不切换；装入 JFrame 后 displayable 断言。
+
+## 5. 组件层深化批（`testContract`，Metal LaF）
+- 完整 8 构造器矩阵（含 text+icon+selected、icon+selected 变体）。
+- UI 身份：`ToggleButtonUI`/`MetalToggleButtonUI`；**rolloverEnabled 默认 false**
+  （与 JButton 的 true 相反——易错）。
+- doClick 双事件：ActionEvent + ItemEvent 成对（SELECTED→DESELECTED），
+  `ItemEvent.getItem()==按钮本身`（JToggleButton.fireItemStateChanged 重发）。
+- 状态机边沿：armed+pressed 不翻转；**release 时翻转**；再 press 保持、再 release 再翻
+  （翻转只发生在 armed 且 release 的边沿）。
+- 组内互斥：点击另一成员转移选择、`getSelection()==胜者模型`。
+- selectedIcon/pressedIcon 身份存储。

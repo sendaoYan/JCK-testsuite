@@ -1,6 +1,7 @@
 /*
  * @test
- * @summary javax.swing.JComboBox conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.JComboBox conformance: white-box structure + black-box behavior
+ *          + deep component-layer contracts (ActionEvent counts, bounds matrix, fixed-model rejections).
  * @key headful
  * @run main JComboBoxTest
  */
@@ -181,9 +182,110 @@ public class JComboBoxTest {
         check(sel.length == 1 && "m2".equals(sel[0]), "getSelectedObjects");
     }
 
+    // ---- Part 3: deep component-layer contracts (ActionEvent counts, bounds matrix, fixed-model rejections) ----
+    static void testDeepContracts() throws Exception {
+        JComboBox<String> cb = new JComboBox<>(new String[]{"a", "b", "c"});
+        final int[] acts = new int[1];
+        final java.awt.event.ActionEvent[] lastAct = new java.awt.event.ActionEvent[1];
+        cb.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { acts[0]++; lastAct[0] = e; }
+        });
+        cb.setSelectedIndex(2);
+        check(acts[0] == 1, "setSelectedIndex fires one ActionEvent");
+        check("comboBoxChanged".equals(lastAct[0].getActionCommand()), "ActionEvent command comboBoxChanged");
+        check(lastAct[0].getSource() == cb, "ActionEvent source is the combo box");
+        cb.setSelectedItem("a");
+        check(acts[0] == 2 && "comboBoxChanged".equals(lastAct[0].getActionCommand()),
+                "setSelectedItem fires one ActionEvent with same command");
+        cb.setSelectedIndex(-1);
+        check(acts[0] == 3 && cb.getSelectedItem() == null, "clear fires one ActionEvent");
+        cb.setEditable(true);
+        check(acts[0] == 3, "setEditable fires no ActionEvent");
+        cb.addActionListener(null);
+        check(true, "addActionListener(null) tolerated no-throw");
+
+        // editor: default non-null, same-instance re-set keeps identity
+        check(cb.getEditor() != null, "editor non-null when editable");
+        javax.swing.ComboBoxEditor ed = cb.getEditor();
+        cb.setEditor(ed);
+        check(cb.getEditor() == ed, "setEditor(same) identity");
+
+        cb.setMaximumRowCount(0);
+        check(cb.getMaximumRowCount() == 0, "setMaximumRowCount(0) accepted, no validation");
+        javax.swing.ListCellRenderer<? super String> r = cb.getRenderer();
+        cb.setRenderer(r);
+        check(cb.getRenderer() == r, "setRenderer identity");
+        check(cb.getRenderer() != null, "default renderer non-null");
+
+        cb.setEnabled(false);
+        check(!cb.isEnabled(), "setEnabled(false)");
+        cb.setEnabled(true);
+        check(cb.isEnabled(), "setEnabled(true) restore");
+
+        // indexed bounds matrix: reads return null, writes throw AIOOBE
+        JComboBox<String> b = new JComboBox<>(new String[]{"a", "b"});
+        check(b.getItemAt(99) == null, "getItemAt(99) null");
+        check(b.getItemAt(-1) == null, "getItemAt(-1) null");
+        try { b.removeItemAt(99); check(false, "removeItemAt(99) must throw"); }
+        catch (ArrayIndexOutOfBoundsException e) { check(true, "removeItemAt(99) AIOOBE"); }
+        try { b.removeItemAt(-1); check(false, "removeItemAt(-1) must throw"); }
+        catch (ArrayIndexOutOfBoundsException e) { check(true, "removeItemAt(-1) AIOOBE"); }
+        try { b.insertItemAt("x", 99); check(false, "insertItemAt(99) must throw"); }
+        catch (ArrayIndexOutOfBoundsException e) { check(true, "insertItemAt(99) AIOOBE"); }
+        check(b.getItemCount() == 2, "failed mutations leave count");
+
+        // removeAllItems event count
+        JComboBox<String> rc = new JComboBox<>(new String[]{"p"});
+        final int[] rActs = new int[1];
+        rc.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { rActs[0]++; }
+        });
+        rc.removeAllItems();
+        check(rc.getItemCount() == 0 && rc.getSelectedIndex() == -1, "removeAllItems empties");
+        check(rActs[0] == 1, "removeAllItems fires exactly one ActionEvent");
+
+        // fixed (non-mutable) model rejects every mutator with RuntimeException
+        class FixedModel implements javax.swing.ComboBoxModel<String> {
+            private String sel; private final String[] items = {"x", "y"};
+            public int getSize() { return items.length; }
+            public String getElementAt(int i) { return items[i]; }
+            public void setSelectedItem(Object o) { sel = (String) o; }
+            public Object getSelectedItem() { return sel; }
+            public void addListDataListener(javax.swing.event.ListDataListener l) { }
+            public void removeListDataListener(javax.swing.event.ListDataListener l) { }
+        }
+        JComboBox<String> fx = new JComboBox<>(new FixedModel());
+        check(fx.getItemCount() == 2, "fixed model count");
+        try { fx.addItem("q"); check(false, "addItem on fixed must throw"); }
+        catch (RuntimeException e) { check(true, "addItem on fixed model RuntimeException"); }
+        try { fx.removeItem("x"); check(false, "removeItem on fixed must throw"); }
+        catch (RuntimeException e) { check(true, "removeItem on fixed model RuntimeException"); }
+        try { fx.removeAllItems(); check(false, "removeAllItems on fixed must throw"); }
+        catch (RuntimeException e) { check(true, "removeAllItems on fixed model RuntimeException"); }
+        try { fx.insertItemAt("q", 0); check(false, "insertItemAt on fixed must throw"); }
+        catch (RuntimeException e) { check(true, "insertItemAt on fixed model RuntimeException"); }
+        check(fx.getItemCount() == 2, "fixed model count unchanged after rejections");
+
+        // setModel(null): NPE (do not reuse the instance afterwards)
+        try {
+            new JComboBox<String>().setModel(null);
+            check(false, "setModel(null) must throw");
+        } catch (NullPointerException e) { check(true, "setModel(null) NPE"); }
+
+        // all standard ctors wire a mutable DefaultComboBoxModel; UI binding
+        check(new JComboBox<String>(new String[]{"z"}).getModel() instanceof DefaultComboBoxModel,
+                "array ctor model is mutable DefaultComboBoxModel");
+        check(new JComboBox<>(new Vector<String>()).getModel() instanceof DefaultComboBoxModel,
+                "vector ctor model is mutable DefaultComboBoxModel");
+        check(cb.getUI() != null && cb.getUI().getClass().getName().endsWith("MetalComboBoxUI"),
+                "Metal binding installs MetalComboBoxUI");
+        check("ComboBoxUI".equals(cb.getUIClassID()), "getUIClassID ComboBoxUI");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(JComboBoxTest::testWhiteBox);
         runOnEDT(JComboBoxTest::testBlackBox);
+        runOnEDT(JComboBoxTest::testDeepContracts);
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -185,9 +185,70 @@ public class JLabelTest {
         check(!frame.isVisible(), "frame not visible after dispose");
     }
 
+    // ---- Part 3: deep contract additions under Metal ----
+    static void testContract() throws Exception {
+        // constructor matrix and LaF defaults
+        JLabel l0 = new JLabel();
+        check("".equals(l0.getText()), "no-arg text is the LaF default (empty string)");
+        check(l0.getIcon() == null, "no-arg icon null");
+        check(l0.getHorizontalTextPosition() == SwingConstants.TRAILING, "horizontalTextPosition default TRAILING");
+        check(l0.getVerticalTextPosition() == SwingConstants.CENTER, "verticalTextPosition default CENTER");
+        check(l0.getAutoscrolls() == false, "labels do not autoscroll by default");
+        check("LabelUI".equals(l0.getUIClassID()), "getUIClassID LabelUI");
+        check("javax.swing.plaf.metal.MetalLabelUI".equals(l0.getUI().getClass().getName()),
+                "Metal installs MetalLabelUI");
+        javax.swing.ImageIcon ic = new javax.swing.ImageIcon(
+                new java.awt.image.BufferedImage(3, 2, java.awt.image.BufferedImage.TYPE_INT_RGB));
+        check(new JLabel(ic).getIcon() == ic, "icon ctor");
+        check("ti".equals(new JLabel("ti", ic, SwingConstants.RIGHT).getText())
+                && new JLabel("ti", ic, SwingConstants.RIGHT).getHorizontalAlignment() == SwingConstants.RIGHT,
+                "text+icon+alignment ctor");
+        check(new JLabel(null, null, SwingConstants.CENTER).getHorizontalAlignment() == SwingConstants.CENTER,
+                "null text/icon ctor tolerated");
+
+        // ---- text semantics
+        l0.setText("hello");
+        check("hello".equals(l0.getText()), "setText/getText");
+        l0.setText(null);
+        check(l0.getText() == null, "setText(null) -> null (not empty)");
+
+        // ---- iconTextGap accepts negative values (no validation)
+        l0.setIconTextGap(-1);
+        check(l0.getIconTextGap() == -1, "setIconTextGap(-1) accepted");
+
+        // ---- displayed mnemonic auto-index + range validation
+        JLabel lm = new JLabel("abc");
+        lm.setDisplayedMnemonic(java.awt.event.KeyEvent.VK_B);
+        check(lm.getDisplayedMnemonic() == java.awt.event.KeyEvent.VK_B, "setDisplayedMnemonic(int)");
+        check(lm.getDisplayedMnemonicIndex() == 1, "UI auto-derives index 1 for 'B' in 'abc'");
+        lm.setDisplayedMnemonicIndex(0);
+        check(lm.getDisplayedMnemonicIndex() == 0, "index may point at any in-range char (no mnemonic-match rule)");
+        try {
+            lm.setDisplayedMnemonicIndex(99);
+            check(false, "IAE mnemonicIndex 99");
+        } catch (IllegalArgumentException expected) { passed++; }
+        try {
+            new JLabel((String) null).setDisplayedMnemonicIndex(0);
+            check(false, "IAE mnemonicIndex on null text");
+        } catch (IllegalArgumentException expected) { passed++; }
+        check(lm.getDisplayedMnemonicIndex() == 0, "failed setters leave index untouched");
+
+        // ---- derived disabled icon: ImageIcon only, derived on query, explicit wins
+        l0.setIcon(ic);
+        check(l0.getIcon() == ic, "setIcon identity");
+        javax.swing.Icon derived = l0.getDisabledIcon();
+        check(derived != null && derived != ic, "ImageIcon gets a LaF-derived disabledIcon");
+        l0.setDisabledIcon(ic);
+        check(l0.getDisabledIcon() == ic, "explicit disabledIcon wins");
+        check(new JLabel("d", fixedIcon(2, 2), SwingConstants.LEFT).getDisabledIcon() == null,
+                "plain Icon gets no derived disabledIcon");
+    }
+
     public static void main(String[] args) throws Exception {
+        javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
         runOnEDT(JLabelTest::testWhiteBox);
         runOnEDT(JLabelTest::testBlackBox);
+        runOnEDT(JLabelTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

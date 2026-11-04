@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary javax.swing.JPanel conformance: white-box structure + black-box behavior.
- * @key headful
+ * @summary javax.swing.JPanel conformance: white-box structure + black-box behavior
+ *          + Metal UI delegate, layout swap, child bookkeeping (headless-safe, Metal LaF).
  * @run main JPanelTest
  */
 
@@ -10,13 +10,16 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.awt.Rectangle;
 import java.lang.reflect.Modifier;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.UIManager;
 import javax.swing.border.Border;
 import javax.swing.border.LineBorder;
 import javax.swing.plaf.PanelUI;
+import javax.swing.plaf.metal.MetalLookAndFeel;
 
 public class JPanelTest {
     static int passed;
@@ -130,9 +133,42 @@ public class JPanelTest {
         check(p.getAccessibleContext() != null, "getAccessibleContext non-null");
     }
 
+    // ---- Part 3: Metal UI delegate, layout swap, child bookkeeping ----
+    static void testContractExtras() throws Exception {
+        JPanel p = new JPanel();
+        check("BasicPanelUI".equals(p.getUI().getClass().getSimpleName()), "Metal installs BasicPanelUI");
+        check(p.isOptimizedDrawingEnabled(), "optimized drawing default true");
+
+        JPanel p5 = new JPanel(new BorderLayout(), true);
+        check(p5.isDoubleBuffered(), "JPanel(layout,true) double buffered");
+
+        p.setLayout(new GridLayout(1, 2));
+        check(p.getLayout() instanceof GridLayout, "setLayout round-trip");
+        p.setLayout(new FlowLayout());
+        check(p.getLayout() instanceof FlowLayout, "setLayout back to FlowLayout");
+        p.updateUI();
+        check(p.getUI() instanceof PanelUI, "updateUI keeps PanelUI");
+
+        p.add(new JLabel("a"));
+        p.add(new JLabel("b"));
+        check(p.getComponentCount() == 2, "component count after adds");
+        check(p.getComponent(1) instanceof JLabel, "getComponent(int) type");
+        check("b".equals(((JLabel) p.getComponent(1)).getText()), "getComponent(int) identity");
+        p.remove(1);
+        check(p.getComponentCount() == 1, "component count after remove(int)");
+        p.removeAll();
+        check(p.getComponentCount() == 0, "component count after removeAll");
+    }
+
     public static void main(String[] args) throws Exception {
+        try {
+            UIManager.setLookAndFeel(new MetalLookAndFeel());
+        } catch (Exception e) {
+            throw new AssertionError("cannot install Metal LaF", e);
+        }
         runOnEDT(JPanelTest::testWhiteBox);
         runOnEDT(JPanelTest::testBlackBox);
+        runOnEDT(JPanelTest::testContractExtras);
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

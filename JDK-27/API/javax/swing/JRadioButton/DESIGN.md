@@ -22,3 +22,14 @@
 4. 组内 setSelected(false) 被拒绝（活动单选保持选中）。
 5. group.clearSelection + 重新选中 getSelection 身份；doClick 遵循互斥。
 6. mnemonic/actionCommand 往返；装入 JFrame 后选中态保留。
+
+## 5. 组件层深化批（`testContract`，Metal LaF）
+- 完整 8 构造器矩阵；no-arg 默认 icon 为 null。
+- Metal 默认：borderPainted=false、rolloverEnabled=true、focusPainted=true；
+  `RadioButtonUI`/`MetalRadioButtonUI`；模型继承 ToggleButtonModel。
+- 单选语义：选中项再 doClick **保持选中**且其他成员无事件（组内 radio 与组外
+  toggle 的 doClick 行为差异——同一 ToggleButtonModel 因 group 存在与否而不同）。
+- 选择转移恰好一对 SELECTED/DESELECTED；`getSelection()` 跟随。
+- clearSelection 全清；**remove 后该成员恢复独立翻转**（两次 doClick 归零），
+  组内 setSelected 切换独占、组外 setSelected 不影响组内。
+- selectedIcon 身份存储。

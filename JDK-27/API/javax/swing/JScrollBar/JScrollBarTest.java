@@ -1,6 +1,7 @@
 /*
  * @test
- * @summary javax.swing.JScrollBar conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.JScrollBar conformance: white-box structure + black-box behavior
+ *          + deep component-layer contracts (clamp rules, increment no-validation, model propagation).
  * @key headful
  * @run main JScrollBarTest
  */
@@ -147,9 +148,80 @@ public class JScrollBarTest {
         check(src[0] == sb3, "adjustment source is scrollbar");
     }
 
+    // ---- Part 3: deep component-layer contracts (clamp rules, increment no-validation, model propagation) ----
+    static void testDeepContracts() throws Exception {
+        // setValue clamps into [min, max-extent]
+        JScrollBar sb = new JScrollBar();
+        sb.setValue(1000);
+        check(sb.getValue() == 90, "setValue(1000) clamps to max-extent 90");
+        sb.setValue(-5);
+        check(sb.getValue() == 0, "setValue(-5) clamps to min 0");
+
+        // increments are NOT validated (contrast with value clamping)
+        sb.setUnitIncrement(0);
+        check(sb.getUnitIncrement() == 0, "setUnitIncrement(0) accepted, no validation");
+        sb.setBlockIncrement(-1);
+        check(sb.getBlockIncrement() == -1, "setBlockIncrement(-1) accepted, no validation");
+        sb.setOrientation(Adjustable.HORIZONTAL);
+        check(sb.getOrientation() == Adjustable.HORIZONTAL, "setOrientation(HORIZONTAL)");
+        check(sb.getUnitIncrement() == 0 && sb.getBlockIncrement() == -1,
+                "orientation change keeps increments");
+        check(sb.getOrientation() == Adjustable.HORIZONTAL, "orientation kept");
+
+        // ctor orientation validation
+        try {
+            new JScrollBar(99);
+            check(false, "ctor JScrollBar(99) must throw");
+        } catch (IllegalArgumentException e) { check(true, "ctor JScrollBar(99) IAE"); }
+
+        // setValues is a raw bulk setter: requested value stored unclamped
+        sb.setValues(95, 20, 0, 100);
+        check(sb.getValue() == 95, "setValues stores requested value unclamped");
+        check(sb.getMaximum() == 100, "setValues keeps requested max");
+        // extent clamps into [0, max - value]: 50 -> 100-95 = 5
+        sb.setVisibleAmount(50);
+        check(sb.getVisibleAmount() == 5, "setVisibleAmount clamps extent to max-value");
+
+        // per-mutation event counts on a fresh bar
+        JScrollBar f = new JScrollBar();
+        final int[] n = new int[1];
+        f.addAdjustmentListener(new AdjustmentListener() {
+            public void adjustmentValueChanged(AdjustmentEvent e) { n[0]++; }
+        });
+        f.setMinimum(5);
+        check(n[0] == 1 && f.getMinimum() == 5, "setMinimum fires one event");
+        f.setVisibleAmount(20);
+        check(n[0] == 2 && f.getVisibleAmount() == 20, "setVisibleAmount fires one event");
+        f.setMaximum(300);
+        check(n[0] == 3 && f.getMaximum() == 300, "setMaximum fires one event");
+        check(f.getValue() <= f.getMaximum() - f.getVisibleAmount(), "invariant after model edits");
+
+        // model swap: identity, quiet, live propagation; null rejected
+        DefaultBoundedRangeModel m = new DefaultBoundedRangeModel(5, 10, 0, 50);
+        n[0] = 0;
+        f.setModel(m);
+        check(f.getModel() == m, "setModel identity");
+        check(f.getValue() == 5, "value visible from swapped model");
+        check(n[0] == 0, "model swap itself fires no AdjustmentEvent");
+        m.setValue(9);
+        check(f.getValue() == 9, "model mutation visible in scrollbar");
+        check(n[0] == 1, "model mutation fires AdjustmentEvent via scrollbar");
+        try {
+            new JScrollBar().setModel(null);
+            check(false, "setModel(null) must throw");
+        } catch (NullPointerException e) { check(true, "setModel(null) NPE"); }
+
+        // UI binding
+        check(sb.getUI() != null && sb.getUI().getClass().getName().endsWith("MetalScrollBarUI"),
+                "Metal binding installs MetalScrollBarUI");
+        check("ScrollBarUI".equals(sb.getUIClassID()), "getUIClassID ScrollBarUI");
+        check(sb.getAccessibleContext() != null, "getAccessibleContext non-null");
+    }
+
     public static void main(String[] args) throws Exception {
         runOnEDT(JScrollBarTest::testWhiteBox);
         runOnEDT(JScrollBarTest::testBlackBox);
+        runOnEDT(JScrollBarTest::testDeepContracts);
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

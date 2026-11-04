@@ -1,6 +1,7 @@
 /*
  * @test
- * @summary javax.swing.JSlider conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.JSlider conformance: white-box structure + black-box behavior
+ *          + deep component-layer contracts (clamp cascades, snap math, ChangeEvent counting).
  * @key headful
  * @run main JSliderTest
  */
@@ -40,7 +41,92 @@ public class JSliderTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JSliderTest::testWhiteBox);
         runOnEDT(JSliderTest::testBlackBox);
+        runOnEDT(JSliderTest::testDeepContracts);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: deep component-layer contracts (clamp cascades, snap math, ChangeEvent counting) ----
+    static void testDeepContracts() throws Exception {
+        // 2-arg ctor value is the midpoint, not min
+        check(new JSlider(10, 20).getValue() == 15, "2-arg ctor value is midpoint (10+20)/2");
+
+        // min/max clamp cascades
+        JSlider s = new JSlider(); // 0..100 value 50
+        s.setValue(200);
+        check(s.getValue() == 100, "setValue(200) clamps to max");
+        s.setValue(-5);
+        check(s.getValue() == 0, "setValue(-5) clamps to min");
+        s.setValue(50);
+        s.setMinimum(200);
+        check(s.getMinimum() == 200, "setMinimum(200) drags min above value");
+        check(s.getValue() == 200, "value follows min upward");
+        s.setMaximum(150); // min==200 collapses everything to 150
+        check(s.getMaximum() == 150, "setMaximum(150) below min clamps max");
+        check(s.getMinimum() == 150, "min follows max down");
+        check(s.getValue() == 150, "value follows collapse");
+
+        // snap-to-ticks exact math with spacing 5
+        JSlider t = new JSlider();
+        t.setMinorTickSpacing(5);
+        t.setSnapToTicks(true);
+        t.setValue(3);
+        check(t.getValue() == 5, "snap setValue(3) -> 5");
+        t.setValue(4);
+        check(t.getValue() == 5, "snap setValue(4) -> 5");
+        t.setValue(2);
+        check(t.getValue() == 0, "snap setValue(2) -> 0");
+        t.setSnapToTicks(false);
+        t.setValue(3);
+        check(t.getValue() == 3, "snap off keeps exact 3");
+
+        // ChangeEvent counting: one per real change, none for same value,
+        // propagation from model mutations, quiet same-model re-set
+        JSlider q = new JSlider();
+        final int[] n = new int[1];
+        final javax.swing.event.ChangeEvent[] last = new javax.swing.event.ChangeEvent[1];
+        q.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent e) { n[0]++; last[0] = e; }
+        });
+        q.setValue(60);
+        check(n[0] == 1 && last[0].getSource() == q, "setValue fires one ChangeEvent, source slider");
+        q.setValue(60);
+        check(n[0] == 1, "same-value setValue fires nothing");
+        DefaultBoundedRangeModel m = new DefaultBoundedRangeModel(7, 0, 0, 9);
+        q.setModel(m);
+        check(q.getModel() == m && q.getValue() == 7, "model swap identity and value");
+        check(n[0] == 1, "model swap itself fires no ChangeEvent");
+        n[0] = 0;
+        m.setValue(8);
+        check(q.getValue() == 8, "model mutation visible");
+        check(n[0] == 1, "model mutation fires ChangeEvent via slider");
+        q.setModel(q.getModel());
+        check(n[0] == 1, "same-model re-set fires nothing");
+        try {
+            new JSlider().setModel(null);
+            check(false, "setModel(null) must throw");
+        } catch (NullPointerException e) { check(true, "setModel(null) NPE"); }
+
+        // labelTable null + createStandardLabels bounds
+        s.setLabelTable(null);
+        check(s.getLabelTable() == null, "setLabelTable(null) accepted");
+        try {
+            new JSlider(0, 100).createStandardLabels(0);
+            check(false, "createStandardLabels(0) must throw");
+        } catch (IllegalArgumentException e) { check(true, "createStandardLabels(0) IAE"); }
+
+        try {
+            new JSlider(99);
+            check(false, "ctor JSlider(99) must throw");
+        } catch (IllegalArgumentException e) { check(true, "ctor JSlider(99) IAE"); }
+        try {
+            s.setOrientation(99);
+            check(false, "setOrientation(99) must throw");
+        } catch (IllegalArgumentException e) { check(true, "setOrientation(99) IAE"); }
+        check(s.getOrientation() == SwingConstants.HORIZONTAL, "orientation kept after rejection");
+
+        check(s.getUI() != null && s.getUI().getClass().getName().endsWith("MetalSliderUI"),
+                "Metal binding installs MetalSliderUI");
+        check("SliderUI".equals(s.getUIClassID()), "getUIClassID SliderUI");
     }
 
     static void testWhiteBox() throws Exception {

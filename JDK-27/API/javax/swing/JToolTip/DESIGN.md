@@ -21,3 +21,10 @@ tip.setComponent(component);
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `JComponent` + `Accessible`。
 - 行为（黑盒）：`testBlackBox()` 覆盖初始 `getComponent` null、`setTipText/getTipText`、`setComponent/getComponent`、`getUIClassID`。
+
+
+## 5. 深化部分（`JToolTipTest.testBlackBox` 重写，空安全往返 + UI 绑定 + 属性分工）
+1. 初始 tipText/component 均 null；setTipText 覆写/置 null、setComponent 换绑/置 null 全部空安全。
+2. UI 绑定（Metal 先行）：MetalToolTipUI / getUIClassID=="ToolTipUI" / updateUI 重绑无异常。
+3. accessibleContext 非空且实例稳定（两次获取同一对象）。
+4. 属性分工：setToolTipText 是 JComponent 级属性，不馈入 getTipText（getTipText 仍 null），两者互不相干。

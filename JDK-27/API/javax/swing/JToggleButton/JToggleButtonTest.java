@@ -154,9 +154,76 @@ public class JToggleButtonTest {
         check(!frame.isVisible(), "frame not visible after dispose");
     }
 
+    // ---- Part 3: deep contract additions under Metal ----
+    static void testContract() throws Exception {
+        // full constructor matrix
+        check(!new JToggleButton().isSelected(), "no-arg unselected");
+        check(new JToggleButton("s", true).isSelected(), "text+selected ctor");
+        check(!new JToggleButton("s", false).isSelected(), "text+selected ctor false");
+        check(new JToggleButton(fixedIcon(), true).isSelected(), "icon+selected ctor");
+        check(new JToggleButton("tsc", fixedIcon(), true).isSelected(), "text+icon+selected ctor");
+        check(new JToggleButton("ti", fixedIcon()).getIcon() != null, "text+icon ctor");
+
+        // UI delegate and toggle-specific default
+        check("ToggleButtonUI".equals(new JToggleButton().getUIClassID()), "getUIClassID ToggleButtonUI");
+        check("javax.swing.plaf.metal.MetalToggleButtonUI".equals(new JToggleButton().getUI().getClass().getName()),
+                "Metal installs MetalToggleButtonUI");
+        check(!new JToggleButton().isRolloverEnabled(), "rolloverEnabled default false for toggle buttons");
+
+        // doClick toggles and pairs Action + Item events
+        JToggleButton b = new JToggleButton("t");
+        List<ItemEvent> items = new ArrayList<>();
+        List<String> acts = new ArrayList<>();
+        b.addItemListener((ItemListener) e -> items.add(e));
+        b.addActionListener(e -> acts.add(e.getActionCommand()));
+        b.doClick();
+        check(b.isSelected() && acts.size() == 1, "doClick selects and fires ActionEvent");
+        check(items.size() == 1 && items.get(0).getStateChange() == ItemEvent.SELECTED, "ItemEvent SELECTED");
+        b.doClick();
+        check(!b.isSelected() && acts.size() == 2, "second doClick unselects, second ActionEvent");
+        check(items.size() == 2 && items.get(1).getStateChange() == ItemEvent.DESELECTED,
+                "ItemEvent DESELECTED");
+        check(items.get(0).getItem() == b, "ItemEvent item is the re-firing button");
+
+        // press/release state machine: flip happens on release while armed
+        JToggleButton.ToggleButtonModel mod =
+                (JToggleButton.ToggleButtonModel) new JToggleButton().getModel();
+        mod.setArmed(true);
+        mod.setPressed(true);
+        check(mod.isArmed() && mod.isPressed() && !mod.isSelected(), "armed+pressed keeps selection pending");
+        mod.setPressed(false);
+        check(mod.isSelected(), "release latches selection");
+        mod.setPressed(true);
+        mod.setPressed(false);
+        check(!mod.isSelected(), "second release cycle unselects");
+        mod.setPressed(true);
+        check(!mod.isSelected(), "selection unchanged while pressed (flip waits for release)");
+        mod.setPressed(false);
+        check(mod.isSelected(), "release flips again");
+
+        // group exclusivity across toggles
+        JToggleButton x = new JToggleButton("x"), y = new JToggleButton("y");
+        javax.swing.ButtonGroup g = new javax.swing.ButtonGroup();
+        g.add(b); g.add(x); g.add(y);
+        b.doClick();
+        check(b.isSelected() && !x.isSelected() && !y.isSelected(), "one selected after first click");
+        y.doClick();
+        check(!b.isSelected() && y.isSelected(), "clicking another member transfers selection");
+        check(g.getSelection() == y.getModel(), "group tracks the winner");
+
+        // icon plumbing
+        Icon ic = fixedIcon();
+        b.setSelectedIcon(ic);
+        check(b.getSelectedIcon() == ic, "selectedIcon identity");
+        b.setPressedIcon(ic);
+        check(b.getPressedIcon() == ic, "pressedIcon identity");
+    }
+
     public static void main(String[] args) throws Exception {
+        javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
         runOnEDT(JToggleButtonTest::testWhiteBox);
         runOnEDT(JToggleButtonTest::testBlackBox);
+        runOnEDT(JToggleButtonTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

@@ -1,6 +1,8 @@
 /*
  * @test
- * @summary javax.swing.JToolBar conformance: white-box structure + black-box behavior.
+ * @summary javax.swing.JToolBar conformance: white-box structure + black-box behavior
+ *          + deep component-layer contracts (Action wiring, separators, orientation negatives).
+ *          + deep component-layer contracts (Action wiring, separators, orientation negatives).
  * @key headful
  * @run main JToolBarTest
  */
@@ -42,7 +44,71 @@ public class JToolBarTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JToolBarTest::testWhiteBox);
         runOnEDT(JToolBarTest::testBlackBox);
+        runOnEDT(JToolBarTest::testDeepContracts);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: deep component-layer contracts (Action wiring, separators, orientation negatives) ----
+    static void testDeepContracts() throws Exception {
+        // add(Action): button text synced from action name, enabled state propagates
+        JToolBar tb = new JToolBar();
+        final boolean[] fired = new boolean[1];
+        Action act = new AbstractAction("TB") {
+            public void actionPerformed(ActionEvent e) { fired[0] = true; }
+        };
+        JButton added = tb.add(act);
+        check(added instanceof JButton, "add(Action) returns JButton");
+        check("TB".equals(added.getText()), "button text synced from action name");
+        check(added.getAction() == act, "button action is the given action");
+        check(added.isEnabled(), "button enabled while action enabled");
+        act.setEnabled(false);
+        check(!added.isEnabled(), "action disable propagates to button");
+        act.setEnabled(true);
+        check(added.isEnabled(), "action re-enable propagates to button");
+        added.doClick();
+        check(fired[0], "button click dispatches through the action");
+
+        // indexed child access edges
+        JButton b1 = new JButton("1");
+        tb.add(b1);
+        check(tb.getComponentIndex(b1) == 1, "index after action button is 1");
+        check(tb.getComponentIndex(new JButton("alien")) == -1, "foreign button index -1");
+        check(tb.getComponentAtIndex(tb.getComponentCount()) == null, "getComponentAtIndex(count) null");
+        check(tb.getComponentAtIndex(99) == null && tb.getComponentAtIndex(-1) == null,
+                "getComponentAtIndex(99)/(-1) null");
+
+        // separators: exact class and counting
+        int before = tb.getComponentCount();
+        tb.addSeparator();
+        check(tb.getComponentCount() == before + 1, "addSeparator() adds one child");
+        check("javax.swing.JToolBar$Separator".equals(
+                tb.getComponent(tb.getComponentCount() - 1).getClass().getName()),
+                "separator component class JToolBar$Separator");
+        tb.addSeparator(new Dimension(11, 22));
+        check(tb.getComponentCount() == before + 2, "addSeparator(dim) adds one child");
+
+        // margin roundtrip
+        Insets m = new Insets(1, 2, 3, 4);
+        tb.setMargin(m);
+        check(tb.getMargin().equals(m), "setMargin roundtrip");
+
+        // orientation negatives with state kept
+        tb.setOrientation(SwingConstants.VERTICAL);
+        check(tb.getOrientation() == SwingConstants.VERTICAL, "setOrientation(VERTICAL)");
+        try {
+            tb.setOrientation(99);
+            check(false, "setOrientation(99) must throw");
+        } catch (IllegalArgumentException e) { check(true, "setOrientation(99) IAE"); }
+        check(tb.getOrientation() == SwingConstants.VERTICAL, "orientation kept after rejection");
+        try {
+            tb.setOrientation(-5);
+            check(false, "setOrientation(-5) must throw");
+        } catch (IllegalArgumentException e) { check(true, "setOrientation(-5) IAE"); }
+        check(tb.getOrientation() == SwingConstants.VERTICAL, "orientation kept after second rejection");
+
+        check(tb.getUI() != null && tb.getUI().getClass().getName().endsWith("MetalToolBarUI"),
+                "Metal binding installs MetalToolBarUI");
+        check("ToolBarUI".equals(tb.getUIClassID()), "getUIClassID ToolBarUI");
     }
 
     static void testWhiteBox() throws Exception {

@@ -16,6 +16,7 @@ import javax.swing.ButtonGroup;
 import javax.swing.ButtonModel;
 import javax.swing.JFrame;
 import javax.swing.JRadioButton;
+import javax.swing.JToggleButton;
 
 public class JRadioButtonTest {
     static int passed;
@@ -137,9 +138,71 @@ public class JRadioButtonTest {
         check(!frame.isVisible(), "frame not visible after dispose");
     }
 
+    // ---- Part 3: deep contract additions under Metal ----
+    static void testContract() throws Exception {
+        javax.swing.Icon ic = new javax.swing.ImageIcon(
+                new java.awt.image.BufferedImage(2, 2, java.awt.image.BufferedImage.TYPE_INT_RGB));
+        // full constructor matrix
+        JRadioButton b0 = new JRadioButton();
+        check(!b0.isSelected(), "no-arg unselected");
+        check(b0.getIcon() == null, "no-arg default icon null");
+        check(new JRadioButton(ic).getIcon() == ic, "icon ctor");
+        check(new JRadioButton("ri", ic).getIcon() == ic, "text+icon ctor");
+        check(new JRadioButton("rs", true).isSelected(), "text+selected ctor");
+        check(!new JRadioButton("rs", false).isSelected(), "text+selected ctor false");
+        check(new JRadioButton(ic, true).isSelected(), "icon+selected ctor");
+        check(new JRadioButton("rsc", ic, true).isSelected(), "text+icon+selected ctor");
+
+        // radio-specific defaults under Metal
+        check(b0.getModel() instanceof JToggleButton.ToggleButtonModel, "ToggleButtonModel inherited");
+        check("RadioButtonUI".equals(b0.getUIClassID()), "getUIClassID RadioButtonUI");
+        check("javax.swing.plaf.metal.MetalRadioButtonUI".equals(b0.getUI().getClass().getName()),
+                "Metal installs MetalRadioButtonUI");
+        check(!b0.isBorderPainted(), "borderPainted default false");
+        check(b0.isRolloverEnabled(), "rolloverEnabled default true");
+        check(b0.isFocusPainted(), "focusPainted default true");
+
+        // re-clicking the selected radio keeps it selected and stays quiet
+        JRadioButton r1 = new JRadioButton("r1"), r3 = new JRadioButton("r3");
+        List<ItemEvent> items3 = new ArrayList<>();
+        r3.addItemListener((ItemListener) e -> items3.add(e));
+        ButtonGroup g = new ButtonGroup();
+        g.add(r1); g.add(r3);
+        check(g.getButtonCount() == 2, "group count");
+        r3.doClick();
+        check(r3.isSelected() && !r1.isSelected(), "r3 selected exclusively");
+        check(items3.size() == 1 && items3.get(0).getStateChange() == ItemEvent.SELECTED, "one SELECTED ItemEvent");
+        r1.doClick();
+        check(r1.isSelected() && !r3.isSelected(), "selection transfers to r1");
+        check(items3.size() == 2 && items3.get(1).getStateChange() == ItemEvent.DESELECTED, "r3 DESELECTED");
+        items3.clear();
+        r1.doClick();
+        check(r1.isSelected(), "re-clicking selected radio keeps selection");
+        check(items3.isEmpty(), "no ItemEvent from clicking unselected sibling");
+        check(g.getSelection() == r1.getModel(), "group selection is r1 model");
+
+        // removal restores independent toggle behaviour for the removed radio only
+        g.clearSelection();
+        check(!r1.isSelected(), "clearSelection empties radio group");
+        g.remove(r1);
+        r1.doClick();
+        check(r1.isSelected(), "removed radio selects");
+        r1.doClick();
+        check(!r1.isSelected(), "ungrouped radio toggles off on second click");
+        r1.doClick();
+        r3.setSelected(true);
+        check(r3.isSelected() && r1.isSelected(), "grouped setSelected leaves ungrouped selection alone");
+
+        // icon plumbing
+        b0.setSelectedIcon(ic);
+        check(b0.getSelectedIcon() == ic, "selectedIcon identity");
+    }
+
     public static void main(String[] args) throws Exception {
+        javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
         runOnEDT(JRadioButtonTest::testWhiteBox);
         runOnEDT(JRadioButtonTest::testBlackBox);
+        runOnEDT(JRadioButtonTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

@@ -1,17 +1,23 @@
 /*
  * @test
- * @summary javax.swing.JLayer conformance: white-box structure + black-box behavior.
- * @key headful
+ * @summary javax.swing.JLayer conformance: white-box structure + black-box behavior
+ *          + LayerUI swap property event, getUIClassID, null-view ctor, border
+ *          delegation version note (headless-safe, Metal LaF).
  * @run main JLayerTest
  */
 
 import java.awt.EventQueue;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.lang.reflect.Modifier;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JLayer;
 import javax.swing.JPanel;
+import javax.swing.UIManager;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import javax.swing.plaf.LayerUI;
+import javax.swing.plaf.metal.MetalLookAndFeel;
 
 public class JLayerTest {
     static int passed;
@@ -33,12 +39,6 @@ public class JLayerTest {
             if (t instanceof Error) throw (Error) t;
             throw new RuntimeException(t);
         }
-    }
-
-    public static void main(String[] args) throws Exception {
-        runOnEDT(JLayerTest::testWhiteBox);
-        runOnEDT(JLayerTest::testBlackBox);
-        System.out.println("PASS (" + passed + " assertions)");
     }
 
     static void testWhiteBox() throws Exception {
@@ -119,5 +119,44 @@ public class JLayerTest {
 
         bl.updateUI();
         check(true, "updateUI ok");
+    }
+
+    // ---- Part 3: LayerUI swap event, class id, null-view ctor ----
+    static void testContractLayerUI() throws Exception {
+        check("ComponentUI".equals(new JLayer<JPanel>().getUIClassID()), "getUIClassID ComponentUI");
+
+        LayerUI<JPanel> u3 = new LayerUI<JPanel>();
+        JLayer<JPanel> nullView = new JLayer<JPanel>(null, u3);
+        check(nullView.getView() == null, "null-view ctor view null");
+        check(nullView.getUI() == u3, "null-view ctor ui");
+        check(nullView.getBorder() == null, "getBorder null with no view");
+
+        // setUI swap fires a "UI" property change with old/new values.
+        JLayer<JPanel> layer = new JLayer<JPanel>(new JPanel());
+        LayerUI<?> oldUi = layer.getUI();
+        AtomicReference<PropertyChangeEvent> ev = new AtomicReference<>();
+        layer.addPropertyChangeListener((PropertyChangeEvent e) -> {
+            if ("UI".equals(e.getPropertyName())) ev.set(e);
+        });
+        LayerUI<JPanel> newUi = new LayerUI<JPanel>();
+        layer.setUI(newUi);
+        check(layer.getUI() == newUi, "setUI round-trip");
+        check(ev.get() != null, "setUI fires UI property event");
+        check(ev.get().getOldValue() == oldUi, "UI event old value");
+        check(ev.get().getNewValue() == newUi, "UI event new value");
+        layer.updateUI();
+        check(true, "updateUI no-throw after swap");
+    }
+
+    public static void main(String[] args) throws Exception {
+        try {
+            UIManager.setLookAndFeel(new MetalLookAndFeel());
+        } catch (Exception e) {
+            throw new AssertionError("cannot install Metal LaF", e);
+        }
+        runOnEDT(JLayerTest::testWhiteBox);
+        runOnEDT(JLayerTest::testBlackBox);
+        runOnEDT(JLayerTest::testContractLayerUI);
+        System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -34,3 +34,11 @@ JDK 自带测试（`~/git/jdk25u-dev/test/jdk`）：
 6. setValues 一次设置四项。
 7. setValueIsAdjusting 往返、setModel 往返。
 8. addAdjustmentListener + setValue 触发一次 AdjustmentEvent(TRACK) 且 source 为 JScrollBar。
+
+## 5. 深化部分（`JScrollBarTest.testDeepContracts`，钳制规则 + 增量无校验 + 模型传播）
+1. setValue 钳制到 [min, max-extent]：setValue(1000)→90、setValue(-5)→0。
+2. **增量无任何校验**（与值钳制对照）：setUnitIncrement(0)、setBlockIncrement(-1) 照单全收；方向切换不重置增量。ctor JScrollBar(99) IAE。
+3. setValues 是原始批量 setter：请求值不钳制原样存储（value+extent 可超 max）；随后 setVisibleAmount(50) 把 extent 钳到 max-value=5。
+4. 逐变更事件计数：setMinimum/setVisibleAmount/setMaximum 各 1 次 AdjustmentEvent（TRACK）。
+5. 模型交换：身份保持、本身 0 事件；模型直接变异（m.setValue）经滚动条转发 1 次事件；setModel(null) NPE。
+6. UI 绑定：MetalScrollBarUI / getUIClassID=="ScrollBarUI"。

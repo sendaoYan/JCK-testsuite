@@ -1,25 +1,43 @@
-# javax.swing.JRootPane — DESIGN
+# javax.swing.JRootPane 测试设计
 
 ## 1. API 功能
-窗口根容器（`extends JComponent`，implements `Accessible`），组织 contentPane/layeredPane/glassPane/menuBar。核心方法分组：
-- 窗格：`getContentPane/setContentPane`、`getLayeredPane/setLayeredPane`、`getGlassPane/setGlassPane`。
-- 菜单栏：`setJMenuBar/getJMenuBar`、`getMenuBar`（deprecated）。
-- 默认按钮：`setDefaultButton/getDefaultButton`。
-- 装饰样式：`setWindowDecorationStyle/getWindowDecorationStyle`（常量 NONE/FRAME/PLAIN_DIALOG/INFORMATION_DIALOG/ERROR_DIALOG/COLOR_CHOOSER_DIALOG/FILE_CHOOSER_DIALOG/QUESTION_DIALOG/WARNING_DIALOG；非法值 IAE）。
-- 验证根：`isValidateRoot()`。
+顶层容器根结构（JComponent + Accessible）：管理 contentPane/layeredPane/glassPane
+三层（layeredPane 内 FRAME_CONTENT_LAYER=-30000 承载 contentPane+menuBar）、
+JMenuBar/defaultButton 挂点、windowDecorationStyle（NONE/FRAME/6 种对话框样式，
+1..8）、isValidateRoot；getUIClassID=="RootPaneUI"。
 
 ## 2. Java 用户如何使用
-`JRootPane root = new JRootPane();` → `root.setContentPane(new JPanel())`（旧 contentPane 从 layeredPane 解绑、新 pane 挂到 FRAME_CONTENT_LAYER）→ `root.setJMenuBar(mb)` → `root.setDefaultButton(btn)`。窗口装饰：在已挂进窗口的 rootPane（`frame.getRootPane()`）上 `setWindowDecorationStyle(FRAME)` 循环设置各样式；`setContentPane(null)`/`setLayeredPane(null)` → IllegalComponentStateException，`setGlassPane(null)` → NPE。
+`JDialog frame` 类内部自动建 JRootPane；程序侧
+`frame.getRootPane().setDefaultButton(okButton)`（回车触发）、
+`rootPane.setWindowDecorationStyle(JRootPane.FRAME)` 启用 Swing 自绘标题栏。
+直接 `new JRootPane()` 用于自定义顶层容器/单元测试。
 
-## 3. 开源用法调研（来源：JDK 源码 + test/jdk）
-- `~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/JFrame.java`：`setRootPane` 把 rootPane `add(rootPane, BorderLayout.CENTER)`；JDialog/JWindow 同构。
-- `~/git/jdk25u-dev/src/java.desktop/share/classes/javax/swing/plaf/metal/MetalRootPaneUI.java`：`setWindowDecorationStyle != NONE` 时 `installClientDecorations`，经 `root.getParent()` 取窗口（独立 rootPane 会 NPE）。
-- `~/git/jdk25u-dev/test/jdk/javax/swing/JRootPane/`：窗格替换、菜单栏、装饰样式断言。
+## 3. 开源实际用法调研（本地源码+自带测试，web 未使用）
+`src/java.desktop/share/classes/javax/swing/JRootPane.java`；
+JFrame/JDialog/JWindow/JInternalFrame 的 rootPaneCheckingException 用法；
+`test/jdk/javax/swing/JRootPane/`。
 
-## 4. 测试用例设计（黑盒部分，`JRootPaneTest.testBlackBox`）
-1. 默认 contentPane/layeredPane/glassPane/UI 非 null；contentPane 由 layeredPane 承载。
-2. setContentPane 往返 + 新旧绑定切换 + null ICSE；setLayeredPane 往返 + contentPane 引用保持 + null ICSE。
-3. setGlassPane 往返 + 旧可见性传播 + null NPE。
-4. setJMenuBar/setMenuBar（deprecated）一致 + null 清空；setDefaultButton 往返。
-5. windowDecorationStyle 默认 NONE + 非法值 -1/99 IAE（独立 rootPane 不触发装饰）；样式往返在 frame.getRootPane() 上循环断言。
-6. 装入 JFrame：frameRoot isValidateRoot、contentPane 装载按钮、pack 后 componentCount==1、standalone root isValidateRoot。
+## 4. 测试用例设计 + 易错细节
+- 常量矩阵：NONE=0/FRAME=1/PLAIN=2/INFO=3/ERROR=4/COLOR_CHOOSER=5/FILE_CHOOSER=6/
+  QUESTION=7/WARNING=8（5、6、7 的非连续编号易错）。
+- 默认接线：contentPane 布局是 BorderLayout（JRootPane$1 匿名子类——只断
+  instanceof）；contentPane.parent==layeredPane、layeredPane.parent==root；
+  glassPane 是 JComponent、不透明 false、不可见 false；
+  默认 menuBar/defaultButton null；isValidateRoot true；Metal→MetalRootPaneUI。
+- 换件矩阵：setContentPane(new) 后新件挂 layeredPane、旧件 parent==null、
+  FRAME_CONTENT_LAYER 恰 1 件；setLayeredPane(new) 后 contentPane 引用保留；
+  setGlassPane(gp) 后 gp.parent==root。
+- **null 反例三种异常各不相同**：setContentPane(null)→IllegalComponentStateException、
+  setLayeredPane(null)→IllegalComponentStateException、setGlassPane(null)→NPE；
+  setJMenuBar(null) 合法清空；deprecated getMenuBar/setMenuBar 与新 API 一致。
+- defaultButton：设置即触发 propertyName=="defaultButton" 事件（old null/new 按钮）；
+  无窗口也生效；setDefaultButton(null) 合法。
+- **setWindowDecorationStyle 语义（重点）**：合法值先写入字段再应用——headless 下
+  FRAME 抛 HeadlessException、对话框样式抛 NPE，**但 getWindowDecorationStyle()
+  已是新值**（write-then-throw）；非法值（99）在赋值前就 IAE，字段保持原值。
+- 版本/环境差异：本文件含 JFrame 实窗块（@key headful，DISPLAY 跑）；headless 反例用 isHeadless() 门控；
+  headless 反例块用 GraphicsEnvironment.isHeadless() 门控，两种环境同一文件全绿。
+
+自动化实现位于同目录 `JRootPaneTest.java`：`check(boolean,msg)` 计数断言、
+`checkThrows(Class,Runnable)` 校验精确异常类型，`main` 结尾打印
+`PASS (N assertions)`；jtreg `@run main` 直接驱动。

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JCheckBox;
 import javax.swing.JFrame;
+import javax.swing.JToggleButton;
 
 public class JCheckBoxTest {
     static int passed;
@@ -130,9 +131,69 @@ public class JCheckBoxTest {
         check(!frame.isVisible(), "frame not visible after dispose");
     }
 
+    // ---- Part 3: deep contract additions under Metal ----
+    static void testContract() throws Exception {
+        javax.swing.Icon ic = new javax.swing.ImageIcon(
+                new java.awt.image.BufferedImage(2, 2, java.awt.image.BufferedImage.TYPE_INT_RGB));
+        // full constructor matrix
+        check(!new JCheckBox().isSelected(), "no-arg unselected");
+        check(new JCheckBox(ic).getIcon() == ic, "icon ctor");
+        check(new JCheckBox("ci", ic).getIcon() == ic, "text+icon ctor");
+        check(new JCheckBox("cs", true).isSelected(), "text+selected ctor");
+        check(!new JCheckBox("cs", false).isSelected(), "text+selected ctor false");
+        check(new JCheckBox(ic, true).isSelected(), "icon+selected ctor");
+        check(new JCheckBox("csc", ic, true).isSelected(), "text+icon+selected ctor");
+        check(new JCheckBox((String) null, (javax.swing.Icon) null, true).isSelected(),
+                "null text/icon with selected ctor");
+
+        // checkbox-specific defaults under Metal
+        JCheckBox b0 = new JCheckBox();
+        check(b0.getModel() instanceof JToggleButton.ToggleButtonModel, "ToggleButtonModel inherited");
+        check("CheckBoxUI".equals(b0.getUIClassID()), "getUIClassID CheckBoxUI");
+        check("javax.swing.plaf.metal.MetalCheckBoxUI".equals(b0.getUI().getClass().getName()),
+                "Metal installs MetalCheckBoxUI");
+        check(!b0.isBorderPainted(), "borderPainted default false (unlike plain buttons)");
+        check(b0.isRolloverEnabled(), "rolloverEnabled default true");
+        check(b0.isFocusPainted(), "focusPainted default true");
+
+        // doClick toggles and fires ItemEvents
+        JCheckBox b1 = new JCheckBox("c");
+        List<ItemEvent> items = new ArrayList<>();
+        b1.addItemListener((ItemListener) e -> items.add(e));
+        b1.doClick();
+        check(b1.isSelected(), "doClick selects checkbox");
+        check(items.size() == 1 && items.get(0).getStateChange() == ItemEvent.SELECTED, "ItemEvent SELECTED");
+        b1.doClick();
+        check(!b1.isSelected(), "doClick again unselects");
+        check(items.get(1).getStateChange() == ItemEvent.DESELECTED, "ItemEvent DESELECTED");
+
+        // grouping keeps checkbox semantics exclusive while inside the group
+        JCheckBox x = new JCheckBox("x"), y = new JCheckBox("y");
+        javax.swing.ButtonGroup g = new javax.swing.ButtonGroup();
+        g.add(b1); g.add(x); g.add(y);
+        b1.doClick();
+        y.doClick();
+        check(y.isSelected() && !b1.isSelected(), "group exclusivity for checkboxes");
+        check(g.getSelection() == y.getModel(), "group selection tracks checkbox model");
+        g.remove(y);
+        check(y.isSelected(), "removed checkbox keeps state");
+
+        // UI auto-derives displayedMnemonicIndex from a matching mnemonic
+        b1.setText("check");
+        check(b1.getDisplayedMnemonicIndex() == -1, "displayedMnemonicIndex -1 before mnemonic");
+        b1.setMnemonic('C');
+        check(b1.getMnemonic() == 'C', "setMnemonic");
+        check(b1.getDisplayedMnemonicIndex() == 0,
+                "UI auto-derives displayedMnemonicIndex when mnemonic matches text");
+        b1.setDisplayedMnemonicIndex(-1);
+        check(b1.getDisplayedMnemonicIndex() == -1, "setDisplayedMnemonicIndex(-1) resets");
+    }
+
     public static void main(String[] args) throws Exception {
+        javax.swing.UIManager.setLookAndFeel(new javax.swing.plaf.metal.MetalLookAndFeel());
         runOnEDT(JCheckBoxTest::testWhiteBox);
         runOnEDT(JCheckBoxTest::testBlackBox);
+        runOnEDT(JCheckBoxTest::testContract);
         System.out.println("PASS (" + passed + " assertions)");
     }
     interface ThrowingRunnable { void run() throws Exception; }

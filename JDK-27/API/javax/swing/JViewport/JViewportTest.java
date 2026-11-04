@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary javax.swing.JViewport conformance: white-box structure + black-box behavior.
- * @key headful
+ * @summary javax.swing.JViewport conformance: white-box structure + black-box behavior
+ *          + view wiring, no-clamp positions, UI delegate (headless-safe, Metal LaF).
  * @run main JViewportTest
  */
 
@@ -13,7 +13,9 @@ import java.awt.Rectangle;
 import java.lang.reflect.Modifier;
 import javax.swing.JLabel;
 import javax.swing.JViewport;
+import javax.swing.UIManager;
 import javax.swing.border.LineBorder;
+import javax.swing.plaf.metal.MetalLookAndFeel;
 
 public class JViewportTest {
     static int passed;
@@ -136,9 +138,33 @@ public class JViewportTest {
         check(vp.getView() == null, "setView(null) clears view");
     }
 
+    // ---- Part 3: view wiring, no-clamp positions, UI delegate ----
+    static void testContractExtras() throws Exception {
+        JViewport vp = new JViewport();
+        check("BasicViewportUI".equals(vp.getUI().getClass().getSimpleName()), "Metal installs BasicViewportUI");
+        check(vp.getBorder() == null, "default border null");
+        check(new Rectangle(0, 0, 0, 0).equals(vp.getViewRect()), "default viewRect 0,0,0,0");
+
+        JLabel view = new JLabel("v");
+        vp.setView(view);
+        check(view.getParent() == vp, "view parented by viewport");
+        // Position is NOT clamped to the view size while undisplayed.
+        vp.setViewPosition(new Point(500, 500));
+        check(new Point(500, 500).equals(vp.getViewPosition()), "view position not clamped");
+        // View rect derives from position + extent.
+        vp.setExtentSize(new Dimension(120, 80));
+        check(new Rectangle(500, 500, 120, 80).equals(vp.getViewRect()), "getViewRect position+extent");
+    }
+
     public static void main(String[] args) throws Exception {
+        try {
+            UIManager.setLookAndFeel(new MetalLookAndFeel());
+        } catch (Exception e) {
+            throw new AssertionError("cannot install Metal LaF", e);
+        }
         runOnEDT(JViewportTest::testWhiteBox);
         runOnEDT(JViewportTest::testBlackBox);
+        runOnEDT(JViewportTest::testContractExtras);
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

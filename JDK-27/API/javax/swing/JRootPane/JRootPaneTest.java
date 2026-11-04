@@ -5,19 +5,28 @@
  * @run main JRootPaneTest
  */
 
+import java.awt.BorderLayout;
 import java.awt.Canvas;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.EventQueue;
+import java.awt.GraphicsEnvironment;
+import java.awt.HeadlessException;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JMenuBar;
 import javax.swing.JRootPane;
 import javax.swing.JPanel;
+import javax.swing.UIManager;
+import javax.swing.plaf.metal.MetalLookAndFeel;
 
 public class JRootPaneTest {
     static int passed;
@@ -155,9 +164,73 @@ public class JRootPaneTest {
     }
 
     public static void main(String[] args) throws Exception {
+        try {
+            UIManager.setLookAndFeel(new MetalLookAndFeel());
+        } catch (Exception e) {
+            throw new AssertionError("cannot install Metal LaF", e);
+        }
         runOnEDT(JRootPaneTest::testWhiteBox);
         runOnEDT(JRootPaneTest::testBlackBox);
+        runOnEDT(JRootPaneTest::testContractExtras);
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: constants matrix, default wiring, default-button event, style semantics ----
+    static void testContractExtras() throws Exception {
+        check(JRootPane.PLAIN_DIALOG == 2, "PLAIN_DIALOG 2");
+        check(JRootPane.INFORMATION_DIALOG == 3, "INFORMATION_DIALOG 3");
+        check(JRootPane.ERROR_DIALOG == 4, "ERROR_DIALOG 4");
+        check(JRootPane.COLOR_CHOOSER_DIALOG == 5, "COLOR_CHOOSER_DIALOG 5");
+        check(JRootPane.FILE_CHOOSER_DIALOG == 6, "FILE_CHOOSER_DIALOG 6");
+
+        JRootPane root = new JRootPane();
+        check(root.getContentPane().getLayout() instanceof BorderLayout, "contentPane layout is BorderLayout");
+        check(root.getGlassPane() instanceof JComponent, "glassPane is JComponent");
+        check(!((JComponent) root.getGlassPane()).isOpaque(), "glassPane not opaque");
+        check(!root.getGlassPane().isVisible(), "glassPane not visible by default");
+        check(root.getContentPane().getParent() == root.getLayeredPane(), "contentPane parented by layeredPane");
+        check(root.getLayeredPane().getParent() == root, "layeredPane parented by root");
+        check(root.getJMenuBar() == null, "default menuBar null");
+        check("RootPaneUI".equals(root.getUIClassID()), "getUIClassID RootPaneUI");
+        check("MetalRootPaneUI".equals(root.getUI().getClass().getSimpleName()), "Metal installs MetalRootPaneUI");
+
+        // setDefaultButton fires a "defaultButton" property event with old/new values.
+        JButton def = new JButton("default");
+        AtomicReference<PropertyChangeEvent> ev = new AtomicReference<>();
+        root.addPropertyChangeListener((PropertyChangeEvent e) -> {
+            if ("defaultButton".equals(e.getPropertyName())) ev.set(e);
+        });
+        root.setDefaultButton(def);
+        check(ev.get() != null, "setDefaultButton fires defaultButton event");
+        check(ev.get().getNewValue() == def, "defaultButton event new value");
+        check(ev.get().getOldValue() == null, "defaultButton event old value null");
+
+        // Style semantics (headless only): valid styles are stored then throw while
+        // applying; invalid 99 is rejected before assignment.
+        if (GraphicsEnvironment.isHeadless()) {
+            JRootPane h = new JRootPane();
+            try {
+                h.setWindowDecorationStyle(JRootPane.FRAME);
+                check(false, "FRAME should throw headless");
+            } catch (HeadlessException expected) {
+                check(true, "FRAME HeadlessException");
+            }
+            check(h.getWindowDecorationStyle() == JRootPane.FRAME, "FRAME stored despite headless throw");
+            try {
+                h.setWindowDecorationStyle(JRootPane.PLAIN_DIALOG);
+                check(false, "PLAIN_DIALOG should throw headless");
+            } catch (NullPointerException expected) {
+                check(true, "PLAIN_DIALOG NPE");
+            }
+            check(h.getWindowDecorationStyle() == JRootPane.PLAIN_DIALOG, "PLAIN_DIALOG stored despite NPE");
+            try {
+                h.setWindowDecorationStyle(99);
+                check(false, "99 should throw IAE");
+            } catch (IllegalArgumentException expected) {
+                check(true, "99 IAE");
+            }
+            check(h.getWindowDecorationStyle() == JRootPane.PLAIN_DIALOG, "invalid 99 leaves style unchanged");
+        }
     }
     interface ThrowingRunnable { void run() throws Exception; }
     static void runOnEDT(ThrowingRunnable r) throws Exception {

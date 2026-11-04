@@ -27,3 +27,22 @@ b.doClick();
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验 abstract、父类 `JComponent`、实现 `ItemSelectable`+`SwingConstants`。
 - 行为（黑盒）：`testBlackBox()` 覆盖默认 model 为 null、`setModel` 安装、文本/mnemonic/actionCommand 往返、`setSelected` 状态、margin 往返、外观开关、`setDisplayedMnemonicIndex`、`addActionListener`+`doClick` 触发一次动作事件。
+
+## 5. 组件层深化批（Metal LaF + EDT）
+`testContract()` 补充（JDK-8 侧镜像，双侧契约一致）：
+- Metal 默认值锁定：对齐 CENTER/CENTER、textPosition TRAILING/CENTER、iconTextGap=4、
+  margin=InsetsUIResource[2,14,2,14]、rolloverEnabled=true、borderPainted=true、
+  focusPainted=true、multiClickThreshhold=0、displayedMnemonicIndex=-1。
+- `setText(null)` → `getText()==null`（非 ""）；隐式 actionCommand 跟随 text，
+  显式 setActionCommand 覆盖、`setActionCommand(null)` 恢复隐式。
+- 4 个对齐 setter 传 99 抛 IllegalArgumentException；`setIconTextGap(-1)` 不抛（非对称）。
+- setMnemonic 触发事件名 `"mnemonic"`；`setDisplayedMnemonicIndex(99)` 抛 IAE。
+- **disabledIcon 派生只对 ImageIcon 生效**（查询时派生 GrayFilter 灰度副本），
+  自定义 Icon 无派生；显式 setDisabledIcon 优先。
+- 状态机对照：armed+pressed 时 selected=false；release 时 **ToggleButtonModel 翻转、
+  DefaultButtonModel 不翻转**；`JToggleButton` 的 ItemEvent `getItem()==按钮本身`。
+- setModel：不触发 ChangeEvent、handler 监听器迁移新模型、组件监听器保留。
+- ButtonGroup：`setSelected(true)` 在组内切换（非拒绝）；remove 选中成员后 getSelection
+  为 null 且该成员独立；clearSelection 全清。
+- setAction：同步 text/tooltip/mnemonic/enabled，后续 Action 属性变化持续同步，
+  doClick 转发 Action，`setAction(null)` 复位，hideActionText 抑制 text 同步。

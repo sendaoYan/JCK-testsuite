@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary javax.swing.JLayeredPane conformance: white-box structure + black-box behavior.
- * @key headful
+ * @summary javax.swing.JLayeredPane conformance: white-box structure + black-box behavior
+ *          + add(comp,int) index trap, ordering, removeAll reset (headless-safe).
  * @run main JLayeredPaneTest
  */
 
@@ -36,6 +36,7 @@ public class JLayeredPaneTest {
     public static void main(String[] args) throws Exception {
         runOnEDT(JLayeredPaneTest::testWhiteBox);
         runOnEDT(JLayeredPaneTest::testBlackBox);
+        runOnEDT(JLayeredPaneTest::testContractAddConstraints);
         System.out.println("PASS (" + passed + " assertions)");
     }
 
@@ -111,5 +112,53 @@ public class JLayeredPaneTest {
 
         check(JLayeredPane.getLayeredPaneAbove(p2) == pane, "getLayeredPaneAbove added");
         check(JLayeredPane.getLayeredPaneAbove(new JPanel()) == null, "getLayeredPaneAbove standalone null");
+    }
+
+    // ---- Part 3: add(comp,int) index trap, ordering, removeAll reset ----
+    static void testContractAddConstraints() throws Exception {
+        JLayeredPane pane = new JLayeredPane();
+        check(pane.getComponentsInLayer(100).length == 0, "empty layer components 0");
+        check(pane.getIndexOf(new JPanel()) == -1, "getIndexOf non-child -1");
+        check(JLayeredPane.getLayer(new JPanel()) == 0, "static getLayer unlayered default 0");
+        // JDK-27-only: JComponent.getUI() base accessor; JLayeredPane has no UI delegate there.
+        check(pane.getUI() == null, "JComponent.getUI() null for JLayeredPane");
+
+        // add(comp, int): the int is an INDEX, not a layer - classic trap.
+        JPanel b1 = new JPanel();
+        pane.add(b1, 5);
+        check(pane.getComponentCount() == 1, "add(comp,int) adds component");
+        check(pane.getLayer(b1) == 0, "add(comp,int) int is index not layer");
+        JPanel b2 = new JPanel();
+        pane.add(b2, Integer.valueOf(5));
+        check(pane.getLayer(b2) == 5, "add(comp,Integer) sets layer");
+        check(pane.getComponentCountInLayer(5) == 1, "layer 5 count (int-added stays default)");
+        // Child array is kept in descending layer order; within a layer insertion order holds.
+        JPanel b3 = new JPanel();
+        pane.add(b3, Integer.valueOf(3));
+        check(pane.getIndexOf(b2) == 0, "highest layer at front");
+        check(pane.getIndexOf(b3) == 1, "middle layer behind higher one");
+        check(pane.getIndexOf(b1) == 2, "default layer at the back");
+        check(pane.lowestLayer() == 0, "lowestLayer 0 (int-added child defaulted)");
+
+        pane.setLayer(b1, 7);
+        check(pane.getIndexOf(b1) == 0, "raised layer moves child to front");
+
+        // moveToFront/moveToBack reposition inside the layer only.
+        JLayeredPane same = new JLayeredPane();
+        JPanel s1 = new JPanel();
+        JPanel s2 = new JPanel();
+        same.add(s1, Integer.valueOf(5));
+        same.add(s2, Integer.valueOf(5));
+        check(same.getIndexOf(s1) == 0 && same.getIndexOf(s2) == 1, "same-layer insertion order");
+        same.moveToBack(s1);
+        check(same.getIndexOf(s1) == 1 && same.getIndexOf(s2) == 0, "moveToBack swaps within layer");
+        same.moveToFront(s1);
+        check(same.getIndexOf(s1) == 0, "moveToFront restores");
+
+        // removeAll resets the layer bookkeeping.
+        pane.removeAll();
+        check(pane.getComponentCount() == 0, "removeAll empties pane");
+        check(pane.highestLayer() == 0 && pane.lowestLayer() == 0, "layers reset after removeAll");
+        check(JLayeredPane.getLayeredPaneAbove(b1) == null, "getLayeredPaneAbove null after removeAll");
     }
 }
