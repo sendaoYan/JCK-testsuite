@@ -47,6 +47,18 @@ public class WindowAdapterTest {
         check(Modifier.isPublic(m8.getModifiers()), "windowGainedFocus public");
         Method m9 = c.getMethod("windowLostFocus", java.awt.event.WindowEvent.class);
         check(Modifier.isPublic(m9.getModifiers()), "windowLostFocus public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "WindowAdapter ctor is protected");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowOpened", java.awt.event.WindowEvent.class).getModifiers()), "windowOpened public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowClosing", java.awt.event.WindowEvent.class).getModifiers()), "windowClosing public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowClosed", java.awt.event.WindowEvent.class).getModifiers()), "windowClosed public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowIconified", java.awt.event.WindowEvent.class).getModifiers()), "windowIconified public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowDeiconified", java.awt.event.WindowEvent.class).getModifiers()), "windowDeiconified public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowActivated", java.awt.event.WindowEvent.class).getModifiers()), "windowActivated public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowDeactivated", java.awt.event.WindowEvent.class).getModifiers()), "windowDeactivated public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowStateChanged", java.awt.event.WindowEvent.class).getModifiers()), "windowStateChanged public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowGainedFocus", java.awt.event.WindowEvent.class).getModifiers()), "windowGainedFocus public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowLostFocus", java.awt.event.WindowEvent.class).getModifiers()), "windowLostFocus public");
     }
 
     // ---- Part 2: black-box (behavioral) ----

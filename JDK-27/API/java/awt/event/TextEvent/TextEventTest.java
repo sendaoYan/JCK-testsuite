@@ -48,11 +48,40 @@ public class TextEventTest {
         check(TextEvent.TEXT_FIRST <= TextEvent.TEXT_VALUE_CHANGED && TextEvent.TEXT_VALUE_CHANGED <= TextEvent.TEXT_LAST, "id within range");
 
         check(e instanceof AWTEvent, "TextEvent instanceof AWTEvent");
+        // consume semantics: consume()/isConsumed() are protected in AWTEvent, exercised via a local subclass
+        // consume semantics: semantic event ids are pre-consumed by AWTEvent's constructor
+        Consumable ev = new Consumable();
+        check(ev.consumedFlag(), "TextEvent" + " pre-consumed at construction");
+        ev.consumeIt();
+        check(ev.consumedFlag(), "consume keeps consumed");
+        // toString
+        check(e.toString().startsWith("java.awt.event.TextEvent["), "toString starts with class name");
+        check(e.toString().contains("TEXT_VALUE_CHANGED"), "toString contains id text");
+    }
+
+    static class Consumable extends TextEvent {
+        Consumable() { super("src", TextEvent.TEXT_VALUE_CHANGED); }
+        void consumeIt() { consume(); }
+        boolean consumedFlag() { return isConsumed(); }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        java.awt.event.TextEvent e = new java.awt.event.TextEvent("src", java.awt.event.TextEvent.TEXT_VALUE_CHANGED);
+        java.awt.event.TextEvent back = roundTrip(e);
+        check(back.getID() == java.awt.event.TextEvent.TEXT_VALUE_CHANGED, "serialization preserves id");
+        check(back.paramString().equals("TEXT_VALUE_CHANGED"), "serialization keeps paramString");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -92,11 +92,63 @@ public class MouseEventTest {
         check(ps.paramString().contains("clickCount=1"), "paramString clickCount");
 
         check(e instanceof InputEvent, "MouseEvent instanceof InputEvent");
+        // remaining documented constants
+        check(MouseEvent.MOUSE_RELEASED == 502, "MOUSE_RELEASED == 502");
+        check(MouseEvent.MOUSE_ENTERED == 504, "MOUSE_ENTERED == 504");
+        check(MouseEvent.MOUSE_EXITED == 505, "MOUSE_EXITED == 505");
+        check(MouseEvent.MOUSE_LAST == 507, "MOUSE_LAST == 507");
+        // negative coordinates and zero click count round-trip (no constructor validation)
+        MouseEvent neg = new MouseEvent(src, MouseEvent.MOUSE_MOVED, when, 0, -5, -6, -7, -8, 0, false, MouseEvent.NOBUTTON);
+        check(neg.getX() == -5 && neg.getY() == -6, "negative coords round-trip");
+        check(neg.getXOnScreen() == -7 && neg.getYOnScreen() == -8, "negative absolute coords round-trip");
+        check(neg.getClickCount() == 0, "zero click count round-trips");
+        check(neg.getButton() == MouseEvent.NOBUTTON, "NOBUTTON round-trips");
+        // translatePoint works in both directions and with zeros
+        neg.translatePoint(5, 6);
+        check(neg.getX() == 0 && neg.getY() == 0, "translatePoint back to origin");
+        neg.translatePoint(0, 0);
+        check(neg.getX() == 0 && neg.getY() == 0, "translatePoint(0,0) is no-op");
+        // getMouseModifiersText for buttons
+        check(MouseEvent.getMouseModifiersText(InputEvent.BUTTON1_MASK).equals("Button1"), "getMouseModifiersText Button1");
+        check(MouseEvent.getMouseModifiersText(InputEvent.BUTTON2_DOWN_MASK).equals("Button2"), "getMouseModifiersText Button2");
+        check(MouseEvent.getMouseModifiersText(InputEvent.BUTTON3_DOWN_MASK).equals("Button3"), "getMouseModifiersText Button3");
+        // old-style BUTTON2_MASK aliases ALT_MASK and renders as Alt
+        check(MouseEvent.getMouseModifiersText(InputEvent.BUTTON2_MASK).equals("Alt+Button2"), "BUTTON2_MASK (==ALT_MASK bit) renders as Alt+Button2");
+        // consume semantics
+        check(!simple.isConsumed(), "fresh not consumed");
+        simple.consume();
+        check(simple.isConsumed(), "consume marks consumed");
+        // toString contains paramString content
+        check(e.toString().startsWith("java.awt.event.MouseEvent["), "toString starts with class name");
+        check(e.toString().contains("MOUSE_PRESSED"), "toString contains id text");
+        // getPoint returns a fresh mutable Point each call
+        java.awt.Point p1 = e.getPoint();
+        p1.x = 999;
+        check(e.getX() != 999, "getPoint returns a defensive copy");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        Component src = new Component() { };
+        MouseEvent e = new MouseEvent(src, MouseEvent.MOUSE_RELEASED, 654L, InputEvent.BUTTON1_DOWN_MASK, 7, 8, 9, 10, 2, true, MouseEvent.BUTTON3);
+        MouseEvent back = roundTrip(e);
+        check(back.getID() == MouseEvent.MOUSE_RELEASED, "serialization preserves id");
+        check(back.getX() == 7 && back.getY() == 8, "serialization preserves coordinates");
+        check(back.getXOnScreen() == 9 && back.getYOnScreen() == 10, "serialization preserves absolute coordinates");
+        check(back.getClickCount() == 2, "serialization preserves click count");
+        check(back.getButton() == MouseEvent.BUTTON3, "serialization preserves button");
+        check(back.isPopupTrigger(), "serialization preserves popup trigger");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

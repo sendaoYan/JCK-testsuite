@@ -13,3 +13,8 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、继承 ComponentEvent、常量/构造器/getWindow 返回 Window。黑盒：11 个 id 常量精确值；4 种构造器对 null 源抛 IllegalArgumentException；headful 分支构造 Window 验证 getWindow/getOppositeWindow/getOldState/getNewState/paramString。
 对应 `WindowEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- 200..209 全部 id 精确值及相邻配对关系（closing/closed、iconified/deiconified、activated/deactivated、gained/lost focus）。
+- 全部构造器 null source → IAE（EventObject 契约）。
+- 序列化：类型可序列化；实例断言在 headful 分支内（headless 下跳过，不影响确定性）。

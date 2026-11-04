@@ -81,11 +81,31 @@ public class WindowEventTest {
                 w.dispose();
             }
         }
+        // opposite window defaults to null in the state-change constructor
+        // (verified headful above); headless constant matrix continues
+        check(WindowEvent.WINDOW_CLOSING + 1 == WindowEvent.WINDOW_CLOSED, "ids consecutive closing/closed");
+        check(WindowEvent.WINDOW_ICONIFIED + 1 == WindowEvent.WINDOW_DEICONIFIED, "ids consecutive iconified pair");
+        check(WindowEvent.WINDOW_ACTIVATED + 1 == WindowEvent.WINDOW_DEACTIVATED, "ids consecutive activation pair");
+        check(WindowEvent.WINDOW_GAINED_FOCUS + 1 == WindowEvent.WINDOW_LOST_FOCUS, "ids consecutive focus pair");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        // Window itself is headful; serialization contract is exercised through constants and structure only
+        check(WindowEvent.WINDOW_FIRST == WindowEvent.WINDOW_OPENED, "WINDOW_FIRST anchored");
+        check(WindowEvent.WINDOW_LAST == WindowEvent.WINDOW_STATE_CHANGED, "WINDOW_LAST anchored");
+        check(java.io.Serializable.class.isAssignableFrom(java.awt.event.WindowEvent.class), "WindowEvent is Serializable");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

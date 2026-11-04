@@ -20,3 +20,6 @@
 - **白盒**：反射断言类型形态（public/abstract/interface、继承 EventListener、方法数量与签名、public abstract 或 public no-op）。
 - **黑盒**：实例化实现/子类，逐一调用每个回调（事件参数传 null，断言不抛异常且正确分派到对应方法）；单方法接口另测 SAM lambda；适配器断言只有被覆写的方法被分派。
 - 对应 `TextListenerTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- 接口方法签名（public abstract）逐个校验；lambda/SAM 调用与事件实例精确传递；EventListener 继承关系。

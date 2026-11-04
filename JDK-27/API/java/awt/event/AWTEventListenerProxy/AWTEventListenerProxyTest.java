@@ -64,9 +64,22 @@ public class AWTEventListenerProxyTest {
         check(p3.getEventMask() == 0L, "zero mask round-trips");
     }
 
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        // AWTEventListenerProxy holds a non-serializable listener; contract is structural only
+        check(java.util.EventListener.class.isAssignableFrom(java.awt.event.AWTEventListenerProxy.class), "proxy is an EventListener");
+        check(java.awt.event.AWTEventListener.class.isAssignableFrom(java.awt.event.AWTEventListenerProxy.class), "proxy is an AWTEventListener");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

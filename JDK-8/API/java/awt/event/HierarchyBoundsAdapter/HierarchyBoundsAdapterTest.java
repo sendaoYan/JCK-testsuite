@@ -1,8 +1,12 @@
 /*
  * @test
- * @summary java.awt.event.HierarchyBoundsAdapter conformance: abstract class reflection.
+ * @summary java.awt.event.HierarchyBoundsAdapter conformance: white-box structure + black-box behavior.
  * @run main HierarchyBoundsAdapterTest
  */
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.awt.event.HierarchyBoundsAdapter;
 
 public class HierarchyBoundsAdapterTest {
     static int passed;
@@ -12,23 +16,41 @@ public class HierarchyBoundsAdapterTest {
         passed++;
     }
 
-    static boolean hasMethod(Class<?> c, String name) {
-        for (java.lang.reflect.Method m : c.getMethods())
-            if (m.getName().equals(name)) return true;
-        return false;
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.event.HierarchyBoundsAdapter");
+        int m = c.getModifiers();
+        check(Modifier.isPublic(m), "HierarchyBoundsAdapter is public");
+        check(Modifier.isAbstract(m), "HierarchyBoundsAdapter is abstract");
+        check(c.getSuperclass() == Object.class, "HierarchyBoundsAdapter extends Object");
+        check(java.util.Arrays.asList(c.getInterfaces()).contains(java.awt.event.HierarchyBoundsListener.class), "implements java.awt.event.HierarchyBoundsListener");
+        check(c.getDeclaredMethods().length == 2, "HierarchyBoundsAdapter has 2 no-op methods");
+        Method m0 = c.getMethod("ancestorMoved", java.awt.event.HierarchyEvent.class);
+        check(Modifier.isPublic(m0.getModifiers()), "ancestorMoved public");
+        Method m1 = c.getMethod("ancestorResized", java.awt.event.HierarchyEvent.class);
+        check(Modifier.isPublic(m1.getModifiers()), "ancestorResized public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isPublic(c.getDeclaredConstructors()[0].getModifiers()), "HierarchyBoundsAdapter ctor is public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("ancestorMoved", java.awt.event.HierarchyEvent.class).getModifiers()), "ancestorMoved public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("ancestorResized", java.awt.event.HierarchyEvent.class).getModifiers()), "ancestorResized public");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        final java.util.List<String> calls = new java.util.ArrayList<String>();
+        HierarchyBoundsAdapter a = new HierarchyBoundsAdapter() {
+            public void ancestorMoved(java.awt.event.HierarchyEvent e) { calls.add("ancestorMoved"); }
+            // ancestorResized(java.awt.event.HierarchyEvent) inherited as no-op
+        };
+        a.ancestorMoved(null); // no-op default method must not throw
+        a.ancestorResized(null); // no-op default method must not throw
+        check(calls.size() == 1 && calls.get(0).equals("ancestorMoved"), "only overridden method dispatched");
+        check(a instanceof java.awt.event.HierarchyBoundsListener, "HierarchyBoundsAdapter instanceof java.awt.event.HierarchyBoundsListener");
     }
 
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.event.HierarchyBoundsAdapter");
-        check(!c.isInterface() && !c.isEnum(), "not interface/enum");
-        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "is abstract");
-        check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");
-        java.util.Set<String> ifaces = new java.util.HashSet<String>();
-        for (Class<?> i : c.getInterfaces()) ifaces.add(i.getName());
-        String[] expected = {"java.awt.event.HierarchyBoundsListener"};
-        check(ifaces.equals(new java.util.HashSet<String>(java.util.Arrays.asList(expected))), "interfaces");
-        check(hasMethod(c, "ancestorMoved"), "method ancestorMoved");
-        check(hasMethod(c, "ancestorResized"), "method ancestorResized");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

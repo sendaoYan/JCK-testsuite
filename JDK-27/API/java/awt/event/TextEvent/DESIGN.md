@@ -13,3 +13,9 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、继承 AWTEvent、常量/构造器。黑盒：构造→回读 id/source；paramString TEXT_VALUE_CHANGED 与 unknown type；3 个常量精确值；id 范围关系。
 对应 `TextEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- TEXT_VALUE_CHANGED=TEXT_FIRST=TEXT_LAST=900。
+- 消费语义：语义 id 构造即 consumed（consume() 保持）。
+- paramString 精确等值（TEXT_VALUE_CHANGED / unknown type）。
+- 序列化：id 与 paramString 保留。

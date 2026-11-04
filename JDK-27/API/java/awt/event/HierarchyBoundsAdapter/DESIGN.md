@@ -20,3 +20,7 @@
 - **白盒**：反射断言类型形态（public/abstract/interface、继承 EventListener、方法数量与签名、public abstract 或 public no-op）。
 - **黑盒**：实例化实现/子类，逐一调用每个回调（事件参数传 null，断言不抛异常且正确分派到对应方法）；单方法接口另测 SAM lambda；适配器断言只有被覆写的方法被分派。
 - 对应 `HierarchyBoundsAdapterTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- 版本差异锁定：JDK-27：本侧无参构造器为 protected（断言 isProtected）（白盒 getDeclaredConstructors 断言，双侧相反）。
+- 全部 no-op 方法签名 public 校验 + 空实现以 null 事件调用不抛异常。

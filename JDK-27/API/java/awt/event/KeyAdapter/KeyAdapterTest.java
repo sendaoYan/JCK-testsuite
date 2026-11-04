@@ -31,6 +31,11 @@ public class KeyAdapterTest {
         check(Modifier.isPublic(m1.getModifiers()), "keyPressed public");
         Method m2 = c.getMethod("keyReleased", java.awt.event.KeyEvent.class);
         check(Modifier.isPublic(m2.getModifiers()), "keyReleased public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "KeyAdapter ctor is protected");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("keyTyped", java.awt.event.KeyEvent.class).getModifiers()), "keyTyped public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("keyPressed", java.awt.event.KeyEvent.class).getModifiers()), "keyPressed public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("keyReleased", java.awt.event.KeyEvent.class).getModifiers()), "keyReleased public");
     }
 
     // ---- Part 2: black-box (behavioral) ----

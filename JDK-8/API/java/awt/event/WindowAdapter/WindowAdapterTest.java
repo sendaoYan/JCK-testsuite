@@ -1,8 +1,12 @@
 /*
  * @test
- * @summary java.awt.event.WindowAdapter conformance: abstract class reflection.
+ * @summary java.awt.event.WindowAdapter conformance: white-box structure + black-box behavior.
  * @run main WindowAdapterTest
  */
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.awt.event.WindowAdapter;
 
 public class WindowAdapterTest {
     static int passed;
@@ -12,31 +16,83 @@ public class WindowAdapterTest {
         passed++;
     }
 
-    static boolean hasMethod(Class<?> c, String name) {
-        for (java.lang.reflect.Method m : c.getMethods())
-            if (m.getName().equals(name)) return true;
-        return false;
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.event.WindowAdapter");
+        int m = c.getModifiers();
+        check(Modifier.isPublic(m), "WindowAdapter is public");
+        check(Modifier.isAbstract(m), "WindowAdapter is abstract");
+        check(c.getSuperclass() == Object.class, "WindowAdapter extends Object");
+        check(java.util.Arrays.asList(c.getInterfaces()).contains(java.awt.event.WindowListener.class), "implements java.awt.event.WindowListener");
+        check(java.util.Arrays.asList(c.getInterfaces()).contains(java.awt.event.WindowStateListener.class), "implements java.awt.event.WindowStateListener");
+        check(java.util.Arrays.asList(c.getInterfaces()).contains(java.awt.event.WindowFocusListener.class), "implements java.awt.event.WindowFocusListener");
+        check(c.getDeclaredMethods().length == 10, "WindowAdapter has 10 no-op methods");
+        Method m0 = c.getMethod("windowOpened", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m0.getModifiers()), "windowOpened public");
+        Method m1 = c.getMethod("windowClosing", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m1.getModifiers()), "windowClosing public");
+        Method m2 = c.getMethod("windowClosed", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m2.getModifiers()), "windowClosed public");
+        Method m3 = c.getMethod("windowIconified", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m3.getModifiers()), "windowIconified public");
+        Method m4 = c.getMethod("windowDeiconified", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m4.getModifiers()), "windowDeiconified public");
+        Method m5 = c.getMethod("windowActivated", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m5.getModifiers()), "windowActivated public");
+        Method m6 = c.getMethod("windowDeactivated", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m6.getModifiers()), "windowDeactivated public");
+        Method m7 = c.getMethod("windowStateChanged", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m7.getModifiers()), "windowStateChanged public");
+        Method m8 = c.getMethod("windowGainedFocus", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m8.getModifiers()), "windowGainedFocus public");
+        Method m9 = c.getMethod("windowLostFocus", java.awt.event.WindowEvent.class);
+        check(Modifier.isPublic(m9.getModifiers()), "windowLostFocus public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isPublic(c.getDeclaredConstructors()[0].getModifiers()), "WindowAdapter ctor is public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowOpened", java.awt.event.WindowEvent.class).getModifiers()), "windowOpened public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowClosing", java.awt.event.WindowEvent.class).getModifiers()), "windowClosing public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowClosed", java.awt.event.WindowEvent.class).getModifiers()), "windowClosed public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowIconified", java.awt.event.WindowEvent.class).getModifiers()), "windowIconified public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowDeiconified", java.awt.event.WindowEvent.class).getModifiers()), "windowDeiconified public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowActivated", java.awt.event.WindowEvent.class).getModifiers()), "windowActivated public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowDeactivated", java.awt.event.WindowEvent.class).getModifiers()), "windowDeactivated public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowStateChanged", java.awt.event.WindowEvent.class).getModifiers()), "windowStateChanged public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowGainedFocus", java.awt.event.WindowEvent.class).getModifiers()), "windowGainedFocus public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("windowLostFocus", java.awt.event.WindowEvent.class).getModifiers()), "windowLostFocus public");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        final java.util.List<String> calls = new java.util.ArrayList<String>();
+        WindowAdapter a = new WindowAdapter() {
+            public void windowOpened(java.awt.event.WindowEvent e) { calls.add("windowOpened"); }
+            // windowClosing(java.awt.event.WindowEvent) inherited as no-op
+            // windowClosed(java.awt.event.WindowEvent) inherited as no-op
+            // windowIconified(java.awt.event.WindowEvent) inherited as no-op
+            // windowDeiconified(java.awt.event.WindowEvent) inherited as no-op
+            // windowActivated(java.awt.event.WindowEvent) inherited as no-op
+            // windowDeactivated(java.awt.event.WindowEvent) inherited as no-op
+            // windowStateChanged(java.awt.event.WindowEvent) inherited as no-op
+            // windowGainedFocus(java.awt.event.WindowEvent) inherited as no-op
+            // windowLostFocus(java.awt.event.WindowEvent) inherited as no-op
+        };
+        a.windowOpened(null); // no-op default method must not throw
+        a.windowClosing(null); // no-op default method must not throw
+        a.windowClosed(null); // no-op default method must not throw
+        a.windowIconified(null); // no-op default method must not throw
+        a.windowDeiconified(null); // no-op default method must not throw
+        a.windowActivated(null); // no-op default method must not throw
+        a.windowDeactivated(null); // no-op default method must not throw
+        a.windowStateChanged(null); // no-op default method must not throw
+        a.windowGainedFocus(null); // no-op default method must not throw
+        a.windowLostFocus(null); // no-op default method must not throw
+        check(calls.size() == 1 && calls.get(0).equals("windowOpened"), "only overridden method dispatched");
+        check(a instanceof java.awt.event.WindowListener, "WindowAdapter instanceof java.awt.event.WindowListener");
     }
 
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.event.WindowAdapter");
-        check(!c.isInterface() && !c.isEnum(), "not interface/enum");
-        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "is abstract");
-        check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");
-        java.util.Set<String> ifaces = new java.util.HashSet<String>();
-        for (Class<?> i : c.getInterfaces()) ifaces.add(i.getName());
-        String[] expected = {"java.awt.event.WindowFocusListener", "java.awt.event.WindowListener", "java.awt.event.WindowStateListener"};
-        check(ifaces.equals(new java.util.HashSet<String>(java.util.Arrays.asList(expected))), "interfaces");
-        check(hasMethod(c, "windowOpened"), "method windowOpened");
-        check(hasMethod(c, "windowClosing"), "method windowClosing");
-        check(hasMethod(c, "windowClosed"), "method windowClosed");
-        check(hasMethod(c, "windowIconified"), "method windowIconified");
-        check(hasMethod(c, "windowDeiconified"), "method windowDeiconified");
-        check(hasMethod(c, "windowActivated"), "method windowActivated");
-        check(hasMethod(c, "windowDeactivated"), "method windowDeactivated");
-        check(hasMethod(c, "windowStateChanged"), "method windowStateChanged");
-        check(hasMethod(c, "windowGainedFocus"), "method windowGainedFocus");
-        check(hasMethod(c, "windowLostFocus"), "method windowLostFocus");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

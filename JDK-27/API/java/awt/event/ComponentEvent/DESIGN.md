@@ -13,3 +13,9 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、继承 AWTEvent、常量与构造器。黑盒：构造→getID/getSource/getComponent 回读；4 个常量精确值；paramString 对 moved/resized 带 bounds、hidden/shown 纯文本、未知 id 为 unknown type。
 对应 `ComponentEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- COMPONENT_MOVED/RESIZED/SHOWN/HIDDEN 与 FIRST/LAST(100..103) 精确值。
+- 消费语义：COMPONENT_* id 不可消费，consume() 为 no-op（isConsumed 恒 false）——锁定参考实现行为。
+- paramString 精确格式（`COMPONENT_MOVED (0,0 0x0)`、`unknown type`）。
+- 序列化：id 保留；EventObject.source 为 transient，getComponent() round-trip 后为 null。

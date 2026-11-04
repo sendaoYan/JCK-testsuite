@@ -29,6 +29,10 @@ public class FocusAdapterTest {
         check(Modifier.isPublic(m0.getModifiers()), "focusGained public");
         Method m1 = c.getMethod("focusLost", java.awt.event.FocusEvent.class);
         check(Modifier.isPublic(m1.getModifiers()), "focusLost public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "FocusAdapter ctor is protected");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("focusGained", java.awt.event.FocusEvent.class).getModifiers()), "focusGained public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("focusLost", java.awt.event.FocusEvent.class).getModifiers()), "focusLost public");
     }
 
     // ---- Part 2: black-box (behavioral) ----

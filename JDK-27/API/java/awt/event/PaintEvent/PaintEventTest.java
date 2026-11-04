@@ -61,11 +61,35 @@ public class PaintEventTest {
         check(unk.paramString().equals("unknown type,updateRect=" + rect), "paramString unknown type");
 
         check(e instanceof ComponentEvent, "PaintEvent instanceof ComponentEvent");
+        // setUpdateRect(null) accepted and round-trips through paramString
+        e.setUpdateRect(null);
+        check(e.getUpdateRect() == null, "setUpdateRect(null) accepted");
+        check(e.paramString().equals("PAINT,updateRect=null"), "paramString null rect");
+        // zero-size rect is legal
+        PaintEvent zero = new PaintEvent(src, PaintEvent.PAINT, new java.awt.Rectangle(0, 0, 0, 0));
+        check(zero.getUpdateRect().width == 0 && zero.getUpdateRect().height == 0, "zero-size rect legal");
+        // toString
+        check(zero.toString().startsWith("java.awt.event.PaintEvent["), "toString starts with class name");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        java.awt.Component src = new java.awt.Component() { };
+        java.awt.event.PaintEvent e = new java.awt.event.PaintEvent(src, java.awt.event.PaintEvent.PAINT, new java.awt.Rectangle(1, 2, 3, 4));
+        java.awt.event.PaintEvent back = roundTrip(e);
+        check(back.getID() == java.awt.event.PaintEvent.PAINT, "serialization preserves id");
+        check(back.getUpdateRect().equals(new java.awt.Rectangle(1, 2, 3, 4)), "serialization preserves update rect");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

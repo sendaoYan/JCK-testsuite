@@ -18,7 +18,7 @@ public class AdjustmentEventTest {
         passed++;
     }
 
-    static class DummyAdjustable implements Adjustable {
+    static class DummyAdjustable implements Adjustable, java.io.Serializable {
         int value;
         DummyAdjustable(int v) { value = v; }
         public int getOrientation() { return 0; }
@@ -89,11 +89,47 @@ public class AdjustmentEventTest {
         check(ps2.contains("value=77"), "e2 paramString value");
         check(ps2.contains("adjType=TRACK"), "e2 paramString type");
         check(ps2.contains("isAdjusting=true"), "e2 paramString isAdjusting");
+        // out-of-range adjustment type and value round-trip (no constructor validation)
+        AdjustmentEvent weird = new AdjustmentEvent(adj, AdjustmentEvent.ADJUSTMENT_VALUE_CHANGED, 99, -1);
+        check(weird.getAdjustmentType() == 99, "arbitrary adjustment type round-trips");
+        check(weird.getValue() == -1, "negative value round-trips");
+        // toString contains the paramString content
+        check(weird.toString().contains("adjType="), "toString embeds paramString");
+        check(weird.toString().startsWith("java.awt.event.AdjustmentEvent["), "toString starts with class name");
+        // consume semantics: consume()/isConsumed() are protected in AWTEvent, exercised via a local subclass
+        // consume semantics: semantic event ids are pre-consumed by AWTEvent's constructor
+        Consumable ev = new Consumable();
+        check(ev.consumedFlag(), "AdjustmentEvent" + " pre-consumed at construction");
+        ev.consumeIt();
+        check(ev.consumedFlag(), "consume keeps consumed");
+    }
+
+    static class Consumable extends AdjustmentEvent {
+        Consumable() { super(new DummyAdjustable(1), AdjustmentEvent.ADJUSTMENT_VALUE_CHANGED, AdjustmentEvent.TRACK, 1); }
+        void consumeIt() { consume(); }
+        boolean consumedFlag() { return isConsumed(); }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        DummyAdjustable adj = new DummyAdjustable(42);
+        java.awt.event.AdjustmentEvent e = new java.awt.event.AdjustmentEvent(adj, java.awt.event.AdjustmentEvent.ADJUSTMENT_VALUE_CHANGED, java.awt.event.AdjustmentEvent.BLOCK_INCREMENT, 42, true);
+        java.awt.event.AdjustmentEvent back = roundTrip(e);
+        check(back.getID() == java.awt.event.AdjustmentEvent.ADJUSTMENT_VALUE_CHANGED, "serialization preserves id");
+        check(back.getValue() == 42, "serialization preserves value");
+        check(back.getAdjustmentType() == java.awt.event.AdjustmentEvent.BLOCK_INCREMENT, "serialization preserves adjustment type");
+        check(back.getValueIsAdjusting(), "serialization preserves isAdjusting");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

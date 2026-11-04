@@ -13,3 +13,10 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public abstract、继承 ComponentEvent、掩码/方法形态。黑盒：经 KeyEvent 实例化→getWhen/getModifiers/getModifiersEx 回读；isShiftDown/isControlDown/isAltDown 组合；consume/isConsumed；9 个掩码常量精确值；getMaskForButton(1..3) 与 (0/4) 抛 IAE；getModifiersExText。
 对应 `InputEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- 全部掩码精确值：旧 SHIFT/CTRL/META/ALT/BUTTON1=1/2/4/8/16、ALT_GRAPH=32、BUTTON2_MASK==ALT_MASK、BUTTON3_MASK==META_MASK；扩展 SHIFT/CTRL/META/ALT/B1/B2/B3/ALTGRAPH=0x40/0x80/0x100/0x200/0x400/0x800/0x1000/0x2000，两两位不重叠。
+- getModifiers()：扩展掩码 → 旧掩码映射（CTRL|ALT_DOWN_MASK → CTRL_MASK|ALT_MASK）。
+- getModifiersExText：拼接顺序 Meta+Ctrl+Alt+Shift(+Alt Graph)、Button1/2/3、位 20 渲染 Button10。
+- getMaskForButton(0/1000) → IAE；1/2/3 → BUTTON*_DOWN_MASK。
+- 序列化：when/getModifiersEx/isXxxDown 保留。

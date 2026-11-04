@@ -67,11 +67,49 @@ public class HierarchyEventTest {
         check(moved.getChangeFlags() == 0, "4-arg ctor changeFlags 0");
 
         check(e instanceof AWTEvent, "HierarchyEvent instanceof AWTEvent");
+        // all three flag bits combined
+        long all = HierarchyEvent.PARENT_CHANGED | HierarchyEvent.DISPLAYABILITY_CHANGED | HierarchyEvent.SHOWING_CHANGED;
+        HierarchyEvent allEv = new HierarchyEvent(src, HierarchyEvent.HIERARCHY_CHANGED, changed, parent, all);
+        check(allEv.getChangeFlags() == all, "all flags combined round-trip");
+        // ANCESTOR events ignore change flags in getChangeFlags (4-arg ctor keeps 0)
+        check(moved.getChangeFlags() == 0, "ancestor event change flags 0");
+        // consume semantics: consume()/isConsumed() are protected in AWTEvent, exercised via a local subclass
+        // consume semantics: HIERARCHY_CHANGED is not consumable; consume() is a no-op
+        Consumable ev = new Consumable();
+        check(!ev.consumedFlag(), "fresh not consumed");
+        ev.consumeIt();
+        check(!ev.consumedFlag(), "consume() is a no-op for hierarchy events");
+        // toString
+        check(e.toString().startsWith("java.awt.event.HierarchyEvent["), "toString starts with class name");
+    }
+
+    static class Consumable extends HierarchyEvent {
+        Consumable() { super(new java.awt.Component() { }, HierarchyEvent.HIERARCHY_CHANGED, null, null); }
+        void consumeIt() { consume(); }
+        boolean consumedFlag() { return isConsumed(); }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        java.awt.Component src = new java.awt.Component() { };
+        java.awt.event.HierarchyEvent e = new java.awt.event.HierarchyEvent(src, java.awt.event.HierarchyEvent.HIERARCHY_CHANGED, src, null, java.awt.event.HierarchyEvent.SHOWING_CHANGED);
+        java.awt.event.HierarchyEvent back = roundTrip(e);
+        check(back.getID() == java.awt.event.HierarchyEvent.HIERARCHY_CHANGED, "serialization preserves id");
+        check(back.getChangeFlags() == java.awt.event.HierarchyEvent.SHOWING_CHANGED, "serialization preserves change flags");
+        check(back.getComponent() == null, "EventObject source is transient: component null after round-trip");
+        check(back.getChanged() != null, "serialization preserves changed");
+        check(back.getChangedParent() == null, "serialization preserves null parent");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

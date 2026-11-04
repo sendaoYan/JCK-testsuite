@@ -13,3 +13,9 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、继承 AWTEvent、实现 ActiveEvent、常量与构造器。黑盒：getWhen 非负；isDispatched 初始 false、dispatch 后 true；dispatch 执行 runnable 副作用；默认不捕获异常会传播；catchExceptions=true 时 getException/getThrowable 保存异常；listener 构造器在 dispatch 后回调；paramString 含字段。
 对应 `InvocationEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- dispatch() 非幂等：每次调用都执行 runnable（计数器证明）。
+- 异常语义矩阵：默认构造器异常透传；catchThrowables=true 时 Runnable 抛 Error 也被捕获（getThrowable 非 null、getException 对非 Exception 为 null）；notifier 在 runnable 抛异常后仍执行。
+- getWhen 构造时刻单调。
+- 序列化：runnable（需 Serializable 匿名类）与 dispatched 标志保留，round-trip 后 dispatch 再次执行 runnable。

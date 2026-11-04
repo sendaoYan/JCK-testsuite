@@ -37,6 +37,17 @@ public class FlavorListenerTest {
         java.awt.datatransfer.FlavorListener l = e -> {};
         l.flavorsChanged(null);
         check(true, "flavorsChanged callable");
+        check(l instanceof java.util.EventListener, "FlavorListener instanceof EventListener");
+        check(java.awt.datatransfer.FlavorListener.class.getDeclaredMethods().length == 1, "single abstract method");
+        java.lang.reflect.Method m = java.awt.datatransfer.FlavorListener.class.getMethod("flavorsChanged", java.awt.datatransfer.FlavorEvent.class);
+        check(java.lang.reflect.Modifier.isPublic(m.getModifiers()) && java.lang.reflect.Modifier.isAbstract(m.getModifiers()), "flavorsChanged public abstract");
+        check(m.getReturnType() == void.class, "flavorsChanged returns void");
+        // exact event instance delivery
+        final java.util.List<java.awt.datatransfer.FlavorEvent> seen = new java.util.ArrayList<>();
+        java.awt.datatransfer.FlavorListener rec = seen::add;
+        java.awt.datatransfer.FlavorEvent ev = new java.awt.datatransfer.FlavorEvent(new java.awt.datatransfer.Clipboard("l"));
+        rec.flavorsChanged(ev);
+        check(seen.size() == 1 && seen.get(0) == ev, "exact event instance delivered");
     }
 
     public static void main(String[] args) throws Exception {

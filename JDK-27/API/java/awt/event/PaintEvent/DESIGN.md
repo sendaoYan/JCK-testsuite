@@ -13,3 +13,8 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、继承 ComponentEvent、常量/构造器。黑盒：构造→回读 id/source/updateRect；setUpdateRect；null 矩形；4 个常量精确值；paramString 含 updateRect。
 对应 `PaintEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- PAINT/UPDATE=800/801、FIRST/LAST；null/零尺寸 updateRect 合法；setUpdateRect(null) 合法。
+- paramString 精确等值（PAINT,updateRect=...、UPDATE,updateRect=null、unknown type）。
+- 序列化：id/updateRect 保留。

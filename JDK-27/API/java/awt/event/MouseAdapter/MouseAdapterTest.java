@@ -43,6 +43,16 @@ public class MouseAdapterTest {
         check(Modifier.isPublic(m6.getModifiers()), "mouseDragged public");
         Method m7 = c.getMethod("mouseMoved", java.awt.event.MouseEvent.class);
         check(Modifier.isPublic(m7.getModifiers()), "mouseMoved public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "MouseAdapter ctor is protected");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseClicked", java.awt.event.MouseEvent.class).getModifiers()), "mouseClicked public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mousePressed", java.awt.event.MouseEvent.class).getModifiers()), "mousePressed public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseReleased", java.awt.event.MouseEvent.class).getModifiers()), "mouseReleased public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseEntered", java.awt.event.MouseEvent.class).getModifiers()), "mouseEntered public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseExited", java.awt.event.MouseEvent.class).getModifiers()), "mouseExited public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseWheelMoved", java.awt.event.MouseWheelEvent.class).getModifiers()), "mouseWheelMoved public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseDragged", java.awt.event.MouseEvent.class).getModifiers()), "mouseDragged public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseMoved", java.awt.event.MouseEvent.class).getModifiers()), "mouseMoved public");
     }
 
     // ---- Part 2: black-box (behavioral) ----

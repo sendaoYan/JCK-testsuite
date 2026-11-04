@@ -33,6 +33,12 @@ public class ComponentAdapterTest {
         check(Modifier.isPublic(m2.getModifiers()), "componentShown public");
         Method m3 = c.getMethod("componentHidden", java.awt.event.ComponentEvent.class);
         check(Modifier.isPublic(m3.getModifiers()), "componentHidden public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "ComponentAdapter ctor is protected");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("componentResized", java.awt.event.ComponentEvent.class).getModifiers()), "componentResized public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("componentMoved", java.awt.event.ComponentEvent.class).getModifiers()), "componentMoved public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("componentShown", java.awt.event.ComponentEvent.class).getModifiers()), "componentShown public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("componentHidden", java.awt.event.ComponentEvent.class).getModifiers()), "componentHidden public");
     }
 
     // ---- Part 2: black-box (behavioral) ----

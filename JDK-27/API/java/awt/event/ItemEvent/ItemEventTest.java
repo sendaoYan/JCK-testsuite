@@ -67,11 +67,44 @@ public class ItemEventTest {
         check(nil.getItem() == null, "null item round-trips");
 
         check(e instanceof AWTEvent, "ItemEvent instanceof AWTEvent");
+        // arbitrary state-change values round-trip (no validation)
+        ItemEvent weird = new ItemEvent(src, ItemEvent.ITEM_STATE_CHANGED, item, 42);
+        check(weird.getStateChange() == 42, "arbitrary state change round-trips");
+        // consume semantics: consume()/isConsumed() are protected in AWTEvent, exercised via a local subclass
+        // consume semantics: semantic event ids are pre-consumed by AWTEvent's constructor
+        Consumable ev = new Consumable();
+        check(ev.consumedFlag(), "ItemEvent" + " pre-consumed at construction");
+        ev.consumeIt();
+        check(ev.consumedFlag(), "consume keeps consumed");
+        // toString
+        check(e.toString().startsWith("java.awt.event.ItemEvent["), "toString starts with class name");
+    }
+
+    static class Consumable extends ItemEvent {
+        Consumable() { super(new DummyItemSelectable(), ItemEvent.ITEM_STATE_CHANGED, "i", ItemEvent.SELECTED); }
+        void consumeIt() { consume(); }
+        boolean consumedFlag() { return isConsumed(); }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        DummyItemSelectable src = new DummyItemSelectable();
+        java.awt.event.ItemEvent e = new java.awt.event.ItemEvent(src, java.awt.event.ItemEvent.ITEM_STATE_CHANGED, "item", java.awt.event.ItemEvent.DESELECTED);
+        java.awt.event.ItemEvent back = roundTrip(e);
+        check(back.getID() == java.awt.event.ItemEvent.ITEM_STATE_CHANGED, "serialization preserves id");
+        check("item".equals(back.getItem()), "serialization preserves item");
+        check(back.getStateChange() == java.awt.event.ItemEvent.DESELECTED, "serialization preserves state change");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

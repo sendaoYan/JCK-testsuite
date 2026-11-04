@@ -4,6 +4,7 @@
  * @run main MimeTypeParseExceptionTest
  */
 
+import java.io.*;
 import java.lang.reflect.*;
 
 public class MimeTypeParseExceptionTest {
@@ -31,6 +32,9 @@ public class MimeTypeParseExceptionTest {
         if (c.isInterface()) check(Modifier.isInterface(m), "interface modifier consistent");
         else if (c != Object.class) check(c.getSuperclass() != null, "class superclass non-null");
         check(c.getSuperclass().getName().equals("java.lang.Exception"), "extends Exception");
+        check(java.io.Serializable.class.isAssignableFrom(c), "Serializable");
+        check(Modifier.isPublic(c.getConstructor().getModifiers()), "public no-arg ctor");
+        check(Modifier.isPublic(c.getConstructor(String.class).getModifiers()), "public message ctor");
     }
 
     static void testBlackBox() throws Exception {
@@ -38,6 +42,44 @@ public class MimeTypeParseExceptionTest {
         java.awt.datatransfer.MimeTypeParseException e2 = new java.awt.datatransfer.MimeTypeParseException("bad mime");
         check("bad mime".equals(e2.getMessage()), "message ctor");
         check(java.lang.Exception.class.isInstance(e2), "instanceof Exception");
+        check(e1.getMessage() == null, "no-arg ctor message null");
+        check(e1 instanceof java.io.Serializable, "instanceof Serializable");
+
+        // message round-trips exactly, including empty and unicode
+        check("".equals(new java.awt.datatransfer.MimeTypeParseException("").getMessage()), "empty message round-trip");
+        String uni = "非法MIME";
+        check(uni.equals(new java.awt.datatransfer.MimeTypeParseException(uni).getMessage()), "unicode message round-trip");
+        // identity of the message object is preserved
+        String msg = new String("shared");
+        check(new java.awt.datatransfer.MimeTypeParseException(msg).getMessage() == msg, "message object identity preserved");
+
+        // checked-exception semantics: callable from a method declaring it, catchable as Exception
+        boolean caught = false;
+        try { throwMime(); }
+        catch (java.awt.datatransfer.MimeTypeParseException x) { caught = true; check("t".equals(x.getMessage()), "thrown message preserved"); }
+        check(caught, "catchable as its own type");
+
+        // serialization round-trip preserves message and type
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        new ObjectOutputStream(b).writeObject(e2);
+        java.awt.datatransfer.MimeTypeParseException back =
+            (java.awt.datatransfer.MimeTypeParseException) new ObjectInputStream(new ByteArrayInputStream(b.toByteArray())).readObject();
+        check("bad mime".equals(back.getMessage()), "serialization preserves message");
+        check(back instanceof java.awt.datatransfer.MimeTypeParseException, "serialization preserves type");
+        // null message survives round-trip too
+        b = new ByteArrayOutputStream();
+        new ObjectOutputStream(b).writeObject(e1);
+        java.awt.datatransfer.MimeTypeParseException back1 =
+            (java.awt.datatransfer.MimeTypeParseException) new ObjectInputStream(new ByteArrayInputStream(b.toByteArray())).readObject();
+        check(back1.getMessage() == null, "serialization preserves null message");
+
+        // toString from Throwable includes class name and message
+        check(e2.toString().contains("MimeTypeParseException"), "toString has class name");
+        check(e2.toString().contains("bad mime"), "toString has message");
+    }
+
+    static void throwMime() throws java.awt.datatransfer.MimeTypeParseException {
+        throw new java.awt.datatransfer.MimeTypeParseException("t");
     }
 
     public static void main(String[] args) throws Exception {

@@ -13,3 +13,8 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、继承 AWTEvent、常量/构造器。黑盒：构造→回读 id/source/item/stateChange/getItemSelectable；DESELECTED；5 个常量精确值；paramString 含 id/stateChange；null item。
 对应 `ItemEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- SELECTED/DESELECTED=1/2、任意 stateChange 值无校验回读；null item 合法。
+- 消费语义：ITEM_STATE_CHANGED 语义 id 构造即 consumed。
+- 序列化：id/item/stateChange 保留。

@@ -13,3 +13,8 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、继承 MouseEvent、常量/构造器。黑盒：构造→回读 scrollType/scrollAmount/wheelRotation/preciseWheelRotation；getUnitsToScroll=amount*rotation；14 参显式 precise；常量精确值；paramString 含 scrollType/scrollAmount/wheelRotation。
 对应 `MouseWheelEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- 11/14 参构造器：11 参 preciseWheelRotation 默认 = (double)wheelRotation；负分数 precise（-0.25）与 0 rotation 合法；getUnitsToScroll = scrollAmount*wheelRotation（BLOCK 型同样）。
+- paramString 含 preciseWheelRotation=。
+- 序列化：scrollType/scrollAmount/wheelRotation/preciseWheelRotation/unitsToScroll 保留。

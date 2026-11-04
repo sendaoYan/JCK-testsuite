@@ -1,8 +1,12 @@
 /*
  * @test
- * @summary java.awt.event.ContainerAdapter conformance: abstract class reflection.
+ * @summary java.awt.event.ContainerAdapter conformance: white-box structure + black-box behavior.
  * @run main ContainerAdapterTest
  */
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.awt.event.ContainerAdapter;
 
 public class ContainerAdapterTest {
     static int passed;
@@ -12,23 +16,41 @@ public class ContainerAdapterTest {
         passed++;
     }
 
-    static boolean hasMethod(Class<?> c, String name) {
-        for (java.lang.reflect.Method m : c.getMethods())
-            if (m.getName().equals(name)) return true;
-        return false;
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.awt.event.ContainerAdapter");
+        int m = c.getModifiers();
+        check(Modifier.isPublic(m), "ContainerAdapter is public");
+        check(Modifier.isAbstract(m), "ContainerAdapter is abstract");
+        check(c.getSuperclass() == Object.class, "ContainerAdapter extends Object");
+        check(java.util.Arrays.asList(c.getInterfaces()).contains(java.awt.event.ContainerListener.class), "implements java.awt.event.ContainerListener");
+        check(c.getDeclaredMethods().length == 2, "ContainerAdapter has 2 no-op methods");
+        Method m0 = c.getMethod("componentAdded", java.awt.event.ContainerEvent.class);
+        check(Modifier.isPublic(m0.getModifiers()), "componentAdded public");
+        Method m1 = c.getMethod("componentRemoved", java.awt.event.ContainerEvent.class);
+        check(Modifier.isPublic(m1.getModifiers()), "componentRemoved public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isPublic(c.getDeclaredConstructors()[0].getModifiers()), "ContainerAdapter ctor is public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("componentAdded", java.awt.event.ContainerEvent.class).getModifiers()), "componentAdded public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("componentRemoved", java.awt.event.ContainerEvent.class).getModifiers()), "componentRemoved public");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() throws Exception {
+        final java.util.List<String> calls = new java.util.ArrayList<String>();
+        ContainerAdapter a = new ContainerAdapter() {
+            public void componentAdded(java.awt.event.ContainerEvent e) { calls.add("componentAdded"); }
+            // componentRemoved(java.awt.event.ContainerEvent) inherited as no-op
+        };
+        a.componentAdded(null); // no-op default method must not throw
+        a.componentRemoved(null); // no-op default method must not throw
+        check(calls.size() == 1 && calls.get(0).equals("componentAdded"), "only overridden method dispatched");
+        check(a instanceof java.awt.event.ContainerListener, "ContainerAdapter instanceof java.awt.event.ContainerListener");
     }
 
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("java.awt.event.ContainerAdapter");
-        check(!c.isInterface() && !c.isEnum(), "not interface/enum");
-        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "is abstract");
-        check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");
-        java.util.Set<String> ifaces = new java.util.HashSet<String>();
-        for (Class<?> i : c.getInterfaces()) ifaces.add(i.getName());
-        String[] expected = {"java.awt.event.ContainerListener"};
-        check(ifaces.equals(new java.util.HashSet<String>(java.util.Arrays.asList(expected))), "interfaces");
-        check(hasMethod(c, "componentAdded"), "method componentAdded");
-        check(hasMethod(c, "componentRemoved"), "method componentRemoved");
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

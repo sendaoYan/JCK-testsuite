@@ -29,6 +29,10 @@ public class MouseMotionAdapterTest {
         check(Modifier.isPublic(m0.getModifiers()), "mouseDragged public");
         Method m1 = c.getMethod("mouseMoved", java.awt.event.MouseEvent.class);
         check(Modifier.isPublic(m1.getModifiers()), "mouseMoved public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "MouseMotionAdapter ctor is protected");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseDragged", java.awt.event.MouseEvent.class).getModifiers()), "mouseDragged public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("mouseMoved", java.awt.event.MouseEvent.class).getModifiers()), "mouseMoved public");
     }
 
     // ---- Part 2: black-box (behavioral) ----

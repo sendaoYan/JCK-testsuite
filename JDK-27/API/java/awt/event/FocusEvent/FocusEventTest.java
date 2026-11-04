@@ -77,11 +77,37 @@ public class FocusEventTest {
         check(e2.paramString().contains(",permanent"), "paramString permanent");
 
         check(e instanceof ComponentEvent, "FocusEvent instanceof ComponentEvent");
+        // serialization of a legacy (no-cause) FocusEvent defaults cause to UNKNOWN via readResolve
+        java.awt.Component s2 = new java.awt.Component() { };
+        java.awt.event.FocusEvent legacy = new java.awt.event.FocusEvent(s2, java.awt.event.FocusEvent.FOCUS_GAINED);
+        java.awt.event.FocusEvent lback = roundTrip(legacy);
+        check(lback.getCause() == java.awt.event.FocusEvent.Cause.UNKNOWN, "legacy serialization defaults cause UNKNOWN");
+        // all 11 Cause constants are distinct
+        check(java.util.Arrays.toString(FocusEvent.Cause.values()).contains("MOUSE_EVENT"), "Cause constants include MOUSE_EVENT");
+        check(FocusEvent.Cause.valueOf("UNKNOWN") == FocusEvent.Cause.UNKNOWN, "valueOf UNKNOWN");
+        // toString
+        check(e.toString().contains("FOCUS_GAINED"), "toString contains id text");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        java.awt.Component src = new java.awt.Component() { };
+        java.awt.event.FocusEvent e = new java.awt.event.FocusEvent(src, java.awt.event.FocusEvent.FOCUS_LOST, true, null, java.awt.event.FocusEvent.Cause.TRAVERSAL);
+        java.awt.event.FocusEvent back = roundTrip(e);
+        check(back.getID() == java.awt.event.FocusEvent.FOCUS_LOST, "serialization preserves id");
+        check(back.isTemporary(), "serialization preserves temporary flag");
+        check(back.getCause() == java.awt.event.FocusEvent.Cause.TRAVERSAL, "serialization preserves cause");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

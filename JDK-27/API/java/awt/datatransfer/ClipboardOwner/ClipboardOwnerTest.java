@@ -37,6 +37,23 @@ public class ClipboardOwnerTest {
         java.awt.datatransfer.ClipboardOwner o = (c, t) -> {};
         o.lostOwnership(null, null);
         check(true, "lostOwnership callable");
+        check(!(o instanceof java.util.EventListener), "ClipboardOwner is NOT an EventListener (standalone interface)");
+
+        // ---- callback receives exact clipboard/transferable instances ----
+        final java.util.List<String> calls = new java.util.ArrayList<>();
+        final java.awt.datatransfer.Clipboard cb = new java.awt.datatransfer.Clipboard("own");
+        final java.awt.datatransfer.Transferable tr = new java.awt.datatransfer.StringSelection("data");
+        java.awt.datatransfer.ClipboardOwner recording = (c, t) -> {
+            calls.add("lost");
+            if (c != null) { check(c == cb, "callback clipboard identity"); check(t == tr, "callback transferable identity"); }
+        };
+        recording.lostOwnership(cb, tr);
+        check(calls.size() == 1 && calls.get(0).equals("lost"), "lostOwnership dispatched once");
+        // null arguments are legal per contract (no focus/clipboard left)
+        recording.lostOwnership(null, null);
+        check(calls.size() == 2, "lostOwnership(null,null) callable");
+        // exactly one abstract method
+        check(java.awt.datatransfer.ClipboardOwner.class.getDeclaredMethods().length == 1, "single abstract method");
     }
 
     public static void main(String[] args) throws Exception {

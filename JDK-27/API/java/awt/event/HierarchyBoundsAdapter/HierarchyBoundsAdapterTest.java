@@ -29,6 +29,10 @@ public class HierarchyBoundsAdapterTest {
         check(Modifier.isPublic(m0.getModifiers()), "ancestorMoved public");
         Method m1 = c.getMethod("ancestorResized", java.awt.event.HierarchyEvent.class);
         check(Modifier.isPublic(m1.getModifiers()), "ancestorResized public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "HierarchyBoundsAdapter ctor is protected");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("ancestorMoved", java.awt.event.HierarchyEvent.class).getModifiers()), "ancestorMoved public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("ancestorResized", java.awt.event.HierarchyEvent.class).getModifiers()), "ancestorResized public");
     }
 
     // ---- Part 2: black-box (behavioral) ----

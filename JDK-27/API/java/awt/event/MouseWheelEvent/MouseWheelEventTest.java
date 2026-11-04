@@ -68,11 +68,45 @@ public class MouseWheelEventTest {
         check(ps.contains("wheelRotation=-2"), "paramString wheelRotation");
 
         check(e instanceof MouseEvent, "MouseWheelEvent instanceof MouseEvent");
+        // fractional precise rotation with integer wheel rotation
+        MouseWheelEvent frac = new MouseWheelEvent(src, MouseEvent.MOUSE_WHEEL, when, 0, 0, 0, 0, 0, 0, false, MouseWheelEvent.WHEEL_UNIT_SCROLL, 3, 0, -0.25);
+        check(frac.getPreciseWheelRotation() == -0.25, "negative fractional precise rotation");
+        check(frac.getWheelRotation() == 0, "integer rotation independent of precise");
+        check(frac.getUnitsToScroll() == 0, "unitsToScroll uses integer rotation");
+        // 11-arg ctor defaults preciseWheelRotation to (double) wheelRotation
+        check(e.getPreciseWheelRotation() == -2.0, "11-arg ctor precise defaults to wheelRotation");
+        // zero scroll amount and zero rotation are legal
+        MouseWheelEvent zero = new MouseWheelEvent(src, MouseEvent.MOUSE_WHEEL, when, 0, 0, 0, 0, 0, 0, false, MouseWheelEvent.WHEEL_UNIT_SCROLL, 0, 0);
+        check(zero.getScrollAmount() == 0 && zero.getWheelRotation() == 0, "zero amounts legal");
+        check(zero.getUnitsToScroll() == 0, "zero unitsToScroll");
+        // paramString includes precise rotation
+        check(precise.paramString().contains("preciseWheelRotation=2.5"), "paramString precise rotation");
+        // toString
+        check(e.toString().startsWith("java.awt.event.MouseWheelEvent["), "toString starts with class name");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        Component src = new Component() { };
+        MouseWheelEvent e = new MouseWheelEvent(src, MouseEvent.MOUSE_WHEEL, 432L, 0, 1, 2, 3, 4, 1, false, MouseWheelEvent.WHEEL_UNIT_SCROLL, 2, 3, 0.5);
+        MouseWheelEvent back = roundTrip(e);
+        check(back.getID() == MouseEvent.MOUSE_WHEEL, "serialization preserves id");
+        check(back.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL, "serialization preserves scroll type");
+        check(back.getScrollAmount() == 2, "serialization preserves scroll amount");
+        check(back.getWheelRotation() == 3, "serialization preserves wheel rotation");
+        check(back.getPreciseWheelRotation() == 0.5, "serialization preserves precise rotation");
+        check(back.getUnitsToScroll() == 6, "serialization preserves unitsToScroll");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

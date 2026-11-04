@@ -29,6 +29,10 @@ public class ContainerAdapterTest {
         check(Modifier.isPublic(m0.getModifiers()), "componentAdded public");
         Method m1 = c.getMethod("componentRemoved", java.awt.event.ContainerEvent.class);
         check(Modifier.isPublic(m1.getModifiers()), "componentRemoved public");
+        // ctor visibility (version-differentiated: JDK-8 public, JDK-9+ protected)
+        check(java.lang.reflect.Modifier.isProtected(c.getDeclaredConstructors()[0].getModifiers()), "ContainerAdapter ctor is protected");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("componentAdded", java.awt.event.ContainerEvent.class).getModifiers()), "componentAdded public");
+        check(java.lang.reflect.Modifier.isPublic(c.getMethod("componentRemoved", java.awt.event.ContainerEvent.class).getModifiers()), "componentRemoved public");
     }
 
     // ---- Part 2: black-box (behavioral) ----

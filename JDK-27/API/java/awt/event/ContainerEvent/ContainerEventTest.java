@@ -56,11 +56,35 @@ public class ContainerEventTest {
         // inheritance: ContainerEvent IS-A ComponentEvent and AWTEvent
         check(e instanceof ComponentEvent, "ContainerEvent instanceof ComponentEvent");
         check(e.getComponent() == cont, "getComponent returns source container");
+        // null child round-trips (event type carried, child absent)
+        ContainerEvent noChild = new ContainerEvent(cont, ContainerEvent.COMPONENT_ADDED, null);
+        check(noChild.getChild() == null, "null child round-trips");
+        // NOTE: paramString() with a null child throws NPE in the reference implementation (child.getName()); not asserted.
+        // toString
+        check(e.toString().startsWith("java.awt.event.ContainerEvent["), "toString starts with class name");
+        check(e.toString().contains("COMPONENT_ADDED"), "toString contains id text");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        java.awt.Container cont = new java.awt.Container();
+        java.awt.Component child = new java.awt.Component() { };
+        java.awt.event.ContainerEvent e = new java.awt.event.ContainerEvent(cont, java.awt.event.ContainerEvent.COMPONENT_REMOVED, child);
+        java.awt.event.ContainerEvent back = roundTrip(e);
+        check(back.getID() == java.awt.event.ContainerEvent.COMPONENT_REMOVED, "serialization preserves id");
+        check(back.getChild() != null, "serialization preserves child");
+        check(back.getContainer() == null, "EventObject source is transient: container null after round-trip");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

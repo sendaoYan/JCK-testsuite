@@ -13,3 +13,8 @@ JDK 源码: ~/git/jdk25u-dev/src/java.desktop/share/classes/java/awt/datatransfe
 白盒: 继承 EventObject；黑盒: getSource 为构造传入的 Clipboard。
 
 自动化实现位于同目录 `FlavorEventTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（本轮追加）
+- null source → IAE（EventObject 契约）。
+- 事件实例身份经 FlavorListener 精确传递（同一实例）。
+- 序列化：Clipboard 非 Serializable，EventObject.source transient → round-trip 后 getSource() 为 null，但类型与 EventObject 超类型保留。

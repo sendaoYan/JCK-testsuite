@@ -85,11 +85,54 @@ public class InputMethodEventTest {
         check(ps.contains("caret: "), "paramString caret");
 
         check(e instanceof AWTEvent, "InputMethodEvent instanceof AWTEvent");
+        // committedCharacterCount == text length boundary is legal
+        InputMethodEvent exact = new InputMethodEvent(src, InputMethodEvent.INPUT_METHOD_TEXT_CHANGED, when, text, 2, caret, vis);
+        check(exact.getCommittedCharacterCount() == 2, "count == text length legal");
+        // count cannot exceed the iterator length
+        boolean over = false;
+        try { new InputMethodEvent(src, InputMethodEvent.INPUT_METHOD_TEXT_CHANGED, when, text, 3, caret, vis); }
+        catch (IllegalArgumentException x) { over = true; }
+        check(over, "count > text length throws IAE");
+        // negative count rejected
+        boolean neg = false;
+        try { new InputMethodEvent(src, InputMethodEvent.INPUT_METHOD_TEXT_CHANGED, when, text, -1, caret, vis); }
+        catch (IllegalArgumentException x) { neg = true; }
+        check(neg, "negative count throws IAE");
+        // 4-arg caret-only ctor also validates id range
+        boolean bad4 = false;
+        try { new InputMethodEvent(src, 9999, caret, vis); }
+        catch (IllegalArgumentException x) { bad4 = true; }
+        check(bad4, "4-arg ctor validates id range");
+        // consume semantics
+        check(!caretEv.isConsumed(), "caret event fresh not consumed");
+        caretEv.consume();
+        check(caretEv.isConsumed(), "caret event consume marks consumed");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        Component src = new Component() { };
+        java.text.AttributedCharacterIterator text = new java.text.AttributedString("ab").getIterator();
+        TextHitInfo caret = TextHitInfo.leading(1);
+        TextHitInfo vis = TextHitInfo.leading(0);
+        InputMethodEvent e = new InputMethodEvent(src, InputMethodEvent.INPUT_METHOD_TEXT_CHANGED, 111L, text, 2, caret, vis);
+        InputMethodEvent back = roundTrip(e);
+        check(back.getID() == InputMethodEvent.INPUT_METHOD_TEXT_CHANGED, "serialization preserves id");
+        check(back.getWhen() == 111L, "serialization preserves when");
+        // caret/visiblePosition/count/text are transient: only id and when survive the round-trip
+        check(back.getCommittedCharacterCount() == 0, "serialization resets transient committed count");
+        check(back.getCaret() == null && back.getVisiblePosition() == null, "serialization resets transient caret/visiblePosition");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

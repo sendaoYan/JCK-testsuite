@@ -85,11 +85,59 @@ public class InvocationEventTest {
         check(ps.contains("catchExceptions="), "paramString catchExceptions");
 
         check(e instanceof ActiveEvent, "InvocationEvent instanceof ActiveEvent");
+        // dispatch() is not idempotent: each call runs the runnable again
+        final int[] runs = {0};
+        InvocationEvent twice = new InvocationEvent(src, () -> runs[0]++);
+        twice.dispatch(); twice.dispatch();
+        check(runs[0] == 2, "double dispatch runs runnable twice");
+        // notifier runs even when the runnable throws (catchThrowables=true)
+        final boolean[] notified = {false};
+        InvocationEvent errNotif = new InvocationEvent(src, () -> { throw new RuntimeException("x"); }, () -> notified[0] = true, true);
+        errNotif.dispatch();
+        check(notified[0], "notifier runs after runnable exception");
+        check(errNotif.getException() != null, "exception captured alongside notifier");
+        // Error (not Exception) is also captured by catchThrowables
+        InvocationEvent errCap = new InvocationEvent(src, () -> { throw new AssertionError("err"); }, null, true);
+        errCap.dispatch();
+        check(errCap.getThrowable() instanceof AssertionError, "Error captured by getThrowable");
+        check(errCap.getException() == null, "getException null for non-Exception Throwable");
+        // getWhen is captured at construction time (monotone for two events)
+        InvocationEvent a1 = new InvocationEvent(src, () -> { });
+        InvocationEvent a2 = new InvocationEvent(src, () -> { });
+        check(a2.getWhen() >= a1.getWhen(), "getWhen monotone across constructions");
+        // toString contains paramString
+        check(a1.toString().contains("INVOCATION_DEFAULT"), "toString contains id text");
     }
 
+    static int totalRuns;
+
+    static class CountingRunnable implements Runnable, java.io.Serializable {
+        public void run() { totalRuns++; }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        Object src = new Object();
+        CountingRunnable cr = new CountingRunnable();
+        InvocationEvent e = new InvocationEvent(src, cr, null, true);
+        e.dispatch();
+        check(totalRuns == 1, "original dispatch counted");
+        InvocationEvent back = roundTrip(e);
+        check(back.getID() == InvocationEvent.INVOCATION_DEFAULT, "serialization preserves id");
+        check(back.isDispatched(), "serialization preserves dispatched flag");
+        back.dispatch();
+        check(totalRuns == 2, "deserialized event carries and runs its own runnable");
+    }
+    
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

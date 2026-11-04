@@ -87,11 +87,50 @@ public class InputEventTest {
         check(InputEvent.getModifiersExText(InputEvent.SHIFT_DOWN_MASK).length() > 0, "getModifiersExText non-empty");
 
         check(none instanceof ComponentEvent, "InputEvent instanceof ComponentEvent");
+        // remaining documented old-style masks
+        check(InputEvent.BUTTON2_MASK == InputEvent.ALT_MASK, "BUTTON2_MASK aliased to ALT_MASK");
+        check(InputEvent.BUTTON3_MASK == InputEvent.META_MASK, "BUTTON3_MASK aliased to META_MASK");
+        // remaining documented extended masks
+        check(InputEvent.META_DOWN_MASK == 0x100, "META_DOWN_MASK == 0x100");
+        check(InputEvent.ALT_DOWN_MASK == 0x200, "ALT_DOWN_MASK == 0x200");
+        check(InputEvent.BUTTON1_DOWN_MASK == 0x400, "BUTTON1_DOWN_MASK == 0x400");
+        check(InputEvent.BUTTON2_DOWN_MASK == 0x800, "BUTTON2_DOWN_MASK == 0x800");
+        check(InputEvent.BUTTON3_DOWN_MASK == 0x1000, "BUTTON3_DOWN_MASK == 0x1000");
+        // all extended masks are distinct bits
+        int[] ex = { InputEvent.SHIFT_DOWN_MASK, InputEvent.CTRL_DOWN_MASK, InputEvent.META_DOWN_MASK, InputEvent.ALT_DOWN_MASK,
+                     InputEvent.BUTTON1_DOWN_MASK, InputEvent.BUTTON2_DOWN_MASK, InputEvent.BUTTON3_DOWN_MASK, InputEvent.ALT_GRAPH_DOWN_MASK };
+        for (int i = 0; i < ex.length; i++)
+            for (int j = i + 1; j < ex.length; j++)
+                check((ex[i] & ex[j]) == 0, "extended masks bits distinct");
+        // getModifiersExText joins with '+' and orders Meta first
+        check(InputEvent.getModifiersExText(InputEvent.SHIFT_DOWN_MASK | InputEvent.CTRL_DOWN_MASK).equals("Ctrl+Shift"), "getModifiersExText Ctrl+Shift order");
+        check(InputEvent.getModifiersExText(InputEvent.BUTTON1_DOWN_MASK).equals("Button1"), "getModifiersExText Button1");
+        // old modifiers exposed via getModifiers for extended input
+        check(combo.getModifiers() == (InputEvent.CTRL_MASK | InputEvent.ALT_MASK), "getModifiers maps extended to old masks");
+        // negative modifiers text is empty for unknown bits
+        check(InputEvent.getModifiersExText(1 << 20).equals("Button10"), "getModifiersExText button bit 20 is Button10");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundTrip(T o) throws java.io.IOException, ClassNotFoundException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(b).writeObject(o);
+        return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(b.toByteArray())).readObject();
+    }
+    static void testSerialization() throws Exception {
+        Component src = new Component() { };
+        KeyEvent e = new KeyEvent(src, KeyEvent.KEY_PRESSED, 77L, InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK, KeyEvent.VK_X, KeyEvent.CHAR_UNDEFINED);
+        KeyEvent back = roundTrip(e);
+        check(back.getWhen() == 77L, "serialization preserves when");
+        check(back.getModifiersEx() == (InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK), "serialization preserves extended modifiers");
+        check(back.isControlDown() && back.isAltDown(), "serialization keeps isControlDown/isAltDown");
+        check(!back.isShiftDown(), "serialization keeps shift up");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

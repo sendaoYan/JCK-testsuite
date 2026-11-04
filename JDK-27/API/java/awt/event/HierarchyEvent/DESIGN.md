@@ -13,3 +13,8 @@
 ## 4. 测试用例设计 + 自动化实现
 白盒：public、继承 AWTEvent、常量/构造器。黑盒：构造→回读 id/source/getComponent/getChanged/getChangedParent/getChangeFlags；组合 flags；8 个常量精确值；paramString 含 HIERARCHY_CHANGED/PARENT_CHANGED 等。
 对应 `HierarchyEventTest.java` 的 `testWhiteBox()` / `testBlackBox()`。
+
+## 5. 契约深化（本轮追加）
+- 变更标志位精确值：PARENT_CHANGED=1/DISPLAYABILITY_CHANGED=2/SHOWING_CHANGED=4，三标志可组合回读；ANCESTOR 事件 4 参构造器 flags=0。
+- 消费语义：HIERARCHY_CHANGED 不可消费，consume() no-op——锁定参考实现行为。
+- 序列化：id/changeFlags/changed 保留；component（source）transient。
