@@ -9,6 +9,11 @@
  * @run main AttributeChangeNotificationFilterTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.Vector;
 import javax.management.AttributeChangeNotification;
 import javax.management.AttributeChangeNotificationFilter;
 import javax.management.Notification;
@@ -74,10 +79,90 @@ public class AttributeChangeNotificationFilterTest {
         check(f.isNotificationEnabled(acn("A")), "matching attribute accepted");
     }
 
+    // ---- deepened (batch d): exact-name semantics / live vector / null / serial form ----
+
+    static void testExactNameSemantics() {
+        // matching is exact String.equals on the attribute name: no prefix, no case folding
+        AttributeChangeNotificationFilter f = new AttributeChangeNotificationFilter();
+        f.enableAttribute("Count");
+        check(f.isNotificationEnabled(acn("Count")), "exact attribute name matches");
+        check(!f.isNotificationEnabled(acn("CountX")), "longer name does not match");
+        check(!f.isNotificationEnabled(acn("Cou")), "shorter name does not match (no prefix semantics)");
+        check(!f.isNotificationEnabled(acn("count")), "case-sensitive");
+        check(!f.isNotificationEnabled(acn("")), "empty attribute name not enabled");
+        // an explicitly enabled empty name matches an empty attribute name
+        AttributeChangeNotificationFilter e = new AttributeChangeNotificationFilter();
+        e.enableAttribute("");
+        check(e.isNotificationEnabled(acn("")), "explicitly enabled empty name matches");
+        // a plain Notification with the right type string is rejected: must be an ACN instance
+        check(!f.isNotificationEnabled(new Notification("jmx.attribute.change", "s", 1L)),
+                "non-ACN instance rejected even with matching type string");
+    }
+
+    static void testNullNotificationNpe() {
+        final AttributeChangeNotificationFilter f = new AttributeChangeNotificationFilter();
+        f.enableAttribute("A");
+        checkThrows(NullPointerException.class,
+                new ThrowingRunnable() { public void run() { f.isNotificationEnabled(null); } },
+                "isNotificationEnabled(null) -> NPE (impl reads type before instanceof)");
+    }
+
+    static void testGetEnabledAttributesIsLive() {
+        AttributeChangeNotificationFilter f = new AttributeChangeNotificationFilter();
+        f.enableAttribute("A");
+        f.enableAttribute("B");
+        Vector<String> v = f.getEnabledAttributes();
+        check(v.size() == 2 && v.contains("A") && v.contains("B"), "getEnabledAttributes content");
+        v.remove("A");   // live Vector: the removal reaches the filter's set
+        check(!f.isNotificationEnabled(acn("A")),
+                "getEnabledAttributes returns the live Vector (removal write-through)");
+        check(f.isNotificationEnabled(acn("B")), "untouched name still enabled");
+        check(f.getEnabledAttributes().size() == 1, "filter set updated through the vector");
+    }
+
+    static void testDisableNoThrowAndNull() {
+        AttributeChangeNotificationFilter f = new AttributeChangeNotificationFilter();
+        f.disableAttribute("never-enabled");
+        check(f.getEnabledAttributes().isEmpty(), "disableAttribute of an unknown name is a no-op");
+        f.disableAttribute(null);
+        check(f.getEnabledAttributes().isEmpty(), "disableAttribute(null) tolerated");
+        f.enableAttribute("A");
+        f.disableAttribute(null);
+        check(f.getEnabledAttributes().size() == 1, "disableAttribute(null) does not disturb enabled names");
+    }
+
+    static void testSerializationDeep() throws Exception {
+        AttributeChangeNotificationFilter f = new AttributeChangeNotificationFilter();
+        f.enableAttribute("Count");
+        f.enableAttribute("Size");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(f);
+        oos.close();
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        AttributeChangeNotificationFilter back = (AttributeChangeNotificationFilter) ois.readObject();
+        ois.close();
+        check(back.getEnabledAttributes().size() == 2, "round trip preserves enabled names size");
+        check(back.getEnabledAttributes().contains("Count")
+                && back.getEnabledAttributes().contains("Size"),
+                "round trip preserves enabled names content");
+        check(back.isNotificationEnabled(acn("Count")) && back.isNotificationEnabled(acn("Size")),
+                "round trip filter still matches enabled names");
+        check(!back.isNotificationEnabled(acn("Weight")),
+                "round trip filter still rejects other names");
+        check(!back.isNotificationEnabled(new Notification("jmx.attribute.change", "s", 1L)),
+                "round trip filter still rejects non-ACN instances");
+    }
+
     public static void main(String[] args) throws Exception {
         testBasic();
         testEnableDisable();
         testRejectsNonMatchingNotification();
+        testExactNameSemantics();
+        testNullNotificationNpe();
+        testGetEnabledAttributesIsLive();
+        testDisableNoThrowAndNull();
+        testSerializationDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
