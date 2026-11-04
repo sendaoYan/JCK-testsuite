@@ -25,3 +25,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 无 peer 时 `getBufferStrategy` 为 null → `testBlackBox`。
 - `paint/update` 用内存 Graphics 调用不抛异常 → `testBlackBox`。
 - add 到显示 Frame 后 displayable/showing + setBounds/setBackground 往返 → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- 无 peer 前 `getBufferStrategy()` 返回 null（不抛）。
+- `paint(null)`/`update(null)` 抛精确 NullPointerException（JDK-27 消息指向 Graphics.clearRect）。
+- getAccessibleContext 返回 `Canvas$AccessibleAWTCanvas` 类型。
+- 序列化往返：副本是不同对象（identity 区分），name 与 background 保留。

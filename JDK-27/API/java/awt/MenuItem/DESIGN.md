@@ -26,3 +26,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - setLabel/setEnabled/enable/disable 往返 → `testBlackBox`。
 - MenuShortcut getKey/usesShiftModifier + setShortcut/deleteShortcut → `testBlackBox`。
 - setActionCommand + ActionListener 管理 → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- `MenuItem(null)` 保留 null；`enable()`/`disable()` 是 setEnabled 的 deprecated 别名（行为等价）。
+- actionCommand 默认回退 label、显式优先、`setActionCommand(null)` 回退 label（与 Button 同一三段链）。
+- MenuShortcut 语义：getKey 返回虚拟键码、默认无 shift、equals 对称且 hashCode 一致、shift 变体与 plain 不等。
+- 同一 ActionListener 重复注册计数 2；移除单个实例。

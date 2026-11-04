@@ -29,3 +29,10 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 单选 select/deselect + 多选 getSelectedIndexes/getSelectedItems → `testBlackBox`。
 - makeVisible/getVisibleIndex + 事件监听管理 → `testBlackBox`。
 - add 到显示 Frame 后 displayable → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- `List(0)` 行数回退 4（负数 rows 同样接受）；`List(6)` 单选、`List(2,true)` 多选。
+- `add(null)` 接受（与 Choice 相反）；`add(item,-1)` 与越界 index 均按追加处理；`add(item,1)` 精确插入；`replaceItem(null,0)` 接受。
+- 越界：`replaceItem(x,99)`/`getItem(99)`/`remove(99)`/`remove(-2)` 均精确 AIOOBE；`remove("不存在")` 抛 IAE。
+- 越界 select 的原始索引泄漏（历史怪癖锁定）：`select(-1)` 后 getSelectedIndex()==-1、`select(99)` 后 getSelectedIndex()==99（原样存储越界值），两种状态下 `getSelectedItems()` 都抛 AIOOBE；deselect 越界不修正索引；`makeVisible(-1)` no-op。
+- 单选 reselect 迁移选择、deselect 清空；`setMultipleMode(false)` 保留已有多选但 getSelectedIndex() 报 -1。

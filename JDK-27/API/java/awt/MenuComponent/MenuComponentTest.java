@@ -56,9 +56,50 @@ public class MenuComponentTest {
         mi.removeNotify(); // no-op before peer
     }
 
+    // ---- shared helper for exact-exception assertions (deepening batch) ----
+    interface ThrowingAction { void run() throws Exception; }
+
+    static void expectExact(Class<? extends Throwable> expected, String tag, ThrowingAction action) {
+        try {
+            action.run();
+            check(false, tag + ": expected " + expected.getSimpleName() + " but nothing was thrown");
+        } catch (Throwable thrown) {
+            check(thrown.getClass() == expected,
+                  tag + ": expected " + expected.getName() + " but got " + thrown.getClass().getName());
+        }
+    }
+
+    // ---- Part 3: contract deepening ----
+    static void testContractMenuComponent() throws Exception {
+        MenuItem mi = new MenuItem("mc");
+        check(mi.getParent() == null, "parent null before attach");
+        Menu m = new Menu("m");
+        m.add(mi);
+        check(mi.getParent() == m, "Menu.add wires item parent");
+        m.remove(mi);
+        // JDK 8 keeps the stale parent link after removal; JDK 9+ unwires it
+        check(mi.getParent() == null, "Menu.remove unwires item parent (JDK 9+)");
+        check(mi.getName() != null, "generated name non-null");
+        mi.setName("named");
+        check("named".equals(mi.getName()), "setName/getName roundtrip");
+        Font f = new Font("Dialog", Font.PLAIN, 7);
+        mi.setFont(f);
+        check(f.equals(mi.getFont()), "setFont/getFont roundtrip");
+        check(mi.getFont() != null, "explicit font retrievable");
+        mi.setFont(null);
+        check(mi.getFont() == null, "setFont(null) clears the font (no fallback before a peer)");
+        check(mi.toString() != null, "toString non-null");
+        //@8 check(mi.getPeer() == null, "deprecated getPeer() is null without a peer");
+        //@27 boolean peerGone = false;
+        //@27 try { Class.forName("java.awt.MenuComponent").getMethod("getPeer"); }
+        //@27 catch (NoSuchMethodException expected) { peerGone = true; }
+        //@27 check(peerGone, "deprecated getPeer removed (JDK 9+)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractMenuComponent();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

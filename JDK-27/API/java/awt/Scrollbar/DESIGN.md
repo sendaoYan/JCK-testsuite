@@ -28,3 +28,11 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 数值/增量/方向/调整状态 setter-getter 往返 + setValues → `testBlackBox`。
 - AdjustmentListener 管理 → `testBlackBox`。
 - add 到显示 Frame 后 displayable → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- 非法 orientation（5/-1）在 3 个构造器与 setOrientation 均抛精确 IAE（illegal scrollbar orientation）。
+- ctor clamp：value<min 抬到 min；value>max-visible 压回；min>max 时 max 抬到 min+1。
+- 增量钳制：`setUnitIncrement(0/-5)`、`setBlockIncrement(0/-5)` 不抛、钳到 1；默认 unit=1、block=visible。
+- `setValues` 一站式 clamp 矩阵（同上三条规则且 min 提升会连带移动 value）；`setValue` clamp 到 [min, max-visible]。
+- 默认 value 0/min 0/max 100/visible 10；getVisible 与 getVisibleAmount 别名。
+- 同一 AdjustmentListener 重复注册计数 2；程序化 setValue 不派发 AdjustmentEvent。

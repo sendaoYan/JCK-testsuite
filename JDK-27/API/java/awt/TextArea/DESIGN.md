@@ -27,3 +27,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 选择/全选/光标/可编辑 组合 → `testBlackBox`。
 - getPreferredSize/getMinimumSize 非空 → `testBlackBox`。
 - add 到显示 Frame 后 displayable → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- rows/columns 默认 0；`setRows(0)`/`setColumns(0)` 允许（不抛），负数抛 IAE。
+- null 文本语义：`append(null)`/`insert(null,i)`/`replaceRange(null,i,j)` 写入字面 4 字符 "null"；而 `setText(null)` 归一化为空串（同一类内两套 null 语义并存，实测锁定）。
+- `replaceRange(str, 4, 2)` 交换边界不抛：按 `substring(0,start)+str+substring(end)` 拼接得到 "abcdXYcdef" 式结果（end 只决定尾巴起点）。
+- insert 越界与 replaceRange 常规越界抛 StringIndexOutOfBoundsException；insert(str,3)/append 往返精确断言。

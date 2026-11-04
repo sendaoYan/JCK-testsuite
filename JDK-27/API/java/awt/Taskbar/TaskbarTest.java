@@ -5,6 +5,8 @@
  * @run main TaskbarTest
  */
 
+import java.awt.*;
+
 import java.lang.reflect.*;
 import java.awt.Taskbar;
 
@@ -69,9 +71,42 @@ public class TaskbarTest {
         }
     }
 
+    // ---- shared helper for exact-exception assertions (deepening batch) ----
+    interface ThrowingAction { void run() throws Exception; }
+
+    static void expectExact(Class<? extends Throwable> expected, String tag, ThrowingAction action) {
+        try {
+            action.run();
+            check(false, tag + ": expected " + expected.getSimpleName() + " but nothing was thrown");
+        } catch (Throwable thrown) {
+            check(thrown.getClass() == expected,
+                  tag + ": expected " + expected.getName() + " but got " + thrown.getClass().getName());
+        }
+    }
+
+    // ---- Part 3: contract deepening ----
+    static void testContractTaskbar() throws Exception {
+        // measured on this Linux/X11 display: no taskbar provider exists outside macOS
+        check(!Taskbar.isTaskbarSupported(), "isTaskbarSupported false on Linux/X11");
+        expectExact(UnsupportedOperationException.class, "getTaskbar without a provider",
+              () -> Taskbar.getTaskbar());
+        java.util.Set<String> states = new java.util.HashSet<>();
+        for (Taskbar.State st : Taskbar.State.values()) states.add(st.name());
+        check(states.equals(new java.util.HashSet<>(java.util.Arrays.asList(
+                "OFF", "NORMAL", "PAUSED", "INDETERMINATE", "ERROR"))), "State constant set");
+        check(Taskbar.State.values().length == 5, "5 State constants");
+        java.util.Set<String> features = new java.util.HashSet<>();
+        for (Taskbar.Feature ft : Taskbar.Feature.values()) features.add(ft.name());
+        check(features.containsAll(java.util.Arrays.asList("ICON_IMAGE", "MENU", "PROGRESS_VALUE",
+                "PROGRESS_VALUE_WINDOW", "USER_ATTENTION", "USER_ATTENTION_WINDOW")),
+              "known Feature constants");
+        check(Taskbar.Feature.values().length == 10, "10 Feature constants");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractTaskbar();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -25,3 +25,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 构造初始状态 + setState 往返 → `testBlackBox`。
 - getSelectedObjects 有无选中 → `testBlackBox`。
 - 继承 setLabel/setEnabled + ItemListener 管理 → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- `CheckboxMenuItem(null)` 保留 null label 且 state=false；setState 幂等。
+- 程序化 setState 不派发 ItemEvent；getSelectedObjects on 返回自身/off 返回 null。
+- toString 精确携带 `state=true`/`state=false`（`java.awt.CheckboxMenuItem[...,state=...]`）。
+- 继承 actionCommand 默认回退 label 语义；setShortcut/deleteShortcut 继承链路可用。

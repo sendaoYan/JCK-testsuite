@@ -28,3 +28,11 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - ItemListener 管理 → `testBlackBox`。
 - CheckboxGroup 分配与 setCheckboxGroup(null) → `testBlackBox`。
 - add 到显示 Frame 后 displayable → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- `Checkbox(null)` 保留 null label；默认 ("", false, 无组)。
+- 组选择迁移：`setState(true)` 把组选择迁到本成员（旧成员翻 false）；第 2 个 true 构造进组会抢走选择。
+- 历史行为锁定：对组内当前选中成员 `setState(false)` 是彻底 no-op（自身 state 保持 true、组引用保持）——两个 JDK 实测一致。
+- `setSelectedCheckbox(null)` 把成员 state 翻 false；detach（setCheckboxGroup(null)）保留自身 state 并清除组选择。
+- `getSelectedObjects()` 选中时返回含自身引用的数组、未选中返回 null。
+- 同一 ItemListener 注册两次计数 2；程序化 setState 不派发 ItemEvent。

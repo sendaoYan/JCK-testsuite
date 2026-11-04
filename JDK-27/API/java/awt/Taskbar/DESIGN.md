@@ -24,3 +24,8 @@ if (Taskbar.isTaskbarSupported()) {
 - 支持：`getTaskbar` 非空且单例；对全部 10 个 Feature `isSupported` 确定性；抽查 ICON_IMAGE/PROGRESS_VALUE。
 - 不支持：`getTaskbar` 抛 `UnsupportedOperationException`。
 不调用 setIconImage/setProgressValue 等（无桌面服务时不安全）。
+
+## ⑤ 契约深化（本轮追加）
+- Linux/X11 实测：isTaskbarSupported=false；`getTaskbar()` 抛精确 UnsupportedOperationException。
+- 枚举锁定：State 恰 5 个常量、Feature 恰 10 个常量（实测修正：不是早期误记的 15——旧探测把 State 混入了 Feature 计数）。
+- JDK 8 无 java.awt.Taskbar（本目录仅 JDK-27 侧存在）。

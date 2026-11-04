@@ -5,6 +5,8 @@
  * @run main TrayIconTest
  */
 
+import java.awt.*;
+
 import java.lang.reflect.*;
 import java.awt.SystemTray;
 import java.awt.TrayIcon;
@@ -77,9 +79,49 @@ public class TrayIconTest {
         }
     }
 
+    // ---- shared helper for exact-exception assertions (deepening batch) ----
+    interface ThrowingAction { void run() throws Exception; }
+
+    static void expectExact(Class<? extends Throwable> expected, String tag, ThrowingAction action) {
+        try {
+            action.run();
+            check(false, tag + ": expected " + expected.getSimpleName() + " but nothing was thrown");
+        } catch (Throwable thrown) {
+            check(thrown.getClass() == expected,
+                  tag + ": expected " + expected.getName() + " but got " + thrown.getClass().getName());
+        }
+    }
+
+    // ---- Part 3: contract deepening ----
+    static void testContractTrayIcon() throws Exception {
+        // a zero-size image is rejected before any tray-support consideration
+        expectExact(IllegalArgumentException.class, "TrayIcon(zero-size image)",
+              () -> new java.awt.TrayIcon(new java.awt.image.BufferedImage(0, 0, java.awt.image.BufferedImage.TYPE_INT_RGB)));
+        boolean tray = java.awt.SystemTray.isSupported();
+        check(tray || !tray, "SystemTray.isSupported answers a boolean");
+        if (!tray) {
+            expectExact(UnsupportedOperationException.class, "getSystemTray without tray support",
+                  () -> java.awt.SystemTray.getSystemTray());
+            java.awt.image.BufferedImage img =
+                  new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            expectExact(UnsupportedOperationException.class, "TrayIcon(Image) without tray support",
+                  () -> new java.awt.TrayIcon(img));
+            expectExact(UnsupportedOperationException.class, "TrayIcon(Image,String) without tray support",
+                  () -> new java.awt.TrayIcon(img, "tip"));
+            expectExact(UnsupportedOperationException.class, "TrayIcon(null)",
+                  () -> new java.awt.TrayIcon(null));
+        }
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (java.awt.TrayIcon.MessageType mt : java.awt.TrayIcon.MessageType.values()) names.add(mt.name());
+        check(names.equals(new java.util.HashSet<>(java.util.Arrays.asList(
+                "ERROR", "WARNING", "INFO", "NONE"))), "MessageType constant set");
+        check(java.awt.TrayIcon.MessageType.values().length == 4, "4 MessageType constants");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractTrayIcon();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

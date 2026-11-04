@@ -25,3 +25,8 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 三构造器默认/指定文本与对齐 → `testBlackBox`。
 - setText/setAlignment 往返 → `testBlackBox`。
 - add 到显示 Frame 后 displayable/showing → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- 常量精确值 LEFT 0/CENTER 1/RIGHT 2。
+- `Label(null)`、`Label(null,alignment)`、`setText(null)` 均保留 null（不归一化为空串）。
+- `setAlignment(99)`/`setAlignment(-1)` 与 `new Label(t,9)`/`(t,-1)` 均抛 IAE（improper alignment）；失败的 set 后原值保持。

@@ -25,3 +25,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 ## ④ 测试用例设计 + 自动化实现
 - 白盒：抽象类、Serializable、关键方法存在性 → `testWhiteBox`。
 - 通过 MenuItem 子类验证名称/字体/父/toString → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- 无 parent 初始为 null；`Menu.add` wire 子项 parent 链接；remove 后 JDK 9+ 解除、JDK 8 保留 stale 链接（版本差异，双侧分别断言）。
+- 未显式 setName 时自动生成名非 null；setName/getName 往返。
+- `setFont(null)` 后 `getFont()` 返回 null——peer 前没有默认字体回退（实测修正了"保留默认字体"的直觉）。
+- deprecated `getPeer()`：JDK 8 无 peer 时返回 null；JDK 9+ 方法已删除（反射锁定存在性差异）。

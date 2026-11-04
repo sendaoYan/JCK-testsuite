@@ -25,3 +25,7 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 默认/构造标签 → `testBlackBox`。
 - add/getItemCount/getItem → `testBlackBox`。
 - 挂到显示组件后 getParent + show 弹出（Xvfb 无 WM）→ `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- `show(origin, x, y)` 前置条件：origin 非 showing 时抛精确 RuntimeException（非 IllegalComponentStateException 子类）；显示 host 后 show 成功且项可枚举。
+- ctor(String) label 保留（含 null）；继承 Menu 的全部增删契约。

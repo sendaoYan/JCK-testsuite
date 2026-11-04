@@ -25,3 +25,10 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - 构造带组 Checkbox 自动选中 true 项 → `testBlackBox`。
 - setSelectedCheckbox/setCurrent 互斥切换 + 状态同步 → `testBlackBox`。
 - toString 格式 → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- 初始无选择；构造为 true 的 Checkbox 加入组即成为 selection。
+- `setCurrent`/`setSelectedCheckbox` 互为别名（两侧走查）；自赋值保持选择。
+- `setSelectedCheckbox(null)` 取消成员的 state（不是仅清引用）。
+- toString 精确格式 `java.awt.CheckboxGroup[selectedCheckbox=...]`，null 选择时输出 selectedCheckbox=null。
+- implements Serializable：序列化往返后选择关系保留。

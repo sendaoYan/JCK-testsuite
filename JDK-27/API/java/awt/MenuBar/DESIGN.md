@@ -28,3 +28,9 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - add/getMenuCount/getMenu/setHelpMenu 往返 → `testBlackBox`。
 - getShortcutMenuItem/deleteShortcut/shortcuts 枚举 → `testBlackBox`。
 - remove(int)/remove(MenuComponent) → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- `add((Menu) null)` 抛精确 NullPointerException；add 返回同一 Menu 实例。
+- `getMenu(99)`/`remove(99)`/`remove(-1)` 抛精确 AIOOBE；remove(int) 后续菜单前移；getMenuCount 与 countItems 别名对 countMenus。
+- help 菜单替换语义：第 2 个 setHelpMenu 替换第 1 个（不叠加）；help 计入 count；`setHelpMenu(null)` 移除 help（count 减回）。
+- 快捷键注册表：getShortcutMenuItem 按 equals 匹配（不是 identity）；未注册返回 null；`shortcuts()` 枚举含已注册键；deleteShortcut 注销；shift 变体与 plain 是不同键（MenuShortcut 的 usesShiftModifier 参与 equals）。

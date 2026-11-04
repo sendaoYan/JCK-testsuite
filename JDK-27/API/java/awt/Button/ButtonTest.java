@@ -78,9 +78,76 @@ public class ButtonTest {
         }
     }
 
+    // ---- shared helper for exact-exception assertions (deepening batch) ----
+    interface ThrowingAction { void run() throws Exception; }
+
+    static void expectExact(Class<? extends Throwable> expected, String tag, ThrowingAction action) {
+        try {
+            action.run();
+            check(false, tag + ": expected " + expected.getSimpleName() + " but nothing was thrown");
+        } catch (Throwable thrown) {
+            check(thrown.getClass() == expected,
+                  tag + ": expected " + expected.getName() + " but got " + thrown.getClass().getName());
+        }
+    }
+
+    // ---- Part 3: contract deepening ----
+    static void testContractButton() throws Exception {
+        // label null semantics: the null is retained, it is not normalized to ""
+        Button b0 = new Button();
+        check("".equals(b0.getLabel()), "Button(): default label is the empty string");
+        check(new Button(null).getLabel() == null, "Button(null): null label retained");
+        b0.setLabel("x");
+        b0.setLabel(null);
+        check(b0.getLabel() == null, "setLabel(null) retains null");
+
+        // action command: defaults to label, explicit value wins, null falls back to label
+        Button b1 = new Button("Go");
+        check("Go".equals(b1.getActionCommand()), "action command defaults to label");
+        b1.setActionCommand("run");
+        check("run".equals(b1.getActionCommand()), "setActionCommand/getActionCommand roundtrip");
+        b1.setLabel("Stop");
+        check("run".equals(b1.getActionCommand()), "explicit action command independent of label");
+        b1.setActionCommand(null);
+        check("Stop".equals(b1.getActionCommand()), "setActionCommand(null) falls back to label");
+
+        // listener registry: duplicates allowed, remove removes one instance, null tolerated
+        java.awt.event.ActionListener l1 = e -> { }, l2 = e -> { };
+        Button b2 = new Button("L");
+        b2.addActionListener(l1); b2.addActionListener(l1); b2.addActionListener(l2);
+        check(b2.getActionListeners().length == 3, "duplicate listeners all registered");
+        b2.removeActionListener(l1);
+        check(b2.getActionListeners().length == 2, "removeActionListener removes a single instance");
+        b2.addActionListener(null);
+        check(b2.getActionListeners().length == 2, "addActionListener(null) is a no-op");
+        b2.removeActionListener(null);
+        check(b2.getActionListeners().length == 2, "removeActionListener(null) is a no-op");
+        check(b2.getListeners(java.awt.event.ActionListener.class).length == 2,
+              "getListeners(ActionListener) reflects registry");
+        b2.removeActionListener(l1); b2.removeActionListener(l2);
+        check(b2.getActionListeners().length == 0, "registry empties");
+
+        // enable/disable cycle
+        check(b2.isEnabled(), "enabled by default");
+        b2.setEnabled(false);
+        check(!b2.isEnabled(), "setEnabled(false)");
+        b2.setEnabled(true);
+        check(b2.isEnabled(), "setEnabled(true)");
+
+        // programmatic mutations never dispatch ActionEvent without a peer
+        boolean[] fired = { false };
+        Button b3 = new Button("NoEvent");
+        b3.addActionListener(e -> fired[0] = true);
+        b3.setLabel("changed");
+        b3.setEnabled(false);
+        java.awt.EventQueue.invokeAndWait(() -> { });
+        check(!fired[0], "no ActionEvent from programmatic label/enable changes");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractButton();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

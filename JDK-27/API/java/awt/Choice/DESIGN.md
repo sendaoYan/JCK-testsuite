@@ -28,3 +28,12 @@ JDK 自用（来源 `~/git/jdk25u-dev`）：
 - remove(string/int)/removeAll 及选中清除 → `testBlackBox`。
 - ItemListener 管理 → `testBlackBox`。
 - add 到显示 Frame 后 displayable → `testBlackBox`。
+
+## ⑤ 契约深化（本轮追加）
+- 空态契约：count 0、selectedIndex -1、selectedItem null。
+- `add(null)`/`addItem(null)` 抛精确 NullPointerException；`add(String)` 被接受。
+- 首个 add 自动把选中态置为 index 0（后续 add 不改）。
+- `getItem(99)`/`getItem(-1)` AIOOBE；`insert(x,-1)` IAE；insert 在 count 处或越界均追加（不抛）；insert(0) 移位。
+- `remove(99)`/`remove(-1)` AIOOBE；`remove(String 不存在或 null)` 抛 IAE（不是 NoSuchElementException）。
+- `select(99)`/`select(-1)` IAE 且失败后保持原选择；`select(String 不存在/null)` 静默 no-op。
+- removeAll 清空 items 且清空 selection（index 回 -1）；ItemListener 登记/移除对称。

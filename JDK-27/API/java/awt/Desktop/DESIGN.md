@@ -25,3 +25,8 @@ if (Desktop.isDesktopSupported()) {
 - 支持：`getDesktop` 非空且单例；对全部 24 个 Action `isSupported` 确定性；抽查 OPEN/BROWSE/MAIL/APP_QUIT_HANDLER。
 - 不支持：`getDesktop` 抛 `UnsupportedOperationException`。
 不真正调用 open/browse/mail（避免拉起外部程序）。
+
+## ⑤ 契约深化（本轮追加）
+- X11 实测：isDesktopSupported=true、getDesktop 单例；Linux 仅 OPEN 支持，EDIT/PRINT/MAIL/BROWSE 均 false。
+- 不支持动作的异常矩阵（精确类型）：`edit(file)`/`print(file)`/`mail()`/`browse(uri)` 均抛 UnsupportedOperationException（plain，非包装）；`open(不存在文件)` 抛 IllegalArgumentException；`isSupported(null)` 不抛、正常应答 false。
+- 版本差异：Action 常量 JDK 8 为 5 个、JDK 9+ 为 24 个（APP_*/BROWSE_FILE_DIR/MOVE_TO_TRASH 等 Linux 上全部 unsupported，按 isSupported=false 断言而非硬编码异常）。

@@ -68,9 +68,63 @@ public class CanvasTest {
         }
     }
 
+    // ---- shared helper for exact-exception assertions (deepening batch) ----
+    interface ThrowingAction { void run() throws Exception; }
+
+    static void expectExact(Class<? extends Throwable> expected, String tag, ThrowingAction action) {
+        try {
+            action.run();
+            check(false, tag + ": expected " + expected.getSimpleName() + " but nothing was thrown");
+        } catch (Throwable thrown) {
+            check(thrown.getClass() == expected,
+                  tag + ": expected " + expected.getName() + " but got " + thrown.getClass().getName());
+        }
+    }
+
+    // ---- Part 3: contract deepening ----
+    static <T extends java.io.Serializable> T roundTrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(obj);
+        }
+        try (java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            @SuppressWarnings("unchecked")
+            T copy = (T) ois.readObject();
+            return copy;
+        }
+    }
+
+    static void testContractCanvas() throws Exception {
+        Canvas fresh = new Canvas();
+        check(fresh.getBufferStrategy() == null, "no buffer strategy before peer");
+        // null Graphics must fail fast with NPE in paint/update
+        expectExact(NullPointerException.class, "paint(null)", () -> new Canvas().paint(null));
+        expectExact(NullPointerException.class, "update(null)", () -> new Canvas().update(null));
+        // accessible context type
+        check("java.awt.Canvas$AccessibleAWTCanvas".equals(fresh.getAccessibleContext().getClass().getName()),
+              "AccessibleAWTCanvas context type");
+        // Component-level data property roundtrips
+        fresh.setName("cv");
+        check("cv".equals(fresh.getName()), "setName/getName roundtrip");
+        Color bg = new Color(10, 20, 30);
+        fresh.setBackground(bg);
+        check(bg.equals(fresh.getBackground()), "setBackground/getBackground roundtrip");
+        fresh.setForeground(Color.WHITE);
+        check(Color.WHITE.equals(fresh.getForeground()), "setForeground/getForeground roundtrip");
+        fresh.setEnabled(false);
+        check(!fresh.isEnabled(), "setEnabled(false)");
+        // serialization round trip keeps the data properties
+        Canvas copy = roundTrip(fresh);
+        check(copy != fresh, "serialized copy is a distinct object");
+        check("cv".equals(copy.getName()), "serialization keeps name");
+        check(bg.equals(copy.getBackground()), "serialization keeps background");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractCanvas();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
