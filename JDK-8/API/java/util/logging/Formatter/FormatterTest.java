@@ -1,10 +1,14 @@
 /*
  * @test
- * @summary java.util.logging.Formatter conformance: format/formatMessage/getHead/getTail.
+ * @summary java.util.logging.Formatter conformance: white-box structure + black-box behavior.
  * @run main FormatterTest
  */
 
+import java.lang.reflect.Modifier;
+import java.util.ListResourceBundle;
+import java.util.ResourceBundle;
 import java.util.logging.Formatter;
+import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
@@ -16,20 +20,63 @@ public class FormatterTest {
         passed++;
     }
 
-    static void testFormatter() {
-        Formatter f = new Formatter() {
-            public String format(LogRecord record) {
-                return record.getMessage();
-            }
-        };
-        check("msg".equals(f.format(new LogRecord(Level.INFO, "msg"))), "format");
-        check("hello".equals(f.formatMessage(new LogRecord(Level.INFO, "hello"))), "formatMessage");
-        check("".equals(f.getHead(null)), "getHead default empty");
-        check("".equals(f.getTail(null)), "getTail default empty");
+    static boolean hasMethod(Class<?> c, String name, Class<?>... params) {
+        try { c.getMethod(name, params); return true; } catch (NoSuchMethodException e) { return false; }
     }
 
-    public static void main(String[] args) {
-        testFormatter();
+    // ---- Part 1: white-box (structural) ----
+    static void testWhiteBox() throws Exception {
+        Class<?> c = Class.forName("java.util.logging.Formatter");
+        check(Modifier.isPublic(c.getModifiers()), "public class");
+        check(Modifier.isAbstract(c.getModifiers()), "abstract class");
+        check(Modifier.isProtected(c.getDeclaredConstructor().getModifiers()), "protected constructor");
+        check(Modifier.isAbstract(c.getMethod("format", LogRecord.class).getModifiers()), "format is abstract");
+        check(hasMethod(c, "getHead", Handler.class), "getHead(Handler)");
+        check(hasMethod(c, "getTail", Handler.class), "getTail(Handler)");
+        check(hasMethod(c, "formatMessage", LogRecord.class), "formatMessage(LogRecord)");
+    }
+
+    // ---- Part 2: black-box (behavioral) ----
+    static void testBlackBox() {
+        Formatter f = new Formatter() {
+            public String format(LogRecord record) {
+                return "[" + record.getMessage() + "]";
+            }
+        };
+        check("[msg]".equals(f.format(new LogRecord(Level.INFO, "msg"))), "custom format");
+        check("".equals(f.getHead(null)), "getHead default empty");
+        check("".equals(f.getTail(null)), "getTail default empty");
+
+        // formatMessage: no parameters -> raw message
+        check("hello".equals(f.formatMessage(new LogRecord(Level.INFO, "hello"))),
+                "formatMessage without params");
+
+        // formatMessage: java.text style {0}/{1} substitution
+        LogRecord r = new LogRecord(Level.INFO, "a={0} b={1}");
+        r.setParameters(new Object[] {Integer.valueOf(1), Integer.valueOf(2)});
+        check("a=1 b=2".equals(f.formatMessage(r)), "formatMessage {0}/{1} substitution");
+
+        // formatMessage: resource bundle key lookup + substitution
+        ResourceBundle rb = new ListResourceBundle() {
+            protected Object[][] getContents() {
+                return new Object[][] {{"greeting", "Hello {0}!"}};
+            }
+        };
+        LogRecord localized = new LogRecord(Level.INFO, "greeting");
+        localized.setResourceBundle(rb);
+        localized.setResourceBundleName("testBundle");
+        localized.setParameters(new Object[] {"World"});
+        check("Hello World!".equals(f.formatMessage(localized)),
+                "formatMessage resource-bundle key resolution");
+
+        // formatMessage: null message safe
+        LogRecord nullMsg = new LogRecord(Level.INFO, null);
+        check(f.formatMessage(nullMsg) == null, "formatMessage null message -> null");
+    }
+
+    public static void main(String[] args) throws Exception {
+        testWhiteBox();
+        testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
