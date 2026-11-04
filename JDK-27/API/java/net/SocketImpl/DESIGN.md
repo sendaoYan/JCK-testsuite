@@ -15,3 +15,10 @@ JDK 内建 PlainSocketImpl 派生自此；自定义协议栈/代理实现亦继�
 ## 四、测试用例设计
 
 验证 abstract 且实现 SocketOptions；protected 字段 fd/address/port/localport；匿名/具名子类暴露受保护访问器并断言默认值。
+
+## 批次 F 深化补充（79 断言）
+
+- 白盒：抽象方法清单及修饰符（public abstract ×5：create/connect/bind/listen/accept 等）；protected 字段类型（address:InetAddress、port:int、localport:int、fd:FileDescriptor）。
+- 子类默认行为：MiniImpl 只覆写必要方法；基类 `shutdownInput/shutdownOutput` 抛 IOException "Method not implemented!"。
+- `toString` 默认形式 "Socket[addr=null,port=0,localport=0]"。
+- JDK-27：protected `setOption/getOption(SocketOption)`（JDK 13+）存在性（MiniImpl 不覆写即继承默认抛错路径不触发）。

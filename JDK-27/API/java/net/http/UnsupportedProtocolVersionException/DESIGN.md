@@ -24,3 +24,13 @@
 
 - 白盒：public / final / 父类 `IOException` / 唯一 `String` 构造器。
 - 黑盒：构造→message 保留→层级→无 cause→堆栈非空→`initCause` 链→二次 `initCause` 抛 `IllegalStateException`。
+
+## 6. 缺口分析（本批深化）
+
+原 11 条断言缺少序列化与精确消息。本批追加至 30 条：
+
+- 形状（probed）：仅一个构造器；仅 serialVersionUID 字段；svuid = 981344214212332893；
+  与 HttpTimeoutException 是兄弟类（互不继承）。
+- 行为：toString 精确格式（含/不含/空 message）；null message 合法；多个 suppressed 按序；
+  空 message toString 以 ": " 结尾。
+- 序列化（probed）：round-trip 保留 message 与 IOException 类型。

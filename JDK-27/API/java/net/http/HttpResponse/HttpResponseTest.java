@@ -118,9 +118,124 @@ public class HttpResponseTest {
         check(pph != null, "PushPromiseHandler.of non-null");
     }
 
+    // ---- deepened: full-shape anonymous implementations exercising every method ----
+    static void testCustomImplementations() throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(java.net.URI.create("https://example.com/a")).build();
+
+        // A complete user implementation: every interface method returns sentinels,
+        // including the JDK-27 default connectionLabel() which stays empty.
+        HttpResponse<String> resp = new HttpResponse<>() {
+            public int statusCode() { return 301; }
+            public HttpRequest request() { return req; }
+            public Optional<HttpResponse<String>> previousResponse() { return Optional.empty(); }
+            public HttpHeaders headers() { return HttpHeaders.of(Map.of("X", List.of("v")), (k, v) -> true); }
+            public String body() { return "BODY"; }
+            public Optional<SSLSession> sslSession() { return Optional.empty(); }
+            public java.net.URI uri() { return java.net.URI.create("https://example.com/a"); }
+            public HttpClient.Version version() { return HttpClient.Version.HTTP_3; }
+        };
+        check(resp.statusCode() == 301, "custom statusCode");
+        check(resp.request() == req, "custom request identity");
+        check("BODY".equals(resp.body()), "custom body");
+        check(resp.version() == HttpClient.Version.HTTP_3, "custom HTTP_3 version");
+        check("v".equals(resp.headers().firstValue("x").orElse(null)), "custom headers");
+        check(resp.previousResponse().isEmpty(), "custom previousResponse empty");
+        check(resp.sslSession().isEmpty(), "custom sslSession empty");
+        check(resp.connectionLabel().isEmpty(), "connectionLabel default returns Optional.empty()");
+
+        // previousResponse can chain to an earlier response.
+        HttpResponse<String> first = new HttpResponse<>() {
+            public int statusCode() { return 302; }
+            public HttpRequest request() { return req; }
+            public Optional<HttpResponse<String>> previousResponse() { return Optional.empty(); }
+            public HttpHeaders headers() { return HttpHeaders.of(Map.of(), (k, v) -> true); }
+            public String body() { return null; }
+            public Optional<SSLSession> sslSession() { return Optional.empty(); }
+            public java.net.URI uri() { return java.net.URI.create("https://example.com/"); }
+            public HttpClient.Version version() { return HttpClient.Version.HTTP_1_1; }
+        };
+        HttpResponse<String> second = new HttpResponse<>() {
+            public int statusCode() { return 200; }
+            public HttpRequest request() { return req; }
+            public Optional<HttpResponse<String>> previousResponse() { return Optional.of(first); }
+            public HttpHeaders headers() { return HttpHeaders.of(Map.of(), (k, v) -> true); }
+            public String body() { return "final"; }
+            public Optional<SSLSession> sslSession() { return Optional.empty(); }
+            public java.net.URI uri() { return java.net.URI.create("https://example.com/final"); }
+            public HttpClient.Version version() { return HttpClient.Version.HTTP_2; }
+        };
+        check(second.previousResponse().isPresent(), "previousResponse present");
+        check(second.previousResponse().get().statusCode() == 302,
+                "previousResponse exposes the redirected response");
+        check(first.body() == null, "null body is a legal sentinel");
+
+        // sslSession can report a session object.
+        final SSLSession session = (SSLSession) java.lang.reflect.Proxy.newProxyInstance(
+                HttpResponseTest.class.getClassLoader(),
+                new Class<?>[]{javax.net.ssl.SSLSession.class},
+                (p, m, a) -> null);
+        HttpResponse<Void> withSsl = new HttpResponse<>() {
+            public int statusCode() { return 200; }
+            public HttpRequest request() { return req; }
+            public Optional<HttpResponse<Void>> previousResponse() { return Optional.empty(); }
+            public HttpHeaders headers() { return HttpHeaders.of(Map.of(), (k, v) -> true); }
+            public Void body() { return null; }
+            public Optional<SSLSession> sslSession() { return Optional.of(session); }
+            public java.net.URI uri() { return java.net.URI.create("https://example.com/"); }
+            public HttpClient.Version version() { return HttpClient.Version.HTTP_2; }
+        };
+        check(withSsl.sslSession().get() == session, "sslSession identity round-trip");
+    }
+
+    // ---- deepened: default-method and structural details ----
+    static void testStructure() throws Exception {
+        // connectionLabel is the only default method on HttpResponse.
+        int defaults = 0;
+        for (Method m : HttpResponse.class.getMethods()) {
+            if (m.isDefault()) defaults++;
+        }
+        check(defaults == 1, "exactly one default method (connectionLabel)");
+        check(method("connectionLabel").getReturnType() == Optional.class,
+                "connectionLabel returns Optional<String>");
+        check(method("previousResponse").getReturnType() == Optional.class,
+                "previousResponse returns Optional");
+        check(method("sslSession").getReturnType() == Optional.class, "sslSession returns Optional");
+        check(!HttpResponse.class.isSealed(), "HttpResponse is not sealed (user-implementable)");
+        check(HttpResponse.class.getTypeParameters().length == 1,
+                "HttpResponse has one type parameter <T>");
+
+        // BodySubscriber contract: getBody() returns the same stage on repeat calls,
+        // incomplete until the flow finishes (probed).
+        HttpResponse.BodySubscriber<String> pending =
+                HttpResponse.BodySubscribers.ofString(java.nio.charset.StandardCharsets.UTF_8);
+        java.util.concurrent.CompletableFuture<String> stage1 = pending.getBody().toCompletableFuture();
+        java.util.concurrent.CompletableFuture<String> stage2 = pending.getBody().toCompletableFuture();
+        check(stage1 == stage2, "getBody() returns the same instance (probed)");
+        check(!stage1.isDone(), "getBody() incomplete before flow completion");
+        pending.onSubscribe(new Flow.Subscription() {
+            public void request(long n) { }
+            public void cancel() { }
+        });
+        pending.onNext(List.of(ByteBuffer.wrap("now".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        pending.onComplete();
+        check("now".equals(stage1.get()), "stage completes with the delivered body");
+
+        // PushPromiseHandler: factory-free handler usable directly.
+        HttpResponse.PushPromiseHandler<String> direct = (init, push, acceptor) ->
+                acceptor.apply(HttpResponse.BodyHandlers.replacing("pushed"));
+        HttpRequest a = HttpRequest.newBuilder(java.net.URI.create("https://example.com")).build();
+        HttpRequest b = HttpRequest.newBuilder(java.net.URI.create("https://example.com/p")).build();
+        java.util.concurrent.CompletableFuture<HttpResponse<String>> pushed = new java.util.concurrent.CompletableFuture<>();
+        // The acceptor's returned future is what the implementation associates with the push.
+        direct.applyPushPromise(a, b, bh -> pushed);
+        check(!pushed.isDone(), "push future completion is driven by the client (not tested further)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCustomImplementations();
+        testStructure();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

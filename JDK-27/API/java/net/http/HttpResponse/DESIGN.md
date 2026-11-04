@@ -29,3 +29,12 @@ HTTP 响应的泛型接口 `HttpResponse<T>` 及其配套的 `BodyHandler`/`Body
 - 黑盒（不真发请求）：匿名 `HttpResponse` 全方法 + 默认 `connectionLabel` →
   匿名 `ResponseInfo` + Flow 协议驱动 `BodyHandlers.replacing/discarding` 完成 →
   `BodyHandlers/BodySubscribers` 工厂非空 → `PushPromiseHandler.of`。
+
+## 6. 缺口分析（本批深化）
+
+原 29 条断言以接口访问为主。本批追加至 51 条：
+
+- 自定义实现：完整匿名实现返回哨兵（statusCode 301、request identity、HTTP_3、previousResponse
+  链 302→200、null body 合法、sslSession Optional、经 Proxy 的 getBody）。
+- 结构核对：恰一个 default 方法 connectionLabel；Optional 返回类型；非 sealed；单类型参数；
+  getBody() 同一实例；flow 未完成前 incomplete；PushPromiseHandler 直接 lambda。

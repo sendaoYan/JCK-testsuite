@@ -21,6 +21,13 @@ public class InterfaceAddressTest {
         check(c.getMethod("getNetworkPrefixLength") != null, "getNetworkPrefixLength");
         check(c.getMethod("equals", Object.class) != null, "equals");
         check(c.getMethod("hashCode") != null, "hashCode");
+        // only obtainable from NetworkInterface (probed; ctor private on JDK-27)
+        java.lang.reflect.Constructor<?>[] ctors = c.getDeclaredConstructors();
+        boolean anyPublic = false;
+        for (java.lang.reflect.Constructor<?> ctor : ctors) {
+            if (Modifier.isPublic(ctor.getModifiers())) anyPublic = true;
+        }
+        check(!anyPublic, "no public constructors");
     }
 
     static void testBlackBox() throws Exception {
@@ -55,9 +62,61 @@ public class InterfaceAddressTest {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Deepening: deterministic loopback contract (probed identical on both
+    // JDKs: no broadcast on lo, prefix 8/128, re-lookup equality)
+    // ------------------------------------------------------------------
+
+    static void testLoopbackInterfaceAddresses() throws Exception {
+        NetworkInterface lo = NetworkInterface.getByInetAddress(InetAddress.getLoopbackAddress());
+        check(lo != null, "loopback interface present");
+        List<InterfaceAddress> ias = lo.getInterfaceAddresses();
+        check(!ias.isEmpty(), "loopback has interface addresses");
+        int v4 = 0;
+        int v6 = 0;
+        for (InterfaceAddress ia : ias) {
+            InetAddress a = ia.getAddress();
+            check(a != null, "address non-null");
+            check(a.isLoopbackAddress() || a.isAnyLocalAddress(),
+                    "lo carries loopback/any-local addresses only");
+            short plen = ia.getNetworkPrefixLength();
+            check(plen >= 0 && plen <= 128, "prefix length within 0..128");
+            if (a instanceof Inet4Address) {
+                check(plen <= 32, "IPv4 prefix <= 32");
+                v4++;
+            } else {
+                check(plen <= 128, "IPv6 prefix <= 128");
+                v6++;
+            }
+            check(null == ia.getBroadcast(), "no broadcast on loopback: " + a.getHostAddress());
+            check(ia.toString().contains(a.getHostAddress()), "toString contains address text");
+        }
+        check(v4 >= 1, "at least one IPv4 interface address on lo");
+        check(v6 >= 1, "at least one IPv6 interface address on lo");
+    }
+
+    static void testReLookupEquality() throws Exception {
+        NetworkInterface lo = NetworkInterface.getByInetAddress(InetAddress.getLoopbackAddress());
+        List<InterfaceAddress> first = lo.getInterfaceAddresses();
+        NetworkInterface loAgain = NetworkInterface.getByName(lo.getName());
+        List<InterfaceAddress> second = loAgain.getInterfaceAddresses();
+        check(first.size() == second.size(), "same address count on re-lookup");
+        for (int i = 0; i < first.size(); i++) {
+            InterfaceAddress a = first.get(i);
+            InterfaceAddress b = second.get(i);
+            check(a.equals(b), "re-lookup InterfaceAddress equal: " + a);
+            check(a.hashCode() == b.hashCode(), "re-lookup hashCode equal");
+            check(a.getAddress().equals(b.getAddress()), "address equal on re-lookup");
+            check(a.getNetworkPrefixLength() == b.getNetworkPrefixLength(),
+                    "prefix equal on re-lookup");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLoopbackInterfaceAddresses();
+        testReLookupEquality();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

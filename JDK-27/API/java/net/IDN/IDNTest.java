@@ -100,6 +100,149 @@ public class IDNTest {
         checkThrows(NullPointerException.class, () -> IDN.toUnicode((String) null, 0), "toUnicode(null, flags)");
     }
 
+    // ------------------------------------------------------------------
+    // Deepening: exact ACE table, flag constants, label length boundary,
+    // toUnicode never throws (probed identical on JDK-8 and JDK-27)
+    // ------------------------------------------------------------------
+
+    static void testFlagConstantValues() {
+        check(IDN.ALLOW_UNASSIGNED == 1, "ALLOW_UNASSIGNED == 1");
+        check(IDN.USE_STD3_ASCII_RULES == 2, "USE_STD3_ASCII_RULES == 2");
+    }
+
+    static void testExactAceTable() {
+        String[][] table = {
+            {"例え.jp", "xn--r8jz45g.jp"},
+            {"例え.テスト", "xn--r8jz45g.xn--zckzah"},
+            {"bücher.de", "xn--bcher-kva.de"},
+            {"日本語.jp", "xn--wgv71a119e.jp"},
+            {"münchen.de", "xn--mnchen-3ya.de"},
+        };
+        for (String[] row : table) {
+            check(row[1].equals(IDN.toASCII(row[0])), "toASCII(" + row[0] + ") exact");
+            check(row[0].equals(IDN.toUnicode(row[1])), "toUnicode(" + row[1] + ") exact round trip");
+        }
+        check("www.xn--bcher-kva.de".equals(IDN.toASCII("www.bücher.de")), "prefixed label encoded");
+        check("bücher.de.".equals(IDN.toUnicode("xn--bcher-kva.de.")), "trailing dot preserved toUnicode");
+        check("xn--bcher-kva.de.".equals(IDN.toASCII("bücher.de.")), "trailing dot preserved toASCII");
+    }
+
+    static void testCaseHandling() {
+        check("example.COM".equals(IDN.toASCII("example.COM")), "toASCII upper TLD preserved");
+        check("EXAMPLE.com".equals(IDN.toASCII("EXAMPLE.com")), "toASCII upper SLD preserved");
+        check("example.COM".equals(IDN.toUnicode("example.COM")), "toUnicode case preserved");
+        check("xn--r8jz45g.jp".equals(IDN.toASCII("xn--r8jz45g.jp")), "ACE passthrough toASCII");
+        check("xn--BCHER-kva.de".equals(IDN.toASCII("xn--BCHER-kva.de")), "mixed-case ACE passthrough");
+        check("BüCHER.DE".equals(IDN.toUnicode("XN--BCHER-KVA.DE")), "uppercase ACE prefix decoded");
+    }
+
+    static void testNonLdhWithoutStd3() {
+        check("a b".equals(IDN.toASCII("a b", 0)), "space passthrough without STD3");
+        check("a_b".equals(IDN.toASCII("a_b", 0)), "underscore passthrough without STD3");
+        check("ex!ample.com".equals(IDN.toASCII("ex!ample.com", 0)), "exclamation passthrough");
+        try {
+            IDN.toASCII("a b", IDN.USE_STD3_ASCII_RULES);
+            check(false, "space with STD3 must throw");
+        } catch (IllegalArgumentException e) {
+            check("Contains non-LDH ASCII characters".equals(e.getMessage()), "space STD3 message exact");
+        }
+        checkThrows(IllegalArgumentException.class,
+                () -> IDN.toASCII("a_b", IDN.USE_STD3_ASCII_RULES), "underscore STD3 rejected");
+        checkThrows(IllegalArgumentException.class,
+                () -> IDN.toASCII("ex!ample.com", IDN.USE_STD3_ASCII_RULES), "exclamation STD3 rejected");
+        check("a b".equals(IDN.toUnicode("a b", 0)), "toUnicode space passthrough");
+        check("a b".equals(IDN.toUnicode("a b", IDN.USE_STD3_ASCII_RULES)),
+                "toUnicode space passthrough even with STD3");
+        check("a_b".equals(IDN.toUnicode("a_b", IDN.USE_STD3_ASCII_RULES)), "toUnicode underscore passthrough");
+    }
+
+    static void testLabelLengthBoundary() {
+        StringBuilder b63 = new StringBuilder();
+        for (int i = 0; i < 63; i++) b63.append('a');
+        check((b63 + ".com").equals(IDN.toASCII(b63 + ".com")), "63-char label accepted");
+        StringBuilder b64 = new StringBuilder();
+        for (int i = 0; i < 64; i++) b64.append('a');
+        try {
+            IDN.toASCII(b64 + ".com");
+            check(false, "64-char label must throw");
+        } catch (IllegalArgumentException e) {
+            check("The label in the input is too long".equals(e.getMessage()),
+                    "label-too-long message exact");
+        }
+        String ace = IDN.toASCII("日本語.jp");
+        check(ace.split("\\.")[0].length() <= 63, "encoded label length <= 63");
+    }
+
+    static void testToUnicodeNeverThrows() {
+        String[] passthrough = {
+            "xn--a-ecp.ru", "xn--.jp", "xn---.jp", "xn--a", "xn--0.jp",
+            "!!invalid!!.jp", "plain.example.com", "", ".",
+            "bücher.de"
+        };
+        for (String s : passthrough) {
+            String out = IDN.toUnicode(s);
+            check(s.equals(out), "toUnicode(" + (s.isEmpty() ? "<empty>" : s) + ") unchanged");
+        }
+        check("bücher.de".equals(IDN.toUnicode("xn--bcher-kva.de", IDN.USE_STD3_ASCII_RULES)),
+                "flagged toUnicode decodes");
+        check("bücher".equals(IDN.toUnicode("xn--bcher-kva")), "single-label ACE decodes");
+    }
+
+    static void testProhibitedCodePoints() {
+        String bad = "example.com";
+        checkThrows(IllegalArgumentException.class, () -> IDN.toASCII(bad), "prohibited code point rejected");
+        checkThrows(IllegalArgumentException.class,
+                () -> IDN.toASCII(bad, IDN.ALLOW_UNASSIGNED), "ALLOW_UNASSIGNED does not permit U+E000");
+        try {
+            IDN.toASCII(bad);
+            check(false, "must throw");
+        } catch (IllegalArgumentException e) {
+            check(e.getMessage() != null && e.getMessage().contains("A prohibited code point"),
+                    "prohibited message contains reason");
+        }
+    }
+
+    static void testExpandedAceTable() {
+        String[][] table = {
+            {"bücher.example", "xn--bcher-kva.example"},
+            {"mitäsuomi.fi", "xn--mitsuomi-2za.fi"},
+            {"레스토랑.kr", "xn--9i2bvi24zosp.kr"},
+            {"испытание.рф", "xn--80akhbyknj4f.xn--p1ai"},
+        };
+        for (String[] row : table) {
+            check(row[1].equals(IDN.toASCII(row[0])), "toASCII(" + row[0] + ") exact");
+            check(row[0].equals(IDN.toUnicode(row[1])), "toUnicode(" + row[1] + ") exact");
+            check(row[1].equals(IDN.toASCII(row[0], 0)), "toASCII(" + row[0] + ",0) identical");
+        }
+        check("xn--bcher1-3ya.de".equals(IDN.toASCII("bücher1.de")), "digit in unicode label");
+        check("a-b.example".equals(IDN.toASCII("a-b.example", IDN.USE_STD3_ASCII_RULES)),
+                "interior hyphen legal under STD3");
+    }
+
+    static void testStd3IllegalMatrix() {
+        char[] bad = {'!', '"', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '/', ':',
+                      ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~'};
+        for (char c : bad) {
+            String s = "ex" + c + "ample.com";
+            checkThrows(IllegalArgumentException.class,
+                    () -> IDN.toASCII(s, IDN.USE_STD3_ASCII_RULES),
+                    "STD3 rejects '" + c + "'");
+        }
+        String[] ok = {"a-z.example", "0-9.example", "A-Z.example", "a9-zA.example"};
+        for (String s : ok) {
+            String out = IDN.toASCII(s, IDN.USE_STD3_ASCII_RULES);
+            check(s.equals(out), "STD3 accepts LDH " + s);
+        }
+    }
+
+    static void testEmptyLabelMatrixExtended() {
+        String[] illegal = {"a..b", "..", "a..", "..b", ".a.b.", "a.b.."};
+        for (String s : illegal) {
+            checkThrows(IllegalArgumentException.class, () -> IDN.toASCII(s), "empty label " + s);
+            check(s.equals(IDN.toUnicode(s)), "toUnicode(" + s + ") passthrough");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testFlags();
@@ -108,6 +251,16 @@ public class IDNTest {
         testEmptyLabelValidation();
         testStd3Rules();
         testNullSemantics();
+        testFlagConstantValues();
+        testExactAceTable();
+        testCaseHandling();
+        testNonLdhWithoutStd3();
+        testLabelLengthBoundary();
+        testToUnicodeNeverThrows();
+        testProhibitedCodePoints();
+        testExpandedAceTable();
+        testStd3IllegalMatrix();
+        testEmptyLabelMatrixExtended();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -49,3 +49,55 @@
 - `toURL()` 对相对 URI 抛 IllegalArgumentException（不是 MalformedURLException）。
 - getRawUserInfo 保留 `%40`，getUserInfo 解码为 `@`，authority 解码后可能含 `@`。
 - 网络边界：`resolve/relativize` 传 null 抛 NPE。
+
+## 5. 深化批次 A 缺口分析（2026-11-05，83 → 726 断言）
+
+原 10 个 test 方法只有单一样例的组件分解 + 少量 resolve/equals 正例，缺：
+逐字段解析矩阵、异常三元组精确断言、RFC 引用变换表、对象同一性契约、
+转义等价规则、compareTo 排序表、IRI/toASCIIString 行为、构造器边界（registry
+authority、port 上界、全 null）。本次追加 17 个 test 方法：
+
+| 方法 | 覆盖 |
+|---|---|
+| testParseMatrixFull | 19 样例 × 19 列（17 组件 + isAbsolute/isOpaque/toString），区分 null（未定义）与 ""（空串，如 `http://h` path=""、`file:///x` authority=null） |
+| testExactExceptionMatrix | 12 个非法样例的 reason/index/input/getMessage 精确断言 + registry authority（`http://h:port/` host=null port=-1、`http://u@h:70000/` port=70000 不校验上界） |
+| testResolveReferenceTable | base `http://a/b/c/d;p?q` × 34 条引用（RFC 3986 §5.3 全表） |
+| testResolveIdentitySemantics | resolve 返回入参对象的四种情形（绝对/opaque child、opaque base）、孤立 fragment 同/异、相对 base 合并 |
+| testRelativizeMatrix | 前缀裁剪、非前缀返回原对象（同一性 `==`）、javadoc 恒等式 round-trip |
+| testNormalizeMatrix | 19 条边界（越顶 `..` 保留、尾随 `/..`、空串、`.`） |
+| testNormalizationIsIdempotentWhenAlreadyNormal | 已 normal 返回 this（对象同一性）、未 normal 必须新对象、二次 normalize 幂等 |
+| testEqualsHashCodeEscapes | raw+hex 折叠规则全矩阵（`%41`≠`A`、`%6e`=`%6E`）、IPv6 压缩不等、equals⇒hashCode |
+| testCompareToOrdering | 固定排序表（undefined scheme 最前）+ 字段序（scheme→path→query→fragment，未定义 < 已定义）|
+| testToASCIIStringIRI | 非 ASCII host/userInfo/path/query/fragment 全部百分号编码（UTF-8 字节）、round-trip 解码等价但 equals=false |
+| testToURLEdgeCases | fragment 保留、`file:///x`→`file:/x`、相对 IAE("URI is not absolute")、urn MFE("unknown protocol") |
+| testConstructorEdgeMatrix | 5 参 authority `h:80`、全 null→空 URI、4 参 null host、registry authority、7 参 port 65535/65536 不校验上界 |
+| testCreateSemantics | create("")、create(非法)→IAE 且 cause 为 USX（精确三元组 + IAE message==cause message）、create(null) NPE |
+| testParseServerAuthorityDeep | registry 端口/方括号/IPv6 future 精确异常；成功路径全部返回 this |
+| testSerializationMore | opaque/相对/空/非 ASCII URI round-trip |
+| （原有 10 个方法全部保留） | |
+
+### 与 RFC 3986 的已验证偏差（Java 实现 RFC 2396 §5.2，双 JDK 一致）
+
+| 场景 | RFC 3986 | Java 实际 |
+|---|---|---|
+| `base.resolve("")` | `http://a/b/c/d;p?q` | `http://a/b/c/` |
+| `base.resolve("?y")` | `http://a/b/c/d;p?y` | `http://a/b/c/?y` |
+| `base.resolve("../../../g")` | `http://a/g` | `http://a/../g`（越顶 `..` 保留）|
+| `normalize("/a/b/../../../c")` | `/c` | `/../c` |
+| 绝对 path 引用 `/./g`、`/../g` | 先 remove_dot_segments | 原样保留 |
+| relativize 需要「向上」 | RFC 可产 `../../g` | 返回 target 本身（永不产 `..`）|
+
+### equals 精确规则（javadoc「raw 形式比较，转义十六进制不分大小写」，实测锁定）
+
+- `%41` ≠ `A`、`%6e` = `%6E`、`%6e` ≠ `n`（不是解码等价！）；round-trip `create(toASCIIString())` 解码相同但 equals=false
+- scheme/host 大小写不敏感；userInfo/path/query/fragment/SSP 大小写敏感
+- IPv6 压缩展开互不相等（`[::1]` ≠ `[0:0:0:0:0:0:0:1]`），hex 大小写折叠相等（`[::FFFF:1]` = `[::ffff:1]`）
+- port -1 ≠ 80；`http://h`（path=""）≠ `http://h/`（path="/"）
+- toASCIIString 不做 IDNA/punycode：`http://例え.jp/` → `http://%E4%BE%8B%E3%81%88.jp/`（host 也百分号编码；punycode 属 IDN.toASCII）
+
+### JDK-8 vs JDK-27 行为差异（探针实测）
+
+1. authority 内非法字符的 USX **index**：JDK-8 报 authority 起点（`http://exa mple.com/x`→7），JDK-27 报实际非法字符位置（→10）。reason 均为 "Illegal character in authority"。测试只断言 reason/input。
+2. `URI.create(null)` NPE message：JDK-8 为 null，JDK-27 为 "Cannot invoke \"String.length()\" because \"this.input\" is null"。只断言类型。
+3. `compareTo` 对 `%6e` vs `%6E`：JDK-8 返回非 0（与 equals==true 不一致），JDK-27 返回 0（一致化）。测试不断言该值。
+4. `compareTo(null)` NPE message 双侧不同（类型一致）。公开 API javap 双侧完全一致（36 成员，无新增）。

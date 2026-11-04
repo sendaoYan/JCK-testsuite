@@ -45,3 +45,28 @@
 ## JDK-27 补充
 
 - `InetAddress.ofLiteral(String)`（JDK 18+）：IPv4→Inet4Address、IPv6→Inet6Address；非法→IAE；null→NPE。
+
+## 深化补充（批次 E，56→372 断言；全部行为先经双 JDK 探针实证）
+
+### 缺口分析（深化前 56 断言：ofLiteral 仅 4 条样例；缺字面量矩阵/IPv6 归一化/MC 范围/isReachable/跨构造 equals/序列化类型）
+
+与 JDK-8 侧同源的 11 个深化维度全部镜像（见 JDK-8 侧 DESIGN.md 的深化补充表），
+新增方法：testIPv4LiteralMatrix / testIPv6LiteralMatrix / testNullHostAndLocalhost /
+testGetByAddressMatrix / testHashCodeExactValues / testClassificationIPv4Boundaries /
+testClassificationIPv6Boundaries / testMulticastScopeMatrix / testReachability /
+testCrossConstructionEquality / testSerializationDeep。
+
+### ofLiteral 严格化扩展（JDK-27 专属，testOfLiteral）
+
+- `ofLiteral("1.2.3")` → 1.2.0.3（遗留 3 段式仍接受）；`ofLiteral("01.2.3.4")` → 1.2.3.4。
+- `ofLiteral("[::1]")` 接受；`ofLiteral("[1.2.3.4]")` → IAE；`ofLiteral("::ffff:127.0.0.1")` → Inet4Address。
+- IAE 精确消息：`Invalid IP address literal: <输入>`（探针实证）。
+- `ofLiteral("localhost")`/`("")`/`(" ")` → IAE（永不查 DNS，与 getByName 的语义分界）。
+
+### 易错规范细节（新增实证，JDK-8 与 JDK-27 一致）
+
+- `getByName("::1")` 的 `getHostAddress()` 是全展开 `0:0:0:0:0:0:0:1`，不是 `::1`。
+- `getByName("::ffff:127.0.0.1")` 返回 Inet4Address（IPv4-mapped 折叠 4 字节）。
+- `getByAddress(null)` → UnknownHostException（"addr is of illegal length"），非 NPE。
+- fec0::/10 是 site-local；fc00::/7（ULA）不是。
+- isReachable 负 timeout → IAE "timeout can't be negative"（双侧一致）。

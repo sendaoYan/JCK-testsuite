@@ -152,6 +152,178 @@ public class InetSocketAddressTest {
         check(u.getPort() == 443, "serialized unresolved port");
     }
 
+    // ------------------------------------------------------------------
+    // Deepening: exact negative messages + wildcard/unresolved semantics
+    // (probed; differences vs JDK-8 are flagged inline)
+    // ------------------------------------------------------------------
+
+    static void testPortValidationExactMessages() {
+        int[] bad = {-1, -1000, Integer.MIN_VALUE, 65536, 65537, Integer.MAX_VALUE};
+        for (int port : bad) {
+            final int p = port;
+            try {
+                new InetSocketAddress(p);
+                check(false, "ISA(" + p + ") must throw");
+            } catch (IllegalArgumentException e) {
+                check(("port out of range:" + p).equals(e.getMessage()),
+                        "exact message for port " + p);
+            }
+            try {
+                new InetSocketAddress(InetAddress.getLoopbackAddress(), p);
+                check(false, "ISA(addr," + p + ") must throw");
+            } catch (IllegalArgumentException e) {
+                check(("port out of range:" + p).equals(e.getMessage()),
+                        "exact message ISA(addr," + p + ")");
+            }
+            try {
+                new InetSocketAddress("127.0.0.1", p);
+                check(false, "ISA(str," + p + ") must throw");
+            } catch (IllegalArgumentException e) {
+                check(("port out of range:" + p).equals(e.getMessage()),
+                        "exact message ISA(str," + p + ")");
+            }
+            try {
+                InetSocketAddress.createUnresolved("h", p);
+                check(false, "createUnresolved(h," + p + ") must throw");
+            } catch (IllegalArgumentException e) {
+                check(("port out of range:" + p).equals(e.getMessage()),
+                        "exact message createUnresolved(h," + p + ")");
+            }
+        }
+        for (int port : new int[]{0, 1, 65535}) {
+            check(new InetSocketAddress(port).getPort() == port, "legal port " + port);
+            check(InetSocketAddress.createUnresolved("h", port).getPort() == port,
+                    "legal unresolved port " + port);
+        }
+    }
+
+    static void testNullHostRejected() {
+        try {
+            InetSocketAddress.createUnresolved(null, 80);
+            check(false, "createUnresolved(null,80) must throw");
+        } catch (IllegalArgumentException e) {
+            check("hostname can't be null".equals(e.getMessage()), "createUnresolved(null) message");
+        }
+        try {
+            new InetSocketAddress((String) null, 80);
+            check(false, "ISA((String)null,80) must throw");
+        } catch (IllegalArgumentException e) {
+            check("hostname can't be null".equals(e.getMessage()), "ISA((String)null) message");
+        }
+    }
+
+    static void testWildcardSemantics() throws Exception {
+        InetSocketAddress w1 = new InetSocketAddress(80);
+        InetSocketAddress w2 = new InetSocketAddress(80);
+        check(w1.getAddress() != null, "wildcard address non-null");
+        check(w1.getAddress().isAnyLocalAddress(), "wildcard isAnyLocalAddress");
+        check("0.0.0.0".equals(w1.getAddress().getHostAddress()), "wildcard host address 0.0.0.0");
+        check("0.0.0.0/0.0.0.0:80".equals(w1.toString()), "wildcard toString exact");
+        check(w1.equals(w2), "two wildcards equal");
+        check(w1.hashCode() == w2.hashCode(), "wildcard hashCode equal");
+        check(!w1.isUnresolved(), "wildcard resolved");
+        check("0.0.0.0".equals(w1.getHostString()), "wildcard hostString 0.0.0.0");
+        check(!w1.equals(new InetSocketAddress(81)), "wildcard different port not equal");
+        check(!w1.equals(new InetSocketAddress("127.0.0.1", 80)),
+                "wildcard not equal loopback-resolved same port");
+        InetSocketAddress w3 = new InetSocketAddress((InetAddress) null, 80);
+        check(w3.equals(w1), "null-address ctor equals wildcard");
+        check(w3.hashCode() == w1.hashCode(), "null-address hashCode equals wildcard");
+        check(w3.getAddress().isAnyLocalAddress(), "null-address wildcard address");
+    }
+
+    static void testUnresolvedDeep() {
+        InetSocketAddress u = InetSocketAddress.createUnresolved("no.such.host.invalid", 80);
+        check(u.isUnresolved(), "invalid host unresolved");
+        check("no.such.host.invalid".equals(u.getHostName()),
+                "unresolved getHostName returns literal without resolution");
+        check("no.such.host.invalid".equals(u.getHostString()), "unresolved hostString");
+        check(null == u.getAddress(), "unresolved address null");
+        check(u.getPort() == 80, "unresolved port");
+        InetSocketAddress mixed = InetSocketAddress.createUnresolved("HoSt", 80);
+        check("HoSt".equals(mixed.getHostString()), "hostString preserves case");
+        check("HoSt".equals(mixed.getHostName()), "getHostName preserves case");
+        InetSocketAddress lower = InetSocketAddress.createUnresolved("host", 80);
+        check(mixed.equals(lower), "unresolved equals case-insensitive");
+        check(mixed.hashCode() == lower.hashCode(), "unresolved hashCode case-insensitive");
+        check(!mixed.equals(InetSocketAddress.createUnresolved("host", 81)), "unresolved port differs");
+        check(!mixed.equals(InetSocketAddress.createUnresolved("other", 80)), "unresolved host differs");
+        check(!mixed.equals(null), "unresolved equals null false");
+        check(!mixed.equals("HoSt:80"), "unresolved equals other type false");
+        // JDK-27 marks unresolved addresses in toString (probed; JDK-8 omits it)
+        check("HoSt/<unresolved>:80".equals(mixed.toString()), "unresolved toString exact (JDK-27 form)");
+    }
+
+    static void testResolvedVsUnresolvedEquality() throws Exception {
+        InetAddress addr = InetAddress.getByAddress("h", new byte[]{10, 0, 0, 1});
+        InetSocketAddress res = new InetSocketAddress(addr, 80);
+        InetSocketAddress unres = InetSocketAddress.createUnresolved("10.0.0.1", 80);
+        check(!res.equals(unres), "resolved != unresolved (same literal text)");
+        check(!unres.equals(res), "unresolved != resolved symmetric");
+        InetAddress sameBytesUnnamed = InetAddress.getByAddress(new byte[]{10, 0, 0, 1});
+        check(res.equals(new InetSocketAddress(sameBytesUnnamed, 80)),
+                "resolved equality ignores host name of InetAddress");
+        check(res.hashCode() == new InetSocketAddress(sameBytesUnnamed, 80).hashCode(),
+                "resolved hashCode ignores host name");
+        InetSocketAddress loop = new InetSocketAddress("127.0.0.1", 80);
+        check(!loop.isUnresolved(), "literal loopback resolved");
+        check(loop.getAddress().isLoopbackAddress(), "literal loopback address");
+        check(loop.getAddress().equals(InetAddress.getByName("127.0.0.1")),
+                "literal address bytes equal");
+        check(!loop.equals(new InetSocketAddress("127.0.0.1", 81)), "different port not equal");
+        check(loop.equals(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 80)),
+                "literal equals address-constructed");
+        check("127.0.0.1".equals(loop.getHostString()), "loopback hostString literal");
+        String hn = loop.getHostName();
+        check("127.0.0.1".equals(hn) || "localhost".equals(hn),
+                "loopback getHostName is literal or localhost (env dependent)");
+    }
+
+    static void testIPv6Forms() throws Exception {
+        InetSocketAddress v6 = new InetSocketAddress("::1", 80);
+        check(!v6.isUnresolved(), "v6 literal resolves");
+        check(v6.getAddress() instanceof java.net.Inet6Address, "v6 address type");
+        check(v6.getAddress().isLoopbackAddress(), "v6 literal loopback");
+        // hostString is the normalised full IPv6 text, not the compressed input (probed)
+        check("0:0:0:0:0:0:0:1".equals(v6.getHostString()), "v6 hostString normalised form");
+        check(v6.getPort() == 80, "v6 port");
+        // JDK-27 brackets the v6 text in toString (probed; JDK-8 does not)
+        check("/[0:0:0:0:0:0:0:1]:80".equals(v6.toString()), "v6 toString exact (JDK-27 form)");
+        check(v6.equals(new InetSocketAddress(InetAddress.getByName("::1"), 80)),
+                "v6 equals address-constructed");
+        check(!v6.equals(new InetSocketAddress("127.0.0.1", 80)), "v6 != v4 loopback same port");
+        InetSocketAddress namedV6 = new InetSocketAddress(
+                InetAddress.getByAddress("v6host", new byte[16]), 9);
+        check("v6host".equals(namedV6.getHostString()), "named v6 hostString");
+        check(namedV6.getAddress().isAnyLocalAddress(), "named v6 any-local address");
+    }
+
+    static void testSerializationDeep() throws Exception {
+        InetSocketAddress w = roundTrip(new InetSocketAddress(77));
+        check(!w.isUnresolved(), "serialized wildcard resolved");
+        check(w.getPort() == 77, "serialized wildcard port");
+        check(w.getAddress().isAnyLocalAddress(), "serialized wildcard any-local");
+        check("0.0.0.0/0.0.0.0:77".equals(w.toString()), "serialized wildcard toString");
+        InetAddress addr = InetAddress.getByAddress("keep", new byte[]{10, 9, 8, 7});
+        InetSocketAddress r = roundTrip(new InetSocketAddress(addr, 1234));
+        check("keep".equals(r.getHostString()), "serialized resolved host name kept");
+        check("10.9.8.7".equals(r.getAddress().getHostAddress()), "serialized resolved address");
+        check(r.getPort() == 1234, "serialized resolved port");
+        check(r.getAddress().equals(InetAddress.getByAddress(new byte[]{10, 9, 8, 7})),
+                "serialized resolved equals fresh");
+        check(r.hashCode() == new InetSocketAddress(
+                InetAddress.getByAddress(new byte[]{10, 9, 8, 7}), 1234).hashCode(),
+                "serialized hashCode contract");
+        InetSocketAddress u = roundTrip(InetSocketAddress.createUnresolved("gone.host.invalid", 99));
+        check(u.isUnresolved(), "serialized unresolved stays unresolved");
+        check("gone.host.invalid".equals(u.getHostString()), "serialized unresolved host");
+        check(u.getPort() == 99, "serialized unresolved port");
+        check(null == u.getAddress(), "serialized unresolved address null");
+        java.net.SocketAddress sa = roundTrip((java.net.SocketAddress) new InetSocketAddress(5));
+        check(sa instanceof InetSocketAddress, "round trip via SocketAddress keeps class");
+        check(((InetSocketAddress) sa).getPort() == 5, "SocketAddress round trip port");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPortConstructor();
@@ -160,6 +332,13 @@ public class InetSocketAddressTest {
         testUnresolved();
         testEqualsHashCode();
         testSerialization();
+        testPortValidationExactMessages();
+        testNullHostRejected();
+        testWildcardSemantics();
+        testUnresolvedDeep();
+        testResolvedVsUnresolvedEquality();
+        testIPv6Forms();
+        testSerializationDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

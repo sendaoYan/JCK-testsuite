@@ -25,3 +25,12 @@ HTTP 请求整体超时的异常，直接继承 `IOException`。
 
 - 白盒：public / 非 final / 直接父类 `IOException` / 唯一 `String` 构造器。
 - 黑盒：构造→message 保留→层级→无 cause→堆栈非空→`initCause` 链→二次 `initCause` 抛 `IllegalStateException`。
+
+## 6. 缺口分析（本批深化）
+
+原 12 条断言缺少序列化与精确消息。本批追加至 33 条：
+
+- 形状（probed）：仅一个 String 构造器；仅 serialVersionUID 字段；svuid = 981344271622632951。
+- 行为：toString 精确格式（含/不含 message）；null message 合法；suppressed 挂载；
+  setStackTrace 清空；HttpConnectTimeoutException 为其子类。
+- 序列化（probed）：round-trip 保留 message/cause/IOException 类型；identity equals。

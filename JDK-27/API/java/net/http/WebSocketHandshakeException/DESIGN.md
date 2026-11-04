@@ -27,3 +27,13 @@ WebSocket 握手失败时抛出的异常，final 类，继承 `IOException`，�
 - 黑盒：用 `Proxy` 生成一个 `HttpResponse`（`statusCode()`→403）→构造→`getResponse()` 返回同一实例→
   `IOException` 层级→`getMessage()==null`→无 cause→堆栈非空→`initCause` 返回 this 且 cause 可读→
   二次 `initCause` 抛 `IllegalStateException`。
+
+## 6. 缺口分析（本批深化）
+
+原 12 条断言缺少序列化语义。本批追加至 30 条：
+
+- 形状（probed）：仅一个构造器；声明 transient `response` 字段 + serialVersionUID；svuid = 1；
+  getResponse() 返回 HttpResponse<?>。
+- 行为：null response 合法且 getResponse() 为 null；toString 即纯类名（无 message 追加，probed）；
+  suppressed；initCause 协变覆盖返回 WebSocketHandshakeException（probed）。
+- 序列化（probed）：transient response 序列化后为 null；message 保持 null；类型层级保留。

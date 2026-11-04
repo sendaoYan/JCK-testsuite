@@ -48,3 +48,16 @@
 
 - `setOption/getOption/supportedOptions`（JDK 9+）：`getOption(null)`→NPE；`setOption(name,null)`→IAE。
 - `Socket` 实现 Closeable（白盒）。
+
+## 批次 F 深化补充（Socket 状态机簇）
+
+> 完整状态机覆盖：回环连接对、shutdown 双向语义、close 状态机、失败后状态演化、JDK 9+ typed option API。SocketTest.java 深化至 284 断言。
+
+### 新增测试方法
+
+- 回环连接对基建（daemon acceptor + `ArrayBlockingQueue` 同步）；端口互易断言。
+- shutdown 语义：shutdownInput→EOF、shutdownOutput→write 抛 IOException("Socket closed")。
+- close 状态机：isClosed=true 且 isConnected/isBound 保持；访问器级消息 "Socket is closed"、connect 级 "Socket closed"。
+- connect 失败矩阵：refused→ConnectException("Connection refused (connect failed)")；已连接再 connect→IAE("Already connected")；sendUrgentData 分级消息（未连接 "Not connected"、关闭 "Socket is closed"、impl 失活 "Socket closed"）。
+- `testConnectedSocketOptionApi`：setOption/getOption(SO_LINGER) 往返；SO_BROADCAST→UnsupportedOperationException。
+- trafficClass 精确回读（JDK-27 无 JDK-8 的 0xFC 掩码）；refused 后 isClosed=true（JDK-8 为 false）。

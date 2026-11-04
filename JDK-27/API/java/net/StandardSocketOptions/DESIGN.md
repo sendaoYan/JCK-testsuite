@@ -15,3 +15,9 @@ NIO SocketChannel/ServerSocketChannel/DatagramChannel 与 java.net.Socket 通用
 ## 四、测试用例设计
 
 枚举常量存在性；name()/type() 正确；在真实 Socket 上 setOption/getOption 往返。
+
+## 批次 F 深化补充（134 断言）
+
+- 12 字段（JDK 9+ 含 SO_REUSEPORT）name/type/identity 矩阵：Boolean×5、Integer×5、NetworkInterface（IP_MULTICAST_IF）。
+- JDK-8 侧（111 断言）：11 字段、SO_REUSEPORT 断言不存在。
+- name() 精确串、type() 精确 Class、静态单例身份（同一字段两次引用 ==）。

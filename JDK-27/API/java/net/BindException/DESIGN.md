@@ -15,3 +15,10 @@
 ## 四、测试用例设计
 
 继承 SocketException/IOException；直接构造与带 message 构造；可作为 throws 声明。
+
+## 批次 F 深化补充（55 断言）
+
+- 层级 BE<SE<IOException、catch 矩阵、与 CE/STE/NRTH/PUE 互不为子类。
+- serialVersionUID=-5945005768251722951L（双 JDK 一致）。
+- 真实触发（回环）：占用 127.0.0.1 临时端口后重绑→"Address already in use"（JDK-27 无后缀；JDK-8 为 "…(Bind failed)"）；wildcard 重叠绑定同样 BindException；holder 关闭后端口可重绑。
+- cause/suppressed/序列化/跨线程传播全套（BE 可作为 BE 的 cause）。

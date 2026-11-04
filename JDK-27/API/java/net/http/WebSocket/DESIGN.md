@@ -29,3 +29,14 @@ WebSocket 客户端接口，及其嵌套 `Builder`/`Listener`。
 - 白盒：interface / `NORMAL_CLOSURE==1000` / 发送与控制方法面 / 嵌套 Builder、Listener 接口。
 - 黑盒（不真发请求）：`newWebSocketBuilder()` 流式方法返回 this + null 参数异常 →
   用 `Proxy` mock 的 WebSocket 驱动 `Listener` 默认方法（返回 null / no-op 不抛）。
+
+## 6. 缺口分析（本批深化）
+
+原 30 条断言未核对签名与默认行为细节。本批追加至 66 条：
+
+- 签名：10 个声明方法与返回类型（send* → CompletableFuture<WebSocket>、request/abort void、
+  getSubprotocol String、isOutputClosed/isInputClosed boolean）；NORMAL_CLOSURE 为唯一声明字段
+  public static final int = 1000；非 sealed、非泛型。
+- Listener 深挖（probed）：7 个方法全 default；onOpen/onText/onBinary/onPing/onPong 各调 request(1)、
+  onClose/onError 不调用；CompletionStage 类返回 void 的两类方法；自定义 onText 结果原样返回；
+  super 调用重新发 request(1)。

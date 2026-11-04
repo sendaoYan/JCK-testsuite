@@ -32,3 +32,15 @@
 - 黑盒（不真发请求）：`newHttpClient()` 默认属性 → `newBuilder().build()` 默认属性 →
   显式 builder 配置读回（followRedirects/version/connectTimeout/proxy/executor）→
   `shutdown→awaitTermination→isTerminated` 与 `shutdownNow` 生命周期。
+
+## 6. 缺口分析（本批深化）
+
+原 52 条断言只覆盖默认值与基本生命周期。本批追加至 121 条：
+
+- 访问器 round-trip：sslContext/cookieHandler/authenticator/executor/proxy identity；
+  sslParameters 防御性拷贝（内容相等非同实例）；NO_PROXY 常量；Version.HTTP_3 与三种 Redirect 可配置读回。
+- 生命周期深挖：awaitTermination(ZERO/负值) 不抛 IAE 返回 false（probed）、null → NPE；
+  shutdown/close 幂等；终止后 send() → IOException "closed"；完全终止后 awaitTermination(ZERO) 返回 true（probed）。
+- 签名核对：send 声明 IOException+InterruptedException、恰两个 sendAsync 重载、
+  JDK-27 无 localAddress() 读访问器（仅 Builder 侧，probed）。
+- 边界：connectTimeout(1ns)；全部 Optional 访问器默认空。

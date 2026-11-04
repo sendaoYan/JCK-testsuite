@@ -49,3 +49,16 @@
 - `toURL()` 对相对 URI 抛 IllegalArgumentException（不是 MalformedURLException）。
 - getRawUserInfo 保留 `%40`，getUserInfo 解码为 `@`，authority 解码后可能含 `@`。
 - 网络边界：`resolve/relativize` 传 null 抛 NPE。
+
+## 5. 深化批次 A 缺口分析（2026-11-05，95 → 738 断言，含保留的 13 项白盒）
+
+与 JDK-8 侧同构，追加 17 个 test 方法（解析矩阵 19×19、异常三元组、RFC 引用
+变换表 34 条、resolve/relativize/normalize 同一性、equals 转义规则、compareTo
+排序表、IRI、构造器边界、create 语义、parseServerAuthority、序列化）。
+关键实测结论与 JDK-8 侧一致，另见 JDK-8 侧 DESIGN.md 第 5 章的偏差表；本侧
+差异记录：
+
+- `URI("http://exa mple.com/x")` USX index=10（实际非法字符位置；JDK-8=7）
+- `URI.create(null)` NPE 带 message（JDK-8 无）
+- `compareTo` 已与 equals 一致（`%6e` vs `%6E` 返回 0）
+- 公开 API 与 JDK-8 完全一致（javap 36 成员对照，无新增公开方法）

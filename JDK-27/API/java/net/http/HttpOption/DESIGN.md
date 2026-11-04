@@ -24,3 +24,14 @@
 
 - 白盒：public interface / 一个类型参数 / `H3_DISCOVERY` 常量。
 - 黑盒：常量 `name()`/`type()`/`instanceof HttpOption`；`Http3DiscoveryMode` 三个枚举值 + `valueOf`。
+
+## 6. 缺口分析（本批深化）
+
+原 12 条断言仅核对常量与枚举存在性。本批追加至 42 条：
+
+- sealed 形状（probed）：isSealed true；permits 恰 java.net.http.HttpRequestOptionImpl；
+  恰两个抽象方法 name()/type() 及其返回类型；H3_DISCOVERY 为
+  `HttpOption<Http3DiscoveryMode>` 类型、public static final、toString 为名字。
+- setOption 集成（probed）：默认缺省；ALT_SVC round-trip；覆盖写；setOption(..., null) 移除；
+  重设恢复；Builder.copy() 携带；request.getOption() 读回。
+- 负例（probed）：setOption(null, v) NPE；错类型值 IAE；getOption(null) NPE；缺省 equals Optional.empty。

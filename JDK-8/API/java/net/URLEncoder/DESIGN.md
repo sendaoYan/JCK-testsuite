@@ -35,3 +35,14 @@
 - 编码名 null→NPE（**不是** UnsupportedEncodingException）；空串 `""`→UnsupportedEncodingException。
 - 输入字符串 null→NPE（encode(null)/encode(null,enc)）。
 - 代理对按 UTF-8 编码为 4 字节，即 4 个 `%XX`；UTF-16 输出带 BOM（`%FE%FF`）。
+
+## 缺口分析与深化（批次 B，2026-11-05）
+
+原版 17 断言。深化后 181 断言 断言，新增：
+
+| 深化点 | 方法 | 探明事实 |
+|---|---|---|
+| ASCII 33..126 全矩阵 | testAsciiMatrix | 字母数字逐字符透传（62×）；`.` `-` `*` `_` 透传；空格→`+`；其余每个可打印 ASCII 精确 `%XX`（大写）；控制字符 %00/%01/%0D%0A/%7F |
+| ISO-8859-1 单字节 | testIso8859AndAliases | ü→%FC、é→%E9、ÿ→%FF；0..255 全字符编码后 %00/%80/%FC/%FF 全部出现；别名 UTF8/utf-8/Iso-8859-1/ISO8859_1 等价；US-ASCII 对非 ASCII 用替换字节 → %3F（不抛异常） |
+| UTF-8 边界码点 | testUtf8Boundaries | U+007F 单字节 / U+0080 双字节边界、U+07FF/U+0800、U+FFFF 三字节最大、U+10000 代理对四字节、CJK 样例；编码确定性 |
+| 空串与标点表 | testEmptyBoundaries | 空串→空串（含 deprecated 重载）；27 个标点字符精确输出表 |
