@@ -12,6 +12,7 @@ import java.util.AbstractQueue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -145,7 +146,7 @@ public class LinkedBlockingQueueTest {
         check(!q.contains(null), "contains(null) returns false");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws InterruptedException {
         // constructor(Collection)
         LinkedBlockingQueue<Integer> q = new LinkedBlockingQueue<>(Arrays.asList(1, 2, 3));
         check(q.size() == 3, "constructor(Collection) copies");
@@ -196,6 +197,32 @@ public class LinkedBlockingQueueTest {
         // toString
         LinkedBlockingQueue<Integer> ts = new LinkedBlockingQueue<>(Arrays.asList(1, 2));
         check(ts.toString() != null && ts.toString().contains("1"), "toString non-null");
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // 容量 0/负数边界（非法）
+        expectThrows(() -> new LinkedBlockingQueue<>(0), IllegalArgumentException.class,
+                "capacity 0 constructor");
+        expectThrows(() -> new LinkedBlockingQueue<>(-1), IllegalArgumentException.class,
+                "capacity negative constructor");
+
+        // 空队列查询边界
+        LinkedBlockingQueue<Integer> empty = new LinkedBlockingQueue<>();
+        expectThrows(() -> empty.element(), NoSuchElementException.class, "element() empty");
+        expectThrows(() -> empty.remove(), NoSuchElementException.class, "remove() empty");
+        check(empty.poll() == null && empty.peek() == null, "poll/peek empty null");
+
+        // 满队列 add 抛异常
+        LinkedBlockingQueue<Integer> full = new LinkedBlockingQueue<>(2);
+        full.add(1);
+        full.add(2);
+        expectThrows(() -> full.add(3), IllegalStateException.class, "add() full");
+        check(!full.offer(3, 0, TimeUnit.NANOSECONDS), "offer(timeout 0) full false");
+
+        // 无界 offer 永不失败 + remainingCapacity 随计数递减
+        LinkedBlockingQueue<Integer> unb = new LinkedBlockingQueue<>();
+        check(unb.offer(1) && unb.offer(2), "unbounded offer always true");
+        check(unb.remainingCapacity() == Integer.MAX_VALUE - 2,
+                "unbounded remainingCapacity after 2");
     }
 
     public static void main(String[] args) throws Exception {

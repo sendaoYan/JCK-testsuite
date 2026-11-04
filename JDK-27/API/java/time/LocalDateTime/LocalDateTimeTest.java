@@ -63,6 +63,40 @@ public class LocalDateTimeTest {
         testComparison();
         testConversions();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        check(LocalDateTime.parse(LocalDateTime.MIN.toString()).equals(LocalDateTime.MIN),
+                "round-trip MIN");
+        check(LocalDateTime.parse(LocalDateTime.MAX.toString()).equals(LocalDateTime.MAX),
+                "round-trip MAX");
+        check(LocalDateTime.parse(LocalDateTime.of(-1, 1, 1, 0, 0).toString())
+                .equals(LocalDateTime.of(-1, 1, 1, 0, 0)), "round-trip negative year");
+
+        // 极值邻域
+        check(LocalDateTime.MIN.plusNanos(1)
+                .equals(LocalDateTime.of(-999999999, 1, 1, 0, 0, 0, 1)), "MIN plusNanos(1)");
+        check(LocalDateTime.MAX.minusNanos(1)
+                .equals(LocalDateTime.of(999999999, 12, 31, 23, 59, 59, 999_999_998)),
+                "MAX minusNanos(1)");
+
+        // 年末跨年进位
+        check(LocalDateTime.of(2024, 12, 31, 23, 0).plusHours(2)
+                .equals(LocalDateTime.of(2025, 1, 1, 1, 0)), "year-end plusHours rollover");
+
+        // epoch 与 toEpochSecond 一致性（经 UTC 偏移换算）
+        check(LocalDateTime.of(1970, 1, 1, 0, 0).toEpochSecond(ZoneOffset.UTC) == 0,
+                "toEpochSecond epoch");
+        check(LocalDateTime.of(1970, 1, 1, 0, 0).toInstant(ZoneOffset.UTC).equals(Instant.EPOCH),
+                "toInstant epoch");
+
+        // compareTo 反对称
+        LocalDateTime da = LocalDateTime.of(2024, 3, 1, 12, 0);
+        LocalDateTime db = LocalDateTime.of(2024, 3, 1, 13, 0);
+        check(da.compareTo(db) == -db.compareTo(da), "compareTo anti-symmetry");
+
+        // 非法月 0 等价类
+        expectThrows(DateTimeException.class, () -> LocalDateTime.of(2024, 0, 1, 0, 0),
+                "of month 0");
     }
 
     static void testFactories() {

@@ -52,6 +52,21 @@ public class DayOfWeekTest {
         testPlusMinus();
         testDisplayNames();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        for (DayOfWeek d : DayOfWeek.values()) {
+            check(DayOfWeek.valueOf(d.name()) == d, "valueOf round-trip " + d);
+        }
+        check(DayOfWeek.MONDAY.plus(0) == DayOfWeek.MONDAY, "plus(0) identity");
+        check(DayOfWeek.MONDAY.minus(7) == DayOfWeek.MONDAY, "minus(7) identity");
+        check(DayOfWeek.MONDAY.plus(-7) == DayOfWeek.MONDAY, "plus(-7) identity");
+        check(DayOfWeek.from(LocalDate.of(2024, 1, 1)) == DayOfWeek.MONDAY, "from 2024-01-01 Monday");
+        check(DayOfWeek.MONDAY.compareTo(DayOfWeek.TUESDAY) < 0
+                && DayOfWeek.SUNDAY.compareTo(DayOfWeek.MONDAY) > 0, "compareTo ordinal order");
+        check(DayOfWeek.FRIDAY.getDisplayName(TextStyle.FULL, Locale.US).equals("Friday"),
+                "FULL Friday");
+        check(DayOfWeek.MONDAY.getDisplayName(TextStyle.SHORT, Locale.US).equals("Mon"),
+                "SHORT Monday");
     }
 
     static void testValuesAndOf() {

@@ -54,6 +54,25 @@ public class RandomTest {
         testSetSeed();
         testStreams();
         testGaussian();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        Random r = new Random(42L);
+        check(r.nextLong(1) == 0L, "nextLong(bound=1) == 0");
+        check(r.nextInt(5, 6) == 5, "nextInt(origin, origin+1) == origin");
+        check(r.nextLong(7, 8) == 7L, "nextLong(origin, origin+1) == origin");
+        double db = r.nextDouble(10.0);
+        check(db >= 0.0 && db < 10.0, "nextDouble(bound) in [0,bound)");
+        double dor = r.nextDouble(5.0, 20.0);
+        check(dor >= 5.0 && dor < 20.0, "nextDouble(origin,bound) in [origin,bound)");
+        byte[] empty = new byte[0];
+        r.nextBytes(empty);
+        check(empty.length == 0, "nextBytes(empty) no-op");
+
+        // 越界 origin/bound 抛异常
+        assertThrows(IllegalArgumentException.class, () -> new Random(1).nextInt(5, 5),
+                "nextInt(origin==bound)");
+        assertThrows(IllegalArgumentException.class, () -> new Random(1).nextLong(5, 5),
+                "nextLong(origin==bound)");
     }
 
     static void testSeedReproducibility() {

@@ -262,6 +262,38 @@ public class CollectorsTest {
                 ConcurrentSkipListMap::new));
         check(m3 instanceof ConcurrentSkipListMap, "toConcurrentMap with map factory");
         check(m3.get(1).equals("ab") && m3.get(2).equals("cc"), "toConcurrentMap factory contents");
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // 空流等价类
+        check(Stream.<String>empty().collect(Collectors.joining()).equals(""), "joining empty");
+        check(Stream.<String>empty().collect(Collectors.joining(",")).equals(""),
+                "joining empty with delimiter");
+        check(Stream.<Integer>empty().collect(Collectors.toList()).isEmpty(), "toList empty");
+        check(Stream.<Integer>empty().collect(Collectors.summingInt(Integer::intValue)) == 0,
+                "summingInt empty == 0");
+        check(Stream.<Integer>empty().collect(Collectors.counting()) == 0L, "counting empty == 0");
+        Map<Boolean, List<Integer>> emptyPart = Stream.<Integer>empty()
+                .collect(Collectors.partitioningBy(x -> x > 0));
+        check(emptyPart.get(true).isEmpty() && emptyPart.get(false).isEmpty(),
+                "partitioningBy empty two empty buckets");
+        Map<Integer, List<Integer>> emptyGroup = Stream.<Integer>empty()
+                .collect(Collectors.groupingBy(x -> x % 2));
+        check(emptyGroup.isEmpty(), "groupingBy empty map");
+
+        // minBy/maxBy 吸收律
+        check(Stream.of(1, 9, 3).collect(Collectors.minBy(Integer::compareTo)).get()
+                <= Stream.of(1, 9, 3).collect(Collectors.maxBy(Integer::compareTo)).get(),
+                "minBy <= maxBy");
+
+        // collectingAndThen 恒等
+        check(Stream.of(1, 2, 3).collect(Collectors.collectingAndThen(Collectors.toList(),
+                Function.identity())).equals(List.of(1, 2, 3)), "collectingAndThen identity");
+
+        // teeing 组合不变量
+        String tee2 = Stream.of(1, 2, 3).collect(Collectors.teeing(
+                Collectors.counting(), Collectors.summingInt(Integer::intValue),
+                (c, s) -> c + "=" + s));
+        check(tee2.equals("3=6"), "teeing count/sum");
     }
 
     public static void main(String[] args) throws Exception {

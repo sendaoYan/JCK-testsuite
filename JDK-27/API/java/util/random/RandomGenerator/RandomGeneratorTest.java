@@ -40,6 +40,43 @@ public class RandomGeneratorTest {
         testDeterminism();
         testRanges();
         testStreams();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        RandomGeneratorFactory<RandomGenerator> fac = RandomGeneratorFactory.getDefault();
+        RandomGenerator g = fac.create(123L);
+        check(g.nextInt(1) == 0, "nextInt(bound=1) == 0");
+        check(g.nextLong(1) == 0L, "nextLong(bound=1) == 0");
+        check(g.nextInt(5, 6) == 5, "nextInt(origin, origin+1) == origin");
+        check(g.nextLong(7, 8) == 7L, "nextLong(origin, origin+1) == origin");
+        double db = g.nextDouble(1.0);
+        check(db >= 0.0 && db < 1.0, "nextDouble(bound=1) in [0,1)");
+        byte[] empty = new byte[0];
+        g.nextBytes(empty);
+        check(empty.length == 0, "nextBytes(empty) no-op");
+
+        // 固定种子可复现（浮点/布尔）
+        RandomGenerator g1 = fac.create(42L);
+        RandomGenerator g2 = fac.create(42L);
+        check(g1.nextDouble() == g2.nextDouble() && g1.nextFloat() == g2.nextFloat(),
+                "same seed nextDouble/nextFloat deterministic");
+        check(g1.nextBoolean() == g2.nextBoolean(), "same seed nextBoolean deterministic");
+
+        // 越界 origin/bound 抛异常
+        expectThrows(IllegalArgumentException.class, () -> fac.create(1L).nextInt(5, 5),
+                "nextInt(origin==bound)");
+        expectThrows(IllegalArgumentException.class, () -> fac.create(1L).nextLong(5, 5),
+                "nextLong(origin==bound)");
+    }
+
+    static void expectThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                    + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
     }
 
     static void testFactories() {

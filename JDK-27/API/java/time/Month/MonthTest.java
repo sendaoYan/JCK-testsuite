@@ -53,6 +53,33 @@ public class MonthTest {
         testPlusMinus();
         testDisplayNames();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        for (Month m : Month.values()) {
+            check(Month.valueOf(m.name()) == m, "valueOf round-trip " + m);
+        }
+        check(Month.JANUARY.plus(0) == Month.JANUARY, "plus(0) identity");
+        check(Month.JANUARY.minus(12) == Month.JANUARY, "minus(12) identity");
+        check(Month.JANUARY.plus(-12) == Month.JANUARY, "plus(-12) identity");
+
+        // 每月天数：minLength/maxLength 与 length 一致
+        int[] expected = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        for (int i = 0; i < 12; i++) {
+            Month m = Month.of(i + 1);
+            check(m.length(false) == expected[i], "length(false) " + m);
+            int max = (m == Month.FEBRUARY) ? 29 : expected[i];
+            check(m.maxLength() == max, "maxLength " + m);
+            check(m.minLength() == expected[i], "minLength " + m);
+        }
+
+        // from(LocalDate) 往返
+        for (Month m : Month.values()) {
+            check(Month.from(LocalDate.of(2024, m.getValue(), 1)) == m, "from round-trip " + m);
+        }
+
+        // compareTo 序关系
+        check(Month.JANUARY.compareTo(Month.FEBRUARY) < 0
+                && Month.DECEMBER.compareTo(Month.JANUARY) > 0, "compareTo ordinal order");
     }
 
     static void testValuesAndOf() {

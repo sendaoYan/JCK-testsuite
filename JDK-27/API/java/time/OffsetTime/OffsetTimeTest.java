@@ -57,6 +57,43 @@ public class OffsetTimeTest {
         testComparison();
         testArithmeticImmutability();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        check(OffsetTime.parse(ot().toString()).equals(ot()), "round-trip basic");
+        OffsetTime odd = OffsetTime.of(10, 30, 45, 123_456_789, ZoneOffset.ofHoursMinutes(5, 30));
+        check(OffsetTime.parse(odd.toString()).equals(odd), "round-trip +05:30");
+
+        // MIN/MAX 常量（offset 随极值而翻转）
+        check(OffsetTime.MIN.equals(OffsetTime.of(LocalTime.MIDNIGHT, ZoneOffset.MAX)), "MIN constant");
+        check(OffsetTime.MAX.equals(OffsetTime.of(LocalTime.MAX, ZoneOffset.MIN)), "MAX constant");
+
+        // withOffsetSameInstant 往返
+        check(odd.withOffsetSameInstant(ZoneOffset.UTC).withOffsetSameInstant(odd.getOffset())
+                .equals(odd), "withOffsetSameInstant round-trip");
+
+        // 纳秒边界回绕
+        check(OffsetTime.of(LocalTime.MAX, ZoneOffset.UTC).plusNanos(1)
+                .equals(OffsetTime.of(LocalTime.MIDNIGHT, ZoneOffset.UTC)), "MAX plusNanos(1) wraps");
+        check(OffsetTime.of(LocalTime.MIDNIGHT, ZoneOffset.UTC).minusNanos(1)
+                .equals(OffsetTime.of(LocalTime.MAX, ZoneOffset.UTC)), "MIDNIGHT minusNanos(1) wraps");
+
+        // toEpochSecond 跨 offset 一致
+        LocalDate d = LocalDate.of(2024, 3, 1);
+        check(odd.toEpochSecond(d) == odd.withOffsetSameInstant(ZoneOffset.UTC).toEpochSecond(d),
+                "toEpochSecond consistent across offsets");
+
+        // compareTo 反对称
+        OffsetTime ta = OffsetTime.of(10, 30, 0, 0, ZoneOffset.ofHours(2));
+        OffsetTime tb = OffsetTime.of(11, 30, 0, 0, ZoneOffset.ofHours(2));
+        check(ta.compareTo(tb) == -tb.compareTo(ta), "compareTo anti-symmetry");
+
+        // 非法纳秒等价类
+        expectThrows(DateTimeException.class,
+                () -> OffsetTime.of(10, 0, 0, 1_000_000_000, ZoneOffset.UTC), "of nano 1e9");
+    }
+
+    static OffsetTime ot() {
+        return OffsetTime.of(10, 30, 45, 123_456_789, ZoneOffset.ofHours(2));
     }
 
     static void testFactories() {

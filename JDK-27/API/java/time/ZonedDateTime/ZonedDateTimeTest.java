@@ -61,6 +61,39 @@ public class ZonedDateTimeTest {
         testArithmeticImmutability();
         testComparison();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        ZonedDateTime odd = ZonedDateTime.of(2024, 3, 1, 12, 30, 45, 123_456_789,
+                ZoneOffset.ofHoursMinutes(5, 30));
+        check(ZonedDateTime.parse(odd.toString()).equals(odd), "round-trip +05:30");
+
+        // epoch 与时间线
+        ZonedDateTime epoch = ZonedDateTime.of(1970, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        check(epoch.toInstant().equals(Instant.EPOCH), "epoch toInstant");
+        check(epoch.plusDays(1).toLocalDate().equals(LocalDate.of(1970, 1, 2)), "epoch plusDays");
+
+        // 年末跨年进位
+        ZonedDateTime yearEnd = ZonedDateTime.of(2024, 12, 31, 23, 0, 0, 0, ZoneOffset.UTC);
+        check(yearEnd.plusHours(2).toLocalDateTime().equals(LocalDateTime.of(2025, 1, 1, 1, 0)),
+                "year-end plusHours rollover");
+
+        // withZoneSameInstant 往返保持本地时间
+        check(odd.withZoneSameInstant(ZoneOffset.UTC).withZoneSameInstant(odd.getZone())
+                .toLocalDateTime().equals(odd.toLocalDateTime()), "withZoneSameInstant round-trip");
+
+        // toOffsetDateTime / toLocalDateTime 拆分
+        check(odd.toOffsetDateTime().toInstant().equals(odd.toInstant()),
+                "toOffsetDateTime keeps instant");
+
+        // compareTo 反对称
+        ZonedDateTime za = ZonedDateTime.of(2024, 3, 1, 12, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime zb = ZonedDateTime.of(2024, 3, 1, 13, 0, 0, 0, ZoneOffset.UTC);
+        check(za.compareTo(zb) == -zb.compareTo(za), "compareTo anti-symmetry");
+        check(za.isBefore(zb) && !zb.isBefore(za), "isBefore anti-symmetry");
+
+        // 非法日 0 等价类
+        expectThrows(DateTimeException.class,
+                () -> ZonedDateTime.of(2024, 1, 0, 0, 0, 0, 0, ZoneOffset.UTC), "of day 0");
     }
 
     static void testFactories() {

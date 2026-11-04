@@ -59,6 +59,36 @@ public class YearMonthTest {
         testComparison();
         testFormat();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        check(YearMonth.parse(YearMonth.of(-1, 1).toString()).equals(YearMonth.of(-1, 1)),
+                "round-trip negative year");
+        check(YearMonth.of(999999999, 12).equals(YearMonth.parse("+999999999-12")),
+                "MAX parse with explicit sign");
+        check(YearMonth.parse(YearMonth.of(-999999999, 1).toString())
+                .equals(YearMonth.of(-999999999, 1)), "round-trip MIN");
+
+        // plusMonths 跨年进位/借位
+        check(YearMonth.of(2024, 12).plusMonths(1).equals(YearMonth.of(2025, 1)),
+                "plusMonths Dec->Jan");
+        check(YearMonth.of(2024, 1).minusMonths(1).equals(YearMonth.of(2023, 12)),
+                "minusMonths Jan->Dec");
+        check(YearMonth.of(2024, 1).plusMonths(24).equals(YearMonth.of(2026, 1)),
+                "plusMonths 24 = +2y");
+
+        // 每月月末
+        check(YearMonth.of(2024, 4).atEndOfMonth().equals(LocalDate.of(2024, 4, 30)),
+                "atEndOfMonth 30-day");
+        check(YearMonth.of(2024, 12).atEndOfMonth().equals(LocalDate.of(2024, 12, 31)),
+                "atEndOfMonth December");
+
+        // compareTo 反对称
+        YearMonth ma = YearMonth.of(2024, 2);
+        YearMonth mb = YearMonth.of(2024, 3);
+        check(ma.compareTo(mb) == -mb.compareTo(ma), "compareTo anti-symmetry");
+
+        // 非法月 0 等价类
+        expectThrows(DateTimeException.class, () -> YearMonth.of(2024, 0), "of month 0");
     }
 
     static void testFactories() {

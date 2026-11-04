@@ -167,6 +167,28 @@ public class DoubleStreamTest {
         Spliterator<Double> rawSpl =
             ((BaseStream<Double, DoubleStream>) DoubleStream.of(1.0, 2.0)).spliterator();
         check(rawSpl != null, "BaseStream spliterator()");
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // 空流谓词真空真 / reduce 恒等
+        check(!DoubleStream.empty().anyMatch(x -> true), "empty anyMatch false");
+        check(DoubleStream.empty().allMatch(x -> false), "empty allMatch vacuous true");
+        check(DoubleStream.empty().noneMatch(x -> true), "empty noneMatch true");
+        check(DoubleStream.empty().reduce(3.5, Double::sum) == 3.5, "empty reduce identity");
+        check(DoubleStream.empty().reduce(0.0, (a, b) -> a + b) == 0.0, "empty reduce identity 0");
+
+        // 单元素极值
+        check(DoubleStream.of(5.0).min().getAsDouble() == 5.0, "single min");
+        check(DoubleStream.of(5.0).max().getAsDouble() == 5.0, "single max");
+        check(DoubleStream.of(5.0).sum() == 5.0, "single sum");
+        check(DoubleStream.of(5.0).average().getAsDouble() == 5.0, "single average");
+        check(DoubleStream.of(5.0).findFirst().getAsDouble() == 5.0, "single findFirst");
+
+        // 极值
+        check(DoubleStream.of(Double.MAX_VALUE).sum() == Double.MAX_VALUE, "sum MAX");
+        check(DoubleStream.of(-Double.MAX_VALUE).min().getAsDouble() == -Double.MAX_VALUE,
+                "min -MAX");
+        check(DoubleStream.of(3.0, 1.0, 2.0).min().getAsDouble()
+                <= DoubleStream.of(3.0, 1.0, 2.0).max().getAsDouble(), "min <= max");
     }
 
     public static void main(String[] args) throws Exception {

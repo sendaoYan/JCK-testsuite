@@ -176,6 +176,33 @@ public class IntStreamTest {
         Spliterator<Integer> rawSpl =
             ((BaseStream<Integer, IntStream>) IntStream.of(1, 2)).spliterator();
         check(rawSpl != null, "BaseStream spliterator()");
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // 空流谓词真空真 / reduce 恒等
+        check(!IntStream.empty().anyMatch(x -> true), "empty anyMatch false");
+        check(IntStream.empty().allMatch(x -> false), "empty allMatch vacuous true");
+        check(IntStream.empty().noneMatch(x -> true), "empty noneMatch true");
+        check(IntStream.empty().reduce(7, Integer::sum) == 7, "empty reduce identity");
+        check(IntStream.empty().reduce(0, (a, b) -> a + b) == 0, "empty reduce identity 0");
+
+        // 单元素极值
+        check(IntStream.of(5).min().getAsInt() == 5, "single min");
+        check(IntStream.of(5).max().getAsInt() == 5, "single max");
+        check(IntStream.of(5).sum() == 5, "single sum");
+        check(IntStream.of(5).average().getAsDouble() == 5.0, "single average");
+        check(IntStream.of(5).findFirst().getAsInt() == 5, "single findFirst");
+
+        // 极值 range
+        check(IntStream.rangeClosed(Integer.MAX_VALUE, Integer.MAX_VALUE).sum() == Integer.MAX_VALUE,
+                "rangeClosed at MAX single element");
+        check(IntStream.range(Integer.MAX_VALUE - 1, Integer.MAX_VALUE).count() == 1,
+                "range near MAX exclusive");
+        check(IntStream.rangeClosed(Integer.MIN_VALUE, Integer.MIN_VALUE).sum() == Integer.MIN_VALUE,
+                "rangeClosed at MIN single element");
+
+        // min/max 吸收律（同一有序集合）
+        check(IntStream.of(3, 1, 2).min().getAsInt() <= IntStream.of(3, 1, 2).max().getAsInt(),
+                "min <= max");
     }
 
     public static void main(String[] args) throws Exception {

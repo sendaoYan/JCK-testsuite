@@ -37,6 +37,37 @@ public class SplittableRandomTest {
         testDeterminism();
         testRanges();
         testSplit();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        SplittableRandom r = new SplittableRandom(42L);
+        check(r.nextInt(1) == 0, "nextInt(bound=1) == 0");
+        check(r.nextLong(1) == 0L, "nextLong(bound=1) == 0");
+        check(r.nextInt(5, 6) == 5, "nextInt(origin, origin+1) == origin");
+        check(r.nextLong(7, 8) == 7L, "nextLong(origin, origin+1) == origin");
+        double db = r.nextDouble(1.0);
+        check(db >= 0.0 && db < 1.0, "nextDouble(bound=1) in [0,1)");
+        byte[] empty = new byte[0];
+        r.nextBytes(empty);
+        check(empty.length == 0, "nextBytes(empty) no-op");
+
+        // 越界 origin/bound 抛异常
+        assertThrows(IllegalArgumentException.class, () -> new SplittableRandom(1).nextInt(0),
+                "nextInt(bound=0)");
+        assertThrows(IllegalArgumentException.class, () -> new SplittableRandom(1).nextInt(5, 5),
+                "nextInt(origin==bound)");
+        assertThrows(IllegalArgumentException.class, () -> new SplittableRandom(1).nextLong(5, 5),
+                "nextLong(origin==bound)");
+    }
+
+    static void assertThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                    + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
     }
 
     static void testDeterminism() {

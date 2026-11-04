@@ -53,6 +53,41 @@ public class ClockTest {
         testTick();
         testSystemClocks();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // tick 边界：恰好落在 tick 边界时不截断
+        check(Clock.tick(Clock.fixed(Instant.ofEpochSecond(10), ZoneOffset.UTC),
+                Duration.ofSeconds(5)).instant().equals(Instant.ofEpochSecond(10)),
+                "tick exact boundary unchanged");
+        check(Clock.tick(Clock.fixed(Instant.ofEpochSecond(14), ZoneOffset.UTC),
+                Duration.ofSeconds(5)).instant().equals(Instant.ofEpochSecond(10)),
+                "tick truncates down to 10");
+
+        // offset 负偏移（回退）
+        check(Clock.offset(Clock.fixed(Instant.ofEpochSecond(100), ZoneOffset.UTC),
+                Duration.ofSeconds(-50)).instant().equals(Instant.ofEpochSecond(50)),
+                "offset negative");
+
+        // millis 与 instant 一致（纳秒截断）
+        check(Clock.fixed(Instant.ofEpochSecond(1, 999_000_000), ZoneOffset.UTC).millis()
+                == Instant.ofEpochSecond(1, 999_000_000).toEpochMilli(), "millis truncates nanos");
+
+        // withZone 保持 instant
+        Instant base = Instant.ofEpochSecond(500);
+        check(Clock.fixed(base, ZoneOffset.UTC).withZone(ZoneOffset.ofHours(-5)).instant()
+                .equals(base), "withZone keeps instant");
+
+        // equals/hashCode
+        Clock c1 = Clock.fixed(Instant.ofEpochSecond(1), ZoneOffset.UTC);
+        Clock c2 = Clock.fixed(Instant.ofEpochSecond(1), ZoneOffset.UTC);
+        check(c1.equals(c2) && c1.hashCode() == c2.hashCode(), "fixed equals/hashCode");
+        check(!c1.equals(Clock.fixed(Instant.ofEpochSecond(2), ZoneOffset.UTC)),
+                "fixed not equals different instant");
+
+        // tick 分钟边界截断
+        check(Clock.tick(Clock.fixed(Instant.ofEpochSecond(123), ZoneOffset.UTC),
+                Duration.ofSeconds(60)).instant().equals(Instant.ofEpochSecond(120)),
+                "tick truncates to minute boundary");
     }
 
     static void testFixed() {

@@ -59,6 +59,36 @@ public class MonthDayTest {
         testComparison();
         testFormat();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        check(MonthDay.parse(MonthDay.of(1, 1).toString()).equals(MonthDay.of(1, 1)),
+                "round-trip Jan 1");
+        check(MonthDay.parse(MonthDay.of(12, 31).toString()).equals(MonthDay.of(12, 31)),
+                "round-trip Dec 31");
+        check(MonthDay.parse(MonthDay.of(2, 29).toString()).equals(MonthDay.of(2, 29)),
+                "round-trip Feb 29");
+
+        // 每月最大天（月末）
+        check(MonthDay.of(Month.FEBRUARY, 29).isValidYear(2024), "Feb 29 valid in leap");
+        check(MonthDay.of(Month.DECEMBER, 31).isValidYear(2023), "Dec 31 valid");
+        check(MonthDay.of(Month.APRIL, 30).isValidYear(2023), "Apr 30 valid");
+
+        // atYear 钳制：非闰年 2/29 -> 2/28
+        check(MonthDay.of(2, 29).atYear(2023).equals(LocalDate.of(2023, 2, 28)),
+                "atYear Feb 29 non-leap clamps");
+
+        // withDayOfMonth 修改并保持不可变
+        MonthDay mdd = MonthDay.of(2, 29);
+        check(mdd.withDayOfMonth(1).equals(MonthDay.of(2, 1)), "withDayOfMonth");
+        check(mdd.equals(MonthDay.of(2, 29)), "immutability after withDayOfMonth");
+
+        // compareTo 反对称
+        MonthDay a = MonthDay.of(2, 29);
+        MonthDay b = MonthDay.of(3, 1);
+        check(a.compareTo(b) == -b.compareTo(a), "compareTo anti-symmetry");
+
+        // 非法月 0 等价类
+        expectThrows(DateTimeException.class, () -> MonthDay.of(0, 1), "of month 0");
     }
 
     static void testFactories() {

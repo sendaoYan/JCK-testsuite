@@ -64,6 +64,35 @@ public class YearTest {
         testComparison();
         testFormat();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        check(Year.parse(Year.of(Year.MIN_VALUE).toString()).equals(Year.of(Year.MIN_VALUE)),
+                "round-trip MIN");
+        check(Year.parse(Year.of(Year.MAX_VALUE).toString()).equals(Year.of(Year.MAX_VALUE)),
+                "round-trip MAX");
+        check(Year.parse(Year.of(-1).toString()).equals(Year.of(-1)), "round-trip -1");
+        check(Year.parse(Year.of(0).toString()).equals(Year.of(0)), "round-trip 0");
+
+        // length 与 isLeap 一致（极值年份）
+        check(Year.of(Year.MIN_VALUE).length() == (Year.of(Year.MIN_VALUE).isLeap() ? 366 : 365),
+                "MIN length/isLeap consistent");
+        check(Year.of(Year.MAX_VALUE).length() == (Year.of(Year.MAX_VALUE).isLeap() ? 366 : 365),
+                "MAX length/isLeap consistent");
+
+        // 极值邻域运算溢出
+        expectThrows(DateTimeException.class, () -> Year.of(Year.MIN_VALUE).minusYears(1),
+                "MIN minusYears overflow");
+        expectThrows(DateTimeException.class, () -> Year.of(Year.MAX_VALUE).plusYears(1),
+                "MAX plusYears overflow");
+
+        // atDay 年末边界
+        check(Year.of(2023).atDay(365).equals(LocalDate.of(2023, 12, 31)), "atDay 365 non-leap");
+        check(Year.of(2024).atDay(366).equals(LocalDate.of(2024, 12, 31)), "atDay 366 leap");
+
+        // compareTo 反对称
+        Year ya = Year.of(2024);
+        Year yb = Year.of(2025);
+        check(ya.compareTo(yb) == -yb.compareTo(ya), "compareTo anti-symmetry");
     }
 
     static void testFactories() {

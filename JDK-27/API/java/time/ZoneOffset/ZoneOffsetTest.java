@@ -54,6 +54,33 @@ public class ZoneOffsetTest {
         testGettersAndRules();
         testComparison();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        check(ZoneOffset.MIN.getTotalSeconds() == -64800, "MIN totalSeconds");
+        check(ZoneOffset.MAX.getTotalSeconds() == 64800, "MAX totalSeconds");
+        check(ZoneOffset.ofTotalSeconds(64800).getId().equals("+18:00"), "ofTotalSeconds MAX id");
+        check(ZoneOffset.ofTotalSeconds(-64800).getId().equals("-18:00"), "ofTotalSeconds MIN id");
+
+        // round-trip：of(id) == ofTotalSeconds(totalSeconds)
+        for (int sec : new int[]{0, 1, -1, 19800, -19800, 64800, -64800}) {
+            ZoneOffset z = ZoneOffset.ofTotalSeconds(sec);
+            check(ZoneOffset.of(z.getId()).equals(z), "of(id) round-trip " + sec);
+        }
+
+        // getRules 恒等
+        ZoneOffset o = ZoneOffset.ofHours(3);
+        check(o.getRules().getOffset(Instant.EPOCH).equals(o), "rules epoch offset");
+
+        // compareTo 反对称
+        ZoneOffset za = ZoneOffset.ofHours(1);
+        ZoneOffset zb = ZoneOffset.ofHours(2);
+        check(za.compareTo(zb) == -zb.compareTo(za), "compareTo anti-symmetry");
+
+        // ofTotalSeconds 越界
+        expectThrows(DateTimeException.class, () -> ZoneOffset.ofTotalSeconds(64801),
+                "ofTotalSeconds above MAX");
+        expectThrows(DateTimeException.class, () -> ZoneOffset.ofTotalSeconds(-64801),
+                "ofTotalSeconds below MIN");
     }
 
     static void testFactories() {

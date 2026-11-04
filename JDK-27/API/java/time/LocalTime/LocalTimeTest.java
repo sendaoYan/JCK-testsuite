@@ -58,6 +58,32 @@ public class LocalTimeTest {
         testComparison();
         testConversions();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        check(LocalTime.parse(LocalTime.MAX.toString()).equals(LocalTime.MAX), "round-trip MAX");
+        check(LocalTime.parse(LocalTime.MIDNIGHT.toString()).equals(LocalTime.MIDNIGHT),
+                "round-trip MIDNIGHT");
+        check(LocalTime.parse(LocalTime.NOON.toString()).equals(LocalTime.NOON), "round-trip NOON");
+
+        // nano-of-day 极值
+        check(LocalTime.ofNanoOfDay(0).equals(LocalTime.MIDNIGHT), "ofNanoOfDay(0) == MIDNIGHT");
+        check(LocalTime.MAX.toNanoOfDay() == 86_399_999_999_999L, "MAX.toNanoOfDay");
+        check(LocalTime.MAX.toSecondOfDay() == 86_399, "MAX.toSecondOfDay");
+
+        // 纳秒边界回绕
+        check(LocalTime.MAX.plusNanos(1).equals(LocalTime.MIDNIGHT), "MAX plusNanos(1) wraps");
+        check(LocalTime.MIDNIGHT.minusNanos(1).equals(LocalTime.MAX), "MIDNIGHT minusNanos(1) wraps");
+        check(LocalTime.MAX.minusNanos(1).equals(LocalTime.of(23, 59, 59, 999_999_998)),
+                "MAX minusNanos(1)");
+
+        // compareTo 反对称
+        LocalTime ta = LocalTime.of(10, 0);
+        LocalTime tb = LocalTime.of(11, 0);
+        check(ta.compareTo(tb) == -tb.compareTo(ta), "compareTo anti-symmetry");
+
+        // withNano 越界
+        expectThrows(DateTimeException.class, () -> LocalTime.MIDNIGHT.withNano(1_000_000_000),
+                "withNano 1e9 out of range");
     }
 
     static void testFactories() {

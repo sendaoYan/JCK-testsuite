@@ -67,6 +67,32 @@ public class LocalDateTest {
         testConversions();
         testPeriodsAndStreams();
         testErrors();
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // round-trip：parse(toString(x)) == x（MIN/MAX/负年份）
+        check(LocalDate.parse(LocalDate.MIN.toString()).equals(LocalDate.MIN), "round-trip MIN");
+        check(LocalDate.parse(LocalDate.MAX.toString()).equals(LocalDate.MAX), "round-trip MAX");
+        check(LocalDate.parse(LocalDate.of(-1, 1, 1).toString()).equals(LocalDate.of(-1, 1, 1)),
+                "round-trip negative year");
+        check(LocalDate.parse(LocalDate.of(0, 1, 1).toString()).equals(LocalDate.of(0, 1, 1)),
+                "round-trip year zero");
+
+        // 极值邻域：MIN/+1 与 MAX/-1
+        check(LocalDate.MIN.plusDays(1).equals(LocalDate.of(-999999999, 1, 2)), "MIN plusDays(1)");
+        check(LocalDate.MAX.minusDays(1).equals(LocalDate.of(999999999, 12, 30)), "MAX minusDays(1)");
+
+        // epoch 单调性
+        check(LocalDate.MIN.toEpochDay() + 1 == LocalDate.MIN.plusDays(1).toEpochDay(),
+                "toEpochDay monotonic at MIN");
+
+        // 闰日加一年钳制到非闰年 2/28
+        check(LocalDate.of(2024, 2, 29).plusYears(1).equals(LocalDate.of(2025, 2, 28)),
+                "leap day plusYears clamps");
+
+        // compareTo 反对称
+        LocalDate ca = LocalDate.of(2024, 3, 1);
+        LocalDate cb = LocalDate.of(2024, 3, 2);
+        check(ca.compareTo(cb) == -cb.compareTo(ca), "compareTo anti-symmetry");
     }
 
     static void testFactories() {

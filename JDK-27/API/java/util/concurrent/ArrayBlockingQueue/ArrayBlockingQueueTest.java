@@ -12,6 +12,7 @@ import java.util.AbstractQueue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -25,6 +26,17 @@ public class ArrayBlockingQueueTest {
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
+    }
+
+    static void expectThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                    + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
     }
 
     static boolean hasMethod(Class<?> c, String name, Class<?>... p) {
@@ -151,7 +163,7 @@ public class ArrayBlockingQueueTest {
         check(nonFair.peek() == 9, "non-fair constructor works");
     }
 
-    static void testBlackBox() {
+    static void testBlackBox() throws InterruptedException {
         // Constructor (int, boolean, Collection)
         List<String> seed = Arrays.asList("a", "b");
         ArrayBlockingQueue<String> q = new ArrayBlockingQueue<>(4, true, seed);
@@ -209,6 +221,29 @@ public class ArrayBlockingQueueTest {
 
         // toString
         check(q.toString() != null && q.toString().contains("1"), "toString non-null with content");
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // 容量 0 边界（非法）
+        expectThrows(IllegalArgumentException.class, () -> new ArrayBlockingQueue<>(0),
+                "capacity 0 constructor");
+        expectThrows(IllegalArgumentException.class, () -> new ArrayBlockingQueue<>(-1),
+                "capacity negative constructor");
+
+        // 空队列查询边界
+        ArrayBlockingQueue<String> empty = new ArrayBlockingQueue<>(2);
+        expectThrows(NoSuchElementException.class, () -> empty.element(), "element() empty");
+        expectThrows(NoSuchElementException.class, () -> empty.remove(), "remove() empty");
+        check(empty.poll() == null && empty.peek() == null, "poll/peek empty null");
+
+        // 满队列 add 抛异常（offer 语义决定）
+        ArrayBlockingQueue<String> full = new ArrayBlockingQueue<>(2);
+        full.add("a");
+        full.add("b");
+        expectThrows(IllegalStateException.class, () -> full.add("c"), "add() full");
+        check(full.size() == 2, "size unchanged after failed add");
+
+        // 满队列 offer(timeout=0) 立即失败
+        check(!full.offer("c", 0, TimeUnit.NANOSECONDS), "offer(timeout 0) full false");
     }
 
     public static void main(String[] args) throws Exception {

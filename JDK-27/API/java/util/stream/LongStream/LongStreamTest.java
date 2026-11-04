@@ -175,6 +175,33 @@ public class LongStreamTest {
         Spliterator<Long> rawSpl =
             ((BaseStream<Long, LongStream>) LongStream.of(1L, 2L)).spliterator();
         check(rawSpl != null, "BaseStream spliterator()");
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // 空流谓词真空真 / reduce 恒等
+        check(!LongStream.empty().anyMatch(x -> true), "empty anyMatch false");
+        check(LongStream.empty().allMatch(x -> false), "empty allMatch vacuous true");
+        check(LongStream.empty().noneMatch(x -> true), "empty noneMatch true");
+        check(LongStream.empty().reduce(7L, Long::sum) == 7L, "empty reduce identity");
+        check(LongStream.empty().reduce(0L, (a, b) -> a + b) == 0L, "empty reduce identity 0");
+
+        // 单元素极值
+        check(LongStream.of(5L).min().getAsLong() == 5L, "single min");
+        check(LongStream.of(5L).max().getAsLong() == 5L, "single max");
+        check(LongStream.of(5L).sum() == 5L, "single sum");
+        check(LongStream.of(5L).average().getAsDouble() == 5.0, "single average");
+        check(LongStream.of(5L).findFirst().getAsLong() == 5L, "single findFirst");
+
+        // 极值 range
+        check(LongStream.rangeClosed(Long.MAX_VALUE, Long.MAX_VALUE).sum() == Long.MAX_VALUE,
+                "rangeClosed at MAX single element");
+        check(LongStream.range(Long.MAX_VALUE - 1L, Long.MAX_VALUE).count() == 1L,
+                "range near MAX exclusive");
+        check(LongStream.rangeClosed(Long.MIN_VALUE, Long.MIN_VALUE).sum() == Long.MIN_VALUE,
+                "rangeClosed at MIN single element");
+
+        // min/max 吸收律
+        check(LongStream.of(3L, 1L, 2L).min().getAsLong() <= LongStream.of(3L, 1L, 2L).max().getAsLong(),
+                "min <= max");
     }
 
     public static void main(String[] args) throws Exception {

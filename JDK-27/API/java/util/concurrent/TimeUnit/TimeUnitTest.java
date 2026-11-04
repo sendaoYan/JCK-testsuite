@@ -27,6 +27,17 @@ public class TimeUnitTest {
         passed++;
     }
 
+    static void expectThrows(Class<? extends Throwable> type, Runnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                    + " but got " + t.getClass().getSimpleName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = cls("java.util.concurrent.TimeUnit");
@@ -113,6 +124,30 @@ public class TimeUnitTest {
         check(TimeUnit.SECONDS.toChronoUnit() == ChronoUnit.SECONDS, "SECONDS.toChronoUnit");
         check(TimeUnit.NANOSECONDS.convert(Duration.ofNanos(123)) == 123L, "convert(Duration) nanos");
         check(TimeUnit.MICROSECONDS.convert(Duration.ofNanos(1500)) == 1L, "convert(Duration) truncates nanos to micros");
+
+        // ---- 边界值/等价类/等价性（本棒补测） ----
+        // 溢出饱和（不是环绕）
+        check(TimeUnit.NANOSECONDS.convert(Long.MAX_VALUE, TimeUnit.DAYS) == Long.MAX_VALUE,
+                "convert saturates to MAX");
+        check(TimeUnit.NANOSECONDS.convert(Long.MIN_VALUE, TimeUnit.DAYS) == Long.MIN_VALUE,
+                "convert saturates to MIN");
+
+        // 负值截断朝零
+        check(TimeUnit.SECONDS.convert(Duration.ofMillis(-1500)) == -1L,
+                "convert(Duration) negative truncates toward zero");
+        check(TimeUnit.DAYS.convert(-25L, TimeUnit.HOURS) == -1L,
+                "convert negative truncates toward zero");
+
+        // 未映射 ChronoUnit 抛 IllegalArgumentException
+        expectThrows(IllegalArgumentException.class, () -> TimeUnit.of(ChronoUnit.HALF_DAYS),
+                "of(HALF_DAYS) unsupported");
+        expectThrows(IllegalArgumentException.class, () -> TimeUnit.of(ChronoUnit.FOREVER),
+                "of(FOREVER) unsupported");
+
+        // 7 个常量 toChronoUnit 往返
+        for (TimeUnit u : TimeUnit.values()) {
+            check(TimeUnit.of(u.toChronoUnit()) == u, "toChronoUnit/of round-trip " + u);
+        }
     }
 
     public static void main(String[] args) throws Exception {
