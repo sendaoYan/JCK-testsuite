@@ -2,15 +2,23 @@
  * @test
  * @summary java.util.Random conformance: white-box structure plus black-box behavior of
  *          seed reproducibility, nextInt(bound)/nextInt/nextLong/nextDouble/nextFloat ranges,
- *          nextBoolean/nextBytes, nextGaussian determinism, setSeed, and ints/longs/doubles
- *          streams.
+ *          nextBoolean/nextBytes, nextGaussian determinism, setSeed, ints/longs/doubles
+ *          streams, RandomGenerator default methods (origin/bound + nextExponential +
+ *          nextGaussian(mean,stddev)), Random.from factory, and Serializable round-trip.
  * @run main RandomTest
  */
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.random.RandomGenerator;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
+import java.util.stream.DoubleStream;
 
 public class RandomTest {
     static int passed;
@@ -44,6 +52,7 @@ public class RandomTest {
         c.getMethod("nextDouble");
         c.getMethod("nextBytes", byte[].class);
         c.getMethod("ints", long.class);
+        c.getMethod("from", RandomGenerator.class);
         passed++;
     }
 
@@ -146,9 +155,160 @@ public class RandomTest {
         check(a.nextGaussian() == b.nextGaussian(), "nextGaussian deterministic for same seed");
     }
 
+    // ---- 本棒新增：完整契约覆盖 ----
+
+    static void testNextIntBoundMatrix() {
+        Random r = new Random(7L);
+        assertThrows(IllegalArgumentException.class, () -> r.nextInt(0), "nextInt(0) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.nextInt(-1), "nextInt(-1) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.nextInt(Integer.MIN_VALUE),
+                "nextInt(MIN_VALUE) IAE");
+
+        Random p = new Random(123L);
+        for (int i = 0; i < 1000; i++) {
+            int v = p.nextInt(256);
+            check(v >= 0 && v < 256, "nextInt(256) power-of-two in range");
+        }
+        Random big = new Random(456L);
+        for (int i = 0; i < 1000; i++) {
+            int v = big.nextInt(Integer.MAX_VALUE);
+            check(v >= 0 && v < Integer.MAX_VALUE, "nextInt(MAX_VALUE) in range");
+        }
+    }
+
+    static void testNextBytesContract() {
+        Random r = new Random(1L);
+        assertThrows(NullPointerException.class, () -> r.nextBytes(null), "nextBytes(null) NPE");
+        byte[] empty = new byte[0];
+        r.nextBytes(empty);
+        check(empty.length == 0, "nextBytes(empty) ok");
+    }
+
+    static void testGaussianFinite() {
+        Random r = new Random(2024L);
+        Random r2 = new Random(2024L);
+        for (int i = 0; i < 100; i++) {
+            double g = r.nextGaussian();
+            check(!Double.isNaN(g) && !Double.isInfinite(g), "nextGaussian finite");
+            check(g == r2.nextGaussian(), "nextGaussian deterministic");
+        }
+    }
+
+    static void testStreamContracts() {
+        Random r = new Random(1L);
+        assertThrows(IllegalArgumentException.class, () -> r.ints(-1L), "ints(-1) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.ints(-1L, 0, 10), "ints(-1,o,b) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.ints(10, 10, 10), "ints(origin>=bound) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.ints(10, 10), "ints(o>=b) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.longs(-1L), "longs(-1) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.longs(10, 10L, 10L), "longs(o>=b) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.longs(10L, 10L), "longs(o>=b) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.doubles(-1L), "doubles(-1) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.doubles(10, 1.0, 1.0), "doubles(o>=b) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.doubles(1.0, 1.0), "doubles(o>=b) IAE");
+
+        IntStream is = new Random(2L).ints(5000, 10, 20);
+        check(is.allMatch(v -> v >= 10 && v < 20), "ints(origin,bound) range");
+        LongStream ls = new Random(2L).longs(5000, 100L, 200L);
+        check(ls.allMatch(v -> v >= 100L && v < 200L), "longs(origin,bound) range");
+        DoubleStream ds = new Random(2L).doubles(5000, 0.5, 1.5);
+        check(ds.allMatch(v -> v >= 0.5 && v < 1.5), "doubles(origin,bound) range");
+
+        check(new Random(1L).ints(50).count() == 50, "ints(50).count() == 50");
+        check(new Random(1L).ints().limit(77).count() == 77, "ints().limit(77).count() == 77");
+
+        check(Arrays.equals(new Random(42L).ints(100).toArray(), new Random(42L).ints(100).toArray()),
+                "ints deterministic");
+        check(Arrays.equals(new Random(42L).longs(100).toArray(), new Random(42L).longs(100).toArray()),
+                "longs deterministic");
+        check(Arrays.equals(new Random(42L).doubles(100).toArray(), new Random(42L).doubles(100).toArray()),
+                "doubles deterministic");
+    }
+
+    static void testSerialization() throws Exception {
+        Random original = new Random(123456789L);
+        original.nextInt();
+        original.nextLong();
+        original.nextDouble();
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(original);
+        oos.close();
+
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
+        Random revived = (Random) ois.readObject();
+        ois.close();
+
+        boolean same = true;
+        for (int i = 0; i < 50; i++) {
+            if (original.nextInt() != revived.nextInt()) { same = false; break; }
+        }
+        check(same, "Serializable round-trip preserves sequence");
+        check(revived.nextDouble() >= 0.0 && revived.nextDouble() < 1.0,
+                "revived Random still operational");
+    }
+
+    static void testRandomGeneratorDefaults() {
+        Random r = new Random(5L);
+        // nextInt(origin, bound) / nextLong(origin, bound) range + IAE.
+        for (int i = 0; i < 1000; i++) {
+            int v = r.nextInt(-50, 50);
+            check(v >= -50 && v < 50, "nextInt(origin,bound) range");
+        }
+        for (int i = 0; i < 1000; i++) {
+            long v = r.nextLong(-100L, 100L);
+            check(v >= -100L && v < 100L, "nextLong(origin,bound) range");
+        }
+        assertThrows(IllegalArgumentException.class, () -> r.nextInt(5, 5), "nextInt(o==b) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.nextLong(5L, 5L), "nextLong(o==b) IAE");
+
+        // nextDouble(bound) / nextDouble(origin, bound) range + IAE.
+        for (int i = 0; i < 1000; i++) {
+            double v = r.nextDouble(10.0);
+            check(v >= 0.0 && v < 10.0, "nextDouble(bound) range");
+        }
+        for (int i = 0; i < 1000; i++) {
+            double v = r.nextDouble(2.0, 5.0);
+            check(v >= 2.0 && v < 5.0, "nextDouble(origin,bound) range");
+        }
+        assertThrows(IllegalArgumentException.class, () -> r.nextDouble(0.0), "nextDouble(0) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.nextDouble(Double.NaN), "nextDouble(NaN) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.nextDouble(1.0, 1.0), "nextDouble(o==b) IAE");
+        assertThrows(IllegalArgumentException.class, () -> r.nextDouble(Double.NaN, 1.0), "nextDouble(NaN,b) IAE");
+
+        // nextExponential: finite and >= 0.
+        for (int i = 0; i < 100; i++) {
+            double e = r.nextExponential();
+            check(!Double.isNaN(e) && !Double.isInfinite(e) && e >= 0.0, "nextExponential finite and >= 0");
+        }
+
+        // nextGaussian(mean, stddev): finite.
+        for (int i = 0; i < 100; i++) {
+            double g = r.nextGaussian(10.0, 2.0);
+            check(!Double.isNaN(g) && !Double.isInfinite(g), "nextGaussian(mean,stddev) finite");
+        }
+    }
+
+    static void testFromFactory() {
+        Random source = new Random(777L);
+        Random a = Random.from(source);
+        Random b = Random.from(new Random(777L));
+        check(a != null && b != null, "from returns non-null");
+        check(a.nextLong() == b.nextLong() && a.nextInt() == b.nextInt(),
+                "from(factory) reproduces same sequence as source");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNextIntBoundMatrix();
+        testNextBytesContract();
+        testGaussianFinite();
+        testStreamContracts();
+        testSerialization();
+        testRandomGeneratorDefaults();
+        testFromFactory();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
