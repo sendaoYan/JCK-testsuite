@@ -5,6 +5,7 @@
  */
 
 import java.lang.reflect.Modifier;
+import javax.swing.event.ChangeEvent;
 
 public class ChangeEventTest {
     static int passed;
@@ -40,9 +41,19 @@ public class ChangeEventTest {
         check(ev2.toString().contains(srcString), "toString embeds source");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        ChangeEvent e = new ChangeEvent("src");
+        check("src".equals(e.getSource()), "source");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

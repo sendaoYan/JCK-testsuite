@@ -76,9 +76,40 @@ public class StrokeBorderTest {
         check(true, "paintBorder smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        StrokeBorder b = new StrokeBorder(new java.awt.BasicStroke(2f));
+        check(b.getStroke() != null, "stroke");
+        check(b.getBorderInsets(null) != null, "insets");
+    }
+
+
+
+
+    // ---- Part 2b: serialization contract (negative) ----
+    static void testExtraContracts() throws Exception {
+        // StrokeBorder is effectively non-serializable: its BasicStroke field is not Serializable.
+        boolean nse = false;
+        try {
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+            oos.writeObject(new StrokeBorder(new BasicStroke(1.5f)));
+            oos.close();
+            java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                    new java.io.ByteArrayInputStream(bos.toByteArray()));
+            oin.readObject();
+        } catch (java.io.NotSerializableException expected) {
+            nse = true;
+        }
+        check(nse, "StrokeBorder serialization throws NotSerializableException (BasicStroke not Serializable)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

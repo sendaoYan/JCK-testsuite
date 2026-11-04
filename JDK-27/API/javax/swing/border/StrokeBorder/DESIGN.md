@@ -27,3 +27,7 @@ Paint p = painted.getPaint();           // Color.RED
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `AbstractBorder`、非 abstract。
 - 行为（黑盒）：`testBlackBox()` 覆盖——单参构造 stroke round-trip、paint 为 null、边距 `ceil(2.5)==3`；两参构造 paint/stroke round-trip、边距 `ceil(2.0)==2`；零线宽边距 0；null stroke 抛 NPE；`paintBorder` smoke。
+
+## 5. 深化追加（第二轮）
+- 序列化反例：StrokeBorder 实际不可序列化 —— 写出时抛 `java.io.NotSerializableException`（其 `BasicStroke` 字段非 Serializable），JDK-8 与 JDK-27 行为一致（已实证）。
+- 版本说明：StrokeBorder 自 JDK 7 起存在，双侧（JDK-8 与 JDK-27）均可测，并非 JDK-27 独有（javap 确认）。

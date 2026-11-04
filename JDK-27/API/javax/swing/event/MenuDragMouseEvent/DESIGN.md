@@ -39,3 +39,6 @@ menuItem.addMenuDragMouseListener(new MenuDragMouseListener() {
 - 白盒：保留原结构断言（继承 MouseEvent、public、非 abstract、无接口）。
 - 黑盒：用 `new Container()` 作源、`JMenuItem` 构造 `MenuElement[]` 路径、`new MenuSelectionManager()` 管理器（构造器为空，headless 安全），构造 9 参数事件验证 source/id/when/x/y/clickCount/popupTrigger/getPath/getMenuSelectionManager 的 round-trip。
 - 自动化：`testWhiteBox()` + `testBlackBox()`，headless-safe、不碰显示器。
+
+## 5. 深化追加（第二轮）
+- 构造器全重载补缺：9 参（无 modifiersEx 的 deprecated 形式）——source/id/when/modifiers/x/y/clickCount/popupTrigger/path/manager 全部 round-trip。

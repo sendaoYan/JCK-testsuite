@@ -10,6 +10,8 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.event.MouseEvent;
 import javax.swing.event.MouseInputListener;
+import java.util.HashSet;
+import java.util.Set;
 
 public class MouseInputListenerTest {
     static int passed;
@@ -90,9 +92,30 @@ public class MouseInputListenerTest {
         check(last[0].getX() == 9 && last[0].getY() == 10, "moved x/y round-trip");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.MouseInputListener", false, MouseInputListenerTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        check(hasInterface(c, "java.awt.event.MouseListener"), "implements java.awt.event.MouseListener");
+        check(hasInterface(c, "java.awt.event.MouseMotionListener"), "implements java.awt.event.MouseMotionListener");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

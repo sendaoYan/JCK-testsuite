@@ -7,6 +7,7 @@
 import java.lang.reflect.Modifier;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
+import javax.swing.event.TableModelEvent;
 
 public class TableModelEventTest {
     static int passed;
@@ -80,9 +81,20 @@ public class TableModelEventTest {
         check(delete.getType() == javax.swing.event.TableModelEvent.DELETE, "delete type DELETE");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        TableModelEvent e = new TableModelEvent(new javax.swing.table.DefaultTableModel(), 1, 3, 2, TableModelEvent.UPDATE);
+        check(e.getFirstRow() == 1 && e.getLastRow() == 3, "rows");
+        check(e.getColumn() == 2 && e.getType() == TableModelEvent.UPDATE, "column/type");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

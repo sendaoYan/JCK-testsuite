@@ -11,6 +11,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.PlainDocument;
 import javax.swing.text.SimpleAttributeSet;
+import java.util.HashSet;
+import java.util.Set;
 
 public class DocumentListenerTest {
     static int passed;
@@ -96,9 +98,34 @@ public class DocumentListenerTest {
         check("CHANGE".equals(DocumentEvent.EventType.CHANGE.toString()), "CHANGE toString");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.DocumentListener", false, DocumentListenerTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        check(hasInterface(c, "java.util.EventListener"), "implements java.util.EventListener");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("insertUpdate"), "method insertUpdate");
+        check(names.contains("removeUpdate"), "method removeUpdate");
+        check(names.contains("changedUpdate"), "method changedUpdate");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

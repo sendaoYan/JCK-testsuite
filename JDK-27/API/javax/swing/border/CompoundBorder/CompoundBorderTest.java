@@ -77,9 +77,52 @@ public class CompoundBorderTest {
         check(true, "compound paintBorder smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        CompoundBorder b = new CompoundBorder();
+        check(b.getInsideBorder() == null && b.getOutsideBorder() == null, "empty");
+        check(b.getBorderInsets(null) != null, "insets");
+    }
+
+
+
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) oin.readObject();
+    }
+
+    // ---- Part 2b: serialization round-trip + BorderFactory data contracts ----
+    static void testExtraContracts() throws Exception {
+        CompoundBorder cb = new CompoundBorder(new LineBorder(Color.RED, 2), new EmptyBorder(1, 2, 3, 4));
+        CompoundBorder ccopy = roundtrip(cb);
+        check(ccopy != cb, "serialized CompoundBorder distinct instance");
+        check(ccopy.getOutsideBorder() instanceof LineBorder, "serialized outside border preserved");
+        check(ccopy.getInsideBorder() instanceof EmptyBorder, "serialized inside border preserved");
+        LineBorder outer = (LineBorder) ccopy.getOutsideBorder();
+        check(outer.getThickness() == 2 && outer.getLineColor().equals(Color.RED), "serialized outer border data preserved");
+        check(insetsEq(ccopy.getBorderInsets(null), 3, 4, 5, 6), "serialized compound insets preserved");
+
+        javax.swing.border.Border fc = javax.swing.BorderFactory.createCompoundBorder(
+                new EmptyBorder(1, 1, 1, 1), new EmptyBorder(2, 2, 2, 2));
+        check(fc instanceof CompoundBorder, "createCompoundBorder(Border,Border) type");
+        check(insetsEq(fc.getBorderInsets(null), 3, 3, 3, 3), "createCompoundBorder insets summed");
+        javax.swing.border.Border fn = javax.swing.BorderFactory.createCompoundBorder();
+        check(fn instanceof CompoundBorder, "createCompoundBorder() no-arg type");
+        check(insetsEq(fn.getBorderInsets(null), 0, 0, 0, 0), "createCompoundBorder() zero insets");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

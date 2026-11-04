@@ -48,9 +48,19 @@ public class CannotUndoExceptionTest {
         check(e.toString().startsWith("javax.swing.undo.CannotUndoException"), "toString names the exception type");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        CannotUndoException e = new CannotUndoException();
+        check(e instanceof RuntimeException, "is RuntimeException");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

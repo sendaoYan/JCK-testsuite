@@ -75,9 +75,51 @@ public class SoftBevelBorderTest {
         check(true, "paintBorder smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        SoftBevelBorder b = new SoftBevelBorder(SoftBevelBorder.RAISED);
+        check(b.getBevelType() == SoftBevelBorder.RAISED, "type");
+        check(b.getBorderInsets(null) != null, "insets");
+    }
+
+
+
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) oin.readObject();
+    }
+
+    // ---- Part 2b: serialization round-trip + BorderFactory data contracts ----
+    static void testExtraContracts() throws Exception {
+        SoftBevelBorder sb = new SoftBevelBorder(BevelBorder.RAISED, Color.WHITE, Color.BLACK);
+        SoftBevelBorder scopy = roundtrip(sb);
+        check(scopy != sb, "serialized SoftBevelBorder distinct instance");
+        check(scopy.getBevelType() == BevelBorder.RAISED, "serialized soft bevel type preserved");
+        check(!scopy.isBorderOpaque(), "serialized soft bevel still not opaque");
+
+        javax.swing.border.Border sr = javax.swing.BorderFactory.createSoftBevelBorder(BevelBorder.RAISED);
+        check(sr instanceof SoftBevelBorder, "createSoftBevelBorder(int) type");
+        check(((SoftBevelBorder) sr).getBevelType() == BevelBorder.RAISED, "createSoftBevelBorder(int) type round-trip");
+        javax.swing.border.Border sl = javax.swing.BorderFactory.createSoftBevelBorder(BevelBorder.LOWERED, Color.WHITE, Color.BLACK);
+        check(((SoftBevelBorder) sl).getBevelType() == BevelBorder.LOWERED, "createSoftBevelBorder 4-arg lowered");
+        javax.swing.border.Border s4 = javax.swing.BorderFactory.createSoftBevelBorder(BevelBorder.RAISED,
+                Color.WHITE, Color.LIGHT_GRAY, Color.DARK_GRAY, Color.BLACK);
+        check(((SoftBevelBorder) s4).getBevelType() == BevelBorder.RAISED, "createSoftBevelBorder 5-arg raised");
+        check(insetsEq(sr.getBorderInsets(null), 3, 3, 3, 3), "soft bevel factory insets 3");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

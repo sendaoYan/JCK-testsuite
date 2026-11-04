@@ -80,9 +80,55 @@ public class EtchedBorderTest {
         check(true, "paintBorder smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        EtchedBorder b = new EtchedBorder();
+        check(b.getEtchType() == EtchedBorder.LOWERED, "type");
+        check(b.getBorderInsets(null) != null, "insets");
+    }
+
+
+
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) oin.readObject();
+    }
+
+    // ---- Part 2b: serialization round-trip + BorderFactory data contracts ----
+    static void testExtraContracts() throws Exception {
+        EtchedBorder eb = new EtchedBorder(EtchedBorder.RAISED, new Color(1, 2, 3), new Color(4, 5, 6));
+        EtchedBorder copy = roundtrip(eb);
+        check(copy != eb, "serialized EtchedBorder distinct instance");
+        check(copy.getEtchType() == EtchedBorder.RAISED, "serialized etch type preserved");
+        check(copy.getHighlightColor().equals(new Color(1, 2, 3)), "serialized highlight preserved");
+        check(copy.getShadowColor().equals(new Color(4, 5, 6)), "serialized shadow preserved");
+
+        javax.swing.border.Border d = javax.swing.BorderFactory.createEtchedBorder();
+        check(d instanceof EtchedBorder, "createEtchedBorder() type");
+        check(((EtchedBorder) d).getEtchType() == EtchedBorder.LOWERED, "createEtchedBorder() default lowered");
+        javax.swing.border.Border r = javax.swing.BorderFactory.createEtchedBorder(EtchedBorder.RAISED);
+        check(((EtchedBorder) r).getEtchType() == EtchedBorder.RAISED, "createEtchedBorder(int) type round-trip");
+        javax.swing.border.Border cs = javax.swing.BorderFactory.createEtchedBorder(Color.WHITE, Color.BLACK);
+        check(((EtchedBorder) cs).getEtchType() == EtchedBorder.LOWERED, "createEtchedBorder(Color,Color) default type");
+        check(((EtchedBorder) cs).getHighlightColor() == Color.WHITE
+              && ((EtchedBorder) cs).getShadowColor() == Color.BLACK, "createEtchedBorder(Color,Color) colors");
+        javax.swing.border.Border rcs = javax.swing.BorderFactory.createEtchedBorder(EtchedBorder.RAISED, Color.WHITE, Color.BLACK);
+        check(((EtchedBorder) rcs).getEtchType() == EtchedBorder.RAISED, "createEtchedBorder(int,Color,Color) type");
+        check(insetsEq(d.getBorderInsets(null), 2, 2, 2, 2), "etched factory insets 2");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -5,6 +5,7 @@
  */
 
 import java.lang.reflect.Modifier;
+import javax.swing.event.MenuEvent;
 
 public class MenuEventTest {
     static int passed;
@@ -39,9 +40,19 @@ public class MenuEventTest {
         check(menuEvent.toString().contains(menu.toString()), "toString embeds menu source");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        MenuEvent e = new MenuEvent("src");
+        check("src".equals(e.getSource()), "source");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

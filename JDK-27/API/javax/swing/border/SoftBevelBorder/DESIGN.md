@@ -26,3 +26,7 @@ int type = soft.getBevelType();           // BevelBorder.RAISED
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `BevelBorder`、非 abstract。
 - 行为（黑盒）：`testBlackBox()` 覆盖——单参构造类型 round-trip、边距 `(3,3,3,3)`、不透明；两参构造继承 `BevelBorder` 的四色派生；五参构造四色 round-trip；RAISED+LOWERED `paintBorder` smoke。
+
+## 5. 深化追加（第二轮）
+- 序列化 round-trip：bevelType 保持、仍非 opaque。
+- BorderFactory 数据属性：`createSoftBevelBorder(int)`、`(int,Color,Color)`、`(int,Color,Color,Color,Color)`；工厂 insets 恒 (3,3,3,3)。

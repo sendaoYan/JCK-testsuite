@@ -121,9 +121,19 @@ public class UndoableEditSupportTest {
         check(snap.getUndoableEditListeners()[0] == l5, "listener array is a snapshot copy");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        UndoableEditSupport s = new UndoableEditSupport("owner");
+        check(s != null, "constructed");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

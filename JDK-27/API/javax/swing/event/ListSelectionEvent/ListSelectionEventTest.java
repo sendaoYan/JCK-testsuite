@@ -5,6 +5,7 @@
  */
 
 import java.lang.reflect.Modifier;
+import javax.swing.event.ListSelectionEvent;
 
 public class ListSelectionEventTest {
     static int passed;
@@ -49,9 +50,20 @@ public class ListSelectionEventTest {
         check(s.contains("firstIndex= 3") && s.contains("lastIndex= 10"), "toString contains indices");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        ListSelectionEvent e = new ListSelectionEvent("src", 1, 5, false);
+        check(e.getFirstIndex() == 1 && e.getLastIndex() == 5, "indices");
+        check(!e.getValueIsAdjusting(), "adjusting");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

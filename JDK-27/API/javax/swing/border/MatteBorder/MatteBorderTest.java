@@ -81,9 +81,57 @@ public class MatteBorderTest {
         check(true, "paintBorder smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        MatteBorder b = new MatteBorder(1, 2, 3, 4, java.awt.Color.RED);
+        java.awt.Insets i = b.getBorderInsets(null);
+        check(i.top == 1 && i.left == 2 && i.bottom == 3 && i.right == 4, "insets");
+        check(java.awt.Color.RED.equals(b.getMatteColor()), "color");
+    }
+
+
+
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) oin.readObject();
+    }
+
+    // ---- Part 2b: serialization round-trip + BorderFactory data contracts ----
+    static void testExtraContracts() throws Exception {
+        MatteBorder mb = new MatteBorder(2, 3, 4, 5, new Color(9, 9, 9));
+        MatteBorder mcopy = roundtrip(mb);
+        check(mcopy != mb, "serialized MatteBorder distinct instance");
+        check(insetsEq(mcopy.getBorderInsets(), 2, 3, 4, 5), "serialized matte insets preserved");
+        check(mcopy.getMatteColor().equals(new Color(9, 9, 9)), "serialized matte color preserved");
+        check(mcopy.getTileIcon() == null, "serialized matte icon null");
+
+        javax.swing.border.Border fm = javax.swing.BorderFactory.createMatteBorder(6, 7, 8, 9, Color.ORANGE);
+        check(fm instanceof MatteBorder, "createMatteBorder(int x4, Color) type");
+        check(insetsEq(((MatteBorder) fm).getBorderInsets(), 6, 7, 8, 9), "createMatteBorder(int x4, Color) insets");
+        check(((MatteBorder) fm).getMatteColor() == Color.ORANGE, "createMatteBorder color");
+        Icon fic = new Icon() {
+            public int getIconWidth() { return 7; }
+            public int getIconHeight() { return 5; }
+            public void paintIcon(Component c, Graphics g, int x, int y) {}
+        };
+        javax.swing.border.Border fim = javax.swing.BorderFactory.createMatteBorder(1, 2, 3, 4, fic);
+        check(fim instanceof MatteBorder, "createMatteBorder(int x4, Icon) type");
+        check(((MatteBorder) fim).getTileIcon() == fic, "createMatteBorder(int x4, Icon) icon");
+        check(insetsEq(((MatteBorder) fim).getBorderInsets(), 1, 2, 3, 4), "createMatteBorder(int x4, Icon) explicit insets");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -43,3 +43,9 @@ for (ChangeListener l : ls) l.stateChanged(ev);
 - 白盒：保留原结构断言（继承 Object、public、非 abstract、接口只有 Serializable）。
 - 黑盒：初始空容器 → 添加两个 ChangeListener + 一个 ActionListener → 验证总数/分类计数/平铺数组顺序（插入序）→ `getListeners` 逆序 → `remove` 后计数更新 → 清空后回退到空数组 → `add(type, null)` 为 no-op → 类型不匹配抛 `IllegalArgumentException`。
 - 自动化：`testWhiteBox()` + `testBlackBox()`，多步组合操作，headless-safe。
+
+## 5. 深化追加（第二轮）
+- 重复注册：同一 listener add 两次计数为 2、typed 数组可见 2 份；remove 一次后仍剩 1 份。
+- 反例：remove 从未注册的 listener 是文档化 no-op（计数不变）。
+- 未注册类型：`getListeners`/`getListenerCount` 返回空/0。
+- 序列化 round-trip：listener 为可序列化静态类时，计数/typed 数组/元素类型全部保持。

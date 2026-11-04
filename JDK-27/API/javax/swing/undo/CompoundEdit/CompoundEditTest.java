@@ -123,9 +123,23 @@ public class CompoundEditTest {
         check(edge.isInProgress(), "empty compound still in progress");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        CompoundEdit e = new CompoundEdit();
+        check(e.isInProgress(), "in progress");
+        e.end();
+        check(!e.isInProgress(), "ended");
+        check(e.canUndo() && !e.canRedo(), "undoable, not redoable");
+        check(e.getPresentationName() != null, "presentation");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

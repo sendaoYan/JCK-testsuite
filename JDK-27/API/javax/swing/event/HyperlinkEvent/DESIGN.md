@@ -40,3 +40,6 @@ pane.addHyperlinkListener(e -> {
 - 白盒：保留原结构断言（继承 EventObject、public、非 abstract、无接口）。
 - 黑盒：用 `new URL("https://openjdk.org/")`（仅解析不联网）覆盖 3/4/6 参数构造器，验证各 getter 的 round-trip，并确认缺失参数（description/sourceElement/inputEvent）默认为 null；6 参数构造器验证全部字段。
 - 自动化：`testWhiteBox()` + `testBlackBox()`，headless-safe、无网络。
+
+## 5. 深化追加（第二轮）
+- 构造器全重载补缺：5 参（带 Element、无 InputEvent）——sourceElement round-trip、inputEvent 默认 null。

@@ -11,6 +11,8 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
+import java.util.HashSet;
+import java.util.Set;
 
 public class AncestorListenerTest {
     static int passed;
@@ -90,9 +92,34 @@ public class AncestorListenerTest {
               "ANCESTOR_* id constants distinct/stable");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.AncestorListener", false, AncestorListenerTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        check(hasInterface(c, "java.util.EventListener"), "implements java.util.EventListener");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("ancestorAdded"), "method ancestorAdded");
+        check(names.contains("ancestorRemoved"), "method ancestorRemoved");
+        check(names.contains("ancestorMoved"), "method ancestorMoved");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -10,6 +10,9 @@ import javax.swing.undo.AbstractUndoableEdit;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
+import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 
 public class AbstractUndoableEditTest {
     static int passed;
@@ -113,9 +116,40 @@ public class AbstractUndoableEditTest {
         check(s != null && s.contains("hasBeenDone") && s.contains("alive"), "toString identifies state fields");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.undo.AbstractUndoableEdit", false, AbstractUndoableEditTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
+        check(hasInterface(c, "javax.swing.undo.UndoableEdit"), "implements javax.swing.undo.UndoableEdit");
+        check(hasInterface(c, "java.io.Serializable"), "implements java.io.Serializable");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("die"), "method die");
+        check(names.contains("undo"), "method undo");
+        check(names.contains("canUndo"), "method canUndo");
+        check(names.contains("redo"), "method redo");
+        check(names.contains("canRedo"), "method canRedo");
+        check(names.contains("addEdit"), "method addEdit");
+        check(names.contains("replaceEdit"), "method replaceEdit");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

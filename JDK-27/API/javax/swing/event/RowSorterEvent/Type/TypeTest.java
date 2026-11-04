@@ -5,6 +5,9 @@
  */
 
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 
 public class TypeTest {
     static int passed;
@@ -50,9 +53,37 @@ public class TypeTest {
         check(javax.swing.event.RowSorterEvent.Type.valueOf("SORT_ORDER_CHANGED") == orderChanged, "valueOf SORT_ORDER_CHANGED");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.RowSorterEvent$Type", false, TypeTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == true, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == true, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Enum"), "superclass");
+        Object[] en = c.getEnumConstants();
+        check(en != null && en.length == 2, "enum constant count");
+        check(en != null && en.length > 0 && "SORT_ORDER_CHANGED".equals(((Enum) en[0]).name()), "const SORT_ORDER_CHANGED");
+        check(en != null && en.length > 1 && "SORTED".equals(((Enum) en[1]).name()), "const SORTED");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("values"), "method values");
+        check(names.contains("valueOf"), "method valueOf");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

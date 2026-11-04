@@ -129,9 +129,75 @@ public class TitledBorderTest {
         check(true, "paintBorder smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        TitledBorder b = new TitledBorder("Hello");
+        check("Hello".equals(b.getTitle()), "title");
+        check(b.getBorder() != null, "has default border");
+        check(b.getTitlePosition() == TitledBorder.DEFAULT_POSITION, "position");
+        check(b.getTitleJustification() == TitledBorder.LEADING, "justification");
+    }
+
+
+
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) oin.readObject();
+    }
+
+    // ---- Part 2b: serialization round-trip + BorderFactory data contracts ----
+    static void testExtraContracts() throws Exception {
+        TitledBorder tb = new TitledBorder(new LineBorder(Color.BLACK, 2), "Ser",
+                TitledBorder.RIGHT, TitledBorder.BELOW_BOTTOM);
+        TitledBorder tcopy = roundtrip(tb);
+        check(tcopy != tb, "serialized TitledBorder distinct instance");
+        check("Ser".equals(tcopy.getTitle()), "serialized title preserved");
+        check(tcopy.getTitleJustification() == TitledBorder.RIGHT, "serialized justification preserved");
+        check(tcopy.getTitlePosition() == TitledBorder.BELOW_BOTTOM, "serialized position preserved");
+        check(tcopy.getBorder() instanceof LineBorder, "serialized wrapped border preserved");
+        check(tcopy.getTitleColor() != null, "serialized title color resolved");
+
+        javax.swing.border.Border t1 = javax.swing.BorderFactory.createTitledBorder("T1");
+        check(t1 instanceof TitledBorder, "createTitledBorder(String) type");
+        check("T1".equals(((TitledBorder) t1).getTitle()), "createTitledBorder(String) title");
+        javax.swing.border.Border t2 = javax.swing.BorderFactory.createTitledBorder(new EmptyBorder(1, 1, 1, 1));
+        check(((TitledBorder) t2).getBorder() instanceof EmptyBorder, "createTitledBorder(Border) border");
+        check("".equals(((TitledBorder) t2).getTitle()), "createTitledBorder(Border) empty title");
+        javax.swing.border.Border t3 = javax.swing.BorderFactory.createTitledBorder(new EmptyBorder(1, 1, 1, 1), "T3");
+        check("T3".equals(((TitledBorder) t3).getTitle()), "createTitledBorder(Border,String) title");
+        javax.swing.border.Border t4 = javax.swing.BorderFactory.createTitledBorder(
+                new EmptyBorder(1, 1, 1, 1), "T4", TitledBorder.CENTER, TitledBorder.TOP);
+        check(((TitledBorder) t4).getTitleJustification() == TitledBorder.CENTER, "createTitledBorder 4-arg justification");
+        check(((TitledBorder) t4).getTitlePosition() == TitledBorder.TOP, "createTitledBorder 4-arg position");
+        javax.swing.border.Border t5 = javax.swing.BorderFactory.createTitledBorder(
+                new EmptyBorder(1, 1, 1, 1), "T5", TitledBorder.LEFT, TitledBorder.ABOVE_TOP,
+                new Font(Font.DIALOG, Font.ITALIC, 11));
+        check(((TitledBorder) t5).getTitleFont().getSize() == 11, "createTitledBorder 5-arg font size");
+        check(((TitledBorder) t5).getTitleFont().isItalic(), "createTitledBorder 5-arg font style");
+        javax.swing.border.Border t6 = javax.swing.BorderFactory.createTitledBorder(
+                new EmptyBorder(1, 1, 1, 1), "T6", TitledBorder.LEFT, TitledBorder.ABOVE_TOP,
+                new Font(Font.DIALOG, Font.PLAIN, 12), Color.BLUE);
+        check(((TitledBorder) t6).getTitleColor() == Color.BLUE, "createTitledBorder 6-arg color");
+        javax.swing.border.Border t7 = javax.swing.BorderFactory.createTitledBorder(
+                new EmptyBorder(1, 1, 1, 1), "T7", TitledBorder.TRAILING, TitledBorder.BELOW_BOTTOM,
+                new Font(Font.DIALOG, Font.PLAIN, 12), Color.RED);
+        check(((TitledBorder) t7).getTitleJustification() == TitledBorder.TRAILING
+              && ((TitledBorder) t7).getTitlePosition() == TitledBorder.BELOW_BOTTOM,
+              "createTitledBorder 6-arg trailing/below-bottom");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

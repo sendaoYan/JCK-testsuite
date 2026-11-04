@@ -28,3 +28,7 @@ Color ho = raised.getHighlightOuterColor(); // WHITE.brighter()
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `AbstractBorder`、常量 `RAISED==0`/`LOWERED==1`。
 - 行为（黑盒）：`testBlackBox()` 覆盖——单参构造类型 round-trip、颜色全 null、边距 `(2,2,2,2)`、opaque；两参构造四色派生（`brighter()`/原值/原值/`brighter()`）；五参构造四色 round-trip；组件背景四色推导；指定色优先；RAISED+LOWERED `paintBorder` smoke。
+
+## 5. 深化追加（第二轮）
+- 序列化 round-trip：bevelType 与四个颜色逐项保持。
+- BorderFactory 数据属性：`createBevelBorder(int)`、`createLoweredBevelBorder()`、`createBevelBorder(int,Color,Color)`（highlight→inner、shadow→outer）、`createBevelBorder(int,Color,Color,Color,Color)`；工厂 insets 恒 (2,2,2,2)。

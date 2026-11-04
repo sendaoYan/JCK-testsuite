@@ -30,3 +30,7 @@ Color hi = eb.getHighlightColor(label);                  // WHITE.brighter()
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `AbstractBorder`、常量 `RAISED==0`/`LOWERED==1`。
 - 行为（黑盒）：`testBlackBox()` 覆盖——默认 LOWERED 且颜色为 null；边距 `(2,2,2,2)`；`isBorderOpaque()==true`；`EtchedBorder(RAISED)` 类型 round-trip；颜色构造默认 LOWERED 且颜色 round-trip；四参构造 round-trip；组件背景推导 `brighter()/darker()`；指定色优先；`paintBorder` smoke。
+
+## 5. 深化追加（第二轮）
+- 序列化 round-trip：etchType/highlight/shadow 逐项保持。
+- BorderFactory 数据属性：`createEtchedBorder()`（默认 LOWERED）、`(int)`、`(Color,Color)`（默认 LOWERED）、`(int,Color,Color)`；工厂 insets 恒 (2,2,2,2)。

@@ -6,6 +6,9 @@
 
 import java.lang.reflect.Modifier;
 import javax.swing.JInternalFrame;
+import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 
 public class InternalFrameEventTest {
     static int passed;
@@ -57,9 +60,33 @@ public class InternalFrameEventTest {
         check(unknown.paramString().equals("unknown type"), "paramString unknown type");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.InternalFrameEvent", false, InternalFrameEventTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.awt.AWTEvent"), "superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("paramString"), "method paramString");
+        check(names.contains("getInternalFrame"), "method getInternalFrame");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -29,3 +29,7 @@ margin.getBorderInsets(null, reuse);                     // reuse 被覆写为 (
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `AbstractBorder`、实现 `Serializable`、非 abstract。
 - 行为（黑盒）：`testBlackBox()` 覆盖——int 构造与 `Insets` 构造的边距 round-trip；`getBorderInsets(c, insets)` 复用并覆写同一对象；`getBorderInsets()` 每次返回新对象；`null` Insets 构造与 `getBorderInsets(c, null)` 抛 NPE；`isBorderOpaque()==false`；`paintBorder` 空实现 smoke。
+
+## 5. 深化追加（第二轮）
+- 序列化 round-trip：`new EmptyBorder(4,5,6,7)` 反序列化后 insets 逐边保持、仍非 opaque、为新实例。
+- BorderFactory 数据属性：`createEmptyBorder(2,3,4,5)` 类型/insets/非 opaque；`createEmptyBorder()` 零 insets。（注意 `createEmptyBorder(Insets)` 重载不存在，Insets 版本只有 `new EmptyBorder(Insets)` 构造器。）

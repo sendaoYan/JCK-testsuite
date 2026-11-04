@@ -28,3 +28,7 @@ MatteBorder iconBorder = new MatteBorder(tile); // 边距 = (h,w,h,w)
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `EmptyBorder`、非 abstract。
 - 行为（黑盒）：`testBlackBox()` 覆盖——纯色构造边距 round-trip、`getMatteColor`、无图标、opaque；`Insets`+颜色构造；图标构造按图标宽高推导边距 `(5,7,5,7)`、`getTileIcon` round-trip、无颜色、不透明；显式边距+图标构造保留边距；颜色与图标两种 `paintBorder` smoke。
+
+## 5. 深化追加（第二轮）
+- 序列化 round-trip（color 变体）：insets/matteColor 保持、tileIcon 为 null。
+- BorderFactory 数据属性：`createMatteBorder(int,int,int,int,Color)` 与 `(…,Icon)`（只测数据属性；注意 `createMatteBorder(Icon)` 单参重载不存在，icon insets 推导走 `new MatteBorder(Icon)` 构造器）。

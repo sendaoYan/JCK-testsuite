@@ -7,6 +7,7 @@
 import java.lang.reflect.Modifier;
 import javax.swing.undo.AbstractUndoableEdit;
 import javax.swing.undo.UndoableEdit;
+import javax.swing.event.UndoableEditEvent;
 
 public class UndoableEditEventTest {
     static int passed;
@@ -47,9 +48,19 @@ public class UndoableEditEventTest {
         check(customEv.getSource().equals("src"), "custom getSource");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        UndoableEditEvent e = new UndoableEditEvent("src", null);
+        check("src".equals(e.getSource()) && e.getEdit() == null, "source/edit");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

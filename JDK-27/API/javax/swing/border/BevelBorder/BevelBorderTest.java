@@ -85,9 +85,59 @@ public class BevelBorderTest {
         check(true, "paintBorder smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        BevelBorder b = new BevelBorder(BevelBorder.RAISED);
+        check(b.getBevelType() == BevelBorder.RAISED, "type");
+        check(b.getBorderInsets(null) != null, "insets");
+    }
+
+
+
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) oin.readObject();
+    }
+
+    // ---- Part 2b: serialization round-trip + BorderFactory data contracts ----
+    static void testExtraContracts() throws Exception {
+        BevelBorder bb = new BevelBorder(BevelBorder.LOWERED,
+                new Color(1, 1, 1), new Color(2, 2, 2), new Color(3, 3, 3), new Color(4, 4, 4));
+        BevelBorder bcopy = roundtrip(bb);
+        check(bcopy != bb, "serialized BevelBorder distinct instance");
+        check(bcopy.getBevelType() == BevelBorder.LOWERED, "serialized bevel type preserved");
+        check(bcopy.getHighlightOuterColor().equals(new Color(1, 1, 1))
+              && bcopy.getHighlightInnerColor().equals(new Color(2, 2, 2)), "serialized highlight colors preserved");
+        check(bcopy.getShadowOuterColor().equals(new Color(3, 3, 3))
+              && bcopy.getShadowInnerColor().equals(new Color(4, 4, 4)), "serialized shadow colors preserved");
+
+        javax.swing.border.Border raised = javax.swing.BorderFactory.createBevelBorder(BevelBorder.RAISED);
+        check(raised instanceof BevelBorder, "createBevelBorder(int) type");
+        check(((BevelBorder) raised).getBevelType() == BevelBorder.RAISED, "createBevelBorder(int) type round-trip");
+        javax.swing.border.Border lowered = javax.swing.BorderFactory.createLoweredBevelBorder();
+        check(((BevelBorder) lowered).getBevelType() == BevelBorder.LOWERED, "createLoweredBevelBorder lowered");
+        javax.swing.border.Border wc = javax.swing.BorderFactory.createBevelBorder(BevelBorder.RAISED, Color.WHITE, Color.BLACK);
+        check(((BevelBorder) wc).getHighlightInnerColor() == Color.WHITE
+              && ((BevelBorder) wc).getShadowOuterColor() == Color.BLACK, "createBevelBorder(int,Color,Color) colors");
+        javax.swing.border.Border w4 = javax.swing.BorderFactory.createBevelBorder(BevelBorder.LOWERED,
+                Color.WHITE, Color.GRAY, Color.DARK_GRAY, Color.BLACK);
+        check(((BevelBorder) w4).getHighlightOuterColor() == Color.WHITE, "createBevelBorder 5-arg outer highlight");
+        check(((BevelBorder) w4).getShadowInnerColor() == Color.BLACK, "createBevelBorder 5-arg inner shadow");
+        check(insetsEq(raised.getBorderInsets(null), 2, 2, 2, 2), "bevel factory insets 2");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

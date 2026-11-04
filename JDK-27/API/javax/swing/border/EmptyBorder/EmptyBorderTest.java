@@ -79,9 +79,48 @@ public class EmptyBorderTest {
         check(true, "paintBorder no-op smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        EmptyBorder b = new EmptyBorder(1, 2, 3, 4);
+        java.awt.Insets i = b.getBorderInsets(null);
+        check(i.top == 1 && i.left == 2 && i.bottom == 3 && i.right == 4, "insets");
+    }
+
+
+
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) oin.readObject();
+    }
+
+    // ---- Part 2b: serialization round-trip + BorderFactory data contracts ----
+    static void testExtraContracts() throws Exception {
+        EmptyBorder eb = new EmptyBorder(4, 5, 6, 7);
+        EmptyBorder copy = roundtrip(eb);
+        check(copy != eb && copy instanceof EmptyBorder, "serialized EmptyBorder distinct instance");
+        check(insetsEq(copy.getBorderInsets(), 4, 5, 6, 7), "serialized insets preserved");
+        check(!copy.isBorderOpaque(), "serialized border still not opaque");
+
+        javax.swing.border.Border f1 = javax.swing.BorderFactory.createEmptyBorder(2, 3, 4, 5);
+        check(f1 instanceof EmptyBorder, "createEmptyBorder(int,int,int,int) type");
+        check(insetsEq(((EmptyBorder) f1).getBorderInsets(), 2, 3, 4, 5), "createEmptyBorder(int x4) insets");
+        javax.swing.border.Border f0 = javax.swing.BorderFactory.createEmptyBorder();
+        check(insetsEq(((EmptyBorder) f0).getBorderInsets(), 0, 0, 0, 0), "createEmptyBorder() zero insets");
+        check(!f1.isBorderOpaque(), "createEmptyBorder not opaque");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

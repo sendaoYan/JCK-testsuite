@@ -14,6 +14,8 @@ import javax.swing.MenuElement;
 import javax.swing.MenuSelectionManager;
 import javax.swing.event.MenuDragMouseEvent;
 import javax.swing.event.MenuDragMouseListener;
+import java.util.HashSet;
+import java.util.Set;
 
 public class MenuDragMouseListenerTest {
     static int passed;
@@ -92,9 +94,35 @@ public class MenuDragMouseListenerTest {
         check(last[0].isPopupTrigger() == true, "released popupTrigger round-trip");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.MenuDragMouseListener", false, MenuDragMouseListenerTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        check(hasInterface(c, "java.util.EventListener"), "implements java.util.EventListener");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("menuDragMouseEntered"), "method menuDragMouseEntered");
+        check(names.contains("menuDragMouseExited"), "method menuDragMouseExited");
+        check(names.contains("menuDragMouseDragged"), "method menuDragMouseDragged");
+        check(names.contains("menuDragMouseReleased"), "method menuDragMouseReleased");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

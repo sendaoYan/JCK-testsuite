@@ -6,6 +6,9 @@
 
 import java.lang.reflect.Modifier;
 import javax.swing.tree.TreePath;
+import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 
 public class TreeModelEventTest {
     static int passed;
@@ -70,9 +73,54 @@ public class TreeModelEventTest {
         check(ev.toString() != null && ev.toString().length() > 0, "toString non-empty");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.TreeModelEvent", false, TreeModelEventTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.util.EventObject"), "superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getTreePath"), "method getTreePath");
+        check(names.contains("getPath"), "method getPath");
+        check(names.contains("getChildren"), "method getChildren");
+        check(names.contains("getChildIndices"), "method getChildIndices");
+    }
+
+
+    // ---- Part 2b: (TreePath, int[], Object[]) constructor ----
+    static void testExtraContracts() {
+        Object sourceTp = new Object();
+        TreePath tp = new TreePath(new Object[] { "r", "p" });
+        int[] indicesTp = { 0, 2 };
+        Object[] childrenTp = { "c0", "c2" };
+        javax.swing.event.TreeModelEvent ev =
+            new javax.swing.event.TreeModelEvent(sourceTp, tp, indicesTp, childrenTp);
+        check(ev.getSource() == sourceTp, "(TreePath,int[],Object[]) source round-trip");
+        check(ev.getTreePath() == tp, "(TreePath,int[],Object[]) path identity");
+        check(ev.getPath().length == 2 && ev.getPath()[0].equals("r"), "(TreePath,int[],Object[]) getPath");
+        check(ev.getChildIndices().length == 2 && ev.getChildIndices()[0] == 0
+              && ev.getChildIndices()[1] == 2, "(TreePath,int[],Object[]) indices round-trip");
+        check(ev.getChildren().length == 2 && ev.getChildren()[0].equals("c0")
+              && ev.getChildren()[1].equals("c2"), "(TreePath,int[],Object[]) children round-trip");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

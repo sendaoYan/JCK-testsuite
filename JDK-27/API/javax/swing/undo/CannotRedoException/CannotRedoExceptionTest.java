@@ -50,9 +50,19 @@ public class CannotRedoExceptionTest {
         check(withMessage.toString().startsWith("javax.swing.undo.CannotRedoException"), "toString names the exception type");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        CannotRedoException e = new CannotRedoException();
+        check(e instanceof RuntimeException, "is RuntimeException");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

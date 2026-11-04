@@ -5,6 +5,7 @@
  */
 
 import java.lang.reflect.Modifier;
+import javax.swing.event.ListDataEvent;
 
 public class ListDataEventTest {
     static int passed;
@@ -53,9 +54,20 @@ public class ListDataEventTest {
         check(s.contains("index0=4") && s.contains("index1=9"), "toString contains indices");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        ListDataEvent e = new ListDataEvent("src", ListDataEvent.INTERVAL_ADDED, 0, 2);
+        check(e.getIndex0() == 0 && e.getIndex1() == 2, "indices");
+        check(e.getType() == ListDataEvent.INTERVAL_ADDED, "type");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

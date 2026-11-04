@@ -13,6 +13,9 @@ import java.lang.reflect.Modifier;
 
 import javax.swing.border.AbstractBorder;
 import javax.swing.border.EmptyBorder;
+import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 
 public class AbstractBorderTest {
     static int passed;
@@ -96,9 +99,40 @@ public class AbstractBorderTest {
         check(true, "paintBorder no-op smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.border.AbstractBorder", false, AbstractBorderTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == true, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass");
+        check(hasInterface(c, "javax.swing.border.Border"), "implements javax.swing.border.Border");
+        check(hasInterface(c, "java.io.Serializable"), "implements java.io.Serializable");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("paintBorder"), "method paintBorder");
+        check(names.contains("getBorderInsets"), "method getBorderInsets");
+        check(names.contains("getBorderInsets"), "method getBorderInsets");
+        check(names.contains("isBorderOpaque"), "method isBorderOpaque");
+        check(names.contains("getInteriorRectangle"), "method getInteriorRectangle");
+        check(names.contains("getInteriorRectangle"), "method getInteriorRectangle");
+        check(names.contains("getBaseline"), "method getBaseline");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

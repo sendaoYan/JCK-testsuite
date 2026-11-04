@@ -220,9 +220,21 @@ public class UndoManagerTest {
         check(m.lastEditExposed() == D, "lastEdit returns most recent edit");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        UndoManager m = new UndoManager();
+        check(m.getLimit() == 100, "limit");
+        check(m.isInProgress(), "in progress");
+        check(m.getPresentationName() != null, "presentation");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

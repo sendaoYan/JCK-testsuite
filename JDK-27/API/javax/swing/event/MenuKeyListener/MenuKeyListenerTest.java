@@ -14,6 +14,8 @@ import javax.swing.MenuElement;
 import javax.swing.MenuSelectionManager;
 import javax.swing.event.MenuKeyEvent;
 import javax.swing.event.MenuKeyListener;
+import java.util.HashSet;
+import java.util.Set;
 
 public class MenuKeyListenerTest {
     static int passed;
@@ -85,9 +87,34 @@ public class MenuKeyListenerTest {
         check(last[0].getID() == KeyEvent.KEY_RELEASED, "released getID round-trip");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.MenuKeyListener", false, MenuKeyListenerTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        check(hasInterface(c, "java.util.EventListener"), "implements java.util.EventListener");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("menuKeyTyped"), "method menuKeyTyped");
+        check(names.contains("menuKeyPressed"), "method menuKeyPressed");
+        check(names.contains("menuKeyReleased"), "method menuKeyReleased");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -32,3 +32,7 @@ Dimension min = tb.getMinimumSize(component);
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `AbstractBorder`、非 abstract，并校验 6 个位置常量与 6 个对齐常量数值。
 - 行为（黑盒）：`testBlackBox()` 覆盖——单参构造 title + 默认 position/justification；全参构造 title/border/justification/position round-trip；空标题时 `getBorderInsets` 等于被包装边框边距；六类 setter round-trip；非法 position/justification 抛 IAE；空标题 `getMinimumSize==(4,4)`、带标题时尺寸增长；`isBorderOpaque()==false`；基线空标题为 -1、负宽抛 IAE、null 组件抛 NPE；`getBaselineResizeBehavior` 随位置返回 `CONSTANT_ASCENT`/`CONSTANT_DESCENT`；空标题 `paintBorder` smoke。
+
+## 5. 深化追加（第二轮）
+- 序列化 round-trip：title/titleJustification/titlePosition/包裹边框类型保持，titleColor 反序列化后可解析非 null。
+- BorderFactory 数据属性：`createTitledBorder` 六个重载逐个断言 title/border/justification/position/font(size+style)/color。（注意 `TitledBorder(Border)` 构造器把 title 设为空串 ""，不是 null。）

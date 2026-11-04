@@ -6,6 +6,9 @@
 
 import java.lang.reflect.Modifier;
 import javax.swing.text.Element;
+import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 
 public class ElementChangeTest {
     static int passed;
@@ -49,9 +52,34 @@ public class ElementChangeTest {
         check(change.getChildrenAdded()[1] == elem, "added element identity");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.event.DocumentEvent$ElementChange", false, ElementChangeTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(c.isInterface(), "is interface");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() == null, "interface has no superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getElement"), "method getElement");
+        check(names.contains("getIndex"), "method getIndex");
+        check(names.contains("getChildrenRemoved"), "method getChildrenRemoved");
+        check(names.contains("getChildrenAdded"), "method getChildrenAdded");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

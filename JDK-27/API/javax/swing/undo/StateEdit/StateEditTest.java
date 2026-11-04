@@ -8,6 +8,9 @@ import java.lang.reflect.Modifier;
 import java.util.Hashtable;
 import javax.swing.undo.StateEdit;
 import javax.swing.undo.StateEditable;
+import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 
 public class StateEditTest {
     static int passed;
@@ -93,9 +96,35 @@ public class StateEditTest {
         check(exposed.post().get("count").equals(Integer.valueOf(8)), "post-state keeps new value");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static boolean hasInterface(Class<?> c, String name) {
+        for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;
+        return false;
+    }
+
+    // Legacy shallow assertions preserved verbatim from the original JDK-8 test.
+    static void testLegacyShallow() throws Exception {
+        Class<?> c = Class.forName("javax.swing.undo.StateEdit", false, StateEditTest.class.getClassLoader());
+        check(c != null, "forName");
+        check(!c.isInterface(), "is class");
+        check(c.isEnum() == false, "isEnum");
+        check(c.isAnnotation() == false, "isAnnotation");
+        check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
+        check(Modifier.isFinal(c.getModifiers()) == false, "final");
+        check(c.getSuperclass() != null && c.getSuperclass().getName().equals("javax.swing.undo.AbstractUndoableEdit"), "superclass");
+        Set<String> names = new HashSet<String>();
+        for (Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("end"), "method end");
+        check(names.contains("undo"), "method undo");
+        check(names.contains("redo"), "method redo");
+        check(names.contains("getPresentationName"), "method getPresentationName");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLegacyShallow();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

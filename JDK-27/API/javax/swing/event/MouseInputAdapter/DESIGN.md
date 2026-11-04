@@ -41,3 +41,6 @@ c.addMouseMotionListener(a);
 - 断言适配器实例 `instanceof MouseInputListener`。
 
 白盒保留原有结构断言（superclass `MouseAdapter`、abstract、接口 `MouseInputListener`），新增构造器 `protected`。
+
+## 5. 版本差异（JDK-8 vs JDK-27）
+- javap 确认：JDK-8 上 `MouseInputAdapter()` 构造器为 **public**；JDK 9+（含 JDK-27）收窄为 **protected**。JDK-8 侧测试钉住 public，JDK-27 侧测试钉住 protected。

@@ -29,3 +29,7 @@ Border black = LineBorder.createBlackLineBorder();    // 共享的 1px 黑线
 ## 4. 测试用例设计 + 自动化实现
 - 结构（白盒）：`testWhiteBox()` 校验父类 `AbstractBorder`、非 abstract。
 - 行为（黑盒）：`testBlackBox()` 覆盖——全参构造颜色/粗细/圆角 round-trip、边距=thickness、圆角不透明；单参构造默认粗细 1 直角；两参构造边距 `(4,4,4,4)` 直角不透明；黑白工厂单例缓存且颜色/粗细正确；`paintBorder`（圆角+直角）smoke。
+
+## 5. 深化追加（第二轮）
+- 序列化 round-trip：颜色/厚度/圆角逐项保持（注意反序列化后的 `Color` 是新实例，须用 equals 断言）。
+- BorderFactory 数据属性：`createLineBorder(Color)`（厚度 1 直角）、`createLineBorder(Color,int)`、`createLineBorder(Color,int,boolean)`（圆角 → 非 opaque）。

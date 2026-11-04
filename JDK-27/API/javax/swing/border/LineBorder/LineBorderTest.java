@@ -81,9 +81,54 @@ public class LineBorderTest {
         check(true, "paintBorder smoke");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        LineBorder b = new LineBorder(java.awt.Color.BLACK, 2);
+        check(java.awt.Color.BLACK.equals(b.getLineColor()), "color");
+        check(b.getThickness() == 2, "thickness");
+        check(b.getBorderInsets(null) != null, "insets");
+    }
+
+
+
+
+    @SuppressWarnings("unchecked")
+    static <T> T roundtrip(T obj) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(obj);
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return (T) oin.readObject();
+    }
+
+    // ---- Part 2b: serialization round-trip + BorderFactory data contracts ----
+    static void testExtraContracts() throws Exception {
+        LineBorder lb = new LineBorder(new Color(10, 20, 30), 3, true);
+        LineBorder copy = roundtrip(lb);
+        check(copy != lb, "serialized LineBorder distinct instance");
+        check(copy.getLineColor().equals(new Color(10, 20, 30)), "serialized line color preserved");
+        check(copy.getThickness() == 3, "serialized thickness preserved");
+        check(copy.getRoundedCorners(), "serialized rounded corners preserved");
+
+        javax.swing.border.Border c1 = javax.swing.BorderFactory.createLineBorder(Color.MAGENTA);
+        check(c1 instanceof LineBorder, "createLineBorder(Color) type");
+        check(((LineBorder) c1).getThickness() == 1, "createLineBorder(Color) default thickness 1");
+        check(!((LineBorder) c1).getRoundedCorners(), "createLineBorder(Color) square corners");
+        check(((LineBorder) c1).getLineColor() == Color.MAGENTA, "createLineBorder(Color) color");
+        javax.swing.border.Border c2 = javax.swing.BorderFactory.createLineBorder(Color.MAGENTA, 5);
+        check(((LineBorder) c2).getThickness() == 5, "createLineBorder(Color,int) thickness");
+        javax.swing.border.Border c3 = javax.swing.BorderFactory.createLineBorder(Color.MAGENTA, 5, true);
+        check(((LineBorder) c3).getRoundedCorners(), "createLineBorder(Color,int,boolean) rounded");
+        check(!c3.isBorderOpaque(), "createLineBorder rounded not opaque");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
+        testExtraContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

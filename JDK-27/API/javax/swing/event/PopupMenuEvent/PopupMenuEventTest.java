@@ -5,6 +5,7 @@
  */
 
 import java.lang.reflect.Modifier;
+import javax.swing.event.PopupMenuEvent;
 
 public class PopupMenuEventTest {
     static int passed;
@@ -39,9 +40,19 @@ public class PopupMenuEventTest {
         check(menuEvent.toString().contains(menu.toString()), "toString embeds popup source");
     }
 
+
+    // ---- Part 3: legacy shallow coverage (retained; assertions preserved verbatim) ----
+    static void test() throws Exception {
+        PopupMenuEvent e = new PopupMenuEvent("src");
+        check("src".equals(e.getSource()), "source");
+    }
+
+
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        test();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
