@@ -75,7 +75,43 @@ public class PreferenceChangeEventTest {
         check("gone".equals(removal.getKey()), "removal key");
     }
 
+
+    // =====================契约深化：key/newValue/oldValue/source 字段（真实触发，隔离节点） =====================
+    static void testContracts() throws Exception {
+        java.util.prefs.Preferences n = java.util.prefs.Preferences.userRoot().node("/jck/testPCE1");
+        try {
+            final java.util.List<java.util.prefs.PreferenceChangeEvent> events =
+                    java.util.Collections.synchronizedList(new java.util.ArrayList<java.util.prefs.PreferenceChangeEvent>());
+            n.addPreferenceChangeListener(events::add);
+            n.put("k1", "v1");
+            n.sync();
+            check(events.size() == 1, "put fires exactly one event (after sync dispatch)");
+            if (!events.isEmpty()) {
+                java.util.prefs.PreferenceChangeEvent ev = events.get(0);
+                check(ev.getNode() == n, "event node identity");
+                check("k1".equals(ev.getKey()), "event key");
+                check("v1".equals(ev.getNewValue()), "event newValue");
+            }
+            // 移除触发 newValue=null
+            events.clear();
+            n.remove("k1");
+            n.sync();
+            check(events.size() == 1, "remove fires one event");
+            check(events.isEmpty() || events.get(0).getNewValue() == null, "remove event newValue null");
+            // 覆盖触发新值
+            events.clear();
+            n.put("k2", "a");
+            n.put("k2", "b");
+            n.sync();
+            check(events.size() == 2, "two puts fire two events");
+            check("b".equals(events.get(1).getNewValue()), "second event carries new value");
+        } finally {
+            try { n.removeNode(); } catch (Exception ignore) { }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

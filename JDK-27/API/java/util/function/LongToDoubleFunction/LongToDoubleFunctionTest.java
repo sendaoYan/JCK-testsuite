@@ -33,8 +33,23 @@ public class LongToDoubleFunctionTest {
         check(c.applyAsDouble(2) == 2.0, "apply");
         check(c.applyAsDouble(0) == 0, "apply zero");
     }
+
+    // ===================== 契约深化：long->double 有损宽化矩阵 =====================
+    static void testContracts() {
+        LongToDoubleFunction f = n -> (double) n;
+        check(f.applyAsDouble(0L) == 0.0, "zero");
+        check(f.applyAsDouble(Long.MAX_VALUE) == 9.223372036854776E18, "MAX rounds");
+        check(f.applyAsDouble(1L << 52) == 4503599627370496.0, "2^52 exact");
+        check(f.applyAsDouble((1L << 53) + 1) == 9007199254740992.0, "2^53+1 loses bit");
+        LongToDoubleFunction frac = n -> n / 4.0;
+        check(frac.applyAsDouble(5L) == 1.25, "division exact");
+        LongToDoubleFunction mr = n -> Long.valueOf(n).doubleValue();
+        check(mr.applyAsDouble(-7L) == -7.0, "method ref");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

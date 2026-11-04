@@ -66,7 +66,35 @@ public class CalendarNameProviderTest {
               "getDisplayNames values");
     }
 
+
+    // ===================== 契约深化：匿名实现 getDisplayName + null NPE + style 变体 =====================
+    static void testContracts() {
+        final Locale[] locs = {Locale.GERMANY};
+        CalendarNameProvider p = new CalendarNameProvider() {
+            public Locale[] getAvailableLocales() { return locs; }
+            public String getDisplayName(String calendarType, int field, int value, int style, Locale locale) {
+                return calendarType + "-F" + field + "V" + value + "S" + style; }
+            public java.util.Map<String, Integer> getDisplayNames(String calendarType, int field, int style, Locale locale) {
+                return java.util.Collections.singletonMap("only", 1); }
+        };
+        check("gregory-F2V2S1".equals(p.getDisplayName("gregory", java.util.Calendar.MONTH, 2,
+                java.util.Calendar.SHORT_FORMAT, Locale.GERMANY)),
+              "getDisplayName(String,int,int,int,Locale) override behavior");
+        check(p.getDisplayNames("gregory", java.util.Calendar.MONTH,
+                java.util.Calendar.LONG_FORMAT, Locale.GERMANY).get("only") == Integer.valueOf(1),
+              "getDisplayNames override behavior");
+        // Calendar style 常量矩阵（SHORT/LONG x FORMAT/STANDALONE）
+        check(java.util.Calendar.SHORT_FORMAT != java.util.Calendar.LONG_FORMAT
+              && java.util.Calendar.SHORT_STANDALONE != java.util.Calendar.LONG_STANDALONE
+              && java.util.Calendar.SHORT_FORMAT != java.util.Calendar.SHORT_STANDALONE,
+              "four style constants pairwise distinct");
+        // 自有实现 null 容忍
+        check(p.getDisplayName(null, 2, 2, java.util.Calendar.SHORT_FORMAT, Locale.GERMANY).startsWith("null-"),
+              "own impl tolerates null calendarType");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

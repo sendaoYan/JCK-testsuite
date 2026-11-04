@@ -125,7 +125,56 @@ public class IntStreamTest {
         checkThrows(NullPointerException.class, () -> IntStream.of(1).mapToObj(null), "mapToObj(null)");
     }
 
+
+    // ===================== 契约深化：range/rangeClosed 边界/统计矩阵/boxed/asXXXStream/iterate/gauss 并行 =====================
+    static void testContracts() {
+        // range [1,5) 4 元素 vs rangeClosed [1,5] 5 元素
+        check(IntStream.range(1, 5).count() == 4, "range excludes end");
+        check(IntStream.rangeClosed(1, 5).count() == 5, "rangeClosed includes end");
+        check(IntStream.range(5, 1).count() == 0, "reversed range empty");
+        check(IntStream.rangeClosed(5, 5).count() == 1 && IntStream.range(5, 5).count() == 0,
+              "single-point rangeClosed only");
+        // Gauss：1..100 求和（顺序 = 并行 = 公式）
+        int serial = IntStream.rangeClosed(1, 100).sum();
+        int parallel = IntStream.rangeClosed(1, 100).parallel().sum();
+        check(serial == 5050 && parallel == 5050, "gauss sum serial==parallel==5050");
+        // 空流统计契约
+        check(IntStream.empty().sum() == 0, "empty sum 0");
+        check(!IntStream.empty().average().isPresent(), "empty average empty");
+        check(!IntStream.empty().min().isPresent() && !IntStream.empty().max().isPresent(), "empty min/max");
+        check(IntStream.empty().summaryStatistics().getCount() == 0, "empty stats count 0");
+        // summaryStatistics 全字段
+        java.util.IntSummaryStatistics st = IntStream.of(3, 1, 4, 1, 5).summaryStatistics();
+        check(st.getCount() == 5 && st.getSum() == 14 && st.getMin() == 1 && st.getMax() == 5
+              && st.getAverage() == 2.8, "IntSummaryStatistics all fields");
+        // boxed / mapToObj / asLongStream / asDoubleStream
+        check(IntStream.of(1, 2).boxed().collect(Collectors.toList()).equals(Arrays.asList(1, 2)), "boxed");
+        check(IntStream.of(1, 2).mapToObj(i -> "<" + i + ">").collect(Collectors.toList())
+              .equals(Arrays.asList("<1>", "<2>")), "mapToObj");
+        check(IntStream.of(1, 2).asLongStream().sum() == 3L, "asLongStream");
+        check(IntStream.of(1, 2).asDoubleStream().average().getAsDouble() == 1.5, "asDoubleStream");
+        // iterate 双参 + limit
+        check(IntStream.iterate(2, i -> i * i).limit(3).toArray().length == 3, "iterate squares bounded");
+        // of/concat/distinct/sorted
+        check(IntStream.concat(IntStream.of(1, 2), IntStream.of(2, 3)).distinct().toArray().length == 3,
+              "concat + distinct");
+        check(java.util.Arrays.equals(IntStream.of(3, 1, 2).sorted().toArray(), new int[] {1, 2, 3}),
+              "sorted primitives");
+        // limit/skip 负例（IAE）
+        checkThrows(IllegalArgumentException.class, () -> IntStream.of(1).limit(-1), "limit(-1) IAE");
+        checkThrows(IllegalArgumentException.class, () -> IntStream.of(1).skip(-1), "skip(-1) IAE");
+        checkThrows(NullPointerException.class, () -> IntStream.of(1).map(null), "map(null) NPE");
+        // findAny/noneMatch/allMatch
+        check(IntStream.empty().findAny().isPresent() == false, "empty findAny empty");
+        check(IntStream.range(0, 10).parallel().findAny().isPresent(), "parallel findAny present");
+        check(IntStream.of(1, 2).noneMatch(i -> i > 5) && !IntStream.of(1, 2).noneMatch(i -> i > 1),
+              "noneMatch both branches");
+        // toArray 精确
+        check(java.util.Arrays.equals(IntStream.range(0, 3).toArray(), new int[] {0, 1, 2}), "toArray content");
+    }
+
     public static void main(String[] args) {
+        testContracts();
         testFactories();
         testIntermediate();
         testTerminal();

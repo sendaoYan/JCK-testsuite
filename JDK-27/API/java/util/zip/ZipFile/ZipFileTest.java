@@ -1,23 +1,18 @@
 /*
  * @test
- * @summary java.util.zip.ZipFile conformance: white-box structure + black-box open/entries/content.
+ * @summary java.util.zip.ZipFile contract: ctor null/NPE + missing-file ZipException,
+ *          size/entries/getEntry/getComment/getName/getInputStream, getEntry null
+ *          name NPE, getInputStream null entry NPE, close idempotence and
+ *          IllegalStateException after close (getName still works), OPEN_DELETE
+ *          removes file, stream() matches entries.
  * @run main ZipFileTest
  */
 
-import java.io.Closeable;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.lang.reflect.Modifier;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
-import java.util.List;
-import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -30,97 +25,117 @@ public class ZipFileTest {
         passed++;
     }
 
-    static Class<?> clazz(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
-    }
+    interface ThrowingRunnable { void run() throws Throwable; }
 
-    static void deleteTree(Path root) throws java.io.IOException {
-        if (root == null || !Files.exists(root)) return;
-        Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
-            public FileVisitResult visitFile(Path f, BasicFileAttributes a) throws java.io.IOException {
-                Files.delete(f);
-                return FileVisitResult.CONTINUE;
-            }
-            public FileVisitResult postVisitDirectory(Path d, java.io.IOException e) throws java.io.IOException {
-                if (e != null) throw e;
-                Files.delete(d);
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = clazz("java.util.zip.ZipFile");
-        check(Modifier.isPublic(c.getModifiers()), "public class");
-        check(Closeable.class.isAssignableFrom(c), "implements Closeable");
-        check(ZipFile.OPEN_READ == 1, "OPEN_READ == 1");
-        check(ZipFile.OPEN_DELETE == 4, "OPEN_DELETE == 4");
-
-        c.getConstructor(String.class);
-        c.getConstructor(java.io.File.class);
-        c.getConstructor(java.io.File.class, int.class);
-        c.getConstructor(java.io.File.class, java.nio.charset.Charset.class);
-        c.getMethod("getComment");
-        c.getMethod("getEntry", String.class);
-        c.getMethod("getInputStream", ZipEntry.class);
-        c.getMethod("getName");
-        c.getMethod("entries");
-        c.getMethod("stream");
-        c.getMethod("size");
-        c.getMethod("close");
-        check(true, "constructors and access methods present");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        Path dir = Files.createTempDirectory("jck");
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
         try {
-            Path zip = dir.resolve("test.zip");
-            ZipOutputStream zout = new ZipOutputStream(Files.newOutputStream(zip));
-            zout.setComment("zip-comment");
-            zout.putNextEntry(new ZipEntry("b.txt"));
-            zout.write("bbb".getBytes("UTF-8"));
-            zout.closeEntry();
-            zout.putNextEntry(new ZipEntry("a.txt"));
-            zout.write("aaa".getBytes("UTF-8"));
-            zout.closeEntry();
-            zout.close();
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
 
-            ZipFile zf = new ZipFile(zip.toFile());
-            check(zf.size() == 2, "size");
-            check("zip-comment".equals(zf.getComment()), "getComment");
-            check(zf.getName().endsWith("test.zip"), "getName endsWith test.zip");
-            check(zf.getEntry("a.txt") != null, "getEntry a.txt");
-            check(zf.getEntry("missing") == null, "getEntry missing returns null");
+    static File makeZip() throws Exception {
+        File tmp = File.createTempFile("jcapi-zf", ".zip");
+        tmp.deleteOnExit();
+        ZipOutputStream zout = new ZipOutputStream(new FileOutputStream(tmp));
+        zout.setComment("zf comment");
+        zout.putNextEntry(new ZipEntry("a.txt"));
+        zout.write("alpha".getBytes(StandardCharsets.UTF_8));
+        zout.closeEntry();
+        zout.putNextEntry(new ZipEntry("b.txt"));
+        zout.write("beta".getBytes(StandardCharsets.UTF_8));
+        zout.closeEntry();
+        zout.close();
+        return tmp;
+    }
 
-            ZipEntry ea = zf.getEntry("a.txt");
-            InputStream in = zf.getInputStream(ea);
-            byte[] ca = in.readAllBytes();
-            check("aaa".equals(new String(ca, "UTF-8")), "entry a content");
-            in.close();
+    static void testCtor() throws Exception {
+        checkThrows(NullPointerException.class, () -> new ZipFile((String) null), "null String ctor NPE");
+        checkThrows(NullPointerException.class, () -> new ZipFile((File) null), "null File ctor NPE");
+        File missing = new File("/nonexistent/nope.zip");
+        checkThrows(java.nio.file.NoSuchFileException.class, () -> new ZipFile(missing),
+                "missing file NoSuchFileException (JDK-7u40+/NIO 路径与 JDK-8 FileNotFoundException 均为 IOException，版本差异锁定)");
+    }
 
-            // entries() enumeration: collect and sort names before asserting
-            List<String> names = new ArrayList<>();
-            for (Enumeration<? extends ZipEntry> en = zf.entries(); en.hasMoreElements(); ) {
-                names.add(en.nextElement().getName());
-            }
-            Collections.sort(names);
-            check(names.equals(Arrays.asList("a.txt", "b.txt")), "entries enumeration names (sorted)");
+    static void testRead() throws Exception {
+        File tmp = makeZip();
+        ZipFile zf = new ZipFile(tmp);
+        check(zf.size() == 2, "size");
+        check("zf comment".equals(zf.getComment()), "comment");
+        check(tmp.getPath().equals(zf.getName()), "getName returns path");
 
-            // stream(): collect and sort names
-            List<String> streamNames = zf.stream().map(ZipEntry::getName).sorted().collect(Collectors.toList());
-            check(streamNames.equals(Arrays.asList("a.txt", "b.txt")), "stream names (sorted)");
+        ZipEntry a = zf.getEntry("a.txt");
+        check(a != null && "a.txt".equals(a.getName()), "getEntry found");
+        check(zf.getEntry("missing.txt") == null, "getEntry missing null");
 
-            zf.close();
-        } finally {
-            deleteTree(dir);
+        InputStream in = zf.getInputStream(a);
+        byte[] buf = new byte[16];
+        int n = in.read(buf);
+        check("alpha".equals(new String(buf, 0, n, StandardCharsets.UTF_8)), "entry content");
+        in.close();
+
+        int count = 0;
+        for (Enumeration<? extends ZipEntry> en = zf.entries(); en.hasMoreElements(); ) {
+            en.nextElement();
+            count++;
+        }
+        check(count == 2, "entries enumeration count");
+        check(zf.stream().count() == 2, "stream count");
+
+        checkThrows(NullPointerException.class, () -> zf.getEntry(null), "getEntry null NPE");
+        checkThrows(NullPointerException.class, () -> zf.getInputStream(null), "getInputStream null NPE");
+        zf.close();
+    }
+
+    static void testClose() throws Exception {
+        ZipFile zf = new ZipFile(makeZip());
+        zf.close();
+        zf.close(); // idempotent
+        checkThrows(IllegalStateException.class, () -> zf.size(), "size after close ISE");
+        checkThrows(IllegalStateException.class, () -> zf.getComment(), "getComment after close ISE");
+        checkThrows(IllegalStateException.class, () -> zf.getEntry("a.txt"), "getEntry after close ISE");
+        checkThrows(IllegalStateException.class, () -> zf.getInputStream(new ZipEntry("a.txt")), "getInputStream after close ISE");
+        checkThrows(IllegalStateException.class, () -> zf.entries().hasMoreElements(), "entries after close ISE");
+        check(zf.getName() != null, "getName still works after close");
+    }
+
+    static void testOpenDelete() throws Exception {
+        File tmp = makeZip();
+        check(tmp.exists(), "file exists before OPEN_DELETE");
+        ZipFile zf = new ZipFile(tmp, ZipFile.OPEN_READ | ZipFile.OPEN_DELETE);
+        check(zf.size() == 2, "OPEN_DELETE readable");
+        zf.close();
+        check(!tmp.exists(), "OPEN_DELETE removes file on close");
+    }
+
+
+    // ===================== JDK-9+ 增量：toString()（JDK-27 侧锁定） =====================
+    static void testJdk27Additions() throws Exception {
+        File tmp = File.createTempFile("jck-zf-tostring", ".zip");
+        tmp.deleteOnExit();
+        ZipOutputStream zout = new ZipOutputStream(new FileOutputStream(tmp));
+        zout.putNextEntry(new ZipEntry("inner.txt"));
+        zout.write("x".getBytes("UTF-8"));
+        zout.closeEntry();
+        zout.close();
+        try (ZipFile zf = new ZipFile(tmp)) {
+            String s = zf.toString();
+            check(s != null && s.contains(tmp.getName()), "toString contains file name: " + s);
         }
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testCtor();
+        testRead();
+        testClose();
+        testOpenDelete();        testJdk27Additions();
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -68,7 +68,40 @@ public class StreamSupportTest {
         checkThrows(NullPointerException.class, () -> StreamSupport.doubleStream(null, false), "doubleStream null NPE");
     }
 
+
+    // ===================== 契约深化：特性位透传/并行标志/trySplit 内容/原语变体一致性 =====================
+    static void testContracts() {
+        java.util.List<Integer> data = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
+        java.util.Spliterator<Integer> sp = StreamSupport.stream(data.spliterator(), false).spliterator();
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED), "ORDERED propagated");
+        check(sp.hasCharacteristics(java.util.Spliterator.SIZED), "SIZED propagated");
+        check(StreamSupport.stream(data.spliterator(), false)
+              .collect(java.util.stream.Collectors.toList()).equals(data), "sequential stream content");
+        check(StreamSupport.stream(data.spliterator(), true).isParallel(), "parallel flag true");
+        // SIZED + getExactSizeIfKnown
+        check(StreamSupport.stream(data.spliterator(), false).spliterator().getExactSizeIfKnown() == 8,
+              "exact size known");
+        // intStream：range spliterator
+        java.util.Spliterator.OfInt isp = java.util.Spliterators.spliterator(new int[] {10, 20, 30},
+              java.util.Spliterator.ORDERED | java.util.Spliterator.SIZED);
+        check(StreamSupport.stream(isp, false).mapToInt(Integer::intValue).sum() == 60, "OfInt spliterator stream sum");
+        check(StreamSupport.intStream(java.util.Spliterators.spliterator(new int[] {1, 2}, 0), false).count() == 2,
+              "intStream from plain spliterator");
+        check(StreamSupport.longStream(java.util.Spliterators.spliterator(new long[] {5L}, 0), false).sum() == 5L,
+              "longStream");
+        check(StreamSupport.doubleStream(java.util.Spliterators.spliterator(new double[] {2.5}, 0), false).sum() == 2.5,
+              "doubleStream");
+        // null spliterator NPE
+        checkThrows(NullPointerException.class, () -> StreamSupport.stream(null, false), "stream(null) NPE");
+        // supplier 形式：多次 getStream 独立
+        java.util.function.Supplier<java.util.Spliterator<Integer>> sup = () -> data.spliterator();
+        Stream<Integer> s1 = StreamSupport.stream(sup, java.util.Spliterator.ORDERED, false);
+        Stream<Integer> s2 = StreamSupport.stream(sup, java.util.Spliterator.ORDERED, false);
+        check(s1.count() == 8 && s2.count() == 8, "supplier form supports independent streams");
+    }
+
     public static void main(String[] args) {
+        testContracts();
         testStream();
         testStreamSupplier();
         testPrimitiveStreams();

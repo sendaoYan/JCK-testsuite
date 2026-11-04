@@ -52,7 +52,48 @@ public class SocketHandlerTest {
                 "(String,int) constructor declares IOException");
     }
 
+
+    // ===================== 契约深化：回环线路发送（ServerSocket 接收 XML 流）/默认 XMLFormatter/临时端口清理 =====================
+    static void testContracts() throws Exception {
+        try (java.net.ServerSocket ss = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            final java.net.Socket[] accepted = new java.net.Socket[1];
+            Thread acceptor = new Thread(() -> {
+                try { accepted[0] = ss.accept(); } catch (java.io.IOException e) { }
+            });
+            acceptor.start();
+            java.util.logging.SocketHandler sh = new java.util.logging.SocketHandler("127.0.0.1", ss.getLocalPort());
+            try {
+                check(sh.getFormatter() instanceof java.util.logging.XMLFormatter, "default XMLFormatter");
+                check(sh.getEncoding() == null, "default encoding null");
+                sh.publish(new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "over-wire"));
+                sh.flush();
+                acceptor.join(5000);
+                check(accepted[0] != null, "connection accepted on loopback");
+                if (accepted[0] != null) {
+                    accepted[0].setSoTimeout(2000);
+                    StringBuilder wire = new StringBuilder();
+                    try {
+                        java.io.InputStream in = accepted[0].getInputStream();
+                        byte[] buf = new byte[4096];
+                        int n;
+                        while ((n = in.read(buf)) > 0) wire.append(new String(buf, 0, n, "UTF-8"));
+                    } catch (java.net.SocketTimeoutException expected) { }
+                    check(wire.toString().contains("over-wire"), "record traversed the wire: " + wire.length() + " bytes");
+                    accepted[0].close();
+                }
+            } finally {
+                sh.close();
+            }
+        }
+        // 主机名 null -> IllegalArgumentException（"Null host name"）
+        try {
+            new java.util.logging.SocketHandler(null, 1);
+            check(false, "SocketHandler(null host) IAE");
+        } catch (IllegalArgumentException e) { check(true, "SocketHandler(null host) IAE"); }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

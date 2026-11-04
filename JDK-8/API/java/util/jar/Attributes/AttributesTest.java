@@ -208,7 +208,71 @@ public class AttributesTest {
         testInvalidNames();
     }
 
+
+    // ===================== 契约深化：类型检查/Name 合法性矩阵/clone 深拷贝/视图写通道 =====================
+    static void testContracts() throws Exception {
+        Attributes a = new Attributes();
+        expectThrows(ClassCastException.class, () -> a.put("not-a-name", "v"));
+        expectThrows(ClassCastException.class, () -> a.put(new Name("Ok-Name"), Integer.valueOf(42)));
+        expectThrows(NullPointerException.class, () -> a.getValue((String) null));
+        check(a.getValue((Name) null) == null, "getValue(null Name) returns null");
+        expectThrows(IllegalArgumentException.class, () -> new Attributes(-1));
+        new Attributes(0);   // 容量 0 合法（按默认处理）
+        check(true, "Attributes(0) legal");
+        // Name 合法性矩阵（实测：字母数字/_/-合法；空格/:/{/*/./@ 非法；长度 <=70）
+        String[] valid = {"a", "ab", "Manifest-Version", "x", "digit123", "under_score", "hyphen-name",
+                          "70charsxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"};
+        for (String s : valid) {
+            Name n = new Name(s);
+            check(n.toString().equals(s), "Name valid: " + s);
+        }
+        String[] invalid = {"has space", "colon:", "brace{}", "dot.name", "star*", "at@"};
+        for (String s : invalid) {
+            expectThrows(IllegalArgumentException.class, () -> new Name(s));
+        }
+        expectThrows(NullPointerException.class, () -> new Name(null));
+        // Name equals/hashCode 大小写不敏感
+        Name n1 = new Name("AbC-d"), n2 = new Name("aBC-D");
+        check(n1.equals(n2) && n1.hashCode() == n2.hashCode(), "Name case-insensitive equals/hashCode");
+        check(!n1.equals(new Name("aBC-e")), "Name not equal different suffix");
+        check(!n1.equals("AbC-d"), "Name not equal to String");
+        // 常量 toString 精确
+        check("Manifest-Version".equals(Name.MANIFEST_VERSION.toString()), "MANIFEST_VERSION text");
+        check("Main-Class".equals(Name.MAIN_CLASS.toString()), "MAIN_CLASS text");
+        check("Sealed".equals(Name.SEALED.toString()), "SEALED text");
+        check("Content-Type".equals(Name.CONTENT_TYPE.toString()), "CONTENT_TYPE text");
+        // clone 深拷贝
+        Attributes orig = new Attributes();
+        orig.putValue("Alpha", "1");
+        Attributes copy = (Attributes) orig.clone();
+        check(copy.getValue("Alpha").equals("1"), "clone copies mappings");
+        orig.putValue("Beta", "2");
+        check(copy.getValue("Beta") == null && copy.size() == 1, "clone is shallow-copied map, independent");
+        // entrySet 迭代器 remove 反映回 map
+        Attributes it = new Attributes();
+        it.putValue("K1", "v1");
+        it.putValue("K2", "v2");
+        java.util.Iterator<Map.Entry<Object, Object>> i = it.entrySet().iterator();
+        i.next();
+        i.remove();
+        check(it.size() == 1, "entrySet iterator.remove writes through");
+        // putAll 另一 Attributes（大小写折叠）
+        Attributes src2 = new Attributes();
+        src2.putValue("Common", "x");
+        Attributes dst = new Attributes();
+        dst.putValue("COMMON", "y");
+        dst.putAll(src2);
+        check(dst.size() == 1 && "x".equals(dst.getValue("common")), "putAll case-collapses to source value");
+        // Map 通用 containsKey 对 String 键（非 Name）不命中
+        Attributes cks = new Attributes();
+        cks.putValue("Foo", "bar");
+        check(!cks.containsKey("Foo"), "containsKey(String) does not match");
+        check(cks.containsKey(new Name("FOO")), "containsKey(Name) case-insensitive");
+        check(cks.remove("Foo") == null, "remove(String) returns null without CCE (no match)");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

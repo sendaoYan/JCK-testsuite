@@ -111,7 +111,59 @@ public class DoubleStreamTest {
         checkThrows(NullPointerException.class, () -> DoubleStream.of(1.0).mapToObj(null), "mapToObj(null)");
     }
 
+
+    // ===================== 契约深化：NaN/Inf 排序矩阵/统计（空 min=+Inf）/求和精确性/boxed =====================
+    static void testContracts() {
+        // 空统计：min=+Inf max=-Inf（方向锁定）
+        java.util.DoubleSummaryStatistics empty = DoubleStream.empty().summaryStatistics();
+        check(empty.getCount() == 0 && empty.getSum() == 0.0, "empty stats");
+        check(empty.getMin() == Double.POSITIVE_INFINITY && empty.getMax() == Double.NEGATIVE_INFINITY,
+              "empty min +Inf / max -Inf");
+        check(!DoubleStream.empty().average().isPresent(), "empty average");
+        // 全字段
+        java.util.DoubleSummaryStatistics st = DoubleStream.of(2.5, 0.5, 1.5).summaryStatistics();
+        check(st.getCount() == 3 && st.getSum() == 4.5 && st.getMin() == 0.5 && st.getMax() == 2.5
+              && st.getAverage() == 1.5, "DoubleSummaryStatistics all fields");
+        // NaN/Inf 语义：sum 传播 NaN；max 含 NaN 时行为锁定（NaN 最大）
+        check(Double.isNaN(DoubleStream.of(1.0, Double.NaN).sum()), "NaN propagates in sum");
+        check(Double.isInfinite(DoubleStream.of(1.0, Double.POSITIVE_INFINITY).sum()), "Inf propagates");
+        // sorted：NaN 视为最大排在最后
+        double[] sortedNaN = DoubleStream.of(3.0, Double.NaN, 1.0).sorted().toArray();
+        check(sortedNaN[0] == 1.0 && sortedNaN[1] == 3.0 && Double.isNaN(sortedNaN[2]), "sorted puts NaN last");
+        // -0.0 vs 0.0：distinct 折叠（== 语义）
+        check(DoubleStream.of(-0.0, 0.0).distinct().count() == 2,
+              "distinct keeps -0.0 and 0.0 distinct (boxing equals semantics)");
+        // boxed/mapToObj/asLongStream
+        check(DoubleStream.of(1.5, 2.5).boxed().collect(Collectors.toList()).equals(Arrays.asList(1.5, 2.5)),
+              "boxed");
+        check(DoubleStream.of(1.5).mapToObj(String::valueOf).findFirst().get().equals("1.5"), "mapToObj");
+        // iterate/generate + limit
+        check(java.util.Arrays.equals(DoubleStream.iterate(1.0, d -> d / 2).limit(3).toArray(),
+              new double[] {1.0, 0.5, 0.25}), "iterate halves");
+        check(DoubleStream.generate(() -> 2.5).limit(2).sum() == 5.0, "generate constant");
+        // concat/average 精确
+        check(DoubleStream.concat(DoubleStream.of(1.0), DoubleStream.of(2.0)).average().getAsDouble() == 1.5,
+              "concat average");
+        checkThrows(IllegalArgumentException.class, () -> DoubleStream.of(1).limit(-1), "limit(-1) IAE");
+        checkThrows(NullPointerException.class, () -> DoubleStream.of(1).map(null), "map(null) NPE");
+        // parallel 全等（无 NaN 数据）
+        check(java.util.Arrays.equals(DoubleStream.of(3.5, 1.5, 2.5).parallel().sorted().toArray(),
+              DoubleStream.of(3.5, 1.5, 2.5).sorted().toArray()), "parallel sorted == sequential");
+    }
+
+
+    // ===================== JDK-9+/16+ 增量：takeWhile/dropWhile/mapMulti/iterate 三参（JDK-27 侧锁定） =====================
+    static void testJdk27Additions() {
+        check(DoubleStream.of(1, 2, 3, 1).takeWhile(d -> d < 3).count() == 2, "takeWhile prefix");
+        check(DoubleStream.of(1, 2, 3, 1).dropWhile(d -> d < 3).count() == 2, "dropWhile rest");
+        check(java.util.Arrays.equals(DoubleStream.of(1, 2).mapMulti((d, sink) -> { sink.accept(d); sink.accept(d * 10); }).toArray(),
+              new double[] {1, 10, 2, 20}), "mapMulti expands (DoubleConsumer sink keeps primitive)");
+        check(DoubleStream.iterate(1.0, d -> d < 2.0, d -> d * 2).count() == 1, "iterate 3-arg");
+    }
+
     public static void main(String[] args) {
+        testJdk27Additions();
+        testContracts();
         testFactories();
         testIntermediate();
         testTerminal();

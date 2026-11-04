@@ -107,7 +107,46 @@ public class LongStreamTest {
         checkThrows(NullPointerException.class, () -> LongStream.of(1L).mapToObj(null), "mapToObj(null)");
     }
 
+
+    // ===================== 契约深化：range 边界/Gauss 大数/溢出语义/统计/boxed/asDoubleStream =====================
+    static void testContracts() {
+        check(LongStream.range(1, 5).count() == 4, "range excludes end");
+        check(LongStream.rangeClosed(1, 5).count() == 5, "rangeClosed includes end");
+        // Gauss 1..10^6（顺序 = 并行 = 公式）
+        long n = 1_000_000L;
+        long serial = LongStream.rangeClosed(1, n).sum();
+        long parallel = LongStream.rangeClosed(1, n).parallel().sum();
+        check(serial == n * (n + 1) / 2 && parallel == serial, "gauss 1e6 serial==parallel==formula");
+        // int 域越界求和 long 不溢出
+        check(LongStream.rangeClosed(2_000_000_000L, 2_000_000_002L).sum() == 6_000_000_003L,
+              "sum beyond int range exact");
+        // 统计
+        java.util.LongSummaryStatistics st = LongStream.of(5L, 1L, 3L).summaryStatistics();
+        check(st.getCount() == 3 && st.getSum() == 9L && st.getMin() == 1L && st.getMax() == 5L
+              && st.getAverage() == 3.0, "LongSummaryStatistics all fields");
+        check(LongStream.empty().sum() == 0L && !LongStream.empty().average().isPresent(),
+              "empty stats contracts");
+        // boxed/asDoubleStream/mapToObj
+        check(LongStream.of(1L, 2L).boxed().collect(Collectors.toList()).equals(Arrays.asList(1L, 2L)), "boxed");
+        check(LongStream.of(1L, 2L).asDoubleStream().average().getAsDouble() == 1.5, "asDoubleStream");
+        check(LongStream.of(1L, 2L).mapToObj(String::valueOf).collect(Collectors.toList())
+              .equals(Arrays.asList("1", "2")), "mapToObj");
+        // distinct/sorted/concat
+        check(java.util.Arrays.equals(LongStream.of(3, 1, 1, 2).sorted().distinct().toArray(),
+              new long[] {1, 2, 3}), "sorted+distinct");
+        check(LongStream.concat(LongStream.of(1), LongStream.of(2)).sum() == 3L, "concat");
+        // iterate + limit
+        check(java.util.Arrays.equals(LongStream.iterate(1L, i -> i + 1).limit(4).toArray(),
+              new long[] {1, 2, 3, 4}), "iterate bounded");
+        checkThrows(IllegalArgumentException.class, () -> LongStream.of(1).limit(-1), "limit(-1) IAE");
+        checkThrows(NullPointerException.class, () -> LongStream.of(1).map(null), "map(null) NPE");
+        // parallel range 全等
+        check(java.util.Arrays.equals(LongStream.range(0, 50).parallel().sorted().toArray(),
+              LongStream.range(0, 50).sorted().toArray()), "parallel sorted == sequential");
+    }
+
     public static void main(String[] args) {
+        testContracts();
         testFactories();
         testIntermediate();
         testTerminal();

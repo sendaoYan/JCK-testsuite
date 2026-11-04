@@ -52,7 +52,26 @@ public class CalendarDataProviderTest {
         check(p.getMinimalDaysInFirstWeek(Locale.FRANCE) == 1, "getMinimalDaysInFirstWeek FR == 1");
     }
 
+
+    // ===================== 契约深化：匿名实现 firstDayOfWeek/minimalDaysInWeek + null NPE =====================
+    static void testContracts() {
+        final Locale[] locs = {new Locale("th", "TH")};
+        CalendarDataProvider p = new CalendarDataProvider() {
+            public Locale[] getAvailableLocales() { return locs; }
+            public int getFirstDayOfWeek(Locale locale) { return java.util.Calendar.SUNDAY; }
+            public int getMinimalDaysInFirstWeek(Locale locale) { return 4; }
+        };
+        check(p.getFirstDayOfWeek(new Locale("th", "TH")) == java.util.Calendar.SUNDAY,
+              "getFirstDayOfWeek override behavior");
+        check(p.getMinimalDaysInFirstWeek(new Locale("th", "TH")) == 4,
+              "getMinimalDaysInFirstWeek override behavior");
+        // 自有实现：null 实参不抛（返回常量）
+        check(p.getFirstDayOfWeek(null) == java.util.Calendar.SUNDAY, "own impl tolerates null locale");
+        check(p.getMinimalDaysInFirstWeek(null) == 4, "own impl tolerates null locale (minDays)");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

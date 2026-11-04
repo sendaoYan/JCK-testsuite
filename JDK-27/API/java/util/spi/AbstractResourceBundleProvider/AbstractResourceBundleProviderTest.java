@@ -87,7 +87,34 @@ public class AbstractResourceBundleProviderTest {
                      "getBundle null locale");
     }
 
+
+    // ===================== 契约深化：受保护构造器 format 校验 + toBundleName 默认（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        AbstractResourceBundleProvider p = new AbstractResourceBundleProvider("java.class") {};
+        check(p != null, "anonymous subclass of java.class provider constructible");
+        // 非法 format IAE
+        try {
+            new AbstractResourceBundleProvider("jck.invalid") {};
+            check(false, "invalid format IAE");
+        } catch (IllegalArgumentException e) { check(true, "invalid format IAE"); }
+        try {
+            new AbstractResourceBundleProvider("java.class", "java.properties") {};
+            check(true, "two valid formats accepted");
+        } catch (IllegalArgumentException e) { check(false, "two valid formats must be accepted"); }
+        // null format -> IllegalArgumentException（空串表校验，锁定非 NPE）
+        try {
+            new AbstractResourceBundleProvider((String) null) {};
+            check(false, "null format throws");
+        } catch (IllegalArgumentException e) { check(true, "null format IAE (locked)"); }
+        // java.any 不被构造器接受（仅 java.class/java.properties）
+        try {
+            new AbstractResourceBundleProvider("java.any") {};
+            check(false, "java.any ctor IAE");
+        } catch (IllegalArgumentException e) { check(true, "java.any ctor IAE (locked)"); }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

@@ -41,7 +41,32 @@ public class ResourceBundleControlProviderTest {
               "returned control is a real Control");
     }
 
+
+    // ===================== 契约深化：匿名实现返回 Control + Control 关键不变量 =====================
+    static void testContracts() {
+        ResourceBundleControlProvider p = new ResourceBundleControlProvider() {
+            public java.util.ResourceBundle.Control getControl(String baseName) {
+                return "jck.prefixed".equals(baseName) ? java.util.ResourceBundle.Control.getControl(
+                        java.util.ResourceBundle.Control.FORMAT_DEFAULT) : null;
+            }
+        };
+        check(p.getControl("jck.prefixed") != null, "matching baseName yields Control");
+        check(p.getControl("other") == null, "non-matching baseName yields null");
+        // Control 不变量：FORMAT_DEFAULT 含 java.class/java.properties
+        java.util.List<String> fmts = java.util.ResourceBundle.Control.FORMAT_DEFAULT;
+        check(fmts.contains("java.class") && fmts.contains("java.properties"), "FORMAT_DEFAULT contents");
+        check(java.util.ResourceBundle.Control.getControl(
+                java.util.ResourceBundle.Control.FORMAT_DEFAULT) != null,
+              "getControl returns shared instance for default formats");
+        // getControl(null) NPE
+        try {
+            java.util.ResourceBundle.Control.getControl(null);
+            check(false, "getControl(null) NPE");
+        } catch (NullPointerException e) { check(true, "getControl(null) NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

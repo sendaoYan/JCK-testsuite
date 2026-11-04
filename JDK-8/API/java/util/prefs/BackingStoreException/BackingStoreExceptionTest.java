@@ -60,7 +60,25 @@ public class BackingStoreExceptionTest {
         }
     }
 
+
+    // ===================== 契约深化：受检异常链（cause 往返） =====================
+    static void testContracts() {
+        java.io.IOException cause = new java.io.IOException("disk gone");
+        java.util.prefs.BackingStoreException e = new java.util.prefs.BackingStoreException(cause);
+        check(e.getCause() == cause, "cause identity from throwable ctor");
+        check("java.io.IOException: disk gone".equals(e.getMessage()), "message derived from cause");
+        java.util.prefs.BackingStoreException m = new java.util.prefs.BackingStoreException("msg");
+        check("msg".equals(m.getMessage()) && m.getCause() == null, "message ctor");
+        // 受检：必须声明或捕获（编译器锁定——此处捕获即证明）
+        try {
+            throw new java.util.prefs.BackingStoreException("x");
+        } catch (java.util.prefs.BackingStoreException caught) {
+            check(true, "checked exception catchable");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

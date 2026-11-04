@@ -111,7 +111,66 @@ public class MemoryHandlerTest {
         public void close() { closed = true; }
     }
 
+
+    // ===================== 契约深化：缓冲 FIFO/pushLevel 触发整体下发/手动 push/级别过滤/驱逐（丢最旧） =====================
+    static void testContracts() throws Exception {
+        final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.util.logging.StreamHandler target = new java.util.logging.StreamHandler(bos, new java.util.logging.SimpleFormatter());
+        java.util.logging.MemoryHandler mh = new java.util.logging.MemoryHandler(target, 3, java.util.logging.Level.SEVERE);
+        check(mh.getPushLevel() == java.util.logging.Level.SEVERE, "pushLevel from ctor");
+        java.util.logging.Logger l = java.util.logging.Logger.getLogger("jck.memory.fifo");
+        l.setUseParentHandlers(false);
+        l.addHandler(mh);
+        l.setLevel(java.util.logging.Level.ALL);
+        mh.setLevel(java.util.logging.Level.ALL);
+        // 低于 pushLevel：仅缓冲（目标 handler 内部也缓冲，flush 前无字节）
+        l.info("one");
+        l.info("two");
+        target.flush();
+        check(bos.size() == 0, "below pushLevel only buffers");
+        // 达到 pushLevel：缓冲记录 + 触发记录一并下发
+        l.severe("boom");
+        target.flush();
+        String out = bos.toString();
+        check(out.contains("one") && out.contains("two") && out.contains("boom"),
+              "trigger flushes buffered FIFO plus trigger record");
+        // 手动 push()
+        bos.reset();
+        l.info("three");
+        check(bos.size() == 0, "manual push pending");
+        mh.push();
+        target.flush();
+        check(bos.toString().contains("three"), "push() flushes buffer to target");
+        // 容量驱逐：缓冲 3，写 5 条再触发 → 最旧被丢弃
+        bos.reset();
+        for (int i = 1; i <= 5; i++) l.info("evict-" + i);
+        l.severe("boom2");
+        target.flush();
+        String ev = bos.toString();
+        check(!ev.contains("evict-1"), "oldest evicted beyond capacity");
+        check(ev.contains("evict-5") && ev.contains("boom2"), "newest plus trigger survive eviction");
+        // 级别过滤：低于 handler 级别的记录丢弃
+        java.util.logging.MemoryHandler strict = new java.util.logging.MemoryHandler(target, 2, java.util.logging.Level.SEVERE);
+        strict.setLevel(java.util.logging.Level.WARNING);
+        check(!strict.isLoggable(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "x")),
+              "isLoggable false below level");
+        check(strict.isLoggable(new java.util.logging.LogRecord(java.util.logging.Level.WARNING, "x")),
+              "isLoggable true at level");
+        // null target NPE
+        try {
+            new java.util.logging.MemoryHandler(null, 10, java.util.logging.Level.SEVERE);
+            check(false, "MemoryHandler(null target) NPE");
+        } catch (NullPointerException e) { check(true, "MemoryHandler(null target) NPE"); }
+        // 非法容量 IAE
+        try {
+            new java.util.logging.MemoryHandler(target, 0, java.util.logging.Level.SEVERE);
+            check(false, "size 0 IAE");
+        } catch (IllegalArgumentException e) { check(true, "size 0 IAE"); }
+        l.removeHandler(mh);
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

@@ -75,7 +75,40 @@ public class NodeChangeEventTest {
         check(e2.getParent() == other && e2.getChild() != child, "independent event payload");
     }
 
+
+    // ===================== 契约深化：childAdded/childRemoved 事件字段（真实触发，隔离节点） =====================
+    static void testContracts() throws Exception {
+        java.util.prefs.Preferences parent = java.util.prefs.Preferences.userRoot().node("/jck/testNCE1");
+        try {
+            final java.util.List<java.util.prefs.NodeChangeEvent> events =
+                    java.util.Collections.synchronizedList(new java.util.ArrayList<java.util.prefs.NodeChangeEvent>());
+            parent.addNodeChangeListener(new java.util.prefs.NodeChangeListener() {
+                public void childAdded(java.util.prefs.NodeChangeEvent e) { events.add(e); }
+                public void childRemoved(java.util.prefs.NodeChangeEvent e) { events.add(e); }
+            });
+            java.util.prefs.Preferences c = parent.node("newchild");
+            java.util.prefs.Preferences.userRoot().flush();
+            for (int i = 0; i < 100 && events.isEmpty(); i++) Thread.sleep(20);
+            check(events.size() >= 1, "childAdded fired");
+            if (!events.isEmpty()) {
+                java.util.prefs.NodeChangeEvent ev = events.get(0);
+                check(ev.getParent() == parent, "event parent is source node");
+                check(ev.getChild() != null && "newchild".equals(ev.getChild().name()), "event child name");
+            }
+            events.clear();
+            c.removeNode();
+            java.util.prefs.Preferences.userRoot().flush();
+            for (int i = 0; i < 100 && events.isEmpty(); i++) Thread.sleep(20);
+            check(events.size() >= 1, "childRemoved fired");
+            if (!events.isEmpty())
+                check(events.get(0).getParent() == parent, "remove event parent is source");
+        } finally {
+            try { parent.removeNode(); } catch (Exception ignore) { }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

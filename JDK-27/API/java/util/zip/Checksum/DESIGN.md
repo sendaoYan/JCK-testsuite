@@ -1,32 +1,23 @@
-# java.util.zip.Checksum 测试方案
+# java.util.zip.Checksum 测试设计案
 
-白盒结构断言在 `ChecksumTest.testWhiteBox()`，黑盒行为断言在 `ChecksumTest.testBlackBox()`。
+> 覆盖目标：**完整接口契约**。headless 安全。
 
-## 1. API 功能（按方法分组）
+## 1. API 功能
 
-- **抽象方法**：`update(int b)`、`update(byte[] b, int off, int len)`、`getValue()`、`reset()`。
-- **默认方法**（JDK 9+）：`update(byte[] b)`（委托给 `update(b,0,b.length)`）、`update(ByteBuffer buffer)`（逐字节 `update(int)` 并推进 position 到 limit）。
-- 说明：JDK-27 中不存在 `update(long)`（javap 已确认）。
+接口：`update(int)`、`update(byte[],int,int)`、`getValue()`、`reset()`。
 
 ## 2. Java 用户如何使用
 
-- 自定义实现：`class Impl implements Checksum { ... }`，只需实现 4 个抽象方法即获得两个默认方法。
-- 典型调用：`checksum.update(bytes); checksum.update(buf); long v = checksum.getValue(); checksum.reset();`。
-- 真实组合链路：`update(byte[])`（默认）→ 内部 `update(byte[],off,len)` → 逐字节 `update(int)` → `getValue()`。
+- 实现累加逻辑；调用方逐步 update 后 getValue，reset 归零。
+- 依赖：`update(byte[],off,len)` 只处理 [off,off+len) 切片；多次 update 累加；零长度 update 不改变值。
 
-## 3. 开源代码实际用法调研
+## 3. 参考来源
 
-> 说明：本环境 WebSearch 不可用，调研基于 JDK-27 实现源码与 `test/jdk`，逐条标注来源。
+- OpenJDK 接口定义 + CRC32/Adler32 实现语义。
 
-- `src/java.base/share/classes/java/util/zip/Checksum.java:57`：`default public void update(byte[] b)` —— 默认方法实现点。
-- `src/java.base/share/classes/java/util/zip/Checksum.java:105`：`default public void update(ByteBuffer buffer)` —— 默认方法实现点。
-- `test/jdk/java/util/zip/TestChecksum.java:35`：`ChecksumBase.testAll(new MyCRC32C(), 0xE3069283L);` —— 官方用自定义 `Checksum` 实现验证默认方法。
-- `test/jdk/java/util/zip/ChecksumBase.java:54-98`：`reset()`/`update`/`getValue()` 组合测试。
+## 4. 测试用例设计
 
-## 4. 测试用例设计 + 自动化实现
-
-- **正常**：匿名/静态实现只重写 4 个抽象方法；初始 `getValue()` 0；`update(int)` 与 `update(byte[],off,len)` 生效。
-- **默认方法委托**：`update(byte[])` 恰好触发一次 `update(byte[],off,len)` 并逐字节 `update(int)`；`update(ByteBuffer)` 逐字节触发 `update(int)` 且 position 推进到 limit。
-- **边界**：`reset()` 清零。
-- **自动化**：`ChecksumTest.testBlackBox()` 用带调用计数器的 `Impl`；`testWhiteBox()` 用 `getMethod(...).isDefault()` 校验默认/抽象语义。
-- **健壮性**：无墙钟/Random/无序集合，headless，无 `@key`。
+| 测试点 | 用例方法 |
+|---|---|
+| 基本 update/reset | testChecksum |
+| 切片 + 累加 | testSliceAndAccumulation |

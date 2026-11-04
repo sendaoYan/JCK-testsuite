@@ -5,6 +5,7 @@
  */
 
 import java.util.jar.JarEntry;
+import java.util.jar.*;
 import java.util.zip.ZipEntry;
 
 public class JarEntryTest {
@@ -122,7 +123,65 @@ public class JarEntryTest {
         testNullName();
     }
 
+
+    // ===================== 契约深化：构造器默认值/ZipEntry 拷贝/来自 JarFile 的属性/签名面 null =====================
+    static void testContracts() throws Exception {
+        JarEntry plain = new JarEntry("e.txt");
+        check(plain.getSize() == -1 && plain.getCompressedSize() == -1 && plain.getCrc() == -1,
+              "fresh entry sizes -1");
+        check(plain.getTime() == -1, "fresh time -1");
+        check(plain.getMethod() == -1, "fresh method -1");
+        check(plain.getAttributes() == null, "standalone entry attrs null");
+        check(plain.getCodeSigners() == null && plain.getCertificates() == null, "unsigned entry null certs");
+        check(plain.getName().equals("e.txt"), "name kept");
+        check(plain.toString().contains("e.txt"), "toString contains name");
+        check(!plain.isDirectory(), "plain not directory");
+        check(new JarEntry("dir/").isDirectory(), "trailing slash is directory");
+        // JarEntry(ZipEntry) 拷贝时间/注释
+        ZipEntry ze = new ZipEntry("z.txt");
+        ze.setTime(1234567890000L);
+        ze.setComment("zc");
+        JarEntry from = new JarEntry(ze);
+        check(from.getTime() == 1234567890000L, "copied time");
+        check("zc".equals(from.getComment()), "copied comment");
+        // null 构造
+        try {
+            new JarEntry((String) null);
+            check(false, "JarEntry(null String) NPE");
+        } catch (NullPointerException e) { check(true, "JarEntry(null String) NPE"); }
+        try {
+            new JarEntry((ZipEntry) null);
+            check(false, "JarEntry(null ZipEntry) NPE");
+        } catch (NullPointerException e) { check(true, "JarEntry(null ZipEntry) NPE"); }
+        // 造 jar：分节属性可读回
+        Manifest mf = new Manifest();
+        mf.getMainAttributes().putValue("Manifest-Version", "1.0");
+        Attributes sec = new Attributes();
+        sec.putValue("Content-Type", "text/plain");
+        mf.getEntries().put("sec.txt", sec);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        JarOutputStream jo = new JarOutputStream(bos, mf);
+        jo.putNextEntry(new JarEntry("sec.txt"));
+        jo.write("s".getBytes("UTF-8"));
+        jo.closeEntry();
+        jo.close();
+        java.nio.file.Path jarPath = java.nio.file.Files.createTempFile("jck-jarentry", ".jar");
+        java.nio.file.Files.write(jarPath, bos.toByteArray());
+        try (JarFile jf = new JarFile(jarPath.toFile())) {
+            JarEntry e = jf.getJarEntry("sec.txt");
+            check(e != null && e.getAttributes() != null
+                  && "text/plain".equals(e.getAttributes().getValue("Content-Type")),
+                  "section attrs readable via JarFile");
+            check(e.getCertificates() == null && e.getCodeSigners() == null, "unsigned null certs");
+            check(e.getSize() == 1, "size from central directory");
+            check(e.getMethod() == java.util.zip.ZipEntry.DEFLATED, "deflated by default");
+        } finally {
+            java.nio.file.Files.deleteIfExists(jarPath);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

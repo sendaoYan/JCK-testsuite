@@ -33,8 +33,22 @@ public class IntToLongFunctionTest {
         check(c.applyAsLong(2) == 2, "apply");
         check(c.applyAsLong(0) == 0, "apply zero");
     }
+
+    // ===================== 契约深化：int->long 宽化无损矩阵 =====================
+    static void testContracts() {
+        IntToLongFunction f = n -> (long) n;
+        check(f.applyAsLong(0) == 0L, "zero");
+        check(f.applyAsLong(Integer.MAX_VALUE) == 2147483647L, "MAX");
+        check(f.applyAsLong(Integer.MIN_VALUE) == -2147483648L, "MIN");
+        IntToLongFunction summed = n -> (long) n + Integer.MAX_VALUE;
+        check(summed.applyAsLong(1) == 2147483648L, "no overflow in long domain");
+        IntToLongFunction mr = Integer::toUnsignedLong;
+        check(mr.applyAsLong(-1) == 4294967295L, "toUnsignedLong method ref");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

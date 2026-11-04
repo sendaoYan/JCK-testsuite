@@ -79,7 +79,54 @@ public class LocaleNameProviderTest {
                      "getDisplayUnicodeExtensionType(null type)");
     }
 
+
+    // ===================== 契约深化：匿名实现四方法 + null NPE 矩阵 =====================
+    static void testContracts() {
+        final Locale[] locs = {Locale.FRANCE};
+        LocaleNameProvider p = new LocaleNameProvider() {
+            public Locale[] getAvailableLocales() { return locs; }
+            public String getDisplayLanguage(String languageCode, Locale locale) { return "L-" + languageCode; }
+            public String getDisplayCountry(String countryCode, Locale locale) { return "C-" + countryCode; }
+            public String getDisplayVariant(String variant, Locale locale) { return "V-" + variant; }
+            public String getDisplayScript(String scriptCode, Locale locale) { return "S-" + scriptCode; }
+        };
+        check("L-fr".equals(p.getDisplayLanguage("fr", Locale.FRANCE)), "getDisplayLanguage behavior");
+        check("C-FR".equals(p.getDisplayCountry("FR", Locale.FRANCE)), "getDisplayCountry behavior");
+        check("V-POSIX".equals(p.getDisplayVariant("POSIX", Locale.FRANCE)), "getDisplayVariant behavior");
+        check("S-Latn".equals(p.getDisplayScript("Latn", Locale.FRANCE)), "getDisplayScript behavior");
+        check(p.getAvailableLocales() == locs, "availableLocales passthrough");
+        // 自有实现：null 实参直通组合字符串（接口不强制 NPE）
+        check("L-null".equals(p.getDisplayLanguage(null, Locale.FRANCE)), "own impl handles null languageCode");
+        check("C-null".equals(p.getDisplayCountry(null, Locale.FRANCE)), "own impl handles null countryCode");
+    }
+
+
+    // ===================== JDK-10+ 增量：Unicode 扩展键/值名方法（JDK-27 侧锁定） =====================
+    static void testJdk27Additions() {
+        boolean key = false, value = false;
+        for (java.lang.reflect.Method m : java.util.spi.LocaleNameProvider.class.getMethods()) {
+            if (m.getName().equals("getDisplayUnicodeExtensionKey")) key = true;
+            if (m.getName().equals("getDisplayUnicodeExtensionType")) value = true;
+        }
+        check(key, "getDisplayUnicodeExtensionKey present (JDK-10+)");
+        check(value, "getDisplayUnicodeExtensionType present (JDK-10+)");
+        // 匿名实现：默认返回 null（未覆盖）
+        java.util.spi.LocaleNameProvider p = new java.util.spi.LocaleNameProvider() {
+            public java.util.Locale[] getAvailableLocales() { return new java.util.Locale[] {java.util.Locale.US}; }
+            public String getDisplayLanguage(String l, java.util.Locale loc) { return null; }
+            public String getDisplayScript(String s, java.util.Locale loc) { return null; }
+            public String getDisplayCountry(String c, java.util.Locale loc) { return null; }
+            public String getDisplayVariant(String v, java.util.Locale loc) { return null; }
+        };
+        check(p.getDisplayUnicodeExtensionKey("ca", java.util.Locale.US) == null,
+              "getDisplayUnicodeExtensionKey default null");
+        check(p.getDisplayUnicodeExtensionType("ca", "buddhist", java.util.Locale.US) == null,
+              "getDisplayUnicodeExtensionType default null");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testJdk27Additions(); } catch (Exception e) { throw new RuntimeException(e); }
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

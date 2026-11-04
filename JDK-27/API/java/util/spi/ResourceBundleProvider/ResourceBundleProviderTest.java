@@ -44,7 +44,20 @@ public class ResourceBundleProviderTest {
         check(p.getBundle("foo", Locale.FRANCE) == rb, "getBundle(foo, FR) same reference");
     }
 
+
+    // ===================== 契约深化：函数式接口（lambda 实现）+ 直接调用（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        ResourceBundleProvider p = (baseName, locale) -> null;
+        check(p.getBundle("mypkg.Messages", Locale.US) == null, "getBundle lambda behavior (null for absent module bundles)");
+        // 接口面：getBundle(String, Locale) 单抽象方法
+        // 接口面：单抽象方法
+        long abstractCount = java.util.Arrays.stream(ResourceBundleProvider.class.getMethods())
+                .filter(m -> java.lang.reflect.Modifier.isAbstract(m.getModifiers())).count();
+        check(abstractCount == 1, "exactly one abstract method (functional interface)");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

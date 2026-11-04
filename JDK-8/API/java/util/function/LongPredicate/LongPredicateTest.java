@@ -49,8 +49,34 @@ public class LongPredicateTest {
         check(((LongPredicate) x -> true).or(slow).test(6L), "or short-circuit");
         check(calls[0] == 0, "or right operand not called");
     }
+
+    // ===================== 契约深化：and/or/negate 全真值表/短路/NPE/边界值 =====================
+    static void testContracts() {
+        LongPredicate pos = n -> n > 0;
+        check(pos.test(1L) && !pos.test(0L) && !pos.test(-1L), "sign test");
+        boolean[] vals = {true, false};
+        for (boolean p : vals) for (boolean q : vals) {
+            LongPredicate a = n -> p, b = n -> q;
+            check(a.and(b).test(0) == (p && q), "and table " + p + q);
+            check(a.or(b).test(0) == (p || q), "or table " + p + q);
+            check(a.negate().test(0) == !p, "negate table " + p);
+        }
+        final int[] calls = {0};
+        LongPredicate slow = n -> { calls[0]++; return true; };
+        ((LongPredicate) n -> false).and(slow).test(0);
+        check(calls[0] == 0, "and short-circuit");
+        ((LongPredicate) n -> true).or(slow).test(0);
+        check(calls[0] == 0, "or short-circuit");
+        checkThrows(NullPointerException.class, () -> pos.and(null), "and(null) NPE");
+        checkThrows(NullPointerException.class, () -> pos.or(null), "or(null) NPE");
+        LongPredicate isMax = n -> n == Long.MAX_VALUE;
+        check(isMax.test(Long.MAX_VALUE) && !isMax.test(Long.MIN_VALUE), "boundary");
+        check(pos.negate().negate().test(5L), "double negate");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

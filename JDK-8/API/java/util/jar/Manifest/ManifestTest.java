@@ -186,7 +186,76 @@ public class ManifestTest {
         testClearAndToString();
     }
 
+
+    // ===================== 契约深化：72 字节续行/畸形消息/clone 深拷贝/write 幂等/字节级回写 =====================
+    static void testContracts() throws Exception {
+        // 72 字节折行续行（值以单空格开头的行拼接）
+        StringBuilder sb = new StringBuilder("Manifest-Version: 1.0\r\n");
+        StringBuilder longVal = new StringBuilder();
+        for (int i = 0; i < 120; i++) longVal.append('v');
+        sb.append("Long-Attr: ").append(longVal).append("\r\n");
+        Manifest m = new Manifest(new java.io.ByteArrayInputStream(sb.toString().getBytes("UTF-8")));
+        check(m.getMainAttributes().getValue("Long-Attr").length() == 120, "continuation joins to 120 chars");
+        // 畸形（无冒号）-> IOException "invalid header field"（27 消息多 "(line 1)"，前缀一致）
+        try {
+            new Manifest(new java.io.ByteArrayInputStream("no-colon-line\r\n".getBytes("UTF-8")));
+            check(false, "malformed manifest throws IOException");
+        } catch (java.io.IOException e) {
+            check(e.getMessage() != null && e.getMessage().startsWith("invalid header field"),
+                  "malformed message prefix: " + e.getMessage());
+        }
+        // clone / 拷贝构造深拷贝
+        Manifest orig = new Manifest();
+        orig.getMainAttributes().putValue("Manifest-Version", "1.0");
+        orig.getMainAttributes().putValue("X-Key", "1");
+        Attributes sec = new Attributes();
+        sec.putValue("Sealed", "true");
+        orig.getEntries().put("pkg/", sec);
+        Manifest cloned = (Manifest) orig.clone();
+        check(cloned.equals(orig) && cloned.hashCode() == orig.hashCode(), "clone equals/hashCode");
+        orig.getMainAttributes().putValue("X-Key", "2");
+        check("1".equals(cloned.getMainAttributes().getValue("X-Key")), "clone main attrs independent");
+        check(cloned.getEntries().get("pkg/") == orig.getEntries().get("pkg/"),
+              "clone shares section Attributes objects (shallow) but maps distinct");
+        check(cloned.getEntries() != orig.getEntries(), "clone entries map is distinct");
+        Manifest copied = new Manifest(orig);
+        check(copied.equals(orig), "copy ctor equals");
+        orig.getEntries().remove("pkg/");
+        check(copied.getEntries().containsKey("pkg/"), "copy ctor deep");
+        // write -> read -> write 幂等（规范化输出字节一致）
+        java.io.ByteArrayOutputStream w1 = new java.io.ByteArrayOutputStream();
+        orig.write(w1);
+        Manifest reread = new Manifest(new java.io.ByteArrayInputStream(w1.toByteArray()));
+        java.io.ByteArrayOutputStream w2 = new java.io.ByteArrayOutputStream();
+        reread.write(w2);
+        check(java.util.Arrays.equals(w1.toByteArray(), w2.toByteArray()), "write idempotent bytes");
+        check(reread.equals(orig), "round-trip equals");
+        // read(null) NPE / Manifest(InputStream) null NPE
+        try {
+            new Manifest((java.io.InputStream) null);
+            check(false, "Manifest(null) NPE");
+        } catch (NullPointerException e) { check(true, "Manifest(null) NPE"); }
+        Manifest m2 = new Manifest();
+        try {
+            m2.read(null);
+            check(false, "read(null) NPE");
+        } catch (NullPointerException e) { check(true, "read(null) NPE"); }
+        // clear() 清空主属性与条目
+        Manifest cl = new Manifest(orig);
+        cl.clear();
+        check(cl.getMainAttributes().isEmpty() && cl.getEntries().isEmpty(), "clear empties both");
+        // write(null) NPE
+        try {
+            orig.write(null);
+            check(false, "write(null) NPE");
+        } catch (NullPointerException e) { check(true, "write(null) NPE"); }
+        // equals 自反/与非 Manifest false
+        check(orig.equals(orig), "equals reflexive");
+        check(!orig.equals(new Object()), "equals non-Manifest false");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

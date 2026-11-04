@@ -74,7 +74,27 @@ public class CurrencyNameProviderTest {
                      "getDisplayName unavailable locale");
     }
 
+
+    // ===================== 契约深化：匿名实现行为 + null locale NPE + availableLocales 契约 =====================
+    static void testContracts() {
+        final Locale[] locs = {Locale.US};
+        CurrencyNameProvider p = new CurrencyNameProvider() {
+            public Locale[] getAvailableLocales() { return locs; }
+            public String getSymbol(String currencyCode, Locale locale) {
+                return "CNY-SYM-" + currencyCode; }
+            public String getDisplayName(String currencyCode, Locale locale) {
+                return "CNY-NAME-" + currencyCode; }
+        };
+        check("CNY-SYM-USD".equals(p.getSymbol("USD", Locale.US)), "getSymbol override behavior");
+        check("CNY-NAME-USD".equals(p.getDisplayName("USD", Locale.US)), "getDisplayName override behavior");
+        check(p.getAvailableLocales() == locs, "getAvailableLocales passthrough");
+        // 自有实现：null 实参直通（NPE 校验属 JDK 内建 provider，不在接口层强制）
+        check("CNY-SYM-null".equals(p.getSymbol(null, Locale.US)), "own impl handles null code");
+        check("CNY-NAME-XXX".equals(p.getDisplayName("XXX", Locale.US)), "unknown code passthrough");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

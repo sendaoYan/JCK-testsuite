@@ -89,7 +89,35 @@ public class GatherersTest {
                 "mapConcurrent(0) -> IllegalArgumentException");
     }
 
+
+    // ===================== 契约深化：空流/窗口不足/无限流惰性/串行并发1（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        // windowSliding 窗口大于元素数：单个部分窗口
+        check(Stream.of(1, 2, 3).gather(Gatherers.windowSliding(5)).toList()
+              .equals(List.of(List.of(1, 2, 3))), "windowSliding(n>size) single partial window");
+        // fold 空流发射初始值；scan 空流不发射
+        check(Stream.<Integer>of().gather(Gatherers.fold(() -> 9, (x, y) -> x + y)).toList()
+              .equals(List.of(9)), "fold on empty emits initial state");
+        check(Stream.<Integer>of().gather(Gatherers.scan(() -> 0, (s, e) -> s + e)).toList()
+              .isEmpty(), "scan on empty emits nothing");
+        // windowFixed 对无限流惰性（limit 终止）
+        check(Stream.iterate(1, i -> i + 1).gather(Gatherers.windowFixed(3)).limit(2).toList()
+              .equals(List.of(List.of(1, 2, 3), List.of(4, 5, 6))), "windowFixed lazy on infinite source");
+        // mapConcurrent(1, ...) 等价串行映射（保序）
+        check(Stream.of(3, 1, 2).gather(Gatherers.mapConcurrent(1, x -> x * 10)).toList()
+              .equals(List.of(30, 10, 20)), "mapConcurrent(1) preserves encounter order");
+        // scan 前缀和经典
+        check(Stream.of(1, 2, 3, 4).gather(Gatherers.scan(() -> 0, (s, e) -> s + e)).toList()
+              .equals(List.of(1, 3, 6, 10)), "scan prefix sums");
+        // fold 求和
+        check(Stream.of(1, 2, 3, 4).gather(Gatherers.fold(() -> 0, Integer::sum)).toList()
+              .equals(List.of(10)), "fold sum");
+        expectThrows(NullPointerException.class, () -> Gatherers.mapConcurrent(2, null), "mapConcurrent(null) NPE");
+        expectThrows(NullPointerException.class, () -> Gatherers.fold(null, Integer::sum), "fold(null supplier) NPE");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

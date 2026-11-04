@@ -114,7 +114,54 @@ public class LevelTest {
         MyLevel(String name, int value) { super(name, value); }
     }
 
+
+    // ===================== 契约深化：parse 矩阵/整型值映射/比较序/null 契约 =====================
+    static void testContracts() {
+        // 全部已知常量按名解析
+        java.util.logging.Level[] all = {java.util.logging.Level.ALL, java.util.logging.Level.CONFIG,
+              java.util.logging.Level.FINE, java.util.logging.Level.FINER, java.util.logging.Level.FINEST,
+              java.util.logging.Level.INFO, java.util.logging.Level.OFF, java.util.logging.Level.SEVERE,
+              java.util.logging.Level.WARNING};
+        for (java.util.logging.Level lv : all)
+            check(java.util.logging.Level.parse(lv.getName()) == lv, "parse(" + lv.getName() + ") identity");
+        // 整型值表（锁定）
+        check(java.util.logging.Level.ALL.intValue() == Integer.MIN_VALUE, "ALL = MIN_VALUE");
+        check(java.util.logging.Level.FINEST.intValue() == 300 && java.util.logging.Level.FINER.intValue() == 400
+              && java.util.logging.Level.FINE.intValue() == 500 && java.util.logging.Level.CONFIG.intValue() == 700
+              && java.util.logging.Level.INFO.intValue() == 800 && java.util.logging.Level.WARNING.intValue() == 900
+              && java.util.logging.Level.SEVERE.intValue() == 1000 && java.util.logging.Level.OFF.intValue() == Integer.MAX_VALUE,
+              "standard int values table");
+        // 数字串解析到已知整型值（800 -> INFO）
+        check(java.util.logging.Level.parse("800") == java.util.logging.Level.INFO, "parse(800) = INFO");
+        check(java.util.logging.Level.parse("1000") == java.util.logging.Level.SEVERE, "parse(1000) = SEVERE");
+        // 负例：小写/未知/空串 -> IAE（消息含原串）
+        for (String bad : new String[] {"info", "Bad level", "", "WARNING "}) {
+            try {
+                java.util.logging.Level.parse(bad);
+                check(false, "parse(" + bad + ") IAE");
+            } catch (IllegalArgumentException e) {
+                check(e.getMessage() != null && e.getMessage().contains(bad),
+                      "parse bad message echoes input: " + e.getMessage());
+            }
+        }
+        try {
+            java.util.logging.Level.parse(null);
+            check(false, "parse(null) NPE");
+        } catch (NullPointerException e) { check(true, "parse(null) NPE"); }
+        // equals/hashCode 一致性 + Comparable 序
+        check(java.util.logging.Level.INFO.equals(java.util.logging.Level.parse("INFO"))
+              && java.util.logging.Level.INFO.hashCode() == java.util.logging.Level.parse("INFO").hashCode(),
+              "equals/hashCode consistent");
+        check(java.util.logging.Level.FINEST.intValue() < java.util.logging.Level.SEVERE.intValue()
+              && java.util.logging.Level.SEVERE.intValue() > java.util.logging.Level.FINEST.intValue()
+              && java.util.logging.Level.INFO.intValue() == java.util.logging.Level.parse("800").intValue(),
+              "ordering by intValue (Level is not Comparable)");
+        // toString 返回名字
+        check("INFO".equals(java.util.logging.Level.INFO.toString()), "toString is name");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

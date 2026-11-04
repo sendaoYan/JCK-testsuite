@@ -39,8 +39,34 @@ public class BooleanSupplierTest {
         check(!toggle.getAsBoolean(), "toggle 2 false");
         check(toggle.getAsBoolean(), "toggle 3 true");
     }
+
+    // ===================== 契约深化：两种取值/有状态/方法引用/异常透传 =====================
+    static void testContracts() {
+        BooleanSupplier t = () -> true, f = () -> false;
+        check(t.getAsBoolean() && t.getAsBoolean(), "constant true stable");
+        check(!f.getAsBoolean(), "constant false");
+        final boolean[] flip = {false};
+        BooleanSupplier toggle = () -> flip[0] = !flip[0];
+        check(toggle.getAsBoolean() && !toggle.getAsBoolean() && toggle.getAsBoolean(),
+              "stateful supplier toggles from false");
+        java.util.List<String> empty = new java.util.ArrayList<String>();
+        BooleanSupplier mr = empty::isEmpty;
+        check(mr.getAsBoolean(), "method reference to isEmpty");
+        empty.add("x");
+        check(!mr.getAsBoolean(), "same supplier reflects backing object");
+        RuntimeException boom = new RuntimeException("bs");
+        try {
+            BooleanSupplier thrower = () -> { throw boom; };
+            thrower.getAsBoolean();
+            check(false, "exception relayed");
+        } catch (RuntimeException e) {
+            check(e == boom, "exact exception relayed, no wrapping");
+        }
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -67,7 +67,35 @@ public class InvalidPreferencesFormatExceptionTest {
         }
     }
 
+
+    // ===================== 契约深化：坏 XML 导入抛 InvalidPreferencesFormatException =====================
+    static void testContracts() throws Exception {
+        // 畸形 XML
+        byte[] bad = "<not-prefs></not-prefs>".getBytes("UTF-8");
+        try {
+            java.util.prefs.Preferences.importPreferences(new java.io.ByteArrayInputStream(bad));
+            check(false, "malformed import throws");
+        } catch (java.util.prefs.InvalidPreferencesFormatException e) {
+            check(true, "malformed XML -> InvalidPreferencesFormatException");
+        }
+        try {
+            java.util.prefs.Preferences.importPreferences(new java.io.ByteArrayInputStream("garbage".getBytes("UTF-8")));
+            check(false, "non-XML import throws");
+        } catch (java.util.prefs.InvalidPreferencesFormatException e) {
+            check(true, "non-XML -> InvalidPreferencesFormatException");
+        }
+        // 构造器链
+        java.util.prefs.InvalidPreferencesFormatException e1 =
+                new java.util.prefs.InvalidPreferencesFormatException("m");
+        check("m".equals(e1.getMessage()) && e1.getCause() == null, "message ctor");
+        java.io.IOException c = new java.io.IOException("io");
+        java.util.prefs.InvalidPreferencesFormatException e2 =
+                new java.util.prefs.InvalidPreferencesFormatException("m2", c);
+        check("m2".equals(e2.getMessage()) && e2.getCause() == c, "message+cause ctor");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

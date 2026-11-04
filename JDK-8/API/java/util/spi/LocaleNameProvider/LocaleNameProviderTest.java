@@ -65,7 +65,29 @@ public class LocaleNameProviderTest {
         check(p.getDisplayScript("Latn", Locale.US) == null, "getDisplayScript default null");
     }
 
+
+    // ===================== 契约深化：匿名实现四方法 + null NPE 矩阵 =====================
+    static void testContracts() {
+        final Locale[] locs = {Locale.FRANCE};
+        LocaleNameProvider p = new LocaleNameProvider() {
+            public Locale[] getAvailableLocales() { return locs; }
+            public String getDisplayLanguage(String languageCode, Locale locale) { return "L-" + languageCode; }
+            public String getDisplayCountry(String countryCode, Locale locale) { return "C-" + countryCode; }
+            public String getDisplayVariant(String variant, Locale locale) { return "V-" + variant; }
+            public String getDisplayScript(String scriptCode, Locale locale) { return "S-" + scriptCode; }
+        };
+        check("L-fr".equals(p.getDisplayLanguage("fr", Locale.FRANCE)), "getDisplayLanguage behavior");
+        check("C-FR".equals(p.getDisplayCountry("FR", Locale.FRANCE)), "getDisplayCountry behavior");
+        check("V-POSIX".equals(p.getDisplayVariant("POSIX", Locale.FRANCE)), "getDisplayVariant behavior");
+        check("S-Latn".equals(p.getDisplayScript("Latn", Locale.FRANCE)), "getDisplayScript behavior");
+        check(p.getAvailableLocales() == locs, "availableLocales passthrough");
+        // 自有实现：null 实参直通组合字符串（接口不强制 NPE）
+        check("L-null".equals(p.getDisplayLanguage(null, Locale.FRANCE)), "own impl handles null languageCode");
+        check("C-null".equals(p.getDisplayCountry(null, Locale.FRANCE)), "own impl handles null countryCode");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

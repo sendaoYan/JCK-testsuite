@@ -63,7 +63,34 @@ public class XMLFormatterTest {
         check(f.getTail(null).contains("</log>"), "getTail closes </log>");
     }
 
+
+    // ===================== 契约深化：record 结构/转义/head-tail 包裹/异常元素 =====================
+    static void testContracts() {
+        java.util.logging.XMLFormatter xf = new java.util.logging.XMLFormatter();
+        java.util.logging.LogRecord r = new java.util.logging.LogRecord(java.util.logging.Level.WARNING, "a<b>&z");
+        String s = xf.format(r);
+        check(s.contains("<record>") && s.contains("</record>"), "record element");
+        check(s.contains("<level>WARNING</level>"), "level element");
+        check(s.contains("<message>a&lt;b&gt;&amp;z</message>"), "XML escaping of < > &");
+        check(s.contains("<millis>"), "millis element present");
+        check(s.contains("<sequence>"), "sequence element present");
+        check(s.contains("<thread>"), "thread element present");
+        // date 元素为 Instant 形式（带 Z 后缀）且新增 <nanos> 元素（JDK-9+ 形态锁定）
+        check(s.contains("<date>") && s.contains("Z</date>"), "Instant UTC date form");
+        check(s.contains("<nanos>"), "nanos element present (JDK-9+)");
+        // getHead/getTail 包裹整个日志
+        check(xf.getHead(null).contains("<log") && xf.getTail(null).contains("</log>"),
+              "head/tail wrap <log> document");
+        // 异常记录含 <exception> 与帧
+        java.util.logging.LogRecord thr = new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "e");
+        thr.setThrown(new RuntimeException("xml-boom"));
+        String xs = xf.format(thr);
+        check(xs.contains("<exception>") && xs.contains("xml-boom"), "exception element with message");
+        check(xs.contains("<frame>"), "stack frame elements");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

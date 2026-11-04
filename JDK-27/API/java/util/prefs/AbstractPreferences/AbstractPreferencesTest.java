@@ -346,7 +346,34 @@ public class AbstractPreferencesTest {
         check(true, "removeNodeChangeListener returns");
     }
 
+
+    // ===================== 契约深化：removeNode 级联删除子树（隔离节点 + finally） =====================
+    static void testContracts() throws Exception {
+        java.util.prefs.Preferences root = java.util.prefs.Preferences.userRoot().node("/jck/testAbs1");
+        try {
+            java.util.prefs.Preferences a = root.node("a");
+            java.util.prefs.Preferences ab = a.node("b");
+            ab.put("deep", "1");
+            a.put("mid", "2");
+            root.put("top", "3");
+            // removeNode(a) 级联：b 一并消失
+            a.removeNode();
+            check(!root.nodeExists("a"), "a removed");
+            check(!root.nodeExists("a/b"), "descendant removed with ancestor");
+            check("3".equals(root.get("top", "x")), "sibling keys unaffected");
+            // 重建同名节点是全新节点
+            java.util.prefs.Preferences a2 = root.node("a");
+            check(a2.keys().length == 0, "recreated node is empty");
+            // clear 只影响本节点
+            root.clear();
+            check(root.keys().length == 0, "clear local only");
+        } finally {
+            try { root.removeNode(); } catch (Exception ignore) { }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

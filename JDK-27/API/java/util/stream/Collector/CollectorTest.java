@@ -80,7 +80,60 @@ public class CollectorTest {
         check(Collector.Characteristics.valueOf("IDENTITY_FINISH") == Collector.Characteristics.IDENTITY_FINISH, "valueOf");
     }
 
+
+    // ===================== 契约深化：自定义收集器调用记录/IDENTITY_FINISH 不调 finisher/并行 combiner =====================
+    static void testContracts() {
+        final java.util.List<String> calls = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+        Collector<Integer, java.util.List<Integer>, java.util.List<Integer>> recording = Collector.of(
+                () -> (java.util.List<Integer>) java.util.Collections.synchronizedList(new java.util.ArrayList<Integer>()),
+                (list, i) -> { list.add(i); calls.add("acc"); },
+                (l, r) -> { l.addAll(r); calls.add("comb"); return l; },
+                java.util.stream.Collector.Characteristics.IDENTITY_FINISH);
+        // 顺序：acc n 次、无 finisher
+        java.util.List<Integer> seq = Stream.of(1, 2, 3).collect(recording);
+        check(seq.equals(java.util.Arrays.asList(1, 2, 3)) && calls.stream().filter(c -> c.equals("acc")).count() == 3,
+              "sequential accumulates per element");
+        // 并行：combiner 被调用，结果完整
+        calls.clear();
+        Integer[] big = new Integer[10000];
+        for (int i = 0; i < big.length; i++) big[i] = i;
+        java.util.List<Integer> par = java.util.Arrays.stream(big).parallel().collect(recording);
+        check(par.size() == 10000, "parallel combiner merges complete result");
+        check(calls.contains("comb"), "combiner invoked on parallel collect");
+        // 非 IDENTITY_FINISH：finisher 应用
+        Collector<Integer, ?, Integer> counting = Collector.of(
+                () -> (java.util.List<Integer>) java.util.Collections.synchronizedList(new java.util.ArrayList<Integer>()),
+                java.util.List::add,
+                (l, r) -> { l.addAll(r); return l; },
+                java.util.List::size);
+        check(Stream.of(1, 2, 3, 4).collect(counting) == 4, "finisher transforms result");
+        // characteristics 透传
+        Collector<String, ?, java.util.List<String>> withChars = Collector.of(
+                () -> (java.util.List<String>) java.util.Collections.synchronizedList(new java.util.ArrayList<String>()), java.util.List::add,
+                (l, r) -> { l.addAll(r); return l; },
+                java.util.stream.Collector.Characteristics.CONCURRENT,
+                java.util.stream.Collector.Characteristics.UNORDERED);
+        check(withChars.characteristics().contains(java.util.stream.Collector.Characteristics.CONCURRENT)
+              && withChars.characteristics().contains(java.util.stream.Collector.Characteristics.UNORDERED),
+              "characteristics propagated");
+        check(withChars.characteristics().contains(java.util.stream.Collector.Characteristics.IDENTITY_FINISH),
+              "4-arg of() implies identity finisher -> IDENTITY_FINISH present");
+        // 5 参 of()（非恒等 finisher）不含 IDENTITY_FINISH
+        Collector<Integer, ?, Integer> sized = Collector.of(
+                () -> (java.util.List<Integer>) java.util.Collections.synchronizedList(new java.util.ArrayList<Integer>()),
+                java.util.List::add,
+                (l, r) -> { l.addAll(r); return l; },
+                java.util.List::size,
+                java.util.stream.Collector.Characteristics.CONCURRENT,
+                java.util.stream.Collector.Characteristics.UNORDERED);
+        check(!sized.characteristics().contains(java.util.stream.Collector.Characteristics.IDENTITY_FINISH),
+              "non-identity finisher -> no IDENTITY_FINISH");
+        // Characteristics 枚举面
+        check(java.util.stream.Collector.Characteristics.values().length == 3, "exactly 3 characteristics");
+    }
+
     public static void main(String[] args) {
+        testContracts();
         testCollectorOf();
         testNullArguments();
         testCharacteristicsEnum();

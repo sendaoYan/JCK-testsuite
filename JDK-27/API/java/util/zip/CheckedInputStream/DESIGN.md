@@ -1,30 +1,25 @@
-# java.util.zip.CheckedInputStream 测试方案
+# java.util.zip.CheckedInputStream 测试设计案
 
-白盒结构断言在 `CheckedInputStreamTest.testWhiteBox()`，黑盒行为断言在 `CheckedInputStreamTest.testBlackBox()`。
+> 覆盖目标：**完整契约**。headless 安全。
 
-## 1. API 功能（按方法分组）
+## 1. API 功能
 
-- **构造**：`CheckedInputStream(InputStream in, Checksum cksum)`。
-- **读**：`read()`、`read(byte[] b, int off, int len)`、`skip(long n)`。
-- **查询**：`getChecksum()`（返回构造时传入的同一 `Checksum` 实例）。
+带校验的输入流：构造（InputStream, Checksum）、`read()`、`read(byte[],int,int)`、`skip(long)`、`getChecksum()`；继承 `FilterInputStream`。
 
 ## 2. Java 用户如何使用
 
-- 构造：`CheckedInputStream in = new CheckedInputStream(stream, new CRC32());`。
-- 典型调用：读完后 `in.getChecksum().getValue()` 与直接计算的校验值对比；读数据与校验同步进行。
-- 真实组合链路：`new CheckedInputStream(...)` → `read(...)` 循环 → `getChecksum().getValue()`。
+- 包裹输入流读取数据，`getChecksum().getValue()` 得到累加校验值。
+- 依赖：`getChecksum()` 返回传入的同一 Checksum 实例；read/skip 都会更新校验和；len-0 read 不更新。
 
-## 3. 开源代码实际用法调研
+## 3. 参考来源
 
-> 说明：本环境 WebSearch 不可用，调研基于 JDK-27 实现源码，逐条标注来源。
+- OpenJDK 源码 `~/git/jdk8u-dev/jdk/src/share/classes/java/util/zip/CheckedInputStream.java`。
 
-- `src/java.base/share/classes/java/util/zip/GZIPInputStream.java:204`：`CheckedInputStream in = new CheckedInputStream(this_in, crc);` —— GZIP 解压时边读边算 CRC。
-- `src/java.base/share/classes/java/util/zip/CheckedInputStream.java:48`：构造器绑定 `InputStream + Checksum`。
+## 4. 测试用例设计
 
-## 4. 测试用例设计 + 自动化实现
-
-- **正常**：读全量字节后内容与输入一致；`getChecksum()` 返回同一实例；校验值等于直接计算的 `CRC32`。
-- **组合**：单字节 `read()` 循环与多字节 `read(byte[],off,len)` 循环都得到正确校验值；`read(1)+skip(4)+read(余量)` 的剩余字节数正确。
-- **边界**：读尽后 `read()` 返回 -1。
-- **自动化**：`CheckedInputStreamTest.testBlackBox()`；`testWhiteBox()` 校验 `extends FilterInputStream`、构造器与方法存在。
-- **健壮性**：固定输入、ByteArray 流、headless、无 `@key`。
+| 测试点 | 用例方法 |
+|---|---|
+| 实例同一性 + read | testIdentityAndRead |
+| skip 更新校验和 | testSkip |
+| null/越界 | testNullAndBounds |
+| len-0 | testLenZero |

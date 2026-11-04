@@ -67,9 +67,65 @@ public class CRC32CTest {
         check(g.getValue() == 0xE3069283L, "incremental update equals whole");
     }
 
+
+    // ===================== 契约深化：null/越界/ByteBuffer 位置与只读/分块一致性/长输入 =====================
+    static void testJdk27Additions() {
+        byte[] nine = "123456789".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        try {
+            new CRC32C().update((byte[]) null, 0, 1);
+            check(false, "null array NPE");
+        } catch (NullPointerException e) { check(true, "null array NPE"); }
+        try {
+            new CRC32C().update(nine, -1, 1);
+            check(false, "negative offset");
+        } catch (ArrayIndexOutOfBoundsException e) { check(true, "negative offset AIOOBE"); }
+        try {
+            new CRC32C().update(nine, 0, 10);
+            check(false, "len past end");
+        } catch (ArrayIndexOutOfBoundsException e) { check(true, "len past end AIOOBE"); }
+        try {
+            new CRC32C().update((java.nio.ByteBuffer) null);
+            check(false, "null ByteBuffer NPE");
+        } catch (NullPointerException e) { check(true, "null ByteBuffer NPE"); }
+        // ByteBuffer 位置/边界
+        java.nio.ByteBuffer padded = java.nio.ByteBuffer.allocate(11);
+        padded.put((byte) 'x').put(nine).put((byte) 'y').flip();
+        padded.position(1).limit(10);
+        CRC32C pos = new CRC32C();
+        pos.update(padded);
+        check(pos.getValue() == 0xE3069283L, "ByteBuffer respects position/limit");
+        // 只读 buffer 同样可用
+        java.nio.ByteBuffer ro = java.nio.ByteBuffer.wrap(nine).asReadOnlyBuffer();
+        CRC32C r = new CRC32C();
+        r.update(ro);
+        check(r.getValue() == 0xE3069283L, "read-only ByteBuffer");
+        // 分块 == 整体（含大输入跨内部块边界）
+        java.util.Random rnd = new java.util.Random(42);
+        byte[] big = new byte[70000];
+        rnd.nextBytes(big);
+        CRC32C whole = new CRC32C();
+        whole.update(big);
+        CRC32C chunked = new CRC32C();
+        for (int i = 0; i < big.length; i += 9999) {
+            chunked.update(big, i, Math.min(9999, big.length - i));
+        }
+        check(whole.getValue() == chunked.getValue(), "chunked equals whole over 70000 bytes");
+        // getValue 返回 long 且 reset 归零
+        check(whole.getValue() >= 0 && whole.getValue() <= 0xFFFFFFFFL, "value within unsigned 32 range");
+        whole.reset();
+        check(whole.getValue() == 0L, "reset to 0");
+        // 同一数据 CRC32C 与 CRC32 不同
+        java.util.zip.CRC32 c32 = new java.util.zip.CRC32();
+        c32.update(nine);
+        CRC32C cc = new CRC32C();
+        cc.update(nine);
+        check(c32.getValue() != cc.getValue(), "CRC32 != CRC32C for same input");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testBlackBox();        testJdk27Additions();
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

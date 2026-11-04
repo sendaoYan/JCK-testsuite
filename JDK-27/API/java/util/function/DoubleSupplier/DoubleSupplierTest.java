@@ -38,8 +38,34 @@ public class DoubleSupplierTest {
         check(counter.getAsDouble() == 1, "get 1");
         check(counter.getAsDouble() == 2, "get 2");
     }
+
+    // ===================== 契约深化：精确值/特殊值/有状态/异常透传 =====================
+    static void testContracts() {
+        DoubleSupplier half = () -> 0.5;
+        check(half.getAsDouble() == 0.5, "exact constant");
+        DoubleSupplier nan = () -> Double.NaN;
+        check(Double.isNaN(nan.getAsDouble()), "NaN supplier");
+        DoubleSupplier inf = () -> Double.POSITIVE_INFINITY;
+        check(Double.isInfinite(inf.getAsDouble()), "Inf supplier");
+        final int[] i = {0};
+        DoubleSupplier seq = () -> ++i[0] * 0.5;
+        check(seq.getAsDouble() == 0.5 && seq.getAsDouble() == 1.0, "stateful sequence");
+        DoubleSupplier mr = Math::random;
+        double r = mr.getAsDouble();
+        check(r >= 0.0 && r < 1.0, "Math::random in [0,1)");
+        RuntimeException boom = new RuntimeException("ds");
+        try {
+            DoubleSupplier thrower = () -> { throw boom; };
+            thrower.getAsDouble();
+            check(false, "exception relayed");
+        } catch (RuntimeException e) {
+            check(e == boom, "no wrapping");
+        }
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

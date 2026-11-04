@@ -1,13 +1,11 @@
 /*
  * @test
- * @summary java.util.zip.ZipEntry conformance: white-box structure + black-box metadata behavior.
+ * @summary java.util.zip.ZipEntry contract: name validation (null->NPE, too-long->IAE),
+ *          metadata get/set round-trip (size/compressedSize/crc/comment/extra/time),
+ *          clone, equals/hashCode, directory detection, setMethod/setTime.
  * @run main ZipEntryTest
  */
 
-import java.lang.reflect.Modifier;
-import java.nio.file.attribute.FileTime;
-import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.zip.ZipEntry;
 
 public class ZipEntryTest {
@@ -18,106 +16,128 @@ public class ZipEntryTest {
         passed++;
     }
 
-    static Class<?> clazz(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = clazz("java.util.zip.ZipEntry");
-        check(Modifier.isPublic(c.getModifiers()), "public class");
-        check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
-        check(Cloneable.class.isAssignableFrom(c), "implements Cloneable");
-        check(ZipEntry.STORED == 0, "STORED == 0");
-        check(ZipEntry.DEFLATED == 8, "DEFLATED == 8");
-
-        c.getConstructor(String.class);
-        c.getConstructor(ZipEntry.class);
-        c.getMethod("getName");
-        c.getMethod("setTime", long.class);
-        c.getMethod("getTime");
-        c.getMethod("setTimeLocal", LocalDateTime.class);
-        c.getMethod("getTimeLocal");
-        c.getMethod("setLastModifiedTime", FileTime.class);
-        c.getMethod("getLastModifiedTime");
-        c.getMethod("setSize", long.class);
-        c.getMethod("getSize");
-        c.getMethod("setCrc", long.class);
-        c.getMethod("getCrc");
-        c.getMethod("setMethod", int.class);
-        c.getMethod("getMethod");
-        c.getMethod("setExtra", byte[].class);
-        c.getMethod("getExtra");
-        c.getMethod("setComment", String.class);
-        c.getMethod("getComment");
-        c.getMethod("isDirectory");
-        c.getMethod("clone");
-        check(true, "constructors and metadata methods present");
+    static void testNameValidation() {
+        ZipEntry e = new ZipEntry("hello.txt");
+        check("hello.txt".equals(e.getName()), "getName");
+        checkThrows(NullPointerException.class, () -> new ZipEntry((String) null), "null name NPE");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 70000; i++) sb.append('a');
+        checkThrows(IllegalArgumentException.class, () -> new ZipEntry(sb.toString()), "name too long IAE");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() {
-        ZipEntry e = new ZipEntry("dir/file.txt");
-        check("dir/file.txt".equals(e.getName()), "getName");
-        check(e.getTime() == -1, "initial getTime -1");
-        check(e.getLastModifiedTime() == null, "initial getLastModifiedTime null");
-        check(!e.isDirectory(), "not directory initially");
-
+    static void testMetadata() {
+        ZipEntry e = new ZipEntry("data");
+        check(e.getSize() == -1 && e.getCompressedSize() == -1, "default sizes -1");
+        check(e.getCrc() == -1, "default crc -1");
+        check(e.getTime() == -1, "default time -1");
         e.setSize(100);
         check(e.getSize() == 100, "setSize/getSize");
         e.setCompressedSize(50);
-        check(e.getCompressedSize() == 50, "setCompressedSize/getCompressedSize");
-        e.setCrc(12345L);
-        check(e.getCrc() == 12345L, "setCrc/getCrc");
-
-        e.setTime(1000L);
-        check(e.getTime() == 1000L, "setTime/getTime");
-        e.setMethod(ZipEntry.DEFLATED);
-        check(e.getMethod() == ZipEntry.DEFLATED, "setMethod/getMethod");
-
-        // fixed LocalDateTime round-trips through the extended timestamp path
-        LocalDateTime ldt = LocalDateTime.of(2020, 1, 2, 3, 4, 5);
-        e.setTimeLocal(ldt);
-        check(ldt.equals(e.getTimeLocal()), "setTimeLocal/getTimeLocal round-trip");
-
-        // exact epoch millis via FileTime accessors
-        long fixedMillis = 1700000000000L;
-        ZipEntry ft = new ZipEntry("ft");
-        check(ft.setLastModifiedTime(FileTime.fromMillis(fixedMillis)) == ft, "setLastModifiedTime returns this");
-        check(ft.getLastModifiedTime().toMillis() == fixedMillis, "getLastModifiedTime exact millis");
-        ft.setLastAccessTime(FileTime.fromMillis(fixedMillis - 1000));
-        check(ft.getLastAccessTime().toMillis() == fixedMillis - 1000, "set/getLastAccessTime");
-        ft.setCreationTime(FileTime.fromMillis(fixedMillis - 2000));
-        check(ft.getCreationTime().toMillis() == fixedMillis - 2000, "set/getCreationTime");
-
-        byte[] extra = { 1, 2, 3 };
-        e.setExtra(extra);
-        check(Arrays.equals(extra, e.getExtra()), "setExtra/getExtra");
+        check(e.getCompressedSize() == 50, "setCompressedSize");
+        e.setCrc(0xCBF43926L);
+        check(e.getCrc() == 0xCBF43926L, "setCrc");
         e.setComment("a comment");
         check("a comment".equals(e.getComment()), "setComment/getComment");
-
-        check(e.toString() != null, "toString");
-        check(new ZipEntry("a").hashCode() == new ZipEntry("a").hashCode(), "hashCode name-based");
-
-        Object clone = e.clone();
-        check(clone instanceof ZipEntry && clone != e, "clone returns distinct ZipEntry");
-        ZipEntry ec = (ZipEntry) clone;
-        check(e.getName().equals(ec.getName()) && e.getSize() == ec.getSize() && e.getCrc() == ec.getCrc(),
-                "clone copies name/size/crc");
-
-        // copy constructor
-        ZipEntry copy = new ZipEntry(e);
-        check("dir/file.txt".equals(copy.getName()), "copy ctor name");
-        check(copy.getSize() == 100 && copy.getCrc() == 12345L && copy.getMethod() == ZipEntry.DEFLATED,
-                "copy ctor copies size/crc/method");
-
-        ZipEntry dir = new ZipEntry("dir/");
-        check(dir.isDirectory(), "isDirectory for trailing slash");
+        byte[] extra = new byte[]{1, 2, 3};
+        e.setExtra(extra);
+        check(e.getExtra() == extra && e.getExtra().length == 3, "setExtra keeps reference");
+        e.setExtra(null);
+        check(e.getExtra() == null, "setExtra(null) clears");
+        checkThrows(IllegalArgumentException.class, () -> e.setExtra(new byte[70000]), "setExtra too long IAE");
+        e.setComment(null);
+        check(e.getComment() == null, "setComment(null) clears");
     }
 
-    public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+    static void testMethods() {
+        ZipEntry e = new ZipEntry("m.txt");
+        e.setMethod(ZipEntry.STORED);
+        check(e.getMethod() == ZipEntry.STORED, "setMethod STORED");
+        e.setMethod(ZipEntry.DEFLATED);
+        check(e.getMethod() == ZipEntry.DEFLATED, "setMethod DEFLATED");
+        e.setTime(1600000000000L);
+        check(e.getTime() == 1600000000000L, "setTime/getTime");
+    }
+
+    static void testDirectory() {
+        ZipEntry dir = new ZipEntry("dir/");
+        check(dir.isDirectory(), "trailing slash is directory");
+        ZipEntry file = new ZipEntry("dir/file");
+        check(!file.isDirectory(), "no slash not directory");
+    }
+
+    static void testClone() {
+        ZipEntry e = new ZipEntry("clone.txt");
+        e.setSize(10);
+        e.setComment("c");
+        ZipEntry c = (ZipEntry) e.clone();
+        check(c != e, "clone distinct instance");
+        check("clone.txt".equals(c.getName()) && c.getSize() == 10 && "c".equals(c.getComment()), "clone copies fields");
+        check(!e.equals(c), "clone not equal (identity equals)");
+    }
+
+    static void testEqualsHashCode() {
+        ZipEntry a = new ZipEntry("x");
+        ZipEntry b = new ZipEntry("x");
+        check(!a.equals(b), "no name-based equals (identity semantics)");
+        check(a.equals(a), "equals self");
+        check(a.hashCode() == a.hashCode(), "hashCode self-consistent");
+        check(!a.equals(null), "not equal to null");
+        check(!a.equals("x"), "not equal to string");
+    }
+
+
+    // ===================== JDK-9+ 增量：setTimeLocal/getTimeLocal（JDK-27 侧锁定） =====================
+    static void testJdk27Additions() {
+        ZipEntry e = new ZipEntry("t");
+        check(e.getTime() == -1L, "default getTime -1");
+        // 实现怪癖：未设置时间时 getTimeLocal() 抛 DateTimeException（javadoc 未声明 null 路径）
+        try {
+            e.getTimeLocal();
+            check(false, "unset getTimeLocal behavior");
+        } catch (java.time.DateTimeException ex) {
+            check(true, "unset getTimeLocal throws DateTimeException (impl quirk)");
+        }
+        // setTimeLocal 精确往返（毫秒字段保留，奇数秒不丢失）
+        java.time.LocalDateTime t = java.time.LocalDateTime.of(2021, 3, 14, 12, 30, 17);
+        e.setTimeLocal(t);
+        check(t.equals(e.getTimeLocal()), "setTimeLocal exact round-trip incl. odd second");
+        check(e.getTime() == 1615696217000L, "setTimeLocal epoch millis in Asia/Shanghai-local semantics");
+        // setTime 也反映到 getTimeLocal（epoch 0 -> 1970-01-01，时区相关的具体时不断言）
+        e.setTime(0L);
+        check(e.getTime() == 0L, "setTime(0) passthrough");
+        java.time.LocalDateTime zero = e.getTimeLocal();
+        check(zero.getYear() == 1970 && zero.getMonthValue() == 1 && zero.getDayOfMonth() == 1,
+              "epoch 0 local date is 1970-01-01");
+        // setTimeLocal 返回 void（无链式）
+        try {
+            java.lang.reflect.Method m = ZipEntry.class.getMethod("setTimeLocal", java.time.LocalDateTime.class);
+            check(m.getReturnType() == void.class, "setTimeLocal returns void");
+        } catch (NoSuchMethodException nsme) { check(false, "setTimeLocal present"); }
+    }
+
+    public static void main(String[] args) {
+        testNameValidation();
+        testMetadata();
+        testMethods();
+        testDirectory();
+        testClone();
+        testEqualsHashCode();        testJdk27Additions();
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

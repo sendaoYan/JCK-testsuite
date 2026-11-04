@@ -92,7 +92,25 @@ public class LoggingMXBeanTest {
                 "setLoggerLevel unknown level IAE");
     }
 
+
+    // ===================== 契约深化：接口契约面（getLoggerLevel/setLoggerLevel/getParentLoggerName）反射锁定 =====================
+    static void testContracts() throws Exception {
+        Class<?> c = Class.forName("java.util.logging.LoggingMXBean");
+        check(c.isInterface(), "LoggingMXBean is interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getLoggerLevel") && names.contains("setLoggerLevel")
+              && names.contains("getParentLoggerName"), "core management ops present");
+        // 行为（经反射拿到的实例或直接构建代理均需平台支持；此处验证方法签名返回类型）
+        for (java.lang.reflect.Method m : c.getMethods()) {
+            if (m.getName().equals("getLoggerLevel")) check(m.getReturnType() == String.class, "getLoggerLevel -> String");
+            if (m.getName().equals("getParentLoggerName")) check(m.getReturnType() == String.class, "getParentLoggerName -> String");
+            if (m.getName().equals("setLoggerLevel")) check(m.getReturnType() == void.class, "setLoggerLevel -> void");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

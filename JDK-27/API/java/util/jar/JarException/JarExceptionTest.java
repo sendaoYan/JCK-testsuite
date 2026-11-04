@@ -86,7 +86,34 @@ public class JarExceptionTest {
         testThrowCatchRoundTrip();
     }
 
+
+    // ===================== 契约深化：构造矩阵/继承链/序列化 =====================
+    static void testContracts() throws Exception {
+        JarException noMsg = new JarException();
+        check(noMsg.getMessage() == null && noMsg.getCause() == null, "no-arg state");
+        JarException e = new JarException("bad jar");
+        check("bad jar".equals(e.getMessage()), "message ctor");
+        check(e instanceof java.util.zip.ZipException, "extends ZipException");
+        check(e instanceof java.io.IOException, "is IOException");
+        check("java.util.jar.JarException: bad jar".equals(e.toString()), "toString");
+        RuntimeException c = new RuntimeException("r");
+        check(e.initCause(c).getCause() == c, "initCause chaining");
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oo = new java.io.ObjectOutputStream(bos)) { oo.writeObject(e); }
+        Object back = new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(back instanceof JarException && "bad jar".equals(((JarException) back).getMessage()),
+              "serialization round-trip");
+        // Pack200 已在 JDK-14 移除（JDK-8 侧存在，版本差异锁定）
+        try {
+            Class.forName("java.util.jar.Pack200");
+            check(false, "Pack200 must be absent in this JDK");
+        } catch (ClassNotFoundException expected) {
+            check(true, "Pack200 absent since JDK-14");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

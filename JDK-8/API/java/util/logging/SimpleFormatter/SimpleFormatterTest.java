@@ -60,7 +60,35 @@ public class SimpleFormatterTest {
         check(thrownOut.contains("IllegalStateException"), "format includes throwable type");
     }
 
+
+    // ===================== 契约深化：默认 format 输出级别+消息/getHead-getTail 空串/null 容错 =====================
+    static void testContracts() {
+        java.util.logging.SimpleFormatter sf = new java.util.logging.SimpleFormatter();
+        java.util.logging.LogRecord r = new java.util.logging.LogRecord(java.util.logging.Level.INFO, "plain-msg");
+        String s = sf.format(r);
+        check(s.contains("INFO") && s.contains("plain-msg"), "format contains level and message");
+        // 时间戳与日志名可选字段
+        java.util.logging.LogRecord named = new java.util.logging.LogRecord(java.util.logging.Level.WARNING, "w");
+        named.setLoggerName("jck.sf");
+        check(sf.format(named).contains("WARNING"), "warning level rendered");
+        // getHead/getTail 默认空串
+        check("".equals(sf.getHead(null)) && "".equals(sf.getTail(null)), "default head/tail empty");
+        // null record NPE
+        try {
+            sf.format(null);
+            check(false, "format(null) NPE");
+        } catch (NullPointerException e) { check(true, "format(null) NPE"); }
+        // 异常堆栈渲染
+        java.util.logging.LogRecord thr = new java.util.logging.LogRecord(
+                java.util.logging.Level.SEVERE, "fail");
+        thr.setThrown(new RuntimeException("stack-boom"));
+        String withStack = sf.format(thr);
+        check(withStack.contains("stack-boom")
+              && withStack.contains("java.lang.RuntimeException"), "thrown rendered with class and message");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

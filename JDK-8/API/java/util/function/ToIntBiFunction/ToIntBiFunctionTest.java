@@ -34,8 +34,25 @@ public class ToIntBiFunctionTest {
         check(cmp.applyAsInt("b", "a") > 0, "apply reversed");
         check(cmp.applyAsInt("a", "a") == 0, "apply equal");
     }
+
+    // ===================== 契约深化：双参精确/溢出回绕/组合使用 =====================
+    static void testContracts() {
+        ToIntBiFunction<String, String> cmp = String::compareTo;
+        check(cmp.applyAsInt("a", "b") < 0 && cmp.applyAsInt("b", "a") > 0 && cmp.applyAsInt("a", "a") == 0,
+              "compareTo sign convention");
+        ToIntBiFunction<Integer, Integer> mul = (a, b) -> a * b;
+        check(mul.applyAsInt(Integer.MAX_VALUE, 2) == -2, "overflow wraps");
+        ToIntBiFunction<int[], int[]> dot2 = (a, b) -> a[0] * b[0] + a[1] * b[1];
+        check(dot2.applyAsInt(new int[] {1, 2}, new int[] {3, 4}) == 11, "dot product");
+        ToIntBiFunction<String, Character> idx = (s, c) -> s.indexOf(c.charValue());
+        check(idx.applyAsInt("banana", 'n') == 2, "indexOf");
+        ToIntBiFunction<Object, Object> nullGuard = (a, b) -> a == null ? -1 : 1;
+        check(nullGuard.applyAsInt(null, "x") == -1, "null branch");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

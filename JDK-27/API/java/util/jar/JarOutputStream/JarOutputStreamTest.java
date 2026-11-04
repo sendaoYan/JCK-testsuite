@@ -190,7 +190,63 @@ public class JarOutputStreamTest {
         }
     }
 
+
+    // ===================== 契约深化：无 manifest vs 带 manifest 写入面/主类落盘/putNextEntry 状态机 =====================
+    static void testContracts() throws Exception {
+        // 无 manifest：jar 只有内容 entry，读回 manifest 为 null
+        java.io.ByteArrayOutputStream b1 = new java.io.ByteArrayOutputStream();
+        JarOutputStream noMf = new JarOutputStream(b1);
+        noMf.putNextEntry(new JarEntry("x.txt"));
+        noMf.write("hi".getBytes("UTF-8"));
+        noMf.closeEntry();
+        noMf.close();
+        java.nio.file.Path p1 = java.nio.file.Files.createTempFile("jck-jos1", ".jar");
+        java.nio.file.Files.write(p1, b1.toByteArray());
+        try (JarFile jf = new JarFile(p1.toFile())) {
+            check(jf.getManifest() == null, "no manifest written when none supplied");
+            check(jf.size() == 1 && jf.getJarEntry("x.txt") != null, "single entry");
+        } finally { java.nio.file.Files.deleteIfExists(p1); }
+        // 带 manifest：META-INF/MANIFEST.MF 为首个 entry
+        Manifest mf = new Manifest();
+        mf.getMainAttributes().putValue("Manifest-Version", "1.0");
+        mf.getMainAttributes().putValue("Main-Class", "Main");
+        java.io.ByteArrayOutputStream b2 = new java.io.ByteArrayOutputStream();
+        JarOutputStream withMf = new JarOutputStream(b2, mf);
+        withMf.putNextEntry(new JarEntry("y.txt"));
+        withMf.write("yo".getBytes("UTF-8"));
+        withMf.closeEntry();
+        withMf.close();
+        java.nio.file.Path p2 = java.nio.file.Files.createTempFile("jck-jos2", ".jar");
+        java.nio.file.Files.write(p2, b2.toByteArray());
+        try (JarFile jf = new JarFile(p2.toFile())) {
+            check(jf.size() == 2, "manifest + entry");
+            java.util.Enumeration<JarEntry> en = jf.entries();
+            check("META-INF/MANIFEST.MF".equals(en.nextElement().getName()), "manifest is first entry");
+            check("Main".equals(jf.getManifest().getMainAttributes().getValue("Main-Class")), "Main-Class lands");
+        } finally { java.nio.file.Files.deleteIfExists(p2); }
+        // entry 前写 -> ZipException
+        java.io.ByteArrayOutputStream b3 = new java.io.ByteArrayOutputStream();
+        JarOutputStream bad = new JarOutputStream(b3);
+        try {
+            bad.write(1);
+            check(false, "write before entry throws");
+        } catch (java.util.zip.ZipException e) {
+            check(e.getMessage() != null, "write-before-entry message: " + e.getMessage());
+        }
+        bad.close();
+        // null 构造
+        try {
+            new JarOutputStream(null, new Manifest());
+            check(false, "JarOutputStream(null out) NPE");
+        } catch (NullPointerException e) { check(true, "JarOutputStream(null out) NPE"); }
+        try {
+            new JarOutputStream(new java.io.ByteArrayOutputStream(), null);
+            check(false, "JarOutputStream(null manifest) NPE");
+        } catch (NullPointerException e) { check(true, "JarOutputStream(null manifest) NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

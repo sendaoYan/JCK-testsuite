@@ -36,8 +36,29 @@ public class ObjIntConsumerTest {
         acc.accept("!", 7);
         check("v=7!7".equals(sb.toString()), "accept second");
     }
+
+    // ===================== 契约深化：双参精确捕获/null 对象/边界 int =====================
+    static void testContracts() {
+        final java.util.List<String> log = new java.util.ArrayList<String>();
+        ObjIntConsumer<String> c = (s, n) -> log.add(s + ":" + n);
+        c.accept("a", 7);
+        check(log.get(0).equals("a:7"), "both args captured");
+        c.accept("b", Integer.MIN_VALUE);
+        check(log.get(1).endsWith(":" + Integer.MIN_VALUE), "MIN value formats");
+        final boolean[] sawNull = {false};
+        ObjIntConsumer<String> nullOk = (s, n) -> sawNull[0] = s == null;
+        nullOk.accept(null, 0);
+        check(sawNull[0], "null object arg acceptable");
+        ObjIntConsumer<Integer> anon = new ObjIntConsumer<Integer>() {
+            public void accept(Integer i, int n) { log.add(String.valueOf(i - n)); }
+        };
+        anon.accept(10, 4);
+        check(log.get(log.size() - 1).equals("6"), "anonymous impl");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -37,8 +37,28 @@ public class IntUnaryOperatorTest {
         checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
         checkThrows(NullPointerException.class, () -> inc.compose(null), "compose(null)");
     }
+
+    // ===================== 契约深化：compose/andThen 顺序矩阵/identity/NPE =====================
+    static void testContracts() {
+        final StringBuilder order = new StringBuilder();
+        IntUnaryOperator dbl = n -> { order.append('d'); return n * 2; };
+        IntUnaryOperator inc = n -> { order.append('i'); return n + 1; };
+        order.setLength(0);
+        check(dbl.andThen(inc).applyAsInt(3) == 7 && order.toString().equals("di"), "andThen d,i");
+        order.setLength(0);
+        check(dbl.compose(inc).applyAsInt(3) == 8 && order.toString().equals("id"), "compose i,d");
+        check(IntUnaryOperator.identity().applyAsInt(-9) == -9, "identity passthrough");
+        check(IntUnaryOperator.identity().applyAsInt(Integer.MAX_VALUE) == Integer.MAX_VALUE, "identity MAX");
+        checkThrows(NullPointerException.class, () -> dbl.andThen(null), "andThen(null) NPE");
+        checkThrows(NullPointerException.class, () -> dbl.compose(null), "compose(null) NPE");
+        check(dbl.andThen(dbl).andThen(dbl).applyAsInt(1) == 8, "triple chain");
+        IntUnaryOperator wrap = n -> n + 1;
+        check(wrap.applyAsInt(Integer.MAX_VALUE) == Integer.MIN_VALUE, "overflow wraps in operator");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

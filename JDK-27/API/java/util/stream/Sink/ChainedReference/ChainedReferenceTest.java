@@ -59,7 +59,24 @@ public class ChainedReferenceTest {
               "enclosing type is package-private (SPI unreachable outside package)");
     }
 
+
+    // ===================== 契约深化：ChainedReference 链式 Sink 契约面反射锁定 =====================
+    static void testContracts() throws Exception {
+        Class<?> c = Class.forName("java.util.stream.Sink$ChainedReference");
+        check(!c.isInterface(), "ChainedReference is an abstract class (not interface)");
+        check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "abstract");
+        // 构造语义：单个构造器接收被包裹的下游 Sink
+        java.lang.reflect.Constructor<?>[] ctors = c.getDeclaredConstructors();
+        check(ctors.length == 1, "single declared constructor (wraps downstream)");
+        // 生命周期方法委托下游
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("begin") && names.contains("end") && names.contains("cancellationRequested"),
+              "begin/end/cancellationRequested available");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

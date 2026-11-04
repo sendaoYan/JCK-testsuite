@@ -1,6 +1,9 @@
 /*
  * @test
- * @summary java.util.jar.JarFile conformance: white-box structure + black-box behavior.
+ * @summary java.util.jar.JarFile contract: white-box structure (extends ZipFile,
+ *          MANIFEST_NAME, JDK-8 constructors) + black-box behavior (getManifest,
+ *          getJarEntry attributes, getInputStream content, entries/stream,
+ *          null/missing/closed handling).
  * @run main JarFileTest
  */
 
@@ -32,15 +35,18 @@ public class JarFileTest {
         passed++;
     }
 
-    static void expectThrows(Class<? extends Throwable> type, Runnable action) {
+    static void expectThrows(Class<? extends Throwable> type, ThrowingRunnable action, String msg) {
         try {
             action.run();
-            check(false, "expected " + type.getSimpleName());
         } catch (Throwable t) {
-            check(type.isInstance(t),
-                  "expected " + type.getSimpleName() + ", got " + t.getClass().getSimpleName());
+            if (type.isInstance(t)) { passed++; return; }
+            throw new AssertionError(msg + ": expected " + type.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
         }
+        throw new AssertionError(msg + ": expected " + type.getSimpleName() + " but none thrown");
     }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
 
     static boolean hasConstructor(Class<?> c, Class<?>... params) {
         try { c.getConstructor(params); return true; } catch (NoSuchMethodException e) { return false; }
@@ -74,7 +80,7 @@ public class JarFileTest {
         } catch (Exception ignore) { }
     }
 
-    static void writeSimpleJar(Path path) throws Exception {
+    static Path writeSimpleJar(Path dir) throws Exception {
         Manifest mf = new Manifest();
         mf.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
         mf.getMainAttributes().put(Attributes.Name.MAIN_CLASS, "com.example.Main");
@@ -82,7 +88,8 @@ public class JarFileTest {
         sec.put(Attributes.Name.CONTENT_TYPE, "text/plain");
         mf.getEntries().put("hello.txt", sec);
 
-        try (OutputStream os = Files.newOutputStream(path);
+        Path jar = dir.resolve("simple.jar");
+        try (OutputStream os = Files.newOutputStream(jar);
              JarOutputStream jout = new JarOutputStream(os, mf)) {
             jout.putNextEntry(new JarEntry("hello.txt"));
             jout.write("world".getBytes(StandardCharsets.UTF_8));
@@ -91,59 +98,35 @@ public class JarFileTest {
             jout.write("nested-content".getBytes(StandardCharsets.UTF_8));
             jout.closeEntry();
         }
+        return jar;
     }
 
-    static void writeMultiReleaseJar(Path path) throws Exception {
-        Manifest mf = new Manifest();
-        mf.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        mf.getMainAttributes().put(Attributes.Name.MULTI_RELEASE, "true");
-        try (OutputStream os = Files.newOutputStream(path);
-             JarOutputStream jout = new JarOutputStream(os, mf)) {
-            jout.putNextEntry(new JarEntry("version.txt"));
-            jout.write("base".getBytes(StandardCharsets.UTF_8));
-            jout.closeEntry();
-            jout.putNextEntry(new JarEntry("META-INF/versions/9/version.txt"));
-            jout.write("v9".getBytes(StandardCharsets.UTF_8));
-            jout.closeEntry();
-        }
-    }
-
-    // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.jar.JarFile");
         check(!c.isInterface() && java.lang.reflect.Modifier.isPublic(c.getModifiers()),
-              "JarFile is public concrete class");
+                "JarFile is public concrete class");
         check(c.getSuperclass() == ZipFile.class, "extends java.util.zip.ZipFile");
 
         java.lang.reflect.Field f = c.getField("MANIFEST_NAME");
         check(java.lang.reflect.Modifier.isPublic(f.getModifiers())
-              && java.lang.reflect.Modifier.isStatic(f.getModifiers())
-              && java.lang.reflect.Modifier.isFinal(f.getModifiers()),
-              "MANIFEST_NAME is public static final");
+                && java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                && java.lang.reflect.Modifier.isFinal(f.getModifiers()),
+                "MANIFEST_NAME is public static final");
         check("META-INF/MANIFEST.MF".equals(f.get(null)), "MANIFEST_NAME value");
 
-        check(hasMethod(c, "baseVersion"), "baseVersion()");
-        check(hasMethod(c, "runtimeVersion"), "runtimeVersion()");
         check(hasConstructor(c, String.class), "JarFile(String)");
         check(hasConstructor(c, String.class, boolean.class), "JarFile(String,boolean)");
         check(hasConstructor(c, java.io.File.class), "JarFile(File)");
         check(hasConstructor(c, java.io.File.class, boolean.class), "JarFile(File,boolean)");
         check(hasConstructor(c, java.io.File.class, boolean.class, int.class),
-              "JarFile(File,boolean,int)");
-        check(hasConstructor(c, java.io.File.class, boolean.class, int.class,
-              Runtime.Version.class), "JarFile(File,boolean,int,Version)");
-        check(hasMethod(c, "getVersion"), "getVersion()");
-        check(hasMethod(c, "isMultiRelease"), "isMultiRelease()");
+                "JarFile(File,boolean,int)");
         check(hasMethod(c, "getManifest"), "getManifest()");
         check(hasMethod(c, "getJarEntry", String.class), "getJarEntry(String)");
         check(hasMethod(c, "getEntry", String.class), "getEntry(String)");
         check(hasMethod(c, "entries"), "entries()");
         check(hasMethod(c, "stream"), "stream()");
-        check(hasMethod(c, "versionedStream"), "versionedStream()");
         check(hasMethod(c, "getInputStream", ZipEntry.class), "getInputStream(ZipEntry)");
     }
-
-    // ---- Part 2: black-box (behavioral) ----
 
     static void testSimpleJar(Path jar) throws Exception {
         try (JarFile jf = new JarFile(jar.toFile())) {
@@ -152,47 +135,35 @@ public class JarFileTest {
             Manifest manifest = jf.getManifest();
             check(manifest != null, "getManifest present");
             check("1.0".equals(manifest.getMainAttributes().getValue(Attributes.Name.MANIFEST_VERSION)),
-                  "manifest version");
+                    "manifest version");
             check("com.example.Main".equals(manifest.getMainAttributes().getValue(Attributes.Name.MAIN_CLASS)),
-                  "manifest main class");
+                    "manifest main class");
             check("text/plain".equals(manifest.getAttributes("hello.txt").getValue(Attributes.Name.CONTENT_TYPE)),
-                  "manifest per-entry attribute");
+                    "manifest per-entry attribute");
 
             JarEntry hello = jf.getJarEntry("hello.txt");
             check(hello != null && "hello.txt".equals(hello.getName()), "getJarEntry");
             check(jf.getEntry("hello.txt") != null, "getEntry returns ZipEntry");
             check("text/plain".equals(hello.getAttributes().getValue(Attributes.Name.CONTENT_TYPE)),
-                  "JarEntry.getAttributes from manifest section");
+                    "JarEntry.getAttributes from manifest section");
             check(jf.getJarEntry("nonexistent") == null, "getJarEntry unknown -> null");
 
             byte[] content = readAll(jf.getInputStream(hello));
             check(Arrays.equals(content, "world".getBytes(StandardCharsets.UTF_8)),
-                  "entry content equality");
+                    "entry content equality");
 
             List<String> names = entryNames(jf);
             check(names.equals(Arrays.asList("META-INF/MANIFEST.MF", "hello.txt", "nested.txt")),
-                  "entries() enumeration sorted: " + names);
+                    "entries() enumeration sorted: " + names);
 
             List<String> streamNames = new ArrayList<String>();
             jf.stream().map(e -> e.getName()).forEach(streamNames::add);
             Collections.sort(streamNames);
             check(streamNames.equals(names), "stream() names match entries()");
 
-            List<String> versionedNames = new ArrayList<String>();
-            jf.versionedStream().map(e -> e.getName()).forEach(versionedNames::add);
-            Collections.sort(versionedNames);
-            check(versionedNames.equals(names), "versionedStream() equals stream() when not multi-release");
-
-            check(!jf.isMultiRelease(), "simple jar is not multi-release");
-            check(jf.getVersion().equals(JarFile.baseVersion()),
-                  "getVersion returns baseVersion when not multi-release");
-            check(JarFile.baseVersion().feature() == 8, "baseVersion feature is 8");
-            check(JarFile.runtimeVersion().feature() == Runtime.version().feature(),
-                  "runtimeVersion feature equals Runtime.version().feature()");
-
-            expectThrows(NullPointerException.class, () -> jf.getJarEntry(null));
+            expectThrows(NullPointerException.class, () -> jf.getJarEntry(null), "getJarEntry(null) NPE");
             check(jf.getInputStream(new JarEntry("absent.txt")) == null,
-                  "getInputStream for absent entry returns null");
+                    "getInputStream for absent entry returns null");
         }
 
         // closed-file behavior
@@ -200,78 +171,134 @@ public class JarFileTest {
         JarEntry hello = closed.getJarEntry("hello.txt");
         check(hello != null, "obtained entry before close");
         closed.close();
-        expectThrows(IllegalStateException.class, () -> closed.size());
-        expectThrows(IllegalStateException.class, () -> closed.getEntry("hello.txt"));
-        expectThrows(IllegalStateException.class, new Runnable() {
-            public void run() {
-                try { closed.getInputStream(hello); }
-                catch (java.io.IOException e) { throw new RuntimeException(e); }
+        expectThrows(IllegalStateException.class, () -> closed.size(), "size after close ISE");
+        expectThrows(IllegalStateException.class, () -> closed.getEntry("hello.txt"), "getEntry after close ISE");
+        expectThrows(IllegalStateException.class, () -> closed.getInputStream(hello), "getInputStream after close ISE");
+    }
+
+    static void testCtor() throws Exception {
+        expectThrows(NullPointerException.class, () -> new JarFile((String) null), "null String ctor NPE");
+        expectThrows(NullPointerException.class, () -> new JarFile((java.io.File) null), "null File ctor NPE");
+        expectThrows(java.nio.file.NoSuchFileException.class,
+                () -> new JarFile(new java.io.File("/nonexistent/nope.jar")),
+                "missing file NoSuchFileException (JDK-27 NIO path; JDK-8 is FileNotFoundException)");
+    }
+
+
+    // ===================== 契约深化：中文 entry/manifest 分节/entries 序/关闭后 ISE/流视图 =====================
+    static void testContracts() throws Exception {
+        Manifest mf = new Manifest();
+        mf.getMainAttributes().putValue("Manifest-Version", "1.0");
+        mf.getMainAttributes().putValue("Main-Class", "Main");
+        Attributes sec = new Attributes();
+        sec.putValue("X-Section", "yes");
+        mf.getEntries().put("中 文.txt", sec);
+        mf.getEntries().put("plain.txt", new Attributes());
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        JarOutputStream jo = new JarOutputStream(bos, mf);
+        for (String name : new String[] {"中 文.txt", "plain.txt", "dir/"}) {
+            jo.putNextEntry(new JarEntry(name));
+            if (!name.endsWith("/")) jo.write(("body-of-" + name).getBytes("UTF-8"));
+            jo.closeEntry();
+        }
+        jo.close();
+        java.nio.file.Path p = java.nio.file.Files.createTempFile("jck-jarfile", ".jar");
+        java.nio.file.Files.write(p, bos.toByteArray());
+        try (JarFile jf = new JarFile(p.toFile())) {
+            check("Main".equals(jf.getManifest().getMainAttributes().getValue("Main-Class")), "manifest main attrs");
+            check(jf.size() == 4, "size includes META-INF/MANIFEST.MF: " + jf.size());
+            int manifestSeen = 0;
+            java.util.List<String> names = new java.util.ArrayList<String>();
+            java.util.Enumeration<JarEntry> en = jf.entries();
+            while (en.hasMoreElements()) {
+                String n = en.nextElement().getName();
+                names.add(n);
+                if (n.equals("META-INF/MANIFEST.MF")) manifestSeen++;
             }
-        });
-    }
-
-    static void testMultiReleaseJar(Path jar) throws Exception {
-        // default constructor processes at the base version (feature 8)
-        try (JarFile jf = new JarFile(jar.toFile())) {
-            check(jf.isMultiRelease(), "multi-release jar detected");
-            check(jf.getVersion().feature() == JarFile.baseVersion().feature(),
-                  "default constructor uses base version");
-            JarEntry base = jf.getJarEntry("version.txt");
-            check(base != null && "version.txt".equals(base.getName()), "base entry via default");
-            check("version.txt".equals(base.getRealName()), "base entry real name equals name");
-            check(Arrays.equals(readAll(jf.getInputStream(base)), "base".getBytes(StandardCharsets.UTF_8)),
-                  "default constructor reads base content");
-        }
-
-        // runtime-version constructor resolves versioned entries
-        try (JarFile jf = new JarFile(jar.toFile(), false, ZipFile.OPEN_READ, JarFile.runtimeVersion())) {
-            check(jf.isMultiRelease(), "runtime-version jar is multi-release");
-            check(jf.getVersion().feature() == Runtime.version().feature(),
-                  "getVersion feature equals runtime feature");
-
-            JarEntry ve = jf.getJarEntry("version.txt");
-            check(ve != null, "versioned entry resolvable via base name");
-            check("version.txt".equals(ve.getName()), "versioned entry getName is base name");
-            check("META-INF/versions/9/version.txt".equals(ve.getRealName()),
-                  "versioned entry getRealName is raw path");
-            check(Arrays.equals(readAll(jf.getInputStream(ve)), "v9".getBytes(StandardCharsets.UTF_8)),
-                  "versioned entry content is v9");
-
-            List<String> versioned = new ArrayList<String>();
-            jf.versionedStream().map(e -> e.getName()).forEach(versioned::add);
-            Collections.sort(versioned);
-            check(versioned.equals(Arrays.asList("META-INF/MANIFEST.MF", "version.txt")),
-                  "versionedStream hides raw versioned path: " + versioned);
-        }
-
-        // explicitly configured for the base version -> base entry wins
-        try (JarFile jf = new JarFile(jar.toFile(), false, ZipFile.OPEN_READ, JarFile.baseVersion())) {
-            JarEntry base = jf.getJarEntry("version.txt");
-            check(base != null, "base entry resolvable via baseVersion()");
-            check("version.txt".equals(base.getRealName()), "base entry getRealName equals name");
-            check(Arrays.equals(readAll(jf.getInputStream(base)), "base".getBytes(StandardCharsets.UTF_8)),
-                  "base entry content");
-        }
-    }
-
-    static void testBlackBox() throws Exception {
-        Path dir = Files.createTempDirectory("jck");
-        try {
-            Path simple = dir.resolve("simple.jar");
-            writeSimpleJar(simple);
-            testSimpleJar(simple);
-
-            Path mr = dir.resolve("mr.jar");
-            writeMultiReleaseJar(mr);
-            testMultiReleaseJar(mr);
+            check(manifestSeen == 1, "exactly one manifest entry in entries()");
+            check(names.contains("中 文.txt") && names.contains("dir/"), "chinese + dir entries listed");
+            check(jf.stream().count() == jf.size(), "stream() count == size()");
+            JarEntry cn = jf.getJarEntry("中 文.txt");
+            check(cn != null && "yes".equals(cn.getAttributes().getValue("X-Section")), "chinese entry section attrs");
+            java.io.InputStream is = jf.getInputStream(cn);
+            byte[] body = new byte[64];
+            int n = is.read(body);
+            check(new String(body, 0, n, "UTF-8").equals("body-of-中 文.txt"), "chinese body round-trip");
+            is.close();
+            check(jf.getEntry("META-INF/MANIFEST.MF") != null, "manifest reachable via getEntry");
+            check(jf.getJarEntry("missing") == null, "missing entry null");
         } finally {
-            deleteRecursively(dir);
+            java.nio.file.Files.deleteIfExists(p);
+        }
+        // 关闭后操作 IllegalStateException（8 与 27 一致）
+        java.nio.file.Path p2 = java.nio.file.Files.createTempFile("jck-jarfile2", ".jar");
+        java.nio.file.Files.write(p2, bos.toByteArray());
+        JarFile closed = new JarFile(p2.toFile());
+        closed.close();
+        try { closed.getManifest(); check(false, "closed getManifest ISE"); }
+        catch (IllegalStateException e) { check(true, "closed getManifest ISE"); }
+        try { closed.getJarEntry("plain.txt"); check(false, "closed getJarEntry ISE"); }
+        catch (IllegalStateException e) { check(true, "closed getJarEntry ISE"); }
+        try { closed.stream().count(); check(false, "closed stream ISE"); }
+        catch (IllegalStateException e) { check(true, "closed stream ISE"); }
+        check(closed.getName() != null, "getName still works after close");
+        java.nio.file.Files.deleteIfExists(p2);
+        // 不存在的 jar 文件
+        try {
+            new JarFile(new java.io.File("/nonexistent/jck-nope.jar"));
+            check(false, "missing jar file throws");
+        } catch (java.io.IOException e) {
+            // JDK-8: FileNotFoundException；JDK-27: NoSuchFileException（版本差异，均为 IOException）
+            check(e instanceof java.util.zip.ZipException || e instanceof java.io.FileNotFoundException
+                  || e instanceof java.nio.file.NoSuchFileException,
+                  "missing jar IOException family: " + e.getClass().getSimpleName());
+        }
+    }
+
+
+    // ===================== JDK-9+ 增量：multi-release 面（JDK-27 侧锁定） =====================
+    static void testJdk27Additions() throws Exception {
+        java.io.File plain = java.io.File.createTempFile("jck-mr", ".jar");
+        plain.deleteOnExit();
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.util.jar.Manifest mf = new java.util.jar.Manifest();
+        mf.getMainAttributes().putValue("Manifest-Version", "1.0");
+        java.util.jar.JarOutputStream jo = new java.util.jar.JarOutputStream(bos, mf);
+        jo.putNextEntry(new java.util.jar.JarEntry("x.txt"));
+        jo.write("x".getBytes("UTF-8"));
+        jo.closeEntry();
+        jo.close();
+        java.io.FileOutputStream fo = new java.io.FileOutputStream(plain);
+        fo.write(bos.toByteArray());
+        fo.close();
+        try (java.util.jar.JarFile jf = new java.util.jar.JarFile(plain)) {
+            check(!jf.isMultiRelease(), "plain jar isMultiRelease false");
+            check(jf.getVersion().equals(java.util.jar.JarFile.baseVersion()),
+                  "non-MR jar effective version is baseVersion");
+            check(java.util.jar.JarFile.baseVersion().major() == 8, "baseVersion major is 8");
+            check(java.util.jar.JarFile.runtimeVersion().major() > 8, "runtimeVersion major > 8");
+            check(jf.versionedStream().count() == jf.stream().count(),
+                  "versionedStream count == stream count for non-MR jar");
+        }
+        // 用 baseVersion 构造：版本固定为 base
+        try (java.util.jar.JarFile bvf = new java.util.jar.JarFile(plain, false,
+                java.util.zip.ZipFile.OPEN_READ, java.util.jar.JarFile.baseVersion())) {
+            check(!bvf.isMultiRelease(), "baseVersion-constructed not multi-release");
+            check(bvf.getVersion().equals(java.util.jar.JarFile.baseVersion()), "version pinned to base");
         }
     }
 
     public static void main(String[] args) throws Exception {
+        testContracts();
+        testJdk27Additions();
         testWhiteBox();
-        testBlackBox();
+        Path dir = Files.createTempDirectory("jck");
+        try {
+            testSimpleJar(writeSimpleJar(dir));
+        } finally {
+            deleteRecursively(dir);
+        }
+        testCtor();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

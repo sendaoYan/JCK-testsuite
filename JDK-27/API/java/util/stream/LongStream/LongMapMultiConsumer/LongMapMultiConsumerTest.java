@@ -61,7 +61,24 @@ public class LongMapMultiConsumerTest {
         check(suppressed.length == 0, "suppressing every element yields empty");
     }
 
+
+    // ===================== 契约深化：作为 mapMulti 函数式接口丢弃元素（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        java.util.stream.LongStream.LongMapMultiConsumer dropped =
+                (long value, java.util.function.LongConsumer sink) -> { if (value % 2 == 0) sink.accept(value); };
+        final long[] acc = {0L};
+        java.util.function.LongConsumer sink = v -> acc[0] += v;
+        dropped.accept(4L, sink);
+        check(acc[0] == 4L, "even value forwarded");
+        dropped.accept(3L, sink);
+        check(acc[0] == 4L, "odd value dropped (sink not invoked)");
+        check(java.util.stream.LongStream.of(1, 2, 3, 4)
+              .mapMulti((long v, java.util.function.LongConsumer sink2) -> { if (v % 2 == 0) sink2.accept(v); })
+              .toArray().length == 2, "mapMulti drops odd elements end-to-end");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

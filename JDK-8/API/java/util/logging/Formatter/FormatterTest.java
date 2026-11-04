@@ -74,7 +74,29 @@ public class FormatterTest {
         check(f.formatMessage(nullMsg) == null, "formatMessage null message -> null");
     }
 
+
+    // ===================== 契约深化：抽象 format 契约/getHead-getTail 默认空串/格式化 message 参数拼接 =====================
+    static void testContracts() {
+        java.util.logging.Formatter f = new java.util.logging.Formatter() {
+            public String format(java.util.logging.LogRecord r) {
+                return r.getLevel() + ":" + r.getMessage();
+            }
+        };
+        java.util.logging.LogRecord r = new java.util.logging.LogRecord(java.util.logging.Level.INFO, "fm");
+        check("INFO:fm".equals(f.format(r)), "formatMessage-free custom format works");
+        check("".equals(f.getHead(null)) && "".equals(f.getTail(null)), "default head/tail empty");
+        // formatMessage：MessageFormat 插值（无 bundle）
+        r.setParameters(new Object[] {"A", "B"});
+        java.util.logging.LogRecord pf = new java.util.logging.LogRecord(java.util.logging.Level.INFO, "{0}-{1}");
+        pf.setParameters(new Object[] {"A", "B"});
+        check("A-B".equals(f.formatMessage(pf)), "formatMessage interpolates parameters");
+        // 无参数时原样返回
+        check("plain".equals(f.formatMessage(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "plain"))),
+              "formatMessage without params unchanged");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

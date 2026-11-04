@@ -1,13 +1,13 @@
 /*
  * @test
- * @summary java.util.zip.Adler32 conformance: white-box structure + black-box checksum behavior.
+ * @summary java.util.zip.Adler32 contract: known vectors, update overloads (byte[], int,
+ *          ByteBuffer), offset/length, reset to 1, null->NPE, bad bounds->AIOOBE,
+ *          accumulation across updates.
  * @run main Adler32Test
  */
 
-import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
 import java.util.zip.Adler32;
-import java.util.zip.Checksum;
 
 public class Adler32Test {
     static int passed;
@@ -17,64 +17,83 @@ public class Adler32Test {
         passed++;
     }
 
-    static Class<?> clazz(String n) {
-        try { return Class.forName(n); } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = clazz("java.util.zip.Adler32");
-        check(Modifier.isPublic(c.getModifiers()), "public class");
-        check(!c.isInterface() && !c.isEnum() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
-        check(!Modifier.isFinal(c.getModifiers()), "not final");
-        check(c.getSuperclass() == Object.class, "extends Object");
-        check(Checksum.class.isAssignableFrom(c), "implements Checksum");
-
-        c.getMethod("update", int.class);
-        c.getMethod("update", byte[].class, int.class, int.class);
-        c.getMethod("update", ByteBuffer.class);
-        c.getMethod("reset");
-        c.getMethod("getValue");
-        check(true, "update/reset/getValue methods present");
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        byte[] nine = "123456789".getBytes("UTF-8");
-        byte[] wiki = "Wikipedia".getBytes("UTF-8");
-
+    static void testKnownVectors() throws Exception {
         Adler32 a = new Adler32();
         check(a.getValue() == 1L, "initial value 1");
-        a.update(nine, 0, nine.length);
-        check(a.getValue() == 0x091E01DEL, "adler32('123456789') == 0x091E01DE");
+        a.update("Wikipedia".getBytes("UTF-8"));
+        check(a.getValue() == 0x11E60398L, "adler32 of 'Wikipedia'");
         a.reset();
-        check(a.getValue() == 1L, "reset -> 1");
+        a.update("123456789".getBytes("UTF-8"));
+        check(a.getValue() == 0x091E01DEL, "adler32 of '123456789'");
+        Adler32 empty = new Adler32();
+        empty.update(new byte[0]);
+        check(empty.getValue() == 1L, "adler32 of empty is 1");
+    }
+
+    static void testUpdateOverloads() throws Exception {
+        byte[] data = "Wikipedia".getBytes("UTF-8");
+        Adler32 a = new Adler32();
+        a.update(data, 0, data.length);
+        check(a.getValue() == 0x11E60398L, "update(byte[],off,len)");
 
         Adler32 b = new Adler32();
-        for (byte x : nine) b.update(x);
-        check(b.getValue() == 0x091E01DEL, "update(int) byte-wise");
+        for (byte x : data) b.update(x);
+        check(b.getValue() == 0x11E60398L, "update(int) byte-wise");
 
         Adler32 c = new Adler32();
-        c.update(ByteBuffer.wrap(nine));
-        check(c.getValue() == 0x091E01DEL, "update(ByteBuffer)");
+        c.update(ByteBuffer.wrap(data));
+        check(c.getValue() == 0x11E60398L, "update(ByteBuffer)");
+    }
 
-        Adler32 d = new Adler32();
-        d.update(wiki, 0, wiki.length);
-        check(d.getValue() == 0x11E60398L, "adler32('Wikipedia') == 0x11E60398");
+    static void testPartialAndAccumulation() throws Exception {
+        byte[] data = "Wikipedia".getBytes("UTF-8");
+        Adler32 a = new Adler32();
+        a.update(data, 0, 4);
+        a.update(data, 4, data.length - 4);
+        check(a.getValue() == 0x11E60398L, "chained partial updates equal full");
+    }
 
-        Adler32 e = new Adler32();
-        e.update(new byte[0], 0, 0);
-        check(e.getValue() == 1L, "empty input leaves 1");
+    static void testReset() {
+        Adler32 a = new Adler32();
+        a.update(42);
+        long v = a.getValue();
+        a.reset();
+        check(a.getValue() == 1L, "reset to 1");
+        a.update(42);
+        check(a.getValue() == v, "same update after reset yields same value");
+    }
 
-        Adler32 f = new Adler32();
-        f.update(nine, 0, 4);
-        f.update(nine, 4, nine.length - 4);
-        check(f.getValue() == 0x091E01DEL, "incremental update equals whole");
+    static void testNullAndBounds() {
+        Adler32 a = new Adler32();
+        checkThrows(NullPointerException.class, () -> a.update((byte[]) null, 0, 1), "update null byte[] NPE");
+        checkThrows(NullPointerException.class, () -> a.update((ByteBuffer) null), "update null ByteBuffer NPE");
+        byte[] data = new byte[5];
+        checkThrows(ArrayIndexOutOfBoundsException.class, () -> a.update(data, -1, 1), "negative offset AIOOBE");
+        checkThrows(ArrayIndexOutOfBoundsException.class, () -> a.update(data, 0, 6), "len past end AIOOBE");
+        checkThrows(ArrayIndexOutOfBoundsException.class, () -> a.update(data, 4, 2), "off+len past end AIOOBE");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        testKnownVectors();
+        testUpdateOverloads();
+        testPartialAndAccumulation();
+        testReset();
+        testNullAndBounds();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

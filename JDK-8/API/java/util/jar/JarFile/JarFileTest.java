@@ -184,7 +184,77 @@ public class JarFileTest {
                 "missing file FileNotFoundException");
     }
 
+
+    // ===================== 契约深化：中文 entry/manifest 分节/entries 序/关闭后 ISE/流视图 =====================
+    static void testContracts() throws Exception {
+        Manifest mf = new Manifest();
+        mf.getMainAttributes().putValue("Manifest-Version", "1.0");
+        mf.getMainAttributes().putValue("Main-Class", "Main");
+        Attributes sec = new Attributes();
+        sec.putValue("X-Section", "yes");
+        mf.getEntries().put("中 文.txt", sec);
+        mf.getEntries().put("plain.txt", new Attributes());
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        JarOutputStream jo = new JarOutputStream(bos, mf);
+        for (String name : new String[] {"中 文.txt", "plain.txt", "dir/"}) {
+            jo.putNextEntry(new JarEntry(name));
+            if (!name.endsWith("/")) jo.write(("body-of-" + name).getBytes("UTF-8"));
+            jo.closeEntry();
+        }
+        jo.close();
+        java.nio.file.Path p = java.nio.file.Files.createTempFile("jck-jarfile", ".jar");
+        java.nio.file.Files.write(p, bos.toByteArray());
+        try (JarFile jf = new JarFile(p.toFile())) {
+            check("Main".equals(jf.getManifest().getMainAttributes().getValue("Main-Class")), "manifest main attrs");
+            check(jf.size() == 4, "size includes META-INF/MANIFEST.MF: " + jf.size());
+            int manifestSeen = 0;
+            java.util.List<String> names = new java.util.ArrayList<String>();
+            java.util.Enumeration<JarEntry> en = jf.entries();
+            while (en.hasMoreElements()) {
+                String n = en.nextElement().getName();
+                names.add(n);
+                if (n.equals("META-INF/MANIFEST.MF")) manifestSeen++;
+            }
+            check(manifestSeen == 1, "exactly one manifest entry in entries()");
+            check(names.contains("中 文.txt") && names.contains("dir/"), "chinese + dir entries listed");
+            check(jf.stream().count() == jf.size(), "stream() count == size()");
+            JarEntry cn = jf.getJarEntry("中 文.txt");
+            check(cn != null && "yes".equals(cn.getAttributes().getValue("X-Section")), "chinese entry section attrs");
+            java.io.InputStream is = jf.getInputStream(cn);
+            byte[] body = new byte[64];
+            int n = is.read(body);
+            check(new String(body, 0, n, "UTF-8").equals("body-of-中 文.txt"), "chinese body round-trip");
+            is.close();
+            check(jf.getEntry("META-INF/MANIFEST.MF") != null, "manifest reachable via getEntry");
+            check(jf.getJarEntry("missing") == null, "missing entry null");
+        } finally {
+            java.nio.file.Files.deleteIfExists(p);
+        }
+        // 关闭后操作 IllegalStateException（8 与 27 一致）
+        java.nio.file.Path p2 = java.nio.file.Files.createTempFile("jck-jarfile2", ".jar");
+        java.nio.file.Files.write(p2, bos.toByteArray());
+        JarFile closed = new JarFile(p2.toFile());
+        closed.close();
+        try { closed.getManifest(); check(false, "closed getManifest ISE"); }
+        catch (IllegalStateException e) { check(true, "closed getManifest ISE"); }
+        try { closed.getJarEntry("plain.txt"); check(false, "closed getJarEntry ISE"); }
+        catch (IllegalStateException e) { check(true, "closed getJarEntry ISE"); }
+        try { closed.stream().count(); check(false, "closed stream ISE"); }
+        catch (IllegalStateException e) { check(true, "closed stream ISE"); }
+        check(closed.getName() != null, "getName still works after close");
+        java.nio.file.Files.deleteIfExists(p2);
+        // 不存在的 jar 文件
+        try {
+            new JarFile(new java.io.File("/nonexistent/jck-nope.jar"));
+            check(false, "missing jar file throws");
+        } catch (java.io.IOException e) {
+            check(e instanceof java.util.zip.ZipException || e instanceof java.io.FileNotFoundException,
+                  "missing jar IOException family: " + e.getClass().getSimpleName());
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         Path dir = Files.createTempDirectory("jck");
         try {

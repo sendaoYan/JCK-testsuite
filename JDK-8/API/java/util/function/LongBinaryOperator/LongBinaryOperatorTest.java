@@ -34,8 +34,28 @@ public class LongBinaryOperatorTest {
         check(add.applyAsLong(0, 0) == 0, "apply zero");
         check(add.applyAsLong(-1, 1) == 0, "apply inverse");
     }
+
+    // ===================== 契约深化：精确 long 运算/溢出回绕/方法引用 =====================
+    static void testContracts() {
+        LongBinaryOperator add = (x, y) -> x + y;
+        check(add.applyAsLong(2, 3) == 5, "exact add");
+        check(add.applyAsLong(Long.MAX_VALUE, 1) == Long.MIN_VALUE, "overflow wraps");
+        LongBinaryOperator sub = (x, y) -> x - y;
+        check(sub.applyAsLong(Long.MIN_VALUE, 1) == Long.MAX_VALUE, "underflow wraps");
+        LongBinaryOperator max = Math::max;
+        check(max.applyAsLong(-1L, 1L) == 1L, "Math::max ref");
+        LongBinaryOperator xor = (x, y) -> x ^ y;
+        check(xor.applyAsLong(0xFF00L, 0x0FF0L) == 0xF0F0L, "xor exact");
+        LongBinaryOperator anon = new LongBinaryOperator() {
+            public long applyAsLong(long l, long r) { return l % r; }
+        };
+        check(anon.applyAsLong(-7L, 3L) == -1, "anonymous remainder sign follows dividend");
+        check(anon.applyAsLong(7L, -3L) == 1, "remainder sign follows dividend positive");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

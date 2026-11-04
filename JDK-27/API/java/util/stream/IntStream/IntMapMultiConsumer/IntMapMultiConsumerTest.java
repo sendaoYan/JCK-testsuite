@@ -61,7 +61,23 @@ public class IntMapMultiConsumerTest {
         check(Arrays.equals(filtered, new int[]{1, 3, 5}), "conditional emission acts like filter");
     }
 
+
+    // ===================== 契约深化：作为 mapMulti 函数式接口丢弃元素（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        java.util.stream.IntStream.IntMapMultiConsumer dropped =
+                (int value, java.util.function.IntConsumer sink) -> { if (value % 2 == 0) sink.accept(value); };
+        java.util.concurrent.atomic.AtomicInteger n = new java.util.concurrent.atomic.AtomicInteger();
+        dropped.accept(4, n::addAndGet);
+        check(n.get() == 4, "even value forwarded");
+        dropped.accept(3, n::addAndGet);
+        check(n.get() == 4, "odd value dropped (sink not invoked)");
+        check(java.util.stream.IntStream.of(1, 2, 3, 4)
+              .mapMulti((int v, java.util.function.IntConsumer sink) -> { if (v % 2 == 0) sink.accept(v); })
+              .toArray().length == 2, "mapMulti drops odd elements end-to-end");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

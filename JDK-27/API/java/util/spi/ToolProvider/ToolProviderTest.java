@@ -102,7 +102,30 @@ public class ToolProviderTest {
         check(ToolProvider.findFirst("javac") != null, "findFirst never returns null");
     }
 
+
+    // ===================== 契约深化：findFirst javac 交互（name/run/exit code）与缺失工具 Optional.empty（JDK-27 侧锁定） =====================
+    static void testContracts() throws Exception {
+        java.util.Optional<ToolProvider> javac = ToolProvider.findFirst("javac");
+        check(javac.isPresent(), "findFirst(javac) present");
+        if (javac.isPresent()) {
+            ToolProvider tp = javac.get();
+            check("javac".equals(tp.name()), "name() is javac");
+            java.io.StringWriter out = new java.io.StringWriter();
+            int rc = tp.run(new java.io.PrintWriter(out), new java.io.PrintWriter(out), "--version");
+            check(rc == 0, "--version exits 0");
+            check(out.toString().contains("javac"), "--version output mentions javac: " + out.toString().trim());
+            // 错误用法：未知选项 -> 非零退出码
+            java.io.StringWriter err = new java.io.StringWriter();
+            int badRc = tp.run(new java.io.PrintWriter(new java.io.StringWriter()),
+                    new java.io.PrintWriter(err), "--jck-no-such-option");
+            check(badRc != 0, "unknown option exits non-zero (" + badRc + ")");
+        }
+        check(!ToolProvider.findFirst("jck-no-such-tool").isPresent(), "unknown tool empty Optional");
+        expectThrows(NullPointerException.class, () -> ToolProvider.findFirst(null), "findFirst(null) NPE");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

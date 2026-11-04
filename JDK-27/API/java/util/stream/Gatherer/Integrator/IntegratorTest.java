@@ -63,7 +63,42 @@ public class IntegratorTest {
         check(d3.collected.equals(List.of(5)), "greedy integrate pushed");
     }
 
+
+    // ===================== 契约深化：andThen 组合顺序/null NPE/两个 greedy（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        // 手工组合：同一元素先经 first 再经 second（Integrator 无组合方法，语义自管）
+        CollectingDownstream d = new CollectingDownstream();
+        Gatherer.Integrator<Void, Integer, Integer> first =
+                (s, e, down) -> down.push(e * 2);
+        Gatherer.Integrator<Void, Integer, Integer> second =
+                (s, e, down) -> down.push(e + 100);
+        Gatherer.Integrator<Void, Integer, Integer> chained =
+                (s, e, down) -> first.integrate(s, e, down) && second.integrate(s, e, down);
+        check(chained.integrate(null, 3, d), "manual chain integrates");
+        check(d.collected.equals(List.of(6, 103)), "manual chain runs first then second (6,103): " + d.collected);
+        // 第一个返回 false 则第二个不再执行（短路语义）
+        CollectingDownstream d2 = new CollectingDownstream();
+        Gatherer.Integrator<Void, Integer, Integer> shortCircuit =
+                (s, e, down) -> false;
+        Gatherer.Integrator<Void, Integer, Integer> after =
+                (s, e, down) -> down.push(-1);
+        Gatherer.Integrator<Void, Integer, Integer> cut =
+                (s, e, down) -> shortCircuit.integrate(s, e, down) && after.integrate(s, e, down);
+        check(!cut.integrate(null, 5, d2), "false from first stops chain");
+        check(d2.collected.isEmpty(), "second integrator not invoked after false");
+        // of()/ofGreedy() 工厂不急切校验 null（惰性包装，锁定无 NPE）
+        check(Gatherer.Integrator.of(null) == null, "of(null) lazily returns null (no eager validation)");
+        check(Gatherer.Integrator.ofGreedy(null) == null, "ofGreedy(null) lazily returns null");
+        // Greedy.ofGreedy 返回可作 Integrator 使用
+        Gatherer.Integrator.Greedy<Void, Integer, Integer> greedy =
+                Gatherer.Integrator.ofGreedy((s, e, down) -> down.push(e));
+        CollectingDownstream d3 = new CollectingDownstream();
+        check(greedy.integrate(null, 9, d3) && d3.collected.equals(List.of(9)),
+              "Greedy usable as Integrator");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

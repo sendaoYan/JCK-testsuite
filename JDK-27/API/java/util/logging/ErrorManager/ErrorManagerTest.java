@@ -96,7 +96,35 @@ public class ErrorManagerTest {
         }
     }
 
+
+    // ===================== 契约深化：错误码常量表/error 记录/null 容错 =====================
+    static void testContracts() {
+        // 常量表锁定
+        try {
+            check(java.util.logging.ErrorManager.class.getField("GENERIC_FAILURE").getInt(null) == 0, "GENERIC_FAILURE=0");
+            check(java.util.logging.ErrorManager.class.getField("WRITE_FAILURE").getInt(null) == 1, "WRITE_FAILURE=1");
+            check(java.util.logging.ErrorManager.class.getField("FLUSH_FAILURE").getInt(null) == 2, "FLUSH_FAILURE=2");
+            check(java.util.logging.ErrorManager.class.getField("CLOSE_FAILURE").getInt(null) == 3, "CLOSE_FAILURE=3");
+            check(java.util.logging.ErrorManager.class.getField("OPEN_FAILURE").getInt(null) == 4, "OPEN_FAILURE=4");
+            check(java.util.logging.ErrorManager.class.getField("FORMAT_FAILURE").getInt(null) == 5, "FORMAT_FAILURE=5");
+        } catch (Exception e) { throw new RuntimeException(e); }
+        final java.util.List<String> errors = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+        java.util.logging.ErrorManager em = new java.util.logging.ErrorManager() {
+            public void error(String msg, Exception ex, int code) {
+                errors.add(msg + "|" + code);
+                super.error(msg, ex, code);
+            }
+        };
+        em.error("write-failed", new java.io.IOException("disk"), 1);
+        check(errors.size() == 1 && errors.get(0).startsWith("write-failed|1"),
+              "error() invoked with message and code");
+        // 子类化覆盖生效；直接调用基类实现不抛
+        new java.util.logging.ErrorManager().error("x", null, 0);
+        check(true, "base error() tolerates null exception");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

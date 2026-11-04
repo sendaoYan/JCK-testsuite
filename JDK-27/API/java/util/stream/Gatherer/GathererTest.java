@@ -92,7 +92,46 @@ public class GathererTest {
               "integrator returning false short-circuits input");
     }
 
+
+    // ===================== 契约深化：null 契约/并行组合器合并/复用性/无限流短路（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        expectThrows(NullPointerException.class, () -> Stream.of(1).gather(null), "gather(null) NPE");
+        expectThrows(NullPointerException.class, () -> Gatherer.of(null), "Gatherer.of(null) NPE");
+        expectThrows(NullPointerException.class, () -> Gatherer.ofSequential(null,
+                (java.lang.Void s, Integer e, Gatherer.Downstream<? super Integer> d) -> true),
+                "ofSequential(null initializer) NPE");
+        // 无限流 + takeWhile 短路：gatherer 惰性
+        check(Stream.iterate(1, i -> i + 1)
+                .gather(Gatherer.of((java.lang.Void s, Integer e, Gatherer.Downstream<? super Integer> d) -> d.push(e * 2)))
+                .takeWhile(x -> x < 7).toList().equals(List.of(2, 4, 6)),
+              "gatherer is lazy: infinite source + takeWhile terminates");
+        // 并行 gather：ofSequential 状态在 combiner 中合并（求和确定性）
+        Gatherer<Integer, int[], Integer> summer = Gatherer.ofSequential(
+                () -> new int[1],
+                (int[] s, Integer e, Gatherer.Downstream<? super Integer> d) -> { s[0] += e; return true; },
+                (int[] s, Gatherer.Downstream<? super Integer> d) -> d.push(s[0]));
+        check(Stream.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10).parallel().gather(summer)
+              .mapToInt(Integer::intValue).sum() == 55,
+              "parallel gather merges state via combiner (total 55)");
+        // gatherer 可复用（两个流各自独立）
+        Gatherer<Integer, java.lang.Void, Integer> dbl =
+                Gatherer.of((java.lang.Void s, Integer e, Gatherer.Downstream<? super Integer> d) -> d.push(e * 2));
+        check(Stream.of(1, 2).gather(dbl).toList().equals(List.of(2, 4))
+              && Stream.of(3).gather(dbl).toList().equals(List.of(6)),
+              "gatherer reusable across streams");
+        // gather 后流仍是 Stream：可继续链式操作
+        Gatherer<String, java.lang.Void, Integer> len =
+                Gatherer.of((java.lang.Void s, String e, Gatherer.Downstream<? super Integer> d) -> d.push(e.length()));
+        check(Stream.of("a", "bb").gather(len).mapToInt(Integer::intValue).sum() == 3,
+              "gather composes with downstream mapToInt");
+        // 并行 == 顺序（无状态 gatherer + 排序）
+        check(Stream.of(5, 3, 8, 1).parallel().gather(dbl).sorted().toList()
+              .equals(Stream.of(5, 3, 8, 1).gather(dbl).sorted().toList()),
+              "parallel gather == sequential gather (stateless + sorted)");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

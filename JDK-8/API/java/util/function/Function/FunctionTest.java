@@ -58,8 +58,44 @@ public class FunctionTest {
         try { fail.compose((Integer x) -> x).apply(1); throw new AssertionError("relay2"); }
         catch (IllegalStateException c) { check(c == ex, "relay compose"); }
     }
+
+    // ===================== 契约深化：compose vs andThen 顺序矩阵/identity 引用透传/异常中继 =====================
+    static void testContracts() {
+        final StringBuilder order = new StringBuilder();
+        Function<Integer, Integer> dbl = x -> { order.append('d'); return x * 2; };
+        Function<Integer, Integer> inc = x -> { order.append('i'); return x + 1; };
+        order.setLength(0);
+        check(dbl.andThen(inc).apply(3) == 7 && order.toString().equals("di"), "andThen d,i");
+        order.setLength(0);
+        check(dbl.compose(inc).apply(3) == 8 && order.toString().equals("id"), "compose i,d");
+        order.setLength(0);
+        check(dbl.compose(inc).apply(3) == inc.andThen(dbl).apply(3), "compose(g) == g.andThen(f)");
+        Function<String, String> id = Function.identity();
+        check(id.apply("x") == "x", "identity returns same reference");
+        Object o = new Object();
+        check(Function.identity().apply(o) == o, "identity reference equality for any type");
+        checkThrows(NullPointerException.class, () -> dbl.andThen(null), "andThen(null) NPE");
+        checkThrows(NullPointerException.class, () -> dbl.compose(null), "compose(null) NPE");
+        RuntimeException boom = new RuntimeException("fn");
+        try {
+            ((Function<Integer, Integer>) x -> { throw boom; }).andThen(inc).apply(1);
+            check(false, "exception relayed");
+        } catch (RuntimeException e) {
+            check(e == boom, "exact exception relayed");
+        }
+        // 类型变换链 String->Integer->String
+        Function<String, Integer> len = String::length;
+        Function<Integer, String> quoted = n -> "[" + n + "]";
+        check(len.andThen(quoted).apply("abcd").equals("[4]"), "type-changing chain");
+        check(len.compose(s -> s + "xy").apply("ab") == 4, "compose type-changing");
+        // null 入参合法（函数自行处理）
+        Function<String, String> nullSafe = s -> s == null ? "was-null" : s;
+        check("was-null".equals(nullSafe.apply(null)), "null input handled by function");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

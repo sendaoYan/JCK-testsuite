@@ -75,7 +75,21 @@ public class LocaleServiceProviderTest {
                      "isSupportedLocale(null)");
     }
 
+
+    // ===================== 契约深化：isSupportedLocale 默认（availableLocales 含则 true） + null NPE =====================
+    static void testContracts() {
+        final Locale[] locs = {Locale.CANADA_FRENCH};
+        LocaleServiceProvider p = new LocaleServiceProvider() {
+            public Locale[] getAvailableLocales() { return locs; }
+        };
+        check(p.isSupportedLocale(Locale.CANADA_FRENCH), "isSupportedLocale true for listed");
+        check(!p.isSupportedLocale(Locale.CHINA), "isSupportedLocale false for unlisted");
+        expectThrows(NullPointerException.class, () -> p.isSupportedLocale(null), "isSupportedLocale(null) NPE");
+        check(p.getAvailableLocales().length == 1, "availableLocales passthrough");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

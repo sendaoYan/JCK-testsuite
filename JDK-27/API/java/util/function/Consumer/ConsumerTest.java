@@ -45,8 +45,38 @@ public class ConsumerTest {
         first.andThen(second).accept(0);
         check(order[0] == 2, "order completed");
     }
+
+    // ===================== 契约深化：andThen 顺序/异常中继/链式/null 元素 =====================
+    static void testContracts() {
+        final StringBuilder order = new StringBuilder();
+        Consumer<String> a = s -> order.append("a").append(s);
+        Consumer<String> b = s -> order.append("b").append(s);
+        a.andThen(b).accept("x");
+        check(order.toString().equals("axbx"), "andThen order");
+        order.setLength(0);
+        a.andThen(b).andThen(a).accept("y");
+        check(order.toString().equals("aybyay"), "3-stage chain order");
+        final int[] ran = {0};
+        RuntimeException boom = new RuntimeException("c");
+        try {
+            ((Consumer<String>) s -> { throw boom; }).andThen(s -> ran[0]++).accept("z");
+            check(false, "exception relayed");
+        } catch (RuntimeException e) {
+            check(e == boom, "exact exception relayed");
+        }
+        check(ran[0] == 0, "second not run after first throws");
+        checkThrows(NullPointerException.class, () -> a.andThen(null), "andThen(null) NPE");
+        final boolean[] sawNull = {false};
+        Consumer<String> nullOk = s -> sawNull[0] = s == null;
+        nullOk.accept(null);
+        check(sawNull[0], "null element acceptable");
+        // andThen 返回新对象（非自身）
+        check(a.andThen(b) != a && a.andThen(b) != b, "andThen returns composed instance");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

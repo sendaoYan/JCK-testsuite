@@ -136,7 +136,53 @@ public class HandlerTest {
         public void close() { }
     }
 
+
+    // ===================== 契约深化：附件默认值与全往返/Encoding 默认 null =====================
+    static java.util.logging.Handler freshHandler() {
+        return new java.util.logging.Handler() {
+            public void publish(java.util.logging.LogRecord r) { }
+            public void flush() { }
+            public void close() { }
+        };
+    }
+    static void testContracts() throws Exception {
+        java.util.logging.Handler h = freshHandler();
+        check(h.getFilter() == null, "default filter null");
+        check(h.getFormatter() == null, "default formatter null");
+        check(h.getLevel() == java.util.logging.Level.ALL, "default level ALL");
+        check(h.getEncoding() == null, "default encoding null");
+        check(h.getErrorManager() != null, "default ErrorManager present");
+        // 全往返
+        java.util.logging.Filter f = r -> true;
+        h.setFilter(f);
+        check(h.getFilter() == f, "filter round-trip");
+        java.util.logging.Formatter fmt = new java.util.logging.SimpleFormatter();
+        h.setFormatter(fmt);
+        check(h.getFormatter() == fmt, "formatter round-trip");
+        h.setLevel(java.util.logging.Level.WARNING);
+        check(h.getLevel() == java.util.logging.Level.WARNING, "level round-trip");
+        h.setEncoding("UTF-16");
+        check("UTF-16".equals(h.getEncoding()), "encoding round-trip");
+        java.util.logging.ErrorManager em = new java.util.logging.ErrorManager();
+        h.setErrorManager(em);
+        check(h.getErrorManager() == em, "errorManager round-trip");
+        // isLoggable 综合 level + filter
+        check(h.isLoggable(new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "s")), "above level loggable");
+        check(!h.isLoggable(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "i")), "below level not loggable");
+        h.setFilter(r -> false);
+        check(!h.isLoggable(new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "s")),
+              "filter false overrides level");
+        // null 参数 NPE
+        try { h.setFormatter(null); check(false, "setFormatter(null) NPE"); }
+        catch (NullPointerException e) { check(true, "setFormatter(null) NPE"); }
+        try { h.setLevel(null); check(false, "setLevel(null) NPE"); }
+        catch (NullPointerException e) { check(true, "setLevel(null) NPE"); }
+        try { h.setErrorManager(null); check(false, "setErrorManager(null) NPE"); }
+        catch (NullPointerException e) { check(true, "setErrorManager(null) NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

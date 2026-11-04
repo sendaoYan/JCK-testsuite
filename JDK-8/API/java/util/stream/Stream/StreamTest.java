@@ -178,7 +178,92 @@ public class StreamTest {
         check(order[0] == 0 && order[1] == 1, "close handlers run in reverse registration order");
     }
 
+
+    // ===================== 契约深化：并行 encounter order/短路 peek 计数/稳定排序/concat/suppressed close =====================
+    static void testContracts() {
+        // forEachOrdered：并行流保证 encounter order
+        final java.util.List<Integer> order = java.util.Collections.synchronizedList(new java.util.ArrayList<Integer>());
+        java.util.stream.IntStream.range(0, 100).parallel().boxed().forEachOrdered(order::add);
+        check(order.size() == 100 && order.get(0) == 0 && order.get(99) == 99,
+              "parallel forEachOrdered keeps encounter order");
+        // findFirst：并行流仍返回 encounter order 第一个
+        check(java.util.stream.IntStream.range(0, 100).parallel().boxed().findFirst().get() == 0,
+              "parallel findFirst returns first in encounter order");
+        // 短路：anyMatch 停止后上游不再处理（peek 计数）
+        final int[] seen = {0};
+        boolean any = Stream.iterate(0, i -> i + 1).peek(i -> seen[0]++)
+                .anyMatch(i -> i == 3);
+        check(any && seen[0] <= 4, "anyMatch short-circuits upstream (saw " + seen[0] + ")");
+        // limit 影响上游处理次数（无限流 + limit 有限处理）
+        final int[] mapped = {0};
+        long cnt = Stream.iterate(1, i -> i + 1).map(i -> { mapped[0]++; return i; }).limit(5).count();
+        check(cnt == 5 && mapped[0] == 5, "limit bounds upstream mapping exactly (saw " + mapped[0] + ")");
+        // skip(n) 后余量
+        check(Stream.of(1, 2, 3, 4, 5).skip(2).collect(Collectors.toList()).equals(Arrays.asList(3, 4, 5)),
+              "skip leaves tail");
+        check(Stream.of(1, 2).skip(5).count() == 0, "skip past end empty");
+        // sorted 稳定性：同键保持插入序
+        java.util.List<String> stable = Stream.of("b2", "a1", "b1", "a2", "c1")
+                .sorted(java.util.Comparator.comparing((String s) -> s.substring(0, 1)))
+                .collect(Collectors.toList());
+        check(stable.equals(Arrays.asList("a1", "a2", "b2", "b1", "c1")), "sorted is stable: " + stable);
+        // flatMap 一对多/空
+        check(Stream.of(1, 2, 3).flatMap(i -> i == 2 ? Stream.<Integer>empty() : Stream.of(i, i * 10))
+              .collect(Collectors.toList()).equals(Arrays.asList(1, 10, 3, 30)), "flatMap flattens incl. empty");
+        // concat 保序 + 元素计数
+        check(Stream.concat(Stream.of(1, 2), Stream.of(3)).collect(Collectors.toList())
+              .equals(Arrays.asList(1, 2, 3)), "concat keeps order");
+        check(Stream.concat(Stream.empty(), Stream.empty()).count() == 0, "concat of empties empty");
+        // max/min 空流 Optional.empty
+        check(!Stream.<Integer>empty().max(Integer::compare).isPresent(), "empty max Optional.empty");
+        check(!Stream.<Integer>empty().min(Integer::compare).isPresent(), "empty min Optional.empty");
+        check(Stream.of(3, 9, 1).max(Integer::compare).get() == 9, "max present");
+        // distinct 用 equals 折叠（保留首个）
+        java.util.List<String> dup = Stream.of("a", new String("a"), "b").distinct()
+              .collect(Collectors.toList());
+        check(dup.size() == 2 && dup.get(0).equals("a"), "distinct folds by equals");
+        // Stream.of((T[]) null) NPE vs of(null) 单元素
+        checkThrows(NullPointerException.class, () -> Stream.of((Integer[]) null), "of(null array) NPE");
+        check(Stream.of((Object) null).count() == 1, "of(null scalar) single element");
+        // builder 复用 ISE + 空流
+        Stream.Builder<Integer> b = Stream.builder();
+        b.add(1);
+        b.build();
+        checkThrows(IllegalStateException.class, () -> b.add(2), "builder reuse ISE");
+        checkThrows(IllegalStateException.class, () -> b.build(), "builder rebuild ISE");
+        check(Stream.builder().build().count() == 0, "empty builder empty stream");
+        // onClose 异常聚合：主异常 + suppressed
+        RuntimeException e1 = new RuntimeException("one");
+        RuntimeException e2 = new RuntimeException("two");
+        Stream<Integer> cs = Stream.of(1).onClose(() -> { throw e1; }).onClose(() -> { throw e2; });
+        try {
+            cs.close();
+            check(false, "close throws primary");
+        } catch (RuntimeException ex) {
+            check(ex.getMessage().equals("one"), "primary is first throwing handler");
+            Throwable[] sup = ex.getSuppressed();
+            check(sup.length == 1 && sup[0] == e2, "second handler exception suppressed");
+        }
+        // 顺序不变量：filter+map+sorted+collect 与顺序手算一致（parallel 全等）
+        java.util.List<Integer> ref = Stream.of(5, 3, 8, 1, 9, 2).filter(x -> x % 2 == 1)
+                .sorted().collect(Collectors.toList());
+        java.util.List<Integer> par = Stream.of(5, 3, 8, 1, 9, 2).parallel().filter(x -> x % 2 == 1)
+                .sorted().collect(Collectors.toList());
+        check(ref.equals(par) && ref.equals(Arrays.asList(1, 3, 5, 9)), "parallel == sequential for sorted collect");
+        // iterate + generate 确定性
+        check(Stream.iterate(1, i -> i * 2).limit(6).collect(Collectors.toList())
+              .equals(Arrays.asList(1, 2, 4, 8, 16, 32)), "iterate doubles");
+        final int[] g = {0};
+        check(Stream.generate(() -> ++g[0]).limit(3).collect(Collectors.toList())
+              .equals(Arrays.asList(1, 2, 3)), "generate with limit");
+        // toArray(IntFunction) 空流零长
+        check(Stream.<String>empty().toArray(String[]::new).length == 0, "empty toArray zero length");
+        String[] typed = Stream.of("x", "y").toArray(String[]::new);
+        check(typed.length == 2 && typed.getClass() == String[].class, "typed array exact class");
+    }
+
     public static void main(String[] args) {
+        testContracts();
         testFactories();
         testLaziness();
         testIntermediateOps();

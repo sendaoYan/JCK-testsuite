@@ -70,7 +70,28 @@ public class FilterTest {
         public void close() { }
     }
 
+
+    // ===================== 契约深化：函数式 lambda 门控/与 Logger 集成往返 =====================
+    static void testContracts() {
+        java.util.logging.LogRecord ok = new java.util.logging.LogRecord(java.util.logging.Level.INFO, "ok-1");
+        java.util.logging.LogRecord no = new java.util.logging.LogRecord(java.util.logging.Level.INFO, "no-1");
+        java.util.logging.Filter f = r -> r.getMessage().startsWith("ok");
+        check(f.isLoggable(ok) && !f.isLoggable(no), "lambda Filter discriminates");
+        // 与 Logger 集成：setFilter/getFilter 往返 + 移除
+        java.util.logging.Logger l = java.util.logging.Logger.getLogger("jck.filter.roundtrip");
+        l.setFilter(f);
+        check(l.getFilter() == f, "setFilter/getFilter identity");
+        l.setFilter(null);
+        check(l.getFilter() == null, "clear filter");
+        // null record NPE（lambda 不接收 null）
+        try {
+            f.isLoggable(null);
+            check(false, "isLoggable(null) behavior");
+        } catch (NullPointerException e) { check(true, "lambda rejects null (NPE)"); }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

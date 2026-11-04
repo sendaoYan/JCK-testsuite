@@ -8,7 +8,26 @@
 public class OfLongTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ===================== 契约深化：默认方法语义（begin/end/cancellationRequested）反射锁定 =====================
+    static void testContracts() throws Exception {
+        Class<?> c = Class.forName("java.util.stream.Sink");
+        java.util.Set<String> defaults = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            if (m.isDefault()) defaults.add(m.getName());
+        }
+        check(defaults.contains("begin"), "begin is default (no-op)");
+        check(defaults.contains("end"), "end is default (no-op)");
+        check(defaults.contains("cancellationRequested"), "cancellationRequested is default (false)");
+        check(defaults.contains("accept"), "accept(Object) is default (throws IllegalStateException)");
+        java.lang.reflect.Method cc = c.getDeclaredMethod("cancellationRequested");
+        check(cc.getReturnType() == boolean.class, "cancellationRequested returns boolean");
+        check(c.getDeclaredMethod("begin", long.class).getReturnType() == void.class, "begin(long) returns void");
+        check(c.getDeclaredMethod("end").getReturnType() == void.class, "end() returns void");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         Class<?> c = Class.forName("java.util.stream.Sink$OfLong");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "interface has no superclass");

@@ -4,6 +4,7 @@
  * @run main BiFunctionTest
  */
 
+import java.util.function.Function;
 import java.util.function.BiFunction;
 
 public class BiFunctionTest {
@@ -45,8 +46,44 @@ public class BiFunctionTest {
         try { fail.andThen(x -> x + 1).apply(1, 2); throw new AssertionError("relay"); }
         catch (IllegalStateException c) { check(c == ex, "relay"); }
     }
+
+    // ===================== 契约深化：andThen 顺序/generic 协变/无 compose/异常中继 =====================
+    static void testContracts() {
+        final int[] calls = {0};
+        BiFunction<Integer, Integer, Integer> add = (a, b) -> a + b;
+        Function<Integer, String> tag = x -> { calls[0]++; return "v" + x; };
+        calls[0] = 0;
+        check(add.andThen(tag).apply(2, 3).equals("v5"), "andThen applies function to result");
+        check(calls[0] == 1, "downstream called exactly once");
+        checkThrows(NullPointerException.class, () -> add.andThen(null), "andThen(null) NPE");
+        // BiFunction 无 compose（API 面锁定）
+        try {
+            check(BiFunction.class.getMethod("compose", Function.class) == null, "unreachable");
+        } catch (NoSuchMethodException e) {
+            check(true, "BiFunction declares no compose");
+        }
+        // 异常中继 + 下游不执行
+        final int[] ran = {0};
+        RuntimeException boom = new RuntimeException("bf");
+        BiFunction<Integer, Integer, Integer> thrower = (a, b) -> { throw boom; };
+        try {
+            thrower.andThen(x -> { ran[0]++; return x; }).apply(1, 2);
+            check(false, "exception relayed");
+        } catch (RuntimeException e) {
+            check(e == boom, "exact exception relayed");
+        }
+        check(ran[0] == 0, "downstream not run when upstream throws");
+        // 返回 null 合法
+        BiFunction<String, String, String> nuller = (a, b) -> null;
+        check(nuller.apply("a", "b") == null, "null result legal");
+        // 协变：子类型函数可组合
+        BiFunction<Object, Object, CharSequence> wide = (a, b) -> String.valueOf(a) + b;
+        check("xy".equals(wide.andThen((CharSequence s) -> s.toString()).apply("x", "y")), "covariant andThen");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

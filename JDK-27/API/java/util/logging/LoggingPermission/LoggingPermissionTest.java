@@ -69,7 +69,36 @@ public class LoggingPermissionTest {
                 () -> new LoggingPermission(null, null), "null name NPE");
     }
 
+
+    // ===================== 契约深化：仅 control 名合法/非 null actions 校验/implies-equals-hashCode 对称 =====================
+    static void testContracts() {
+        java.util.logging.LoggingPermission p = new java.util.logging.LoggingPermission("control", null);
+        check(p.getName().equals("control"), "name is control");
+        check("".equals(p.getActions()), "actions empty string");
+        // 等价实例：implies/equals/hashCode 一致
+        java.util.logging.LoggingPermission q = new java.util.logging.LoggingPermission("control", "");
+        check(p.implies(q) && q.implies(p), "mutual implies");
+        check(p.equals(q) && q.equals(p), "equals symmetric");
+        check(p.hashCode() == q.hashCode(), "hashCode consistent with equals");
+        check(!p.equals(null) && !p.equals("control"), "equals null/foreign false");
+        // 非 control 名 IAE；actions 非 null IAE
+        try {
+            new java.util.logging.LoggingPermission("write", null);
+            check(false, "bad name IAE");
+        } catch (IllegalArgumentException e) { check(true, "bad name IAE"); }
+        try {
+            new java.util.logging.LoggingPermission("control", "read");
+            check(false, "non-null actions IAE");
+        } catch (IllegalArgumentException e) { check(true, "non-null actions IAE"); }
+        // null name NPE
+        try {
+            new java.util.logging.LoggingPermission(null, null);
+            check(false, "null name NPE");
+        } catch (NullPointerException e) { check(true, "null name NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

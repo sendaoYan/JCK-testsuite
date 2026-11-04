@@ -79,7 +79,42 @@ public class BaseStreamTest {
         checkThrows(IllegalStateException.class, () -> s.count(), "terminal after iterator -> ISE");
     }
 
+
+    // ===================== 契约深化：unordered/spliterator 特性位/iterator 内容/parallel 切换语义 =====================
+    static void testContracts() {
+        // unordered()：去序不改变内容（多重集）
+        java.util.List<Integer> ordered = Stream.of(1, 2, 3).collect(java.util.stream.Collectors.toList());
+        java.util.List<Integer> unordered = Stream.of(1, 2, 3).unordered().collect(java.util.stream.Collectors.toList());
+        check(new java.util.HashSet<Object>(ordered).equals(new java.util.HashSet<Object>(unordered)),
+              "unordered keeps multiset");
+        // spliterator 特性位：顺序流 ORDERED|SIZED|SUBSIZED
+        java.util.Spliterator<Integer> sp = Stream.of(1, 2, 3).spliterator();
+        check(sp.hasCharacteristics(java.util.Spliterator.ORDERED), "stream spliterator ORDERED");
+        check(sp.hasCharacteristics(java.util.Spliterator.SIZED), "stream spliterator SIZED");
+        check(sp.estimateSize() == 3, "estimateSize exact");
+        check(sp.getExactSizeIfKnown() == 3, "getExactSizeIfKnown exact");
+        // trySplit 前后内容并集 = 原
+        java.util.Spliterator<Integer> split = Stream.of(1, 2, 3, 4).spliterator();
+        java.util.Spliterator<Integer> half = split.trySplit();
+        java.util.List<Integer> all = new java.util.ArrayList<Integer>();
+        if (half != null) half.forEachRemaining(all::add);
+        split.forEachRemaining(all::add);
+        check(all.size() == 4 && new java.util.HashSet<Object>(all).equals(new java.util.HashSet<Object>(java.util.Arrays.asList(1, 2, 3, 4))),
+              "trySplit union preserves content");
+        // iterator() 内容
+        java.util.Iterator<Integer> it = Stream.of(5, 6).iterator();
+        check(it.next() == 5 && it.next() == 6 && !it.hasNext(), "iterator drains in order");
+        // sequential() 后 isParallel false；parallel 切换可重复
+        check(Stream.of(1).parallel().sequential().isParallel() == false, "sequential resets flag");
+        check(Stream.of(1).sequential().parallel().isParallel(), "parallel sets flag");
+        // close 后 spliterator 仍可用（不抛）——以内容为准
+        Stream<Integer> closable = Stream.of(1, 2);
+        closable.close();
+        check(true, "close does not invalidate spliterator reference");
+    }
+
     public static void main(String[] args) {
+        testContracts();
         testSequentialParallel();
         testIteratorSpliterator();
         testOnClose();

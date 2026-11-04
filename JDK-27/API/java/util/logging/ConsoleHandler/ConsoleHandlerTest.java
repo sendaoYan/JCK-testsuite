@@ -55,7 +55,37 @@ public class ConsoleHandlerTest {
         h.close();
     }
 
+
+    // ===================== 契约深化：发布到 System.err（重定向捕获）/默认 INFO+SimpleFormatter/级别门控 =====================
+    static void testContracts() {
+        java.io.PrintStream oldErr = System.err;
+        java.io.ByteArrayOutputStream cap = new java.io.ByteArrayOutputStream();
+        System.setErr(new java.io.PrintStream(cap, true));
+        try {
+            java.util.logging.ConsoleHandler ch = new java.util.logging.ConsoleHandler();
+            check(ch.getLevel() == java.util.logging.Level.INFO, "default level INFO");
+            check(ch.getFormatter() instanceof java.util.logging.SimpleFormatter, "default SimpleFormatter");
+            ch.publish(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "to-stderr"));
+            ch.flush();
+            check(cap.toString().contains("to-stderr"), "publishes to System.err (captured)");
+            // 低于级别：不写
+            cap.reset();
+            ch.publish(new java.util.logging.LogRecord(java.util.logging.Level.FINE, "dropped-fine"));
+            ch.flush();
+            check(!cap.toString().contains("dropped-fine"), "FINE dropped at default INFO");
+            // 提升 level 后 FINE 通过
+            ch.setLevel(java.util.logging.Level.ALL);
+            ch.publish(new java.util.logging.LogRecord(java.util.logging.Level.FINE, "kept-fine"));
+            ch.flush();
+            check(cap.toString().contains("kept-fine"), "FINE passes after setLevel(ALL)");
+            ch.close();
+        } finally {
+            System.setErr(oldErr);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

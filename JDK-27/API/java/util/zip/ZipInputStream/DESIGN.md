@@ -1,31 +1,26 @@
-# java.util.zip.ZipInputStream 测试方案
+# java.util.zip.ZipInputStream 测试设计案
 
-白盒结构断言在 `ZipInputStreamTest.testWhiteBox()`，黑盒行为断言在 `ZipInputStreamTest.testBlackBox()`。
+> 覆盖目标：**完整契约**。headless 安全。
 
-## 1. API 功能（按方法分组）
+## 1. API 功能
 
-- **构造**：`(InputStream in)`、`(InputStream in, Charset charset)`。
-- **条目**：`getNextEntry()`、`closeEntry()`。
-- **读**：`read()`、`read(byte[],int,int)`、`readAllBytes()`、`readNBytes(int)`、`readNBytes(byte[],int,int)`、`skip(long)`、`skipNBytes(long)`、`transferTo(OutputStream)`、`available()`。
-- 继承 `InflaterInputStream implements ZipConstants`。
+读 ZIP：构造（InputStream / +Charset）、`getNextEntry()`、`closeEntry()`、`read`、`skip`、`available()`、`close()`；继承 `InflaterInputStream`。
 
 ## 2. Java 用户如何使用
 
-- 构造：`ZipInputStream zin = new ZipInputStream(in);`。
-- 典型调用：循环 `while ((e = zin.getNextEntry()) != null) { zin.readAllBytes(); zin.closeEntry(); }`。
-- 真实组合链路：`getNextEntry` → `read/readAllBytes` → `closeEntry` → 下一 `getNextEntry`。
+- `while ((e = getNextEntry()) != null) { 读当前条目; closeEntry(); }`。
+- 依赖：读尽返回 null；`available()` 条目结束前 1、结束后 0；`skip(-1)`→IAE；关闭后 read/getNextEntry→IOException；DEFLATED 条目用数据描述符时 size/crc 读完后才可知。
 
-## 3. 开源代码实际用法调研
+## 3. 参考来源
 
-> 说明：本环境 WebSearch 不可用，调研基于 JDK-27 实现源码与 `test/jdk`，逐条标注来源。
+- OpenJDK 源码 `~/git/jdk8u-dev/jdk/src/share/classes/java/util/zip/ZipInputStream.java`。
 
-- `test/jdk/java/util/zip/ZipInputStream/Zip64DataDescriptor.java:267`：`try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zip)))` —— 读回 ZIP。
-- `test/jdk/java/util/zip/ZipInputStream/Zip64DataDescriptor.java:118-121`：`ZipOutputStream` 侧 `putNextEntry(ze)` —— 写读配合。
-- `src/java.base/share/classes/java/util/zip/ZipInputStream.java:238`：`readAllBytes()` 读取当前条目剩余字节的实现点。
+## 4. 测试用例设计
 
-## 4. 测试用例设计 + 自动化实现
-
-- **正常**：多条目按写入顺序读出；`readAllBytes()` 读当前条目内容；`read(byte[],off,len)` 读回长度与内容；读尽后 `getNextEntry()` 返回 null。
-- **组合**：`closeEntry()` 后推进下一 `getNextEntry()`；`readNBytes(int)` 读固定字节。
-- **自动化**：`ZipInputStreamTest.testBlackBox()`；`testWhiteBox()` 校验 `extends InflaterInputStream`、构造器与条目/读方法存在。
-- **健壮性**：固定输入、ByteArray 流、headless、无 `@key`。
+| 测试点 | 用例方法 |
+|---|---|
+| 多条目往返 STORED/DEFLATED | testRoundTrip |
+| 元数据（size/crc/time） | testMetadata |
+| skip / closeEntry | testSkipAndCloseEntry |
+| null/越界 | testNullAndBounds |
+| 关闭后行为 | testClose |

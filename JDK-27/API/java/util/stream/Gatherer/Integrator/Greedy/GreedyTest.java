@@ -43,7 +43,25 @@ public class GreedyTest {
         check(greedy instanceof Gatherer.Integrator, "Greedy is also an Integrator");
     }
 
+
+    // ===================== 契约深化：Greedy 语义（总是继续）/静态工厂（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        java.util.List<Integer> sink = new java.util.ArrayList<Integer>();
+        Gatherer.Integrator.Greedy<Void, Integer, Integer> g =
+                Gatherer.Integrator.ofGreedy((s, e, down) -> down.push(e));
+        check(g.integrate(null, 1, e -> { sink.add(e); return true; }), "greedy integrate true");
+        check(g.integrate(null, 2, e -> { sink.add(e); return true; }), "greedy continues after first");
+        check(sink.equals(java.util.Arrays.asList(1, 2)), "greedy pushed both");
+        // 在 gatherer 中使用：总是消费全部输入
+        Gatherer<Integer, Void, Integer> all =
+                Gatherer.of(Gatherer.Integrator.ofGreedy(
+                        (Void s, Integer e, Gatherer.Downstream<? super Integer> d) -> d.push(e)));
+        check(java.util.stream.Stream.of(1, 2, 3).gather(all).toList()
+              .equals(java.util.Arrays.asList(1, 2, 3)), "greedy-driven gatherer consumes all");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

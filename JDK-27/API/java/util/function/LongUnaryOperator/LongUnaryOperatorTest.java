@@ -37,8 +37,26 @@ public class LongUnaryOperatorTest {
         checkThrows(NullPointerException.class, () -> inc.andThen(null), "andThen(null)");
         checkThrows(NullPointerException.class, () -> inc.compose(null), "compose(null)");
     }
+
+    // ===================== 契约深化：compose/andThen 顺序矩阵/identity/NPE =====================
+    static void testContracts() {
+        final StringBuilder order = new StringBuilder();
+        LongUnaryOperator dbl = n -> { order.append('d'); return n * 2; };
+        LongUnaryOperator inc = n -> { order.append('i'); return n + 1; };
+        order.setLength(0);
+        check(dbl.andThen(inc).applyAsLong(3L) == 7L && order.toString().equals("di"), "andThen d,i");
+        order.setLength(0);
+        check(dbl.compose(inc).applyAsLong(3L) == 8L && order.toString().equals("id"), "compose i,d");
+        check(LongUnaryOperator.identity().applyAsLong(-11L) == -11L, "identity passthrough");
+        checkThrows(NullPointerException.class, () -> dbl.andThen(null), "andThen(null) NPE");
+        checkThrows(NullPointerException.class, () -> dbl.compose(null), "compose(null) NPE");
+        check(dbl.applyAsLong(Long.MAX_VALUE / 2 + 1) < 0
+              && dbl.andThen(dbl).applyAsLong(Long.MAX_VALUE / 2 + 1) == 0L, "overflow wraps in chain");
+    }
+
     public static void main(String[] args) {
         testMain();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

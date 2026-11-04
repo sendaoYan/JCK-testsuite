@@ -93,7 +93,58 @@ public class StreamHandlerTest {
                 "StreamHandler(out, null) NPE");
     }
 
+
+    // ===================== 契约深化：publish+flush 落字节/级别丢弃/close 后丢弃/setOutputStream 切换 =====================
+    static void testContracts() throws Exception {
+        final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.util.logging.StreamHandler h = new java.util.logging.StreamHandler(bos, new java.util.logging.SimpleFormatter());
+        h.setLevel(java.util.logging.Level.ALL);
+        // publish + flush
+        h.publish(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "m1"));
+        h.flush();
+        check(bos.size() > 0 && bos.toString().contains("m1"), "publish+flush writes bytes");
+        int afterFirst = bos.size();
+        // close 后 publish 被忽略（无异常）
+        h.close();
+        h.publish(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "after-close"));
+        h.flush();
+        check(bos.size() == afterFirst, "publish after close silently dropped");
+        // 级别丢弃
+        final java.io.ByteArrayOutputStream b2 = new java.io.ByteArrayOutputStream();
+        java.util.logging.StreamHandler gated = new java.util.logging.StreamHandler(b2, new java.util.logging.SimpleFormatter());
+        gated.setLevel(java.util.logging.Level.WARNING);
+        gated.publish(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "dropped"));
+        gated.flush();
+        check(b2.size() == 0, "below-level record dropped");
+        gated.publish(new java.util.logging.LogRecord(java.util.logging.Level.WARNING, "kept"));
+        gated.flush();
+        check(b2.toString().contains("kept"), "at-level record kept");
+        // setOutputStream 切换目标（protected：经子类暴露）
+        final java.io.ByteArrayOutputStream b3 = new java.io.ByteArrayOutputStream();
+        class Exposed extends java.util.logging.StreamHandler {
+            Exposed(java.io.OutputStream os, java.util.logging.Formatter f) { super(os, f); }
+            void redirect(java.io.OutputStream os) { setOutputStream(os); }
+        }
+        Exposed sw = new Exposed(b2, new java.util.logging.SimpleFormatter());
+        sw.setLevel(java.util.logging.Level.ALL);
+        sw.redirect(b3);
+        sw.publish(new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "switched"));
+        sw.flush();
+        check(b3.toString().contains("switched") && !b2.toString().contains("switched"),
+              "setOutputStream redirects subsequent output");
+        // null 流/格式器 NPE
+        try {
+            new java.util.logging.StreamHandler(null, new java.util.logging.SimpleFormatter());
+            check(false, "null stream NPE");
+        } catch (NullPointerException e) { check(true, "null stream NPE"); }
+        try {
+            new java.util.logging.StreamHandler(bos, null);
+            check(false, "null formatter NPE");
+        } catch (NullPointerException e) { check(true, "null formatter NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

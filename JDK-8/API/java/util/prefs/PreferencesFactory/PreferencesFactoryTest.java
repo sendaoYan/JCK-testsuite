@@ -84,7 +84,34 @@ public class PreferencesFactoryTest {
         check(node.parent() == injectedUser, "node parent is factory root");
     }
 
+
+    // ===================== 契约深化：userRoot/systemRoot 契约（默认工厂单例根） =====================
+    static void testContracts() throws Exception {
+        java.util.prefs.PreferencesFactory f =
+                new java.util.prefs.PreferencesFactory() {
+                    public java.util.prefs.Preferences userRoot() { return java.util.prefs.Preferences.userRoot(); }
+                    public java.util.prefs.Preferences systemRoot() { return java.util.prefs.Preferences.systemRoot(); }
+                };
+        java.util.prefs.Preferences ur = f.userRoot();
+        java.util.prefs.Preferences sr = f.systemRoot();
+        check(ur != null && sr != null, "factory roots non-null");
+        check(ur != sr, "userRoot distinct from systemRoot");
+        check(ur == java.util.prefs.Preferences.userRoot(), "userRoot stable across calls");
+        check(sr == java.util.prefs.Preferences.systemRoot(), "systemRoot stable across calls");
+        check("/".equals(ur.absolutePath()) && "/".equals(sr.absolutePath()), "roots have absolute path /");
+        // 与 user 节点交互不抛
+        java.util.prefs.Preferences n = ur.node("/jck/testFactory1");
+        try {
+            n.put("k", "v");
+            check("v".equals(n.get("k", "d")), "factory userRoot usable");
+            n.clear();
+        } finally {
+            try { n.removeNode(); } catch (Exception ignore) { }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

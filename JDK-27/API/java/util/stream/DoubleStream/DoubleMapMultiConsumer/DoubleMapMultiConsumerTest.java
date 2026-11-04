@@ -66,7 +66,24 @@ public class DoubleMapMultiConsumerTest {
         check(Arrays.equals(filtered, new double[]{2.0, 4.0}), "conditional emission acts like filter");
     }
 
+
+    // ===================== 契约深化：作为 mapMulti 函数式接口丢弃元素（JDK-27 侧锁定） =====================
+    static void testContracts() {
+        java.util.stream.DoubleStream.DoubleMapMultiConsumer dropped =
+                (double value, java.util.function.DoubleConsumer sink) -> { if (value >= 2.0) sink.accept(value); };
+        final double[] acc = {0.0};
+        java.util.function.DoubleConsumer sink = v -> acc[0] += v;
+        dropped.accept(2.5, sink);
+        check(acc[0] == 2.5, "passing value forwarded");
+        dropped.accept(1.0, sink);
+        check(acc[0] == 2.5, "filtered value dropped (sink not invoked)");
+        check(java.util.stream.DoubleStream.of(1.0, 2.0, 3.0)
+              .mapMulti((double v, java.util.function.DoubleConsumer sink2) -> { if (v >= 2.0) sink2.accept(v); })
+              .toArray().length == 2, "mapMulti filters end-to-end");
+    }
+
     public static void main(String[] args) throws Exception {
+        testContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

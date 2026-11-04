@@ -165,7 +165,98 @@ public class CollectorsTest {
         checkThrows(NullPointerException.class, () -> Stream.of(1).collect(Collectors.summarizingInt(null)), "summarizingInt(null) NPE");
     }
 
+
+    // ===================== 契约深化：toMap 重复键/toSet/groupingBy 矩阵/collectingAndThen/joining 前后缀 =====================
+    static void testContracts() {
+        java.util.function.Function<String, Integer> len = String::length;
+        // toSet 内容
+        java.util.Set<Integer> lens = Stream.of("a", "bb", "cc", "ddd").map(String::length).collect(Collectors.toSet());
+        check(lens.size() == 3 && lens.contains(1) && lens.contains(2) && lens.contains(3),
+              "toSet deduplicates by equals");
+        // toMap 重复键 -> IllegalStateException（消息两侧版本差异见断言）
+        try {
+            Stream.of("a", "b", "a").collect(Collectors.toMap(s -> s.length(), Function.identity()));
+            check(false, "toMap duplicate key throws ISE");
+        } catch (IllegalStateException e) {
+            check("Duplicate key a".equals(e.getMessage()),
+                      "toMap dup message (JDK-8 form): " + e.getMessage());
+        }
+        // merge 函数覆盖分支
+        java.util.Map<Integer, String> merged = Stream.of("ab", "cd", "ef")
+              .collect(Collectors.toMap(k -> 1, Function.identity(), (a, b) -> a + "|" + b));
+        check("ab|cd|ef".equals(merged.get(1)), "toMap merge folds in encounter order");
+        // toMap null value -> NPE
+        try {
+            Stream.of("k").collect(Collectors.toMap(Function.identity(), s -> null));
+            check(false, "toMap null value NPE");
+        } catch (NullPointerException e) { check(true, "toMap null value NPE"); }
+        try {
+            Stream.of("k").collect(Collectors.toMap(null, Function.identity()));
+            check(false, "toMap null keyMapper NPE");
+        } catch (NullPointerException e) { check(true, "toMap null keyMapper NPE"); }
+        // groupingBy：分类器返回 null -> NPE
+        try {
+            Stream.of("x").collect(Collectors.groupingBy(s -> (String) null));
+            check(false, "groupingBy null classifier result NPE");
+        } catch (NullPointerException e) { check(true, "groupingBy null classifier result NPE"); }
+        // groupingBy 下游 counting / mapping
+        java.util.Map<Integer, Long> counts = Stream.of("a", "bb", "cc", "ddd")
+              .collect(Collectors.groupingBy(len, Collectors.counting()));
+        check(counts.get(1) == 1L && counts.get(2) == 2L && counts.get(3) == 1L, "groupingBy + counting");
+        java.util.Map<Integer, java.util.List<Integer>> byLenUpper = Stream.of("ab", "cd", "e")
+              .collect(Collectors.groupingBy(len, Collectors.mapping(String::hashCode, Collectors.toList())));
+        check(byLenUpper.get(1).size() == 1 && byLenUpper.get(2).size() == 2, "groupingBy + mapping downstream");
+        // groupingBy(mapFactory) TreeMap -> 键有序
+        java.util.Map<Integer, Long> tree = Stream.of("ddd", "a", "bb")
+              .collect(Collectors.groupingBy(len, java.util.TreeMap::new, Collectors.counting()));
+        check(tree instanceof java.util.TreeMap && new java.util.ArrayList<Object>(tree.keySet())
+              .equals(Arrays.asList(1, 2, 3)), "TreeMap factory keeps keys sorted");
+        // partitioningBy
+        java.util.Map<Boolean, java.util.List<Integer>> parts = Stream.of(1, 2, 3, 4)
+              .collect(Collectors.partitioningBy(i -> i % 2 == 0));
+        check(parts.get(true).equals(Arrays.asList(2, 4)) && parts.get(false).equals(Arrays.asList(1, 3)),
+              "partitioningBy both halves");
+        // collectingAndThen：不可变结果
+        java.util.List<Integer> ro = Stream.of(1, 2, 3)
+              .collect(Collectors.collectingAndThen(Collectors.toList(), java.util.Collections::unmodifiableList));
+        try {
+            ro.add(4);
+            check(false, "collectingAndThen unmodifiable add UOE");
+        } catch (UnsupportedOperationException e) { check(true, "collectingAndThen unmodifiable add UOE"); }
+        // joining 前缀/分隔/后缀
+        check("[a,b,c]".equals(Stream.of("a", "b", "c")
+              .collect(Collectors.joining(",", "[", "]"))), "joining with delimiters");
+        check("[]".equals(Stream.<String>empty().collect(Collectors.joining(",", "[", "]"))),
+              "empty joining is prefix+suffix only");
+        // averaging -> OptionalDouble
+        check(Stream.of(1, 2, 3, 4).collect(Collectors.averagingInt(Integer::intValue)) == 2.5,
+              "averagingInt exact (returns Double)");
+        check(Stream.<Integer>empty().collect(Collectors.averagingInt(Integer::intValue)) == 0.0,
+              "empty averaging returns 0.0 (locked)");
+        // counting 空流 0L、summarizing 全字段
+        check(Stream.of().collect(Collectors.counting()) == 0L, "counting empty 0");
+        java.util.IntSummaryStatistics st = Stream.of("aa", "b", "ccc")
+              .collect(Collectors.summarizingInt(String::length));
+        check(st.getCount() == 3 && st.getSum() == 6 && st.getMin() == 1 && st.getMax() == 3 && st.getAverage() == 2.0,
+              "summarizingInt all fields");
+        // toCollection LinkedHashSet 保插入序
+        java.util.Set<String> ordered = Stream.of("z", "a", "m")
+              .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        check(new java.util.ArrayList<String>(ordered).equals(Arrays.asList("z", "a", "m")),
+              "toCollection preserves encounter order");
+        // reducing 两参
+        check(Stream.of(1, 2, 3).collect(Collectors.reducing(0, Integer::intValue, Integer::sum)) == 6,
+              "reducing 3-arg total");
+        // toMap 空 -> 空 map；parallel collect 一致
+        check(Stream.<String>empty().collect(Collectors.toMap(Function.identity(), Function.identity())).isEmpty(),
+              "toMap empty");
+        java.util.Map<Integer, String> par = java.util.stream.IntStream.range(0, 50).parallel().boxed()
+              .collect(Collectors.toMap(i -> i, String::valueOf));
+        check(par.size() == 50 && "49".equals(par.get(49)), "parallel toMap complete");
+    }
+
     public static void main(String[] args) {
+        testContracts();
         testToCollectionAndList();
         testJoining();
         testMappingCollectingAndThen();

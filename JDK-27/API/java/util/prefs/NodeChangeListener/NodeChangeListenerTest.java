@@ -90,7 +90,35 @@ public class NodeChangeListenerTest {
         check(true, "removeNodeChangeListener");
     }
 
+
+    // ===================== 契约深化：childAdded/childRemoved 双回调（真实触发，隔离节点） =====================
+    static void testContracts() throws Exception {
+        java.util.prefs.Preferences n = java.util.prefs.Preferences.userRoot().node("/jck/testNCL1");
+        try {
+            final int[] added = {0}, removed = {0};
+            java.util.prefs.NodeChangeListener l = new java.util.prefs.NodeChangeListener() {
+                public void childAdded(java.util.prefs.NodeChangeEvent e) { added[0]++; }
+                public void childRemoved(java.util.prefs.NodeChangeEvent e) { removed[0]++; }
+            };
+            n.addNodeChangeListener(l);
+            java.util.prefs.Preferences c = n.node("kid");
+            java.util.prefs.Preferences.userRoot().flush();
+            for (int i = 0; i < 100 && added[0] == 0; i++) Thread.sleep(20);
+            check(added[0] >= 1, "childAdded callback invoked");
+            c.removeNode();
+            java.util.prefs.Preferences.userRoot().flush();
+            for (int i = 0; i < 100 && removed[0] == 0; i++) Thread.sleep(20);
+            check(removed[0] >= 1, "childRemoved callback invoked");
+            // 移除监听器（已注册）不抛
+            n.removeNodeChangeListener(l);
+            check(true, "removeNodeChangeListener registered ok");
+        } finally {
+            try { n.removeNode(); } catch (Exception ignore) { }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

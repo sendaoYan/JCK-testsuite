@@ -101,7 +101,58 @@ public class FileHandlerTest {
         }
     }
 
+
+    // ===================== 契约深化：limit/count 轮转/%t %u 模式/临时目录清理（finally） =====================
+    static void testContracts() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("jck-filehandler");
+        try {
+            // 轮转：limit=100, count=3 → 恰好 3 个文件，按 .0/.1/.2 轮转
+            java.util.logging.FileHandler fh = new java.util.logging.FileHandler(
+                    dir + "/app_%u.log", 100, 3, true);
+            java.util.logging.Logger l = java.util.logging.Logger.getLogger("jck.fh.rotate");
+            l.setUseParentHandlers(false);
+            l.addHandler(fh);
+            l.setLevel(java.util.logging.Level.ALL);
+            fh.setLevel(java.util.logging.Level.ALL);
+            for (int i = 0; i < 30; i++) l.info("row-" + i + "-paddingpaddingpadding");
+            fh.close();
+            l.removeHandler(fh);
+            java.io.File[] files = new java.io.File(dir.toString()).listFiles();
+            check(files.length == 3, "rotation produces exactly count=3 files (saw " + files.length + ")");
+            int withSuffix = 0;
+            for (java.io.File f : files)
+                if (f.getName().matches("app_\\d+\\.log\\.[012]")) withSuffix++;
+            check(withSuffix == 3, "rotated names carry generation suffix .0/.1/.2");
+            long total = 0;
+            for (java.io.File f : files) total += f.length();
+            check(total > 0, "records written to disk");
+            // %t/%u 模式：写到 java.io.tmpdir 并清理
+            java.util.logging.FileHandler tmp = new java.util.logging.FileHandler("%t/jck_fh_probe_%u.log");
+            tmp.close();
+            java.io.File[] tmps = new java.io.File(System.getProperty("java.io.tmpdir")).listFiles(
+                    (d, n) -> n.startsWith("jck_fh_probe_"));
+            check(tmps != null && tmps.length >= 1, "%t pattern resolves into java.io.tmpdir");
+            for (java.io.File f : tmps) check(f.delete(), "cleaned " + f.getName());
+            // getEncoding/setEncoding 往返（默认 null）
+            java.util.logging.FileHandler e = new java.util.logging.FileHandler(
+                    dir + "/enc_%u.log", true);
+            check(e.getEncoding() == null, "default encoding null");
+            e.setEncoding("UTF-8");
+            check("UTF-8".equals(e.getEncoding()), "setEncoding round-trip");
+            e.close();
+            // null 模式 NPE
+            try {
+                new java.util.logging.FileHandler(null);
+                check(false, "FileHandler(null) NPE");
+            } catch (NullPointerException ex) { check(true, "FileHandler(null) NPE"); }
+        } finally {
+            for (java.io.File f : dir.toFile().listFiles()) f.delete();
+            java.nio.file.Files.delete(dir);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

@@ -55,7 +55,30 @@ public class TimeZoneNameProviderTest {
               "getGenericDisplayName default null");
     }
 
+
+    // ===================== 契约深化：匿名实现两种 style + null NPE =====================
+    static void testContracts() {
+        final Locale[] locs = {Locale.JAPAN};
+        TimeZoneNameProvider p = new TimeZoneNameProvider() {
+            public Locale[] getAvailableLocales() { return locs; }
+            public String getDisplayName(String id, boolean daylight, int style, Locale locale) {
+                return (daylight ? "DST-" : "STD-") + (style == java.util.TimeZone.LONG ? "LONG-" : "SHORT-") + id; }
+        };
+        check("STD-LONG-Asia/Tokyo".equals(
+                p.getDisplayName("Asia/Tokyo", false, java.util.TimeZone.LONG, Locale.JAPAN)),
+              "getDisplayName LONG standard behavior");
+        check("DST-SHORT-Asia/Tokyo".equals(
+                p.getDisplayName("Asia/Tokyo", true, java.util.TimeZone.SHORT, Locale.JAPAN)),
+              "getDisplayName SHORT daylight behavior");
+        // 自有实现：null 实参直通（NPE 属内建 provider 语义）
+        check(("STD-LONG-null").equals(
+                p.getDisplayName(null, false, java.util.TimeZone.LONG, Locale.JAPAN)), "own impl handles null id");
+        check(p.getDisplayName("Asia/Tokyo", false, java.util.TimeZone.LONG, null) != null,
+              "own impl handles null locale");
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

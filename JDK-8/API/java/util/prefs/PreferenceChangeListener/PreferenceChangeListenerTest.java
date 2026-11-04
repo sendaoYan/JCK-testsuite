@@ -78,7 +78,40 @@ public class PreferenceChangeListenerTest {
         check(true, "removePreferenceChangeListener");
     }
 
+
+    // ===================== 契约深化：lambda 监听 + 注册/移除对称（未注册移除 IAE） =====================
+    static void testContracts() throws Exception {
+        java.util.prefs.Preferences n = java.util.prefs.Preferences.userRoot().node("/jck/testPCL1");
+        try {
+            final int[] hits = {0};
+            java.util.prefs.PreferenceChangeListener l = e -> hits[0]++;
+            n.addPreferenceChangeListener(l);
+            n.put("a", "1");
+            n.sync();
+            check(hits[0] >= 1, "listener notified on put (after sync dispatch)");
+            n.removePreferenceChangeListener(l);
+            n.put("b", "2");
+            n.sync();
+            check(hits[0] == 1, "removed listener no longer notified");
+            // 未注册的监听器移除 -> IAE
+            try {
+                n.removePreferenceChangeListener(e -> { });
+                check(false, "unregistered remove IAE");
+            } catch (IllegalArgumentException e) { check(true, "unregistered remove IAE"); }
+            // 重复注册：每次注册各通知一次（监听器按次分发）
+            n.addPreferenceChangeListener(l);
+            n.addPreferenceChangeListener(l);
+            int before = hits[0];
+            n.put("c", "3");
+            n.sync();
+            check(hits[0] == before + 2, "double registration notifies twice (once per registration)");
+        } finally {
+            try { n.removeNode(); } catch (Exception ignore) { }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");
