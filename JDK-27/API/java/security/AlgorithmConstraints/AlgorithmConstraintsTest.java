@@ -65,6 +65,38 @@ public class AlgorithmConstraintsTest {
         } catch (Exception e) {
             check(true, "DSA unavailable; tolerated");
         }
+
+        // ---- appended contract dimensions ----
+        // exact overload surface: three permits(...) with precise parameter types
+        Method[] ms0 = AlgorithmConstraints.class.getDeclaredMethods();
+        check(ms0.length == 3, "exactly 3 permits overloads");
+        boolean sig1 = false, sig2 = false, sig3 = false;
+        for (Method m : ms0) {
+            check("permits".equals(m.getName()) && m.getReturnType() == boolean.class,
+                    "method is boolean permits: " + m.getName());
+            Class<?>[] p = m.getParameterTypes();
+            if (p.length == 3 && p[0] == Set.class && p[1] == String.class && p[2] == AlgorithmParameters.class) sig1 = true;
+            if (p.length == 2 && p[0] == Set.class && p[1] == Key.class) sig2 = true;
+            if (p.length == 4 && p[0] == Set.class && p[1] == String.class && p[2] == Key.class && p[3] == AlgorithmParameters.class) sig3 = true;
+        }
+        check(sig1, "overload (Set,String,AlgorithmParameters)");
+        check(sig2, "overload (Set,Key)");
+        check(sig3, "overload (Set,String,Key,AlgorithmParameters)");
+        check(!ms0[0].isDefault(), "no default implementations");
+        // arguments delivered verbatim to the implementation
+        final List<String> log = new ArrayList<>();
+        AlgorithmConstraints recording = new AlgorithmConstraints() {
+            public boolean permits(Set<CryptoPrimitive> u, String a, AlgorithmParameters s) { log.add("s:" + a); return true; }
+            public boolean permits(Set<CryptoPrimitive> u, Key k) { log.add("k:" + k.getAlgorithm()); return true; }
+            public boolean permits(Set<CryptoPrimitive> u, String a, Key k, AlgorithmParameters s) { log.add("sk:" + a + ":" + k.getAlgorithm()); return true; }
+        };
+        check(recording.permits(sig, "SHA256withRSA", (AlgorithmParameters) null), "record string");
+        check(recording.permits(sig, kpAny.getPublic()), "record key");
+        check(recording.permits(sig, "RSA", kpAny.getPublic(), null), "record key+alg");
+        check(log.equals(Arrays.asList("s:SHA256withRSA", "k:RSA", "sk:RSA:RSA")),
+                "verbatim argument delivery: " + log);
+        check(recording.permits(null, "X", (AlgorithmParameters) null), "null usage set tolerated by impl");
+
     }
 
     public static void main(String[] args) throws Exception {

@@ -145,7 +145,53 @@ public class TrustedCertificateEntryTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract-deepening section (appended) ----
+    static void testContractDeep() throws Exception {
+        X509Certificate rc = fixtureCert(ROOT_CERT_B64);
+
+        // JKS loop: setEntry(null protection) / classification / lookups
+        KeyStore jks = KeyStore.getInstance("JKS");
+        jks.load(null, null);
+        KeyStore.TrustedCertificateEntry entry = new KeyStore.TrustedCertificateEntry(rc);
+        jks.setEntry("t", entry, null);
+        check(jks.isCertificateEntry("t") && !jks.isKeyEntry("t"),
+                "JKS cert entry classification");
+        check(jks.containsAlias("t") && jks.size() == 1, "size/containsAlias");
+        KeyStore.Entry back = jks.getEntry("t", null);
+        check(back instanceof KeyStore.TrustedCertificateEntry, "getEntry type round-trip");
+        check(((KeyStore.TrustedCertificateEntry) back).getTrustedCertificate().equals(rc),
+                "round-trip cert equals original");
+        check(jks.getCertificate("t").equals(rc), "getCertificate equals original");
+        check(jks.getCertificateChain("t") == null, "cert entry null chain");
+        check(jks.getKey("t", "pw".toCharArray()) == null, "cert entry getKey null");
+        check("t".equals(jks.getCertificateAlias(rc)), "getCertificateAlias");
+
+        // password protection is rejected for trusted-cert entries (both directions)
+        KeyStore.PasswordProtection prot = new KeyStore.PasswordProtection("pw".toCharArray());
+        boolean kse = false;
+        try { jks.setEntry("t2", entry, prot); }
+        catch (java.security.KeyStoreException e) { kse = true; }
+        check(kse, "setEntry with password protection KeyStoreException");
+        boolean uoe = false;
+        try { jks.getEntry("t", prot); }
+        catch (UnsupportedOperationException e) { uoe = true; }
+        check(uoe, "getEntry with password protection UOE");
+
+        // replace + delete lifecycle
+        jks.setCertificateEntry("t", fixtureCert(LEAF_CERT_B64));
+        check(jks.size() == 1, "replace keeps size");
+        jks.deleteEntry("t");
+        check(jks.size() == 0 && !jks.containsAlias("t"), "deleteEntry removes");
+        check(jks.getEntry("t", null) == null, "getEntry after delete null");
+
+        // JKS round-tripped entry still reports the default (empty) attributes
+        jks.setCertificateEntry("t2", rc);
+        check(jks.getEntry("t2", null).getAttributes().isEmpty(),
+                "JKS round-trip attributes empty");
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

@@ -60,6 +60,88 @@ public class SecurityPermissionTest {
         check(sp.hashCode() == new SecurityPermission("getPolicy").hashCode(), "hashCode equal");
         check(!sp.equals(new SecurityPermission("setPolicy")), "equals different name false");
 
+        testContractDeep();
+
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening: actions-ignored matrix, wildcard depth, toString, serialization ----
+    static void testContractDeep() throws Exception {
+        // BasicPermission(name, actions) IGNORES the actions argument entirely (never throws
+        // even for non-null non-empty actions; javadoc's IAE note is not enforced)
+        SecurityPermission withActions = new SecurityPermission("insertProvider.x", "read,write");
+        check("insertProvider.x".equals(withActions.getName()), "actions ctor keeps name");
+        check("".equals(withActions.getActions()), "non-empty actions ignored, getActions == \"\"");
+        check(new SecurityPermission("y", "").getActions().isEmpty(), "empty actions accepted");
+
+        // null name has a precise message at the BasicPermission level
+        try {
+            new SecurityPermission(null);
+        } catch (NullPointerException npe) {
+            check("name can't be null".equals(npe.getMessage()), "null name exact message");
+        }
+        try {
+            new SecurityPermission("");
+        } catch (IllegalArgumentException iae) {
+            check("name can't be empty".equals(iae.getMessage()), "empty name exact message");
+        }
+
+        // wildcard hierarchy: deeper and shallower names
+        SecurityPermission wc = new SecurityPermission("a.b.*");
+        check(wc.implies(new SecurityPermission("a.b.c")), "x.y.* implies x.y.z");
+        check(wc.implies(new SecurityPermission("a.b.c.d")), "x.y.* implies x.y.z.w");
+        check(!wc.implies(new SecurityPermission("a.b")), "x.y.* does not imply x.y");
+        check(wc.implies(new SecurityPermission("a.b.c.*")), "x.y.* implies x.y.z.* (suffix is literal name prefix match)");
+        check(!wc.implies(new BasicPermission("a.b.c") {}), "implies requires same class");
+        check(new SecurityPermission("*").implies(new SecurityPermission("anything.here")),
+                "lone * implies everything (same class)");
+
+        // equals is class-sensitive: same name in another BasicPermission subclass is not equal
+        check(!sp0().equals(new BasicPermission("getPolicy") {}), "cross-subclass equals false");
+        check(!sp0().equals(null), "equals null false");
+        check(!sp0().equals("getPolicy"), "equals non-Permission false");
+
+        // toString format: ("class" "name")
+        String ts = sp0().toString();
+        check(ts.contains("java.security.SecurityPermission") && ts.contains("getPolicy"),
+                "toString contains class and name");
+        check(ts.startsWith("(\""), "toString paren-quote form");
+
+        // newPermissionCollection: homogeneous BasicPermission collections
+        java.security.PermissionCollection pc = sp0().newPermissionCollection();
+        check(pc != null, "newPermissionCollection non-null");
+        pc.add(new SecurityPermission("getPolicy"));
+        pc.add(new SecurityPermission("setPolicy.*"));
+        check(pc.implies(new SecurityPermission("getPolicy")), "collection implies exact");
+        check(pc.implies(new SecurityPermission("setPolicy.now")), "collection implies wildcard");
+        check(!pc.implies(new SecurityPermission("getProperties")), "collection non-member false");
+
+        // well-known targets all instantiate and serialize round-trip
+        String[] targets = {"getPolicy", "setPolicy", "getProperty.key", "putProviderProperty.name",
+                "removeProviderProperty.name", "setSystemScope", "getSignerPrivateKey"};
+        for (String t : targets) {
+            SecurityPermission probe = new SecurityPermission(t);
+            check(t.equals(probe.getName()), "target instantiates: " + t);
+            check(probe.implies(new SecurityPermission(t)), "target implies itself: " + t);
+        }
+
+        // serialization round-trip
+        SecurityPermission rt = (SecurityPermission) roundTrip(sp0());
+        check("getPolicy".equals(rt.getName()), "round-trip name");
+        check("".equals(rt.getActions()), "round-trip actions");
+        check(rt.equals(sp0()), "round-trip equals");
+        check(rt.hashCode() == sp0().hashCode(), "round-trip hashCode");
+    }
+
+    static SecurityPermission sp0() { return new SecurityPermission("getPolicy"); }
+
+    static Object roundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return oin.readObject();
     }
 }

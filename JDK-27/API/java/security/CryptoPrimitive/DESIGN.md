@@ -14,3 +14,9 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：反射断言为 public enum、超类为 `Enum`、含 10 个常量、含 `valueOf`/`values` 方法。
 - `testBlackBox()`：断言 `valueOf("SIGNATURE")==SIGNATURE`、`values().length==10`，并对每个常量做 `valueOf(name())` 往返一致。
+
+## 5. 追加契约维度（深化批）
+- 声明序锁定 ordinal（KEY_WRAP 第 6 位，在 MAC 后——易错）。
+- compareTo 与 ordinal 一致；values() 每次新数组；getDeclaringClass；getEnumConstants。
+- 负例：大小写敏感/无名常量 IAE（消息含名字）、null NPE。
+- 枚举序列化还原单例；EnumSet of/allOf/range（BLOCK_CIPHER..MAC=3）。

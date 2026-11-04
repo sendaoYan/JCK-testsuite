@@ -15,3 +15,10 @@
 - 组合：默认类型空装载端到端走通
 
 断言入口：`ProtectionParameterTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（testContractDeep）
+- 0 个声明方法（纯标记）；匿名实现 identity 相等。
+- ProtectionParameter[] 协变装载两种内置实现。
+- DomainLoadStoreParameter 的保护 map 以本接口为值类型；PasswordProtection 经 Destroyable 引用 destroy 生效。
+- 补充：自定义匿名 ProtectionParameter 取 key 条目 → UnsupportedOperationException；Builder 原样接受并返回匿名标记值；DLSP 快照视图 put → UOE；PasswordProtection destroy 幂等。

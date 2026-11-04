@@ -17,3 +17,12 @@ Identity 子类，可持私钥；JDK-27 setKeyPair 为静默替换，null 抛 NP
 - 异常：setKeyPair(null) 拒绝；toString 含名字
 
 断言入口：`SignerTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 深化补遗（testContractMatrix）
+- setKeyPair(null) → NPE 且消息含 "pair"（JDK-9+ helpful message，与 JDK-8 的 null 消息分叉——版本差异各自断言）。
+- 半空 KeyPair：(pub, null priv) 与 (null pub, priv) 均 InvalidParameterException；失败调用不装键。
+- getPrivateKey 跨调用返回同一实例（== 原私钥）；整对替换静默；setKeyPair 不通知 scope。
+- (String, scope) 构造通知 scope 恰一次；protected 无参构造。
+- toString() 精确 "[Signer]name"；toString(false)==toString()；toString(true) 无钥 "no keys" / 有钥 "public and private keys initialized"。
+- 继承：equals/hashCode 按名；默认 info "No further information available."；instanceof Identity/Principal/Serializable。
+- 序列化 round-trip：name/两半密钥保留、equals 原对象。

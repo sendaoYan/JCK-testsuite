@@ -149,7 +149,52 @@ public class EntryTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract-deepening section (appended) ----
+    static void testContractDeep() throws Exception {
+        Class<?> c = Class.forName("java.security.KeyStore$Entry");
+        java.lang.reflect.Method[] own = c.getDeclaredMethods();
+        check(own.length == 1, "exactly one declared method");
+        check("getAttributes".equals(own[0].getName()), "sole method getAttributes");
+        check(!Modifier.isAbstract(own[0].getModifiers()), "getAttributes is a default method");
+
+        // default method on a bare anonymous implementation: immutable empty set
+        KeyStore.Entry bare = new KeyStore.Entry() { };
+        Set<KeyStore.Entry.Attribute> attrs = bare.getAttributes();
+        check(attrs != null && attrs.isEmpty() && attrs.size() == 0,
+                "default getAttributes empty set");
+        boolean immutable = false;
+        try { attrs.add(null); } catch (UnsupportedOperationException uoe) { immutable = true; }
+        check(immutable, "default attribute set immutable");
+
+        // PKCS12 round-trip: friendlyName equals alias, localKeyId present
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        ks.load(null, null);
+        char[] pw = "pw".toCharArray();
+        javax.crypto.SecretKey sk = new javax.crypto.spec.SecretKeySpec(new byte[16], "AES");
+        ks.setEntry("s", new KeyStore.SecretKeyEntry(sk), new KeyStore.PasswordProtection(pw));
+        KeyStore.Entry got = ks.getEntry("s", new KeyStore.PasswordProtection(pw));
+        KeyStore.Entry.Attribute friendly = null;
+        boolean hasLocalKeyId = false;
+        for (KeyStore.Entry.Attribute at : got.getAttributes()) {
+            if ("1.2.840.113549.1.9.20".equals(at.getName())) friendly = at;
+            if ("1.2.840.113549.1.9.21".equals(at.getName())) hasLocalKeyId = true;
+        }
+        check(friendly != null && "s".equals(friendly.getValue()),
+                "PKCS12 round-trip friendlyName equals alias");
+        check(hasLocalKeyId, "PKCS12 round-trip localKeyId present");
+        check(got.getAttributes().size() == 2, "PKCS12 round-trip attribute count");
+        check(ks.getEntry("missing", null) == null, "missing alias yields null Entry");
+
+        // JKS (attribute-less implementation) still yields the default empty set
+        KeyStore jks = KeyStore.getInstance("JKS");
+        jks.load(null, null);
+        jks.setCertificateEntry("c", fixtureCert(ROOT_CERT_B64));
+        KeyStore.Entry jt = jks.getEntry("c", null);
+        check(jt.getAttributes().isEmpty(), "JKS round-trip attributes empty");
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

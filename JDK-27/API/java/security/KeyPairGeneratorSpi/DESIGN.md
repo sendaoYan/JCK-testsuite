@@ -15,3 +15,8 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：反射断言为 public abstract class、超类 `Object`、含 `generateKeyPair`/`initialize` 方法。
 - `testBlackBox()`：最小子类 `MyKpgSpi` 用 `DummyPublicKey`/`DummyPrivateKey`（algorithm/format 为 "Dummy"，`getEncoded()` 为 `{1,2,3}`）构造 `KeyPair`；断言 `generateKeyPair()` 返回非空且公私钥非空、算法/编码正确，并断言未覆写的 `initialize(AlgorithmParameterSpec, SecureRandom)` 抛 `UnsupportedOperationException`。
+
+## 5. 契约深化（testContractDeep，本轮新增）
+- 引擎方法为 public 修饰（本家族唯一）；initialize(spec,random) 为非抽象默认、声明 IAPE。
+- 真实 DSA 外观闭环：generateKeyPair() 公/私钥格式 X.509/PKCS#8、两次生成不同、实例关联 KeyPairGeneratorSpi。
+- initialize 异常矩阵：(-1)/(64) → InvalidParameterException、1-bit DSA 参数 → IPE（强度先查）、RSA spec 喂 DSA → InvalidAlgorithmParameterException。

@@ -16,3 +16,8 @@ Policy/Configuration getInstance 的参数载体。
 - 异常：null URI → NPE
 
 断言入口：`URIParameterTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 追加契约维度（深化批）
+- getURI 重复调用同实例；非 AlgorithmParameterSpec（与 spec/ 家族区分）。
+- identity equals/hashCode；opaque/相对/空 URI 全收。
+- 恰 1 getter；**非 final**（实测）；非 Serializable。

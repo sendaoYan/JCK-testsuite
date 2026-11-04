@@ -44,7 +44,58 @@ public class NextBytesTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening: defensive copies, null-vs-empty, engine behavior matrix ----
+    static void testContractDeep() throws Exception {
+        // constructor-side defensive copy
+        byte[] src = {3, 1};
+        NextBytes d = DrbgParameters.nextBytes(192, false, src);
+        src[0] = 55;
+        check(Arrays.equals(d.getAdditionalInput(), new byte[]{3, 1}), "additional input copied at construction");
+        check(d.getAdditionalInput() != d.getAdditionalInput(), "getter returns fresh copy each call");
+
+        // null vs empty additional input are preserved distinctly
+        check(DrbgParameters.nextBytes(128, false, null).getAdditionalInput() == null, "null stays null");
+        check(DrbgParameters.nextBytes(128, false, new byte[0]).getAdditionalInput().length == 0,
+                "empty stays empty");
+
+        // strength and pr flag round-trips
+        check(DrbgParameters.nextBytes(0, true, null).getStrength() == 0, "strength 0 preserved");
+        check(DrbgParameters.nextBytes(192, true, null).getPredictionResistance(), "pr true preserved");
+        check(DrbgParameters.nextBytes(192, false, null).getPredictionResistance() == false, "pr false preserved");
+
+        // toString is Object-form (not overridden)
+        check(d.toString().startsWith("java.security.DrbgParameters$NextBytes@"), "toString Object-form");
+
+        // identity equality
+        NextBytes e1 = DrbgParameters.nextBytes(128, false, null);
+        check(e1.equals(e1), "identity equals reflexive");
+        check(!e1.equals(DrbgParameters.nextBytes(128, false, null)), "same value not equal");
+        check(e1.hashCode() == e1.hashCode(), "hashCode self-consistent");
+
+        // engine: additional input is accepted and output delivered on a PR-capable DRBG
+        java.security.SecureRandom pr = java.security.SecureRandom.getInstance("DRBG",
+                DrbgParameters.instantiation(128, DrbgParameters.Capability.PR_AND_RESEED, null));
+        byte[] out = new byte[16];
+        pr.nextBytes(out, DrbgParameters.nextBytes(128, true, new byte[]{1, 2}));
+        boolean nonZero = false;
+        for (byte b : out) if (b != 0) nonZero = true;
+        check(nonZero, "parameterized nextBytes delivers output");
+        // prediction resistance demands PR capability
+        java.security.SecureRandom ro = java.security.SecureRandom.getInstance("DRBG",
+                DrbgParameters.instantiation(128, DrbgParameters.Capability.RESEED_ONLY, null));
+        try {
+            ro.nextBytes(new byte[8], DrbgParameters.nextBytes(128, true, null));
+            check(false, "pr must be unavailable on RESEED_ONLY");
+        } catch (IllegalArgumentException iae) {
+            check("pr not available".equals(iae.getMessage()), "IAE message 'pr not available'");
+        }
+        // without pr the same DRBG accepts the call
+        ro.nextBytes(new byte[8], DrbgParameters.nextBytes(128, false, null));
+        check(true, "non-pr nextBytes accepted on RESEED_ONLY");
     }
 
     static void checkThrows(Class<? extends Throwable> type, Runnable r) {

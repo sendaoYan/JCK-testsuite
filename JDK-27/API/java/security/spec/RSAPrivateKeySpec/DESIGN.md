@@ -27,3 +27,8 @@ PrivateKey key = KeyFactory.getInstance("RSA").generatePrivate(spec);
   - 2 参构造：getModulus/getPrivateExponent 精确、getParams 为 null。
   - 3 参构造：三个 getter 精确、getParams 为传入对象。
   - `instanceof KeySpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：同引用
+- 关键实测：2/3 参构造；getter 原引用；getParams 为 JDK 后加通道；无 equals 覆盖。
+KeyFactory("RSA") 私钥交换基类（RSAPrivateCrtKeySpec 继承）。

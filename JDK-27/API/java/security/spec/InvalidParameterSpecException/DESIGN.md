@@ -27,3 +27,8 @@ try {
 ## 4. 测试用例设计 + 自动化实现
 - 白盒（testWhiteBox）：public 具体类、父类 GeneralSecurityException。
 - 黑盒（testBlackBox）：无参构造 getMessage 为 null；`String` 构造 getMessage 精确匹配且 getCause 为 null；`instanceof GeneralSecurityException`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：构造器数==2 的契约断言
+- 关键实测：仅 2 构造（()/String）——无 cause 构造器（与 InvalidKeySpecException 的关键差异）；继承 GeneralSecurityException，Serializable。
+AlgorithmParameters.init/getParameterSpec 在规范不匹配时抛出。

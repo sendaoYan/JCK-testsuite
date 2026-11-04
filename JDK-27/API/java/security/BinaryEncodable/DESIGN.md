@@ -16,3 +16,7 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：反射断言为 public 接口、无超类。
 - `testBlackBox()`：断言 `new PKCS8EncodedKeySpec(...)` 与 `new X509EncodedKeySpec(...)` 均为 `BinaryEncodable` 实例（测试文件加 `@enablePreview` 以启用 preview API）。
+
+## 5. 契约深化补充（本批）
+- **实现方式**：BinaryEncodable/PEM/AsymmetricKey 均为 JDK-27 preview API，测试改为全反射访问（`@enablePreview` 已移除；普通 javac/jtreg 即可编译运行）。
+- 深化断言：纯标记接口（0 声明方法、无超接口、非 Serializable）；`AsymmetricKey` 的直接超接口恰为 {Key, BinaryEncodable}；PKCS#8/X.509 spec 的 format 标签、getEncoded 每次返回副本、null → NPE；RSA 公/私钥是 BinaryEncodable 而 AES SecretKey 不是；PEM 也是；**接口 sealed** 且 permits 列表含 AsymmetricKey（用户代码无法自行实现）。

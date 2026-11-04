@@ -20,3 +20,8 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：断言 `public`、非接口、父类 `Object`、同时实现 `AlgorithmParameterSpec` 与 `java.security.interfaces.DSAParams`，方法 `getP/getQ/getG` 存在。
 - `testBlackBox()`：用固定 `p=23,q=11,g=5` 校验三个 getter；断言 `instanceof AlgorithmParameterSpec` 与 `instanceof DSAParams`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：getter 同引用
+- 关键实测：3 参构造（全 null 合法），getter 原引用返回；实现 AlgorithmParameterSpec；非 Serializable、无 equals 覆盖。
+AlgorithmParameters.getInstance("DSA").init(spec) → getParameterSpec(DSAParameterSpec.class) 往返；DSAParameterSpec 也是 DSAPublicKeySpec/DSAPrivateKeySpec 的参数部分。

@@ -15,3 +15,9 @@
 - 组合：三类条目进同一 PKCS12 库后 getEntry 按类型还原；缺失别名 null；toString 非空
 
 断言入口：`EntryTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（testContractDeep）
+- 默认属性集不可变：add → UnsupportedOperationException。
+- PKCS12 往返属性恰 2 个：friendlyName（1.2.840.113549.1.9.20，值=alias）+ localKeyId（1.2.840.113549.1.9.21，仅断言存在）。
+- JKS 往返后条目属性集为空（JKS 不携带属性）。

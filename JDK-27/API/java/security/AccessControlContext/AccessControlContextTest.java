@@ -55,6 +55,85 @@ public class AccessControlContextTest {
         checkThrows(AccessControlException.class, () -> accN.checkPermission(null),
                 "checkPermission(null)");
 
+        testContractDeep();
+
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening (JDK-27): JEP 486 denial, combiner equality, intersection semantics ----
+    static void testContractDeep() throws Exception {
+        checkThrows(NullPointerException.class, () -> new AccessControlContext((ProtectionDomain[]) null),
+                "ctor null domain array");
+
+        // combiner round-trip; combiner participates in equals
+        java.security.DomainCombiner dc = new java.security.DomainCombiner() {
+            public ProtectionDomain[] combine(ProtectionDomain[] current, ProtectionDomain[] assigned) {
+                return current;
+            }
+        };
+        AccessControlContext base = new AccessControlContext(new ProtectionDomain[0]);
+        AccessControlContext withCombiner = new AccessControlContext(base, dc);
+        check(withCombiner.getDomainCombiner() == dc, "combiner round-trip identity");
+        check(new AccessControlContext(base, null).getDomainCombiner() == null, "null combiner legal");
+        check(!withCombiner.equals(new AccessControlContext(base, null)), "combiner participates in equals");
+        check(withCombiner.equals(new AccessControlContext(base, dc)), "same combiner stays equal");
+
+        // JDK-27 (JEP 486): even an AllPermission static grant inside the ACC is denied,
+        // and the thrown ACE always carries a null permission
+        java.security.Permissions all = new java.security.Permissions();
+        all.add(new java.security.AllPermission());
+        ProtectionDomain open = new ProtectionDomain(null, all);
+        AccessControlContext granted = new AccessControlContext(new ProtectionDomain[] { open });
+        final java.security.SecurityPermission sp = new java.security.SecurityPermission("setLog");
+        try {
+            granted.checkPermission(sp);
+            check(false, "JDK-27 must deny even AllPermission domains");
+        } catch (java.security.AccessControlException ace) {
+            check(ace.getPermission() == null, "JDK-27 ACE carries null permission");
+        }
+
+        // equals over ProtectionDomain contents: set semantics (order-insensitive)
+        java.security.Permissions none = new java.security.Permissions();
+        ProtectionDomain locked = new ProtectionDomain(null, none);
+        AccessControlContext a1 = new AccessControlContext(new ProtectionDomain[] { locked, open });
+        AccessControlContext a2 = new AccessControlContext(new ProtectionDomain[] { locked, open });
+        check(a1.equals(a2) && a1.hashCode() == a2.hashCode(), "same domain sequence value-equal");
+        check(a1.equals(new AccessControlContext(new ProtectionDomain[] { open, locked })),
+                "domain order does NOT matter for equality (set semantics)");
+
+        // doPrivileged with a captured context runs under that context
+        AccessControlContext snap = java.security.AccessController.getContext();
+        Integer r = java.security.AccessController.doPrivileged(
+                (java.security.PrivilegedAction<Integer>) () -> 42, snap);
+        check(r == 42, "doPrivileged with captured context runs");
+
+        // AccessControlContext is NOT Serializable
+        try {
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            new java.io.ObjectOutputStream(bos).writeObject(base);
+            check(false, "ACC must not be serializable");
+        } catch (java.io.NotSerializableException nse) {
+            check(true, "ACC not serializable");
+        }
+        check(base.toString() != null, "toString non-null");
+
+        // a null element inside the domain array is accepted by the constructor
+        check(new AccessControlContext(new ProtectionDomain[] { null }).getDomainCombiner() == null,
+                "null domain element tolerated at construction");
+        // two snapshots taken in the same frame are value-equal
+        check(java.security.AccessController.getContext().equals(java.security.AccessController.getContext()),
+                "same-frame getContext snapshots equal");
+        // a snapshot's combiner slot is empty in a plain frame
+        check(snap.getDomainCombiner() == null, "plain-frame snapshot has no combiner");
+        check(base.toString().startsWith("java.security.AccessControlContext@"),
+                "toString class@identityHash form");
+        // JDK-27 (JEP 486): even a ZERO-domain context is denied (JDK-8 granted vacuously)
+        try {
+            new AccessControlContext(new ProtectionDomain[0]).checkPermission(sp);
+            check(false, "zero-domain ACC must be denied on JDK-27");
+        } catch (java.security.AccessControlException ace) {
+            check(ace.getPermission() == null, "zero-domain denial ACE carries null permission (JDK-27)");
+            check(ace.getMessage() != null, "denial ACE message non-null");
+        }
     }
 }

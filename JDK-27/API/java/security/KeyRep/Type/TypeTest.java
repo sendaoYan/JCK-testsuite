@@ -6,6 +6,7 @@
 
 import java.lang.reflect.Modifier;
 import java.security.KeyRep;
+import java.util.Arrays;
 
 public class TypeTest {
     static int passed;
@@ -42,6 +43,43 @@ public class TypeTest {
         check(KeyRep.Type.SECRET.ordinal() == 0, "SECRET ordinal 0");
         check(KeyRep.Type.PUBLIC.ordinal() == 1, "PUBLIC ordinal 1");
         check(KeyRep.Type.PRIVATE.ordinal() == 2, "PRIVATE ordinal 2");
+
+        // ---- appended contract dimensions ----
+        // compareTo consistent with ordinals
+        check(KeyRep.Type.SECRET.compareTo(KeyRep.Type.PUBLIC) < 0, "SECRET < PUBLIC");
+        check(KeyRep.Type.PRIVATE.compareTo(KeyRep.Type.SECRET) > 0, "PRIVATE > SECRET");
+        check(KeyRep.Type.SECRET.compareTo(KeyRep.Type.SECRET) == 0, "compareTo self 0");
+        // name()/toString() agree; equals identity semantics
+        for (KeyRep.Type t : values) check(t.toString().equals(t.name()), "toString==name " + t.name());
+        check(!KeyRep.Type.SECRET.equals(KeyRep.Type.PUBLIC), "distinct constants unequal");
+        check(KeyRep.Type.SECRET.hashCode() == KeyRep.Type.SECRET.hashCode(), "hashCode stable");
+        // values() returns a fresh array each call
+        KeyRep.Type[] a1 = KeyRep.Type.values();
+        KeyRep.Type[] a2 = KeyRep.Type.values();
+        check(a1 != a2, "values() fresh array");
+        check(Arrays.equals(a1, a2), "values() same content");
+        // getDeclaringClass is the enum class itself
+        check(KeyRep.Type.SECRET.getDeclaringClass() == KeyRep.Type.class, "getDeclaringClass");
+        check(KeyRep.Type.class.getEnumConstants().length == 3, "getEnumConstants length");
+        // bogus / case-mismatched / null names rejected
+        try { KeyRep.Type.valueOf("secret"); check(false, "valueOf case-sensitive"); }
+        catch (IllegalArgumentException e) { check(e.getMessage().contains("secret"), "IAE message"); }
+        try { KeyRep.Type.valueOf("NO_SUCH"); check(false, "valueOf bogus IAE"); }
+        catch (IllegalArgumentException e) { passed++; }
+        try { KeyRep.Type.valueOf(null); check(false, "valueOf null NPE"); }
+        catch (NullPointerException e) { passed++; }
+        // enum serialization restores the singleton constant
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(KeyRep.Type.PUBLIC);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        check(ois.readObject() == KeyRep.Type.PUBLIC, "serialization restores singleton");
+        // EnumSet interop
+        java.util.EnumSet<KeyRep.Type> set = java.util.EnumSet.of(KeyRep.Type.SECRET, KeyRep.Type.PRIVATE);
+        check(set.size() == 2 && !set.contains(KeyRep.Type.PUBLIC), "EnumSet contains");
+        check(java.util.EnumSet.allOf(KeyRep.Type.class).size() == 3, "EnumSet allOf size");
     }
 
     static boolean hasMethod(Class<?> c, String name) {

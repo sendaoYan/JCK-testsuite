@@ -14,3 +14,8 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：反射断言为 public abstract class、超类 `Object`，含四个 `engine*` 方法。
 - `testBlackBox()`：最小子类 `MyKfSpi` 返回 `DummyPublicKey`/`DummyPrivateKey`（algorithm "Dummy"），`engineTranslateKey` 原样返回；断言 `engineGeneratePublic`/`engineGeneratePrivate` 返回非空且算法为 "Dummy"，`engineTranslateKey` 返回同一对象。
+
+## 5. 契约深化（testContractDeep，本轮新增）
+- exact-4-abstract；记录子类四方法精确透传（spec/key/Class 同一实例）。
+- 真实 DSA KeyFactory 外观闭环：X.509/PKCS#8 规格往返 equals、translateKey(pub) equals。
+- 异常矩阵：generatePublic(null)→InvalidKeySpecException、getKeySpec(null,cls)→IKSE、getKeySpec(k,null)→NPE、translateKey(null)→InvalidKeyException、PKCS8 规格喂公钥工厂→IKSE。

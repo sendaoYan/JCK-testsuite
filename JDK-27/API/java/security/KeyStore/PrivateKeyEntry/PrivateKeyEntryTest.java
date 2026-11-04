@@ -175,6 +175,92 @@ public class PrivateKeyEntryTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract-deepening section (appended) ----
+    static void testContractDeep() throws Exception {
+        PrivateKey rk = fixturePrivKey();
+        X509Certificate rc = fixtureCert(ROOT_CERT_B64);
+
+        // zero-length chain -> IAE (distinct from null chain -> NPE)
+        boolean iae = false;
+        try { new KeyStore.PrivateKeyEntry(rk, new Certificate[0]); }
+        catch (IllegalArgumentException e) { iae = true; }
+        check(iae, "zero-length chain IAE");
+
+        // mixed Certificate.getType() values -> IAE
+        boolean mixed = false;
+        try {
+            new KeyStore.PrivateKeyEntry(new FauxPrivateKey("RSA"),
+                    new Certificate[]{rc, new FauxCert("OTHER")});
+        } catch (IllegalArgumentException e) { mixed = true; }
+        check(mixed, "mixed cert types IAE");
+
+        // private key algorithm vs cert[0] public key mismatch -> IAE
+        boolean mismatch = false;
+        try {
+            new KeyStore.PrivateKeyEntry(new FauxPrivateKey("DSA"),
+                    new Certificate[]{rc});
+        } catch (IllegalArgumentException e) { mismatch = true; }
+        check(mismatch, "key/cert algorithm mismatch IAE");
+
+        // construct-time defensive copy of the chain
+        Certificate[] src = new Certificate[]{rc, fixtureCert(LEAF_CERT_B64)};
+        KeyStore.PrivateKeyEntry e2 = new KeyStore.PrivateKeyEntry(rk, src);
+        src[0] = null;
+        check(e2.getCertificateChain()[0] != null, "construct-time chain copy");
+        check(e2.getCertificateChain()[1] != null, "second element retained");
+
+        // read-time defensive copy
+        Certificate[] leaked = e2.getCertificateChain();
+        leaked[0] = null;
+        check(e2.getCertificateChain()[0] != null, "chain defensive copy on read");
+
+        // JKS loop with the real key: setEntry/getEntry cross-instance equals
+        char[] pw = "pw".toCharArray();
+        KeyStore jks = KeyStore.getInstance("JKS");
+        jks.load(null, null);
+        KeyStore.PasswordProtection prot = new KeyStore.PasswordProtection(pw);
+        jks.setEntry("k", new KeyStore.PrivateKeyEntry(rk, new Certificate[]{rc}), prot);
+        check(jks.isKeyEntry("k"), "JKS key entry classification");
+        KeyStore.Entry back = jks.getEntry("k", prot);
+        check(back instanceof KeyStore.PrivateKeyEntry, "JKS getEntry type round-trip");
+        check(((KeyStore.PrivateKeyEntry) back).getPrivateKey().equals(rk),
+                "round-trip key cross-instance equals");
+        check(jks.getKey("k", pw).equals(rk), "getKey equals original");
+        boolean unrecoverable = false;
+        try { jks.getKey("k", "wrong".toCharArray()); }
+        catch (java.security.UnrecoverableKeyException uke) { unrecoverable = true; }
+        check(unrecoverable, "JKS wrong password UnrecoverableKeyException");
+        // private key with null chain is rejected by the store as well
+        boolean nullChain = false;
+        try { jks.setKeyEntry("k2", rk, pw, null); }
+        catch (IllegalArgumentException iae2) { nullChain = true; }
+        check(nullChain, "setKeyEntry null chain IAE");
+    }
+
+    static PrivateKey fixturePrivKey() throws Exception {
+        return KeyFactory.getInstance("RSA").generatePrivate(
+                new PKCS8EncodedKeySpec(fromB64(ROOT_KEY_B64)));
+    }
+
+    // fixtures for constructor validation paths
+    static class FauxPrivateKey implements PrivateKey {
+        private final String alg;
+        FauxPrivateKey(String alg) { this.alg = alg; }
+        public String getAlgorithm() { return alg; }
+        public String getFormat() { return "PKCS#8"; }
+        public byte[] getEncoded() { return new byte[]{1, 2, 3}; }
+    }
+
+    static class FauxCert extends Certificate {
+        FauxCert(String type) { super(type); }
+        public byte[] getEncoded() { return new byte[]{1, 2, 3}; }
+        public void verify(PublicKey key) { }
+        public void verify(PublicKey key, String sigProvider) { }
+        public String toString() { return "FauxCert"; }
+        public PublicKey getPublicKey() { return null; }
     }
 }

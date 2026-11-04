@@ -181,6 +181,79 @@ public class BuilderTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract-deepening section (appended) ----
+    static void testContractDeep() throws Exception {
+        X509Certificate rc = fixtureCert(ROOT_CERT_B64);
+        KeyStore.PasswordProtection pp = new KeyStore.PasswordProtection("pw".toCharArray());
+
+        // wrapped-store factory rejects a null protection parameter
+        KeyStore ks = KeyStore.getInstance("JKS");
+        ks.load(null, null);
+        ks.setCertificateEntry("c", rc);
+        try {
+            KeyStore.Builder.newInstance(ks, null);
+            check(false, "null protection NPE");
+        } catch (NullPointerException npe) {
+            check(true, "null protection NPE");
+        }
+
+        // 4-arg factory with a null file (non-DKS type) -> NPE at construction
+        try {
+            KeyStore.Builder.newInstance("JKS", null, (java.io.File) null, pp);
+            check(false, "null file NPE at construction");
+        } catch (NullPointerException npe) {
+            check(true, "null file NPE at construction");
+        }
+
+        // CallbackHandlerProtection variant wraps and round-trips identically
+        javax.security.auth.callback.CallbackHandler handler =
+                new javax.security.auth.callback.CallbackHandler() {
+                    public void handle(javax.security.auth.callback.Callback[] callbacks) { }
+                };
+        KeyStore.CallbackHandlerProtection chp = new KeyStore.CallbackHandlerProtection(handler);
+        KeyStore.Builder cb = KeyStore.Builder.newInstance(ks, chp);
+        check(cb.getKeyStore() == ks, "CHP builder store");
+        check(cb.getProtectionParameter("c") == chp, "CHP builder protection");
+
+        // JKS file-backed builder loads once, caches, and exposes a live store
+        java.nio.file.Path p = Files.createTempFile("jck-bld2", ".jks");
+        try {
+            try (OutputStream os = Files.newOutputStream(p)) { ks.store(os, "pw".toCharArray()); }
+            KeyStore.Builder fb = KeyStore.Builder.newInstance("JKS", null, p.toFile(), pp);
+            KeyStore loaded = fb.getKeyStore();
+            check(loaded.containsAlias("c"), "JKS file builder loads contents");
+            check(fb.getKeyStore() == loaded, "file builder caches the store");
+            loaded.setCertificateEntry("added", rc);
+            check(fb.getKeyStore().containsAlias("added"), "builder store is live");
+        } finally {
+            Files.deleteIfExists(p);
+        }
+
+        // unknown type is accepted at construction but fails lazily at getKeyStore()
+        KeyStore.Builder bogus = KeyStore.Builder.newInstance("NoSuchKS_XYZ", null, pp);
+        try {
+            bogus.getKeyStore();
+            check(false, "bogus type getKeyStore KeyStoreException");
+        } catch (java.security.KeyStoreException kse) {
+            check(true, "bogus type getKeyStore KeyStoreException");
+        }
+
+        // custom subclass honors the abstract contract; getKeyStore declares KeyStoreException
+        check(java.lang.reflect.Modifier.isAbstract(KeyStore.Builder.class.getModifiers()),
+                "Builder is abstract");
+        KeyStore subStore = KeyStore.getInstance("JKS");
+        subStore.load(null, null);
+        final int[] calls = {0};
+        KeyStore.Builder custom = new KeyStore.Builder() {
+            public KeyStore getKeyStore() { calls[0]++; return subStore; }
+            public KeyStore.ProtectionParameter getProtectionParameter(String alias) { return pp; }
+        };
+        check(custom.getKeyStore() == subStore, "custom builder store");
+        check(calls[0] == 1, "custom getKeyStore invoked");
+        check(custom.getProtectionParameter("a") == pp, "custom builder protection");
     }
 }

@@ -12,6 +12,22 @@ public class ECPointTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
     static void testWhiteBox() throws Exception {
         Class<?> c = ECPoint.class;
         check(Modifier.isPublic(c.getModifiers()), "public");
@@ -41,9 +57,35 @@ public class ECPointTest {
         check(!p.equals(new ECPoint(BigInteger.ONE, BigInteger.ONE)), "unequal y");
     }
 
+    static void testContracts() {
+        // constructor null matrix (probed: "affine coordinate x or y is null")
+        checkThrows(NullPointerException.class,
+                () -> new ECPoint(null, BigInteger.ONE), "null x -> NPE");
+        checkThrows(NullPointerException.class,
+                () -> new ECPoint(BigInteger.ONE, null), "null y -> NPE");
+        // equals matrix
+        ECPoint a = new ECPoint(BigInteger.valueOf(3), BigInteger.valueOf(10));
+        check(a.equals(a), "reflexive");
+        check(a.equals(new ECPoint(BigInteger.valueOf(3), BigInteger.valueOf(10))), "value equals");
+        check(new ECPoint(BigInteger.valueOf(3), BigInteger.valueOf(10)).equals(a), "symmetric");
+        check(!a.equals(new ECPoint(BigInteger.valueOf(4), BigInteger.valueOf(10))), "different x");
+        check(!a.equals(null), "equals null false");
+        check(!a.equals("(3,10)"), "equals wrong type false");
+        // infinity asymmetry
+        check(!a.equals(ECPoint.POINT_INFINITY), "finite != INFINITY");
+        check(!ECPoint.POINT_INFINITY.equals(a), "INFINITY != finite");
+        // distinct BigInteger instances, equal value
+        check(new ECPoint(new BigInteger("3"), new BigInteger("10")).equals(
+                new ECPoint(new BigInteger(new byte[]{3}), new BigInteger(new byte[]{10}))),
+                "equals across distinct BigInteger instances");
+        // shape
+        check(!java.io.Serializable.class.isAssignableFrom(ECPoint.class), "not Serializable");
+        check(a.toString().startsWith("java.security.spec.ECPoint@"), "toString default Object form");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 

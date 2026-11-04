@@ -66,7 +66,55 @@ public class EdECPublicKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, serialization, equals ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation: EdECPoint passthrough and Key surface
+        EdECPoint pt = new EdECPoint(true, BigInteger.valueOf(12345));
+        EdECPublicKey rec = new RecKey(pt);
+        check(rec.getPoint() == pt, "record getPoint identity passthrough");
+        check(rec.getPoint().isXOdd(), "record point xOdd passthrough");
+        check(rec.getPoint().getY().equals(BigInteger.valueOf(12345)), "record point y passthrough");
+        check("EdDSA-REC".equals(rec.getAlgorithm()), "record getAlgorithm passthrough");
+        check("X.509-REC".equals(rec.getFormat()), "record getFormat passthrough");
+
+        // lattice: inherits serialVersionUID from PublicKey, does not declare its own
+        check(PublicKey.class.isAssignableFrom(EdECPublicKey.class), "is a PublicKey");
+        check(EdECKey.class.isAssignableFrom(EdECPublicKey.class), "is an EdECKey");
+        check(Key.class.isAssignableFrom(EdECPublicKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(EdECPublicKey.class), "is Serializable");
+        check(EdECPublicKey.class.getField("serialVersionUID").getLong(null)
+                == 7187392471159151072L, "inherits PublicKey serialVersionUID value");
+        try {
+            EdECPublicKey.class.getDeclaredField("serialVersionUID");
+            check(false, "declares no own serialVersionUID");
+        } catch (NoSuchFieldException e) {
+            check(true, "declares no own serialVersionUID");
+        }
+
+        // real key: serialization fully equal
+        KeyPair kp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+        EdECPublicKey key = (EdECPublicKey) kp.getPublic();
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+        check(key.equals(key), "reflexive equals");
+        check(!key.equals(kp.getPrivate()), "public not equal to private half");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements EdECPublicKey {
+        private final EdECPoint point;
+        RecKey(EdECPoint point) { this.point = point; }
+        public EdECPoint getPoint() { return point; }
+        public NamedParameterSpec getParams() { return new NamedParameterSpec("Ed25519"); }
+        public String getAlgorithm() { return "EdDSA-REC"; }
+        public String getFormat() { return "X.509-REC"; }
+        public byte[] getEncoded() { return new byte[]{3}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

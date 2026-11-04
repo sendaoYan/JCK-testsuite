@@ -84,7 +84,44 @@ public class RSAMultiPrimePrivateCrtKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — lattice and RSAOtherPrimeInfo construction ----
+    static void testContract() throws Exception {
+        // lattice: extends RSAPrivateKey directly, sibling of RSAPrivateCrtKey
+        check(RSAPrivateKey.class.isAssignableFrom(RSAMultiPrimePrivateCrtKey.class),
+                "is an RSAPrivateKey");
+        check(!RSAPrivateCrtKey.class.isAssignableFrom(RSAMultiPrimePrivateCrtKey.class),
+                "sibling of RSAPrivateCrtKey (both extend RSAPrivateKey directly)");
+        check(RSAPrivateCrtKey.class.getSuperclass() == null
+                && RSAPrivateCrtKey.class.getInterfaces().length == 1,
+                "RSAPrivateCrtKey has a single direct superinterface");
+        check(Key.class.isAssignableFrom(RSAMultiPrimePrivateCrtKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(RSAMultiPrimePrivateCrtKey.class),
+                "is Serializable");
+
+        // RSAOtherPrimeInfo rejects null components
+        BigInteger v = BigInteger.valueOf(7);
+        try {
+            new RSAOtherPrimeInfo(null, v, v);
+            check(false, "RSAOtherPrimeInfo(null prime) throws NPE");
+        } catch (NullPointerException e) {
+            check(true, "RSAOtherPrimeInfo(null prime) throws NPE");
+        }
+        try {
+            new RSAOtherPrimeInfo(v, null, v);
+            check(false, "RSAOtherPrimeInfo(null exponent) throws NPE");
+        } catch (NullPointerException e) {
+            check(true, "RSAOtherPrimeInfo(null exponent) throws NPE");
+        }
+        try {
+            new RSAOtherPrimeInfo(v, v, null);
+            check(false, "RSAOtherPrimeInfo(null coefficient) throws NPE");
+        } catch (NullPointerException e) {
+            check(true, "RSAOtherPrimeInfo(null coefficient) throws NPE");
+        }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

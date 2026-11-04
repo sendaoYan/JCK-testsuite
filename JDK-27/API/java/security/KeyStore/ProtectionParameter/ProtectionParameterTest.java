@@ -44,7 +44,84 @@ public class ProtectionParameterTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract-deepening section (appended) ----
+    static void testContractDeep() throws Exception {
+        Class<?> mc = Class.forName("java.security.KeyStore$ProtectionParameter");
+        // marker interface: zero own methods (all inherited methods come from Object)
+        int ownCount = 0;
+        for (Method m : mc.getMethods()) {
+            if (m.getDeclaringClass() == mc) ownCount++;
+        }
+        check(ownCount == 0, "marker interface declares no methods");
+
+        // anonymous implementations and identity equality
+        KeyStore.ProtectionParameter anon1 = new KeyStore.ProtectionParameter() { };
+        KeyStore.ProtectionParameter anon2 = new KeyStore.ProtectionParameter() { };
+        check(anon1.equals(anon1) && !anon1.equals(anon2),
+                "anonymous instances identity equality");
+        check(!anon1.equals(null), "anonymous marker not equal to null");
+
+        // array covariance through the marker type (both JDK impls + an anonymous one)
+        KeyStore.ProtectionParameter localPw = new KeyStore.PasswordProtection("x".toCharArray());
+        KeyStore.ProtectionParameter localCb = new KeyStore.CallbackHandlerProtection(callbacks -> { });
+        KeyStore.ProtectionParameter[] params = {localPw, localCb, anon1};
+        check(params.length == 3 && mc.isInstance(params[2]), "parameter array covariance");
+
+        // accepted as Builder protection input (marker value flows through Builder API)
+        KeyStore ks = KeyStore.getInstance("JKS");
+        ks.load(null, null);
+        KeyStore.Builder b = KeyStore.Builder.newInstance(ks, localPw);
+        check(b.getKeyStore() == ks, "marker value accepted by Builder");
+        check(b.getProtectionParameter("a") == localPw, "builder returns the same parameter");
+
+        // DomainLoadStoreParameter's per-keystore map is typed by the marker
+        java.util.Map<String, KeyStore.ProtectionParameter> map = new java.util.LinkedHashMap<>();
+        map.put("keystore", localPw);
+        java.security.DomainLoadStoreParameter d =
+                new java.security.DomainLoadStoreParameter(java.net.URI.create("file:/x.cfg"), map);
+        check(d.getProtectionParams().get("keystore") == localPw,
+                "marker-typed map flows through DomainLoadStoreParameter");
+
+        // PasswordProtection's Destroyable lifecycle is reachable through the marker type
+        java.security.KeyStore.PasswordProtection destroyable =
+                new java.security.KeyStore.PasswordProtection("z".toCharArray());
+        check(mc.isInstance(destroyable), "destroyable instance is marker-typed");
+        destroyable.destroy();
+        check(destroyable.isDestroyed(), "destroy via marker-typed reference");
+
+        // custom (non-Password/CallbackHandler) implementations are rejected by the
+        // engine when recovering key entries — UnsupportedOperationException
+        KeyStore jce = KeyStore.getInstance("JCEKS");
+        jce.load(null, null);
+        jce.setKeyEntry("s", new javax.crypto.spec.SecretKeySpec(new byte[16], "AES"),
+                "pw".toCharArray(), null);
+        try {
+            jce.getEntry("s", anon1);
+            check(false, "custom ProtectionParameter rejected by getEntry");
+        } catch (UnsupportedOperationException uoe) {
+            check(true, "custom ProtectionParameter rejected by getEntry");
+        }
+
+        // Builder accepts an anonymous marker value verbatim
+        KeyStore empty = KeyStore.getInstance("JKS");
+        empty.load(null, null);
+        KeyStore.Builder ab = KeyStore.Builder.newInstance(empty, anon2);
+        check(ab.getKeyStore() == empty, "anonymous marker accepted by Builder");
+        check(ab.getProtectionParameter("a") == anon2, "builder returns anonymous marker");
+
+        // DomainLoadStoreParameter snapshot is unmodifiable, not just defensive
+        boolean putRejected = false;
+        try { d.getProtectionParams().put("x", null); }
+        catch (UnsupportedOperationException uoe) { putRejected = true; }
+        check(putRejected, "protection params view unmodifiable");
+
+        // PasswordProtection destroy is idempotent through the concrete type
+        destroyable.destroy();
+        check(destroyable.isDestroyed(), "second destroy stays destroyed");
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

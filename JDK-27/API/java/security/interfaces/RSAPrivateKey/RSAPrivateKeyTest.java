@@ -68,7 +68,57 @@ public class RSAPrivateKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, lcm math, equals ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation passes the full Key surface through
+        RSAPrivateKey rec = new RecKey();
+        check(rec.getPrivateExponent().equals(BigInteger.valueOf(2753)), "record d passthrough");
+        check(rec.getModulus().equals(BigInteger.valueOf(3233)), "record modulus passthrough");
+        check("RSA-REC".equals(rec.getAlgorithm()), "record getAlgorithm passthrough");
+        check("PKCS#8-REC".equals(rec.getFormat()), "record getFormat passthrough");
+
+        // lattice
+        check(RSAKey.class.isAssignableFrom(RSAPrivateKey.class), "is an RSAKey");
+        check(PrivateKey.class.isAssignableFrom(RSAPrivateKey.class), "is a PrivateKey");
+        check(Key.class.isAssignableFrom(RSAPrivateKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(RSAPrivateKey.class), "is Serializable");
+        check(RSAPrivateKey.class.getInterfaces().length == 2, "exactly two direct superinterfaces");
+
+        // RSA math closed loop: d*e == 1 (mod lcm(p-1, q-1)) using the CRT primes
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+        RSAPrivateKey key = (RSAPrivateKey) kp.getPrivate();
+        RSAPrivateCrtKey crt = (RSAPrivateCrtKey) key;
+        BigInteger p1 = crt.getPrimeP().subtract(BigInteger.ONE);
+        BigInteger q1 = crt.getPrimeQ().subtract(BigInteger.ONE);
+        BigInteger lcm = p1.multiply(q1).divide(p1.gcd(q1));
+        check(key.getPrivateExponent().multiply(crt.getPublicExponent()).mod(lcm)
+                .equals(BigInteger.ONE), "d*e == 1 (mod lcm(p-1, q-1))");
+        check(key.getPrivateExponent().compareTo(key.getModulus()) < 0, "d < n");
+
+        // serialization round-trip fully equal
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+
+        // equals semantics
+        check(key.equals(key), "reflexive equals");
+        check(!key.equals(kp.getPublic()), "private not equal to public half");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements RSAPrivateKey {
+        public BigInteger getPrivateExponent() { return BigInteger.valueOf(2753); }
+        public BigInteger getModulus() { return BigInteger.valueOf(3233); }
+        public String getAlgorithm() { return "RSA-REC"; }
+        public String getFormat() { return "PKCS#8-REC"; }
+        public byte[] getEncoded() { return new byte[]{4, 4}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

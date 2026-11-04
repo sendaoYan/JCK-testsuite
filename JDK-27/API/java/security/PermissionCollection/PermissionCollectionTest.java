@@ -65,7 +65,72 @@ public class PermissionCollectionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening (JDK-27): real collections, readOnly message, serialization, stream ----
+    static void testContractDeep() throws Exception {
+        Permission sp = new SecurityPermission("a.b");
+        PermissionCollection pc = sp.newPermissionCollection();
+        check(pc != null, "newPermissionCollection non-null");
+        check(!pc.implies(sp), "empty collection implies false");
+        check(!pc.implies(null), "implies(null) false (no NPE)");
+        pc.add(sp);
+        pc.add(new SecurityPermission("c.*"));
+        check(pc.implies(new SecurityPermission("a.b")), "implies exact member");
+        check(pc.implies(new SecurityPermission("c.d")), "implies wildcard member");
+        check(!pc.implies(new SecurityPermission("c")), "wildcard does not imply parent name");
+        check(!pc.implies(new SecurityPermission("z.z")), "non-member false");
+        try {
+            pc.add(null);
+            check(false, "add(null) must throw");
+        } catch (IllegalArgumentException iae) {
+            check(true, "add(null) -> IllegalArgumentException");
+        }
+        pc.setReadOnly();
+        pc.setReadOnly();
+        check(pc.isReadOnly(), "setReadOnly idempotent");
+        try {
+            pc.add(new SecurityPermission("d.e"));
+            check(false, "real collection add after readonly must throw");
+        } catch (SecurityException se) {
+            check("attempt to add a Permission to a readonly PermissionCollection".equals(se.getMessage()),
+                    "readonly add exact message");
+        }
+        check(pc.toString().contains("a.b"), "toString lists permissions");
+
+        // JDK-9+ default method elementsAsStream
+        long n = pc.elementsAsStream().count();
+        check(n == 2, "elementsAsStream count");
+        check(pc.elementsAsStream().allMatch(p -> p instanceof SecurityPermission), "elementsAsStream element type");
+
+        // serialization round-trip preserves contents and readOnly flag
+        PermissionCollection rt = (PermissionCollection) roundTrip(pc);
+        check(rt.isReadOnly(), "round-trip preserves readOnly");
+        check(rt.implies(new SecurityPermission("a.b")), "round-trip preserves implies exact");
+        check(rt.implies(new SecurityPermission("c.d")), "round-trip preserves implies wildcard");
+        check(!rt.implies(new SecurityPermission("z.z")), "round-trip preserves non-member");
+        check(rt.elementsAsStream().count() == 2, "round-trip stream count");
+
+        // UnresolvedPermissionCollection: add does not enforce readOnly (unlike BasicPermissionCollection)
+        UnresolvedPermission up = new UnresolvedPermission("java.security.SecurityPermission", "getPolicy", null, null);
+        PermissionCollection upc = up.newPermissionCollection();
+        check(upc != null, "UP newPermissionCollection non-null");
+        upc.setReadOnly();
+        upc.add(new UnresolvedPermission("java.security.SecurityPermission", "setLog", null, null));
+        check(true, "UnresolvedPermissionCollection.add after setReadOnly does not throw");
+        check(!upc.implies(new SecurityPermission("getPolicy")), "direct UPC implies always false");
+    }
+
+    static Object roundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return oin.readObject();
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

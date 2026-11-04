@@ -71,7 +71,60 @@ public class DSAPrivateKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, equals semantics ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation passes the full Key surface through
+        DSAPrivateKey rec = new RecKey();
+        check(rec.getX().equals(BigInteger.valueOf(7)), "record getX passthrough");
+        check("DSA-REC".equals(rec.getAlgorithm()), "record getAlgorithm passthrough");
+        check("PKCS#8-REC".equals(rec.getFormat()), "record getFormat passthrough");
+        check(rec.getEncoded() != null && rec.getEncoded().length == 3, "record getEncoded passthrough");
+
+        // lattice: a private DSA key is a DSAKey, PrivateKey, Key and Serializable
+        check(DSAKey.class.isAssignableFrom(DSAPrivateKey.class), "is a DSAKey");
+        check(PrivateKey.class.isAssignableFrom(DSAPrivateKey.class), "is a PrivateKey");
+        check(Key.class.isAssignableFrom(DSAPrivateKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(DSAPrivateKey.class), "is Serializable");
+        check(DSAPrivateKey.class.getInterfaces().length == 2, "exactly two direct superinterfaces");
+
+        // real key: spec and serialization round-trips are fully equal
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("DSA");
+        kpg.initialize(1024);
+        KeyPair kp = kpg.generateKeyPair();
+        DSAPrivateKey key = (DSAPrivateKey) kp.getPrivate();
+        KeyFactory kf = KeyFactory.getInstance("DSA");
+        DSAPrivateKeySpec spec = kf.getKeySpec(key, DSAPrivateKeySpec.class);
+        DSAPrivateKey back = (DSAPrivateKey) kf.generatePrivate(
+                new DSAPrivateKeySpec(spec.getX(), spec.getP(), spec.getQ(), spec.getG()));
+        check(back.equals(key), "spec round-trip equals");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+        check(key instanceof Serializable, "real key serializable");
+
+        // equals semantics
+        check(key.equals(key), "reflexive equals");
+        check(!key.equals(kp.getPublic()), "private not equal to public half");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements DSAPrivateKey {
+        public BigInteger getX() { return BigInteger.valueOf(7); }
+        public DSAParams getParams() {
+            return new DSAParams() {
+                public BigInteger getP() { return BigInteger.valueOf(23); }
+                public BigInteger getQ() { return BigInteger.valueOf(11); }
+                public BigInteger getG() { return BigInteger.valueOf(2); }
+            };
+        }
+        public String getAlgorithm() { return "DSA-REC"; }
+        public String getFormat() { return "PKCS#8-REC"; }
+        public byte[] getEncoded() { return new byte[]{1, 2, 3}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

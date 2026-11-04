@@ -55,7 +55,63 @@ public class RSAKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — default method, record impl, lattice, steering ----
+    static void testContract() throws Exception {
+        // default getParams() returns null for implementations that do not override it
+        RSAKey rec = new RecRSAKey();
+        check(rec.getModulus().equals(BigInteger.valueOf(3233)), "record getModulus passthrough");
+        check(rec.getParams() == null, "default getParams returns null when not overridden");
+        check(new NullModulusKey().getParams() == null,
+                "default getParams null independent of modulus");
+
+        // lattice: bare interface, not a Key, not Serializable, no constant
+        check(RSAKey.class.getInterfaces().length == 0, "no superinterfaces");
+        check(!Key.class.isAssignableFrom(RSAKey.class), "not a Key");
+        check(!Serializable.class.isAssignableFrom(RSAKey.class), "not Serializable");
+        check(RSAKey.class.isAssignableFrom(RSAPublicKey.class), "RSAPublicKey is an RSAKey");
+        check(RSAKey.class.isAssignableFrom(RSAPrivateKey.class), "RSAPrivateKey is an RSAKey");
+        try {
+            RSAKey.class.getDeclaredField("serialVersionUID");
+            check(false, "no serialVersionUID declared");
+        } catch (NoSuchFieldException e) {
+            check(true, "no serialVersionUID declared");
+        }
+
+        // modulus size and exponent steered through RSAKeyGenParameterSpec
+        KeyPairGenerator k1024 = KeyPairGenerator.getInstance("RSA");
+        k1024.initialize(new RSAKeyGenParameterSpec(1024, BigInteger.valueOf(3)));
+        KeyPair small = k1024.generateKeyPair();
+        check(((RSAKey) small.getPublic()).getModulus().bitLength() == 1024,
+                "1024-bit modulus via RSAKeyGenParameterSpec");
+        check(((RSAPublicKey) small.getPublic()).getPublicExponent().intValue() == 3,
+                "public exponent 3 via RSAKeyGenParameterSpec");
+        check(((RSAKey) small.getPrivate()).getModulus().equals(
+                ((RSAKey) small.getPublic()).getModulus()), "shared modulus after steering");
+
+        // cross-family discrimination: a DSA key is not an RSAKey
+        KeyPairGenerator dsa = KeyPairGenerator.getInstance("DSA");
+        dsa.initialize(1024);
+        check(!(dsa.generateKeyPair().getPrivate() instanceof RSAKey),
+                "DSA private key is not an RSAKey");
+        check(!RSAKey.class.isAssignableFrom(DSAPrivateKey.class),
+                "DSAPrivateKey not assignable to RSAKey");
+
+        // equals semantics
+        RSAKey pub = (RSAKey) KeyPairGenerator.getInstance("RSA").generateKeyPair().getPublic();
+        check(pub.equals(pub), "reflexive equals");
+        check(!pub.equals(rec), "real key not equal to record impl");
+    }
+
+    static class RecRSAKey implements RSAKey {
+        public BigInteger getModulus() { return BigInteger.valueOf(3233); }
+    }
+
+    static class NullModulusKey implements RSAKey {
+        public BigInteger getModulus() { return null; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

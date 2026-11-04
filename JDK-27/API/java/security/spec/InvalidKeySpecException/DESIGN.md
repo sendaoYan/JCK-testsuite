@@ -34,3 +34,8 @@ try {
   - `String+Throwable` 构造 getMessage 与 getCause 精确匹配。
   - `Throwable` 构造 getCause 精确匹配、getMessage 非 null。
   - `instanceof GeneralSecurityException`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：构造矩阵（(Throwable) message==cause.toString()）
+- 关键实测：4 构造（()/String/Throwable/String+Throwable），继承 GeneralSecurityException，Serializable。
+KeyFactory.generatePublic/generatePrivate/getKeySpec 在规范无效时抛出。

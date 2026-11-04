@@ -63,7 +63,68 @@ public class ECPublicKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, on-curve math, equals ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation
+        ECPublicKey rec = new RecKey();
+        check(rec.getW().getAffineX().equals(BigInteger.valueOf(1)), "record getW x passthrough");
+        check(rec.getW().getAffineY().equals(BigInteger.valueOf(2)), "record getW y passthrough");
+        check("X.509-REC".equals(rec.getFormat()), "record getFormat passthrough");
+
+        // lattice
+        check(ECKey.class.isAssignableFrom(ECPublicKey.class), "is an ECKey");
+        check(PublicKey.class.isAssignableFrom(ECPublicKey.class), "is a PublicKey");
+        check(Key.class.isAssignableFrom(ECPublicKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(ECPublicKey.class), "is Serializable");
+        check(ECPublicKey.class.getInterfaces().length == 2, "exactly two direct superinterfaces");
+
+        // real key: W satisfies the curve equation y^2 = x^3 + ax + b (mod p)
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+        kpg.initialize(new ECGenParameterSpec("secp256r1"));
+        KeyPair kp = kpg.generateKeyPair();
+        ECPublicKey key = (ECPublicKey) kp.getPublic();
+        ECParameterSpec pp = key.getParams();
+        ECPoint w = key.getW();
+        BigInteger p = ((ECFieldFp) pp.getCurve().getField()).getP();
+        BigInteger lhs = w.getAffineY().pow(2).mod(p);
+        BigInteger rhs = w.getAffineX().pow(3)
+                .add(pp.getCurve().getA().multiply(w.getAffineX()))
+                .add(pp.getCurve().getB()).mod(p);
+        check(lhs.equals(rhs), "W satisfies y^2 = x^3 + ax + b (mod p)");
+
+        // factory round-trips fully equal, serialization equal
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        ECPublicKeySpec spec = kf.getKeySpec(key, ECPublicKeySpec.class);
+        ECPublicKey back = (ECPublicKey) kf.generatePublic(new ECPublicKeySpec(spec.getW(), spec.getParams()));
+        check(back.equals(key), "ECPublicKeySpec round-trip equals");
+        ECPublicKey x509 = (ECPublicKey) kf.generatePublic(new X509EncodedKeySpec(key.getEncoded()));
+        check(x509.equals(key), "X509EncodedKeySpec round-trip equals");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+
+        // equals semantics
+        check(key.equals(key), "reflexive equals");
+        check(!key.equals(kp.getPrivate()), "public not equal to private half");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements ECPublicKey {
+        public ECPoint getW() { return new ECPoint(BigInteger.valueOf(1), BigInteger.valueOf(2)); }
+        public ECParameterSpec getParams() {
+            try {
+                return ((ECKey) KeyPairGenerator.getInstance("EC").generateKeyPair()
+                        .getPublic()).getParams();
+            } catch (Exception e) { throw new RuntimeException(e); }
+        }
+        public String getAlgorithm() { return "EC-REC"; }
+        public String getFormat() { return "X.509-REC"; }
+        public byte[] getEncoded() { return new byte[]{8}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

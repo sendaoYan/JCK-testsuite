@@ -66,7 +66,53 @@ public class XECPublicKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, serialization, equals ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation: BigInteger u passthrough and Key surface
+        XECPublicKey rec = new RecKey();
+        check(rec.getU().equals(BigInteger.valueOf(777)), "record getU passthrough");
+        check("XDH-REC".equals(rec.getAlgorithm()), "record getAlgorithm passthrough");
+        check("X.509-REC".equals(rec.getFormat()), "record getFormat passthrough");
+        check(rec.getEncoded() != null && rec.getEncoded().length == 1, "record getEncoded passthrough");
+
+        // lattice: inherits serialVersionUID from PublicKey, does not declare its own
+        check(PublicKey.class.isAssignableFrom(XECPublicKey.class), "is a PublicKey");
+        check(XECKey.class.isAssignableFrom(XECPublicKey.class), "is an XECKey");
+        check(Key.class.isAssignableFrom(XECPublicKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(XECPublicKey.class), "is Serializable");
+        check(XECPublicKey.class.getField("serialVersionUID").getLong(null)
+                == 7187392471159151072L, "inherits PublicKey serialVersionUID value");
+        try {
+            XECPublicKey.class.getDeclaredField("serialVersionUID");
+            check(false, "declares no own serialVersionUID");
+        } catch (NoSuchFieldException e) {
+            check(true, "declares no own serialVersionUID");
+        }
+
+        // real key: u in [0, 2^255), serialization fully equal
+        KeyPair kp = KeyPairGenerator.getInstance("XDH").generateKeyPair();
+        XECPublicKey key = (XECPublicKey) kp.getPublic();
+        check(key.getU().signum() >= 0, "u non-negative");
+        check(key.getU().compareTo(BigInteger.ONE.shiftLeft(255)) < 0, "u < 2^255");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+        check(key.equals(key), "reflexive equals");
+        check(!key.equals(kp.getPrivate()), "public not equal to private half");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements XECPublicKey {
+        public BigInteger getU() { return BigInteger.valueOf(777); }
+        public AlgorithmParameterSpec getParams() { return new NamedParameterSpec("X25519"); }
+        public String getAlgorithm() { return "XDH-REC"; }
+        public String getFormat() { return "X.509-REC"; }
+        public byte[] getEncoded() { return new byte[]{4}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

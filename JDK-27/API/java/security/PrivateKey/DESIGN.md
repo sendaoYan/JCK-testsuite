@@ -14,3 +14,9 @@
 ## 4. 测试用例设计 + 自动化实现
 - 真实 RSA 私钥：instanceof PrivateKey/AsymmetricKey/Key/Destroyable；getAlgorithm "RSA"、getFormat "PKCS#8"、getEncoded 非空；getParams 默认 null。
 - 白盒：接口，父接口 AsymmetricKey 与 Destroyable（字符串反射断言）。
+
+## 5. 追加契约维度（深化批）
+- marker 形状：无声明方法、sVUID=6034044314589513430L（反射精确值）。
+- DSA-1024 私钥同契约（PKCS#8）；KeyRep 序列化 round-trip equals、编码字节保留。
+- Destroyable 默认：isDestroyed()==false、destroy() 抛 DestroyFailedException。
+- 自定义 opaque 钥 getFormat/getEncoded 可 null。

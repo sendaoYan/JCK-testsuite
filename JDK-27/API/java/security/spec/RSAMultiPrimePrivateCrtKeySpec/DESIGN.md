@@ -30,3 +30,8 @@ RSAOtherPrimeInfo[] others = spec.getOtherPrimeInfo();  // 返回拷贝
   - 9 参构造：8 个 BigInteger getter（含继承的 getModulus/getPrivateExponent）+ getParams 为 null 精确断言。
   - getOtherPrimeInfo 返回内容相等的新数组；修改返回数组不影响内部值。
   - 10 参构造：getParams 为传入对象、getOtherPrimeInfo 长度正确。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：全 getter 逐项往返
+- 关键实测：8 个 BigInteger + RSAOtherPrimeInfo[]（+keyParams）；null 数组合法（getter null）、空数组→IAE "must not be empty"；ctor/getOtherPrimeInfo 双重防御拷贝。
+多素数 RSA（PKCS#1 v2.1）私钥材料交换。

@@ -18,3 +18,9 @@
 - getService：未注册→null；注册后 Service.getType/getAlgorithm/getClassName/getProvider；算法名大小写不敏感、type 大小写敏感；getServices 计数；keys()/elements() 枚举。
 - toString 含名称与版本；equals/hashCode（相同映射相等、不同映射不等）；序列化往返保留 name/version/info 与条目。
 - 易错点：(名称,double版本,信息) 构造器不校验 null/空/负版本（校验在 Java 9+ 的 (name, String version, info) 构造器）；Provider 初始含 Provider.id.* 条目故不断言初始 size 0。
+
+## 5. 契约深化补充（本批）
+- Provider.id 恰 4 键（name/version/info/className），className 是具体子类名。
+- Service 生命周期（经子类暴露 protected putService/removeService）：put 后按算法/别名/大小写不敏感命中、getServices 不可修改（add → UnsupportedOperationException）、remove 后清空、legacy put(MessageDigest.X,cls) 也暴露为 Service。
+- Service 构造 null 矩阵全 NPE；newInstance 须已注册、返回新实例、无引擎类型校验（实测）；supportsParameter 矩阵（MD 引擎 IPE / Signature 按 SupportedKeyClasses / 非 Key IPE / 无属性恒 true）。
+- JDK-9+ getVersionStr/isConfigured 反射断言（JDK-8 缺失记录）。

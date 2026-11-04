@@ -18,3 +18,9 @@
 - 异常：null 证书 → NPE
 
 断言入口：`TrustedCertificateEntryTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（testContractDeep）
+- JKS null 保护闭环：分类、getCertificate equals、null 证书链、getKey null、getCertificateAlias 命中。
+- 口令保护双向拒绝：setEntry → KeyStoreException；getEntry → UnsupportedOperationException。
+- 覆盖+删除生命周期（同 alias 覆盖 size 不变；delete 后 getEntry null）；JKS 往返后属性集为空。

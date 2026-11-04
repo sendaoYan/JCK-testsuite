@@ -17,3 +17,11 @@
 - 异常：未先 getKeyStore 调 getProtectionParameter → IllegalStateException；null alias → NPE；未初始化 KeyStore 传入 → IllegalArgumentException
 
 断言入口：`BuilderTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（testContractDeep）
+- 包装工厂 null protection → NPE；4 参工厂 null file（非 DKS）→ 构造期 NPE。
+- CallbackHandlerProtection 变体包装往返一致。
+- JKS File 变体：装载条目、缓存同一实例、store 活对象（修改可见）。
+- 未知类型构造期接受、首次 getKeyStore 才 KeyStoreException（惰性失败）。
+- 自定义匿名子类记录 getKeyStore 调用次数，验证抽象契约。

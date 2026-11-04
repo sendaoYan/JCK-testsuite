@@ -24,3 +24,8 @@ if (spec instanceof RSAPublicKeySpec rsa) {
 ## 4. 测试用例设计 + 自动化实现
 - 白盒（testWhiteBox）：public 接口、无父接口（getSuperclass()==null）、不声明任何方法。
 - 黑盒（testBlackBox）：真实规范类 `RSAPublicKeySpec`、`RSAPrivateKeySpec` 实例均 `instanceof KeySpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：标记语义验证（instanceof/isAssignableFrom 矩阵覆盖两族、与 AlgorithmParameterSpec 体系互斥、null 可赋值）。
+- 关键实测：所有 *KeySpec 类型的公共标记接口；KeyFactory.generatePublic/generatePrivate/getKeySpec 以本接口体系交换密钥材料。
+实现分两大族：EncodedKeySpec（PKCS8/X509 编码字节）与算法专有 spec（DSA*/RSA*/EC*）。

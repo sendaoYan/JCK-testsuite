@@ -202,6 +202,184 @@ public class SignatureTest {
         final Signature cl = Signature.getInstance("SHA256withRSA");
         checkThrows(CloneNotSupportedException.class, () -> cl.clone(), "clone throws CloneNotSupportedException");
 
+        // ==== contract deepening: DSA loop, verify(off,len), PSS, state machine ====
+
+        // ---- DSA-1024 closed loop: sign -> verify true / tampered data false / different message false ----
+        KeyPairGenerator dsaKpg = KeyPairGenerator.getInstance("DSA");
+        dsaKpg.initialize(1024);
+        KeyPair dsaKp = dsaKpg.generateKeyPair();
+        Signature dsaSigner = Signature.getInstance("SHA256withDSA");
+        dsaSigner.initSign(dsaKp.getPrivate());
+        dsaSigner.update(DATA);
+        byte[] dsaSig = dsaSigner.sign();
+        check(dsaSig != null && dsaSig.length > 0, "DSA sign non-empty");
+        Signature dsaVerifier = Signature.getInstance("SHA256withDSA");
+        dsaVerifier.initVerify(dsaKp.getPublic());
+        dsaVerifier.update(DATA);
+        check(dsaVerifier.verify(dsaSig), "DSA verify round-trip true");
+        Signature dsaTamper = Signature.getInstance("SHA256withDSA");
+        dsaTamper.initVerify(dsaKp.getPublic());
+        byte[] flipped = DATA.clone();
+        flipped[flipped.length - 1] ^= 0x01;
+        dsaTamper.update(flipped);
+        check(!dsaTamper.verify(dsaSig), "DSA verify different message false");
+        Signature dsaOther = Signature.getInstance("SHA256withDSA");
+        dsaOther.initVerify(dsaKpg.generateKeyPair().getPublic());
+        dsaOther.update(DATA);
+        check(!dsaOther.verify(dsaSig), "DSA verify wrong key false");
+
+        // ---- cross-algorithm key misuse -> InvalidKeyException ----
+        Signature rsaSigX = Signature.getInstance("SHA256withRSA");
+        checkThrows(InvalidKeyException.class, () -> rsaSigX.initSign(dsaKp.getPrivate()),
+                "initSign DSA private on RSA signature");
+        Signature rsaSigY = Signature.getInstance("SHA256withRSA");
+        checkThrows(InvalidKeyException.class, () -> rsaSigY.initVerify(dsaKp.getPublic()),
+                "initVerify DSA public on RSA signature");
+
+        // ---- verify(sig, off, len) offset variant ----
+        Signature offVer = Signature.getInstance("SHA256withRSA");
+        offVer.initVerify(kp.getPublic());
+        offVer.update(DATA);
+        byte[] sigOnce = signOnce(kp, DATA);
+        byte[] padded = new byte[sigOnce.length + 16];
+        System.arraycopy(sigOnce, 0, padded, 8, sigOnce.length);
+        check(offVer.verify(padded, 8, sigOnce.length), "verify(off,len) at embedded offset true");
+        check(!offVer.verify(padded, 0, sigOnce.length), "verify(off,len) wrong offset false");
+        // short len: RSA engine demands exact signature length -> SignatureException
+        offVer.update(DATA);
+        final Signature offVerS = offVer;
+        checkThrows(SignatureException.class, () -> offVerS.verify(padded, 8, sigOnce.length - 1),
+                "verify(off,len) short len wrong length");
+        final Signature offVerF = offVer;
+        checkThrows(IllegalArgumentException.class, () -> offVerF.verify(padded, -1, 4),
+                "verify(off,len) negative offset");
+        checkThrows(IllegalArgumentException.class, () -> offVerF.verify(padded, 0, padded.length + 1),
+                "verify(off,len) len overflow");
+
+        // ---- state machine: verify() resets, re-verify without re-update -> false ----
+        Signature reVer = Signature.getInstance("SHA256withRSA");
+        reVer.initVerify(kp.getPublic());
+        reVer.update(DATA);
+        check(reVer.verify(sigOnce), "re-verify first pass true");
+        check(!reVer.verify(sigOnce), "verify again without re-update false");
+        reVer.update(DATA);
+        check(reVer.verify(sigOnce), "verify after re-update true again");
+
+        // ---- sign() after initVerify -> SignatureException (state) ----
+        Signature wrongState = Signature.getInstance("SHA256withRSA");
+        wrongState.initVerify(kp.getPublic());
+        checkThrows(SignatureException.class, () -> wrongState.sign(), "sign after initVerify");
+        // fresh (uninitialized) engine: getParameters is null, no state leakage
+        Signature fresh = Signature.getInstance("SHA256withRSA");
+        check(fresh.getParameters() == null, "getParameters null on fresh SHA256withRSA");
+        // re-init is permitted at any time (javadoc: calling initSign again negates
+        // an earlier call); the fresh sign/verify sequence after re-init stays consistent
+        Signature reInit = Signature.getInstance("SHA256withRSA");
+        reInit.initSign(kp.getPrivate());
+        reInit.update(DATA);
+        reInit.initSign(kp.getPrivate());
+        reInit.update(DATA);
+        Signature reInitVer = Signature.getInstance("SHA256withRSA");
+        reInitVer.initVerify(kp.getPublic());
+        reInitVer.update(DATA);
+        check(reInitVer.verify(reInit.sign()), "sign/verify consistent after re-initSign");
+        // verify(...) followed by another verify of a wrong-length input -> SignatureException
+        Signature lenCheck = Signature.getInstance("SHA256withDSA");
+        lenCheck.initVerify(dsaKp.getPublic());
+        lenCheck.update(DATA);
+        checkThrows(SignatureException.class, () -> lenCheck.verify(new byte[3]),
+                "verify wrong-length signature");
+
+        // ---- failed sign(buf,off,len) attempts do not corrupt accumulator ----
+        Signature robust = Signature.getInstance("SHA256withRSA");
+        robust.initSign(kp.getPrivate());
+        robust.update(DATA);
+        checkThrows(IllegalArgumentException.class, () -> robust.sign(new byte[1024], 500, 700),
+                "sign(buf,off,len) overflow IAE");
+        checkThrows(IllegalArgumentException.class, () -> robust.sign(new byte[8], -1, 4),
+                "sign(buf,off,len) negative offset IAE");
+        byte[] robustSig = robust.sign();
+        Signature robustVer = Signature.getInstance("SHA256withRSA");
+        robustVer.initVerify(kp.getPublic());
+        robustVer.update(DATA);
+        check(robustVer.verify(robustSig), "state intact after failed sign(buf,off,len)");
+
+        // ---- chunked updates equivalent to one-shot ----
+        Signature chunkSigner = Signature.getInstance("SHA256withRSA");
+        chunkSigner.initSign(kp.getPrivate());
+        chunkSigner.update(DATA, 0, 1);
+        chunkSigner.update(DATA, 1, DATA.length - 2);
+        chunkSigner.update(DATA, DATA.length - 1, 1);
+        byte[] chunkSig = chunkSigner.sign();
+        Signature chunkVer = Signature.getInstance("SHA256withRSA");
+        chunkVer.initVerify(kp.getPublic());
+        chunkVer.update(DATA);
+        check(chunkVer.verify(chunkSig), "chunked updates verify against one-shot data");
+
+        // ---- RSASSA-PSS: setParameter spec round-trip (both before and after init) ----
+        Signature pssSigner = Signature.getInstance("RSASSA-PSS");
+        java.security.spec.PSSParameterSpec pssSpec = new java.security.spec.PSSParameterSpec(
+                "SHA-256", "MGF1", java.security.spec.MGF1ParameterSpec.SHA256, 32, 1);
+        pssSigner.setParameter(pssSpec);
+        pssSigner.initSign(kp.getPrivate());
+        pssSigner.update(DATA);
+        byte[] pssBytes = pssSigner.sign();
+        check(pssBytes.length > 0, "PSS sign non-empty");
+        Signature pssVer1 = Signature.getInstance("RSASSA-PSS");
+        pssVer1.setParameter(pssSpec);
+        pssVer1.initVerify(kp.getPublic());
+        pssVer1.update(DATA);
+        check(pssVer1.verify(pssBytes), "PSS verify (setParameter before init)");
+        Signature pssVer2 = Signature.getInstance("RSASSA-PSS");
+        pssVer2.initVerify(kp.getPublic());
+        pssVer2.setParameter(pssSpec);
+        pssVer2.update(DATA);
+        check(pssVer2.verify(pssBytes), "PSS verify (setParameter after init)");
+        // getParameters reflects the applied PSS spec
+        java.security.AlgorithmParameters pssParams = pssVer2.getParameters();
+        check(pssParams != null, "PSS getParameters non-null after setParameter");
+        check(pssParams.toString().contains("SHA-256"), "PSS parameters mention SHA-256");
+        // invalid parameter specs -> InvalidAlgorithmParameterException
+        Signature pssBad = Signature.getInstance("RSASSA-PSS");
+        checkThrows(java.security.InvalidAlgorithmParameterException.class,
+                () -> pssBad.setParameter((java.security.spec.AlgorithmParameterSpec) null),
+                "PSS setParameter(null)");
+        // MD2 spec is accepted lazily (validated at init): initSign then fails with ProviderException
+        Signature pssMd2 = Signature.getInstance("RSASSA-PSS");
+        pssMd2.setParameter(new java.security.spec.PSSParameterSpec(
+                "MD2", "MGF1", java.security.spec.MGF1ParameterSpec.SHA1, 20, 1));
+        checkThrows(java.security.ProviderException.class, () -> pssMd2.initSign(kp.getPrivate()),
+                "PSS MD2 digest unavailable at initSign");
+        Signature pssMgf = Signature.getInstance("RSASSA-PSS");
+        checkThrows(java.security.InvalidAlgorithmParameterException.class, () -> pssMgf.setParameter(
+                        new java.security.spec.PSSParameterSpec("SHA-256", "BOGUS-MGF", java.security.spec.MGF1ParameterSpec.SHA1, 20, 1)),
+                "PSS setParameter bogus MGF");
+
+        // ---- deprecated setParameter(String,Object)/getParameter(String) -> InvalidParameterException ----
+        Signature dep = Signature.getInstance("SHA256withDSA");
+        checkThrows(java.security.InvalidParameterException.class, () -> dep.setParameter("X", "y"),
+                "setParameter(String,Object) unsupported");
+        check(dep.getParameter("X") == null, "getParameter(String) returns null");
+
+        // ---- getInstance with explicit provider instance ----
+        Signature viaProvider = Signature.getInstance("SHA256withRSA", Security.getProvider("SunRsaSign"));
+        check("SunRsaSign".equals(viaProvider.getProvider().getName()), "getInstance(alg, Provider) provider");
+        Signature viaName = Signature.getInstance("SHA256withRSA", "SunRsaSign");
+        check("SunRsaSign".equals(viaName.getProvider().getName()), "getInstance(alg, providerName) provider");
+        checkThrows(NullPointerException.class, () -> Signature.getInstance(null, "SunRsaSign"),
+                "getInstance(null, providerName)");
+        checkThrows(NoSuchAlgorithmException.class, () -> Signature.getInstance("BogusSig_XYZ", "SunRsaSign"),
+                "getInstance(bogus, providerName)");
+        check(sig.getAlgorithm().equals("SHA256withRSA") && sig.toString().contains("SHA256withRSA"),
+                "toString contains algorithm");
+
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    static byte[] signOnce(KeyPair kp, byte[] data) throws Exception {
+        Signature s = Signature.getInstance("SHA256withRSA");
+        s.initSign(kp.getPrivate());
+        s.update(data);
+        return s.sign();
     }
 }

@@ -16,3 +16,10 @@
 - PRIVATE：PKCS#8 编码往返。
 - SECRET：RAW 编码往返，getAlgorithm/getFormat 正确。
 - 白盒：concrete + Serializable。
+
+## 5. 追加契约维度（深化批）
+- null 矩阵：type/algorithm/format/encoded 任一 null → 构造期 NPE。
+- 延迟校验：任意字符串/空数组可构造，失败推迟到反序列化。
+- 失败路径全为 NotSerializableException：未知 type/format 组合消息含 "unrecognized type/format combination: T/F"；无工厂算法/坏字节消息含 "[TYPE] [alg] [format]" 三段式。
+- 真实 RSA 公私钥 writeReplace→KeyRep→readResolve 闭环：equals、algorithm/format/编码字节/hashCode 全保留。
+- readResolve protected、返回 Object、throws ObjectStreamException。

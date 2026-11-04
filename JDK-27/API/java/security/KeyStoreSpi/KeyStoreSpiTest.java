@@ -225,9 +225,240 @@ public class KeyStoreSpiTest {
 
     }
 
+    interface TR { void run() throws Throwable; }
+
+    static void ct(Class<? extends Throwable> expected, TR r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName() + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName() + " but nothing was thrown");
+    }
+
+    static void ctMsg(Class<? extends Throwable> expected, String frag, TR r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (expected.isInstance(t) && t.getMessage() != null && t.getMessage().contains(frag)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName() + "(" + frag + ") but got "
+                    + t.getClass().getName() + "(" + t.getMessage() + ")", t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName() + "(" + frag + ") but nothing was thrown");
+    }
+
+    static class FakeKey implements PrivateKey {
+        public String getAlgorithm() { return "Fake"; }
+        public String getFormat() { return "RAW"; }
+        public byte[] getEncoded() { return new byte[]{1}; }
+    }
+
+    static class FakePublicKey implements java.security.PublicKey {
+        public String getAlgorithm() { return "Fake"; }
+        public String getFormat() { return "X.509"; }
+        public byte[] getEncoded() { return new byte[]{2}; }
+    }
+
+    // Minimal Certificate the JDK-default entry adapters can chew on (chain building calls getPublicKey()).
+    // Note: qualified because JDK 26+ also has a sealed interface java.security.Certificate.
+    static class FakeCertificate extends java.security.cert.Certificate {
+        FakeCertificate() { super("Fake"); }
+        public byte[] getEncoded() { return new byte[]{3}; }
+        public java.security.PublicKey getPublicKey() { return new FakePublicKey(); }
+        public String toString() { return "FakeCertificate"; }
+        public void verify(java.security.PublicKey key) { }
+        public void verify(java.security.PublicKey key, String sigProvider) { }
+    }
+
+    // Records every call; does NOT override engineStore(param)/engineLoad(param)/
+    // engineGetEntry/engineSetEntry/engineEntryInstanceOf/engineGetCreationInstant/
+    // engineGetAttributes/engineProbe so the JDK defaults are exercised.
+    static class DefaultsSpi extends KeyStoreSpi {
+        final Map<String, Key> keys = new LinkedHashMap<>();
+        final Map<String, Certificate> certs = new LinkedHashMap<>();
+        int loadCalls; InputStream lastStream; char[] lastPass; Key lastSetKey; char[] lastSetPass;
+        Certificate[] lastSetChain; String lastCertAlias;
+        public Key engineGetKey(String alias, char[] password) { return keys.get(alias); }
+        public Certificate[] engineGetCertificateChain(String alias) { return null; }
+        public Certificate engineGetCertificate(String alias) { return certs.get(alias); }
+        public java.util.Date engineGetCreationDate(String alias) { return alias.startsWith("noentry") ? null : new java.util.Date(0L); }
+        public void engineSetKeyEntry(String alias, Key key, char[] password, Certificate[] chain) {
+            keys.put(alias, key); lastSetKey = key; lastSetPass = password; lastSetChain = chain;
+        }
+        public void engineSetKeyEntry(String alias, byte[] key, Certificate[] chain) { }
+        public void engineSetCertificateEntry(String alias, Certificate cert) {
+            certs.put(alias, cert); lastCertAlias = alias;
+        }
+        public void engineDeleteEntry(String alias) { keys.remove(alias); certs.remove(alias); }
+        public Enumeration<String> engineAliases() { return Collections.enumeration(keys.keySet()); }
+        public boolean engineContainsAlias(String alias) { return keys.containsKey(alias) || certs.containsKey(alias); }
+        public int engineSize() { return keys.size() + certs.size(); }
+        public boolean engineIsKeyEntry(String alias) { return keys.containsKey(alias); }
+        public boolean engineIsCertificateEntry(String alias) { return certs.containsKey(alias); }
+        public String engineGetCertificateAlias(Certificate cert) { return null; }
+        public void engineStore(OutputStream stream, char[] password) { }
+        public void engineLoad(InputStream stream, char[] password) { loadCalls++; lastStream = stream; lastPass = password; }
+        void doStoreParam(KeyStore.LoadStoreParameter p) throws Exception { engineStore(p); }
+        void doLoadParam(KeyStore.LoadStoreParameter p) throws Exception { engineLoad(p); }
+        KeyStore.Entry doGetEntry(String a, KeyStore.ProtectionParameter p) throws Exception { return engineGetEntry(a, p); }
+        void doSetEntry(String a, KeyStore.Entry e, KeyStore.ProtectionParameter p) throws Exception { engineSetEntry(a, e, p); }
+        boolean doEntryInstanceOf(String a, Class<? extends KeyStore.Entry> c) { return engineEntryInstanceOf(a, c); }
+        java.time.Instant doGetInstant(String a) { return engineGetCreationInstant(a); }
+        Set<KeyStore.Entry.Attribute> doGetAttrs(String a) { return engineGetAttributes(a); }
+        boolean doProbe(InputStream in) throws Exception { return engineProbe(in); }
+    }
+
+    static KeyStore.ProtectionParameter ppParam(String pw) {
+        return new KeyStore.PasswordProtection(pw.toCharArray());
+    }
+
+    static KeyStore.LoadStoreParameter pwParam(String pw) {
+        return () -> new KeyStore.PasswordProtection(pw.toCharArray());
+    }
+
+    static void testContractDeep() throws Exception {
+        Class<?> c = KeyStoreSpi.class;
+
+        // ---- structure: 16 abstract engine methods (unchanged since JDK 8); JDK 9+ adds defaults ----
+        check(c.getConstructor() != null, "public no-arg constructor");
+        int abstractCount = 0;
+        Set<String> names = new HashSet<>();
+        for (Method m : c.getDeclaredMethods()) {
+            if (Modifier.isAbstract(m.getModifiers())) { abstractCount++; names.add(m.getName()); }
+        }
+        check(abstractCount == 16, "16 abstract engine methods, got " + abstractCount + ": " + names);
+        Method m = c.getDeclaredMethod("engineStore", KeyStore.LoadStoreParameter.class);
+        check(!Modifier.isAbstract(m.getModifiers()) && Modifier.isPublic(m.getModifiers()),
+                "engineStore(LoadStoreParameter) public default");
+        m = c.getDeclaredMethod("engineLoad", KeyStore.LoadStoreParameter.class);
+        check(!Modifier.isAbstract(m.getModifiers()), "engineLoad(LoadStoreParameter) default");
+        m = c.getDeclaredMethod("engineGetEntry", String.class, KeyStore.ProtectionParameter.class);
+        check(!Modifier.isAbstract(m.getModifiers()), "engineGetEntry default");
+        m = c.getDeclaredMethod("engineSetEntry", String.class, KeyStore.Entry.class, KeyStore.ProtectionParameter.class);
+        check(!Modifier.isAbstract(m.getModifiers()), "engineSetEntry default");
+        m = c.getDeclaredMethod("engineEntryInstanceOf", String.class, Class.class);
+        check(!Modifier.isAbstract(m.getModifiers()), "engineEntryInstanceOf default");
+        m = c.getDeclaredMethod("engineGetCreationInstant", String.class);
+        check(!Modifier.isAbstract(m.getModifiers()), "engineGetCreationInstant default (JDK 9+)");
+        m = c.getDeclaredMethod("engineGetAttributes", String.class);
+        check(!Modifier.isAbstract(m.getModifiers()), "engineGetAttributes default (JDK 9+)");
+        m = c.getDeclaredMethod("engineProbe", InputStream.class);
+        check(!Modifier.isAbstract(m.getModifiers()), "engineProbe default (JDK 9+)");
+
+        DefaultsSpi ks = new DefaultsSpi();
+        FakeKey fk = new FakeKey();
+        FakeCertificate fc = new FakeCertificate();
+
+        // ---- engineStore(LoadStoreParameter) default: unsupported, also for null ----
+        ct(UnsupportedOperationException.class, () -> ks.doStoreParam(null), "default engineStore(null param) -> UOE");
+        ct(UnsupportedOperationException.class, () -> ks.doStoreParam(pwParam("p")), "default engineStore(param) -> UOE");
+
+        // ---- engineLoad(LoadStoreParameter) default: delegates with password ----
+        ks.doLoadParam(null);
+        check(ks.loadCalls == 1 && ks.lastStream == null && ks.lastPass == null,
+                "default engineLoad(null param) delegates engineLoad(null,null)");
+        ks.doLoadParam(pwParam("pw"));
+        check(ks.loadCalls == 2 && ks.lastStream == null && Arrays.equals(ks.lastPass, "pw".toCharArray()),
+                "JDK 9+: default engineLoad(param) delegates engineLoad(null,password) (JDK 8 threw UOE)");
+
+        // ---- engineGetEntry defaults ----
+        check(ks.doGetEntry("absent", ppParam("p")) == null, "default engineGetEntry absent alias -> null");
+        ks.keys.put("k1", fk);
+        ctMsg(NullPointerException.class, "invalid null input",
+                () -> ks.doGetEntry("k1", ppParam("p")),
+                "key entry + PasswordProtection builds PrivateKeyEntry (chain null -> NPE from entry ctor)");
+        ctMsg(NullPointerException.class, "handler must not be null",
+                () -> ks.doGetEntry("k1", new KeyStore.CallbackHandlerProtection(null)),
+                "key entry + CallbackHandlerProtection(null handler) -> NPE");
+        ct(java.security.UnrecoverableKeyException.class, () -> ks.doGetEntry("k1", null),
+                "key entry + null protection -> UnrecoverableKeyException");
+        ks.certs.put("c1", fc);
+        KeyStore.Entry certEntry = ks.doGetEntry("c1", null);
+        check(certEntry instanceof KeyStore.TrustedCertificateEntry
+                && ((KeyStore.TrustedCertificateEntry) certEntry).getTrustedCertificate() == fc,
+                "cert entry + null protection -> TrustedCertificateEntry with same cert");
+
+        // ---- engineSetEntry defaults ----
+        javax.crypto.SecretKey sk = javax.crypto.KeyGenerator.getInstance("AES").generateKey();
+        ks.doSetEntry("s1", new KeyStore.SecretKeyEntry(sk), ppParam("p"));
+        check(ks.keys.get("s1") == sk, "default engineSetEntry(SecretKeyEntry) -> engineSetKeyEntry(key)");
+        check(Arrays.equals(ks.lastSetPass, "p".toCharArray()), "default engineSetEntry passes password through");
+        ks.doSetEntry("t1", new KeyStore.TrustedCertificateEntry(fc), null);
+        check(ks.certs.get("t1") == fc && ks.lastCertAlias.equals("t1"),
+                "default engineSetEntry(TrustedCertificateEntry, null prot) -> engineSetCertificateEntry");
+        ks.doSetEntry("p1", new KeyStore.PrivateKeyEntry(fk, new Certificate[]{fc}), ppParam("p"));
+        check(ks.keys.get("p1") == fk && ks.lastSetChain != null && ks.lastSetChain.length == 1,
+                "default engineSetEntry(PrivateKeyEntry) -> engineSetKeyEntry with chain");
+
+        // ---- engineEntryInstanceOf defaults ----
+        // "k1" is a key entry with a null chain: PrivateKeyEntry requires a chain, so it classifies as SecretKeyEntry.
+        check(!ks.doEntryInstanceOf("k1", KeyStore.PrivateKeyEntry.class),
+                "default engineEntryInstanceOf: key entry + null chain not PrivateKeyEntry");
+        check(ks.doEntryInstanceOf("k1", KeyStore.SecretKeyEntry.class),
+                "default engineEntryInstanceOf: key entry + null chain is SecretKeyEntry");
+        check(ks.doEntryInstanceOf("t1", KeyStore.TrustedCertificateEntry.class),
+                "default engineEntryInstanceOf: cert entry is TrustedCertificateEntry");
+        check(!ks.doEntryInstanceOf("absent", KeyStore.TrustedCertificateEntry.class),
+                "default engineEntryInstanceOf: absent alias false");
+
+        // ---- JDK 9+ defaults: engineGetCreationInstant / engineGetAttributes / engineProbe ----
+        check(java.time.Instant.EPOCH.equals(ks.doGetInstant("k1")),
+                "default engineGetCreationInstant derives Instant.EPOCH from engineGetCreationDate");
+        check(ks.doGetInstant("noentry") == null,
+                "default engineGetCreationInstant is null-safe when engineGetCreationDate returns null");
+        check(ks.doGetAttrs("k1").isEmpty(), "default engineGetAttributes returns empty Set");
+        ct(NullPointerException.class, () -> ks.doProbe(null), "default engineProbe(null) -> NPE");
+        check(!ks.doProbe(new ByteArrayInputStream(new byte[0])), "default engineProbe(unknown stream) -> false");
+
+        // ---- facade loop: real JKS keystore SPI driven through the public KeyStore facade ----
+        Certificate realCert = fixtureCert(ROOT_CERT_B64);
+        PrivateKey realKey = KeyFactory.getInstance("RSA")
+                .generatePrivate(new PKCS8EncodedKeySpec(fromB64(ROOT_KEY_B64)));
+        KeyStore jks = KeyStore.getInstance("JKS");
+        jks.load(null, null);
+        check(jks.size() == 0 && !jks.aliases().hasMoreElements(), "facade fresh JKS empty");
+        jks.setKeyEntry("fk", realKey, "pw".toCharArray(), new Certificate[]{realCert});
+        check(jks.isKeyEntry("fk"), "facade setKeyEntry classified as key entry");
+        Key gotKey = jks.getKey("fk", "pw".toCharArray());
+        check(gotKey != null && gotKey.equals(realKey) && "PKCS#8".equals(gotKey.getFormat()),
+                "facade getKey round-trips an equal PKCS#8 private key");
+        ct(java.security.UnrecoverableKeyException.class,
+                () -> jks.getKey("fk", "wrong".toCharArray()),
+                "facade JKS getKey with wrong password -> UnrecoverableKeyException");
+        check(jks.getCertificateChain("fk").length == 1
+                && jks.getCertificateChain("fk")[0].equals(realCert), "facade chain preserved");
+        check(jks.getCreationDate("fk") != null, "facade creationDate non-null");
+        jks.setCertificateEntry("fc", realCert);
+        check(jks.getCertificate("fc") == realCert && jks.isCertificateEntry("fc"), "facade cert entry same instance");
+        check(jks.containsAlias("fk") && jks.containsAlias("fc") && jks.size() == 2, "facade size/contains");
+        check(jks.containsAlias("FK"), "JKS aliases are case-insensitive (stored lower-case)");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        jks.store(bos, "pw".toCharArray());
+        check(bos.size() > 0, "facade store produced bytes");
+        KeyStore jks2 = KeyStore.getInstance("JKS");
+        jks2.load(new ByteArrayInputStream(bos.toByteArray()), "pw".toCharArray());
+        check(jks2.size() == 2 && jks2.getKey("fk", "pw".toCharArray()).equals(realKey)
+                && jks2.getCertificate("fc").equals(realCert),
+                "facade store/load round-trip preserves key and cert entries");
+        ct(IOException.class,
+                () -> {
+                    KeyStore bad = KeyStore.getInstance("JKS");
+                    bad.load(new ByteArrayInputStream(bos.toByteArray()), "bad".toCharArray());
+                },
+                "facade JKS load with wrong password -> IOException");
+        jks.deleteEntry("fc");
+        check(jks.size() == 1 && !jks.containsAlias("fc"), "facade deleteEntry removes entry");
+        KeyStore uninit = KeyStore.getInstance("JKS");
+        ct(KeyStoreException.class, () -> uninit.size(), "facade size before load -> KeyStoreException");
+        ct(KeyStoreException.class, () -> uninit.getKey("x", null), "facade getKey before load -> KeyStoreException");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        // ---- contract deepening: JDK default behaviors of the non-abstract engine methods + JKS facade loop ----
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
     static boolean hasInterface(Class<?> c, String name) {

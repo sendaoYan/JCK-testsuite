@@ -66,6 +66,39 @@ public class CertificateTest {
         Identity id = new Identity("jck") {};
         check(id.certificates() == null || id.certificates().length == 0, "identity no certs");
 
+        // ---- appended contract dimensions ----
+        Class<?> c0 = java.security.Certificate.class;
+        check(c0.getDeclaredMethods().length == 7, "exactly 7 declared methods");
+        boolean anyDefault = false;
+        for (Method m : c0.getDeclaredMethods()) if (m.isDefault()) anyDefault = true;
+        check(!anyDefault, "no default methods");
+        check(c0.getInterfaces().length == 0, "extends no interfaces");
+        check(!Serializable.class.isAssignableFrom(c0), "not Serializable");
+        check(c0.isAnnotationPresent(Deprecated.class), "@Deprecated");
+        // checked-exception clauses
+        Method enc = c0.getMethod("encode", OutputStream.class);
+        Set<Class<?>> encEx = new HashSet<>(Arrays.asList(enc.getExceptionTypes()));
+        check(encEx.contains(KeyException.class) && encEx.contains(IOException.class), "encode throws clauses");
+        Method dec = c0.getMethod("decode", InputStream.class);
+        Set<Class<?>> decEx = new HashSet<>(Arrays.asList(dec.getExceptionTypes()));
+        check(decEx.contains(KeyException.class) && decEx.contains(IOException.class), "decode throws clauses");
+        // encode/decode may propagate their checked exceptions verbatim
+        java.security.Certificate failing = new java.security.Certificate() {
+            public Principal getGuarantor() { return null; }
+            public Principal getPrincipal() { return null; }
+            public PublicKey getPublicKey() { return null; }
+            public void encode(OutputStream out) throws IOException { throw new IOException("io"); }
+            public void decode(InputStream in) throws KeyException { throw new KeyException("key"); }
+            public String getFormat() { return null; }
+            public String toString(boolean detailed) { return "f"; }
+        };
+        try { failing.encode(new ByteArrayOutputStream()); check(false, "encode IOException propagates"); }
+        catch (IOException e) { check("io".equals(e.getMessage()), "encode IOException verbatim"); }
+        try { failing.decode(new ByteArrayInputStream(new byte[0])); check(false, "decode KeyException propagates"); }
+        catch (KeyException e) { check("key".equals(e.getMessage()), "decode KeyException verbatim"); }
+        // interface defines no equals value contract: distinct same-content implementations stay unequal
+        check(!c.equals(new JckCert()), "no value equals across implementations");
+
     }
 
     public static void main(String[] args) throws Exception {

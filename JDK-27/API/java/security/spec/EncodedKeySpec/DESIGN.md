@@ -34,3 +34,8 @@ String fmt = pubSpec.getFormat();     // "X.509"
   - 2 参构造 getAlgorithm 返回传入算法名（非空）；单参构造返回 null。
   - getEncoded 返回新数组（防御性拷贝），修改返回数组不影响后续取值。
   - 子类 `instanceof EncodedKeySpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：构造 null→NPE
+- 关键实测：抽象基类，持有编码字节的私有拷贝，定义 getEncoded（防御拷贝）与抽象 getFormat；子类 PKCS8EncodedKeySpec/X509EncodedKeySpec 指定格式名。JDK-9+ 增加 (byte[],String algorithm) 受保护构造器与 getAlgorithm()。
+KeyFactory 以 X509EncodedKeySpec/PKCS8EncodedKeySpec 包装 DER 编码往返还原密钥。

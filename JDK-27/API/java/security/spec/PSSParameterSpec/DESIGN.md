@@ -38,3 +38,8 @@ String digest = spec.getDigestAlgorithm();
   - `int` 构造器：盐长精确、摘要 SHA-1、MGF MGF1、trailer 为 TRAILER_FIELD_BC。
   - 5 参构造器：5 个 getter 精确回读，getMGFParameters 返回传入对象，toString 非空。
   - `instanceof AlgorithmParameterSpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：DEFAULT/int 构造默认矩阵（含 mgfParameters==SHA1 单例同引用）
+- 关键实测：TRAILER_FIELD_BC==1；DEFAULT=（SHA-1,MGF1,MGF1ParameterSpec.SHA1 同引用,20,1）；int 构造=（SHA-1,MGF1,SHA1 单例,saltLen,1）；5 参构造校验：null digest/mgf→NPE、saltLen<0→IAE、trailerField<0→IAE（非 1 值如 2 不拒绝）、null mgfSpec 合法；toString 双侧格式不同（JDK-8 多行 MD:/SaltLength:，JDK-9+ PSSParameterSpec[...]）。
+Signature.setParameter 用于 SHA256withRSA 等的 PSS 变体。

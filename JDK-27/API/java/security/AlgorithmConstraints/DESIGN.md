@@ -15,3 +15,8 @@ TLS/证书路径场景由 `SSLParameters.setAlgorithmConstraints` / `PKIXParamet
 - 黑盒：实现三方法返回固定值，按入参组合逐一断言 permits 语义（true/false 透传 + null 参数路径）
 
 断言入口：`AlgorithmConstraintsTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 追加契约维度（深化批）
+- 结构：恰 3 个 permits 重载（参数类型组精确）、全 boolean、无 default。
+- 实参透传：记录型实现按序收到算法名/密钥算法（"s:...","k:...","sk:...:..." 序列）。
+- null usage set 由实现解释（接口层不校验）。

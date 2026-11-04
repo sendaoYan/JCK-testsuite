@@ -45,6 +45,28 @@ public class URIParameterTest {
         check(p instanceof Policy.Parameters, "Policy.Parameters");
         check(p instanceof javax.security.auth.login.Configuration.Parameters, "Configuration.Parameters");
 
+        // ---- appended contract dimensions ----
+        // repeated getURI returns the same instance
+        check(p.getURI() == p.getURI(), "getURI stable across calls");
+        // NOT an AlgorithmParameterSpec (different family from spec/ classes)
+        check(!(p instanceof java.security.spec.AlgorithmParameterSpec), "not AlgorithmParameterSpec");
+        // identity equals/hashCode
+        check(p.equals(p), "reflexive");
+        check(!p.equals(null) && !p.equals("string"), "equals null/wrong type false");
+        check(p.hashCode() == p.hashCode(), "hashCode stable");
+        // URI flavor tolerance: opaque, relative, empty
+        check(new URIParameter(java.net.URI.create("mailto:jck@example.com")).getURI().getScheme().equals("mailto"),
+                "opaque URI accepted");
+        check(!new URIParameter(java.net.URI.create("../rel/policy")).getURI().isAbsolute(), "relative URI accepted");
+        check(new URIParameter(java.net.URI.create("")).getURI().equals(URI.create("")), "empty URI accepted");
+        // single getter, final, not Serializable
+        int getters = 0;
+        for (java.lang.reflect.Method m : URIParameter.class.getDeclaredMethods())
+            if (m.getName().startsWith("get")) getters++;
+        check(getters == 1, "exactly 1 getter");
+        check(!java.lang.reflect.Modifier.isFinal(URIParameter.class.getModifiers()), "not final");
+        check(!java.io.Serializable.class.isAssignableFrom(URIParameter.class), "not Serializable");
+
     }
 
     public static void main(String[] args) throws Exception {

@@ -40,8 +40,92 @@ public class SecureRandomSpiTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+
+    // throwing-check helper that accepts checked exceptions and a message
+    interface TR { void run() throws Throwable; }
+
+    static void ct(Class<? extends Throwable> expected, TR r, String msg) {
+        try { r.run(); }
+        catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName() + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName() + " but nothing was thrown");
+    }
+
+    // ---- contract deepening: JDK-9+ parameterized SPI surface ----
+    static class DeepSpi extends SecureRandomSpi implements java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        int seedCalls, nextCalls, genCalls, paramsNextCalls, reseedCalls, getParamsCalls;
+        SecureRandomParameters lastParams;
+        protected void engineSetSeed(byte[] seed) { seedCalls++; }
+        protected void engineNextBytes(byte[] bytes) { nextCalls++; Arrays.fill(bytes, (byte)0x5A); }
+        protected byte[] engineGenerateSeed(int numBytes) { genCalls++; return new byte[numBytes]; }
+        DeepSpi(SecureRandomParameters p) { super(p); }
+        void doNext(byte[] b, SecureRandomParameters p) { engineNextBytes(b, p); }
+        SecureRandomParameters doGetParams2() { return engineGetParameters(); }
+        void doReseed(SecureRandomParameters p) { engineReseed(p); }
+        SecureRandomParameters doGetParameters() { return engineGetParameters(); }
+    }
+
+    static void testContractDeep() throws Exception {
+        Class<?> c = SecureRandomSpi.class;
+        // Structure: 3 abstract + parameterized defaults added by JDK 9
+        java.lang.reflect.Constructor<?> pc = c.getDeclaredConstructor(SecureRandomParameters.class);
+        check(java.lang.reflect.Modifier.isProtected(pc.getModifiers()), "protected SecureRandomParameters constructor (JDK 9+)");
+        java.lang.reflect.Method m;
+        m = c.getDeclaredMethod("engineNextBytes", byte[].class, SecureRandomParameters.class);
+        check(!Modifier.isAbstract(m.getModifiers()) && Modifier.isProtected(m.getModifiers()), "engineNextBytes(byte[],params) default impl");
+        m = c.getDeclaredMethod("engineReseed", SecureRandomParameters.class);
+        check(!Modifier.isAbstract(m.getModifiers()), "engineReseed(params) default impl");
+        m = c.getDeclaredMethod("engineGetParameters");
+        check(!Modifier.isAbstract(m.getModifiers()) && Modifier.isProtected(m.getModifiers()), "engineGetParameters default impl");
+        m = c.getDeclaredMethod("toString");
+        check(java.lang.reflect.Modifier.isPublic(m.getModifiers()), "JDK 9+ declares public toString");
+
+        // Behavior of the JDK defaults: every parameterized path is unsupported unless overridden
+        DeepSpi spi = new DeepSpi(new SecureRandomParameters() { });
+        ct(UnsupportedOperationException.class, () -> spi.doNext(new byte[2], null),
+                "default engineNextBytes(b,null) throws UOE (no plain fallback)");
+        ct(UnsupportedOperationException.class, () -> spi.doNext(new byte[2], new SecureRandomParameters() { }),
+                "default engineNextBytes(b,params) throws UOE");
+        ct(UnsupportedOperationException.class, () -> spi.doReseed(null),
+                "default engineReseed(null) throws UOE");
+        ct(UnsupportedOperationException.class, () -> spi.doReseed(new SecureRandomParameters() { }),
+                "default engineReseed(params) throws UOE");
+        check(spi.doGetParams2() == null, "default engineGetParameters returns null");
+        check(spi.toString().equals("DeepSpi"), "toString == simple class name");
+        // plain engine methods still work alongside the parameterized ones
+        byte[] b = new byte[3];
+        spi.engineNextBytes(b);
+        check(spi.nextCalls == 1 && b[0] == (byte)0x5A, "plain engineNextBytes unaffected");
+
+        // Serialization round-trip preserves the SPI subtype
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) { oos.writeObject(spi); }
+        Object back = new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(back instanceof DeepSpi, "serialization round-trip preserves SPI subtype");
+        byte[] b2 = new byte[2];
+        ((DeepSpi) back).engineNextBytes(b2);
+        check(b2[0] == (byte)0x5A, "deserialized SPI still functional");
+
+        // Facade determinism loop: SecureRandom drives the SUN SHA1PRNG SPI
+        java.security.SecureRandom r1 = java.security.SecureRandom.getInstance("SHA1PRNG");
+        r1.setSeed(42L);
+        java.security.SecureRandom r2 = java.security.SecureRandom.getInstance("SHA1PRNG");
+        r2.setSeed(42L);
+        byte[] x1 = new byte[16]; r1.nextBytes(x1);
+        byte[] x2 = new byte[16]; r2.nextBytes(x2);
+        check(Arrays.equals(x1, x2), "facade SHA1PRNG setSeed-before-use is reproducible (SUN SPI contract)");
+        check(java.security.SecureRandom.getInstance("SHA1PRNG").generateSeed(8).length == 8,
+                "facade generateSeed(8) length 8");
+    }
+
 
     static class MyRandomSpi extends SecureRandomSpi {
         protected void engineSetSeed(byte[] seed) { }

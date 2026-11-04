@@ -18,3 +18,9 @@
 - 异常：null key/null 链/null 链元素 → NPE；空链 → IllegalArgumentException
 
 断言入口：`PrivateKeyEntryTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（testContractDeep）
+- 构造校验链补全：零长链 IAE、链内 null NPE、证书 type 混合 IAE、私钥/公钥算法不匹配 IAE（FauxPrivateKey+真证书触发）。
+- 链防御性拷贝双向（构造后改源数组、取回后改泄漏数组均无影响）。
+- JKS setKeyEntry 端到端闭环（真 RSA 私钥+双证书链，跨实例 equals）；setKeyEntry null chain → IllegalArgumentException。

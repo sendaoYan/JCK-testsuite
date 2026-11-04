@@ -60,7 +60,62 @@ public class DSAParamsTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, primality, equals ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation: getters pass fixed values through, null included
+        DSAParams rec = new RecParams();
+        check(rec.getP().equals(BigInteger.valueOf(23)), "record getP passthrough");
+        check(rec.getQ().equals(BigInteger.valueOf(11)), "record getQ passthrough");
+        check(rec.getG().equals(BigInteger.valueOf(2)), "record getG passthrough");
+        check(new NullParams().getP() == null && new NullParams().getQ() == null
+                && new NullParams().getG() == null, "record null passthrough");
+
+        // lattice: extends AlgorithmParameterSpec (JDK-9+; JDK-8 had no superinterface),
+        // not a Key, not Serializable, no constant
+        check(AlgorithmParameterSpec.class.isAssignableFrom(DSAParams.class),
+                "is an AlgorithmParameterSpec (JDK-9+ hierarchy)");
+        check(DSAParams.class.getInterfaces().length == 1
+                && DSAParams.class.getInterfaces()[0] == AlgorithmParameterSpec.class,
+                "single direct superinterface AlgorithmParameterSpec");
+        check(!Key.class.isAssignableFrom(DSAParams.class), "not a Key");
+        check(!Serializable.class.isAssignableFrom(DSAParams.class), "not Serializable");
+        try {
+            DSAParams.class.getDeclaredField("serialVersionUID");
+            check(false, "no serialVersionUID declared");
+        } catch (NoSuchFieldException e) {
+            check(true, "no serialVersionUID declared");
+        }
+
+        // primality of the domain integers and the subgroup order equation
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("DSA");
+        kpg.initialize(1024);
+        DSAParams pp = ((DSAKey) kpg.generateKeyPair().getPublic()).getParams();
+        check(pp.getP().isProbablePrime(64), "p is prime");
+        check(pp.getQ().isProbablePrime(64), "q is prime");
+        check(pp.getG().modPow(pp.getQ(), pp.getP()).equals(BigInteger.ONE),
+                "g^q mod p == 1 (order of g divides q)");
+        check(pp.getP().bitLength() == 1024 && pp.getQ().bitLength() == 160,
+                "legacy 1024/160 set as initialized");
+
+        // equals semantics on the record impl
+        check(rec.equals(rec), "record reflexive equals");
+        check(!rec.equals(pp), "record not equal to real params");
+    }
+
+    static class RecParams implements DSAParams {
+        public BigInteger getP() { return BigInteger.valueOf(23); }
+        public BigInteger getQ() { return BigInteger.valueOf(11); }
+        public BigInteger getG() { return BigInteger.valueOf(2); }
+    }
+
+    static class NullParams implements DSAParams {
+        public BigInteger getP() { return null; }
+        public BigInteger getQ() { return null; }
+        public BigInteger getG() { return null; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

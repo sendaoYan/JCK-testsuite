@@ -72,7 +72,57 @@ public class RSAPrivateCrtKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, serialization, equals ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation: all seven CRT getters pass values through
+        RSAPrivateCrtKey rec = new RecKey();
+        check(rec.getPrimeP().equals(BigInteger.valueOf(61)), "record getPrimeP passthrough");
+        check(rec.getPrimeQ().equals(BigInteger.valueOf(53)), "record getPrimeQ passthrough");
+        check(rec.getPrimeExponentP().equals(BigInteger.valueOf(53)), "record dP passthrough");
+        check(rec.getPrimeExponentQ().equals(BigInteger.valueOf(49)), "record dQ passthrough");
+        check(rec.getCrtCoefficient().equals(BigInteger.valueOf(38)), "record qInv passthrough");
+        check(rec.getPublicExponent().equals(BigInteger.valueOf(17)), "record e passthrough");
+        check(rec.getModulus().equals(BigInteger.valueOf(3233)), "record modulus passthrough");
+
+        // lattice
+        check(RSAPrivateKey.class.isAssignableFrom(RSAPrivateCrtKey.class), "is an RSAPrivateKey");
+        check(RSAKey.class.isAssignableFrom(RSAPrivateCrtKey.class), "is an RSAKey");
+        check(PrivateKey.class.isAssignableFrom(RSAPrivateCrtKey.class), "is a PrivateKey");
+        check(Key.class.isAssignableFrom(RSAPrivateCrtKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(RSAPrivateCrtKey.class), "is Serializable");
+
+        // real key: distinct prime factors, serialization fully equal
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+        RSAPrivateCrtKey key = (RSAPrivateCrtKey) kp.getPrivate();
+        check(!key.getPrimeP().equals(key.getPrimeQ()), "distinct primes");
+        check(key.getPrimeP().isProbablePrime(64) && key.getPrimeQ().isProbablePrime(64),
+                "both factors prime");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+        check(key.equals(key), "reflexive equals");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements RSAPrivateCrtKey {
+        public BigInteger getPrimeP() { return BigInteger.valueOf(61); }
+        public BigInteger getPrimeQ() { return BigInteger.valueOf(53); }
+        public BigInteger getPrimeExponentP() { return BigInteger.valueOf(53); }
+        public BigInteger getPrimeExponentQ() { return BigInteger.valueOf(49); }
+        public BigInteger getCrtCoefficient() { return BigInteger.valueOf(38); }
+        public BigInteger getPublicExponent() { return BigInteger.valueOf(17); }
+        public BigInteger getPrivateExponent() { return BigInteger.valueOf(2753); }
+        public BigInteger getModulus() { return BigInteger.valueOf(3233); }
+        public String getAlgorithm() { return "RSA-REC"; }
+        public String getFormat() { return "PKCS#8-REC"; }
+        public byte[] getEncoded() { return new byte[]{6}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

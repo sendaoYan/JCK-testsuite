@@ -22,6 +22,8 @@ import java.security.Security;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPrivateKeySpec;
+import java.security.spec.RSAPublicKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 
 public class KeyFactoryTest {
@@ -129,6 +131,76 @@ public class KeyFactoryTest {
         // ---- translateKey(null) -> InvalidKeyException ----
         checkThrows(InvalidKeyException.class,
                 () -> kfGen.translateKey(null), "translateKey(null)");
+
+        // ==== contract deepening: DSA factory, spec-class round-trips, cross-checks ====
+
+        // ---- DSA KeyFactory: full encode/spec/rebuild cycle at 1024 bits ----
+        java.security.KeyPairGenerator dsaGen = java.security.KeyPairGenerator.getInstance("DSA");
+        dsaGen.initialize(1024);
+        java.security.KeyPair dkp = dsaGen.generateKeyPair();
+        KeyFactory dkf = KeyFactory.getInstance("DSA");
+        check("DSA".equals(dkf.getAlgorithm()), "DSA KeyFactory getAlgorithm");
+        check(dkf.getProvider() != null, "DSA KeyFactory provider non-null");
+        java.security.spec.DSAPublicKeySpec dpub = dkf.getKeySpec(dkp.getPublic(), java.security.spec.DSAPublicKeySpec.class);
+        java.security.spec.DSAPrivateKeySpec dpriv = dkf.getKeySpec(dkp.getPrivate(), java.security.spec.DSAPrivateKeySpec.class);
+        check(dpub.getP().bitLength() == 1024 && dpub.getQ().bitLength() == 160,
+                "DSA public spec p/q sizes");
+        check(dpriv.getX().signum() > 0, "DSA private spec x positive");
+        java.security.PublicKey rebuiltPub = dkf.generatePublic(dpub);
+        java.security.PrivateKey rebuiltPriv = dkf.generatePrivate(dpriv);
+        check(dkp.getPublic().equals(rebuiltPub), "DSA generatePublic(spec) equals");
+        check(dkp.getPrivate().equals(rebuiltPriv), "DSA generatePrivate(spec) equals");
+        // encoding round-trip across instances (format names precise)
+        java.security.PublicKey encPub = dkf.generatePublic(
+                new X509EncodedKeySpec(dkp.getPublic().getEncoded()));
+        java.security.PrivateKey encPriv = dkf.generatePrivate(
+                new PKCS8EncodedKeySpec(dkp.getPrivate().getEncoded()));
+        check(dkp.getPublic().equals(encPub) && "X.509".equals(encPub.getFormat()),
+                "DSA encode/rebuild public");
+        check(dkp.getPrivate().equals(encPriv) && "PKCS#8".equals(encPriv.getFormat()),
+                "DSA encode/rebuild private");
+        // cross algorithm: DSA key into RSA factory -> InvalidKeySpecException / InvalidKeyException
+        checkThrows(java.security.spec.InvalidKeySpecException.class,
+                () -> kf.getKeySpec(dkp.getPublic(), RSAPublicKeySpec.class),
+                "RSA factory getKeySpec(DSA public)");
+        checkThrows(java.security.InvalidKeyException.class,
+                () -> kf.translateKey(dkp.getPublic()),
+                "RSA factory translateKey(DSA public)");
+
+        // ---- RSA spec-class round-trips (modulus/exponent values survive) ----
+        RSAPublicKeySpec rpub = kf.getKeySpec(kp.getPublic(), RSAPublicKeySpec.class);
+        RSAPrivateKeySpec rpriv = kf.getKeySpec(kp.getPrivate(), RSAPrivateKeySpec.class);
+        check(rpub.getModulus().bitLength() == 1024, "RSA public modulus 1024 bits");
+        check(rpub.getPublicExponent().intValue() == 65537, "RSA exponent 65537");
+        check(rpriv.getPrivateExponent().signum() > 0, "RSA private exponent positive");
+        check(kp.getPublic().equals(kf.generatePublic(rpub)), "RSA generatePublic(RSAPublicKeySpec) equals");
+        // minimal (n,d) spec rebuilds a working but non-CRT key: signatures still verify
+        java.security.PrivateKey minPriv = kf.generatePrivate(
+                new RSAPrivateKeySpec(rpriv.getModulus(), rpriv.getPrivateExponent()));
+        java.security.Signature sg = java.security.Signature.getInstance("SHA256withRSA");
+        sg.initSign(minPriv);
+        sg.update("x".getBytes());
+        byte[] s = sg.sign();
+        java.security.Signature vf = java.security.Signature.getInstance("SHA256withRSA");
+        vf.initVerify(kp.getPublic());
+        vf.update("x".getBytes());
+        check(vf.verify(s), "non-CRT private key signs verifiably");
+        check(!minPriv.equals(kp.getPrivate()), "non-CRT key differs from original CRT key");
+
+        // ---- getInstance with explicit provider forms ----
+        KeyFactory byName = KeyFactory.getInstance("RSA", "SunRsaSign");
+        check("SunRsaSign".equals(byName.getProvider().getName()), "getInstance(alg, providerName)");
+        KeyFactory byProv = KeyFactory.getInstance("RSA", Security.getProvider("SunRsaSign"));
+        check(byProv.getProvider().getName().equals("SunRsaSign"), "getInstance(alg, Provider)");
+        checkThrows(NoSuchAlgorithmException.class, () -> KeyFactory.getInstance("BogusKF_XYZ", "SunRsaSign"),
+                "getInstance(bogus, providerName)");
+        checkThrows(NullPointerException.class, () -> KeyFactory.getInstance(null, "SunRsaSign"),
+                "getInstance(null, providerName)");
+
+        // ---- keys from distinct factories are value-equal (inter-instance equals) ----
+        KeyFactory kf2 = KeyFactory.getInstance("RSA");
+        check(kf.generatePublic(pubSpec).equals(kf2.generatePublic(pubSpec)),
+                "cross-instance generatePublic equals");
 
         System.out.println("PASS (" + passed + " assertions)");
     }

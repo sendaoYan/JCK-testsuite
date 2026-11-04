@@ -40,6 +40,52 @@ public class PrivateKeyTest {
         check("PKCS#8".equals(priv.getFormat()), "getFormat PKCS#8");
         check(priv.getEncoded() != null && priv.getEncoded().length > 0, "getEncoded non-empty");
         check(((java.security.AsymmetricKey) priv).getParams() == null, "getParams default null");
+
+        // ---- appended contract dimensions ----
+        // marker shape: no own methods, fixed serialVersionUID
+        check(PrivateKey.class.getDeclaredMethods().length == 0, "no declared methods (marker)");
+        check(PrivateKey.class.getDeclaredField("serialVersionUID").getLong(null) == 6034044314589513430L,
+                "serialVersionUID 6034044314589513430L");
+        check(Key.class.isAssignableFrom(PrivateKey.class), "Key assignable (via AsymmetricKey)");
+        check(!java.security.PublicKey.class.isAssignableFrom(PrivateKey.class), "disjoint from PublicKey");
+        check(PrivateKey.class.isAssignableFrom(java.security.interfaces.DSAPrivateKey.class),
+                "DSAPrivateKey is a PrivateKey");
+        check(java.io.Serializable.class.isAssignableFrom(PrivateKey.class), "Serializable");
+        // DSA private key: same contract, different algorithm
+        KeyPairGenerator dsa = KeyPairGenerator.getInstance("DSA");
+        dsa.initialize(1024);
+        PrivateKey dsaPriv = dsa.generateKeyPair().getPrivate();
+        check("DSA".equals(dsaPriv.getAlgorithm()), "DSA algorithm");
+        check("PKCS#8".equals(dsaPriv.getFormat()), "DSA PKCS#8");
+        check(!dsaPriv.equals(priv), "distinct keys unequal");
+        // serialization round-trip: KeyRep path restores an equal key
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(priv);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        Object back = ois.readObject();
+        check(back instanceof PrivateKey, "round-trip restores PrivateKey");
+        check(back.equals(priv), "round-trip equals");
+        check(java.util.Arrays.equals(((Key) back).getEncoded(), priv.getEncoded()), "encoding preserved");
+        // Destroyable defaults: not destroyed, destroy unsupported by platform keys
+        check(!((javax.security.auth.Destroyable) priv).isDestroyed(), "default isDestroyed false");
+        try {
+            ((javax.security.auth.Destroyable) priv).destroy();
+            check(false, "destroy unsupported");
+        } catch (javax.security.auth.DestroyFailedException e) {
+            check(true, "default destroy throws DestroyFailedException");
+        }
+        // minimal custom implementation: null format/encoding permitted for opaque keys
+        PrivateKey custom = new PrivateKey() {
+            private static final long serialVersionUID = 6034044314589513430L;
+            public String getAlgorithm() { return "CUSTOM"; }
+            public String getFormat() { return null; }
+            public byte[] getEncoded() { return null; }
+        };
+        check("CUSTOM".equals(custom.getAlgorithm()), "custom algorithm");
+        check(custom.getFormat() == null && custom.getEncoded() == null, "opaque key null format/encoding");
     }
 
     static boolean hasInterface(Class<?> c, String name) {

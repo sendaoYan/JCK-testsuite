@@ -18,3 +18,7 @@
 - 生成参数 getAlgorithm 分别为 "DH"/"DSA"；DSA 参数可解出 DSAParameterSpec（p/q/g 非空、p 位数=请求值）。
 - init((AlgorithmParameterSpec)null)→InvalidAlgorithmParameterException；init(-1)→InvalidParameterException。
 - 易错点：DHGenParameterSpec 在 javax.crypto.spec 包；getInstance 的 provider 重载为 IllegalArgumentException 而非 NPE。
+
+## 5. 契约深化补充（本批）
+- 生成的 DSA 参数直接驱动 KeyPairGenerator+Signature 完整签名闭环；q 160@1024、q 224@2048、q 256@3072（SUN 实测）；两次 generateParameters 独立。
+- init(size,null) 合法；编码 round-trip 值相等；getInstance 带提供者两种形态 + bogus providerName → NoSuchProviderException。

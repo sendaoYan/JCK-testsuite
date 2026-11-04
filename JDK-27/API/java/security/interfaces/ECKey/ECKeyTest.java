@@ -60,7 +60,45 @@ public class ECKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, equals semantics ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation: getParams passes the holder value through
+        ECParameterSpec spec = ((ECKey) KeyPairGenerator.getInstance("EC")
+                .generateKeyPair().getPublic()).getParams();
+        ECKey rec = new RecECKey(spec);
+        check(rec.getParams() == spec, "record getParams identity passthrough");
+        check(new RecECKey(null).getParams() == null, "record null params passthrough");
+
+        // lattice: bare interface, not a Key, not Serializable, no constant
+        check(ECKey.class.getInterfaces().length == 0, "no superinterfaces");
+        check(!Key.class.isAssignableFrom(ECKey.class), "not a Key");
+        check(!Serializable.class.isAssignableFrom(ECKey.class), "not Serializable");
+        check(ECKey.class.isAssignableFrom(ECPublicKey.class), "ECPublicKey is an ECKey");
+        check(ECKey.class.isAssignableFrom(ECPrivateKey.class), "ECPrivateKey is an ECKey");
+        try {
+            ECKey.class.getDeclaredField("serialVersionUID");
+            check(false, "no serialVersionUID declared");
+        } catch (NoSuchFieldException e) {
+            check(true, "no serialVersionUID declared");
+        }
+
+        // equals semantics
+        KeyPair kp = KeyPairGenerator.getInstance("EC").generateKeyPair();
+        ECKey pub = (ECKey) kp.getPublic();
+        check(pub.equals(pub), "reflexive equals");
+        check(!pub.equals(kp.getPrivate()), "public half not equal to private half");
+        check(!pub.equals(rec), "real key not equal to record impl");
+        check(pub.hashCode() == pub.hashCode(), "hashCode stable");
+    }
+
+    static class RecECKey implements ECKey {
+        private final ECParameterSpec params;
+        RecECKey(ECParameterSpec params) { this.params = params; }
+        public ECParameterSpec getParams() { return params; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

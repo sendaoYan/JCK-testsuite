@@ -15,3 +15,9 @@ JDK 1.1 遗留；X.509 证书用 `java.security.cert.Certificate`。此接口保
 - 黑盒：自实现接口（固定返回值），组合断言 getEncoded/verify/toString/getPublicKey 的透传契约；verify(null) 抛自实现异常原样透传
 
 断言入口：`CertificateTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 追加契约维度（深化批）
+- 结构：恰 7 声明方法、无 default/static、无父接口、非 Serializable、@Deprecated。
+- encode/decode 的 throws 子句精确为 {KeyException, IOException}；toString(boolean) 布尔参数返回 String。
+- 异常中继：实现抛出的 IOException/KeyException 原样（消息逐字）传播。
+- equals 无值语义：同内容不同实现实例互不相等。

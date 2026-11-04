@@ -17,3 +17,10 @@
 - 异常：IAE（坏 base64）；null content NPE
 
 断言入口：`PEMTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 契约深化补充（本批）
+- **实现方式**：PEM 为 JDK-27 preview API，`import java.security.PEM` 在普通 javac（无 `--enable-preview`）下直接报错；测试改为全反射访问（`Class.forName`/`Method.invoke`），可按套件标准流程编译与 jtreg 运行。
+- 深化断言：`content()`/`leadingData()` 每次调用返回新副本；`decode()` 跨调用确定；2 参构造 leadingData=null、显式空数组保长度 0；toString 精确规范形 `-----BEGIN TEST-----\r\naGVsbG8=\r\n-----END TEST-----\r\n`（CRLF+尾 CRLF）；长 body 原样输出不重排；String/byte[] 两种构造渲染一致。
+- base64 校验**惰性**：坏内容构造成功、`decode()` 时才 IAE；宽松 MIME 语义（`aGVsbG8!!!` 仍解出 "hello"）。
+- 标签校验：仅拒绝 RFC 7468 保留字（`-`开头/`BEGIN `/`END `前缀）；小写、空串、含数字空格均合法（实测记录）。
+- **equals/hashCode 为身份语义**（同值不同对象不等；非两字段相等——修正 §4 的推测）；null type/null content → NPE。

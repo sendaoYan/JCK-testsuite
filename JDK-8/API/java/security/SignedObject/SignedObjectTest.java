@@ -99,6 +99,84 @@ public class SignedObjectTest {
         verifier4.initVerify(kp.getPublic());
         check(back.verify(kp.getPublic(), verifier4), "serialization preserves signature");
 
+        // ==== contract deepening: DSA algorithm, tampered signature bytes, deep-copy semantics ====
+
+        // ---- DSA signed object closed loop ----
+        java.security.KeyPairGenerator dsaGen = java.security.KeyPairGenerator.getInstance("DSA");
+        dsaGen.initialize(1024);
+        java.security.KeyPair dkp = dsaGen.generateKeyPair();
+        java.io.Serializable dpayload = new java.util.ArrayList<>(java.util.Arrays.asList("d", "s", "a"));
+        java.security.Signature dSigner = java.security.Signature.getInstance("SHA256withDSA");
+        dSigner.initSign(dkp.getPrivate());
+        SignedObject dso = new SignedObject(dpayload, dkp.getPrivate(), dSigner);
+        check("SHA256withDSA".equals(dso.getAlgorithm()), "DSA getAlgorithm");
+        check(dpayload.equals(dso.getObject()), "DSA getObject round-trip");
+        java.security.Signature dVerifier = java.security.Signature.getInstance("SHA256withDSA");
+        dVerifier.initVerify(dkp.getPublic());
+        check(dso.verify(dkp.getPublic(), dVerifier), "DSA verify true");
+        java.security.Signature dVerifier2 = java.security.Signature.getInstance("SHA256withDSA");
+        dVerifier2.initVerify(dkp.getPublic());
+        dVerifier2.update(new byte[]{9});
+        check(dso.verify(dkp.getPublic(), dVerifier2),
+                "verify resets verifier state (recorded: initVerify inside verify)");
+
+        // ---- getSignature returns a fresh copy each call ----
+        check(dso.getSignature() != dso.getSignature(), "getSignature defensive copy");
+        check(java.util.Arrays.equals(dso.getSignature(), dso.getSignature()),
+                "getSignature copies value-equal");
+
+        // ---- verify with verifier not initialized for this key still validates by key arg ----
+        java.security.Signature plainVerifier = java.security.Signature.getInstance("SHA256withDSA");
+        check(dso.verify(dkp.getPublic(), plainVerifier),
+                "verify works with uninitialized verifier (uses key argument)");
+
+        // ---- verify with mismatched algorithm verifier -> InvalidKeyException ----
+        java.security.Signature rsaVerifier = java.security.Signature.getInstance("SHA256withRSA");
+        try {
+            dso.verify(dkp.getPublic(), rsaVerifier);
+            check(false, "cross-algorithm verifier should throw");
+        } catch (java.security.InvalidKeyException e) {
+            check(true, "cross-algorithm verifier InvalidKeyException");
+        }
+
+        // ---- non-serializable object -> ClassCastException at construction (recorded) ----
+        try {
+            new SignedObject(sneakSerializable(new Object()), dkp.getPrivate(), dSigner);
+            check(false, "non-serializable object should fail");
+        } catch (ClassCastException e) {
+            check(true, "non-serializable object ClassCastException");
+        }
+
+        // ---- signed object is deeply immutable: mutate payload after signing does not affect it ----
+        java.util.List<String> mutable = new java.util.ArrayList<>(java.util.Arrays.asList("a", "b"));
+        java.security.Signature mSigner = java.security.Signature.getInstance("SHA256withDSA");
+        mSigner.initSign(dkp.getPrivate());
+        SignedObject mso = new SignedObject((java.io.Serializable) mutable, dkp.getPrivate(), mSigner);
+        mutable.add("c");   // mutate original after signing
+        java.security.Signature mVerifier = java.security.Signature.getInstance("SHA256withDSA");
+        check(mso.verify(dkp.getPublic(), mVerifier),
+                "signature still verifies after mutating original (deep copy at construction)");
+        @SuppressWarnings("unchecked")
+        java.util.List<String> recovered = (java.util.List<String>) mso.getObject();
+        recovered.add("d"); // mutate recovered copy
+        java.security.Signature mVerifier2 = java.security.Signature.getInstance("SHA256withDSA");
+        check(mso.verify(dkp.getPublic(), mVerifier2),
+                "signature unaffected by mutating recovered object");
+
+        // ---- getObject returns a fresh deserialization each call ----
+        java.security.Signature oVerifier = java.security.Signature.getInstance("SHA256withDSA");
+        check(mso.getObject() != mso.getObject(), "getObject returns fresh copy each call");
+        check(mso.verify(dkp.getPublic(), oVerifier), "verify still true after getObject calls");
+
+        // ---- toString: default Object form (no algorithm info) - recorded ----
+        check(so.toString().startsWith("java.security.SignedObject@"), "toString default Object form");
+        check(so.equals(so) && so.hashCode() == so.hashCode(), "self-equals and stable hashCode");
+
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T extends java.io.Serializable> T sneakSerializable(Object o) {
+        return (T) o;
     }
 }

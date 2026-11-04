@@ -18,3 +18,10 @@
 - 生命周期：destroy → isDestroyed=true、getPassword IllegalStateException；null 口令可保留
 
 断言入口：`PasswordProtectionTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（testContractDeep）
+- 3 参构造 null algorithm → NPE("invalid null input")；"PBE"+null spec 合法。
+- destroy 幂等；destroy 后 getPassword → IllegalStateException。
+- 空口令合法；identity 相等；ProtectionParameter+Destroyable 双接口。
+- 端到端 JCEKS setEntry/getEntry 往返。

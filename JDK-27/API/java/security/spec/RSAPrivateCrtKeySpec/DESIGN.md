@@ -31,3 +31,8 @@ BigInteger p = spec.getPrimeP();
 - 黑盒（testBlackBox）：
   - 8 参构造：8 个 getter（含继承 getModulus/getPrivateExponent）精确断言、getParams 为 null。
   - 9 参构造：getParams 为传入对象、getPrimeP 精确。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：8 getter 逐项往返 + 同引用
+- 关键实测：modulus/publicExponent/privateExponent/primeP/primeQ/primeExponentP/primeExponentQ/crtCoefficient（+keyParams）；全 null 合法。
+KeyFactory("RSA") CRT 私钥交换。

@@ -62,6 +62,44 @@ public class SecretKeyEntryTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract-deepening section (appended) ----
+    static void testContractDeep() throws Exception {
+        javax.crypto.SecretKey aes = new javax.crypto.spec.SecretKeySpec(new byte[16], "AES");
+        KeyStore.SecretKeyEntry entry = new KeyStore.SecretKeyEntry(aes);
+
+        // JKS rejects secret keys outright (PrivateKey-only format)
+        KeyStore jks = KeyStore.getInstance("JKS");
+        jks.load(null, null);
+        boolean rejected = false;
+        try { jks.setKeyEntry("s", aes, "pw".toCharArray(), null); }
+        catch (java.security.KeyStoreException kse) { rejected = true; }
+        check(rejected, "JKS setKeyEntry SecretKey KeyStoreException");
+
+        // JCEKS full loop: setEntry -> getEntry/getKey + delete lifecycle
+        char[] pw = "pw".toCharArray();
+        KeyStore.PasswordProtection prot = new KeyStore.PasswordProtection(pw);
+        KeyStore jce = KeyStore.getInstance("JCEKS");
+        jce.load(null, null);
+        jce.setEntry("s", entry, prot);
+        check(jce.isKeyEntry("s") && !jce.isCertificateEntry("s"),
+                "JCEKS entry classification");
+        check(jce.getCertificateChain("s") == null, "JCEKS secret entry null chain");
+        KeyStore.Entry back = jce.getEntry("s", prot);
+        check(back instanceof KeyStore.SecretKeyEntry, "JCEKS getEntry type round-trip");
+        check(java.util.Arrays.equals(
+                ((KeyStore.SecretKeyEntry) back).getSecretKey().getEncoded(),
+                aes.getEncoded()), "JCEKS key bytes round-trip");
+        check("AES".equals(jce.getKey("s", pw).getAlgorithm()), "JCEKS getKey algorithm");
+        boolean unrecoverable = false;
+        try { jce.getKey("s", "wrong".toCharArray()); }
+        catch (java.security.UnrecoverableKeyException uke) { unrecoverable = true; }
+        check(unrecoverable, "JCEKS wrong password UnrecoverableKeyException");
+        jce.deleteEntry("s");
+        check(!jce.containsAlias("s") && jce.size() == 0, "deleteEntry removes secret");
+        check(jce.getEntry("s", prot) == null, "getEntry after delete null");
     }
 }

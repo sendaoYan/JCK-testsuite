@@ -52,6 +52,60 @@ public class KeyPairTest {
         KeyPair mixed2 = new KeyPair(null, priv);
         check(mixed2.getPublic() == null && mixed2.getPrivate() == priv, "private-only keypair");
 
+        // ==== contract deepening: equals/hashCode/toString, serialization, signature use ====
+
+        // ---- equals: KeyPair uses identity semantics (no equals/hashCode override) ----
+        KeyPair same = new KeyPair(gen.getPublic(), gen.getPrivate());
+        check(!same.equals(gen), "identity semantics: same keys, different KeyPair (recorded)");
+        check(same.equals(same), "self-equals always true");
+        check(gen.equals(gen), "self-equals original");
+        check(!gen.equals(null), "not equal to null");
+        check(!gen.equals("not a keypair"), "not equal to other type");
+        KeyPair otherKeys = kpg.generateKeyPair();
+        check(!gen.equals(otherKeys), "different instances differ");
+
+        // ---- toString contains key class info ----
+        String ts = gen.toString();
+        check(ts != null && ts.contains("KeyPair"), "toString contains class name");
+
+        // ---- serialization round-trip preserves both keys ----
+        java.io.ByteArrayOutputStream kbos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(kbos)) {
+            oos.writeObject(same);
+        }
+        KeyPair serBack;
+        try (java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(kbos.toByteArray()))) {
+            serBack = (KeyPair) ois.readObject();
+        }
+        check(gen.getPublic().equals(serBack.getPublic()), "serialized public equals");
+        check(gen.getPrivate().equals(serBack.getPrivate()), "serialized private equals");
+        check(!serBack.equals(gen), "serialized KeyPair itself stays identity-equal (recorded)");
+
+        // ---- keys from the pair drive a real signature loop ----
+        java.security.Signature signer = java.security.Signature.getInstance("SHA256withRSA");
+        signer.initSign(gen.getPrivate());
+        signer.update("keypair-loop".getBytes());
+        byte[] sig = signer.sign();
+        java.security.Signature verifier = java.security.Signature.getInstance("SHA256withRSA");
+        verifier.initVerify(gen.getPublic());
+        verifier.update("keypair-loop".getBytes());
+        check(verifier.verify(sig), "keypair keys drive signature loop");
+
+        // ---- null-containing pairs serialize too (recorded: nulls preserved) ----
+        java.io.ByteArrayOutputStream nbos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(nbos)) {
+            oos.writeObject(mixed);
+        }
+        KeyPair mixedBack;
+        try (java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(nbos.toByteArray()))) {
+            mixedBack = (KeyPair) ois.readObject();
+        }
+        check(mixedBack.getPrivate() == null, "serialized null private stays null");
+        check(mixed.getPublic().equals(mixedBack.getPublic()), "serialized mixed public equals");
+
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

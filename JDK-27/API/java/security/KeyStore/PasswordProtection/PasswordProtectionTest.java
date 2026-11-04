@@ -68,6 +68,53 @@ public class PasswordProtectionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract-deepening section (appended) ----
+    static void testContractDeep() throws Exception {
+        // 3-arg constructor null matrix: null algorithm rejected, null spec retained
+        boolean npe = false;
+        try { new KeyStore.PasswordProtection("pw".toCharArray(), null, null); }
+        catch (NullPointerException e) { npe = true; }
+        check(npe, "3-arg null protection algorithm NPE");
+        KeyStore.PasswordProtection specLess =
+                new KeyStore.PasswordProtection("pw".toCharArray(), "PBE", null);
+        check("PBE".equals(specLess.getProtectionAlgorithm())
+                && specLess.getProtectionParameters() == null,
+                "PBE algorithm recorded, null spec retained");
+
+        // destroy is idempotent and the destroyed state is stable
+        KeyStore.PasswordProtection p = new KeyStore.PasswordProtection("x".toCharArray());
+        p.destroy(); p.destroy();
+        check(p.isDestroyed(), "double destroy stays destroyed");
+
+        // subtyping: ProtectionParameter + Destroyable
+        check(p instanceof KeyStore.ProtectionParameter, "implements ProtectionParameter");
+        check(p instanceof javax.security.auth.Destroyable, "implements Destroyable");
+
+        // identity equality (no equals override)
+        KeyStore.PasswordProtection a = new KeyStore.PasswordProtection("dup".toCharArray());
+        KeyStore.PasswordProtection b = new KeyStore.PasswordProtection("dup".toCharArray());
+        check(a.equals(a) && !a.equals(b), "identity equality semantics");
+
+        // empty password is a legitimate value
+        KeyStore.PasswordProtection e = new KeyStore.PasswordProtection(new char[0]);
+        check(e.getPassword() != null && e.getPassword().length == 0, "empty password length 0");
+
+        // end-to-end: the password actually protects and recovers a keystore key
+        char[] realPw = "real-pw".toCharArray();
+        KeyStore.PasswordProtection prot = new KeyStore.PasswordProtection(realPw);
+        KeyStore ks = KeyStore.getInstance("JCEKS");
+        ks.load(null, null);
+        javax.crypto.SecretKey aes = new javax.crypto.spec.SecretKeySpec(new byte[16], "AES");
+        ks.setEntry("s", new KeyStore.SecretKeyEntry(aes), prot);
+        check(ks.getEntry("s", prot) instanceof KeyStore.SecretKeyEntry,
+                "protection password recovers entry");
+        boolean unrecoverable = false;
+        try { ks.getKey("s", "not-the-password".toCharArray()); }
+        catch (java.security.UnrecoverableKeyException uke) { unrecoverable = true; }
+        check(unrecoverable, "different password cannot recover key");
     }
 }

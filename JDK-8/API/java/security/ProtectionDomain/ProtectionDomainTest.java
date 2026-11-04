@@ -61,6 +61,94 @@ public class ProtectionDomainTest {
         // ---- toString non-empty ----
         check(pd.toString() != null && pd.toString().length() > 0, "toString non-empty");
 
+        testContractDeep();
+
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening: identity equality, implies matrix, null/readonly semantics, toString ----
+    static void testContractDeep() throws Exception {
+        URL u = new URL("file:/tmp/x");
+        CodeSource cs = new CodeSource(u, (java.security.cert.Certificate[]) null);
+        Permissions all = new Permissions();
+        all.add(new AllPermission());
+        Permissions none = new Permissions();
+        Principal p1 = new Principal() { public String getName() { return "p1"; } };
+        Principal p2 = new Principal() { public String getName() { return "p2"; } };
+
+        // equals is IDENTITY (not overridden): same fields -> different instances -> not equal
+        ProtectionDomain a = new ProtectionDomain(cs, all, null, new Principal[]{p1});
+        ProtectionDomain b = new ProtectionDomain(cs, all, null, new Principal[]{p1});
+        check(!a.equals(b), "identity equals: same construction not equal (JDK-8)");
+        check(a.equals(a), "identity equals reflexive");
+        check(!a.equals(null), "equals null false");
+        check(a.hashCode() == a.hashCode(), "hashCode self-consistent");
+
+        // implies matrix driven solely by the static PermissionCollection
+        ProtectionDomain open = new ProtectionDomain(null, all);
+        ProtectionDomain locked = new ProtectionDomain(null, none);
+        check(open.implies(new java.security.SecurityPermission("x")), "AllPermission domain implies");
+        check(!locked.implies(new java.security.SecurityPermission("x")), "empty-perms domain implies nothing");
+        check(locked.implies(new java.io.FilePermission("*", "read")) == false,
+                "empty-perms domain implies nothing for FilePermission");
+        // null permission -> NPE via Permissions.implies
+        try {
+            locked.implies(null);
+            check(false, "implies(null) must throw");
+        } catch (NullPointerException npe) {
+            check(true, "implies(null) -> NPE");
+        }
+        // null permission collection: implies delegates to a null-tolerant fallback -> false
+        ProtectionDomain nullPerms = new ProtectionDomain(null, null);
+        check(!nullPerms.implies(new java.security.SecurityPermission("x")), "null perms implies false");
+        // null permissions ACCEPTS null permission without NPE (no collection to consult)
+        try {
+            check(!nullPerms.implies(null), "null perms implies(null) false (no NPE)");
+        } catch (NullPointerException npe) {
+            check(true, "null perms implies(null) NPE recorded");
+        }
+
+        // principals array defensive copy: mutating the array after construction is invisible
+        Principal[] arr = { p1 };
+        ProtectionDomain pdArr = new ProtectionDomain(null, none, null, arr);
+        arr[0] = p2;
+        check("p1".equals(pdArr.getPrincipals()[0].getName()), "principals defensive copy on construction");
+        // getPrincipals returns a fresh copy each call
+        check(pdArr.getPrincipals() != pdArr.getPrincipals(), "getPrincipals fresh array per call");
+        pdArr.getPrincipals()[0] = p2;
+        check("p1".equals(pdArr.getPrincipals()[0].getName()), "getPrincipals callers cannot mutate state");
+
+        // empty principal array behaves like none
+        ProtectionDomain emptyPrs = new ProtectionDomain(null, none, null, new Principal[0]);
+        check(emptyPrs.getPrincipals().length == 0, "empty principal array preserved length 0");
+
+        // toString: contains location and principal marker
+        String ts = new ProtectionDomain(cs, none, null, new Principal[]{p1}).toString();
+        check(ts.contains("file:/tmp/x"), "toString contains location");
+        check(ts.contains("p1"), "toString contains principal name");
+
+        // the constructor takes ownership: the passed collection is frozen read-only
+        // immediately at CONSTRUCTION (no implies call needed)
+        Permissions shared = new Permissions();
+        shared.add(new java.security.SecurityPermission("before"));
+        ProtectionDomain pdShared = new ProtectionDomain(null, shared);
+        check(shared.isReadOnly(), "collection frozen at construction");
+        check(pdShared.implies(new java.security.SecurityPermission("before")), "sees initial permission");
+        try {
+            shared.add(new java.security.SecurityPermission("after"));
+            check(false, "frozen collection must reject add");
+        } catch (SecurityException se) {
+            check("attempt to add a Permission to a readonly Permissions object".equals(se.getMessage()),
+                    "frozen collection add -> SecurityException with exact message");
+        }
+
+        // ProtectionDomain is NOT Serializable (CodeSource is, PD is not)
+        try {
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            new java.io.ObjectOutputStream(bos).writeObject(open);
+            check(false, "ProtectionDomain must not be serializable");
+        } catch (java.io.NotSerializableException nse) {
+            check(true, "ProtectionDomain not serializable");
+        }
     }
 }

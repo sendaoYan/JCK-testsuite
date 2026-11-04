@@ -62,7 +62,81 @@ public class LoadStoreParameterTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract-deepening section (appended) ----
+    static void testContractDeep() throws Exception {
+        Class<?> c = Class.forName("java.security.KeyStore$LoadStoreParameter");
+
+        // declares exactly one method returning ProtectionParameter
+        Method[] own = c.getDeclaredMethods();
+        check(own.length == 1, "exactly one declared method");
+        check("getProtectionParameter".equals(own[0].getName()), "sole method name");
+        check(KeyStore.ProtectionParameter.class.equals(own[0].getReturnType()),
+                "returns ProtectionParameter");
+
+        // JDK-9+: JKS also accepts load(LSP) through engineLoad(null, protection)
+        // (JDK-8 threw UnsupportedOperationException here)
+        KeyStore jks = KeyStore.getInstance("JKS");
+        jks.load(new KeyStore.LoadStoreParameter() {
+            public KeyStore.ProtectionParameter getProtectionParameter() {
+                return new KeyStore.PasswordProtection("pw".toCharArray());
+            }
+        });
+        check(jks.size() == 0, "JKS load(LSP) empty store (JDK-9+)");
+        KeyStore jks2 = KeyStore.getInstance("JKS");
+        jks2.load(new KeyStore.LoadStoreParameter() {
+            public KeyStore.ProtectionParameter getProtectionParameter() {
+                return new KeyStore.PasswordProtection(null);
+            }
+        });
+        check(jks2.size() == 0, "JKS load(LSP) null password empty store");
+
+        // store(LSP) remains unsupported for stream-based formats on both sides
+        boolean threw = false;
+        try { jks.store(new KeyStore.LoadStoreParameter() {
+            public KeyStore.ProtectionParameter getProtectionParameter() {
+                return new KeyStore.PasswordProtection("pw".toCharArray());
+            } }); }
+        catch (UnsupportedOperationException uoe) { threw = true; }
+        check(threw, "JKS store(LSP) UOE");
+
+        // DomainLoadStoreParameter surface: configuration URI + per-keystore map snapshot
+        java.net.URI cfg = java.net.URI.create("file:/tmp/jck-lsp-deep.cfg");
+        java.util.Map<String, KeyStore.ProtectionParameter> map = new LinkedHashMap<>();
+        map.put("keystore", new KeyStore.PasswordProtection("pw".toCharArray()));
+        java.security.DomainLoadStoreParameter d =
+                new java.security.DomainLoadStoreParameter(cfg, map);
+        check(c.isInstance(d), "DomainLoadStoreParameter implements LSP");
+        check(d.getConfiguration().equals(cfg), "configuration URI round-trip");
+        check(d.getProtectionParameter() == null, "domain-level protection null");
+        check(d.getProtectionParams().keySet().equals(map.keySet()),
+                "protection params snapshot keys");
+        map.clear();
+        check(d.getProtectionParams().size() == 1, "protection params defensive copy");
+
+        // JCEKS mirrors JKS: load(LSP) accepted (JDK-9+), store(LSP) rejected
+        KeyStore jce = KeyStore.getInstance("JCEKS");
+        jce.load(new KeyStore.LoadStoreParameter() {
+            public KeyStore.ProtectionParameter getProtectionParameter() {
+                return new KeyStore.PasswordProtection("pw".toCharArray());
+            } });
+        check(jce.size() == 0, "JCEKS load(LSP) empty store (JDK-9+)");
+        boolean jceStoreRejected = false;
+        try { jce.store(new KeyStore.LoadStoreParameter() {
+            public KeyStore.ProtectionParameter getProtectionParameter() {
+                return new KeyStore.PasswordProtection("pw".toCharArray());
+            } }); }
+        catch (UnsupportedOperationException uoe) { jceStoreRejected = true; }
+        check(jceStoreRejected, "JCEKS store(LSP) UOE");
+
+        // the snapshot view is not just copied but unmodifiable
+        boolean dPutRejected = false;
+        try { d.getProtectionParams().put("x", null); }
+        catch (UnsupportedOperationException uoe) { dPutRejected = true; }
+        check(dPutRejected, "protection params view unmodifiable");
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

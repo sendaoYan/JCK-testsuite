@@ -15,3 +15,9 @@
 - 组合：自定义 LSP(PasswordProtection(null)) 驱动 `load` 初始化空库；PKCS12 不支持 store(LSP) → UnsupportedOperationException（默认 engineStore 抛出）
 
 断言入口：`LoadStoreParameterTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（testContractDeep）
+- JKS load(Lsp)（含 null 口令实现）在 JDK-27 正常工作；store(LSP) 仍 UOE。
+- DomainLoadStoreParameter.getProtectionParams 为快照：改动源 map 后返回集合 size 不变。
+- 补充：JCEKS load(LSP) 亦正常（JDK-9+）、store(LSP) UOE；快照视图不可修改（put → UOE）。

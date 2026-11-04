@@ -17,3 +17,8 @@
 - 边界：defineClass 由白盒反射验证存在（protected final）
 
 断言入口：`SecureClassLoaderTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 追加契约维度（深化批）
+- null CodeSource：默认 getPermissions 返回非空**空授权**集合。
+- 委托身份：loadClass("java.lang.String")==String.class（数组描述符不被 loadClass 支持，勿断言）。
+- 结构：恰 2 个 protected defineClass 重载；getPermissions protected；类非 final。

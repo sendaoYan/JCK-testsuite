@@ -105,6 +105,71 @@ public class AlgorithmParameterGeneratorTest {
                 () -> dh3.init(-1),
                 "init(negative size)");
 
+        // ==== contract deepening: engine reuse, DSA spec round-trip, DSA generation end-to-end ====
+
+        // ---- generated DSA params are directly usable by KeyPairGenerator (real closed loop) ----
+        java.security.KeyPairGenerator useGen = java.security.KeyPairGenerator.getInstance("DSA");
+        useGen.initialize(spec);
+        java.security.KeyPair kp = useGen.generateKeyPair();
+        java.security.Signature sgn = java.security.Signature.getInstance("SHA256withDSA");
+        sgn.initSign(kp.getPrivate());
+        sgn.update("apg".getBytes());
+        byte[] dsig = sgn.sign();
+        java.security.Signature vfy = java.security.Signature.getInstance("SHA256withDSA");
+        vfy.initVerify(kp.getPublic());
+        vfy.update("apg".getBytes());
+        check(vfy.verify(dsig), "generated DSA params support full signature loop");
+        // q/g bit sizes for 1024-bit DSA
+        check(spec.getQ().bitLength() == 160, "DSA q 160 bits");
+        check(spec.getG().signum() > 0 && spec.getG().bitLength() <= 1024, "DSA g range");
+
+        // ---- encoding round-trip of generated params ----
+        byte[] der = p3.getEncoded();
+        check(der != null && der.length > 100, "DSA params DER non-trivial");
+        AlgorithmParameters parsed = AlgorithmParameters.getInstance("DSA");
+        parsed.init(der);
+        DSAParameterSpec back = parsed.getParameterSpec(DSAParameterSpec.class);
+        check(back.getP().equals(spec.getP()) && back.getQ().equals(spec.getQ())
+                && back.getG().equals(spec.getG()), "generated params encode/decode value-equal");
+
+        // ---- two generateParameters calls yield independent parameter sets ----
+        AlgorithmParameters p4 = dsa2.generateParameters();
+        DSAParameterSpec spec2 = p4.getParameterSpec(DSAParameterSpec.class);
+        check(!spec2.getP().equals(spec.getP()), "second generateParameters independent");
+
+        // ---- init(size, null SecureRandom) legal ----
+        AlgorithmParameterGenerator nr = AlgorithmParameterGenerator.getInstance("DSA");
+        nr.init(1024, null);
+        check(nr.generateParameters() != null, "init(size, null random) works");
+
+        // ---- engine metadata ----
+        AlgorithmParameterGenerator meta = AlgorithmParameterGenerator.getInstance("DSA");
+        check("DSA".equals(meta.getAlgorithm()), "getAlgorithm DSA");
+        check(meta.getProvider() != null && "SUN".equals(meta.getProvider().getName()),
+                "getProvider SUN for DSA");
+        check(meta.toString() != null, "toString non-null");
+
+        // ---- getInstance provider forms ----
+        check("SUN".equals(AlgorithmParameterGenerator.getInstance("DSA", "SUN").getProvider().getName()),
+                "getInstance(alg, providerName)");
+        check("SUN".equals(AlgorithmParameterGenerator.getInstance("DSA", java.security.Security.getProvider("SUN"))
+                .getProvider().getName()), "getInstance(alg, Provider)");
+        checkThrows(java.security.NoSuchProviderException.class,
+                () -> AlgorithmParameterGenerator.getInstance("DSA", "NoSuchProvider_XYZ"),
+                "getInstance(alg, bogus providerName)");
+
+        // ---- 2048-bit DSA supported on both JDKs ----
+        AlgorithmParameterGenerator big = AlgorithmParameterGenerator.getInstance("DSA");
+        big.init(2048);
+        DSAParameterSpec bigSpec = big.generateParameters().getParameterSpec(DSAParameterSpec.class);
+        check(bigSpec.getP().bitLength() == 2048, "DSA 2048 p size");
+        check(bigSpec.getQ().bitLength() == 224, "DSA 2048 q size 224 (SUN default)");
+        AlgorithmParameterGenerator huge = AlgorithmParameterGenerator.getInstance("DSA");
+        huge.init(3072);
+        DSAParameterSpec hugeSpec = huge.generateParameters().getParameterSpec(DSAParameterSpec.class);
+        check(hugeSpec.getP().bitLength() == 3072, "DSA 3072 p size");
+        check(hugeSpec.getQ().bitLength() == 256, "DSA 3072 q size 256");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

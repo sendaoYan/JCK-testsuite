@@ -14,3 +14,9 @@
 ## 4. 测试用例设计 + 自动化实现
 - 真实 RSA 公钥：instanceof PublicKey/AsymmetricKey/Key；getAlgorithm "RSA"、getFormat "X.509"、getEncoded 非空；`getParams()` 默认 null。
 - 白盒：接口，父接口为 AsymmetricKey（字符串反射断言）。
+
+## 5. 追加契约维度（深化批）
+- marker 形状：无声明方法、sVUID=7187392471159151072L（反射精确值）。
+- KeyFactory 编码 round-trip：generatePublic(X509(encode)) equals 原钥、hashCode 一致、编码相等。
+- DSA-1024 公钥 X.509；KeyRep 序列化 round-trip equals。
+- 自定义 opaque 钥 null format/encoding 合法。

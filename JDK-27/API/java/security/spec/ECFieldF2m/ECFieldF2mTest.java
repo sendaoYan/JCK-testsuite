@@ -13,6 +13,22 @@ public class ECFieldF2mTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
     static void testWhiteBox() throws Exception {
         Class<?> c = ECFieldF2m.class;
         check(Modifier.isPublic(c.getModifiers()), "public");
@@ -59,9 +75,70 @@ public class ECFieldF2mTest {
         check(f instanceof ECField, "instanceof ECField");
     }
 
+    static void testContracts() {
+        // constructor exception matrix (probed on JDK-27)
+        checkThrows(IllegalArgumentException.class, () -> new ECFieldF2m(0), "m == 0 -> IAE");
+        checkThrows(IllegalArgumentException.class, () -> new ECFieldF2m(-5), "m < 0 -> IAE");
+        checkThrows(NullPointerException.class, () -> new ECFieldF2m(163, (int[]) null), "ks null -> NPE");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, new int[0]), "ks empty -> IAE length");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, new int[]{1, 0}), "ks length 2 -> IAE length");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, new int[]{7, 2, 1, 0}), "ks length 4 -> IAE length");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, new int[]{7, 7, 1}), "ks non-descending -> IAE order");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, new int[]{7, 2, 0}), "ks[2] == 0 -> IAE range");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, new int[]{7, 2, -1}), "ks[2] < 0 -> IAE range");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, new int[]{0}), "ks[0] == 0 -> IAE range");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, new int[]{163}), "ks[0] == m -> IAE range");
+        check(new ECFieldF2m(163, new int[]{8, 2, 1}).getM() == 163, "ks {8,2,1} legal");
+        check(java.util.Arrays.equals(new ECFieldF2m(163, new int[]{74}).getMidTermsOfReductionPolynomial(), new int[]{74}),
+                "trinomial ks {74} midTerms");
+        // rp constructor rules (probed): valid B-163/B-233, all invalid forms -> IAE
+        BigInteger rp163 = BigInteger.ONE.shiftLeft(163).setBit(7).setBit(6).setBit(3).add(BigInteger.ONE);
+        BigInteger rp233 = BigInteger.ONE.shiftLeft(233).setBit(74).add(BigInteger.ONE);
+        check(java.util.Arrays.equals(new ECFieldF2m(163, rp163).getMidTermsOfReductionPolynomial(), new int[]{7, 6, 3}),
+                "rp163 midTerms {7,6,3} (probed)");
+        check(java.util.Arrays.equals(new ECFieldF2m(233, rp233).getMidTermsOfReductionPolynomial(), new int[]{74}),
+                "rp233 midTerms {74} (probed)");
+        checkThrows(NullPointerException.class, () -> new ECFieldF2m(163, (BigInteger) null), "rp null -> NPE");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, rp163.shiftRight(1)), "rp bitLength < m+1 -> IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, rp163.clearBit(0)), "rp without x^0 -> IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, rp163.clearBit(163)), "rp without x^m -> IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, rp163.setBit(200)), "rp bits above m -> IAE");
+        checkThrows(IllegalArgumentException.class,
+                () -> new ECFieldF2m(163, rp163.negate()), "negative rp -> IAE");
+        // cross-constructor equality rp vs ks (probed)
+        ECFieldF2m rpTri = new ECFieldF2m(233, rp233);
+        check(rpTri.equals(new ECFieldF2m(233, new int[]{74})), "rp form equals ks form");
+        check(rpTri.hashCode() == new ECFieldF2m(233, new int[]{74}).hashCode(), "hashCode across forms");
+        // equals matrix extras
+        check(!new ECFieldF2m(163).equals(new ECFieldF2m(164)), "different m not equal");
+        check(!new ECFieldF2m(163).equals(null), "equals null false");
+        check(!new ECFieldF2m(163).equals(new java.security.spec.ECFieldFp(BigInteger.valueOf(2))), "wrong type false");
+        check(!java.io.Serializable.class.isAssignableFrom(ECFieldF2m.class), "not Serializable");
+        // ctor ks defensive copy
+        int[] mut = {7, 2, 1};
+        ECFieldF2m d = new ECFieldF2m(163, mut);
+        mut[0] = 99;
+        check(java.util.Arrays.equals(d.getMidTermsOfReductionPolynomial(), new int[]{7, 2, 1}),
+                "ctor ks defensive copy (probed)");
+        int[] m1 = d.getMidTermsOfReductionPolynomial(), m2 = d.getMidTermsOfReductionPolynomial();
+        check(m1 != m2 && java.util.Arrays.equals(m1, m2), "midTerms fresh copy per call");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 

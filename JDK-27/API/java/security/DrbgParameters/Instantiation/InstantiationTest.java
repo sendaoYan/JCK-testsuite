@@ -44,7 +44,69 @@ public class InstantiationTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening: toString matrix, identity equality, engine round-trip ----
+    static void testContractDeep() throws Exception {
+        // toString is "strength,capability,Arrays.toString(personalization)"
+        Instantiation v = DrbgParameters.instantiation(256, DrbgParameters.Capability.RESEED_ONLY, new byte[]{1, 2, 3});
+        check("256,reseed_only,[1, 2, 3]".equals(v.toString()), "toString exact with personalization");
+        check("128,none,null".equals(
+                DrbgParameters.instantiation(128, DrbgParameters.Capability.NONE, null).toString()),
+                "toString null personalization");
+        check("192,none,[]".equals(
+                DrbgParameters.instantiation(192, DrbgParameters.Capability.NONE, new byte[0]).toString()),
+                "toString empty personalization differs from null");
+        check("112,pr_and_reseed,null".equals(
+                DrbgParameters.instantiation(112, DrbgParameters.Capability.PR_AND_RESEED, null).toString()),
+                "toString pr_and_reseed form");
+
+        // constructor-side defensive copy: later mutation of the source is invisible
+        byte[] src = {4, 5};
+        Instantiation d = DrbgParameters.instantiation(128, DrbgParameters.Capability.NONE, src);
+        src[0] = 77;
+        check(Arrays.equals(d.getPersonalizationString(), new byte[]{4, 5}),
+                "personalization copied at construction");
+        check(d.getPersonalizationString() != d.getPersonalizationString(),
+                "getter returns a fresh copy each call");
+
+        // equals is identity; same-value instances are not equal
+        Instantiation e1 = DrbgParameters.instantiation(128, DrbgParameters.Capability.NONE, null);
+        Instantiation e2 = DrbgParameters.instantiation(128, DrbgParameters.Capability.NONE, null);
+        check(!e1.equals(e2), "identity equals: same value not equal");
+        check(e1.equals(e1), "identity equals reflexive");
+        check(e1.hashCode() == e1.hashCode(), "hashCode self-consistent");
+        check(!e1.equals(null), "equals null false");
+        check(!e1.equals(new Object()), "equals Object false");
+
+        // strength boundaries: -1 wildcard legal, 0 legal, -2 rejected
+        check(DrbgParameters.instantiation(-1, DrbgParameters.Capability.NONE, null).getStrength() == -1,
+                "strength -1 wildcard");
+        check(DrbgParameters.instantiation(0, DrbgParameters.Capability.NONE, null).getStrength() == 0,
+                "strength 0 legal");
+        checkThrows(IllegalArgumentException.class,
+                () -> DrbgParameters.instantiation(-2, DrbgParameters.Capability.NONE, null));
+
+        // all three capabilities round-trip
+        for (DrbgParameters.Capability cap : DrbgParameters.Capability.values()) {
+            check(DrbgParameters.instantiation(128, cap, null).getCapability() == cap,
+                    "capability round-trip " + cap);
+        }
+
+        // engine round-trip: the params handed to getInstance come back from getParameters
+        Instantiation inst = DrbgParameters.instantiation(256, DrbgParameters.Capability.RESEED_ONLY,
+                new byte[]{9, 9, 9});
+        java.security.SecureRandom drbg = java.security.SecureRandom.getInstance("DRBG", inst);
+        check(drbg.getParameters() instanceof Instantiation, "engine returns Instantiation");
+        Instantiation back = (Instantiation) drbg.getParameters();
+        check(back.getStrength() == 256, "engine round-trip strength");
+        check(back.getCapability() == DrbgParameters.Capability.RESEED_ONLY, "engine round-trip capability");
+        check(Arrays.equals(back.getPersonalizationString(), new byte[]{9, 9, 9}),
+                "engine round-trip personalization");
+        drbg.nextBytes(new byte[8]);
+        check(true, "instantiated DRBG produces output");
     }
 
     static void checkThrows(Class<? extends Throwable> type, Runnable r) {

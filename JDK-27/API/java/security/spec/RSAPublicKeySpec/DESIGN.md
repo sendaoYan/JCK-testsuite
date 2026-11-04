@@ -29,3 +29,8 @@ PublicKey key = KeyFactory.getInstance("RSA").generatePublic(spec);
   - 2 参构造：getModulus/getPublicExponent 精确、getParams 为 null。
   - 3 参构造：三个 getter 精确、getParams 为传入对象。
   - `instanceof KeySpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：同引用
+- 关键实测：镜像私钥侧；与 RSAPrivateKeySpec 为兄弟类（互不赋值）。
+KeyFactory("RSA") 公钥交换。

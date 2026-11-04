@@ -6,6 +6,7 @@
 
 import java.lang.reflect.Modifier;
 import java.security.Key;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
@@ -41,6 +42,49 @@ public class PublicKeyTest {
 
         // AsymmetricKey.getParams() default returns null
         check(((java.security.AsymmetricKey) pub).getParams() == null, "getParams default null");
+
+        // ---- appended contract dimensions ----
+        // marker shape: no own methods, fixed serialVersionUID
+        check(PublicKey.class.getDeclaredMethods().length == 0, "no declared methods (marker)");
+        check(PublicKey.class.getDeclaredField("serialVersionUID").getLong(null) == 7187392471159151072L,
+                "serialVersionUID 7187392471159151072L");
+        check(Key.class.isAssignableFrom(PublicKey.class), "Key assignable (via AsymmetricKey)");
+        check(!java.security.PrivateKey.class.isAssignableFrom(PublicKey.class), "disjoint from PrivateKey");
+        check(PublicKey.class.isAssignableFrom(java.security.interfaces.DSAPublicKey.class),
+                "DSAPublicKey is a PublicKey");
+        check(java.io.Serializable.class.isAssignableFrom(PublicKey.class), "Serializable");
+        // KeyFactory encoding round-trip: equal public key with same X.509 material
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        PublicKey restored = kf.generatePublic(new java.security.spec.X509EncodedKeySpec(pub.getEncoded()));
+        check(restored instanceof PublicKey, "KeyFactory output PublicKey");
+        check(restored.equals(pub), "restored equals original");
+        check(restored.hashCode() == pub.hashCode(), "hashCode equal");
+        check(java.util.Arrays.equals(restored.getEncoded(), pub.getEncoded()), "encoding equal");
+        // DSA public key: X.509 as well
+        KeyPairGenerator dsa = KeyPairGenerator.getInstance("DSA");
+        dsa.initialize(1024);
+        PublicKey dsaPub = dsa.generateKeyPair().getPublic();
+        check("X.509".equals(dsaPub.getFormat()), "DSA X.509");
+        check(!dsaPub.equals(pub), "distinct keys unequal");
+        // serialization round-trip via KeyRep
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(pub);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        Object back = ois.readObject();
+        check(back instanceof PublicKey, "round-trip restores PublicKey");
+        check(back.equals(pub), "round-trip equals");
+        // minimal custom implementation
+        PublicKey custom = new PublicKey() {
+            private static final long serialVersionUID = 7187392471159151072L;
+            public String getAlgorithm() { return "CUSTOM"; }
+            public String getFormat() { return null; }
+            public byte[] getEncoded() { return null; }
+        };
+        check("CUSTOM".equals(custom.getAlgorithm()), "custom algorithm");
+        check(custom.getFormat() == null && custom.getEncoded() == null, "opaque key null format/encoding");
     }
 
     static boolean hasInterface(Class<?> c, String name) {

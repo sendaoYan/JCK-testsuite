@@ -44,9 +44,67 @@ public class ServiceTest {
         check(custom.toString() != null && custom.toString().contains("MyAlg"), "constructed toString");
     }
 
+
+    static void testDeepened() throws Exception {
+        Provider sun = Security.getProvider("SUN");
+        // real SUN service instantiates a working engine (closed loop with known vector)
+        Provider.Service md5 = sun.getService("MessageDigest", "MD5");
+        Object engine = md5.newInstance(null);
+        // recorded: SUN registers SPI classes; newInstance returns the SPI object, not the facade
+        check(engine.getClass().getName().equals(md5.getClassName()),
+                "newInstance returns registered class instance");
+        check(engine instanceof java.security.MessageDigestSpi, "MD5 service instance is a MessageDigestSpi");
+        check(!(engine instanceof java.security.MessageDigest),
+                "SPI instance is not the facade MessageDigest (recorded)");
+        try { md5.newInstance(new Object()); check(false, "newInstance(param) should fail"); }
+        catch (java.security.NoSuchAlgorithmException e) { check(true, "newInstance(param) NSAE"); }
+        check(md5.newInstance(null) != engine, "newInstance distinct instances");
+        Provider.Service srng = sun.getService("SecureRandom", "SHA1PRNG");
+        check(srng != null && srng.newInstance(null) instanceof java.security.SecureRandomSpi,
+                "SHA1PRNG service newInstance returns SecureRandomSpi (recorded)");
+
+        // constructor null matrix -> NPE
+        try { new Provider.Service(null, "T", "A", "C", null, null); check(false, "null provider"); }
+        catch (NullPointerException e) { check(true, "Service(null provider) NPE"); }
+        try { new Provider.Service(sun, null, "A", "C", null, null); check(false, "null type"); }
+        catch (NullPointerException e) { check(true, "Service(null type) NPE"); }
+        try { new Provider.Service(sun, "T", null, "C", null, null); check(false, "null algorithm"); }
+        catch (NullPointerException e) { check(true, "Service(null algorithm) NPE"); }
+        try { new Provider.Service(sun, "T", "A", null, null, null); check(false, "null className"); }
+        catch (NullPointerException e) { check(true, "Service(null className) NPE"); }
+
+        // supportsParameter matrix
+        java.security.Key dsaKey = java.security.KeyPairGenerator.getInstance("DSA")
+                .generateKeyPair().getPublic();
+        java.security.Key rsaKey = java.security.KeyPairGenerator.getInstance("RSA")
+                .generateKeyPair().getPublic();
+        try { md5.supportsParameter(dsaKey); check(false, "supportsParameter on MD"); }
+        catch (java.security.InvalidParameterException e) { check(true, "supportsParameter MD engine IPE"); }
+        Map<String, String> sigAttrs = new java.util.HashMap<>();
+        sigAttrs.put("SupportedKeyClasses", "java.security.interfaces.DSAPublicKey");
+        Provider.Service sigSvc = new Provider.Service(sun, "Signature", "FakeSig",
+                "java.lang.String", null, sigAttrs);
+        check(sigSvc.supportsParameter(dsaKey), "supportsParameter matching key");
+        check(!sigSvc.supportsParameter(rsaKey), "supportsParameter non-matching key");
+        try { sigSvc.supportsParameter("not-a-key"); check(false, "supportsParameter non-Key"); }
+        catch (java.security.InvalidParameterException e) { check(true, "supportsParameter non-Key IPE"); }
+
+        // aliases/attributes surface in toString
+        Map<String, String> attrs = new java.util.HashMap<>();
+        attrs.put("SupportedKeyClasses", "java.security.Key");
+        Provider.Service aliased = new Provider.Service(sun, "MessageDigest", "Aliased",
+                "java.lang.String", java.util.Arrays.asList("Alias1"), attrs);
+        String ts = aliased.toString();
+        check(ts.contains("Aliased") && ts.contains("Alias1") && ts.contains("SupportedKeyClasses"),
+                "toString contains algorithm, alias, attribute");
+        check("java.security.Key".equals(aliased.getAttribute("SupportedKeyClasses")),
+                "custom attribute round-trip");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepened();
         System.out.println("PASS (" + passed + " assertions)");
     }
 

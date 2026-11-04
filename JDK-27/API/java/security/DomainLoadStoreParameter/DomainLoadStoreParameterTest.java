@@ -63,6 +63,32 @@ public class DomainLoadStoreParameterTest {
         // implements KeyStore.LoadStoreParameter
         check(d instanceof KeyStore.LoadStoreParameter, "LoadStoreParameter");
 
+        // ---- appended contract dimensions ----
+        // all write channels of the unmodifiable view rejected
+        try { d.getProtectionParams().remove("domain1"); check(false, "remove UOE"); }
+        catch (UnsupportedOperationException e) { check(true, "remove UOE"); }
+        try { d.getProtectionParams().putAll(Collections.emptyMap()); check(false, "putAll UOE"); }
+        catch (UnsupportedOperationException e) { check(true, "putAll UOE"); }
+        try { d.getProtectionParams().clear(); check(false, "clear UOE"); }
+        catch (UnsupportedOperationException e) { check(true, "clear UOE"); }
+        // snapshot semantics: source-map mutation after construction is invisible
+        map.put("domain3", null);
+        map.remove("domain1");
+        check(d.getProtectionParams().size() == 2, "source mutation invisible");
+        check(d.getProtectionParams().get("domain1") == pp1, "removed source entry still snapshotted");
+        // identity equals/hashCode: no value semantics
+        DomainLoadStoreParameter other = new DomainLoadStoreParameter(uri,
+                new LinkedHashMap<>(java.util.Collections.singletonMap("a", pp1)));
+        check(!d.equals(other), "identity equals");
+        check(d.equals(d), "reflexive");
+        check(d.hashCode() == d.hashCode(), "hashCode stable");
+        // exactly 3 getters, class is final
+        int getters = 0;
+        for (java.lang.reflect.Method m : DomainLoadStoreParameter.class.getDeclaredMethods())
+            if (m.getName().startsWith("get")) getters++;
+        check(getters == 3, "exactly 3 getters");
+        check(java.lang.reflect.Modifier.isFinal(DomainLoadStoreParameter.class.getModifiers()), "final class");
+
     }
 
     public static void main(String[] args) throws Exception {

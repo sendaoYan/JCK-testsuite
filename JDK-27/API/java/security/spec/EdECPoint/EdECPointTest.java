@@ -12,6 +12,22 @@ public class EdECPointTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
     static void testWhiteBox() throws Exception {
         Class<?> c = EdECPoint.class;
         check(Modifier.isPublic(c.getModifiers()), "public");
@@ -30,9 +46,25 @@ public class EdECPointTest {
         check(BigInteger.ONE.equals(p2.getY()), "getY false-x point");
     }
 
+    static void testContracts() {
+        // null y -> NPE (probed 'y must not be null')
+        checkThrows(NullPointerException.class, () -> new EdECPoint(true, null), "null y -> NPE");
+        // NO equals/hashCode/toString override: identity semantics (probed)
+        EdECPoint p = new EdECPoint(true, BigInteger.TEN);
+        check(!p.equals(new EdECPoint(true, BigInteger.TEN)),
+                "equal-content points not equal (probed: no equals override)");
+        check(p.equals(p), "reflexive");
+        check(!p.equals(null), "equals null false");
+        check(p.toString().startsWith("java.security.spec.EdECPoint@"), "toString default form");
+        // getY round-trip stable; isXOdd both polarities
+        check(p.getY().equals(BigInteger.TEN), "getY round-trip");
+        check(new EdECPoint(false, BigInteger.ONE).isXOdd() == false, "isXOdd false");
+        check(!java.io.Serializable.class.isAssignableFrom(EdECPoint.class), "not Serializable");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 

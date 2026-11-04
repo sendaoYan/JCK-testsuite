@@ -16,3 +16,13 @@ Provider 实现 KeyStore 类型的核心 SPI；KeyStore 门面全部 final 方�
 - 异常：byte[] setKeyEntry 按本 SPI 抛 KeyStoreException（契约允许）
 
 断言入口：`KeyStoreSpiTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 契约深化（testContractDeep，本轮新增）
+- 16-abstract 精确计数；DefaultsSpi 不覆写 5 个默认方法，钉死 JDK 默认行为：
+  - engineStore(param) → UOE（含 null）。
+  - engineLoad(null param) → 转调 engineLoad(null,null)；JDK-9+ 带密码 param → 转调 engineLoad(null,password)（JDK-8 为 UOE，版本差异）。
+  - engineGetEntry 矩阵：absent→null；key+PasswordProtection（链 null）→NPE "invalid null input"；key+CBH →NPE "handler must not be null"；key+null 保护→UnrecoverableKeyException；cert+null → TrustedCertificateEntry。
+  - engineSetEntry 三种适配（SKE→setKeyEntry 密码透传、TCE→setCertificateEntry、PKE→setKeyEntry 带链；PrivateKeyEntry 构造校验私钥算法==证书公钥算法）。
+  - engineEntryInstanceOf：key+null 链→SKE 非 PKE；cert→TCE；absent→false。
+  - JDK-9+ 默认：engineGetCreationInstant=EPOCH 且 null 安全、engineGetAttributes 空 Set、engineProbe(null)→NPE/未知流→false。
+- JKS 外观闭环（RSA 夹具）：getKey equals（PKCS#8）、错密码→UnrecoverableKeyException、store/load 往返、错 store 密码→IOException、别名大小写不敏感、未 load→KeyStoreException。

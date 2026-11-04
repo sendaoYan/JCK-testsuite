@@ -18,3 +18,8 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：反射断言 `MessageDigestSpi` 为 public abstract class、超类为 `java.lang.Object`，并含 `clone`/`engineGetDigestLength`/`engineUpdate`/`engineDigest`/`engineReset` 方法。
 - `testBlackBox()`：定义最小子类 `MyDigestSpi`（实现 `Cloneable`，`engineDigest()` 返回 `{9,9,9,9}`），断言默认 `engineGetDigestLength()==0`、`clone()` 返回非空且不同的实例、继承的 `engineDigest(byte[],int,int)` 把摘要写入指定数组并返回长度、`engineUpdate(ByteBuffer)` 使缓冲区 position 推进到 limit。
+
+## 5. 契约深化（testContractDeep，本轮新增）
+- 4-abstract 精确集合（engineReset/engineUpdate(byte)/engineUpdate(byte[],int,int)/engineDigest）；透明记录子类断言 engineUpdate 精确透传 off/len。
+- 默认 engineGetDigestLength()==0；默认 engineDigest(buf,off,len) 异常矩阵：len<摘要长 → DigestException("partial digests not returned")、空间不足 → DigestException("insufficient space in the output buffer to store the digest")、buf 为 null → NPE（先解引用）；默认 engineUpdate(ByteBuffer) heap/direct 均单次批量转调数组变体、空 buffer no-op；默认 clone() → CNSE。
+- 外观闭环：MessageDigest SHA-256("abc") == ba7816bf...15ad（SUN SPI 经公开类触达）。

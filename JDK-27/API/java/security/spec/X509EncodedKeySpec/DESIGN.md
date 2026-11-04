@@ -32,3 +32,8 @@ byte[] copy = spec.getEncoded();    // 防御性拷贝
   - getEncoded 返回内容相等的新数组；修改返回数组不影响后续取值；修改构造入参数组不影响内部值（双重防御性拷贝）。
   - 单参构造 getAlgorithm 为 null；2 参构造 getAlgorithm 为传入算法名。
   - `instanceof EncodedKeySpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：同 PKCS8 侧镜像 + 与 PKCS8 永不相等（格式通道区分）
+- 关键实测：EncodedKeySpec 子类，getFormat 恒 "X.509"；不解析内容。JDK-9+ 增加 (byte[],String) 构造器并实现 BinaryEncodable。
+KeyFactory.generatePublic 消费；PublicKey.getEncoded() 产出。

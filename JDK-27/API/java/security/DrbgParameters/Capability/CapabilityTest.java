@@ -6,6 +6,7 @@
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.security.DrbgParameters;
 import java.security.DrbgParameters.Capability;
 
 public class CapabilityTest {
@@ -41,7 +42,63 @@ public class CapabilityTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening: order, enum machinery, name/toString case, wiring ----
+    static void testContractDeep() throws Exception {
+        // declaration order drives ordinal and compareTo
+        check(Capability.PR_AND_RESEED.ordinal() == 0, "PR_AND_RESEED ordinal 0");
+        check(Capability.RESEED_ONLY.ordinal() == 1, "RESEED_ONLY ordinal 1");
+        check(Capability.NONE.ordinal() == 2, "NONE ordinal 2");
+        check(Capability.values()[0] == Capability.PR_AND_RESEED, "values() order: first PR_AND_RESEED");
+        check(Capability.values()[2] == Capability.NONE, "values() order: last NONE");
+        check(Capability.PR_AND_RESEED.compareTo(Capability.RESEED_ONLY) < 0, "natural order 0 < 1");
+        check(Capability.NONE.compareTo(Capability.PR_AND_RESEED) > 0, "natural order 2 > 0");
+
+        // standard enum machinery
+        check(Capability.NONE.getDeclaringClass() == Capability.class, "getDeclaringClass");
+        check(java.io.Serializable.class.isAssignableFrom(Capability.class), "enum is Serializable");
+        check(Comparable.class.isAssignableFrom(Capability.class), "enum is Comparable");
+        try {
+            Capability.valueOf("BOGUS");
+            check(false, "valueOf(BOGUS) must fail");
+        } catch (IllegalArgumentException iae) {
+            check(true, "valueOf(BOGUS) -> IAE");
+        }
+        try {
+            Capability.valueOf(null);
+            check(false, "valueOf(null) must fail");
+        } catch (NullPointerException npe) {
+            check(true, "valueOf(null) -> NPE");
+        }
+
+        // name() is SCREAMING_SNAKE, toString() is lowercase: they differ on purpose
+        for (Capability v : Capability.values()) {
+            check(!v.name().equals(v.toString()), "name and toString differ: " + v.name());
+            check(v.name().toLowerCase().equals(v.toString()), "toString is lowercased name: " + v.name());
+        }
+
+        // capability flags fully determine the feature matrix
+        boolean[][] m = {
+                {true,  true },  // PR_AND_RESEED
+                {true,  false},  // RESEED_ONLY
+                {false, false},  // NONE
+        };
+        int idx = 0;
+        for (Capability v : Capability.values()) {
+            check(v.supportsReseeding() == m[idx][0], "supportsReseeding " + v);
+            check(v.supportsPredictionResistance() == m[idx][1], "supportsPredictionResistance " + v);
+            idx++;
+        }
+
+        // wiring: capability rides through Instantiation into the engine
+        java.security.SecureRandom drbg = java.security.SecureRandom.getInstance("DRBG",
+                DrbgParameters.instantiation(128, Capability.PR_AND_RESEED, null));
+        DrbgParameters.Instantiation back = (DrbgParameters.Instantiation) drbg.getParameters();
+        check(back.getCapability() == Capability.PR_AND_RESEED, "capability survives engine round-trip");
+        check(back.getCapability().supportsPredictionResistance(), "round-tripped capability still reports pr");
     }
 
     static boolean hasInterface(Class<?> c, String name) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true; return false; }

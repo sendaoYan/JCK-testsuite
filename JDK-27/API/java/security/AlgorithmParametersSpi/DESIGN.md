@@ -14,3 +14,9 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：反射断言为 public abstract class、超类 `Object`。
 - `testBlackBox()`：最小子类 `MyApSpi`（`engineGetEncoded` 返回 `{7}`、`engineToString` 返回 "MyApSpi"）断言三个 `engineInit` 正常执行、两个 `engineGetEncoded` 返回 `{7}`、`engineToString()=="MyApSpi"`。
+
+## 5. 契约深化（testContractDeep，本轮新增）
+- exact-7-abstract；异常声明精确（engineInit(spec)→IPSE、engineInit(byte[][,String])→IOException）。
+- 记录子类 7 方法透传；两个 engineGetEncoded 重载互为独立方法（计数验证）。
+- 真实 DSA 外观闭环：init(spec)→getEncoded()→新实例 init(bytes)→p/q/g equals；toString 含 "p:"/"q:"/"g:"。
+- 未 init 状态机：getEncoded→IOException、getParameterSpec→InvalidParameterSpecException、toString 返回 null 引用；init(null spec)→IPSE。

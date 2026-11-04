@@ -58,7 +58,50 @@ public class EdECKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, constant identity semantics ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation: getParams passes the holder value through
+        NamedParameterSpec np = new NamedParameterSpec("Ed25519");
+        EdECKey rec = new RecEdECKey(np);
+        check(rec.getParams() == np, "record getParams identity passthrough");
+        check(new RecEdECKey(null).getParams() == null, "record null params passthrough");
+
+        // lattice: bare interface, not a Key, not Serializable, no constant
+        check(EdECKey.class.getInterfaces().length == 0, "no superinterfaces");
+        check(!Key.class.isAssignableFrom(EdECKey.class), "not a Key");
+        check(!Serializable.class.isAssignableFrom(EdECKey.class), "not Serializable");
+        check(EdECKey.class.isAssignableFrom(EdECPublicKey.class), "EdECPublicKey is an EdECKey");
+        check(EdECKey.class.isAssignableFrom(EdECPrivateKey.class), "EdECPrivateKey is an EdECKey");
+        try {
+            EdECKey.class.getDeclaredField("serialVersionUID");
+            check(false, "no serialVersionUID declared");
+        } catch (NoSuchFieldException e) {
+            check(true, "no serialVersionUID declared");
+        }
+
+        // NamedParameterSpec does not override equals: a key's params instance is a
+        // distinct object carrying the same name as the standard constant
+        KeyPair kp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+        NamedParameterSpec fromKey = (NamedParameterSpec) ((EdECKey) kp.getPublic()).getParams();
+        check(fromKey != NamedParameterSpec.ED25519,
+                "key params is a distinct instance from the constant");
+        check(fromKey.getName().equals(NamedParameterSpec.ED25519.getName()),
+                "same parameter name as the constant");
+
+        // equals semantics on real halves
+        check(kp.getPublic().equals(kp.getPublic()), "reflexive equals");
+        check(!kp.getPublic().equals(kp.getPrivate()), "halves not equal");
+        check(kp.getPublic().hashCode() == kp.getPublic().hashCode(), "hashCode stable");
+    }
+
+    static class RecEdECKey implements EdECKey {
+        private final NamedParameterSpec params;
+        RecEdECKey(NamedParameterSpec params) { this.params = params; }
+        public NamedParameterSpec getParams() { return params; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

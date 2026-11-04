@@ -16,3 +16,13 @@ doPrivileged(PrivilegedExceptionAction) 受检异常的统一包装；JDK-27 get
 - 边界：JDK-27 接受 null exception（getException()==null）；getMessage()==null（不镜像 cause 消息，JDK-17+ 行为）
 
 断言入口：`PrivilegedActionExceptionTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（本批）
+在既有白盒/黑盒基础上追加 `testContractDeep()`：
+- 构造矩阵补 (String,Throwable)/(Throwable)（本类适用的全部公共构造器）+ 消息/cause 精确往返。
+- Throwable 通用契约：二次 initCause→ISE、fillInStackTrace==this、set/getStackTrace 防御拷贝、addSuppressed(+null→NPE)、suppressed 随序列化保持。
+- 形态：toString 两种形态、printStackTrace 含类名、身份 equals。
+- serialVersionUID 精确锁定（4724086851538908602，与 JDK-8 一致）+ 序列化 round-trip。
+- 真实抛出路径（引擎级闭环）与多态捕获链。
+- **cause 槽始终被构造器初始化**（经 super(exception)，即使参数为 null）→ initCause 一律 ISE（与普通异常可 initCause(self)→IAE 不同）；getMessage() 恒 null（不镜像被包装异常消息）；RuntimeException/Error 直通不包装；getException() 双侧均未标 @Deprecated；SUID=4724086851538908602。

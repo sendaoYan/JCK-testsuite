@@ -63,7 +63,60 @@ public class XECPrivateKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, serialization, equals ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation: Optional passthrough and Key surface
+        XECPrivateKey rec = new RecKey();
+        check(rec.getScalar().isPresent() && rec.getScalar().get().length == 1,
+                "record getScalar passthrough");
+        check(!new RecEmptyKey().getScalar().isPresent(), "record empty Optional passthrough");
+        check("XDH-REC".equals(rec.getAlgorithm()), "record getAlgorithm passthrough");
+        check("PKCS#8-REC".equals(rec.getFormat()), "record getFormat passthrough");
+
+        // lattice: inherits serialVersionUID from PrivateKey, does not declare its own
+        check(PrivateKey.class.isAssignableFrom(XECPrivateKey.class), "is a PrivateKey");
+        check(XECKey.class.isAssignableFrom(XECPrivateKey.class), "is an XECKey");
+        check(Key.class.isAssignableFrom(XECPrivateKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(XECPrivateKey.class), "is Serializable");
+        check(XECPrivateKey.class.getField("serialVersionUID").getLong(null)
+                == 6034044314589513430L, "inherits PrivateKey serialVersionUID value");
+        try {
+            XECPrivateKey.class.getDeclaredField("serialVersionUID");
+            check(false, "declares no own serialVersionUID");
+        } catch (NoSuchFieldException e) {
+            check(true, "declares no own serialVersionUID");
+        }
+
+        // real key: serialization fully equal
+        XECPrivateKey key = (XECPrivateKey) KeyPairGenerator.getInstance("XDH")
+                .generateKeyPair().getPrivate();
+        check(key.getEncoded() != null && key.getEncoded().length > 0, "encoded non-empty");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+        check(key.equals(key), "reflexive equals");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements XECPrivateKey {
+        public Optional<byte[]> getScalar() { return Optional.of(new byte[]{1}); }
+        public AlgorithmParameterSpec getParams() { return new NamedParameterSpec("X25519"); }
+        public String getAlgorithm() { return "XDH-REC"; }
+        public String getFormat() { return "PKCS#8-REC"; }
+        public byte[] getEncoded() { return new byte[]{2}; }
+    }
+
+    static class RecEmptyKey implements XECPrivateKey {
+        public Optional<byte[]> getScalar() { return Optional.empty(); }
+        public AlgorithmParameterSpec getParams() { return new NamedParameterSpec("X25519"); }
+        public String getAlgorithm() { return "XDH-REC"; }
+        public String getFormat() { return "PKCS#8-REC"; }
+        public byte[] getEncoded() { return new byte[]{2}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

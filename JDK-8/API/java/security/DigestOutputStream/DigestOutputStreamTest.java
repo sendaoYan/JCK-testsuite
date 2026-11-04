@@ -65,6 +65,58 @@ public class DigestOutputStreamTest {
         for (byte b : data) dos5.write(b);
         check(Arrays.equals(md5.digest(), expected), "write(int) accumulates");
 
+        // ==== contract deepening: write windows, null digest, toString, chunked write ====
+
+        // ---- write(byte[],off,len) partial windows digest exactly the written slice ----
+        MessageDigest win = MessageDigest.getInstance("MD5");
+        ByteArrayOutputStream winSink = new ByteArrayOutputStream();
+        DigestOutputStream d_win = new DigestOutputStream(winSink, win);
+        d_win.on(false);
+        d_win.write(data, 0, 5);                       // off
+        d_win.on(true);
+        d_win.write(data, 5, data.length - 10);        // on: middle
+        d_win.on(false);
+        d_win.write(data, data.length - 5, 5);         // off
+        byte[] window = Arrays.copyOfRange(data, 5, data.length - 5);
+        check(Arrays.equals(win.digest(), MessageDigest.getInstance("MD5").digest(window)),
+                "digest covers only on-window writes");
+        check(Arrays.equals(winSink.toByteArray(), data), "all bytes still written to sink");
+
+        // ---- zero-length write is legal and does not affect digest ----
+        MessageDigest zero = MessageDigest.getInstance("MD5");
+        DigestOutputStream d_zero = new DigestOutputStream(new ByteArrayOutputStream(), zero);
+        d_zero.write(new byte[0]);
+        d_zero.write(data, 2, 0);
+        d_zero.flush();
+        check(Arrays.equals(zero.digest(), MessageDigest.getInstance("MD5").digest(new byte[0])),
+                "zero-length writes leave empty digest");
+
+        // ---- single-byte write boundaries: 0x00 and 0xFF ----
+        MessageDigest bnd = MessageDigest.getInstance("MD5");
+        DigestOutputStream d_bnd = new DigestOutputStream(new ByteArrayOutputStream(), bnd);
+        d_bnd.write(0x00);
+        d_bnd.write(0xFF);
+        check(Arrays.equals(bnd.digest(), MessageDigest.getInstance("MD5").digest(new byte[]{0, (byte) 0xFF})),
+                "write(int) byte value masking");
+
+        // ---- toString mentions digest when set ----
+        MessageDigest tmd = MessageDigest.getInstance("MD5");
+        DigestOutputStream d_ts = new DigestOutputStream(new ByteArrayOutputStream(), tmd);
+        check(d_ts.toString() != null && d_ts.toString().contains("MD5"), "toString contains algorithm");
+
+        // ---- null digest: construction allowed, but write() throws NPE (recorded) ----
+        ByteArrayOutputStream nullSink = new ByteArrayOutputStream();
+        DigestOutputStream d_null = new DigestOutputStream(nullSink, null);
+        check(d_null.getMessageDigest() == null, "null digest stored");
+        try {
+            d_null.write(data);
+            check(false, "write with null digest should NPE");
+        } catch (NullPointerException e) {
+            check(true, "write with null digest NPE (recorded)");
+        }
+        d_null.setMessageDigest(MessageDigest.getInstance("SHA-256"));
+        check(d_null.getMessageDigest() != null, "setMessageDigest after null");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -7,6 +7,7 @@
 import java.lang.reflect.*;
 import java.security.*;
 import java.util.*;
+import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 import javax.security.auth.x500.X500Principal;
 
@@ -53,6 +54,29 @@ public class PrincipalTest {
         // Identity (deprecated) also implements Principal
         Identity id = new Identity("jckid") {};
         check(id instanceof Principal && id.getName().equals("jckid"), "Identity is Principal");
+
+        // ---- appended contract dimensions ----
+        // exact 5-method surface; implies is a default method (JDK-8 abstract->default switch recorded in javap)
+        check(Principal.class.getDeclaredMethods().length == 5, "exactly 5 declared methods");
+        Method impl = Principal.class.getMethod("implies", javax.security.auth.Subject.class);
+        check(impl.isDefault(), "implies is default");
+        check(impl.getReturnType() == boolean.class, "implies boolean");
+        check(Principal.class.getMethod("getName").getReturnType() == String.class, "getName String");
+        // implies default semantics: membership test, null -> false
+        Subject with = new Subject(false, Collections.singleton((Principal) x500),
+                Collections.emptySet(), Collections.emptySet());
+        check(x500.implies(with), "implies true when member");
+        check(!x500.implies(new Subject()), "implies false when not member");
+        check(!x500.implies(null), "implies null false");
+        // default toString of minimal implementations mentions the implementation class
+        check(anon.toString().contains("PrincipalTest") || anon.toString().contains("$"),
+                "default toString mentions impl class");
+        // equals symmetry with wrong types
+        check(!x500.equals(null) && !x500.equals("CN=jck-root"), "equals null/wrong type false");
+        // principals array identity in ProtectionDomain (multi-element)
+        ProtectionDomain pd2 = new ProtectionDomain(null, null, null, new Principal[]{x500, anon});
+        Principal[] arr = pd2.getPrincipals();
+        check(arr.length == 2 && arr[0] == x500 && arr[1] == anon, "multi-principal identity");
 
     }
 

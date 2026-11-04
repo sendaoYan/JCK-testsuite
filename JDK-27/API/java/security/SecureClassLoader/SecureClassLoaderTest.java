@@ -59,6 +59,21 @@ public class SecureClassLoaderTest {
         check(per.seen == cs, "override observes CodeSource");
         check(wide.implies(new SecurityPermission("anything")), "overridden grants all");
 
+        // ---- appended contract dimensions ----
+        // null CodeSource tolerated: non-null, empty default collection
+        PermissionCollection nullCs = new Exposing().getPermissions(new CodeSource(null, (CodeSigner[]) null));
+        check(nullCs != null && !nullCs.implies(new AllPermission()), "null CodeSource empty collection");
+        // delegation identity incl. array classes
+        check(scl.loadClass("java.lang.String") == String.class, "delegation resolves String");
+        // structural: two protected defineClass overloads, protected getPermissions, subclassable
+        int defineCount = 0;
+        for (Method m : SecureClassLoader.class.getDeclaredMethods())
+            if (m.getName().equals("defineClass") && Modifier.isProtected(m.getModifiers())) defineCount++;
+        check(defineCount == 2, "two protected defineClass overloads");
+        Method gp = SecureClassLoader.class.getDeclaredMethod("getPermissions", CodeSource.class);
+        check(Modifier.isProtected(gp.getModifiers()), "getPermissions protected");
+        check(!Modifier.isFinal(SecureClassLoader.class.getModifiers()), "not final: subclassable");
+
     }
 
     public static void main(String[] args) throws Exception {

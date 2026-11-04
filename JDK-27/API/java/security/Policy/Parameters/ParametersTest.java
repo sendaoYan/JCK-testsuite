@@ -44,7 +44,42 @@ public class ParametersTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening: pure marker, typing negatives, URIParameter facts ----
+    static void testContractDeep() throws Exception {
+        Class<?> p = Policy.Parameters.class;
+        check(p.getDeclaredMethods().length == 0, "pure marker: zero declared methods");
+        check(p.getInterfaces().length == 0, "extends no other interface");
+        check(!java.io.Serializable.class.isAssignableFrom(p), "not Serializable");
+        check(!java.lang.annotation.Annotation.class.isAssignableFrom(p), "not an annotation");
+        boolean nested = false;
+        for (Class<?> n : Policy.class.getDeclaredClasses()) if (n == p) nested = true;
+        check(nested, "nested inside Policy");
+
+        // URIParameter: value kept, identity equals, NOT serializable (JDK-27 divergence:
+        // the JDK-8 test records the same fact - stable across both releases)
+        URIParameter up = new URIParameter(java.net.URI.create("file:/tmp/a"));
+        URIParameter up2 = new URIParameter(java.net.URI.create("file:/tmp/a"));
+        check(!up.equals(up2), "URIParameter equals is identity-based");
+        check(up.equals(up), "identity equals reflexive");
+        check(!java.io.Serializable.class.isAssignableFrom(URIParameter.class),
+                "URIParameter is not Serializable");
+        try {
+            new URIParameter(null);
+            check(false, "null URI must fail");
+        } catch (NullPointerException npe) {
+            check(true, "URIParameter(null) -> NPE");
+        }
+        // negative typing: look-alike parameter types are unrelated
+        check(!Policy.Parameters.class.isAssignableFrom(DomainLoadStoreParameter.class),
+                "DomainLoadStoreParameter is not Policy.Parameters");
+        check(!Policy.Parameters.class.isAssignableFrom(PolicySpi.class),
+                "PolicySpi is not Policy.Parameters");
+        check(!Policy.Parameters.class.isAssignableFrom(Policy.class),
+                "Policy is not Policy.Parameters");
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

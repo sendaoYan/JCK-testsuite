@@ -15,3 +15,8 @@
 - 黑盒：匿名子类实现三方法，验证 getName/getInfo/getVersionStr 继承、login 抛出的 LoginException 原样透传、logout/handler 状态可观测
 
 断言入口：`AuthProviderTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 契约深化（testContractDeep，本轮新增）
+- 恰好 2 个 protected 构造器（JDK-8 仅 (String,double,String)，String,String,String 为 JDK-9+ 新增）；3 抽象方法 public abstract + 异常声明精确（login/logout 声明 LoginException，setCallbackHandler 无 checked 异常）。
+- 记录子类：login 收到同一 Subject/CallbackHandler、LoginException 原样传播、setCallbackHandler 存精确 handler。
+- String 版本构造器版本串原样保留（"3.1.4" 不折叠为 double）；空格分隔预置键 "Provider.id name/version/info/className"（className=子类名）；Properties.setProperty/getProperty 语义；构造不注册进 Security。

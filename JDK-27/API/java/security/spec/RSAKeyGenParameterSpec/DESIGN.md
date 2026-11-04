@@ -28,3 +28,8 @@ kpg.initialize(new RSAKeyGenParameterSpec(2048, RSAKeyGenParameterSpec.F4));
   - 2 参构造：getKeysize/getPublicExponent 精确、getKeyParams 为 null。
   - 3 参构造：getKeysize/getPublicExponent 精确、getKeyParams 为传入对象。
   - `instanceof AlgorithmParameterSpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：常量精确值
+- 关键实测：2/3 参构造；常量 F0=3、F4=65537（BigInteger）；keysize 不做校验（负/0 均可，实际行为记录）；null 指数合法。
+KeyPairGenerator.getInstance("RSA").initialize(spec)。

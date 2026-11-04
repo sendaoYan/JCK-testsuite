@@ -41,7 +41,51 @@ public class ReseedTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening: defensive copies, null-vs-empty, engine reseeding matrix ----
+    static void testContractDeep() throws Exception {
+        // constructor-side defensive copy
+        byte[] src = {6, 7};
+        Reseed d = DrbgParameters.reseed(true, src);
+        src[0] = 88;
+        check(Arrays.equals(d.getAdditionalInput(), new byte[]{6, 7}), "additional input copied at construction");
+        check(d.getAdditionalInput() != d.getAdditionalInput(), "getter returns fresh copy each call");
+
+        // null vs empty preserved distinctly; pr flag both ways
+        check(DrbgParameters.reseed(false, null).getAdditionalInput() == null, "null stays null");
+        check(DrbgParameters.reseed(false, new byte[0]).getAdditionalInput().length == 0, "empty stays empty");
+        check(DrbgParameters.reseed(true, null).getPredictionResistance(), "pr true preserved");
+        check(DrbgParameters.reseed(false, new byte[1]).getPredictionResistance() == false, "pr false preserved");
+
+        // toString Object-form, identity equality
+        check(d.toString().startsWith("java.security.DrbgParameters$Reseed@"), "toString Object-form");
+        check(d.equals(d), "identity equals reflexive");
+        check(!d.equals(DrbgParameters.reseed(true, new byte[]{6, 7})), "same value not equal");
+        check(d.hashCode() == d.hashCode(), "hashCode self-consistent");
+
+        // engine: a PR-capable DRBG accepts parameterized reseeds (both pr settings)
+        java.security.SecureRandom pr = java.security.SecureRandom.getInstance("DRBG",
+                DrbgParameters.instantiation(128, DrbgParameters.Capability.PR_AND_RESEED, null));
+        pr.reseed(DrbgParameters.reseed(true, new byte[]{1}));
+        check(true, "reseed(pr=true) works on PR_AND_RESEED");
+        pr.reseed(DrbgParameters.reseed(false, null));
+        check(true, "reseed(pr=false) works on PR_AND_RESEED");
+        pr.nextBytes(new byte[8]);
+        check(true, "DRBG still produces output after parameterized reseed");
+        // RESEED_ONLY DRBG also reseeds (it just lacks prediction resistance)
+        java.security.SecureRandom ro = java.security.SecureRandom.getInstance("DRBG",
+                DrbgParameters.instantiation(128, DrbgParameters.Capability.RESEED_ONLY, null));
+        ro.reseed(DrbgParameters.reseed(false, null));
+        check(true, "RESEED_ONLY accepts reseed without pr");
+        try {
+            ro.reseed(DrbgParameters.reseed(true, null));
+            check(false, "pr reseed must be unavailable on RESEED_ONLY");
+        } catch (IllegalArgumentException iae) {
+            check(true, "reseed(pr=true) rejected on RESEED_ONLY");
+        }
     }
 
     static boolean hasInterface(Class<?> c, String name) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true; return false; }

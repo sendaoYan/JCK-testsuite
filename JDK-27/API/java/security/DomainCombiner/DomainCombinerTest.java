@@ -60,6 +60,33 @@ public class DomainCombinerTest {
         check(DomainCombiner.class.getMethod("combine", ProtectionDomain[].class, ProtectionDomain[].class) != null,
             "single combine method");
 
+        // ---- appended contract dimensions ----
+        // exact signature: combine returns ProtectionDomain[], not default, single declared method
+        Method[] ms0 = DomainCombiner.class.getDeclaredMethods();
+        check(ms0.length == 1, "single declared method");
+        check(ms0[0].getReturnType() == ProtectionDomain[].class, "returns ProtectionDomain[]");
+        check(!ms0[0].isDefault(), "not a default method");
+        check(ms0[0].getParameterCount() == 2, "two parameters");
+        // identity combiner preserves array identity; null inputs tolerated
+        ProtectionDomain[] one = {pd};
+        check(identity.combine(one, null) == one, "identity returns caller array");
+        check(identity.combine(null, null) == null, "combine(null,null) tolerated");
+        // append preserves element order and identity
+        ProtectionDomain pd2 = new ProtectionDomain(null, null);
+        ProtectionDomain[] merged = appender.combine(new ProtectionDomain[]{pd}, new ProtectionDomain[]{pd2});
+        check(merged.length == 2 && merged[0] == pd && merged[1] == pd2, "append order/identity");
+        // recorder sees exact caller arrays
+        final List<String> log2 = new ArrayList<>();
+        DomainCombiner recorder = (cur, asg) -> {
+            log2.add((cur == null ? -1 : cur.length) + "/" + (asg == null ? -1 : asg.length));
+            return cur;
+        };
+        recorder.combine(new ProtectionDomain[]{pd}, null);
+        recorder.combine(null, new ProtectionDomain[]{pd, pd});
+        check(log2.equals(Arrays.asList("1/-1", "-1/2")), "verbatim array delivery: " + log2);
+        // attachment retrieval: plain context has no combiner
+        check(base.getDomainCombiner() == null, "plain context no combiner");
+
     }
 
     public static void main(String[] args) throws Exception {

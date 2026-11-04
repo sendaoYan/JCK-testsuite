@@ -14,3 +14,9 @@
 - 黑盒：lambda 实现 combine 返回入参的固定组合；经 ACC 构造后 getDomainCombiner 读回同一实例；combine 被调用时入参可观测（记录后断言）
 
 断言入口：`DomainCombinerTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+## 5. 追加契约维度（深化批）
+- 结构：单声明方法、返回 ProtectionDomain[]、非 default。
+- 恒等 combiner 返回调用方数组**同一实例**；combine(null,null) 容忍。
+- 拼接型保持元素顺序与身份；记录型断实参数组逐字透传（"1/-1","-1/2"）。
+- 普通 AccessControlContext 的 getDomainCombiner()==null。

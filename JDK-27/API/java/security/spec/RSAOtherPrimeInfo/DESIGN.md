@@ -31,3 +31,8 @@ BigInteger c = info.getCrtCoefficient();
 ## 4. 测试用例设计 + 自动化实现
 - 白盒（testWhiteBox）：public 具体类、父类 Object、无接口、含 getPrime/getExponent/getCrtCoefficient 方法。
 - 黑盒（testBlackBox）：构造后三个 getter 分别精确返回传入的 BigInteger。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：null 矩阵精确消息
+- 关键实测：3 参构造，任一 null→NPE（消息分别含 prime/primeExponent/crtCoefficient）；无接口、单构造器。
+RSAMultiPrimePrivateCrtKeySpec 的 otherPrimeInfo 数组元素。

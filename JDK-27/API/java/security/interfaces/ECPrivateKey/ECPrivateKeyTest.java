@@ -69,7 +69,59 @@ public class ECPrivateKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, equals semantics ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation passes the full Key surface through
+        ECPrivateKey rec = new RecKey();
+        check(rec.getS().equals(BigInteger.valueOf(5)), "record getS passthrough");
+        check("EC-REC".equals(rec.getAlgorithm()), "record getAlgorithm passthrough");
+        check("PKCS#8-REC".equals(rec.getFormat()), "record getFormat passthrough");
+
+        // lattice
+        check(ECKey.class.isAssignableFrom(ECPrivateKey.class), "is an ECKey");
+        check(PrivateKey.class.isAssignableFrom(ECPrivateKey.class), "is a PrivateKey");
+        check(Key.class.isAssignableFrom(ECPrivateKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(ECPrivateKey.class), "is Serializable");
+        check(ECPrivateKey.class.getInterfaces().length == 2, "exactly two direct superinterfaces");
+
+        // real key: spec and serialization round-trips fully equal
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+        kpg.initialize(new ECGenParameterSpec("secp256r1"));
+        KeyPair kp = kpg.generateKeyPair();
+        ECPrivateKey key = (ECPrivateKey) kp.getPrivate();
+        check(key.getS().bitLength() <= key.getParams().getCurve().getField().getFieldSize(),
+                "s fits in the field");
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        ECPrivateKeySpec spec = kf.getKeySpec(key, ECPrivateKeySpec.class);
+        ECPrivateKey back = (ECPrivateKey) kf.generatePrivate(
+                new ECPrivateKeySpec(spec.getS(), spec.getParams()));
+        check(back.equals(key), "spec round-trip equals");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+
+        // equals semantics
+        check(key.equals(key), "reflexive equals");
+        check(!key.equals(kp.getPublic()), "private not equal to public half");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements ECPrivateKey {
+        public BigInteger getS() { return BigInteger.valueOf(5); }
+        public ECParameterSpec getParams() {
+            try {
+                return ((ECKey) KeyPairGenerator.getInstance("EC").generateKeyPair()
+                        .getPublic()).getParams();
+            } catch (Exception e) { throw new RuntimeException(e); }
+        }
+        public String getAlgorithm() { return "EC-REC"; }
+        public String getFormat() { return "PKCS#8-REC"; }
+        public byte[] getEncoded() { return new byte[]{7}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

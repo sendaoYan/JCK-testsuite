@@ -13,6 +13,22 @@ public class EdDSAParameterSpecTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
     static void testWhiteBox() throws Exception {
         Class<?> c = EdDSAParameterSpec.class;
         check(Modifier.isPublic(c.getModifiers()), "public");
@@ -45,9 +61,37 @@ public class EdDSAParameterSpecTest {
         check(spec instanceof AlgorithmParameterSpec, "instanceof AlgorithmParameterSpec");
     }
 
+    static void testContracts() {
+        // single-arg constructor: prehash off, no context (probed)
+        EdDSAParameterSpec off = new EdDSAParameterSpec(false);
+        check(!off.isPrehash() && !off.getContext().isPresent(), "1-arg ctor: no prehash, empty context");
+        EdDSAParameterSpec on = new EdDSAParameterSpec(true);
+        check(on.isPrehash() && !on.getContext().isPresent(), "1-arg ctor: prehash, empty context");
+        // null context -> NPE (probed 'context may not be null')
+        checkThrows(NullPointerException.class,
+                () -> new EdDSAParameterSpec(true, null), "null context -> NPE");
+        // context length limit: 255 (probed -> InvalidParameterException)
+        checkThrows(java.security.InvalidParameterException.class,
+                () -> new EdDSAParameterSpec(true, new byte[256]),
+                "256-byte context -> InvalidParameterException (probed)");
+        EdDSAParameterSpec max = new EdDSAParameterSpec(true, new byte[255]);
+        check(max.getContext().isPresent() && max.getContext().get().length == 255,
+                "255-byte context accepted at boundary");
+        // empty context array: present with length 0 (probed)
+        EdDSAParameterSpec empty = new EdDSAParameterSpec(true, new byte[0]);
+        check(empty.getContext().isPresent() && empty.getContext().get().length == 0,
+                "empty context present, length 0 (probed)");
+        // no equals/hashCode override: identity semantics (probed)
+        EdDSAParameterSpec a = new EdDSAParameterSpec(true, new byte[]{1, 2});
+        check(!a.equals(new EdDSAParameterSpec(true, new byte[]{1, 2})), "equal-content not equal (probed)");
+        check(a.equals(a), "reflexive");
+        check(a.toString().startsWith("java.security.spec.EdDSAParameterSpec@"), "toString default form");
+        check(!java.io.Serializable.class.isAssignableFrom(EdDSAParameterSpec.class), "not Serializable");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 

@@ -69,7 +69,57 @@ public class RSAPublicKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, equals semantics ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation
+        RSAPublicKey rec = new RecKey();
+        check(rec.getPublicExponent().equals(BigInteger.valueOf(65537)), "record e passthrough");
+        check(rec.getModulus().equals(BigInteger.valueOf(3233)), "record modulus passthrough");
+        check("X.509-REC".equals(rec.getFormat()), "record getFormat passthrough");
+        check(rec.getEncoded() != null && rec.getEncoded().length == 1, "record getEncoded passthrough");
+
+        // lattice
+        check(RSAKey.class.isAssignableFrom(RSAPublicKey.class), "is an RSAKey");
+        check(PublicKey.class.isAssignableFrom(RSAPublicKey.class), "is a PublicKey");
+        check(Key.class.isAssignableFrom(RSAPublicKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(RSAPublicKey.class), "is Serializable");
+        check(RSAPublicKey.class.getInterfaces().length == 2, "exactly two direct superinterfaces");
+
+        // real key: exponent and modulus invariants, both factory round-trips equal
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+        RSAPublicKey key = (RSAPublicKey) kp.getPublic();
+        check(key.getPublicExponent().compareTo(key.getModulus()) < 0, "e < n");
+        check(key.getPublicExponent().testBit(0), "e odd");
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        RSAPublicKeySpec spec = kf.getKeySpec(key, RSAPublicKeySpec.class);
+        RSAPublicKey back = (RSAPublicKey) kf.generatePublic(
+                new RSAPublicKeySpec(spec.getModulus(), spec.getPublicExponent()));
+        check(back.equals(key), "RSAPublicKeySpec round-trip equals");
+        RSAPublicKey x509 = (RSAPublicKey) kf.generatePublic(new X509EncodedKeySpec(key.getEncoded()));
+        check(x509.equals(key), "X509EncodedKeySpec round-trip equals");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+
+        // equals semantics
+        check(key.equals(key), "reflexive equals");
+        check(!key.equals(kp.getPrivate()), "public not equal to private half");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements RSAPublicKey {
+        public BigInteger getPublicExponent() { return BigInteger.valueOf(65537); }
+        public BigInteger getModulus() { return BigInteger.valueOf(3233); }
+        public String getAlgorithm() { return "RSA-REC"; }
+        public String getFormat() { return "X.509-REC"; }
+        public byte[] getEncoded() { return new byte[]{5}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

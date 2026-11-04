@@ -62,7 +62,64 @@ public class PermissionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- contract deepening (JDK-27): base-class edges, serialization, Guard semantics ----
+    static class NamedPerm extends Permission {
+        NamedPerm(String n) { super(n); }
+        public boolean implies(Permission p) { return p instanceof NamedPerm && getName() != null && getName().equals(p.getName()); }
+        public boolean equals(Object o) { return o instanceof NamedPerm && String.valueOf(getName()).equals(String.valueOf(((NamedPerm) o).getName())); }
+        public int hashCode() { return String.valueOf(getName()).hashCode(); }
+        public String getActions() { return "read"; }
+    }
+
+    static void testContractDeep() throws Exception {
+        Permission np = new NamedPerm("a.b");
+        check("a.b".equals(np.getName()), "getName exact");
+        // null name legal at base-class level (only concrete subclasses like BasicPermission reject it)
+        Permission nullNamed = new NamedPerm(null);
+        check(nullNamed.getName() == null, "null name preserved");
+        // toString format: ("<class>" "<name>" "<actions>")
+        String ts = np.toString();
+        check(ts.contains("NamedPerm") && ts.contains("a.b") && ts.contains("read"), "toString contains class/name/actions");
+        check(ts.startsWith("(\""), "toString paren-quote form");
+        check(!np.implies(null), "implies null false (subclass logic)");
+        check(!np.equals("a.b"), "equals non-Permission false");
+        check(np.equals(np), "equals reflexive");
+        // Guard contract after JEP 486: checkGuard ALWAYS throws, regardless of SM presence
+        try {
+            np.checkGuard(null);
+            check(false, "checkGuard(null) must throw");
+        } catch (SecurityException e) {
+            check("checking permissions is not supported".equals(e.getMessage()), "checkGuard(null) exact message");
+        }
+        try {
+            new SecurityPermission("getPolicy").checkGuard(new Object());
+            check(false, "checkGuard(obj) must throw");
+        } catch (SecurityException e) {
+            check("checking permissions is not supported".equals(e.getMessage()), "checkGuard(obj) exact message");
+        }
+        // serialVersionUID stable and shared with JDK-8
+        check(java.io.ObjectStreamClass.lookup(Permission.class).getSerialVersionUID() == -5636570222231596674L,
+                "serialVersionUID -5636570222231596674");
+        // serialization round-trip
+        Permission rt = (Permission) roundTrip(np);
+        check(rt instanceof NamedPerm, "round-trip preserves concrete class");
+        check("a.b".equals(rt.getName()) && "read".equals(rt.getActions()), "round-trip preserves name/actions");
+        check(rt.equals(np), "round-trip equals");
+        check(((Permission) roundTrip(nullNamed)).getName() == null, "round-trip preserves null name");
+    }
+
+    static Object roundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        oos.close();
+        java.io.ObjectInputStream oin = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return oin.readObject();
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

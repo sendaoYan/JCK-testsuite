@@ -18,3 +18,8 @@
 - 异常：null key → NPE；null 属性集合 → NPE
 
 断言入口：`SecretKeyEntryTest.java` 的 `testBlackBox()`（白盒结构断言在同文件 `testWhiteBox()`，保留原有）。
+
+
+## 5. 契约深化补充（testContractDeep）
+- JKS setKeyEntry(SecretKey) → KeyStoreException（PrivateKey-only 格式）。
+- JCEKS 全闭环：分类（isKeyEntry true/非证书条目）、null 证书链、getEntry 类型往返、encoded 字节往返、getKey 算法、错口令 UnrecoverableKeyException、deleteEntry 生命周期（getEntry 后续 null）。

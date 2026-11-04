@@ -72,6 +72,63 @@ public class PolicyTest {
         check(custom.getProvider() == null, "no provider");
         check(custom.getParameters() == null, "no parameters");
 
+        // ---- contract deepening (JDK-27): system policy surface, empty collection edges ----
+        Policy sys = Policy.getPolicy();
+        check(sys.getType() == null, "system policy getType null");
+        check(sys.getProvider() == null, "system policy getProvider null");
+        check(sys.getParameters() == null, "system policy getParameters null");
+        // UNSUPPORTED_EMPTY_COLLECTION: implies(null) NPEs (delegates to Permissions.implies)
+        try {
+            Policy.UNSUPPORTED_EMPTY_COLLECTION.implies(null);
+            check(false, "implies(null) must NPE");
+        } catch (NullPointerException npe) {
+            check(true, "empty implies(null) -> NPE");
+        }
+        check(!Policy.UNSUPPORTED_EMPTY_COLLECTION.elements().hasMoreElements(), "empty enumeration");
+        // JDK-27 divergence: JavaPolicy provider is no longer installed
+        try {
+            Policy.getInstance("JavaPolicy", null);
+            check(false, "JavaPolicy must be absent on JDK-27");
+        } catch (NoSuchAlgorithmException nsae) {
+            check(nsae.getMessage() != null && nsae.getMessage().contains("JavaPolicy"),
+                    "JavaPolicy NSAE names the type (JDK-27 divergence from JDK-8)");
+        }
+        // null type -> NPE
+        try {
+            Policy.getInstance(null, null);
+            check(false, "null type must fail");
+        } catch (NullPointerException npe) {
+            check(true, "null type -> NPE");
+        }
+        // Policy.Parameters marker
+        check(Policy.Parameters.class.isInterface(), "Parameters is an interface");
+        check(new URIParameter(new java.net.URI("file:///x")) instanceof Policy.Parameters,
+                "URIParameter implements Parameters");
+        // JDK-27 divergence: overriding getPermissions(CodeSource) alone does NOT feed the
+        // default implies(ProtectionDomain, Permission) any more (getPermissions(ProtectionDomain)
+        // returns UNSUPPORTED_EMPTY_COLLECTION unless overridden directly)
+        ProtectionDomain any = new ProtectionDomain(null, null);
+        check(!custom.implies(any, new SecurityPermission("jck.custom")),
+                "JDK-27: CodeSource-only override does not drive implies");
+        Policy custom2 = new Policy() {
+            public PermissionCollection getPermissions(ProtectionDomain pd) {
+                Permissions perms = new Permissions();
+                perms.add(new SecurityPermission("jck.pd"));
+                return perms;
+            }
+        };
+        // getPermissions(ProtectionDomain) override still answers direct calls...
+        check(custom2.getPermissions(any).implies(new SecurityPermission("jck.pd")),
+                "ProtectionDomain override answers getPermissions");
+        check(!custom2.getPermissions(any).implies(new SecurityPermission("other")),
+                "getPermissions limited to granted set");
+        // ...but implies stays false (JDK-8 delegated, JDK-27 does not - locked-down default)
+        check(!custom2.implies(any, new SecurityPermission("jck.pd")),
+                "JDK-27 implies never consults getPermissions overrides");
+        Policy custom3 = new Policy() {
+            public boolean implies(ProtectionDomain pd, Permission p) { return true; }
+        };
+        check(custom3.implies(any, new AllPermission()), "direct implies override still honored");
     }
 
     public static void main(String[] args) throws Exception {

@@ -43,6 +43,17 @@ public class ProviderTest {
 
     static class TestProvider extends Provider {
         TestProvider(String name, double version, String info) { super(name, version, info); }
+        void putSvc(Provider.Service s) { putService(s); }
+        void removeSvc(Provider.Service s) { removeService(s); }
+    }
+
+    /** public engine implementation usable by Service.newInstance (public class + ctor) */
+    public static class MyDigest extends java.security.MessageDigest {
+        public MyDigest() { super("MyDigest"); }
+        protected void engineUpdate(byte b) { }
+        protected void engineUpdate(byte[] b, int off, int len) { }
+        protected byte[] engineDigest() { return new byte[16]; }
+        protected void engineReset() { }
     }
 
     public static void main(String[] args) throws Exception {
@@ -123,6 +134,116 @@ public class ProviderTest {
         check(back.getVersion() == 3.0, "serialization preserves version");
         check("serial info".equals(back.getInfo()), "serialization preserves info");
         check("v1".equals(back.get("c1")), "serialization preserves entries");
+
+        // ==== contract deepening: Provider.id system keys, Service lifecycle, supportsParameter ====
+
+        // ---- Provider.id system entries (className is the concrete subclass) ----
+        java.util.List<String> idKeys = new java.util.ArrayList<>();
+        for (Object k : Collections.list(p.keys())) {
+            String ks = (String) k;
+            if (ks.startsWith("Provider.id")) idKeys.add(ks);
+        }
+        java.util.Collections.sort(idKeys);
+        check(idKeys.size() == 4, "Provider.id key count (name/version/info/className)");
+        check("TestProv".equals(p.get("Provider.id name")), "Provider.id name");
+        check("1.5".equals(p.get("Provider.id version")), "Provider.id version");
+        check("test info string".equals(p.get("Provider.id info")), "Provider.id info");
+        check((ProviderTest.class.getName() + "$TestProvider").equals(p.get("Provider.id className")),
+                "Provider.id className is concrete subclass");
+
+        // ---- Service lifecycle through protected putService/removeService ----
+        TestProvider sp = new TestProvider("SvcProv", 2.0, "svc");
+        check(sp.getService("MessageDigest", "MyDigest") == null, "getService before put null");
+        java.util.List<String> aliases = java.util.Arrays.asList("MyD");
+        java.util.HashMap<String, String> attrs = new java.util.HashMap<>();
+        attrs.put("SupportedKeyClasses", "java.security.Key");
+        Provider.Service svc2 = new Provider.Service(sp, "MessageDigest", "MyDigest",
+                MyDigest.class.getName(), aliases, attrs);
+        sp.putSvc(svc2);
+        check(sp.getService("MessageDigest", "MyDigest") == svc2, "getService after putService");
+        check(sp.getService("MessageDigest", "MyD") == svc2, "alias lookup");
+        check(sp.getService("MessageDigest", "mydigest") == svc2, "case-insensitive algorithm");
+        check(sp.getServices().contains(svc2), "getServices contains added service");
+        java.util.Set<Provider.Service> svcSet = sp.getServices();
+        checkThrows(java.lang.UnsupportedOperationException.class, () -> svcSet.add(svc2),
+                "getServices unmodifiable");
+        sp.removeSvc(svc2);
+        check(sp.getService("MessageDigest", "MyDigest") == null, "getService after removeService null");
+        check(sp.getServices().isEmpty(), "getServices empty after removeService");
+        // legacy property put also surfaces as a Service
+        sp.put("MessageDigest.Legacy", MyDigest.class.getName());
+        check(sp.getService("MessageDigest", "Legacy") != null, "legacy put surfaces as Service");
+
+        // ---- Service constructor null matrix -> NPE ----
+        final TestProvider np = sp;
+        checkThrows(NullPointerException.class, () -> new Provider.Service(null, "T", "A", "C", null, null),
+                "Service(null provider)");
+        checkThrows(NullPointerException.class, () -> new Provider.Service(np, null, "A", "C", null, null),
+                "Service(null type)");
+        checkThrows(NullPointerException.class, () -> new Provider.Service(np, "T", null, "C", null, null),
+                "Service(null algorithm)");
+        checkThrows(NullPointerException.class, () -> new Provider.Service(np, "T", "A", null, null, null),
+                "Service(null className)");
+
+        // ---- newInstance: real engine instantiation, distinct instances, wrong type ----
+        Provider.Service real = new Provider.Service(sp, "MessageDigest", "MyDigest",
+                MyDigest.class.getName(), null, null);
+        sp.putSvc(real);  // newInstance requires registration
+        Object o1 = real.newInstance(null);
+        check(o1 instanceof java.security.MessageDigest, "newInstance returns engine instance");
+        check(real.newInstance(null) != o1, "newInstance distinct instances");
+        Provider.Service wrong = new Provider.Service(sp, "MessageDigest", "NotEngine",
+                "java.lang.String", null, null);
+        sp.putSvc(wrong);
+        // recorded: hand-registered services are NOT engine-type validated at newInstance;
+        // a java.lang.String under "MessageDigest" instantiates without complaint
+        Object raw = wrong.newInstance(null);
+        check(raw instanceof String, "newInstance no engine-type check for manual services");
+        // unregistered service cannot be instantiated
+        Provider.Service unreg = new Provider.Service(sp, "MessageDigest", "Unreg",
+                MyDigest.class.getName(), null, null);
+        checkThrows(java.security.NoSuchAlgorithmException.class, () -> unreg.newInstance(null),
+                "newInstance unregistered service");
+
+        // ---- Service metadata ----
+        check("java.security.Key".equals(svc2.getAttribute("SupportedKeyClasses")), "getAttribute");
+        check(svc2.getAttribute("NoSuchAttribute") == null, "getAttribute missing null");
+        check(svc2.toString().contains("MessageDigest") && svc2.toString().contains("MyDigest")
+                && svc2.toString().contains("MyD"), "Service toString contents");
+
+        // ---- supportsParameter semantics ----
+        java.security.Key dsaKey = java.security.KeyPairGenerator.getInstance("DSA")
+                .generateKeyPair().getPublic();
+        java.security.Key rsaKey = java.security.KeyPairGenerator.getInstance("RSA")
+                .generateKeyPair().getPublic();
+        final Provider.Service mdSvc = svc2;
+        checkThrows(java.security.InvalidParameterException.class, () -> mdSvc.supportsParameter(dsaKey),
+                "supportsParameter on MessageDigest engine");
+        java.util.HashMap<String, String> sigAttrs = new java.util.HashMap<>();
+        sigAttrs.put("SupportedKeyClasses", "java.security.interfaces.DSAPublicKey");
+        Provider.Service sigSvc = new Provider.Service(sp, "Signature", "FakeSig",
+                "java.lang.String", null, sigAttrs);
+        check(sigSvc.supportsParameter(dsaKey), "supportsParameter matching key class");
+        check(!sigSvc.supportsParameter(rsaKey), "supportsParameter non-matching key class");
+        checkThrows(java.security.InvalidParameterException.class, () -> sigSvc.supportsParameter("not-a-key"),
+                "supportsParameter non-Key");
+        Provider.Service bareSig = new Provider.Service(sp, "Signature", "BareSig",
+                "java.lang.String", null, null);
+        check(bareSig.supportsParameter(rsaKey), "supportsParameter without attribute always true");
+
+        // ---- version-string API: JDK-9+ getVersionStr/isConfigured, absent on JDK-8 ----
+        try {
+            java.lang.reflect.Method gs = Provider.class.getMethod("getVersionStr");
+            check("1.5".equals(gs.invoke(p)), "getVersionStr (JDK-9+)");
+        } catch (NoSuchMethodException e) {
+            check(true, "getVersionStr absent on JDK-8");
+        }
+        try {
+            java.lang.reflect.Method ic = Provider.class.getMethod("isConfigured");
+            check((Boolean) ic.invoke(p), "isConfigured default true (JDK-9+)");
+        } catch (NoSuchMethodException e) {
+            check(true, "isConfigured absent on JDK-8");
+        }
 
         System.out.println("PASS (" + passed + " assertions)");
     }

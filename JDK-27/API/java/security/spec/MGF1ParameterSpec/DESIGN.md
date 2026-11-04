@@ -35,3 +35,8 @@ String digest = sha256.getDigestAlgorithm();  // "SHA-256"
   - toString 包含类名与摘要名。
   - 11 个常量的 getDigestAlgorithm 逐一精确断言（含 SHA-512/224、SHA3-* 等）。
   - `instanceof AlgorithmParameterSpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：7 常量精确摘要名 + 全非空且互异
+- 关键实测：单构造器（null→NPE "digest algorithm is null"；空串/任意名不校验）；JDK-8 常量 SHA1/SHA224/SHA256/SHA384/SHA512/SHA512_224/SHA512_256，JDK-9+ 追加 SHA3_224/256/384/512 并覆写 toString。
+PSSParameterSpec 的 mgfSpec 参数。

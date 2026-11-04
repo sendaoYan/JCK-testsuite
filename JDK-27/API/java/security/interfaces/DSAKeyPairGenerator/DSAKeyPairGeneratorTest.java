@@ -73,7 +73,48 @@ public class DSAKeyPairGeneratorTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — exact member surface and lattice ----
+    static void testContract() throws Exception {
+        // exact member surface: exactly two void initializes; JDK-27 declares no throws
+        // clause (JDK-8 declared the unchecked InvalidParameterException there)
+        Method[] decl = DSAKeyPairGenerator.class.getDeclaredMethods();
+        int count = 0;
+        for (Method m : decl) {
+            if ("initialize".equals(m.getName())) {
+                count++;
+                check(m.getExceptionTypes().length == 0,
+                        "initialize declares no exceptions (JDK-27 dropped the throws clause)");
+                check(m.getReturnType() == void.class, "initialize returns void");
+            }
+        }
+        check(count == 2, "exactly two initialize overloads");
+        check(decl.length == 2, "interface declares exactly two methods in total");
+        for (Method m : decl) {
+            Class<?>[] ps = m.getParameterTypes();
+            if (ps.length == 2) {
+                check(ps[0] == DSAParams.class && ps[1] == SecureRandom.class,
+                        "two-arg overload is (DSAParams, SecureRandom)");
+            }
+            if (ps.length == 3) {
+                check(ps[0] == int.class && ps[1] == boolean.class && ps[2] == SecureRandom.class,
+                        "three-arg overload is (int, boolean, SecureRandom)");
+            }
+        }
+
+        // lattice
+        check(DSAKeyPairGenerator.class.getInterfaces().length == 0, "no superinterfaces");
+        check(!Key.class.isAssignableFrom(DSAKeyPairGenerator.class), "not a Key");
+        check(!Serializable.class.isAssignableFrom(DSAKeyPairGenerator.class), "not Serializable");
+        try {
+            DSAKeyPairGenerator.class.getDeclaredField("serialVersionUID");
+            check(false, "no serialVersionUID declared");
+        } catch (NoSuchFieldException e) {
+            check(true, "no serialVersionUID declared");
+        }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

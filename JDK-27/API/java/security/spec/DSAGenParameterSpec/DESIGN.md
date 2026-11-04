@@ -23,3 +23,8 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：断言 `public`、`final`、非接口、父类为 `Object`、实现 `AlgorithmParameterSpec`，方法 `getPrimePLength/getSubprimeQLength/getSeedLength` 存在。
 - `testBlackBox()`：两参构造 `(2048,256)` 校验三个 getter（seedLength 默认 256）；三参构造 `(2048,256,512)` 校验 seedLength=512；并断言 `instanceof AlgorithmParameterSpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：合法域 {(1024,160),(2048,224),(2048,256),(3072,256)} 与 seedLen>=qLen
+- 关键实测：final 类，2/3 参构造（primePLen,primeQLen[,seedLen]）；seedLen 缺省=primeQLen。
+AlgorithmParameterGenerator.getInstance("DSA").init(spec) 消费。

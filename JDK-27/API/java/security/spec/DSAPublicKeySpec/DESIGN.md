@@ -17,3 +17,8 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：断言 `public`、非接口、父类 `Object`、实现 `java.security.spec.KeySpec`，方法 `getY/getP/getQ/getG` 存在。
 - `testBlackBox()`：固定四元组 `(1,2,3,4)` 校验四个 getter；断言 `instanceof KeySpec`。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：镜像私钥侧 + generatePublic equals 闭环。
+- 关键实测：同 DSAPrivateKeySpec 结构，y 为公钥分量。
+KeyFactory("DSA") getKeySpec/generatePublic 往返。

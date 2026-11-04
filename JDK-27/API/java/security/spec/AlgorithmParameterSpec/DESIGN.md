@@ -22,3 +22,8 @@
 ## 4. 测试用例设计 + 自动化实现
 - `testWhiteBox()`：反射断言 `public`、`isInterface()`、无父类（`getSuperclass()==null`）、声明方法数为 0（纯标记接口）。
 - `testBlackBox()`：断言本组具体类 `DSAParameterSpec` 实例 `instanceof AlgorithmParameterSpec`，验证接口确实被具体参数规范类实现。
+
+## 5. 契约深化补充（第 2 批追加）
+- 新增 testContract 维度：标记语义验证（instanceof/isAssignableFrom 矩阵、无声明方法、Object-only 公共方法面、null 可赋值、数组组件类型）。
+- 关键实测：所有 *ParameterSpec 类型的公共标记接口；KeyFactory/AlgorithmParameters/Signature.setParameter 等引擎以本接口类型接受参数对象。
+接口无方法、无父接口；具体实现有 DSAParameterSpec、DSAGenParameterSpec、MGF1ParameterSpec、PSSParameterSpec、RSAKeyGenParameterSpec 等。

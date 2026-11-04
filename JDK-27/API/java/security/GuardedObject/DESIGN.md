@@ -19,3 +19,8 @@ Object secret = go.getObject(); // 失败则抛 SecurityException
 - 自定义允许 Guard：getObject 返回原对象，可重复调用。
 - 自定义拒绝 Guard：getObject 抛 SecurityException，且 message 精确断言。
 - 白盒：concrete + Serializable，含 getObject。
+
+## 5. 追加契约维度（深化批）
+- null guard 无条件放行；null 对象可存取；**每次 getObject 都咨询 guard**（不缓存，计数 3 次）。
+- 非 Security 的 unchecked（ISE）原样传播不转译。
+- 序列化契约：writeObject 即咨询 guard——拒绝型可序列化 guard 使 writeObject 抛 SecurityException；放行型 round-trip 后 getObject 等值。

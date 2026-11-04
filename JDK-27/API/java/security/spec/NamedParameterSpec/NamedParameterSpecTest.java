@@ -12,6 +12,22 @@ public class NamedParameterSpecTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+
     static boolean hasInterface(Class<?> c, String name){for(Class<?> i:c.getInterfaces())if(i.getName().equals(name))return true;return false;}
     static void checkInterfaces(Class<?> c, String[] names){for(String n:names)check(hasInterface(c,n),"implements "+n);}
     static void checkMethods(Class<?> c, String[] names){for(String n:names)check(hasMethod(c,n),"method "+n);}
@@ -44,9 +60,38 @@ public class NamedParameterSpecTest {
         check(spec instanceof java.security.spec.AlgorithmParameterSpec, "instanceof AlgorithmParameterSpec");
     }
 
+    static void testContracts() {
+        // constructor matrix (probed: NPE 'stdName must not be null')
+        checkThrows(NullPointerException.class, () -> new NamedParameterSpec(null), "null name -> NPE");
+        check("".equals(new NamedParameterSpec("").getName()), "empty name accepted");
+        check("Custom-Curve".equals(new NamedParameterSpec("Custom-Curve").getName()),
+                "arbitrary name verbatim, case preserved");
+        // no equals/hashCode override: identity semantics (probed)
+        NamedParameterSpec a = new NamedParameterSpec("Foo");
+        check(!a.equals(new NamedParameterSpec("Foo")), "equal-content not equal (probed)");
+        check(a.equals(a), "reflexive");
+        check(!a.equals(null), "equals null false");
+        // constants are distinct instances with distinct names; 9 total (probed)
+        NamedParameterSpec[] all = { NamedParameterSpec.X25519, NamedParameterSpec.X448,
+                NamedParameterSpec.ED25519, NamedParameterSpec.ED448,
+                NamedParameterSpec.ML_DSA_44, NamedParameterSpec.ML_DSA_65, NamedParameterSpec.ML_DSA_87,
+                NamedParameterSpec.ML_KEM_512, NamedParameterSpec.ML_KEM_768, NamedParameterSpec.ML_KEM_1024 };
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (NamedParameterSpec n : all) { names.add(n.getName()); check(n.getName() != null, "name non-null"); }
+        check(names.size() == all.length, "all " + all.length + " constant names distinct");
+        check(NamedParameterSpec.ED25519 != NamedParameterSpec.ED448, "constants are distinct instances");
+        check(NamedParameterSpec.ED25519 == NamedParameterSpec.ED25519, "constant is a stable singleton");
+        // toString default form, not Serializable (probed)
+        check(a.toString().startsWith("java.security.spec.NamedParameterSpec@"), "toString default form");
+        check(!java.io.Serializable.class.isAssignableFrom(NamedParameterSpec.class), "not Serializable");
+        // ECGenParameterSpec is a NamedParameterSpec (JDK-9+ shape)
+        check(new java.security.spec.ECGenParameterSpec("secp256r1") instanceof NamedParameterSpec,
+                "ECGenParameterSpec instanceof NamedParameterSpec");
+    }
     public static void main(String[] args) {
         testWhiteBox();
         testBlackBox();
+        testContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

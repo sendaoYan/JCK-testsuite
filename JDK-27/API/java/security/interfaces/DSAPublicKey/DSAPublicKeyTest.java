@@ -71,7 +71,63 @@ public class DSAPublicKeyTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: contract — record impl, lattice, equals semantics ----
+    static void testContract() throws Exception {
+        // record-style minimal implementation
+        DSAPublicKey rec = new RecKey();
+        check(rec.getY().equals(BigInteger.valueOf(8)), "record getY passthrough");
+        check("DSA-REC".equals(rec.getAlgorithm()), "record getAlgorithm passthrough");
+        check("X.509-REC".equals(rec.getFormat()), "record getFormat passthrough");
+
+        // lattice
+        check(DSAKey.class.isAssignableFrom(DSAPublicKey.class), "is a DSAKey");
+        check(PublicKey.class.isAssignableFrom(DSAPublicKey.class), "is a PublicKey");
+        check(Key.class.isAssignableFrom(DSAPublicKey.class), "is a Key");
+        check(Serializable.class.isAssignableFrom(DSAPublicKey.class), "is Serializable");
+        check(DSAPublicKey.class.getInterfaces().length == 2, "exactly two direct superinterfaces");
+
+        // real key: both factory round-trips fully equal, serialization equal
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("DSA");
+        kpg.initialize(1024);
+        KeyPair kp = kpg.generateKeyPair();
+        DSAPublicKey key = (DSAPublicKey) kp.getPublic();
+        KeyFactory kf = KeyFactory.getInstance("DSA");
+        DSAPublicKeySpec spec = kf.getKeySpec(key, DSAPublicKeySpec.class);
+        check(spec.getP().equals(key.getParams().getP()), "spec preserves p");
+        DSAPublicKey back = (DSAPublicKey) kf.generatePublic(
+                new DSAPublicKeySpec(spec.getY(), spec.getP(), spec.getQ(), spec.getG()));
+        check(back.equals(key), "DSAPublicKeySpec round-trip equals");
+        DSAPublicKey x509 = (DSAPublicKey) kf.generatePublic(new X509EncodedKeySpec(key.getEncoded()));
+        check(x509.equals(key), "X509EncodedKeySpec round-trip equals");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        new ObjectOutputStream(bos).writeObject(key);
+        Object copy = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(copy.equals(key), "serialization round-trip equals");
+
+        // domain math and equals semantics
+        check(key.getParams().getG().modPow(key.getParams().getQ(), key.getParams().getP())
+                .equals(BigInteger.ONE), "g^q mod p == 1");
+        check(key.equals(key), "reflexive equals");
+        check(!key.equals(kp.getPrivate()), "public not equal to private half");
+        check(key.hashCode() == key.hashCode(), "hashCode stable");
+    }
+
+    static class RecKey implements DSAPublicKey {
+        public BigInteger getY() { return BigInteger.valueOf(8); }
+        public DSAParams getParams() {
+            return new DSAParams() {
+                public BigInteger getP() { return BigInteger.valueOf(23); }
+                public BigInteger getQ() { return BigInteger.valueOf(11); }
+                public BigInteger getG() { return BigInteger.valueOf(2); }
+            };
+        }
+        public String getAlgorithm() { return "DSA-REC"; }
+        public String getFormat() { return "X.509-REC"; }
+        public byte[] getEncoded() { return new byte[]{9, 9}; }
     }
     static boolean hasInterface(Class<?> c, String name) {
         for (Class<?> i : c.getInterfaces()) if (i.getName().equals(name)) return true;

@@ -4,6 +4,7 @@
  * @run main GuardedObjectTest
  */
 
+import java.io.ObjectInputStream;
 import java.lang.reflect.Modifier;
 import java.security.Guard;
 import java.security.GuardedObject;
@@ -54,6 +55,74 @@ public class GuardedObjectTest {
 
         // getObject may be called repeatedly
         check(secret.equals(allowed.getObject()), "getObject repeatable");
+
+        // ---- appended contract dimensions ----
+        // null guard: unconditional access; null payload retrievable
+        GuardedObject unguarded = new GuardedObject("free", null);
+        check("free".equals(unguarded.getObject()), "null guard permits");
+        check(new GuardedObject(null, null).getObject() == null, "null object retrievable");
+        // guard consulted on EVERY getObject call
+        CountingGuard cg = new CountingGuard();
+        GuardedObject counted = new GuardedObject(Integer.valueOf(7), cg);
+        check(Integer.valueOf(7).equals(counted.getObject()), "counted 1st");
+        check(Integer.valueOf(7).equals(counted.getObject()), "counted 2nd");
+        check(Integer.valueOf(7).equals(counted.getObject()), "counted 3rd");
+        check(cg.calls == 3, "guard called exactly 3 times");
+        // denial message verbatim each time (fresh or cached is impl choice, message stable)
+        try {
+            denied.getObject();
+        } catch (SecurityException e) {
+            check("denied".equals(e.getMessage()), "repeat denial message");
+        }
+        // non-Security unchecked exceptions propagate unwrapped
+        GuardedObject ise = new GuardedObject("v", new Guard() {
+            public void checkGuard(Object o) { throw new IllegalStateException("boom"); }
+        });
+        try {
+            ise.getObject();
+            check(false, "ISE propagates");
+        } catch (IllegalStateException e) {
+            check("boom".equals(e.getMessage()), "ISE unwrapped");
+        }
+        // checkGuard receives the GuardedObject itself, not the payload
+        final Object[] seen = new Object[1];
+        GuardedObject self = new GuardedObject("payload", new Guard() {
+            public void checkGuard(Object o) { seen[0] = o; }
+        });
+        self.getObject();
+        check("payload".equals(seen[0]), "checkGuard receives the guarded payload");
+        // serialization: permissive serializable guard -> payload survives
+        GuardedObject ser = new GuardedObject("round", new CountingGuard());
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(ser);
+        oos.close();
+        ObjectInputStream in = new ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()));
+        GuardedObject back = (GuardedObject) in.readObject();
+        check(back != ser, "deserialized new instance");
+        check("round".equals(back.getObject()), "payload survives round-trip");
+        // serialization itself consults the guard: denying guard blocks writeObject
+        try {
+            java.io.ByteArrayOutputStream b2 = new java.io.ByteArrayOutputStream();
+            java.io.ObjectOutputStream o2 = new java.io.ObjectOutputStream(b2);
+            o2.writeObject(denied);
+            o2.close();
+            check(false, "denying guard blocks serialization");
+        } catch (SecurityException e) {
+            check(true, "denying guard blocks serialization");
+        }
+        // structural: Serializable surface with single getObject
+        check(java.io.Serializable.class.isAssignableFrom(GuardedObject.class), "Serializable");
+        int getObjectCount = 0;
+        for (java.lang.reflect.Method m : GuardedObject.class.getDeclaredMethods())
+            if (m.getName().equals("getObject")) getObjectCount++;
+        check(getObjectCount == 1, "single getObject method");
+    }
+
+    static class CountingGuard implements Guard, java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        int calls;
+        public void checkGuard(Object o) { calls++; }
     }
 
     static boolean hasInterface(Class<?> c, String name) {
