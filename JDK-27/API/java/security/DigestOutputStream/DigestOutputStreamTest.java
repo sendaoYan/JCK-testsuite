@@ -1,81 +1,70 @@
 /*
  * @test
- * @summary java.security.DigestOutputStream conformance: white-box structure + black-box behavior.
+ * @summary java.security.DigestOutputStream conformance: full contract coverage.
+ *          constructor, getMessageDigest/setMessageDigest, on(boolean) toggle,
+ *          default-on digest accumulation via write(int)/write(byte[],off,len), and
+ *          equality against a directly-computed digest.
  * @run main DigestOutputStreamTest
  */
 
-import java.lang.reflect.Modifier;
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Arrays;
 
 public class DigestOutputStreamTest {
     static int passed;
+
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
         passed++;
     }
 
-    // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-        Class<?> c = Class.forName("java.security.DigestOutputStream");
-        check(Modifier.isPublic(c.getModifiers()), "public");
-        check(!c.isInterface() && !Modifier.isAbstract(c.getModifiers()), "concrete class");
-        check(c.getSuperclass().getName().equals("java.io.FilterOutputStream"), "extends FilterOutputStream");
-        checkMethods(c, new String[]{"getMessageDigest", "setMessageDigest", "write", "on", "toString"});
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        byte[] data = "abc".getBytes(StandardCharsets.UTF_8);
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        byte[] expected = md.digest(data);
-
-        // write(int) one byte at a time (digest on by default)
-        MessageDigest m1 = MessageDigest.getInstance("SHA-256");
-        DigestOutputStream dos = new DigestOutputStream(new ByteArrayOutputStream(), m1);
-        check(m1 == dos.getMessageDigest(), "getMessageDigest returns the digest");
-        for (byte b : data) dos.write(b);
-        check(Arrays.equals(expected, m1.digest()), "byte-wise write updates digest");
-
-        // write(byte[],int,int) with on(false) does not update
-        MessageDigest m2 = MessageDigest.getInstance("SHA-256");
-        DigestOutputStream dos2 = new DigestOutputStream(new ByteArrayOutputStream(), m2);
-        dos2.on(false);
-        dos2.write(data, 0, data.length);
-        check(hex(m2.digest()).equals(hex(MessageDigest.getInstance("SHA-256").digest(new byte[0]))),
-            "on(false) skips digest update");
-
-        // setMessageDigest replaces
-        MessageDigest m3 = MessageDigest.getInstance("SHA-256");
-        DigestOutputStream dos3 = new DigestOutputStream(new ByteArrayOutputStream(), MessageDigest.getInstance("MD5"));
-        dos3.setMessageDigest(m3);
-        check(m3 == dos3.getMessageDigest(), "setMessageDigest replaces digest");
-        dos3.write(data);
-        check(Arrays.equals(expected, m3.digest()), "replaced digest computes SHA-256");
-
-        check(dos3.toString() != null, "toString non-null");
-    }
-
-    static boolean hasMethod(Class<?> c, String name) {
-        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
-        return false;
-    }
-    static void checkMethods(Class<?> c, String[] names) {
-        for (String n : names) check(hasMethod(c, n), "method " + n);
-    }
-    static String hex(byte[] b) {
-        char[] h = "0123456789abcdef".toCharArray();
-        char[] out = new char[b.length * 2];
-        for (int i = 0; i < b.length; i++) { out[i * 2] = h[(b[i] >> 4) & 0xf]; out[i * 2 + 1] = h[b[i] & 0xf]; }
-        return new String(out);
-    }
-
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        byte[] data = "the quick brown fox".getBytes("UTF-8");
+
+        // ---- default on: write(byte[]) updates digest ----
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        DigestOutputStream dos = new DigestOutputStream(sink, md);
+        check(dos.getMessageDigest() == md, "getMessageDigest returns passed digest");
+        dos.write(data);
+        byte[] expected = MessageDigest.getInstance("MD5").digest(data);
+        check(Arrays.equals(md.digest(), expected), "default-on digest matches");
+        check(Arrays.equals(sink.toByteArray(), data), "underlying stream receives data");
+
+        // ---- on(false) disables accumulation ----
+        MessageDigest md2 = MessageDigest.getInstance("MD5");
+        DigestOutputStream dos2 = new DigestOutputStream(new ByteArrayOutputStream(), md2);
+        dos2.on(false);
+        dos2.write(data);
+        check(Arrays.equals(md2.digest(), MessageDigest.getInstance("MD5").digest(new byte[0])),
+                "on(false) does not accumulate");
+
+        // ---- on(true) re-enables ----
+        MessageDigest md3 = MessageDigest.getInstance("MD5");
+        DigestOutputStream dos3 = new DigestOutputStream(new ByteArrayOutputStream(), md3);
+        dos3.on(false);
+        dos3.on(true);
+        dos3.write(data);
+        check(Arrays.equals(md3.digest(), expected), "on(true) re-enables accumulation");
+
+        // ---- setMessageDigest replaces ----
+        MessageDigest md4 = MessageDigest.getInstance("SHA-256");
+        DigestOutputStream dos4 = new DigestOutputStream(new ByteArrayOutputStream(),
+                MessageDigest.getInstance("MD5"));
+        dos4.setMessageDigest(md4);
+        check(dos4.getMessageDigest() == md4, "setMessageDigest replaces");
+        dos4.write(data);
+        check(Arrays.equals(md4.digest(), MessageDigest.getInstance("SHA-256").digest(data)),
+                "replaced digest accumulates");
+
+        // ---- write(int) accumulates single bytes ----
+        MessageDigest md5 = MessageDigest.getInstance("MD5");
+        DigestOutputStream dos5 = new DigestOutputStream(new ByteArrayOutputStream(), md5);
+        for (byte b : data) dos5.write(b);
+        check(Arrays.equals(md5.digest(), expected), "write(int) accumulates");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

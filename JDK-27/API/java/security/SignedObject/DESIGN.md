@@ -1,22 +1,17 @@
-# java.security.SignedObject 黑盒行为测试设计
+# SignedObject — 设计案
 
 ## 1. API 功能
-- 构造：`SignedObject(Serializable, PrivateKey, Signature)`。
-- 查询：`getObject()`、`getSignature()`、`getAlgorithm()`、`verify(PublicKey, Signature)`。
+不可变签名对象（implements Serializable）。构造器(Serializable, PrivateKey, Signature) + getObject/getAlgorithm/getSignature/verify(PublicKey, Signature)。
 
-## 2. Java 用户如何使用
-把可序列化对象用私钥签名封装成 SignedObject，之后 `getObject()` 取回对象、`verify(pub, sig)` 校验签名。
-```java
-SignedObject so = new SignedObject(payload, privateKey, signingEngine);
-boolean ok = so.verify(publicKey, verificationEngine);
-```
+## 2. 使用方式
+`new SignedObject(payload, 私钥, Signature.getInstance("SHA256withRSA"))` 内部序列化并签名；`verify(公钥, 验签引擎)`。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/java/security/SignedObject/Correctness.java`：签名正确性验证。
-- `test/jdk/java/security/SignedObject/Copy.java`：序列化拷贝与 getSignature 防御性拷贝。
-- 实现权威：`src/java.base/share/classes/java/security/SignedObject.java`。
+## 3. 参考来源
+- javadoc `java.security.SignedObject`。
+- JCK runtime-8b `api/java_security/SignedObject/`。
 
-## 4. 测试用例设计 + 自动化实现
-- getObject 返回原始对象；getSignature 非空且为防御性拷贝；getAlgorithm 正确。
-- 用正确公钥 verify 为 true，用另一把 RSA 公钥 verify 为 false。
-- 白盒：final + Serializable，含 getObject/getSignature/getAlgorithm/verify。
+## 4. 测试用例设计 + 易错规范细节
+- 构造器：null 对象合法（getObject null）；null key→InvalidKeyException；null signingEngine→NPE。
+- getObject/getAlgorithm/getSignature；verify 往返 true；错误公钥 false。
+- 序列化往返保留 object/algorithm/signature。
+- 易错点：构造器内部会 initSign(signingKey)，故不需预 initSign；不能通过"构造另一个不同 payload 的 SignedObject"测篡改（其签名对自身 payload 有效），篡改场景用错误公钥。

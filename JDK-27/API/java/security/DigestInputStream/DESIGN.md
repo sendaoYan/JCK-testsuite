@@ -1,22 +1,17 @@
-# java.security.DigestInputStream 黑盒行为测试设计
+# DigestInputStream — 设计案
 
 ## 1. API 功能
-- 构造：`DigestInputStream(InputStream, MessageDigest)`。
-- 查询/配置：`getMessageDigest()`、`setMessageDigest(MessageDigest)`、`on(boolean)`。
-- 继承 FilterInputStream 的 `read()`、`read(byte[],int,int)`；`toString()`。
+过滤输入流，读数据同时更新摘要。构造器(InputStream, MessageDigest) + getMessageDigest/setMessageDigest/on(boolean) + 继承 FilterInputStream 的 read。
 
-## 2. Java 用户如何使用
-边读边摘要：默认 on=true，读字节同时更新 digest；`on(false)` 暂停更新；`setMessageDigest` 换摘要算法。
-```java
-DigestInputStream dis = new DigestInputStream(in, MessageDigest.getInstance("SHA-256"));
-while (dis.read() != -1) { }
-byte[] digest = dis.getMessageDigest().digest();
-```
+## 2. 使用方式
+`new DigestInputStream(in, MessageDigest.getInstance("MD5"))` 默认 on，读完后 `getMessageDigest().digest()`。
 
-## 3. 开源代码实际用法调研
-- `test/jdk/java/security/MessageDigest/TestDigestIOStream.java`：DigestInputStream 与 DigestOutputStream 组合读写摘要。
-- 实现权威：`src/java.base/share/classes/java/security/DigestInputStream.java`。
+## 3. 参考来源
+- javadoc `java.security.DigestInputStream`。
+- JCK runtime-8b `api/java_security/DigestInputStream/`。
 
-## 4. 测试用例设计 + 自动化实现
-- 逐字节 read 后 digest == SHA-256("abc")；on(false) 不更新；setMessageDigest 替换后生效；getMessageDigest/toString 断言。
-- 白盒：extends FilterInputStream，含 getMessageDigest/setMessageDigest/read/on/toString。
+## 4. 测试用例设计 + 易错规范细节
+- 默认 on：read(byte[]) 累积；read(byte[],off,len) 只累积读取字节。
+- on(false) 不累积、on(true) 重新累积。
+- setMessageDigest 替换后累积到新摘要。
+- 易错点：类在 java.security 而非 java.io；构造器不校验 null 流/摘要（读时才 NPE）。
