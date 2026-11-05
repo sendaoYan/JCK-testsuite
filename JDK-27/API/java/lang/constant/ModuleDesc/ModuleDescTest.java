@@ -58,9 +58,30 @@ public class ModuleDescTest {
         check(set.contains(ModuleDesc.of("java.base")), "contains by value");
     }
 
+    // ---- Part 3: deep contract (name validation surface) ----
+    static void testDeepContract() {
+        // ModuleDesc.of is deliberately permissive (JDK-27 measured): only null is rejected;
+        // separators like ';' '/' '.' runs are kept verbatim as the module name
+        String[] kept = {"bad;name", "a..b", "x/y", "a-b_c.d"};
+        for (String n : kept)
+            check(ModuleDesc.of(n).name().equals(n),
+                  "of(\"" + n + "\") keeps the name verbatim (no format validation)");
+        check(ModuleDesc.of("bad;name").equals(ModuleDesc.of("bad;name")),
+              "equals holds for permissive names too");
+        try { ModuleDesc.of(null); check(false, "null rejected"); }
+        catch (NullPointerException expected) { check(true, "of(null) NPE"); }
+        // distinct names never collide in hash-based collections
+        java.util.Map<ModuleDesc, Integer> map = new java.util.HashMap<>();
+        map.put(ModuleDesc.of("m1"), 1);
+        map.put(ModuleDesc.of("m2"), 2);
+        check(map.size() == 2 && map.get(ModuleDesc.of("m1")) == 1,
+              "HashMap keyed by ModuleDesc is name-exact");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -70,9 +70,50 @@ public class PackageDescTest {
         catch (NullPointerException expected) { check(true, "ofInternalName(null) NPE"); }
     }
 
+    // ---- Part 3: deep contract (dotted-name validation surface) ----
+    static void testDeepContract() {
+        // of("") denotes the root package directly in dotted form too
+        check(PackageDesc.of("").name().isEmpty()
+                      && PackageDesc.of("").internalName().isEmpty(),
+              "of(\"\") is the root package");
+        check(PackageDesc.of("").equals(PackageDesc.ofInternalName("")),
+              "root package equals across factory forms");
+
+        // dotted form rejects empty identifiers and leading/trailing dots
+        String[] badDotted = {"java..lang", ".a", "a.", "a.b;.c"};
+        for (String n : badDotted) {
+            try {
+                PackageDesc.of(n);
+                check(false, "of(" + n + ") must be rejected");
+            } catch (IllegalArgumentException expected) {
+                check(true, "of(" + n + ") -> IAE");
+            }
+        }
+        // internal form rejects empty path components
+        try {
+            PackageDesc.ofInternalName("a//b");
+            check(false, "ofInternalName(a//b) must be rejected");
+        } catch (IllegalArgumentException expected) {
+            check(true, "ofInternalName(a//b) -> IAE"); }
+
+        // name()/internalName() stay mutually consistent
+        PackageDesc deep = PackageDesc.of("a.b.c.d");
+        check(deep.internalName().equals("a/b/c/d"), "dotted -> slashed");
+        check(PackageDesc.ofInternalName(deep.internalName()).equals(deep),
+              "factory round-trip equals");
+        // single-segment packages
+        PackageDesc single = PackageDesc.of("top");
+        check(single.internalName().equals("top"), "single segment unchanged in internal form");
+        // validation is separator-shaped only: non-identifier characters inside a
+        // segment are kept verbatim (JDK-27 measured)
+        check(PackageDesc.of("a.b-c").name().equals("a.b-c"),
+              "of(\"a.b-c\") kept verbatim (only dot/semicolon placement is validated)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

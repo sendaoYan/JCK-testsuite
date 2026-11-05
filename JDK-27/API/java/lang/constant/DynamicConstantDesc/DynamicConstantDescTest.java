@@ -110,9 +110,87 @@ public class DynamicConstantDescTest {
         check(ts.contains("nullConstant") && ts.contains("nothing"), "toString content: " + ts);
     }
 
+    // ---- Part 3: deep contract (real condy bootstrap closures + null matrix) ----
+    static void testDeepContract() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+
+        // null matrix
+        try {
+            DynamicConstantDesc.ofNamed(null, "n", ConstantDescs.CD_Object);
+            check(false, "ofNamed(null bsm) rejected");
+        } catch (NullPointerException expected) { check(true, "ofNamed(null bsm) -> NPE"); }
+        try {
+            DynamicConstantDesc.of(null);
+            check(false, "of(null bsm) rejected");
+        } catch (NullPointerException expected) { check(true, "of(null bsm) -> NPE"); }
+
+        // real condy closure 1: BSM_PRIMITIVE_CLASS resolves through ConstantBootstraps.
+        // The constant name must be the single-char descriptor ("J"), not "long".
+        Object primLong = DynamicConstantDesc.ofNamed(
+                ConstantDescs.BSM_PRIMITIVE_CLASS, "J",
+                ClassDesc.of("java.lang.Class")).resolveConstantDesc(lookup);
+        check(primLong == long.class, "condy primitiveClass(\"J\") resolves to long.class");
+        try {
+            DynamicConstantDesc.ofNamed(ConstantDescs.BSM_PRIMITIVE_CLASS, "long",
+                    ClassDesc.of("java.lang.Class")).resolveConstantDesc(lookup);
+            check(false, "primitiveClass(\"long\") must fail");
+        } catch (BootstrapMethodError expected) {
+            check(expected.getCause() instanceof IllegalArgumentException,
+                  "primitiveClass(\"long\") -> BootstrapMethodError(IAE)");
+        }
+
+        // real condy closure 2: BSM_GET_STATIC_FINAL with explicit declaring class argument
+        Object maxInt = DynamicConstantDesc.ofNamed(
+                ConstantDescs.BSM_GET_STATIC_FINAL, "MAX_VALUE",
+                ConstantDescs.CD_int, ConstantDescs.CD_Integer).resolveConstantDesc(lookup);
+        check(((Integer) maxInt).intValue() == Integer.MAX_VALUE,
+              "condy getStaticFinal MAX_VALUE resolves to Integer.MAX_VALUE");
+
+        // real condy closure 3: BSM_EXPLICIT_CAST converts its bootstrap argument
+        Object casted = DynamicConstantDesc.ofNamed(
+                ConstantDescs.BSM_EXPLICIT_CAST, "_", ConstantDescs.CD_int,
+                Integer.valueOf(7)).resolveConstantDesc(lookup);
+        check(((Integer) casted).intValue() == 7, "condy explicitCast(7) resolves to 7");
+
+        // real condy closure 4: BSM_ENUM_CONSTANT resolves an enum constant by name
+        Object seconds = DynamicConstantDesc.ofNamed(
+                ConstantDescs.BSM_ENUM_CONSTANT, "SECONDS",
+                ClassDesc.of("java.util.concurrent.TimeUnit")).resolveConstantDesc(lookup);
+        check(seconds == java.util.concurrent.TimeUnit.SECONDS,
+              "condy enumConstant resolves TimeUnit.SECONDS");
+
+        // ofCanonical maps well-known shapes onto the shared constants
+        Object nullConst = DynamicConstantDesc.ofCanonical(
+                ConstantDescs.BSM_NULL_CONSTANT, "_", ConstantDescs.CD_Object, new ConstantDesc[0]);
+        check(nullConst == ConstantDescs.NULL, "ofCanonical(nullConstant) is ConstantDescs.NULL");
+        Object trueConst = DynamicConstantDesc.ofCanonical(
+                ConstantDescs.BSM_GET_STATIC_FINAL, "TRUE", ConstantDescs.CD_Boolean,
+                new ConstantDesc[]{ConstantDescs.CD_Boolean});
+        check(trueConst != ConstantDescs.TRUE,
+              "ofCanonical does not intern TRUE (only NULL canonicalizes to the shared constant)");
+        check(((ConstantDesc) trueConst).resolveConstantDesc(lookup) == Boolean.TRUE,
+              "ofCanonical(TRUE) resolves to Boolean.TRUE");
+        Object plain = DynamicConstantDesc.ofCanonical(
+                ConstantDescs.BSM_EXPLICIT_CAST, "k", ConstantDescs.CD_Object,
+                new ConstantDesc[0]);
+        check(plain instanceof DynamicConstantDesc && plain != ConstantDescs.NULL,
+              "ofCanonical of a non-canonical shape falls back to DynamicConstantDesc");
+
+        // bootstrapArgsList is an unmodifiable view
+        DynamicConstantDesc<?> withArgs = DynamicConstantDesc.ofNamed(
+                ConstantDescs.BSM_EXPLICIT_CAST, "k", ConstantDescs.CD_int, 1);
+        try {
+            withArgs.bootstrapArgsList().add(2);
+            check(false, "bootstrapArgsList must be unmodifiable");
+        } catch (UnsupportedOperationException expected) {
+            check(true, "bootstrapArgsList.add -> UnsupportedOperationException");
+        }
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

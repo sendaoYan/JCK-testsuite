@@ -96,9 +96,59 @@ public class ConstableTest {
               "fresh String is still constant-describable");
     }
 
+    // ---- Part 3: deep contract (constant-precision edges) ----
+    static void testDeepContract() throws Exception {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+
+        // not everything is Constable: plain Object and user classes opt out entirely
+        check(!Constable.class.isAssignableFrom(Object.class),
+              "Object is not Constable (nominal form is opt-in)");
+        check(!Constable.class.isAssignableFrom(StringBuilder.class),
+              "StringBuilder is not Constable");
+
+        // floating-point edge constants keep full precision through the nominal round trip
+        Float[] floats = {Float.NaN, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY,
+                          -0.0f, Float.MIN_VALUE, Float.MAX_VALUE};
+        for (Float f : floats) {
+            ConstantDesc d = f.describeConstable().orElseThrow();
+            Object back = d.resolveConstantDesc(lookup);
+            check(back instanceof Float && ((Float) back).equals(f),
+                  "Float " + f + " round-trips bit-precisely");
+        }
+        Double[] doubles = {Double.NaN, -0.0d, Double.MIN_VALUE, Double.MAX_VALUE,
+                            Double.NEGATIVE_INFINITY};
+        for (Double dv : doubles) {
+            ConstantDesc d = dv.describeConstable().orElseThrow();
+            Object back = d.resolveConstantDesc(lookup);
+            check(back instanceof Double && ((Double) back).equals(dv),
+                  "Double " + dv + " round-trips bit-precisely");
+        }
+        // Long extremes
+        for (long lv : new long[]{Long.MIN_VALUE, -1L, 0L, Long.MAX_VALUE}) {
+            ConstantDesc d = Long.valueOf(lv).describeConstable().orElseThrow();
+            check(d.resolveConstantDesc(lookup).equals(lv), "Long " + lv + " round-trips");
+        }
+        // Character extremes (including surrogate halves)
+        for (char cv : new char[]{Character.MIN_VALUE, 'A', Character.MAX_VALUE,
+                                  Character.MIN_SURROGATE, Character.MAX_SURROGATE}) {
+            ConstantDesc d = Character.valueOf(cv).describeConstable().orElseThrow();
+            check(d.resolveConstantDesc(lookup).equals(cv), "char round-trip");
+        }
+        // the nominal descriptor itself is a usable ConstantDesc (nominal -> nominal)
+        ConstantDesc nominal = Integer.valueOf(7).describeConstable().orElseThrow();
+        check(nominal instanceof Integer && ((Integer) nominal).intValue() == 7,
+              "Integer's nominal form is the Integer constant itself");
+
+        // an empty Optional is the documented "no nominal form" answer, never null
+        check(!((Optional) new Opaque().describeConstable()).isPresent()
+                        && new Opaque().describeConstable() != null,
+              "describeConstable returns empty Optional, not null");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

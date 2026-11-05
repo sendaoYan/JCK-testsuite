@@ -17,3 +17,10 @@ if (m.name().equals(layerObject.descriptor().name())) ...
 白盒：接口、of 静态、name 抽象返回 String。
 黑盒：of/name；值相等 equals/hashCode（跨实例相等、null/异类型不等）；空串名保留；of(null) NPE；HashSet 按值去重。
 对应 `ModuleDescTest.java` 的 `testBlackBox()`。
+
+## 5. 契约深化（JDK-27 实测锁定）
+- **of 仅拒绝 null**：`"bad;name"`、`"a..b"`、`"x/y"`、`"a-b_c.d"` 全部原样保留（模块名不做格式校验）——与 PackageDesc 的严格校验形成对比。
+- equals/hashCode 跨实例值语义在宽容名字上同样成立；HashMap 键控按名精确。
+
+## 版本差异
+JDK-8 无此包（java.lang.constant 是 12+、java.lang.IO 是 25+（JEP 495）、java.lang.foreign 是 19+ 预览 / 22+ 正式）；本目录测试仅 JDK-27，不镜像 JDK-8 侧。

@@ -118,9 +118,111 @@ public class DirectMethodHandleDescTest {
         }
     }
 
+    // ---- Part 3: deep contract (Kind matrix + field accessors + kind misuse) ----
+    static final int FIELD_INT = 7;
+    public int instanceField = FIELD_INT;
+
+    static void testDeepContract() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+
+        // complete Kind matrix: name -> (refKind, isInterface); refKinds follow MethodHandleInfo
+        Object[][] matrix = {
+                {"STATIC", 6, false}, {"INTERFACE_STATIC", 6, true},
+                {"VIRTUAL", 5, false}, {"INTERFACE_VIRTUAL", 9, true},
+                {"SPECIAL", 7, false}, {"INTERFACE_SPECIAL", 7, true},
+                {"CONSTRUCTOR", 8, false},
+                {"GETTER", 1, false}, {"SETTER", 3, false},
+                {"STATIC_GETTER", 2, false}, {"STATIC_SETTER", 4, false},
+        };
+        check(DirectMethodHandleDesc.Kind.values().length == matrix.length,
+              "Kind declares exactly " + matrix.length + " members");
+        for (Object[] row : matrix) {
+            DirectMethodHandleDesc.Kind k = DirectMethodHandleDesc.Kind.valueOf((String) row[0]);
+            check(k.refKind == (Integer) row[1], (String) row[0] + " field refKind " + row[1]);
+            check(k.isInterface == (Boolean) row[2], (String) row[0] + " field isInterface");
+            check(k.toString().equals(row[0]), (String) row[0] + " toString is the name");
+        }
+
+        // Kind.valueOf(int) covers refKinds 1..9; 0 and 10 are rejected
+        DirectMethodHandleDesc.Kind[] byRef = {
+                null, DirectMethodHandleDesc.Kind.GETTER, DirectMethodHandleDesc.Kind.STATIC_GETTER,
+                DirectMethodHandleDesc.Kind.SETTER, DirectMethodHandleDesc.Kind.STATIC_SETTER,
+                DirectMethodHandleDesc.Kind.VIRTUAL, DirectMethodHandleDesc.Kind.STATIC,
+                DirectMethodHandleDesc.Kind.SPECIAL, DirectMethodHandleDesc.Kind.CONSTRUCTOR,
+                DirectMethodHandleDesc.Kind.INTERFACE_VIRTUAL,
+        };
+        for (int rk = 1; rk <= 9; rk++)
+            check(DirectMethodHandleDesc.Kind.valueOf(rk) == byRef[rk],
+                  "valueOf(" + rk + ") mapping");
+        for (int bad : new int[]{0, 10, -1}) {
+            try {
+                DirectMethodHandleDesc.Kind.valueOf(bad);
+                check(false, "valueOf(" + bad + ") rejected");
+            } catch (IllegalArgumentException expected) {
+                check(true, "valueOf(" + bad + ") -> IAE");
+            }
+        }
+        // valueOf(refKind, isInterface) disambiguates the two shared refKinds
+        check(DirectMethodHandleDesc.Kind.valueOf(6, false) == DirectMethodHandleDesc.Kind.STATIC
+                      && DirectMethodHandleDesc.Kind.valueOf(6, true)
+                                 == DirectMethodHandleDesc.Kind.INTERFACE_STATIC,
+              "valueOf(6, iface) disambiguates STATIC family");
+        check(DirectMethodHandleDesc.Kind.valueOf(7, true)
+                      == DirectMethodHandleDesc.Kind.INTERFACE_SPECIAL,
+              "valueOf(7, true) is INTERFACE_SPECIAL");
+
+        // real field write closure: SETTER mutates, GETTER reads back
+        ClassDesc owner = ClassDesc.of("DirectMethodHandleDescTest");
+        DirectMethodHandleDesc setter = MethodHandleDesc.ofField(
+                DirectMethodHandleDesc.Kind.SETTER, owner, "instanceField", ConstantDescs.CD_int);
+        check(setter.refKind() == 3, "SETTER refKind 3 (putField)");
+        check(setter.lookupDescriptor().equals("I"), "field lookupDescriptor is the field type I");
+        check(setter.invocationType().descriptorString()
+                      .equals("(LDirectMethodHandleDescTest;I)V"),
+              "SETTER invocationType (owner,int)void");
+        DirectMethodHandleDescTest host = new DirectMethodHandleDescTest();
+        setter.resolveConstantDesc(lookup).invoke(host, 1234);
+        check(host.instanceField == 1234, "SETTER resolved and wrote the field");
+        DirectMethodHandleDesc getter = MethodHandleDesc.ofField(
+                DirectMethodHandleDesc.Kind.GETTER, owner, "instanceField", ConstantDescs.CD_int);
+        check(getter.invocationType().descriptorString()
+                      .equals("(LDirectMethodHandleDescTest;)I"),
+              "GETTER invocationType (owner)int");
+        check((int) getter.resolveConstantDesc(lookup).invoke(host) == 1234,
+              "GETTER resolved and read the written value");
+
+        // kind misuse: VIRTUAL against a static method fails with IllegalAccessException
+        DirectMethodHandleDesc misKind = MethodHandleDesc.ofMethod(
+                DirectMethodHandleDesc.Kind.VIRTUAL, ConstantDescs.CD_String, "valueOf",
+                MethodTypeDesc.ofDescriptor("(I)Ljava/lang/String;"));
+        try {
+            misKind.resolveConstantDesc(lookup);
+            check(false, "VIRTUAL on static must fail");
+        } catch (IllegalAccessException expected) {
+            check(true, "VIRTUAL on static -> IllegalAccessException (kind is honored)");
+        }
+
+        // factory rejection matrix
+        try {
+            MethodHandleDesc.ofMethod(null, ConstantDescs.CD_String, "length",
+                    MethodTypeDesc.ofDescriptor("()I"));
+            check(false, "ofMethod(null kind) rejected");
+        } catch (NullPointerException expected) { check(true, "ofMethod(null kind) -> NPE"); }
+        try {
+            MethodHandleDesc.ofMethod(DirectMethodHandleDesc.Kind.VIRTUAL, null, "length",
+                    MethodTypeDesc.ofDescriptor("()I"));
+            check(false, "ofMethod(null owner) rejected");
+        } catch (NullPointerException expected) { check(true, "ofMethod(null owner) -> NPE"); }
+        try {
+            MethodHandleDesc.ofField(DirectMethodHandleDesc.Kind.GETTER, owner, "instanceField", null);
+            check(false, "ofField(null type) rejected");
+        } catch (NullPointerException expected) { check(true, "ofField(null type) -> NPE"); }
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

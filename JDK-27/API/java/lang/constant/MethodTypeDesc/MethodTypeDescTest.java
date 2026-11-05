@@ -108,9 +108,74 @@ public class MethodTypeDescTest {
         catch (IllegalArgumentException expected) { check(true, "unterminated IAE"); }
     }
 
+    // ---- Part 3: deep contract (descriptor parsing matrix + MethodType agreement) ----
+    static void testDeepContract() throws Exception {
+        // malformed descriptor matrix: each is rejected with IllegalArgumentException
+        String[] bad = {"VI", "()X", "(I;)V", "Ljava/lang/String", "(IX)V", "()", "(V)V", "I"};
+        for (String d : bad) {
+            try {
+                MethodTypeDesc.ofDescriptor(d);
+                check(false, "ofDescriptor(" + d + ") must be rejected");
+            } catch (IllegalArgumentException expected) {
+                check(true, "ofDescriptor(" + d + ") -> IAE");
+            }
+        }
+        // null matrix
+        try { MethodTypeDesc.ofDescriptor(null); check(false, "ofDescriptor(null) rejected"); }
+        catch (NullPointerException expected) { check(true, "ofDescriptor(null) -> NPE"); }
+        try { MethodTypeDesc.of(null); check(false, "of(null return) rejected"); }
+        catch (NullPointerException expected) { check(true, "of(null return) -> NPE"); }
+        try { MethodTypeDesc.of(ConstantDescs.CD_void, (ClassDesc[]) null); check(false, "of(ret, null) rejected"); }
+        catch (NullPointerException expected) { check(true, "of(ret, null array) -> NPE"); }
+
+        // index bounds on parameter surgery
+        MethodTypeDesc m = MethodTypeDesc.ofDescriptor("(IZ)V");
+        try { m.dropParameterTypes(5, 6); check(false, "drop out of range rejected"); }
+        catch (IndexOutOfBoundsException expected) { check(true, "drop(5,6) -> IndexOutOfBounds"); }
+        try { m.insertParameterTypes(9, ConstantDescs.CD_int); check(false, "insert out of range rejected"); }
+        catch (IndexOutOfBoundsException expected) { check(true, "insert(9) -> IndexOutOfBounds"); }
+        try { m.changeParameterType(5, ConstantDescs.CD_int); check(false, "change out of range rejected"); }
+        catch (IndexOutOfBoundsException expected) { check(true, "changeParameterType(5) -> IndexOutOfBounds"); }
+        try { m.parameterType(5); check(false, "parameterType out of range rejected"); }
+        catch (IndexOutOfBoundsException expected) { check(true, "parameterType(5) -> IndexOutOfBounds"); }
+
+        // descriptorString <-> MethodType.fromMethodDescriptorString agreement (round-trip table)
+        String[] descriptors = {
+                "()V", "(I)V", "(IJZ)V", "(Ljava/lang/String;I)Ljava/lang/Object;",
+                "([Ljava/lang/String;)[I", "(Ljava/lang/Object;Ljava/lang/Object;)Z",
+        };
+        for (String d : descriptors) {
+            MethodTypeDesc mtd = MethodTypeDesc.ofDescriptor(d);
+            MethodType mt = MethodType.fromMethodDescriptorString(d, null);
+            check(mt.toMethodDescriptorString().equals(d),
+                  "MethodType round-trip preserves " + d);
+            check(mtd.resolveConstantDesc(MethodHandles.lookup()).toMethodDescriptorString().equals(d),
+                  "MethodTypeDesc resolves to an equal MethodType for " + d);
+            check(mtd.descriptorString().equals(d), "descriptorString exact for " + d);
+        }
+
+        // surgery results stay consistent with MethodType surgery
+        MethodTypeDesc two = MethodTypeDesc.ofDescriptor("(IZ)V");
+        check(two.dropParameterTypes(0, 0).descriptorString().equals("(IZ)V"),
+              "drop(0,0) is a no-op");
+        check(two.insertParameterTypes(2, ConstantDescs.CD_long).descriptorString().equals("(IZJ)V"),
+              "insert at end");
+        check(two.changeReturnType(ConstantDescs.CD_String).descriptorString().equals("(IZ)Ljava/lang/String;"),
+              "changeReturnType to reference");
+        check(two.parameterList().equals(List.of(ConstantDescs.CD_int, ConstantDescs.CD_boolean))
+                      && two.parameterArray().length == 2,
+              "parameterList/parameterArray agree");
+        check(two.displayDescriptor().equals("(int,boolean)void"), "displayDescriptor");
+        // array parameter display + parsing
+        MethodTypeDesc arrP = MethodTypeDesc.ofDescriptor("([I)V");
+        check(arrP.parameterType(0).isArray(), "[I parameter parses as array");
+        check(arrP.displayDescriptor().equals("(int[])void"), "displayDescriptor uses [] form");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

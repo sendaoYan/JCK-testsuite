@@ -121,6 +121,69 @@ public class MethodHandleDescTest {
         }
     }
 
+    // ---- Part 3: deep contract (view adaptation + write closure + null matrix) ----
+    static void testDeepContract() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+
+        // asType to a supertype view still resolves and dispatches the original method
+        MethodHandleDesc len = MethodHandleDesc.ofMethod(
+                DirectMethodHandleDesc.Kind.VIRTUAL, ClassDesc.of("java.lang.String"),
+                "length", MethodTypeDesc.of(ConstantDescs.CD_int));
+        MethodHandleDesc charSeqView = len.asType(
+                MethodTypeDesc.of(ConstantDescs.CD_int, ClassDesc.of("java.lang.CharSequence")));
+        check(charSeqView.invocationType().descriptorString()
+                      .equals("(Ljava/lang/CharSequence;)I"),
+              "asType(CharSequence) reflected in invocationType");
+        check((int) charSeqView.resolveConstantDesc(lookup).invoke("abcd") == 4,
+              "asType view resolves and invokes");
+        try {
+            len.asType(null);
+            check(false, "asType(null) rejected");
+        } catch (NullPointerException expected) {
+            check(true, "asType(null) -> NPE");
+        }
+
+        // SETTER/GETTER full write-read cycle through resolved handles
+        DirectMethodHandleDesc setter = (DirectMethodHandleDesc) MethodHandleDesc.ofField(
+                DirectMethodHandleDesc.Kind.SETTER,
+                ClassDesc.ofDescriptor("LMethodHandleDescTest$Holder;"), "x", ConstantDescs.CD_int);
+        Holder box = new Holder();
+        setter.resolveConstantDesc(lookup).invoke(box, 777);
+        check(box.x == 777, "SETTER writes 777 through resolved handle");
+        DirectMethodHandleDesc getter = (DirectMethodHandleDesc) MethodHandleDesc.ofField(
+                DirectMethodHandleDesc.Kind.GETTER,
+                ClassDesc.ofDescriptor("LMethodHandleDescTest$Holder;"), "x", ConstantDescs.CD_int);
+        check((int) getter.resolveConstantDesc(lookup).invoke((Object) box) == 777,
+              "GETTER reads the setter's value back");
+
+        // ofConstructor with no extra parameters links the default constructor
+        MethodHandleDesc defCtor = MethodHandleDesc.ofConstructor(ClassDesc.of("java.lang.Object"));
+        check(defCtor.invocationType().descriptorString().equals("()Ljava/lang/Object;"),
+              "default constructor invocationType");
+        check(defCtor.resolveConstantDesc(lookup).invoke() instanceof Object,
+              "default constructor resolves and constructs");
+
+        // null factory matrix
+        try {
+            MethodHandleDesc.of(null, ClassDesc.of("java.lang.Object"),
+                    "<init>", "()V");
+            check(false, "of(null kind) rejected");
+        } catch (NullPointerException expected) { check(true, "of(null kind) -> NPE"); }
+        try {
+            MethodHandleDesc.ofConstructor(null);
+            check(false, "ofConstructor(null) rejected");
+        } catch (NullPointerException expected) { check(true, "ofConstructor(null) -> NPE"); }
+
+        // invocationType vs resolve type agreement for a STATIC method
+        MethodHandleDesc parseInt = MethodHandleDesc.ofMethod(
+                DirectMethodHandleDesc.Kind.STATIC, ClassDesc.of("java.lang.Integer"),
+                "parseInt", MethodTypeDesc.of(ConstantDescs.CD_int, ConstantDescs.CD_String));
+        MethodHandle resolved = parseInt.resolveConstantDesc(lookup);
+        check(resolved.type().toMethodDescriptorString()
+                      .equals(parseInt.invocationType().descriptorString()),
+              "resolved MethodType equals invocationType descriptor");
+    }
+
     public static class Holder {
         public int x = 42;
     }
@@ -128,6 +191,7 @@ public class MethodHandleDescTest {
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

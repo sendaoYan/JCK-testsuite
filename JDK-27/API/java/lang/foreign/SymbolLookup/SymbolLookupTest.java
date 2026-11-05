@@ -1,7 +1,7 @@
 /*
  * @test
  * @summary java.lang.foreign.SymbolLookup conformance: white-box structure + black-box behavior.
- * @run main SymbolLookupTest
+ * @run main/othervm --enable-native-access=ALL-UNNAMED SymbolLookupTest
  */
 import java.lang.foreign.*;
 import java.nio.file.Path;
@@ -82,9 +82,60 @@ public class SymbolLookupTest {
         }
     }
 
+    // ---- Part 3: deep contract (or() precedence, loader surface, determinism) ----
+    static void testDeepContract() {
+        try (Arena a = Arena.ofConfined()) {
+            MemorySegment first = a.allocate(0, 1);
+            MemorySegment second = a.allocate(0, 1);
+            SymbolLookup a1 = name -> "shared".equals(name) ? Optional.of(first) : Optional.empty();
+            SymbolLookup b1 = name -> "shared".equals(name) ? Optional.of(second)
+                    : "onlyInB".equals(name) ? Optional.of(second) : Optional.empty();
+
+            // or() consults the receiver first: "shared" resolves to the FIRST lookup's address
+            SymbolLookup ab = a1.or(b1);
+            check(ab.find("shared").get().address() == first.address(),
+                  "or() prefers the receiver's symbol on name collision");
+            check(ab.find("onlyInB").isPresent(), "or() falls through to the second lookup");
+            // the composed lookup itself composes further (associative chain)
+            SymbolLookup chained = ab.or(name -> "third".equals(name) ? Optional.of(first) : Optional.empty());
+            check(chained.find("shared").isPresent() && chained.find("onlyInB").isPresent()
+                          && chained.find("third").isPresent(),
+                  "or() chains across three lookups");
+            // find is deterministic: same name, same address every time
+            check(ab.find("shared").get().address() == ab.find("shared").get().address(),
+                  "repeated find is stable");
+            // findOrThrow returns the same symbol find does
+            check(ab.findOrThrow("shared").address() == ab.find("shared").get().address(),
+                  "findOrThrow agrees with find");
+        }
+
+        // loaderLookup surface in a fresh test JVM: no JNI library exports strlen
+        // here (measured on this harness; if a future harness loads such a library,
+        // this documents the environment rather than a hard failure)
+        Optional<MemorySegment> viaLoader = SymbolLookup.loaderLookup().find("strlen");
+        check(viaLoader.isEmpty(),
+              "loaderLookup has no strlen in a JVM without JNI libraries (env-recorded)");
+
+        // lookups never throw for unknown names, they answer empty
+        for (String name : new String[]{"", "jck_zzz_1", "malloc_malloc", "\0bad"}) {
+            check(SymbolLookup.loaderLookup().find(name).isEmpty(),
+                  "find(" + (name.isEmpty() ? "empty" : "unknown") + ") answers Optional.empty");
+        }
+        // the default lookup of the native linker resolves the C runtime (glibc)
+        java.util.Optional<MemorySegment> strlen = Linker.nativeLinker().defaultLookup().find("strlen");
+        check(strlen.isPresent(),
+              "defaultLookup resolves strlen from the process C libraries (glibc)");
+        check(strlen.get().byteSize() == 0, "resolved symbol is a bare address (size 0)");
+        // composed default + loader still resolves strlen (order: default first)
+        check(Linker.nativeLinker().defaultLookup().or(SymbolLookup.loaderLookup())
+                      .find("strlen").isPresent(),
+              "defaultLookup.or(loaderLookup) still finds strlen");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

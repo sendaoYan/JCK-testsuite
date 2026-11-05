@@ -30,3 +30,13 @@ Arena.global().allocate(8, 1);              // 永不回收
 - global/ofAuto 段可正常参与 native 调用；`allocate(size, align)` 对 8/64/256 对齐均兑现（地址取模为 0）。
 
 `ArenaNativeTest.java`（23 断言）：C 写 Java 读 / Java 写 C 读双向交换；confined close 杀死段（读写两路 + 二次 close）；wrong-thread 精确异常；shared 跨线程 native 读；global/ofAuto；对齐兑现；libraryLookup(Path) 真调 + close 后 find/findOrThrow 精确异常 + bogus 路径 IAE。C 源（`jck_read_long`/`jck_write_long`）内嵌运行时编译进 scratch，不入库。
+
+## 5. 契约深化（JDK-27 实测锁定）
+- **JDK-27 方法面**：`ofConfined()/ofShared()/ofAuto()/global()`——**无 `of()`**（预览期曾名 of，正式 API 用 ofConfined）。
+- **生命周期**：close 后 get/set → ISE；**二次 close → ISE("Already closed")**；try-with-resources 内手动 close 后隐式 close 同样 ISE；global/ofAuto close → UOE。
+- **线程归属**：confined 段跨线程 get → **WrongThreadException**（精确类型，非泛化 ISE）；shared 段 worker 写/主线程读可见（4242 闭环）。
+- **allocate 契约**：负 size → IAE；alignment 0/非 2 幂 → IAE；(0,1) 合法零长段；新分配段零初始化；maxByteAlignment ≥ 请求对齐且为 2 幂（实测 32/64）。
+- allocate(layout)/allocate(layout,n) 委托 SegmentAllocator 默认方法（size 4/12）。
+
+## 版本差异
+JDK-8 无此包（java.lang.constant 是 12+、java.lang.IO 是 25+（JEP 495）、java.lang.foreign 是 19+ 预览 / 22+ 正式）；本目录测试仅 JDK-27，不镜像 JDK-8 侧。

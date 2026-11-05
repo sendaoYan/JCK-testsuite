@@ -62,9 +62,80 @@ public class ValueLayoutTest {
         }
     }
 
+    // ---- Part 3: deep contract (full carrier/order/unaligned tables) ----
+    static void testDeepContract() throws Exception {
+        // complete size/alignment/carrier table for the JAVA_* family
+        Object[][] table = {
+                {"JAVA_BYTE", ValueLayout.JAVA_BYTE, 1, byte.class},
+                {"JAVA_BOOLEAN", ValueLayout.JAVA_BOOLEAN, 1, boolean.class},
+                {"JAVA_CHAR", ValueLayout.JAVA_CHAR, 2, char.class},
+                {"JAVA_SHORT", ValueLayout.JAVA_SHORT, 2, short.class},
+                {"JAVA_INT", ValueLayout.JAVA_INT, 4, int.class},
+                {"JAVA_FLOAT", ValueLayout.JAVA_FLOAT, 4, float.class},
+                {"JAVA_LONG", ValueLayout.JAVA_LONG, 8, long.class},
+                {"JAVA_DOUBLE", ValueLayout.JAVA_DOUBLE, 8, double.class},
+        };
+        for (Object[] row : table) {
+            ValueLayout vl = (ValueLayout) row[1];
+            String tag = (String) row[0];
+            check(vl.byteSize() == ((Integer) row[2]).longValue(), tag + " byteSize " + row[2]);
+            check(vl.byteAlignment() == vl.byteSize(), tag + " alignment == size (compact)");
+            check(vl.carrier() == row[3], tag + " carrier " + row[3]);
+            check(vl.order() == ByteOrder.nativeOrder(), tag + " order is nativeOrder");
+            check(vl.name().isEmpty(), tag + " has no name by default");
+        }
+        // the complete UNALIGNED family: same size, alignment 1
+        ValueLayout[] unaligned = {ValueLayout.JAVA_CHAR_UNALIGNED, ValueLayout.JAVA_SHORT_UNALIGNED,
+                ValueLayout.JAVA_INT_UNALIGNED, ValueLayout.JAVA_FLOAT_UNALIGNED,
+                ValueLayout.JAVA_LONG_UNALIGNED, ValueLayout.JAVA_DOUBLE_UNALIGNED,
+                ValueLayout.ADDRESS_UNALIGNED};
+        for (ValueLayout u : unaligned)
+            check(u.byteAlignment() == 1 && u.byteSize() >= 2,
+                  "unaligned variant alignment 1: " + u);
+        check(ValueLayout.JAVA_INT_UNALIGNED.byteSize() == 4
+                      && ValueLayout.JAVA_INT_UNALIGNED.carrier() == int.class,
+              "unaligned keeps size and carrier");
+        // alignment surgery
+        check(ValueLayout.JAVA_INT.withByteAlignment(1).byteAlignment() == 1,
+              "JAVA_INT.withByteAlignment(1) is legal");
+        check(ValueLayout.JAVA_INT.withByteAlignment(1).byteSize() == 4,
+              "withByteAlignment does not change size");
+        try {
+            ValueLayout.JAVA_INT.withByteAlignment(3);
+            check(false, "non-power-of-two alignment rejected");
+        } catch (IllegalArgumentException expected) {
+            check(true, "JAVA_INT.withByteAlignment(3) -> IAE");
+        }
+        // withName/withoutName round trip keeps value equality
+        check(ValueLayout.JAVA_INT.withName("x").withoutName().equals(ValueLayout.JAVA_INT),
+              "withName/withoutName value round trip");
+        check(!ValueLayout.JAVA_INT.withName("x").equals(ValueLayout.JAVA_INT),
+              "naming changes layout identity");
+        // varHandle carrier and coordinates
+        VarHandle vh = ValueLayout.JAVA_LONG.varHandle();
+        check(vh.varType() == long.class, "JAVA_LONG varHandle varType");
+        check(java.util.Arrays.equals(vh.coordinateTypes().toArray(),
+                      new Class<?>[]{MemorySegment.class, long.class}),
+              "varHandle coordinates are (MemorySegment, long)");
+        // UNALIGNED layouts actually permit off-alignment access (measured)
+        try (Arena a = Arena.ofConfined()) {
+            MemorySegment seg = a.allocate(8, 8);
+            seg.set(ValueLayout.JAVA_INT_UNALIGNED, 1, 7);
+            check(seg.get(ValueLayout.JAVA_INT_UNALIGNED, 1) == 7,
+                  "JAVA_INT_UNALIGNED@1 round-trips");
+            try {
+                seg.get(ValueLayout.JAVA_INT, 1);
+                check(false, "aligned layout at odd offset must fail");
+            } catch (IllegalArgumentException expected) {
+                check(true, "JAVA_INT@1 -> IAE while UNALIGNED variant succeeds");
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

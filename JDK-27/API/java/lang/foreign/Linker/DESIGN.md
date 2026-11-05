@@ -42,3 +42,14 @@ Map<String,MemoryLayout> canon = linker.canonicalLayouts();
 ### 5.3 C 库说明
 - 每个测试内嵌自写 C 源（无 jni.h 依赖），运行时写入 jtreg scratch（`user.dir`），`gcc -shared -fPIC` 编译（有界等待 60s），`System.load` + `loaderLookup()` 取符号；`.c/.so` 只落 scratch，绝不入库。
 - 函数：`jck_carrier_sum`（13 carrier 求和）、`jck_is_null`、`jck_set_errno`、`jck_read_long`/`jck_write_long`、`jck_sum2`、`jck_apply_and_count`（回调驱动）。
+
+## 5. 契约深化（JDK-27 实测锁定）
+- **nativeLinker() 同一实例**（两次 ==）；canonicalLayouts 不可修改（put → UOE）、含 size_t/long long/wchar_t、≥20 项、size_t 指针宽。
+- **Option 面（27 实测）**：`critical(boolean)`（isTrivial 已更名）、firstVariadicArg、captureCallState、captureStateLayout() 非空 StructLayout。
+- **strlen downcall 真闭环（glibc）**：defaultLookup().find("strlen") present → `downcallHandle(addr, fd(long,ADDRESS))` → invoke(allocateFrom("hello"))==5、""==0；critical(true) 变体同链路 "==4"。
+- **未绑定形态**：downcallHandle(fd) 的 MethodHandle 首参是 MemorySegment（调用目标地址在前）。
+- **NPE 矩阵**：downcallHandle(null,fd)、downcallHandle(fd,null opts)、upcallStub(null/fd null)。
+- **upcall 生命周期**：stub 是零长 native 段、arena 存活期 alive；close 后 scope 死、地址仍可读；死 stub 传入 downcall → ISE（LinkerUpcallTest C 环节覆盖）。
+
+## 版本差异
+JDK-8 无此包（java.lang.constant 是 12+、java.lang.IO 是 25+（JEP 495）、java.lang.foreign 是 19+ 预览 / 22+ 正式）；本目录测试仅 JDK-27，不镜像 JDK-8 侧。

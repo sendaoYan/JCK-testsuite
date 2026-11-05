@@ -115,9 +115,61 @@ public class DynamicCallSiteDescTest {
               "target invokes through the call site");
     }
 
+    // ---- Part 3: deep contract (invokedynamic resolution closure + null matrix) ----
+    static void testDeepContract() throws Throwable {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+
+        // null factory matrix
+        try {
+            DynamicCallSiteDesc.of(null, "n", MethodTypeDesc.ofDescriptor("()V"));
+            check(false, "of(null bsm) rejected");
+        } catch (NullPointerException expected) { check(true, "of(null bsm) -> NPE"); }
+        try {
+            DynamicCallSiteDesc.of(ConstantDescs.BSM_INVOKE, null);
+            check(false, "of(bsm, null type) rejected");
+        } catch (NullPointerException expected) { check(true, "of(bsm, null type) -> NPE"); }
+
+        // real invokedynamic-style resolution: StringConcatFactory.makeConcat builds a
+        // working call site whose target concatenates its two String arguments
+        DirectMethodHandleDesc concatBsm = MethodHandleDesc.ofMethod(
+                DirectMethodHandleDesc.Kind.STATIC,
+                ClassDesc.of("java.lang.invoke.StringConcatFactory"), "makeConcat",
+                MethodTypeDesc.ofDescriptor(
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;"
+                                + "Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"));
+        DynamicCallSiteDesc concat = DynamicCallSiteDesc.of(concatBsm, "x",
+                MethodTypeDesc.ofDescriptor("(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"));
+        CallSite cs = concat.resolveCallSiteDesc(lookup);
+        check(cs != null, "makeConcat call site resolves");
+        check(cs.getTarget().invoke("a", "b").equals("ab"),
+              "makeConcat target concatenates \"a\"+\"b\" == \"ab\"");
+
+        // withArgs/withNameAndType do not mutate the receiver (value semantics)
+        DirectMethodHandleDesc bsm = ConstantDescs.BSM_INVOKE;
+        MethodTypeDesc type = MethodTypeDesc.ofDescriptor("(I)V");
+        DynamicCallSiteDesc base = DynamicCallSiteDesc.of(bsm, "orig", type, 7, "extra");
+        base.withArgs("only");
+        base.withNameAndType("other", MethodTypeDesc.ofDescriptor("(J)V"));
+        check(base.invocationName().equals("orig"), "with* leaves receiver name");
+        check(base.invocationType().descriptorString().equals("(I)V"),
+              "with* leaves receiver type");
+        check(base.bootstrapArgs().length == 2, "with* leaves receiver args");
+
+        // bootstrapArgs array is defensive or value-equal on reconstruction
+        DynamicCallSiteDesc same = DynamicCallSiteDesc.of(
+                (DirectMethodHandleDesc) base.bootstrapMethod(), base.invocationName(),
+                base.invocationType(), base.bootstrapArgs());
+        check(base.equals(same) && base.hashCode() == same.hashCode(),
+              "reconstruction from accessors is equals");
+
+        // generic Object bootstrap path: ConstantBootstraps.invoke-style descriptor resolves
+        check(concat.toString().contains("makeConcat"), "toString names the bootstrap");
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

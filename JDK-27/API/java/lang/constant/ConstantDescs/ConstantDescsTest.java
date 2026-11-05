@@ -8,6 +8,7 @@ import java.lang.constant.ClassDesc;
 import java.lang.constant.ConstantDesc;
 import java.lang.constant.ConstantDescs;
 import java.lang.constant.DirectMethodHandleDesc;
+import java.lang.constant.DynamicConstantDesc;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
@@ -143,9 +144,106 @@ public class ConstantDescsTest {
         check(ConstantDescs.NULL instanceof ConstantDesc, "NULL is a ConstantDesc");
     }
 
+    // ---- Part 3: deep contract (canonical constant table + equivalence) ----
+    static void testDeepContract() throws Exception {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+
+        // full primitive descriptor table (9 primitive/void constants)
+        String[][] prims = {
+                {"CD_boolean", "Z"}, {"CD_byte", "B"}, {"CD_char", "C"}, {"CD_short", "S"},
+                {"CD_int", "I"}, {"CD_long", "J"}, {"CD_float", "F"}, {"CD_double", "D"},
+                {"CD_void", "V"},
+        };
+        for (String[] pair : prims)
+            check(ds((ClassDesc) field(pair[0])).equals(pair[1]),
+                  pair[0] + " descriptor " + pair[1]);
+
+        // boxed + core reference constants (15 more canonical descriptors)
+        String[][] refs = {
+                {"CD_Object", "Ljava/lang/Object;"},
+                {"CD_String", "Ljava/lang/String;"},
+                {"CD_Integer", "Ljava/lang/Integer;"},
+                {"CD_Boolean", "Ljava/lang/Boolean;"},
+                {"CD_Byte", "Ljava/lang/Byte;"},
+                {"CD_Character", "Ljava/lang/Character;"},
+                {"CD_Short", "Ljava/lang/Short;"},
+                {"CD_Long", "Ljava/lang/Long;"},
+                {"CD_Float", "Ljava/lang/Float;"},
+                {"CD_Double", "Ljava/lang/Double;"},
+                {"CD_Number", "Ljava/lang/Number;"},
+                {"CD_Exception", "Ljava/lang/Exception;"},
+                {"CD_Throwable", "Ljava/lang/Throwable;"},
+                {"CD_Collection", "Ljava/util/Collection;"},
+                {"CD_Set", "Ljava/util/Set;"},
+                {"CD_MethodHandle", "Ljava/lang/invoke/MethodHandle;"},
+                {"CD_MethodType", "Ljava/lang/invoke/MethodType;"},
+                {"CD_VarHandle", "Ljava/lang/invoke/VarHandle;"},
+                {"CD_CallSite", "Ljava/lang/invoke/CallSite;"},
+                {"CD_ConstantDesc", "Ljava/lang/constant/ConstantDesc;"},
+                {"CD_ConstantBootstraps", "Ljava/lang/invoke/ConstantBootstraps;"},
+        };
+        for (String[] pair : refs)
+            check(ds((ClassDesc) field(pair[0])).equals(pair[1]),
+                  pair[0] + " descriptor exact");
+
+        // canonical constants equal freshly-built descriptors by value (but are not the same instance)
+        ClassDesc cdString = (ClassDesc) field("CD_String");
+        ClassDesc built = ClassDesc.of("java.lang.String");
+        check(cdString.equals(built), "CD_String equals ClassDesc.of(...)");
+        check(cdString != built, "CD_String is not the same instance as of() (no interning)");
+        check(cdString.hashCode() == built.hashCode(), "CD_String hashCode agrees with of()");
+        check(ConstantDescs.CD_int.equals(ClassDesc.ofDescriptor("I")),
+              "CD_int equals ofDescriptor(\"I\")");
+
+        // canonical constants resolve
+        check(((ClassDesc) field("CD_Number")).resolveConstantDesc(lookup) == Number.class,
+              "CD_Number resolves");
+        check(((ClassDesc) field("CD_Collection"))
+                      .resolveConstantDesc(lookup) == java.util.Collection.class,
+              "CD_Collection resolves");
+
+        // every BSM constant is a resolvable STATIC method; most live on
+        // ConstantBootstraps, the class-data pair lives on MethodHandles
+        String[] bsmFields = {"BSM_PRIMITIVE_CLASS", "BSM_ENUM_CONSTANT", "BSM_GET_STATIC_FINAL",
+                              "BSM_NULL_CONSTANT", "BSM_VARHANDLE_FIELD", "BSM_VARHANDLE_STATIC_FIELD",
+                              "BSM_VARHANDLE_ARRAY", "BSM_INVOKE", "BSM_EXPLICIT_CAST"};
+        for (String name : bsmFields) {
+            DirectMethodHandleDesc d = (DirectMethodHandleDesc) field(name);
+            check(d.kind() == DirectMethodHandleDesc.Kind.STATIC, name + " STATIC kind");
+            check(d.owner().descriptorString().equals("Ljava/lang/invoke/ConstantBootstraps;"),
+                  name + " owner ConstantBootstraps");
+            String ts = d.toString();
+            check(ts.contains("ConstantBootstraps"), name + " toString names owner");
+            check(d.resolveConstantDesc(lookup) != null, name + " resolves to a MethodHandle");
+        }
+        for (String name : new String[]{"BSM_CLASS_DATA", "BSM_CLASS_DATA_AT"}) {
+            DirectMethodHandleDesc d = (DirectMethodHandleDesc) field(name);
+            check(d.kind() == DirectMethodHandleDesc.Kind.STATIC, name + " STATIC kind");
+            check(d.owner().descriptorString().equals("Ljava/lang/invoke/MethodHandles;"),
+                  name + " owner MethodHandles (class-data bootstraps)");
+            check(d.resolveConstantDesc(lookup) != null, name + " resolves to a MethodHandle");
+        }
+
+        // MTD / dynamic-constant table precision
+        check(ConstantDescs.MTD_void.equals(MethodTypeDesc.ofDescriptor("()V")),
+              "MTD_void equals ofDescriptor(\"()V\")");
+        check(ConstantDescs.TRUE.resolveConstantDesc(lookup).getClass() == Boolean.class,
+              "TRUE resolves to a Boolean");
+        check(ConstantDescs.NULL.equals(DynamicConstantDesc.ofNamed(
+                      ConstantDescs.BSM_NULL_CONSTANT, "_", ConstantDescs.CD_Object)),
+              "NULL equals an equivalent freshly-built dynamic constant");
+    }
+
+    static Object field(String name) throws Exception {
+        Field f = ConstantDescs.class.getDeclaredField(name);
+        f.setAccessible(true);
+        return f.get(null);
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

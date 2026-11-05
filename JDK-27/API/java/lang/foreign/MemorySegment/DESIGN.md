@@ -33,3 +33,16 @@ MemorySegment arr = MemorySegment.ofArray(new int[]{1,2,3});
 - C 的指针算术以 Java 传入的段基址为准：`asSlice(8)` 传给 C 只影响偏移 8 处；`getAtIndex/setAtIndex` 与 C `p[i]` 一致。
 
 `MemorySegmentNativeTest.java`（27 断言）：Long.MIN/MAX 双向往返；asSlice 偏移语义（写偏移 8 不动偏移 0）；索引访问与 C p[i] 一致 + setAtIndex 对 C 可见；只读段 C 可读/Java 写 IAE；NULL 段三元组；堆段两种数组 IAE；C 字符串互操作（NUL 终结符物化、strlen 一致、strchr 偏移/NULL）。C 源（`jck_read_long`/`jck_write_long`/`jck_read_int_at`/`jck_is_null`）内嵌运行时编译进 scratch，不入库。
+
+## 5. 契约深化（JDK-27 实测锁定）
+- **越界矩阵（全 IOOBE）**：INT@size-3、负 offset、getAtIndex(-1)、setAtIndex 越界、asSlice(9)/asSlice(-1)。
+- **对齐仍在强制**：get/set(JAVA_LONG, offset 4) → **IAE**（非 IOOBE）；JAVA_LONG_UNALIGNED@4 合法；heap byte[] 段 INT@1 → IAE（堆基址 1 字节对齐）。
+- **只读违规是 IAE**（27 实测，非 UOE）：set/fill/copyFrom/setString 对 asReadOnly 视图全 IAE；读不受限；asReadOnly 幂等（equals 成立但非同实例）。
+- **equals 语义**：base+offset+size 视图同一性——同内容不同地址 **false**；asSlice(0) equals 原段且 hashCode 相同。
+- **NULL 契约**：address 0、size 0、isNative true、scope 常活、任意线程可访问、内容访问 IOOBE、ofAddress(0) 与其 equals。
+- **字符串**：allocateFrom("中")=3 UTF-8 字节+NUL（size 4）；空串=NUL 1 字节；**无 NUL 终止的 getString → IOOBE**。
+- **堆段**：int[] 段 asByteBuffer → UOE（仅 byte[] 段可转）；elements/spliterator 按给定元素布局计数（16B/INT=4）。
+- copy 窗口外字节不动；typed copy 按布局往返。
+
+## 版本差异
+JDK-8 无此包（java.lang.constant 是 12+、java.lang.IO 是 25+（JEP 495）、java.lang.foreign 是 19+ 预览 / 22+ 正式）；本目录测试仅 JDK-27，不镜像 JDK-8 侧。

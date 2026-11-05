@@ -29,3 +29,12 @@ MethodHandle mh = Linker.nativeLinker().downcallHandle(addr, fd);
 - JDK-27 的 FunctionDescriptor **无** `withCallConv` 等属性 API（javap 实证），调用约定差异全部收敛到 `Linker.Option`。
 
 `FunctionDescriptorNativeTest.java`（27 断言）：toMethodType 三向对应 + bound/unbound 真调（含 NULL 实参分支）；append（jck_sum2→jck_sum3 真调精确值）；insert 中部/首部真调 + 越界 IAE；changeReturn 加宽真调；dropReturn/ofVoid 真调；调用 arity WrongMethodTypeException。C 源（`jck_sum2`/`jck_sum3`/`jck_widen`/`jck_void3`/`jck_ptr_and_int`）内嵌运行时编译进 scratch，不入库。
+
+## 5. 契约深化（JDK-27 实测锁定）
+- 纯函数族：append/insert/changeReturn/drop 全部不改原描述符；changeReturnLayout 保持参数列表逐项相同。
+- insertArgumentLayouts(-1/超界) → **IAE**；changeReturnLayout(null)/of(null,…) → NPE。
+- ofVoid() → ()void；值语义 equals/hashCode；ADDRESS 参数映射 MemorySegment.class。
+- **argumentLayouts() 不可修改**（add → UOE，27 实测）。
+
+## 版本差异
+JDK-8 无此包（java.lang.constant 是 12+、java.lang.IO 是 25+（JEP 495）、java.lang.foreign 是 19+ 预览 / 22+ 正式）；本目录测试仅 JDK-27，不镜像 JDK-8 侧。

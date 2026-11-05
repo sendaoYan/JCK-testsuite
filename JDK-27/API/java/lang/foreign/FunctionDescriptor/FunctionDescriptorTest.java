@@ -69,9 +69,89 @@ public class FunctionDescriptorTest {
               "ofVoid toMethodType");
     }
 
+    // ---- Part 3: deep contract (immutability, value semantics, null matrix) ----
+    static void testDeepContract() {
+        FunctionDescriptor base = FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.JAVA_LONG, ValueLayout.JAVA_DOUBLE);
+
+        // every mutator returns a new descriptor; the original is untouched
+        FunctionDescriptor appended = base.appendArgumentLayouts(ValueLayout.JAVA_BYTE);
+        check(base.argumentLayouts().size() == 2, "appendArgumentLayouts is pure");
+        check(appended.argumentLayouts().size() == 3
+                      && appended.argumentLayouts().get(2) == ValueLayout.JAVA_BYTE,
+              "appended layout lands at the tail");
+        FunctionDescriptor inserted = base.insertArgumentLayouts(1, ValueLayout.JAVA_SHORT);
+        check(inserted.argumentLayouts().get(1) == ValueLayout.JAVA_SHORT
+                      && inserted.argumentLayouts().get(2) == ValueLayout.JAVA_DOUBLE,
+              "insertArgumentLayouts(1, SHORT) shifts the tail");
+        FunctionDescriptor changed = base.changeReturnLayout(ValueLayout.ADDRESS);
+        check(changed.returnLayout().get() == ValueLayout.ADDRESS
+                      && base.returnLayout().get() == ValueLayout.JAVA_INT,
+              "changeReturnLayout is pure");
+        check(changed.argumentLayouts().equals(base.argumentLayouts()),
+              "changeReturnLayout keeps arguments identical");
+        FunctionDescriptor dropped = base.dropReturnLayout();
+        check(dropped.returnLayout().isEmpty() && dropped.argumentLayouts().size() == 2,
+              "dropReturnLayout keeps arguments");
+
+        // insertArgumentLayouts bounds: negative or too-large index is rejected
+        for (int bad : new int[]{-1, 3, 100}) {
+            try {
+                base.insertArgumentLayouts(bad, ValueLayout.JAVA_BYTE);
+                check(false, "insertArgumentLayouts(" + bad + ") must be rejected");
+            } catch (IllegalArgumentException expected) {
+                check(true, "insertArgumentLayouts(" + bad + ") -> IAE");
+            }
+        }
+        // null return layout is rejected
+        try {
+            base.changeReturnLayout(null);
+            check(false, "changeReturnLayout(null) rejected");
+        } catch (NullPointerException expected) {
+            check(true, "changeReturnLayout(null) -> NPE");
+        }
+        try {
+            FunctionDescriptor.of(null, ValueLayout.JAVA_INT);
+            check(false, "of(null return) rejected");
+        } catch (NullPointerException expected) {
+            check(true, "of(null, ...) -> NPE");
+        }
+
+        // ofVoid with no arguments: ()void
+        FunctionDescriptor noArgs = FunctionDescriptor.ofVoid();
+        check(noArgs.returnLayout().isEmpty() && noArgs.argumentLayouts().isEmpty(),
+              "ofVoid() has neither return nor arguments");
+        check(noArgs.toMethodType() == MethodType.methodType(void.class),
+              "ofVoid() toMethodType is ()void");
+
+        // value semantics: same construction equals, hashCode agrees
+        FunctionDescriptor again = FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.JAVA_LONG, ValueLayout.JAVA_DOUBLE);
+        check(base.equals(again) && base.hashCode() == again.hashCode(),
+              "value-equal descriptors");
+        check(!base.equals(appended), "different shapes not equals");
+        check(!base.equals(null) && !base.equals("fd"), "!equals unrelated");
+        // ofVoid vs of-void-return are both void-returning but differ in shape
+        check(FunctionDescriptor.ofVoid(ValueLayout.JAVA_INT)
+                      .equals(FunctionDescriptor.ofVoid(ValueLayout.JAVA_INT)),
+              "ofVoid value equality");
+        // ADDRESS argument maps to MemorySegment.class in the method type
+        check(FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS)
+                      .toMethodType().parameterType(0) == MemorySegment.class,
+              "ADDRESS argument maps to MemorySegment.class");
+        // argumentLayouts is an unmodifiable view (measured)
+        try {
+            base.argumentLayouts().add(ValueLayout.JAVA_BYTE);
+            check(false, "argumentLayouts must be unmodifiable");
+        } catch (UnsupportedOperationException expected) {
+            check(true, "argumentLayouts.add -> UnsupportedOperationException");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

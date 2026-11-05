@@ -18,3 +18,12 @@ CallSite cs = d.resolveCallSiteDesc(MethodHandles.lookup());
 白盒：final、无 public 构造器、11 方法、静态 of。
 黑盒：of 全访问器（name/type/bsm/args 值与长度）；of(bsm,type) 默认名 "_"；withArgs 整体替换参数且保留 name/bsm；withNameAndType；按值 equals/hashCode；toString 含 nameBs/target；真实解析：测试类内 bootstrap 返回 ConstantCallSite，resolveCallSiteDesc 得到类型匹配且 invokeExact("abcd")==4 的 CallSite。
 对应 `DynamicCallSiteDescTest.java` 的 `testBlackBox()`。
+
+## 5. 契约深化（JDK-27 实测锁定）
+- **invokedynamic 真解析闭环**：以 `StringConcatFactory.makeConcat` 为 bootstrap，`DynamicCallSiteDesc.of(bsm,"x",(String,String)String).resolveCallSiteDesc(lookup)` 返回可用 CallSite，target.invoke("a","b")=="ab"。
+- withArgs/withNameAndType 纯函数：不改变接收者 name/type/args。
+- 由访问器重建的 DynamicCallSiteDesc 与原对象 equals。
+- null 矩阵：of(null bsm,…)/of(bsm,null type) → NPE。
+
+## 版本差异
+JDK-8 无此包（java.lang.constant 是 12+、java.lang.IO 是 25+（JEP 495）、java.lang.foreign 是 19+ 预览 / 22+ 正式）；本目录测试仅 JDK-27，不镜像 JDK-8 侧。

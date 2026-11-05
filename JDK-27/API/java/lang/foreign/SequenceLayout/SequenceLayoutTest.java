@@ -61,9 +61,62 @@ public class SequenceLayoutTest {
         check(named.withByteAlignment(8).byteAlignment() == 8, "withByteAlignment");
     }
 
+    // ---- Part 3: deep contract (varlen removal, reshape/flatten matrix) ----
+    static void testDeepContract() {
+        SequenceLayout seq = MemoryLayout.sequenceLayout(4, ValueLayout.JAVA_INT);
+
+        // JDK-27 removed variable-length sequences: all negative counts are IAE
+        try { MemoryLayout.sequenceLayout(-1, ValueLayout.JAVA_INT); check(false, "seq(-1) rejected"); }
+        catch (IllegalArgumentException expected) { check(true, "sequenceLayout(-1) -> IAE (varlen removed)"); }
+        try { seq.withElementCount(-1); check(false, "wEC(-1) rejected"); }
+        catch (IllegalArgumentException expected) { check(true, "withElementCount(-1) -> IAE"); }
+        try { seq.withElementCount(-2); check(false, "wEC(-2) rejected"); }
+        catch (IllegalArgumentException expected) { check(true, "withElementCount(-2) -> IAE"); }
+        // zero-count sequence is legal
+        check(MemoryLayout.sequenceLayout(0, ValueLayout.JAVA_INT).byteSize() == 0,
+              "seq(0) has size 0");
+
+        // reshape requires the product of dimensions to equal elementCount
+        check(seq.reshape(1, 2, 2).elementCount() == 1, "reshape(1,2,2) outer count 1");
+        check(((SequenceLayout) seq.reshape(1, 2, 2).elementLayout()).elementCount() == 2,
+              "reshape(1,2,2) nests [2:[2:i4]]");
+        check(seq.reshape(1, 2, 2).byteSize() == 16, "reshape preserves total size");
+        check(seq.reshape(4).elementLayout() == ValueLayout.JAVA_INT,
+              "reshape(4) keeps the leaf element");
+        for (long bad : new long[]{5, 3, 2, 0}) {
+            try {
+                seq.reshape(bad);
+                check(false, "reshape(" + bad + ") must not divide 4");
+            } catch (IllegalArgumentException expected) {
+                check(true, "reshape(" + bad + ") -> IAE (product must match)");
+            }
+        }
+        // flatten undoes reshape exactly
+        SequenceLayout nested = seq.reshape(2, 2);
+        SequenceLayout flat = nested.flatten();
+        check(flat.elementCount() == 4 && flat.elementLayout() == ValueLayout.JAVA_INT,
+              "flatten restores a single dimension");
+        check(flat.equals(seq), "flatten result equals the original sequence");
+
+        // alignment inherits from the element layout; withByteAlignment can raise it
+        check(seq.byteAlignment() == 4, "sequence alignment equals element alignment");
+        check(MemoryLayout.sequenceLayout(2, ValueLayout.JAVA_LONG).byteAlignment() == 8,
+              "long-element sequence alignment 8");
+        // byteOffset path arithmetic across the sequence
+        check(seq.byteOffset(MemoryLayout.PathElement.sequenceElement(3)) == 12,
+              "sequenceElement(3) offset 12");
+        // unbound sequenceElement() selects the element layout itself
+        check(seq.select(MemoryLayout.PathElement.sequenceElement()) == ValueLayout.JAVA_INT,
+              "select(sequenceElement()) returns the element layout");
+        // withName covariant chain keeps it a SequenceLayout
+        SequenceLayout named = (SequenceLayout) seq.withName("v").withoutName();
+        check(named.elementCount() == 4, "name chain preserves count");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

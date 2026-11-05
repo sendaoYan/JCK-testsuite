@@ -18,3 +18,11 @@ Object v = d.resolveConstantDesc(MethodHandles.lookup()); // null
 白盒：接口、唯一方法、返回 Object、异常声明、三个子接口关系。
 黑盒：NULL resolve→null；TRUE/FALSE resolve；Integer 名义形式 resolve；ClassDesc 作 ConstantDesc resolve；ClassNotFound 负例（ReflectiveOperationException 子类）；泛型/函数式用法。
 对应 `ConstantDescTest.java` 的 `testBlackBox()`。
+
+## 5. 契约深化（JDK-27 实测锁定）
+- 四大家族（ClassDesc/MethodTypeDesc/MethodHandleDesc/EnumDesc）经 ConstantDesc 视图 resolve 均回读等值对象；MethodHandleDesc 视图 resolve 后可直接 invoke。
+- 解析失败矩阵精确异常：ClassDesc→ClassNotFoundException、MethodHandleDesc(缺方法)→NoSuchMethodException、MethodTypeDesc(缺参数类)→ClassNotFoundException，全部是声明的 ReflectiveOperationException 子类。
+- `ConstantDescs.NULL` 可作 HashSet 键（值语义）且 resolve 为 null。
+
+## 版本差异
+JDK-8 无此包（java.lang.constant 是 12+、java.lang.IO 是 25+（JEP 495）、java.lang.foreign 是 19+ 预览 / 22+ 正式）；本目录测试仅 JDK-27，不镜像 JDK-8 侧。

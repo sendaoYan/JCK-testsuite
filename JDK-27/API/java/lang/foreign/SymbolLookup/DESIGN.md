@@ -30,3 +30,13 @@ MemorySegment malloc = libc.find("malloc").orElseThrow();
 - **lookup 随 Arena 死**：close 后 find 抛 IllegalStateException；loaderLookup 不受其它 lookup 的 arena 关闭影响（生命周期挂在 class loader）。
 
 `SymbolLookupNativeTest.java`（25 断言）覆盖上述全部路径，含真实调用验证（strlen "abcde"→5、jck_is_null NULL→1/段→0）。C 源（`jck_is_null`/`jck_read_long`）内嵌运行时编译进 scratch，不入库。
+
+## 5. 契约深化（JDK-27 实测锁定）
+- **or() 优先级**：名字冲突时**接收者**的符号胜出（地址可区分）；or() 可链式组合 3+ 个 lookup；find 幂等（同地址）；findOrThrow 与 find 地址一致。
+- **loaderLookup**：无 JNI 库的 JVM 中 `find("strlen")` 为 **empty**（环境实测记录；glibc 符号不经 ClassLoader 注册）；未知名/空名/NUL 名一律 Optional.empty 不抛。
+- **defaultLookup（glibc）**：strlen present，符号是零长 bare address；defaultLookup.or(loaderLookup) 组合仍命中。
+- findOrThrow 缺失 → NoSuchElementException。
+- 本文件 @run 加 --enable-native-access（libraryLookup 是 restricted 调用）。
+
+## 版本差异
+JDK-8 无此包（java.lang.constant 是 12+、java.lang.IO 是 25+（JEP 495）、java.lang.foreign 是 19+ 预览 / 22+ 正式）；本目录测试仅 JDK-27，不镜像 JDK-8 侧。
