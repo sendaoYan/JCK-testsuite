@@ -12,3 +12,6 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒：public/final/static/关键方法。黑盒：断言溢出钳位（`MAX+1==MAX`、`MIN-1==MIN`）与正常路径、`byte` 钳位、无符号 min/max（`0` 与 `-1` 比较），全部精确确定。
+## 5. 契约深化（JDK-27）
+- 8 操作 × 4 类型全矩阵：addSaturating/subSaturating 四类型 MAX/MIN 边夹取；addSaturatingUnsigned(-1,·)→-1 四类型；subSaturatingUnsigned 下溢夹 0 四类型；minUnsigned/maxUnsigned 四类型无符号序。
+- 与向量 lane 语义对账：SADD/SUADD(lanewise) == VectorMath 标量（byte 120+20→127）。

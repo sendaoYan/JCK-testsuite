@@ -44,7 +44,40 @@ public class VectorTest {
         check(v.eq(v.broadcast(7)).allTrue(), "eq self allTrue");
     }
 
+
+    static void testDeepen() {
+        VectorSpecies<Integer> sp = IntVector.SPECIES_128;
+        IntVector v = IntVector.fromArray(sp, new int[] {1, 2, 3, 4}, 0);
+        check(v.toString().equals("[1, 2, 3, 4]"), "toString exact");
+        check(v.elementSize() * v.length() == v.species().vectorBitSize(), "elementSize*length == vectorBitSize");
+        check(v.shape() == v.species().vectorShape(), "shape == species.vectorShape");
+        check(v.viewAsIntegralLanes().elementType() == int.class, "integral species viewAs identity type");
+        check(v.viewAsIntegralLanes().equals(v), "viewAsIntegralLanes identity for int");
+        DoubleVector d = DoubleVector.fromArray(DoubleVector.SPECIES_128, new double[] {1.5, -2.25}, 0);
+        jdk.incubator.vector.Vector<Long> bits = d.viewAsIntegralLanes();
+        check(bits.elementType() == long.class && bits.length() == d.length(), "double views as long, same lanes");
+        check(bits.viewAsFloatingLanes().equals(d), "viewAs round-trip restores values");
+        VectorMask<Integer> m = VectorMask.fromValues(sp, false, true, false, true);
+        check(v.compress(m).lane(0) == 2 && v.compress(m).lane(1) == 4, "compress lanes");
+        check(IntVector.broadcast(sp, 7).expand(m).lane(1) == 7, "expand lanes");
+        IntVector gathered = v.selectFrom(IntVector.fromArray(sp, new int[] {3, 0, 2, 1}, 0));
+        check(gathered.lane(0) == 0 && gathered.lane(1) == 2
+                && gathered.lane(2) == 1 && gathered.lane(3) == 3, "selectFrom this supplies indexes");
+        check(v.slice(1).lane(0) == 2, "slice(1)");
+        check(v.slice(1).unslice(1, IntVector.zero(sp), 0, m).lane(3) == 0, "unslice masked writes only set lanes");
+        check(v.reduceLanesToLong(VectorOperators.ADD) == 10L, "reduceLanesToLong");
+        check(v.reduceLanesToLong(VectorOperators.ADD, m) == 6L, "reduceLanesToLong masked");
+        check(v.compare(VectorOperators.LT, IntVector.broadcast(sp, 3)).toString().equals("Mask[TT..]"), "compare LT");
+        check(v.eq(IntVector.broadcast(sp, 2)).toString().equals("Mask[.T..]"), "eq mask position");
+        check(v.hashCode() == IntVector.fromArray(sp, new int[] {1, 2, 3, 4}, 0).hashCode(), "hashCode value-based");
+        check(!v.equals(IntVector.fromArray(sp, new int[] {4, 3, 2, 1}, 0)), "equals lane-order sensitive");
+        check(v.withLane(2, 30).lane(2) == 30 && v.withLane(2, 30).lane(0) == 1, "withLane immutable");
+        check(IntVector.zero(sp).test(VectorOperators.IS_DEFAULT).allTrue(), "IS_DEFAULT on zero");
+    }
+
     public static void main(String[] args) throws Exception {
+        testDeepen();
+
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

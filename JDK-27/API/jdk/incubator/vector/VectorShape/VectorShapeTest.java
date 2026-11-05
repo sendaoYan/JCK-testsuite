@@ -40,7 +40,39 @@ public class VectorShapeTest {
         check(sp.vectorBitSize() == 256 && sp.elementType() == int.class, "withLanes");
     }
 
+
+    static void testDeepen() {
+        check(java.util.Arrays.toString(VectorShape.values()).equals("[S_64_BIT, S_128_BIT, S_256_BIT, S_512_BIT, S_Max_BIT]"), "values exact order");
+        int maxBits = VectorShape.S_Max_BIT.vectorBitSize();
+        check(maxBits >= 64 && Integer.bitCount(maxBits) == 1, "S_Max_BIT power of two >= 64");
+        check(VectorShape.forBitSize(64) == VectorShape.S_64_BIT
+                && VectorShape.forBitSize(128) == VectorShape.S_128_BIT
+                && VectorShape.forBitSize(256) == VectorShape.S_256_BIT
+                && VectorShape.forBitSize(512) == VectorShape.S_512_BIT, "forBitSize exact table");
+        check(VectorShape.forBitSize(maxBits) == VectorShape.S_512_BIT
+                || VectorShape.forBitSize(maxBits) == VectorShape.S_Max_BIT, "forBitSize max maps to 512-class shape");
+        int[] bad = {0, 32, 65, 511, 8192};
+        for (int b : bad) {
+            boolean iae = false;
+            try { VectorShape.forBitSize(b); } catch (IllegalArgumentException e) {
+                iae = e.getMessage().equals("Bad vector bit-size: " + b);
+            }
+            check(iae, "forBitSize(" + b + ") IAE exact message");
+        }
+        check(VectorShape.forIndexBitSize(32, 128) == VectorShape.S_64_BIT, "forIndexBitSize(32,128)");
+        check(VectorShape.forIndexBitSize(64, 64) == VectorShape.S_64_BIT, "forIndexBitSize(64,64)");
+        int pref = VectorShape.preferredShape().vectorBitSize();
+        check(Integer.bitCount(pref) == 1 && pref >= 64, "preferredShape power of two");
+        check(VectorShape.S_256_BIT.compareTo(VectorShape.S_128_BIT) > 0, "enum ordering by declaration");
+        check(VectorShape.S_64_BIT.name().equals("S_64_BIT") && VectorShape.S_Max_BIT.toString().equals("S_Max_BIT"), "name/toString");
+        VectorSpecies<Integer> sp = VectorShape.S_256_BIT.withLanes(int.class);
+        check(sp.withShape(VectorShape.S_128_BIT).length() == 4, "withLanes+withShape length 4");
+        check(sp.withShape(VectorShape.S_128_BIT).vectorShape() == VectorShape.S_128_BIT, "withShape result shape");
+    }
+
     public static void main(String[] args) throws Exception {
+        testDeepen();
+
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

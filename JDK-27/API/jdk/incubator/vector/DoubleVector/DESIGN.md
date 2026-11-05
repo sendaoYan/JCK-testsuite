@@ -12,3 +12,6 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒：public/abstract/extends Vector/species 常量/关键方法。黑盒：`SPECIES_256` 固定宽度组合 broadcast → add/sub → lane → intoArray/fromArray → reduceLanes；简单 double 运算断言精确值，累加用容差。
+## 5. 契约深化（JDK-27）
+- viewAsIntegralLanes 位级 1.5→0x3FF8000000000000L + viewAsFloatingLanes 往返等值。
+- fma/SQRT/IS_NAN/IS_DEFAULT；掩码归约；D2I 截断/D2F/convertShape(D2I)/REINTERPRET_D2L 位级；掩码 load/store；eq；blend；compress；toString。

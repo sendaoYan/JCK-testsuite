@@ -12,3 +12,7 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒：public interface/关键方法。黑盒：用 `IntVector.SPECIES_256`，断言 elementType/elementSize/vectorBitSize/vectorShape，`withShape` 扩/缩宽度后 length 单调变化，`broadcast/maskAll/fromArray` 生成实例。
+## 5. 契约深化（JDK-27）
+- of(...)==具体类常量（int/double/byte 三验）；ofPreferred；ofLargestShape 512 位级；withLanes 同型恒等、byte 化 lane 扩容。
+- loopBound(10)==8、整除不变量；partLimit(int256→long256)==0；toString "Species[int, 4, S_128_BIT]"；equals/hashCode。
+- of(boolean)/of(String) UOE 精确消息 "Bad vector element type: ... (should be a primitive type such as byte.class with a known bit-size)"；maskAll().indexInRange 组合。

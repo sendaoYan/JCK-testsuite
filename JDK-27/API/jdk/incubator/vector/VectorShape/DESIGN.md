@@ -12,3 +12,6 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒：public/final/enum/关键方法。黑盒：断言各常量 vectorBitSize，`forBitSize` 映射，`valueOf/values`，`withLanes` 生成正确 elementType 的 species，全部确定。
+## 5. 契约深化（JDK-27）
+- values() 恰 5 值声明序 [S_64_BIT..S_Max_BIT]；S_Max_BIT 2 的幂 ≥64。
+- forBitSize 精确表（64/128/256/512）+ 负例 0/32/65/511/8192 全部 IAE 精确消息 "Bad vector bit-size: N"；forIndexBitSize(32,128)==(64,64)==S_64_BIT；preferredShape 2 的幂；withLanes+withShape 复合长度。

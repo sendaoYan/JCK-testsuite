@@ -12,3 +12,7 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒：public/abstract/extends Vector/species 常量/关键方法。黑盒：`SPECIES_256` 固定宽度，broadcast + add + lane + intoArray/fromArray 回读 + reduceLanes；short 加法断言精确值。
+## 5. 契约深化（JDK-27）
+- SADD 32000+1000→32767（与 VectorMath 对账）、SSUB -32000-1000→-32768、32001 不夹取。
+- REVERSE_BYTES 字节交换；S2I 符号扩展 vs ZERO_EXTEND_S2I/S2L(-1→65535) 分叉。
+- mul/div 截断、XOR、MIN/MAX 归约、reduceLanesToLong、掩码归约、selectFrom（接收者提供索引）、slice、blend、compress/expand、fromArray 越界 IOOBE、toString 精确格式。

@@ -16,3 +16,7 @@
 
 ## 4. 测试用例设计 + 自动化实现
 场景：白盒断言 public/abstract/extends Vector/四档 species 常量/关键方法存在；黑盒用 `SPECIES_256` 固定宽度，组合 `broadcast → add/sub/neg → lane → intoArray → fromArray → reduceLanes(ADD) → eq`，断言逐 lane 精确值（整数运算无容差）。
+## 5. 契约深化（JDK-27）
+- 旗舰向量化内核闭环：13 元素 a[i]*b[i]+c[i] 主循环（loopBound(13)==8? SPECIES_128→loopBound==12）+ indexInRange 尾掩码（"Mask[T...]"），逐 lane 与标量循环对账。
+- lanewise 矩阵：ROL/ROR/LSHL31/ASHR 符号/LSHR 零填/BIT_COUNT/TZ/LZ(0→32)/ZOMO/COMPRESS_BITS/EXPAND_BITS/AND_NOT。
+- FIRST_NONZERO 归约三态；compress/expand；selectFrom 语义 b[this[i]]；slice/unslice 掩码版；reinterpretShape 小端字节+往返；I2D/I2L/I2F/F2I 截断/REINTERPRET_F2I 位级；ULT/UGT/UGE/ULE 无符号比较表；掩码归约/blend/lanewise；toString/hashCode。

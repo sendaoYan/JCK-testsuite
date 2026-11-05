@@ -46,7 +46,39 @@ public class DoubleVectorTest {
         check(Math.abs(reduced - 6.0 * n) < 1e-9, "reduceLanes ADD");
     }
 
+
+    static void testDeepen() {
+        VectorSpecies<Double> sp = DoubleVector.SPECIES_128;
+        check(sp.length() == 2, "SPECIES_128 double length 2");
+        DoubleVector d = DoubleVector.fromArray(sp, new double[] {1.5, -2.25}, 0);
+        LongVector lv = (LongVector) d.viewAsIntegralLanes();
+        check(lv.lane(0) == 0x3FF8000000000000L, "bits of 1.5 via viewAsIntegralLanes");
+        check(lv.viewAsFloatingLanes().equals(d), "viewAs round-trip");
+        check(DoubleVector.broadcast(sp, 2.0).fma(DoubleVector.broadcast(sp, 3.0),
+                DoubleVector.broadcast(sp, 1.0)).lane(0) == 7.0, "fma");
+        check(DoubleVector.broadcast(sp, 16.0).lanewise(VectorOperators.SQRT).lane(0) == 4.0, "SQRT");
+        check(DoubleVector.broadcast(sp, Double.NaN).test(VectorOperators.IS_NAN).allTrue(), "IS_NAN");
+        check(DoubleVector.broadcast(sp, 1.0).test(VectorOperators.IS_DEFAULT).toString().equals("Mask[..]"), "IS_DEFAULT");
+        VectorMask<Double> m = VectorMask.fromValues(sp, true, false);
+        check(DoubleVector.broadcast(sp, 5.0).reduceLanes(VectorOperators.ADD, m) == 5.0, "masked reduce ADD");
+        check(((IntVector) DoubleVector.broadcast(sp, 2.75).convert(VectorOperators.D2I, 0)).lane(0) == 2, "D2I truncates");
+        check(((FloatVector) DoubleVector.broadcast(sp, 2.5).convert(VectorOperators.D2F, 0)).lane(0) == 2.5f, "D2F");
+        check(((IntVector) DoubleVector.broadcast(sp, 2.75).convertShape(VectorOperators.D2I, IntVector.SPECIES_128, 0)).lane(0) == 2, "convertShape");
+        check(((LongVector) DoubleVector.broadcast(sp, 1.0).convert(VectorOperators.REINTERPRET_D2L, 0)).lane(0) == 0x3FF0000000000000L, "REINTERPRET_D2L bits");
+        double[] src = {1.0, 8.0};
+        double[] dst = new double[2];
+        DoubleVector.fromArray(sp, src, 0, m).intoArray(dst, 0, m);
+        check(dst[0] == 1.0 && dst[1] == 0.0, "masked load/store zero pattern");
+        check(DoubleVector.broadcast(sp, 1.0).eq(DoubleVector.broadcast(sp, 1.0)).allTrue(), "eq");
+        check(d.blend(DoubleVector.broadcast(sp, 9.0), m).lane(0) == 9.0
+                && d.blend(DoubleVector.broadcast(sp, 9.0), m).lane(1) == -2.25, "blend");
+        check(d.compress(m).lane(0) == 1.5, "compress");
+        check(d.toString().equals("[1.5, -2.25]"), "toString exact");
+    }
+
     public static void main(String[] args) throws Exception {
+        testDeepen();
+
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

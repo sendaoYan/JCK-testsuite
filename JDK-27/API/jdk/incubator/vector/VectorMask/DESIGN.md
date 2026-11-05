@@ -12,3 +12,7 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒：public/abstract/关键方法。黑盒：用 `IntVector.SPECIES_256`，`maskAll(true)` → `not/and/or` → `trueCount/laneIsSet/allTrue/anyTrue` → `toVector`（强转 IntVector 断言 lane 值），全部为确定布尔/计数断言。
+## 5. 契约深化（JDK-27）
+- toLong 位序（bit i == lane i）+ fromLong 往返；firstTrue/lastTrue（全 false：length / -1）。
+- xor/andNot/eq/not().not()/or/and 布尔代数；toString 精确 "Mask[T.T.T.T.]"；toArray/intoArray 往返。
+- compress() 左聚 "Mask[TTTT....]"；indexInRange(index,limit) 语义 = 本掩码 ∧ (index+i<limit)；cast 同 lane 数跨元素类型成功、异 lane 数 IAE 精确消息 "VectorMask length and species length differ"；toVector -1/0 lane。

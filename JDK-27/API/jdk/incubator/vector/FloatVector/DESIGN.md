@@ -15,3 +15,6 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒：public/abstract/extends Vector/species 常量/关键方法。黑盒：`SPECIES_256` 固定宽度，broadcast + add/mul + lane + intoArray/fromArray 回读 + reduceLanes；浮点断言用精确值（加/乘简单运算）或小容差（reduceLanes 累加）。
+## 5. 契约深化（JDK-27）
+- fma 与 lanewise(FMA) 一致 2*3+1；SQRT；test 族 IS_NAN/IS_FINITE/IS_INFINITE/IS_DEFAULT/IS_NEGATIVE 掩码断言。
+- NaN eq 全 false；div/abs/neg；掩码归约；F2I 截断 2.75→2 与 F2D；REINTERPRET_F2I 1.0f→0x3F800000；viewAsIntegralLanes(int) 往返；blend；掩码 load/store 零填充模式；toString。

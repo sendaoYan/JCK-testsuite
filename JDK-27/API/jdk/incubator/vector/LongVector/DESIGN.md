@@ -12,3 +12,7 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒：public/abstract/extends Vector/species 常量/关键方法。黑盒：`SPECIES_256` 固定宽度，broadcast + add + lane + intoArray/fromArray 回读 + reduceLanes；long 加法断言精确值。
+## 5. 契约深化（JDK-27）
+- 64 位语义：LSHL 63、BIT_COUNT(-1L)==64、REVERSE 与 Long.reverse 对账、REVERSE_BYTES、LZ 63/TZ 0→64。
+- viewAsIntegralLanes↔viewAsFloatingLanes 往返；REINTERPRET_D2L 1.5→0x3FF8000000000000L。
+- ULT/UGT 无符号比较；reduceLanesToLong/FIRST_NONZERO/MIN/MAX/掩码归约；compress/expand；blend；toString；withLane。
