@@ -51,6 +51,42 @@ public class SystemLoadNativeTest {
 
     static native long jckMissing2(int a, long b);
 
+    // ------------------------------------------------------------------
+    // Library acquisition: prefer a prebuilt library from jtreg's
+    // -nativepath (property test.nativepath) so cross-arch runs (e.g. a
+    // foreign-arch JDK under qemu) never invoke the host gcc; the prebuilt
+    // .so is staged into user.dir so the loadLibrary/java.library.path
+    // assertions keep working unchanged. Without test.nativepath the test
+    // self-compiles from the embedded C source against this JDK's own jni.h.
+    // ------------------------------------------------------------------
+    static Path obtain() throws Exception {
+        String np = System.getProperty("test.nativepath");
+        if (np != null) {
+            Path pre = Paths.get(np).resolve("libjcksyslife.so");
+            if (!Files.exists(pre))
+                throw new AssertionError("test.nativepath set but libjcksyslife.so missing (run: make native)");
+            Path staged = Paths.get(System.getProperty("user.dir")).resolve("libjcksyslife.so");
+            Files.copy(pre, staged, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return staged;
+        }
+        return compile(C_SRC, "jcksyslife.c", "libjcksyslife.so");
+    }
+
+    // The no-symbol library: in nativepath mode reuse a sibling prebuilt
+    // library (real ELF exporting a different test's JNI symbols, hence none
+    // of ours); otherwise self-compile the deliberately bare source.
+    static Path obtainNoSym() throws Exception {
+        String np = System.getProperty("test.nativepath");
+        if (np != null) {
+            for (String alt : new String[] {"libjckrtlife.so", "libjckjni.so", "libjnisemantics.so"}) {
+                Path pre = Paths.get(np).resolve(alt);
+                if (Files.exists(pre)) return pre;
+            }
+            throw new AssertionError("test.nativepath set but no sibling library found for the no-symbol case");
+        }
+        return compile(C_SRC_NO_SYMBOL, "jcknosym.c", "libjcknosym.so");
+    }
+
     static Path jdkHome() {
         Path p = Paths.get(System.getProperty("java.home"));
         return p.endsWith("jre") ? p.getParent() : p;
@@ -92,7 +128,7 @@ public class SystemLoadNativeTest {
         // JDKs, without --enable-native-access: System.load must still work.
         boolean bare = args.length > 0 && args[0].equals("bare");
         if (bare) {
-            Path so = compile(C_SRC, "jcksyslife.c", "libjcksyslife.so");
+            Path so = obtain();
             System.load(so.toAbsolutePath().toString());
             check(jckAdd(20, 22) == 42, "bare run: load and call");
             System.load(so.toAbsolutePath().toString());
@@ -101,7 +137,7 @@ public class SystemLoadNativeTest {
             return;
         }
 
-        Path so = compile(C_SRC, "jcksyslife.c", "libjcksyslife.so");
+        Path so = obtain();
 
         // System.load of an absolute path succeeds and binds the native method.
         System.load(so.toAbsolutePath().toString());
@@ -130,7 +166,7 @@ public class SystemLoadNativeTest {
 
         // A library that exports none of the expected symbols still loads;
         // each unresolved native method fails at call time naming the method.
-        Path noSym = compile(C_SRC_NO_SYMBOL, "jcknosym.c", "libjcknosym.so");
+        Path noSym = obtainNoSym();
         System.load(noSym.toAbsolutePath().toString());
         try {
             jckMissing();

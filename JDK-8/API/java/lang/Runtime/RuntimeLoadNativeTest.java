@@ -45,6 +45,23 @@ public class RuntimeLoadNativeTest {
         return p.endsWith("jre") ? p.getParent() : p;
     }
 
+    // Cross-arch support: with jtreg -nativepath set (property
+    // test.nativepath) stage the prebuilt library into user.dir (keeping the
+    // rt.loadLibrary/java.library.path assertions working) instead of
+    // invoking the host gcc; without it the test self-compiles as before.
+    static Path obtain() throws Exception {
+        String np = System.getProperty("test.nativepath");
+        if (np != null) {
+            Path pre = Paths.get(np).resolve("libjckrtlife.so");
+            if (!Files.exists(pre))
+                throw new AssertionError("test.nativepath set but libjckrtlife.so missing (run: make native)");
+            Path staged = Paths.get(System.getProperty("user.dir")).resolve("libjckrtlife.so");
+            Files.copy(pre, staged, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return staged;
+        }
+        return compile();
+    }
+
     static Path compile() throws Exception {
         Path dir = Paths.get(System.getProperty("user.dir"));
         Path cFile = dir.resolve("jckrtlife.c");
@@ -81,7 +98,7 @@ public class RuntimeLoadNativeTest {
         // without --enable-native-access: Runtime.load must still work.
         boolean bare = args.length > 0 && args[0].equals("bare");
         if (bare) {
-            Path so = compile();
+            Path so = obtain();
             rt.load(so.toAbsolutePath().toString());
             check(jckMul(6, 7) == 42, "bare run: load and call");
             rt.load(so.toAbsolutePath().toString());
@@ -90,7 +107,7 @@ public class RuntimeLoadNativeTest {
             return;
         }
 
-        Path so = compile();
+        Path so = obtain();
         String abs = so.toAbsolutePath().toString();
 
         // Runtime.load of an absolute path succeeds and binds the method.

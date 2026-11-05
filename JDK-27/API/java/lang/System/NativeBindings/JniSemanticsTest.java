@@ -396,6 +396,21 @@ public class JniSemanticsTest {
     }
 
     static void compileAndLoad() throws Exception {
+        // Cross-arch support: with jtreg -nativepath set (property
+        // test.nativepath) load the prebuilt library directly and never
+        // invoke the host gcc; the build system names it after the C source
+        // (libjnisemantics.so), the historical in-test name is libjckjni.so.
+        String np = System.getProperty("test.nativepath");
+        if (np != null) {
+            for (String cand : new String[] {"libjckjni.so", "libjnisemantics.so"}) {
+                Path pre = Paths.get(np).resolve(cand);
+                if (Files.exists(pre)) {
+                    System.load(pre.toAbsolutePath().toString());
+                    return;
+                }
+            }
+            throw new AssertionError("test.nativepath set but no prebuilt JNI library found (run: make native)");
+        }
         Path dir = Paths.get(System.getProperty("user.dir"));
         Path cFile = dir.resolve("jnisemantics.c");
         Path so = dir.resolve("libjckjni.so");
