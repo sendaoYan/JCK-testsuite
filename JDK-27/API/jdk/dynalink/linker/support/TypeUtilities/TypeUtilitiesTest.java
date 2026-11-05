@@ -41,9 +41,51 @@ public class TypeUtilitiesTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    static void testConversionMatrix() {
+        // method-invocation conversion (JLS 5.3): widening + boxing, never narrowing
+        check(TypeUtilities.isMethodInvocationConvertible(int.class, long.class), "int -> long");
+        check(TypeUtilities.isMethodInvocationConvertible(int.class, double.class), "int -> double");
+        check(TypeUtilities.isMethodInvocationConvertible(int.class, Integer.class), "int -> Integer");
+        check(TypeUtilities.isMethodInvocationConvertible(Integer.class, int.class), "Integer -> int");
+        check(TypeUtilities.isMethodInvocationConvertible(int.class, Object.class), "int -> Object");
+        check(!TypeUtilities.isMethodInvocationConvertible(long.class, int.class), "long !-> int");
+        check(!TypeUtilities.isMethodInvocationConvertible(String.class, int.class), "String !-> int");
+        check(TypeUtilities.isMethodInvocationConvertible(String.class, CharSequence.class), "String -> CharSequence");
+        // lossless conversion adds unboxing-widening chains like int -> long
+        check(TypeUtilities.isConvertibleWithoutLoss(int.class, long.class), "lossless int -> long");
+        check(!TypeUtilities.isConvertibleWithoutLoss(long.class, int.class), "lossy long -> int");
+        check(TypeUtilities.isConvertibleWithoutLoss(Integer.class, Object.class), "lossless widening");
+        check(!TypeUtilities.isConvertibleWithoutLoss(Object.class, String.class), "downcast is lossy");
+        // subtype relation: reflexive, transitive through wrappers is NOT assumed
+        check(TypeUtilities.isSubtype(Integer.class, Number.class), "Integer <: Number");
+        check(!TypeUtilities.isSubtype(Number.class, Integer.class), "Number not<: Integer");
+        check(TypeUtilities.isSubtype(int.class, int.class), "reflexive on primitives");
+        check(TypeUtilities.isSubtype(int.class, long.class), "primitive widening counts as subtyping");
+        check(TypeUtilities.isSubtype(long.class, double.class), "long <: double");
+        check(!TypeUtilities.isSubtype(int.class, Integer.class), "primitive and wrapper are unrelated");
+    }
+
+    static void testPrimitiveMapping() {
+        for (Class<?> p : List.of(boolean.class, byte.class, char.class, short.class, int.class, long.class, float.class, double.class, void.class)) {
+            check(TypeUtilities.getPrimitiveTypeByName(p.getName()) == p, "name -> primitive: " + p.getName());
+            check(TypeUtilities.isWrapperType(TypeUtilities.getWrapperType(p)),
+                  "wrapper for " + p.getName() + ": " + TypeUtilities.getWrapperType(p));
+            check(TypeUtilities.getPrimitiveType(TypeUtilities.getWrapperType(p)) == p, "wrapper -> primitive round trip");
+        }
+        check(TypeUtilities.getPrimitiveTypeByName("nope") == null, "unknown name -> null");
+        check(TypeUtilities.getPrimitiveType(Void.class) == void.class, "Void maps back to void");
+        check(TypeUtilities.getPrimitiveType(String.class) == null, "non-wrapper -> null");
+        check(TypeUtilities.isWrapperType(Integer.class) && TypeUtilities.isWrapperType(Character.class), "wrapper types");
+        check(!TypeUtilities.isWrapperType(int.class) && !TypeUtilities.isWrapperType(String.class), "non-wrappers");
+        check(TypeUtilities.getWrapperType(Integer.class) == null, "non-primitive wrapper lookup -> null");
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testConversionMatrix();
+        testPrimitiveMapping();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

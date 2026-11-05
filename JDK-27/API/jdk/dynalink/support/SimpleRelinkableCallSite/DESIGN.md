@@ -11,3 +11,6 @@ new SimpleRelinkableCallSite(csd)。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。黑盒构造+type+getDescriptor。
+## 5. 契约深化（JDK-27）
+- 真实链接-调用闭环；relink(null, mh)→NPE；resetAndRelink 与 relink 同效（替换目标）；descriptor/type 保真。
+- 源码语义：relink=setTarget(gi.compose(relinkAndInvoke))，resetAndRelink 委托 relink。

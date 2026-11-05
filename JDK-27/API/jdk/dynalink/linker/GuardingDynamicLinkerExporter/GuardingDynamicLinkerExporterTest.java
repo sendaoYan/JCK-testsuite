@@ -39,9 +39,37 @@ public class GuardingDynamicLinkerExporterTest {
         check(links != null && links.isEmpty(), "get returns empty list");
     }
 
-    public static void main(String[] args) throws Exception {
+
+    static class Concrete extends GuardingDynamicLinkerExporter {
+        public List<GuardingDynamicLinker> get() { return List.of(); }
+    }
+
+    static void testDeepContract() {
+        check(Modifier.isAbstract(GuardingDynamicLinkerExporter.class.getModifiers()), "abstract class");
+        check(Modifier.isProtected(GuardingDynamicLinkerExporter.class.getDeclaredConstructors()[0].getModifiers()),
+              "protected constructor");
+        check(java.util.function.Supplier.class.isAssignableFrom(GuardingDynamicLinkerExporter.class),
+              "implements Supplier<List<GuardingDynamicLinker>>");
+        check(GuardingDynamicLinkerExporter.AUTOLOAD_PERMISSION_NAME.equals("dynalink.exportLinkersAutomatically"),
+              "autoload permission name");
+        boolean hasGet = false;
+        for (Method m : GuardingDynamicLinkerExporter.class.getMethods())
+            if (m.getName().equals("get") && m.getParameterCount() == 0) hasGet = true;
+        check(hasGet, "public get() with no arguments");
+        check(new Concrete().get().isEmpty(), "subclass returns its list");
+        // ServiceLoader discovery contract: the class is the advertised service type
+        check(java.util.ServiceLoader.load(GuardingDynamicLinkerExporter.class).getClass() != null, "service loadable");
+        // a JDK-default runtime ships no exporters (jdk.dynalink has none in its module descriptor provides)
+        boolean any = false;
+        for (GuardingDynamicLinkerExporter e : java.util.ServiceLoader.load(GuardingDynamicLinkerExporter.class,
+                GuardingDynamicLinkerExporter.class.getClassLoader())) any = true;
+        check(!any, "no exporters registered in a stock runtime");
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

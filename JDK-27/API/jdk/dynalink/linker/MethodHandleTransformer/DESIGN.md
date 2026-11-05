@@ -11,3 +11,6 @@ DefaultInternalObjectFilter 实现。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。白盒 interface；黑盒降级。
+## 5. 契约深化（JDK-27）
+- 单抽象方法名是 transform(MethodHandle)（非 transformMethodHandle）。
+- setInternalObjectsFilter 真实闭环：仅当 beans 动态方法调用建立时（GET:METHOD→CALL）触发过滤器；LinkerServices.filterInternalObjects 直通转换保持类型。

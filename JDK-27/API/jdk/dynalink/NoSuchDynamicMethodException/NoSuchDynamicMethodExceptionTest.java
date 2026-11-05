@@ -36,9 +36,48 @@ public class NoSuchDynamicMethodExceptionTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    // ---- shared fixtures for the deep contract sections ----
+    public static class POJO {
+        public int field = 7;
+        public String getName() { return "name-" + field; }
+        public String greet(String who) { return "hi " + who; }
+    }
+    static DynamicLinker beanLinker() {
+        DynamicLinkerFactory f = new DynamicLinkerFactory();
+        f.setPrioritizedLinker(new jdk.dynalink.beans.BeansLinker());
+        f.setFallbackLinkers();
+        return f.createLinker();
+    }
+    static SimpleRelinkableCallSite site(MethodHandles.Lookup lk, Operation op, MethodType mt) {
+        return new SimpleRelinkableCallSite(new CallSiteDescriptor(lk, op, mt));
+    }
+
+    static void testDeepContract() throws Throwable {
+        NoSuchDynamicMethodException e = new NoSuchDynamicMethodException("msg");
+        check(e instanceof RuntimeException, "RuntimeException");
+        check(e.getMessage().equals("msg"), "message kept");
+        check(e.getCause() == null, "no cause channel");
+        check(java.io.ObjectStreamClass.lookup(NoSuchDynamicMethodException.class).getSerialVersionUID() == 1L,
+              "serialVersionUID is 1");
+        // the engine throws it for an unlinkable call site, with the descriptor as the message
+        DynamicLinker linker = beanLinker();
+        SimpleRelinkableCallSite cs = site(MethodHandles.lookup(),
+            StandardOperation.GET.withNamespace(StandardNamespace.PROPERTY).named("missing"),
+            MethodType.methodType(Object.class, Object.class));
+        linker.link(cs);
+        try {
+            cs.getTarget().invoke((Object) new POJO());
+            check(false, "unlinkable site must throw");
+        } catch (NoSuchDynamicMethodException thrown) {
+            check(thrown.getMessage().startsWith("GET:PROPERTY:missing(Object)Object@"), "message is the descriptor: " + thrown.getMessage());
+        }
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

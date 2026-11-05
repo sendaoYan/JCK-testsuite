@@ -11,3 +11,6 @@ StandardOperation.GET + named/withNamespace。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。黑盒枚举常量+named 链。
+## 5. 契约深化（JDK-27）
+- values 声明顺序精确表 [GET, SET, REMOVE, CALL, NEW]；toString==name；单例恒等。
+- 每个操作 withNamespace/named 保 base 恒等；组合 toString（CALL:METHOD、REMOVE:ELEMENT）。

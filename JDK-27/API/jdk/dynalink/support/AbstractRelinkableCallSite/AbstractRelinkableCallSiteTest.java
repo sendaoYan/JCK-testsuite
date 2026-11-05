@@ -39,9 +39,48 @@ public class AbstractRelinkableCallSiteTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    public static class POJO { public int field = 7; }
+    static class MinimalSite extends AbstractRelinkableCallSite {
+        int relinks, resets, inits;
+        MinimalSite(CallSiteDescriptor d) { super(d); }
+        public void relink(GuardedInvocation gi, MethodHandle relink) { relinks++; setTarget(gi.compose(relink)); }
+        public void resetAndRelink(GuardedInvocation gi, MethodHandle relink) { resets++; setTarget(gi.compose(relink)); }
+    }
+
+    static void testDeepContract() throws Throwable {
+        // structure: abstract, extends MutableCallSite, implements RelinkableCallSite
+        check(Modifier.isAbstract(AbstractRelinkableCallSite.class.getModifiers()), "abstract");
+        check(AbstractRelinkableCallSite.class.getSuperclass() == java.lang.invoke.MutableCallSite.class,
+              "extends MutableCallSite");
+        check(RelinkableCallSite.class.isAssignableFrom(AbstractRelinkableCallSite.class), "implements RelinkableCallSite");
+        check(Modifier.isProtected(AbstractRelinkableCallSite.class.getDeclaredConstructors()[0].getModifiers()),
+              "protected constructor");
+        // lifecycle through a real linker
+        MethodHandles.Lookup lk = MethodHandles.lookup();
+        CallSiteDescriptor d = new CallSiteDescriptor(lk,
+            StandardOperation.GET.withNamespace(StandardNamespace.PROPERTY).named("field"),
+            MethodType.methodType(Object.class, Object.class));
+        MinimalSite cs = new MinimalSite(d);
+        check(cs.getDescriptor() == d, "getDescriptor returns the constructor descriptor");
+        check(cs.type().equals(d.getMethodType()), "MutableCallSite type is the descriptor type");
+        DynamicLinkerFactory f = new DynamicLinkerFactory();
+        f.setPrioritizedLinker(new BeansLinker());
+        f.setFallbackLinkers();
+        f.createLinker().link(cs);
+        check(cs.relinks == 0, "link() itself only initializes");
+        check(cs.getTarget().invoke((Object) new POJO()).equals(7), "first invocation triggers relink");
+        check(cs.relinks == 1, "one relink pass: " + cs.relinks);
+        // initialize installs the bootstrap handle verbatim
+        MethodHandle id = MethodHandles.identity(Object.class);
+        cs.initialize(id);
+        check(cs.getTarget() == id, "initialize sets the target directly");
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

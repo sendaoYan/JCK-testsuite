@@ -32,9 +32,42 @@ public class TypeBasedGuardingDynamicLinkerTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    static class StringOnlyLinker implements TypeBasedGuardingDynamicLinker {
+        final List<Class<?>> asked = new ArrayList<>();
+        public boolean canLinkType(Class<?> type) { asked.add(type); return type == String.class; }
+        public GuardedInvocation getGuardedInvocation(LinkRequest req, LinkerServices svc) { return null; }
+    }
+
+    static void testDeepContract() throws Throwable {
+        // interface contract: canLinkType + inherited getGuardedInvocation
+        check(TypeBasedGuardingDynamicLinker.class.isInterface(), "interface");
+        check(GuardingDynamicLinker.class.isAssignableFrom(TypeBasedGuardingDynamicLinker.class),
+              "extends GuardingDynamicLinker");
+        int n = 0; Method abs = null;
+        for (Method m : TypeBasedGuardingDynamicLinker.class.getDeclaredMethods())
+            if (Modifier.isAbstract(m.getModifiers())) { n++; abs = m; }
+        check(n == 1 && abs.getName().equals("canLinkType"), "adds exactly canLinkType");
+        // the composite consults canLinkType to skip linkers cheaply
+        StringOnlyLinker s = new StringOnlyLinker();
+        TypeBasedGuardingDynamicLinker all = new TypeBasedGuardingDynamicLinker() {
+            public boolean canLinkType(Class<?> t) { return true; }
+            public GuardedInvocation getGuardedInvocation(LinkRequest r, LinkerServices v) { return null; }
+        };
+        CompositeTypeBasedGuardingDynamicLinker c = new CompositeTypeBasedGuardingDynamicLinker(List.of(s, all));
+        check(c.canLinkType(String.class), "OR of the delegates");
+        check(c.canLinkType(Integer.class), "second delegate accepts");
+        s.asked.clear();
+        c.getGuardedInvocation(new SimpleLinkRequest(new CallSiteDescriptor(MethodHandles.lookup(),
+            StandardOperation.GET, MethodType.methodType(Object.class, Object.class)), false, Integer.valueOf(1)),
+            null);
+        check(!s.asked.contains(Integer.class), "canLinkType-false linker skipped for the receiver type");
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

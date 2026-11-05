@@ -11,3 +11,6 @@ new SimpleLinkRequest(csd, unstable, args)。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。黑盒 receiver/arguments/descriptor/stable/replaceArguments。
+## 5. 契约深化（JDK-27）
+- getter 保真（descriptor 恒等、unstable 标志、receiver=arguments[0]、参数序列）。
+- replaceArguments(desc, args) 产出新实例、共享 descriptor、原对象不动；null receiver 合法（arguments[0]==null）。

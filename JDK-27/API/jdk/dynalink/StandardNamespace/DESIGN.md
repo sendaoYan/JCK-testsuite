@@ -11,3 +11,7 @@ StandardNamespace.PROPERTY + findFirst。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。黑盒枚举常量+findFirst+valueOf。
+## 5. 契约深化（JDK-27）
+- values 顺序精确表 [PROPERTY, ELEMENT, METHOD]；toString==name。
+- findFirst：多命名空间取声明序第一个；具名包装可解包；裸操作/null→null。
+- 组合 toString（GET:PROPERTY、SET:ELEMENT:i）；每个值实现 Namespace。

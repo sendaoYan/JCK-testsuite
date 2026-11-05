@@ -36,9 +36,36 @@ public class CompositeGuardingDynamicLinkerTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    static void testDelegationOrder() throws Throwable {
+        MethodHandles.Lookup lk = MethodHandles.lookup();
+        final List<String> calls = new ArrayList<>();
+        // first linker returning a value short-circuits the chain
+        GuardingDynamicLinker a = (req, svc) -> { calls.add("a"); return null; };
+        GuardingDynamicLinker b = (req, svc) -> { calls.add("b"); return null; };
+        CompositeGuardingDynamicLinker c = new CompositeGuardingDynamicLinker(List.of(a, b));
+        LinkRequest req = new SimpleLinkRequest(new CallSiteDescriptor(lk, StandardOperation.GET,
+                MethodType.methodType(Object.class, Object.class)), false, new Object());
+        check(c.getGuardedInvocation(req, null) == null, "all-declining composite returns null");
+        check(calls.equals(List.of("a", "b")), "delegates consulted in order: " + calls);
+        // a winner stops the walk
+        calls.clear();
+        final MethodHandle mh = MethodHandles.dropArguments(
+                MethodHandles.constant(Object.class, "WIN"), 0, Object.class);
+        GuardingDynamicLinker winner = (rq, s) -> { calls.add("w"); return new GuardedInvocation(mh, (MethodHandle) null); };
+        CompositeGuardingDynamicLinker c2 = new CompositeGuardingDynamicLinker(List.of(a, winner, b));
+        GuardedInvocation gi = c2.getGuardedInvocation(req, null);
+        check(gi != null && gi.getInvocation() == mh, "winning invocation returned");
+        check(calls.equals(List.of("a", "w")), "walk stops at the winner: " + calls);
+        // an empty composite declines everything
+        CompositeGuardingDynamicLinker empty = new CompositeGuardingDynamicLinker(List.of());
+        check(empty.getGuardedInvocation(req, null) == null, "empty composite declines");
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDelegationOrder();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

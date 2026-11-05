@@ -11,3 +11,7 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。白盒 abstract + 常量。
+## 5. 契约深化（JDK-27）
+- implements Supplier<List<GuardingDynamicLinker>>（get() 继承自 Supplier，非本类声明）。
+- AUTOLOAD_PERMISSION_NAME=="dynalink.exportLinkersAutomatically"；protected 构造器；抽象类。
+- 原生 JDK 运行时无已注册 exporter（ServiceLoader 空）断言。

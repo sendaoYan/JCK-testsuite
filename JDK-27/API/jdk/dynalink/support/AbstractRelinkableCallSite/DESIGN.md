@@ -11,3 +11,6 @@ ChainedCallSite/SimpleRelinkableCallSite 的父类。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。黑盒通过子类实例测 getDescriptor/initialize。
+## 5. 契约深化（JDK-27）
+- 结构：abstract、extends MutableCallSite、implements RelinkableCallSite、protected 构造器。
+- MinimalSite 生命周期真实闭环：getDescriptor 恒等、MutableCallSite.type()==descriptor 类型、link() 只 initialize 不 relink、首调恰一次 relink、initialize 原样安装 handle。

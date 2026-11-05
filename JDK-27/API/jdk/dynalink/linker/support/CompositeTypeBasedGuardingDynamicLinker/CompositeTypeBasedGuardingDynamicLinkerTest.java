@@ -36,9 +36,40 @@ public class CompositeTypeBasedGuardingDynamicLinkerTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    static void testTypeFilteredDelegation() throws Throwable {
+        MethodHandles.Lookup lk = MethodHandles.lookup();
+        final List<String> asked = new ArrayList<>();
+        TypeBasedGuardingDynamicLinker strings = new TypeBasedGuardingDynamicLinker() {
+            public boolean canLinkType(Class<?> t) { asked.add(t.getSimpleName()); return t == String.class; }
+            public GuardedInvocation getGuardedInvocation(LinkRequest r, LinkerServices s) { return null; }
+        };
+        TypeBasedGuardingDynamicLinker everything = new TypeBasedGuardingDynamicLinker() {
+            public boolean canLinkType(Class<?> t) { return true; }
+            public GuardedInvocation getGuardedInvocation(LinkRequest r, LinkerServices s) { return null; }
+        };
+        CompositeTypeBasedGuardingDynamicLinker c = new CompositeTypeBasedGuardingDynamicLinker(List.of(strings, everything));
+        check(c.canLinkType(String.class) && c.canLinkType(Integer.class), "canLinkType is the OR of delegates");
+        check(!new CompositeTypeBasedGuardingDynamicLinker(List.of(strings)).canLinkType(Integer.class),
+              "single-delegate OR");
+        // canLinkType-false delegates are skipped entirely for the receiver type
+        asked.clear();
+        LinkRequest req = new SimpleLinkRequest(new CallSiteDescriptor(lk, StandardOperation.GET,
+                MethodType.methodType(Object.class, Object.class)), false, Integer.valueOf(1));
+        c.getGuardedInvocation(req, null);
+        check(!asked.contains("Integer"), "string-only linker never consulted for Integer: " + asked);
+        // optimize() folds a mixed list into a single composite-friendly list
+        List<GuardingDynamicLinker> opt = CompositeTypeBasedGuardingDynamicLinker.optimize(List.of(strings, everything));
+        check(opt.size() == 1, "optimize folds into one composite: " + opt.size());
+        // optimize of a lone type-based linker keeps it direct
+        List<GuardingDynamicLinker> opt2 = CompositeTypeBasedGuardingDynamicLinker.optimize(List.of(strings));
+        check(opt2.size() == 1 && opt2.get(0) == strings, "lone linker stays unwrapped");
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testTypeFilteredDelegation();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

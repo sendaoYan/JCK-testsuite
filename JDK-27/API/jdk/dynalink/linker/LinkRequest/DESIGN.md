@@ -11,3 +11,7 @@ SimpleLinkRequest 实现。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。白盒 interface；黑盒降级。
+## 5. 契约深化（JDK-27）
+- 接口面精确集合 {getArguments, getCallSiteDescriptor, getReceiver, isCallSiteUnstable, replaceArguments}。
+- 真实观察：自定义 linker 收到的 request 的 receiver=实参0、参数含 receiver、descriptor 类型来自 site、首链 stable。
+- replaceArguments 新实例+共享 descriptor；SimpleLinkRequest unstable=true 通道。

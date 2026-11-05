@@ -41,9 +41,31 @@ public class StandardOperationTest {
 
     }
 
+
+    static void testDeepContract() {
+        List<StandardOperation> vals = List.of(StandardOperation.values());
+        check(vals.equals(List.of(StandardOperation.GET, StandardOperation.SET, StandardOperation.REMOVE,
+                                  StandardOperation.CALL, StandardOperation.NEW)),
+              "values in canonical order: " + vals);
+        for (StandardOperation op : StandardOperation.values()) {
+            check(op.toString().equals(op.name()), "toString is the name: " + op);
+            check(op.withNamespace(StandardNamespace.PROPERTY).getBaseOperation() == op, op + " withNamespace");
+            check(op.named("n").getBaseOperation() == op, op + " named");
+            check(op instanceof Operation, op + " is an Operation");
+        }
+        check(StandardOperation.valueOf("CALL") == StandardOperation.CALL, "valueOf");
+        // the enum instances are singletons usable in identity comparisons
+        check(StandardOperation.GET == StandardOperation.values()[0], "identity");
+        // composed toStrings
+        check(StandardOperation.CALL.withNamespace(StandardNamespace.METHOD).toString().equals("CALL:METHOD"), "CALL:METHOD");
+        check(StandardOperation.REMOVE.withNamespace(StandardNamespace.ELEMENT).toString().equals("REMOVE:ELEMENT"), "REMOVE:ELEMENT");
+        check(StandardOperation.NEW.toString().equals("NEW"), "NEW stays bare");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

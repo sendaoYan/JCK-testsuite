@@ -11,3 +11,5 @@ new CompositeGuardingDynamicLinker(list)。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。黑盒空组合 getGuardedInvocation 返回 null。
+## 5. 契约深化（JDK-27）
+- 顺序委托保真（a→b）；首个非空结果短路后续；全拒绝→null；空组合器拒绝一切。

@@ -36,9 +36,35 @@ public class SimpleRelinkableCallSiteTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    public static class POJO { public int field = 7; }
+
+    static void testDeepContract() throws Throwable {
+        MethodHandles.Lookup lk = MethodHandles.lookup();
+        DynamicLinkerFactory f = new DynamicLinkerFactory();
+        f.setPrioritizedLinker(new BeansLinker());
+        f.setFallbackLinkers();
+        DynamicLinker linker = f.createLinker();
+        SimpleRelinkableCallSite cs = new SimpleRelinkableCallSite(new CallSiteDescriptor(lk,
+            StandardOperation.GET.withNamespace(StandardNamespace.PROPERTY).named("field"),
+            MethodType.methodType(Object.class, Object.class)));
+        linker.link(cs);
+        check(cs.getTarget().invoke((Object) new POJO()).equals(7), "real link invokes");
+        // relink(null, ...) is rejected
+        try { cs.relink(null, MethodHandles.identity(Object.class)); check(false, "null invocation"); }
+        catch (NullPointerException expected) { check(true, "relink null NPE"); }
+        // resetAndRelink delegates to relink (same observable behavior)
+        MethodHandle inv = MethodHandles.identity(Object.class);
+        cs.resetAndRelink(new GuardedInvocation(inv, (MethodHandle) null), MethodHandles.identity(MethodHandle.class));
+        check(cs.getTarget().invoke((Object) "q").equals("q"), "resetAndRelink replaces the target");
+        check(cs.getDescriptor().getOperation().toString().equals("GET:PROPERTY:field"), "descriptor kept");
+        check(cs.type().parameterCount() == 1, "MutableCallSite type");
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

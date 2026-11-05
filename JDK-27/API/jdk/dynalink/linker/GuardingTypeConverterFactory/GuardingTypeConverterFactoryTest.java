@@ -31,9 +31,53 @@ public class GuardingTypeConverterFactoryTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    static void testFunctionalSurface() throws Exception {
+        int n = 0; Method abs = null;
+        for (Method m : GuardingTypeConverterFactory.class.getDeclaredMethods())
+            if (Modifier.isAbstract(m.getModifiers())) { n++; abs = m; }
+        check(n == 1 && abs.getName().equals("convertToType"), "single abstract convertToType");
+        check(abs.getParameterCount() == 3, "three parameters: source, target, lookup supplier");
+        check(abs.getParameterTypes()[2] == java.util.function.Supplier.class, "third parameter is a Supplier<Lookup>");
+        check(Modifier.isInterface(GuardingTypeConverterFactory.class.getModifiers()), "interface");
+    }
+
+    public static int parseInt(String s) { return Integer.parseInt(s); }
+    interface ConvLinker extends GuardingDynamicLinker, GuardingTypeConverterFactory { }
+
+    static void testConverterLoop() throws Throwable {
+        MethodHandles.Lookup lk = MethodHandles.lookup();
+        MethodHandle s2i = lk.findStatic(GuardingTypeConverterFactoryTest.class, "parseInt",
+                MethodType.methodType(int.class, String.class));
+        final List<Class<?>> asked = new ArrayList<>();
+        GuardingDynamicLinker conv = new ConvLinker() {
+            public GuardedInvocation getGuardedInvocation(LinkRequest req, LinkerServices svc) { return null; }
+            public GuardedInvocation convertToType(Class<?> from, Class<?> to, java.util.function.Supplier<MethodHandles.Lookup> lsup) {
+                if (to == int.class && from == String.class) {
+                    asked.add(from);
+                    return new GuardedInvocation(s2i, (MethodHandle) null);
+                }
+                return null;
+            }
+        };
+        DynamicLinkerFactory f = new DynamicLinkerFactory();
+        f.setPrioritizedLinkers(conv);
+        f.setFallbackLinkers();
+        DynamicLinker linker = f.createLinker();
+        LinkerServices svc = linker.getLinkerServices();
+        check(svc.canConvert(String.class, int.class), "custom factory enables canConvert");
+        check(!svc.canConvert(String.class, boolean.class), "unhandled pair stays unconvertible");
+        MethodHandle converter = svc.getTypeConverter(String.class, int.class);
+        check(converter != null, "getTypeConverter returns the custom converter");
+        check((Integer) converter.invokeWithArguments((Object) "123") == 123, "converter parses");
+        check(asked.equals(List.of(String.class)), "factory asked for the pair: " + asked);
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testFunctionalSurface();
+        testConverterLoop();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

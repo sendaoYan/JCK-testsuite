@@ -33,9 +33,37 @@ public class DefaultInternalObjectFilterTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    public static Object unhide(Object o) { return o instanceof String && ((String) o).startsWith("#") ? ((String) o).substring(1) : o; }
+    public static Object hide(Object o) { return "H"; }
+
+    static void testDeepContract() throws Throwable {
+        MethodHandles.Lookup lk = MethodHandles.lookup();
+        // null filters are accepted: the filter becomes a no-op
+        check(new DefaultInternalObjectFilter(null, null) != null, "null/null accepted");
+        MethodHandle paramFilter = lk.findStatic(DefaultInternalObjectFilterTest.class, "unhide",
+                MethodType.methodType(Object.class, Object.class));
+        MethodHandle retFilter = lk.findStatic(DefaultInternalObjectFilterTest.class, "hide",
+                MethodType.methodType(Object.class, Object.class));
+        DefaultInternalObjectFilter f = new DefaultInternalObjectFilter(paramFilter, retFilter);
+        check(f instanceof MethodHandleTransformer, "implements MethodHandleTransformer");
+        // a matching-typed handle is transformed on both parameter and return
+        MethodHandle echo = lk.findStatic(DefaultInternalObjectFilterTest.class, "echo",
+                MethodType.methodType(Object.class, Object.class));
+        MethodHandle t = f.transform(echo);
+        check(t.type().equals(MethodType.methodType(Object.class, Object.class)), "transformed type: " + t.type());
+        check(t.invoke((Object) "#x").equals("H"), "parameter unhidden then return hidden");
+        check(t.invoke((Object) "plain").equals("H"), "plain parameter still filtered on return");
+        // the original handle is untouched
+        check(echo.invoke((Object) "#x").equals("#x"), "original handle unchanged");
+    }
+
+    public static Object echo(Object o) { return o; }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -45,9 +45,39 @@ public class SimpleLinkRequestTest {
 
     }
 
-    public static void main(String[] args) throws Exception {
+
+    static void testDeepContract() {
+        MethodHandles.Lookup lk = MethodHandles.lookup();
+        CallSiteDescriptor d = new CallSiteDescriptor(lk,
+            StandardOperation.GET.withNamespace(StandardNamespace.PROPERTY).named("f"),
+            MethodType.methodType(Object.class, Object.class));
+        SimpleLinkRequest r = new SimpleLinkRequest(d, false, "recv", "a1");
+        check(r.getCallSiteDescriptor() == d, "descriptor kept by identity");
+        check(!r.isCallSiteUnstable(), "stable request");
+        check(r.getReceiver().equals("recv"), "receiver is argument 0");
+        check(r.getArguments().length == 2, "arguments length");
+        check(r.getArguments()[1].equals("a1"), "extra arguments follow");
+        // the unstable flag is simply carried
+        SimpleLinkRequest u = new SimpleLinkRequest(d, true, "x");
+        check(u.isCallSiteUnstable(), "unstable request");
+        check(u.getArguments().length == 1, "single argument");
+        // replaceArguments builds a new request over the same descriptor
+        LinkRequest rep = r.replaceArguments(d, new Object[]{ "y", "b2" });
+        check(rep != r, "new instance");
+        check(rep.getCallSiteDescriptor() == d, "descriptor shared");
+        check(rep.getReceiver().equals("y"), "replaced receiver");
+        check(rep.getArguments()[1].equals("b2"), "replaced arguments");
+        check(r.getReceiver().equals("recv"), "original untouched");
+        // null receiver is allowed (arguments[0] == null)
+        SimpleLinkRequest n = new SimpleLinkRequest(d, false, (Object) null);
+        check(n.getReceiver() == null, "null receiver allowed");
+        check(n.getArguments().length == 1 && n.getArguments()[0] == null, "null travels as argument 0");
+    }
+
+    public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

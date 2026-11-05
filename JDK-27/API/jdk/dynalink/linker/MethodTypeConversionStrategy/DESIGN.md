@@ -11,3 +11,6 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。白盒 interface；黑盒降级。
+## 5. 契约深化（JDK-27）
+- 单抽象 asType(MethodHandle, MethodType)。
+- setAutoConversionStrategy 真实闭环：链接期对 invocation/guard 各至少一次调用，目标类型收敛到 site 类型。

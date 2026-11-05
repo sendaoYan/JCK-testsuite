@@ -35,9 +35,36 @@ public class SecureLookupSupplierTest {
 
     }
 
+
+    static class Exposing extends SecureLookupSupplier {
+        Exposing(MethodHandles.Lookup l) { super(l); }
+        MethodHandles.Lookup peek() { return getLookupPrivileged(); }
+    }
+
+    static void testDeepContract() {
+        check(SecureLookupSupplier.GET_LOOKUP_PERMISSION_NAME.equals("dynalink.getLookup"), "permission name constant");
+        try { new SecureLookupSupplier(null); check(false, "null lookup must throw"); }
+        catch (NullPointerException expected) { check(true, "null lookup NPE"); }
+        MethodHandles.Lookup lk = MethodHandles.lookup();
+        SecureLookupSupplier s = new SecureLookupSupplier(lk);
+        check(s.getLookup() == lk, "getLookup returns the secured lookup");
+        // getLookup needs no permission on a stock runtime (no SecurityManager installed)
+        check(s.getLookup() == lk, "getLookup callable without permission");
+        // the protected privileged view is usable from a subclass
+        Exposing e = new Exposing(lk);
+        check(e.peek() == lk, "getLookupPrivileged from subclass");
+        check(e.getLookup() == lk, "both views agree");
+        // CallSiteDescriptor is the canonical subclass
+        CallSiteDescriptor d = new CallSiteDescriptor(lk, StandardOperation.GET, MethodType.methodType(Object.class));
+        check(d instanceof SecureLookupSupplier, "CallSiteDescriptor extends SecureLookupSupplier");
+        check(d.getLookup() == lk, "descriptor lookup through the supplier API");
+        check(!Modifier.isFinal(SecureLookupSupplier.class.getModifiers()), "class is not final (subclassable)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

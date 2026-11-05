@@ -39,9 +39,34 @@ public class StandardNamespaceTest {
 
     }
 
+
+    static void testDeepContract() {
+        List<StandardNamespace> vals = List.of(StandardNamespace.values());
+        check(vals.equals(List.of(StandardNamespace.PROPERTY, StandardNamespace.ELEMENT, StandardNamespace.METHOD)),
+              "values in canonical order: " + vals);
+        check(StandardNamespace.valueOf("PROPERTY") == StandardNamespace.PROPERTY, "valueOf");
+        check(StandardNamespace.PROPERTY.toString().equals("PROPERTY"), "toString is the name");
+        // findFirst walks the operation namespaces in order
+        Operation multi = StandardOperation.GET.withNamespaces(StandardNamespace.ELEMENT, StandardNamespace.PROPERTY);
+        check(StandardNamespace.findFirst(multi) == StandardNamespace.ELEMENT, "findFirst picks the first namespace");
+        check(StandardNamespace.findFirst(StandardOperation.GET.withNamespace(StandardNamespace.METHOD)) == StandardNamespace.METHOD,
+              "findFirst single");
+        check(StandardNamespace.findFirst(StandardOperation.GET.withNamespace(StandardNamespace.METHOD).named("m")) == StandardNamespace.METHOD,
+              "findFirst unwraps a named operation");
+        check(StandardNamespace.findFirst(StandardOperation.GET) == null, "findFirst on a bare operation is null");
+        check(StandardNamespace.findFirst(null) == null, "findFirst(null) is null");
+        // namespaces compose into operation toString
+        check(StandardOperation.GET.withNamespace(StandardNamespace.PROPERTY).toString().equals("GET:PROPERTY"), "GET:PROPERTY");
+        check(StandardOperation.SET.withNamespace(StandardNamespace.ELEMENT).named("i").toString().equals("SET:ELEMENT:i"),
+              "SET:ELEMENT:i");
+        // each standard namespace is a Namespace
+        for (StandardNamespace ns : StandardNamespace.values()) check(ns instanceof Namespace, ns + " is a Namespace");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
