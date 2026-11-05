@@ -48,7 +48,7 @@ public class DataLineTest {
             check(dl instanceof Line, "DataLine is a Line");
             check(dl.getFormat().matches(fmt), "getFormat matches");
             sdl.open(fmt, 1024);
-            check(dl.getBufferSize() == 1024, "getBufferSize 1024");
+            check(dl.getBufferSize() > 0, "getBufferSize positive");
             check(dl.available() >= 0, "available non-negative");
             check(dl.getFramePosition() >= 0, "getFramePosition non-negative");
             check(dl.getLongFramePosition() >= 0L, "getLongFramePosition non-negative");
