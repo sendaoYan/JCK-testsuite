@@ -20,3 +20,7 @@
 - 4 参构造器带属性：`getProperty("author"/"duration")`、`properties().size()`。
 - 受保护构造器经子类：`getByteLength` 精确往返。
 - `toString()` 含类型名与 `.wav/.au` 扩展名。
+
+## 6. 版本差异（JDK-8 vs JDK-27，双侧各自断言）
+- `Type.AIFF` 扩展名为 `aif`（非 aiff）、`AIFC` 为 `aifc`、`toString()` 为 `AIFF-C`——两版一致，常量语义锁定。
+- 可写文件类型仅 3 个（WAVE/AU/AIFF）；AIFC/SND 为只读常量。

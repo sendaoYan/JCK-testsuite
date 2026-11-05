@@ -21,3 +21,7 @@
 - `write` 到 OutputStream 后 `getSequence`/`getMidiFileFormat` 往返（分辨率/类型/字节长度）；再 `write` 到临时目录 File 后 `getSequence(File)`/`getMidiFileFormat(File)` 往返（finally 清理）。
 - 异常路径：`getMidiDevice(null)` NPE、未知 Info IAE、`getSequence/getMidiFileFormat(null)` NPE、空流 IOException、空流 `getSoundbank` InvalidMidiDataException、不支持类型 `write` IAE。
 - 设备降级：`getSequencer/getSynthesizer/getReceiver/getTransmitter` 成功则断言非空并 close，`MidiUnavailableException` 时降级标记。
+
+## 6. 版本差异（JDK-8 vs JDK-27，双侧各自断言）
+- headless 默认 `getTransmitter()`：两版均抛 `MidiUnavailableException`（message 为 null）；`getReceiver()` 两版均可用（Gervill 软件设备）。
+- 软件设备两版一致：Gervill（SoftSynthesizer）+ Real Time Sequencer；MidiDevice.Info 不可序列化。

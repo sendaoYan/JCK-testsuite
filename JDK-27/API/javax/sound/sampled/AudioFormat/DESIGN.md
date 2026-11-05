@@ -23,3 +23,7 @@
 - 8 参构造器属性往返。
 - `matches`：相同格式匹配、属性被忽略、`NOT_SPECIFIED` 通配匹配、采样率/编码/字节序不同不匹配。
 - `toString()` 含编码名。
+
+## 6. 版本差异（JDK-8 vs JDK-27，双侧各自断言）
+- `toString()`：无字节序后缀的格式（如 8-bit PCM_UNSIGNED mono）JDK-8 输出以 `, ` 结尾（`...1 bytes/frame, `），JDK-27 无尾随逗号；带 `little-endian/big-endian` 后缀时两版一致。
+- 该尾随逗号同样渗入 `AudioSystem.getLine` 的 IllegalArgumentException 消息（JDK-8 `...99 bytes/frame,  is supported.`）。

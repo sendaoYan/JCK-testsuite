@@ -18,3 +18,7 @@ SPI 实现者子类化并注册，`MidiSystem.write`/`getMidiFileTypes` 委托�
 - 子类 `FakeWriter`（`getMidiFileTypes()={0,1}`、`getMidiFileTypes(seq)={0}`），断言默认 `isFileTypeSupported` 对 0/1 为真、对 2 为假；带 Sequence 重载对 0 真、1 假。
 - `write` 两个重载（OutputStream / 临时目录 File）返回 42，临时目录 finally 清理。
 - 白盒补齐：非接口抽象类、extends Object、`protected` 构造、`getMidiFileTypes/isFileTypeSupported/write` 方法齐全。
+
+## 6. 版本差异（JDK-8 vs JDK-27，双侧各自断言）
+- 反射 `getDeclaredMethods` 时 JDK-27 的实现类包含 lambda 合成方法——测试须排序/按名匹配而非按序断言。
+- 手写 34 字节 SMF（format 0/1）write→read round-trip 两版逐字节一致。

@@ -20,3 +20,7 @@
 - `mark/reset` 往返重放相同字节。
 - frameSize=1 时 `read()` 单字节（含 0x81 无符号展开）与 EOF。
 - frameSize>1 时 `read()` 抛 `IOException`；`close()` 无异常完成。
+
+## 6. 版本差异（JDK-8 vs JDK-27，双侧各自断言）
+- `close()` 后 `read()` 不抛异常（透传底层流）——两版一致，锁定该宽容语义。
+- 8-bit signed 写 WAV 后按 unsigned (+128) 存储：{16,-16}→{144,112}；16-bit 写出 44+2048=2092 字节——两版一致。
