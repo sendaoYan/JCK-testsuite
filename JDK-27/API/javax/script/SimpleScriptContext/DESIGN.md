@@ -22,3 +22,7 @@ AbstractScriptEngine 默认用它作上下文。测试覆盖引擎/全局绑定�
 - 黑盒: 作用域顺序；引擎遮蔽全局；全局绑定 no-op；IO 回读；setBindings null/非法 scope；name 校验
 
 自动化实现位于同目录 `SimpleScriptContextTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 深化增量（契约覆盖）
+追加 `testDeepContracts()`：黑盒行为矩阵（构造/读写/视图/null 负例精确异常与消息片段），
+JDK-8 与 JDK-27 行为一致时共享同一断言文本。

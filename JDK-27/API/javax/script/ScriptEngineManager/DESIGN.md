@@ -22,3 +22,7 @@
 - 黑盒: put/get；set/getBindings；未知引擎 null；注册名/扩展/MIME 解析；register 空参 NPE
 
 自动化实现位于同目录 `ScriptEngineManagerTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. JDK-8 侧差异（Nashorn 实引擎）
+JDK-8 `getEngineFactories()`=1（Nashorn "js"）：断言工厂非空、ENGINE="jdk.nashorn..." 生态查询闭环；JDK-27 =0，
+用 URLClassLoader + 运行时生成 META-INF/services 临时目录验证 ServiceLoader 发现（finally 删除目录）。

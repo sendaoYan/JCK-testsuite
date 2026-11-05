@@ -21,3 +21,7 @@ ScriptEngine 的标准骨架实现：默认 SimpleScriptContext、put/get、setC
 - 黑盒: put/get；eval 变体委托；set/getContext；scope 校验 IAE/NPE；Bindings 构造
 
 自动化实现位于同目录 `AbstractScriptEngineTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 深化增量（契约覆盖）
+追加 `testDeepContracts()`：黑盒行为矩阵（构造/读写/视图/null 负例精确异常与消息片段），
+JDK-8 与 JDK-27 行为一致时共享同一断言文本。

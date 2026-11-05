@@ -8,6 +8,8 @@ import java.lang.reflect.*;
 import java.util.*;
 import javax.naming.*;
 import javax.naming.ldap.spi.*;
+import java.util.HashMap;
+import java.util.List;
 
 public class LdapDnsProviderTest {
     static int passed;

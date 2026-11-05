@@ -21,3 +21,7 @@ ScriptEngineManager 通过工厂发现并创建引擎。测试用匿名工厂断
 - 黑盒: 各 getter；getParameter ENGINE/ENGINE_VERSION/LANGUAGE/LANGUAGE_VERSION/NAME；语法/输出/程序生成；getScriptEngine
 
 自动化实现位于同目录 `ScriptEngineFactoryTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 深化增量（契约覆盖）
+追加 `testDeepContracts()`：黑盒行为矩阵（构造/读写/视图/null 负例精确异常与消息片段），
+JDK-8 与 JDK-27 行为一致时共享同一断言文本。

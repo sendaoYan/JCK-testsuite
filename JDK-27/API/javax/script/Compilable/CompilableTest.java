@@ -6,6 +6,16 @@
 
 import java.lang.reflect.*;
 import java.io.*;
+import javax.script.AbstractScriptEngine;
+import javax.script.Bindings;
+import javax.script.Compilable;
+import javax.script.CompiledScript;
+import javax.script.ScriptContext;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineFactory;
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
+import javax.script.SimpleBindings;
 
 public class CompilableTest {
     static int passed;
@@ -51,6 +61,87 @@ public class CompilableTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- deep contract coverage (self-made compilable engine) -------------
+
+    static void testDeepContracts() throws Exception {
+        check(new ScriptEngineManager().getEngineFactories().isEmpty(),
+                "no platform engine: Compilable tested with self-made engine");
+        DeepCompEngine e = new DeepCompEngine();
+        check(e instanceof Compilable, "engine implements Compilable");
+        Compilable c = e;
+        dComp27(c, e);
+        System.out.println("deep: Compilable contracts OK (self-made)");
+    }
+
+    static class DeepCompEngine extends AbstractScriptEngine implements Compilable {
+        int compiles;
+        int execs;
+        public CompiledScript compile(String script) throws ScriptException {
+            if (script == null) throw new NullPointerException("null script");
+            if (script.indexOf("{") >= 0) throw new ScriptException("deep syntax error", "c.js", 1, 2);
+            compiles++;
+            final String src = script;
+            return new CompiledScript() {
+                public Object eval(ScriptContext ctx) throws ScriptException {
+                    execs++;
+                    return DeepCompEngine.this.eval(src, ctx);
+                }
+                public ScriptEngine getEngine() { return DeepCompEngine.this; }
+            };
+        }
+        public CompiledScript compile(java.io.Reader reader) throws ScriptException {
+            StringBuilder sb = new StringBuilder();
+            try { int ch; while ((ch = reader.read()) >= 0) sb.append((char) ch); }
+            catch (java.io.IOException x) { throw new AssertionError(x); }
+            return compile(sb.toString());
+        }
+        public Object eval(String s, ScriptContext ctx) throws ScriptException {
+            if (s.equals("ident")) return ctx.getAttribute("probe");
+            return "OK:" + s;
+        }
+        public Object eval(java.io.Reader r, ScriptContext ctx) throws ScriptException {
+            StringBuilder sb = new StringBuilder();
+            try { int ch; while ((ch = r.read()) >= 0) sb.append((char) ch); }
+            catch (java.io.IOException x) { throw new AssertionError(x); }
+            return eval(sb.toString(), ctx);
+        }
+        public Bindings createBindings() { return new SimpleBindings(); }
+        public ScriptEngineFactory getFactory() { return null; }
+    }
+
+    static void dComp27(Compilable c, DeepCompEngine e) throws Exception {
+        CompiledScript cs = c.compile("cmd");
+        check(e.compiles == 1, "one compilation");
+        check("OK:cmd".equals(cs.eval()), "compiled eval");
+        check("OK:cmd".equals(cs.eval()), "second eval reuses the compilation");
+        check("OK:cmd".equals(cs.eval(e.getContext())), "eval(ScriptContext)");
+        check(e.compiles == 1 && e.execs == 3, "three executions, still one compilation");
+        check(cs.getEngine() == e, "getEngine returns the compiling engine");
+        // the compiled artifact observes current bindings at eval time
+        e.put("probe", "first");
+        CompiledScript id = c.compile("ident");
+        e.put("probe", "second");
+        check("second".equals(id.eval()), "bindings read at eval, not compile, time");
+        // Reader overload funnels through compile(String)
+        CompiledScript r = c.compile(new java.io.StringReader("rr"));
+        check("OK:rr".equals(r.eval()), "compile(Reader) works");
+        // negative contract of this engine
+        boolean se = false;
+        try { c.compile("{bad"); }
+        catch (ScriptException x) {
+            se = true;
+            check("c.js".equals(x.getFileName()), "compile error file");
+            check(x.getLineNumber() == 1 && x.getColumnNumber() == 2, "compile error position");
+        }
+        check(se, "syntax error reported at compile time");
+        boolean npe = false;
+        try { c.compile((String) null); }
+        catch (NullPointerException x) { npe = true; }
+        check(npe, "compile(null) -> NPE (engine contract)");
+    }
+
 }

@@ -59,6 +59,71 @@ public class NameClassPairTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- deep contract coverage (appended) --------------------------------
+
+    static void testDeepContracts() throws Exception {
+        dNcpConstructorMatrix();
+        dNcpSetters();
+        dNcpNameInNamespace();
+        dNcpToString();
+        dNcpSerialization();
+        System.out.println("deep: NameClassPair contracts OK");
+    }
+
+    static void dNcpConstructorMatrix() {
+        NameClassPair p = new NameClassPair("n", "c");
+        check("n".equals(p.getName()) && "c".equals(p.getClassName()), "(name, class)");
+        check(p.isRelative(), "relative by default");
+        NameClassPair p2 = new NameClassPair("n", "c", false);
+        check(!p2.isRelative(), "relative false");
+        boolean uoe = false;
+        try { p2.getNameInNamespace(); } catch (UnsupportedOperationException x) { uoe = true; }
+        check(uoe, "nameInNamespace unset -> UnsupportedOperationException");
+    }
+
+    static void dNcpSetters() {
+        NameClassPair p = new NameClassPair("n", "c");
+        p.setName("n2");
+        check("n2".equals(p.getName()), "setName");
+        p.setClassName("c2");
+        check("c2".equals(p.getClassName()), "setClassName");
+        p.setRelative(false);
+        check(!p.isRelative(), "setRelative");
+    }
+
+    static void dNcpNameInNamespace() {
+        NameClassPair p = new NameClassPair("n", "c");
+        boolean unset = false;
+        try { p.getNameInNamespace(); } catch (UnsupportedOperationException x) { unset = true; }
+        check(unset, "unset name-in-namespace -> UnsupportedOperationException");
+        p.setNameInNamespace("a/b/n");
+        check("a/b/n".equals(p.getNameInNamespace()), "set/read round trip");
+        p.setRelative(false);
+        check("a/b/n".equals(p.getNameInNamespace()), "fields independent");
+    }
+
+    static void dNcpToString() {
+        NameClassPair rel = new NameClassPair("nm", "cls", true);
+        check(rel.toString().contains("nm") && rel.toString().contains("cls"), "toString has name+class");
+        check(!rel.toString().contains("(not relative)"), "no marker when relative");
+        NameClassPair notRel = new NameClassPair("nm", "cls", false);
+        check(notRel.toString().contains("(not relative)"), "marker when not relative");
+    }
+
+    static void dNcpSerialization() throws Exception {
+        NameClassPair p = new NameClassPair("nm", "cls", false);
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oo = new java.io.ObjectOutputStream(bos)) { oo.writeObject(p); }
+        try (java.io.ObjectInputStream oi = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            NameClassPair back = (NameClassPair) oi.readObject();
+            check("nm".equals(back.getName()) && "cls".equals(back.getClassName()), "fields survive");
+            check(!back.isRelative(), "relative flag survives");
+        }
+    }
+
 }

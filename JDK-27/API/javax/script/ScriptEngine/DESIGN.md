@@ -22,3 +22,8 @@
 - 黑盒: 七个常量；eval 变体；put/get；createBindings；get/setContext；set/getBindings
 
 自动化实现位于同目录 `ScriptEngineTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. JDK-8 侧差异（Nashorn 实引擎）
+JDK-8 深化用 `new ScriptEngineManager().getEngineByName("js")` 真执行：`1+2`→Integer、`41/2`→Double(20.5)、
+`'a'+'b'`→String、`1<2`→Boolean、空语句/空脚本→null；`var carry=40` 后 `carry+2`→**Double 42.0**（var 算术装箱 Double）；
+engine-scope 状态跨 eval 持久。JDK-27 侧以测试内自造 ScriptEngine 实现同一契约（无内置引擎）。

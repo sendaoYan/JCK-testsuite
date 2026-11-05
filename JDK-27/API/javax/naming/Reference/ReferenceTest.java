@@ -10,6 +10,8 @@ import javax.naming.BinaryRefAddr;
 import javax.naming.RefAddr;
 import javax.naming.Reference;
 import javax.naming.StringRefAddr;
+import javax.naming.Name;
+import java.util.Vector;
 
 public class ReferenceTest {
     static int passed;
@@ -76,6 +78,108 @@ public class ReferenceTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- deep contract coverage (appended) --------------------------------
+
+    static void testDeepContracts() throws Exception {
+        dRefConstructorMatrix();
+        dRefAddrListOps();
+        dRefEquality();
+        dRefCloneClear();
+        dRefSerialization();
+        System.out.println("deep: Reference contracts OK");
+    }
+
+    static void dRefConstructorMatrix() {
+        Reference r = new Reference("MyClass");
+        check("MyClass".equals(r.getClassName()), "className");
+        check(r.getFactoryClassName() == null, "no factory by default");
+        check(r.getFactoryClassLocation() == null, "no factory location by default");
+        check(r.size() == 0 && !r.getAll().hasMoreElements(), "no addrs by default");
+        Reference r2 = new Reference("C", new StringRefAddr("t", "v"));
+        check(r2.size() == 1 && "t".equals(r2.get(0).getType()), "initial addr");
+        Reference r3 = new Reference("C", "Factory", "file:/loc");
+        check("Factory".equals(r3.getFactoryClassName()) && "file:/loc".equals(r3.getFactoryClassLocation()),
+                "factory ctor");
+        Reference r4 = new Reference("C", new StringRefAddr("t", "v"), "Factory", "file:/loc");
+        check(r4.size() == 1 && "Factory".equals(r4.getFactoryClassName()), "4-arg ctor");
+        boolean ok = true;
+        try { new Reference((String) null); } catch (NullPointerException e) { ok = false; }
+        check(ok || new Reference((String) null).getClassName() == null,
+                "null class name recorded (no requirement of rejection)");
+    }
+
+    static void dRefAddrListOps() {
+        Reference r = new Reference("C");
+        r.add(new StringRefAddr("a", "1"));
+        r.add(new StringRefAddr("b", "2"));
+        r.add(0, new StringRefAddr("zero", "z"));
+        check("zero".equals(r.get(0).getType()), "insert at head");
+        check(r.size() == 3, "size after insert");
+        java.util.List<String> types = new java.util.ArrayList<>();
+        java.util.Enumeration<RefAddr> en = r.getAll();
+        while (en.hasMoreElements()) types.add(en.nextElement().getType());
+        check(types.equals(java.util.Arrays.asList("zero", "a", "b")), "getAll order");
+        check("1".equals(r.get("a").getContent()), "get by type");
+        check(r.get("missing") == null, "get by unknown type null");
+        r.add(new StringRefAddr("a", "1b"));
+        check("1".equals(r.get("a").getContent()), "get by type returns first match");
+        Object removed = r.remove(0);
+        check("zero".equals(((StringRefAddr) removed).getType()), "remove returns addr");
+        boolean oob = false;
+        try { r.remove(99); } catch (ArrayIndexOutOfBoundsException e) { oob = true; }
+        check(oob, "remove out of range -> AIOOBE");
+        oob = false;
+        try { r.get(99); } catch (ArrayIndexOutOfBoundsException e) { oob = true; }
+        check(oob, "get out of range -> AIOOBE");
+        r.clear();
+        check(r.size() == 0, "clear empties");
+        r.add(null);
+        check(r.size() == 1 && r.get(0) == null, "null addr storable (recorded behavior)");
+    }
+
+    static void dRefEquality() {
+        Reference a = new Reference("C", new StringRefAddr("t", "1"), "F", "L");
+        Reference b = new Reference("C", new StringRefAddr("t", "1"), "F", "L");
+        check(a.equals(b), "equal references");
+        check(a.hashCode() == b.hashCode(), "hashCode contract");
+        check(a.equals(new Reference("C", new StringRefAddr("t", "1"), "OtherF", "L")),
+                "equals ignores factory information");
+        check(a.equals(new Reference("C", new StringRefAddr("t", "1"), "F", "OtherL")),
+                "equals ignores factory location");
+        check(!a.equals(new Reference("Other", new StringRefAddr("t", "1"), "F", "L")),
+                "class name participates");
+        check(!a.equals(new Reference("C", new StringRefAddr("t", "2"), "F", "L")),
+                "address content participates");
+        check(!a.equals(null) && !a.equals("C"), "null/other type not equal");
+    }
+
+    static void dRefCloneClear() {
+        Reference r = new Reference("C", new StringRefAddr("t", "1"));
+        Reference clone = (Reference) r.clone();
+        check(clone.equals(r), "clone equal");
+        clone.add(new StringRefAddr("u", "2"));
+        check(r.size() == 1 && clone.size() == 2, "clone list independent");
+        check(clone.get(0) == r.get(0) || clone.get(0).equals(r.get(0)), "addr shared or equal (shallow clone)");
+        String text = r.toString();
+        check(text.contains("C") && text.contains("t"), "toString mentions class and addr type");
+    }
+
+    static void dRefSerialization() throws Exception {
+        Reference r = new Reference("C", new StringRefAddr("t", "1"), "F", "file:/L");
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oo = new java.io.ObjectOutputStream(bos)) { oo.writeObject(r); }
+        try (java.io.ObjectInputStream oi = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            Reference back = (Reference) oi.readObject();
+            check(back.equals(r), "round trip equal");
+            check("C".equals(back.getClassName()) && "F".equals(back.getFactoryClassName())
+                    && "file:/L".equals(back.getFactoryClassLocation()), "class/factory survive");
+            check("1".equals(back.get("t").getContent()), "addr content survives");
+        }
+    }
+
 }

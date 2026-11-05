@@ -19,3 +19,7 @@
 - 黑盒: 各构造消息格式；默认 fileName null/行 -1/列 -1；cause 包装
 
 自动化实现位于同目录 `ScriptExceptionTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 深化增量（契约覆盖）
+追加 `testDeepContracts()`：黑盒行为矩阵（构造/读写/视图/null 负例精确异常与消息片段），
+JDK-8 与 JDK-27 行为一致时共享同一断言文本。

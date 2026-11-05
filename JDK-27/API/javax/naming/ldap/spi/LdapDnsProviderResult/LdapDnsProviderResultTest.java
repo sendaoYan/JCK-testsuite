@@ -7,6 +7,9 @@
 import java.lang.reflect.*;
 import java.util.*;
 import javax.naming.ldap.spi.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class LdapDnsProviderResultTest {
     static int passed;

@@ -10,6 +10,8 @@ import java.util.Hashtable;
 import javax.naming.Context;
 import javax.naming.Name;
 import javax.naming.spi.ObjectFactory;
+import javax.naming.CompositeName;
+import javax.naming.spi.NamingManager;
 
 public class ObjectFactoryTest {
     static int passed;
@@ -66,6 +68,65 @@ public class ObjectFactoryTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- deep contract coverage (appended) --------------------------------
+
+    static void testDeepContracts() throws Exception {
+        dOfDirect();
+        dOfViaNamingManager();
+        System.out.println("deep: ObjectFactory contracts OK");
+    }
+
+    public static class DeepOf implements ObjectFactory {
+        public static Object lastObj;
+        public static Name lastName;
+        public static Context lastCtx;
+        public static java.util.Hashtable<?, ?> lastEnv;
+        public Object getObjectInstance(Object obj, Name name, Context nameCtx,
+                java.util.Hashtable<?, ?> environment) {
+            lastObj = obj; lastName = name; lastCtx = nameCtx; lastEnv = environment;
+            return "OF(" + obj + ")";
+        }
+    }
+
+    public static class DeepOfNull implements ObjectFactory {
+        public Object getObjectInstance(Object obj, Name name, Context nameCtx,
+                java.util.Hashtable<?, ?> environment) {
+            return null;
+        }
+    }
+
+    static void dOfDirect() throws Exception {
+        DeepOf f = new DeepOf();
+        Name n = new CompositeName("a/b");
+        java.util.Hashtable<Object, Object> env = new java.util.Hashtable<>();
+        check("OF(target)".equals(f.getObjectInstance("target", n, null, env)),
+                "factory result");
+        check(DeepOf.lastObj.equals("target"), "reference recorded");
+        check(DeepOf.lastName.equals(n), "name recorded");
+        check(DeepOf.lastEnv == env, "environment recorded");
+        // factory may freely return null (means "not handled")
+        check(new DeepOfNull().getObjectInstance("x", null, null, null) == null,
+                "null return allowed");
+    }
+
+    static void dOfViaNamingManager() throws Exception {
+        // OBJECT_FACTORIES property drives NamingManager lookup
+        java.util.Hashtable<Object, Object> env = new java.util.Hashtable<>();
+        env.put(Context.OBJECT_FACTORIES, "ObjectFactoryTest$DeepOf");
+        Name n = new CompositeName("via/nm");
+        Object out = NamingManager.getObjectInstance("payload", n, null, env);
+        check("OF(payload)".equals(out), "NamingManager delegates to property factory");
+        check(DeepOf.lastName.equals(n), "name forwarded");
+        // null-returning factory leaves the original object in place
+        env = new java.util.Hashtable<>();
+        env.put(Context.OBJECT_FACTORIES, "ObjectFactoryTest$DeepOfNull");
+        Object sentinel = new Object();
+        out = NamingManager.getObjectInstance(sentinel, null, null, env);
+        check(out == sentinel, "null return -> original reference preserved");
+    }
+
 }
