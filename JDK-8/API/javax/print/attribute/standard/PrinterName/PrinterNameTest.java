@@ -20,6 +20,44 @@ public class PrinterNameTest {
         check(v.equals(new PrinterName("sample-text", java.util.Locale.US)), "equals");
         check(v.hashCode() == new PrinterName("sample-text", java.util.Locale.US).hashCode(), "hashCode");
         check(v.toString() != null, "toString");
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: null NPE / locale defaulting / equals / serialization ----
+    static void testContractDeep() throws Exception {
+        PrinterName v = new PrinterName("contract", java.util.Locale.FRENCH);
+        check("contract".equals(v.getValue()), "getValue");
+        check(java.util.Locale.FRENCH.equals(v.getLocale()), "getLocale");
+        check("contract".equals(v.toString()), "toString == value");
+        check("printer-name".equals(v.getName()), "getName");
+        check(PrinterName.class == v.getCategory(), "getCategory");
+        expectNPE("PrinterName(null, locale)", new Runnable() { public void run() { new PrinterName(null, java.util.Locale.FRENCH); } }, " value is null");
+        PrinterName dl = new PrinterName("x", null);
+        check(java.util.Locale.getDefault().equals(dl.getLocale()), "null locale -> default locale");
+        check(v.equals(new PrinterName("contract", java.util.Locale.FRENCH)), "equals same value+locale");
+        check(!v.equals(new PrinterName("contract", java.util.Locale.ENGLISH)), "different locale unequal");
+        check(!v.equals(new PrinterName("other", java.util.Locale.FRENCH)), "different value unequal");
+        check(!v.equals(null) && !v.equals("contract"), "null/foreign unequal");
+        check(v.hashCode() == new PrinterName("contract", java.util.Locale.FRENCH).hashCode(), "hashCode consistent");
+        PrinterName rt = (PrinterName) serRoundTrip(v);
+        check(rt.equals(v) && "contract".equals(rt.getValue()) && java.util.Locale.FRENCH.equals(rt.getLocale()), "serialization round-trip");
+        PrinterName en = new PrinterName("mixed", java.util.Locale.ENGLISH);
+        check(!v.equals(en) && !en.equals(v), "locale asymmetry none");
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+
 }

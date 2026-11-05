@@ -34,6 +34,48 @@ public class ResolutionSyntaxTest {
         check(hasMethod(c, "lessThanOrEquals"), "declares lessThanOrEquals");
         check(hasMethod(c, "equals"), "declares equals");
         check(hasMethod(c, "hashCode"), "declares hashCode");
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: direct instantiation / dru normalization / physical equals / lte ----
+    static void testContractDeep() throws Exception {
+        javax.print.attribute.ResolutionSyntax r = new MyRes(300, 600, javax.print.attribute.ResolutionSyntax.DPI);
+        check(r.getCrossFeedResolution(javax.print.attribute.ResolutionSyntax.DPI) == 300, "crossFeed getter");
+        check(r.getFeedResolution(javax.print.attribute.ResolutionSyntax.DPI) == 600, "feed getter");
+        check(r.toString().equals("30000x60000 dphi"), "toString dphi form");
+        check(r.equals(new MyRes(150, 300, 200)), "physical equality unit scaling");
+        check(r.hashCode() == new MyRes(150, 300, 200).hashCode(), "hashCode physical");
+        check(r.lessThanOrEquals(r), "self lte");
+        check(!r.lessThanOrEquals(new MyRes(150, 600, javax.print.attribute.ResolutionSyntax.DPI)), "lte false when crossFeed bigger");
+        expectIAE("cross 0", new Runnable() { public void run() { new MyRes(0, 1, 100); } }, "crossFeedResolution is < 1");
+        expectIAE("feed 0", new Runnable() { public void run() { new MyRes(1, 0, 100); } }, "feedResolution is < 1");
+        expectIAE("units 0", new Runnable() { public void run() { new MyRes(1, 1, 0); } }, "units is < 1");
+        javax.print.attribute.ResolutionSyntax rt = (javax.print.attribute.ResolutionSyntax) serRoundTrip(r);
+        check(rt.equals(r), "serialization round-trip");
+        check(!r.equals(null), "null unequal");
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectCCE(String what, Runnable r) {
+        try { r.run(); throw new AssertionError("expected CCE: " + what); }
+        catch (ClassCastException e) { check(e.getMessage() == null, "CCE message null: [" + e.getMessage() + "]"); }
+    }
+
+    static class MyRes extends javax.print.attribute.ResolutionSyntax {
+        MyRes(int cf, int f, int u) { super(cf, f, u); }
+    }
+
 }

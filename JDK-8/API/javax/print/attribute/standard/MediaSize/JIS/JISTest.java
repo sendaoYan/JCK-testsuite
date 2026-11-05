@@ -154,6 +154,39 @@ public class JISTest {
         check(java.lang.reflect.Modifier.isStatic(f_YOU_7.getModifiers()), "YOU_7 is static");
         check(f_YOU_7.getType() == javax.print.attribute.standard.MediaSize.class, "YOU_7 type MediaSize");
         check(f_YOU_7.get(null) != null, "YOU_7 non-null");
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: full size table in mm / cross-unit consistency ----
+    static void testContractDeep() throws Exception {
+        check(MediaSize.JIS.B0.getX(MediaSize.MM) == 1030f && MediaSize.JIS.B0.getY(MediaSize.MM) == 1456f, "JIS.B0 1030x1456 mm");
+        check(MediaSize.JIS.B1.getX(MediaSize.MM) == 728f && MediaSize.JIS.B1.getY(MediaSize.MM) == 1030f, "JIS.B1 728x1030 mm");
+        check(MediaSize.JIS.B2.getX(MediaSize.MM) == 515f && MediaSize.JIS.B2.getY(MediaSize.MM) == 728f, "JIS.B2 515x728 mm");
+        check(MediaSize.JIS.B3.getX(MediaSize.MM) == 364f && MediaSize.JIS.B3.getY(MediaSize.MM) == 515f, "JIS.B3 364x515 mm");
+        check(MediaSize.JIS.B4.getX(MediaSize.MM) == 257f && MediaSize.JIS.B4.getY(MediaSize.MM) == 364f, "JIS.B4 257x364 mm");
+        check(MediaSize.JIS.B5.getX(MediaSize.MM) == 182f && MediaSize.JIS.B5.getY(MediaSize.MM) == 257f, "JIS.B5 182x257 mm");
+        check(MediaSize.JIS.B6.getX(MediaSize.MM) == 128f && MediaSize.JIS.B6.getY(MediaSize.MM) == 182f, "JIS.B6 128x182 mm");
+        check(MediaSize.JIS.B7.getX(MediaSize.MM) == 91f && MediaSize.JIS.B7.getY(MediaSize.MM) == 128f, "JIS.B7 91x128 mm");
+        check(MediaSize.JIS.B8.getX(MediaSize.MM) == 64f && MediaSize.JIS.B8.getY(MediaSize.MM) == 91f, "JIS.B8 64x91 mm");
+        check(MediaSize.JIS.B9.getX(MediaSize.MM) == 45f && MediaSize.JIS.B9.getY(MediaSize.MM) == 64f, "JIS.B9 45x64 mm");
+        check(MediaSize.JIS.B10.getX(MediaSize.MM) == 32f && MediaSize.JIS.B10.getY(MediaSize.MM) == 45f, "JIS.B10 32x45 mm");
+        // at most 1/100 mm rounding tolerance on inch-derived conversions
+        check(Math.abs(MediaSize.NA.LETTER.getX(MediaSize.INCH) - 8.5f) < 1e-5f, "NA.LETTER inch");
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+
 }

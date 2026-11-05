@@ -23,6 +23,39 @@ public class JobImpressionsSupportedTest {
         check(v.equals(new JobImpressionsSupported(0, 5)), "equals");
         check(v.hashCode() == new JobImpressionsSupported(0, 5).hashCode(), "hashCode");
         check(v.toString() != null, "toString");
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: range parsing / members normalization / contains / next / serialization ----
+    static void testContractDeep() throws Exception {
+        JobImpressionsSupported pr = new JobImpressionsSupported(1, 11);
+        check(java.util.Arrays.deepEquals(pr.getMembers(), new int[][] {{1,11}}), "members from (lo,hi)");
+        check(pr.contains(1) && pr.contains(11) && !pr.contains(0) && !pr.contains(12), "contains boundaries");
+        check(pr.next(0) == 1 && pr.next(11) == -1, "next boundaries");
+        expectIAE("JobImpressionsSupported(5,1)", new Runnable() { public void run() { new JobImpressionsSupported(5, 1); } }, "Null range specified");
+        check("job-impressions-supported".equals(pr.getName()), "getName");
+        check(JobImpressionsSupported.class == pr.getCategory(), "getCategory");
+        check(pr.equals(new JobImpressionsSupported(1, 11)), "equals same range");
+        check(!pr.equals(new JobImpressionsSupported(2, 11)), "different range unequal");
+        check(pr.hashCode() == new JobImpressionsSupported(1, 11).hashCode(), "hashCode consistent");
+        check(!pr.equals(null) && !pr.equals("1:3"), "null/foreign unequal");
+        JobImpressionsSupported rt = (JobImpressionsSupported) serRoundTrip(pr);
+        check(rt.equals(pr) && java.util.Arrays.deepEquals(rt.getMembers(), pr.getMembers()), "serialization round-trip");
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+
 }

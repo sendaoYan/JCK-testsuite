@@ -22,6 +22,34 @@ public class INPUT_STREAMTest {
         check("java.io.InputStream".equals(f_AUTOSENSE.getRepresentationClassName()), "AUTOSENSE representation");
         javax.print.DocFlavor made = new javax.print.DocFlavor.INPUT_STREAM("text/plain; charset=\"us-ascii\"");
         check(made instanceof javax.print.DocFlavor.INPUT_STREAM, "ctor instanceof");
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: full predefined constant table / rep-class family / mime spot checks ----
+    static void testContractDeep() throws Exception {
+        check(javax.print.DocFlavor.INPUT_STREAM.TEXT_PLAIN_UTF_8.getRepresentationClassName().equals("java.io.InputStream"), "UTF_8 rep");
+        check(javax.print.DocFlavor.INPUT_STREAM.AUTOSENSE.getRepresentationClassName().equals("java.io.InputStream"), "AUTOSENSE rep");
+        check(javax.print.DocFlavor.INPUT_STREAM.PNG.getMimeType().equals("image/png"), "PNG mime");
+        check(javax.print.DocFlavor.INPUT_STREAM.PDF.getMimeType().equals("application/pdf"), "PDF mime");
+        javax.print.DocFlavor is = new javax.print.DocFlavor("application/pdf", "java.io.InputStream");
+        check(is.equals(javax.print.DocFlavor.INPUT_STREAM.PDF), "constructed equals predefined PDF");
+        check(!is.equals(javax.print.DocFlavor.BYTE_ARRAY.PDF), "InputStream != byte[] flavor for same mime");
+        check(javax.print.DocFlavor.INPUT_STREAM.TEXT_PLAIN_US_ASCII.getMimeType().equals("text/plain; charset=\"us-ascii\""), "US_ASCII mime");
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+
 }

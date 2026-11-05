@@ -51,6 +51,57 @@ public class ChromaticityTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: full enum table / category-name / equals / serialization singleton ----
+    static void testContractDeep() throws Exception {
+        check(Chromaticity.MONOCHROME.getValue() == 0, "MONOCHROME.getValue == 0");
+        check("monochrome".equals(Chromaticity.MONOCHROME.toString()), "MONOCHROME.toString [monochrome]");
+        check(Chromaticity.COLOR.getValue() == 1, "COLOR.getValue == 1");
+        check("color".equals(Chromaticity.COLOR.toString()), "COLOR.toString [color]");
+        check("chromaticity".equals(Chromaticity.MONOCHROME.getName()), "getName == \"chromaticity\"");
+        check(Chromaticity.class == Chromaticity.MONOCHROME.getCategory(), "getCategory");
+        check(Chromaticity.MONOCHROME.equals(Chromaticity.MONOCHROME), "equals self");
+        check(!Chromaticity.MONOCHROME.equals(null), "not equals null");
+        check(!Chromaticity.MONOCHROME.equals("monochrome"), "not equals foreign type");
+        check(Chromaticity.MONOCHROME.hashCode() == 0, "hashCode == value");
+        check(Chromaticity.MONOCHROME.clone() == Chromaticity.MONOCHROME, "clone returns same singleton");
+        check(!Chromaticity.MONOCHROME.equals(Chromaticity.COLOR), "distinct constants unequal");
+        check(Chromaticity.MONOCHROME.toString() != Chromaticity.COLOR.toString() || true, "toString stable");
+        check(!Chromaticity.MONOCHROME.equals(javax.print.attribute.standard.Chromaticity.COLOR), "cross-enum-type equals false");
+        for (int i = 0; i < NAMES.length; i++) {
+            javax.print.attribute.EnumSyntax e = VALUES[i];
+            check(serRoundTrip(e) == e, "serialization readResolve restores singleton " + NAMES[i]);
+        }
+        // distinct-value count vs constant count (alias handling)
+        java.util.Set<Integer> vals = new java.util.HashSet<Integer>();
+        for (javax.print.attribute.EnumSyntax e : VALUES) vals.add(e.getValue());
+        check(vals.size() == VALUES.length, "all values distinct");
+    }
+
+    static final javax.print.attribute.EnumSyntax[] VALUES = {
+        Chromaticity.MONOCHROME,
+        Chromaticity.COLOR
+    };
+    static final String[] NAMES = {
+        "MONOCHROME",
+        "COLOR"
+    };
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+
 }

@@ -29,6 +29,46 @@ public class URISyntaxTest {
         check(hasMethod(c, "hashCode"), "declares hashCode");
         check(hasMethod(c, "equals"), "declares equals");
         check(hasMethod(c, "toString"), "declares toString");
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: URI identity / null NPE / serialization ----
+    static void testContractDeep() throws Exception {
+        java.net.URI u = java.net.URI.create("ipp://server/queue");
+        MyUri t = new MyUri(u);
+        check(t.getURI() == u, "getURI same reference (no copy)");
+        check("ipp://server/queue".equals(t.toString()), "toString == uri string");
+        expectNPE("MyUri(null)", new Runnable() { public void run() { new MyUri(null); } }, " uri is null");
+        check(t.equals(new MyUri(java.net.URI.create("ipp://server/queue"))), "equals same uri");
+        check(!t.equals(new MyUri(java.net.URI.create("ipp://other"))), "different uri unequal");
+        check(!t.equals(u), "foreign type unequal");
+        check(t.hashCode() == new MyUri(java.net.URI.create("ipp://server/queue")).hashCode(), "hashCode");
+        MyUri rt = (MyUri) serRoundTrip(t);
+        check(rt.equals(t) && rt.getURI().equals(u), "serialization round-trip");
+        javax.print.attribute.standard.PrinterURI pu = new javax.print.attribute.standard.PrinterURI(u);
+        check("printer-uri".equals(pu.getName()), "standard name");
+    }
+    static class MyUri extends javax.print.attribute.URISyntax {
+        MyUri(java.net.URI u) { super(u); }
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectCCE(String what, Runnable r) {
+        try { r.run(); throw new AssertionError("expected CCE: " + what); }
+        catch (ClassCastException e) { check(e.getMessage() == null, "CCE message null: [" + e.getMessage() + "]"); }
+    }
+
 }

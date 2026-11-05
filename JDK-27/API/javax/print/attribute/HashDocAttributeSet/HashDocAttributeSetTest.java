@@ -59,6 +59,53 @@ public class HashDocAttributeSetTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: interface-typed CCE / ctor variants / serialization ----
+    static void testContractDeep() throws Exception {
+        javax.print.attribute.HashDocAttributeSet s = new javax.print.attribute.HashDocAttributeSet();
+        check(s instanceof javax.print.attribute.DocAttributeSet, "implements DocAttributeSet");
+        s.add(javax.print.attribute.standard.Chromaticity.COLOR);
+        check(s.size() == 1, "typed add OK");
+        expectCCE("add foreign interface attribute", new Runnable() { public void run() { s.add((javax.print.attribute.Attribute) new javax.print.attribute.standard.JobName("x", null)); } });
+        check(s.size() == 1, "failed add leaves size");
+        javax.print.attribute.HashDocAttributeSet fromAttr = new javax.print.attribute.HashDocAttributeSet(javax.print.attribute.standard.Chromaticity.COLOR);
+        check(fromAttr.size() == 1, "single-attribute ctor");
+        javax.print.attribute.HashDocAttributeSet fromArr = new javax.print.attribute.HashDocAttributeSet(new javax.print.attribute.DocAttribute[] { javax.print.attribute.standard.Chromaticity.COLOR });
+        check(fromArr.size() == 1, "array ctor");
+        javax.print.attribute.HashDocAttributeSet fromSet = new javax.print.attribute.HashDocAttributeSet(s);
+        check(fromSet.size() == 1, "set ctor");
+        javax.print.attribute.HashDocAttributeSet ser = (javax.print.attribute.HashDocAttributeSet) serRoundTrip(s);
+        check(ser.equals(s), "serialization round-trip");
+        javax.print.attribute.HashAttributeSet plain = new javax.print.attribute.HashAttributeSet();
+        plain.add(javax.print.attribute.standard.Chromaticity.COLOR);
+        check(s.equals(plain), "content equality with untyped set");
+        check(s.hashCode() == plain.hashCode(), "hashCode equality with untyped set");
+        javax.print.attribute.AttributeSet un = javax.print.attribute.AttributeSetUtilities.unmodifiableView(s);
+        try { un.clear(); throw new AssertionError("expected UnmodifiableSetException"); }
+        catch (javax.print.attribute.UnmodifiableSetException e) { passed++; }
+        s.clear();
+        check(s.isEmpty(), "clear");
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectCCE(String what, Runnable r) {
+        try { r.run(); throw new AssertionError("expected CCE: " + what); }
+        catch (ClassCastException e) { check(e.getMessage() == null, "CCE message null: [" + e.getMessage() + "]"); }
+    }
+
 }

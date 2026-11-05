@@ -79,6 +79,32 @@ public class URLTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: full predefined constant table / rep-class family / mime spot checks ----
+    static void testContractDeep() throws Exception {
+        check(javax.print.DocFlavor.URL.TEXT_PLAIN_UTF_8.getRepresentationClassName().equals("java.net.URL"), "rep class");
+        check(javax.print.DocFlavor.URL.GIF.getMimeType().equals("image/gif"), "GIF mime");
+        check(javax.print.DocFlavor.URL.POSTSCRIPT.getMimeType().equals("application/postscript"), "PS mime");
+        javax.print.DocFlavor u = new javax.print.DocFlavor("image/gif", "java.net.URL");
+        check(u.equals(javax.print.DocFlavor.URL.GIF), "constructed equals predefined GIF");
+        check(!u.equals(javax.print.DocFlavor.BYTE_ARRAY.GIF), "URL != byte[] flavor");
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+
 }

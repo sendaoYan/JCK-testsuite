@@ -35,6 +35,40 @@ public class MultiDocTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: chained MultiDoc contract ----
+    static void testContractDeep() throws Exception {
+        javax.print.SimpleDoc d1 = new javax.print.SimpleDoc("one", javax.print.DocFlavor.STRING.TEXT_PLAIN, null);
+        javax.print.SimpleDoc d2 = new javax.print.SimpleDoc("two", javax.print.DocFlavor.STRING.TEXT_PLAIN, null);
+        javax.print.MultiDoc last = new RecMultiDoc(d2, null);
+        javax.print.MultiDoc first = new RecMultiDoc(d1, last);
+        check(first.getDoc() == d1, "first doc identity");
+        check(first.next() == last, "next identity");
+        check(last.next() == null, "tail next null");
+        check(last.getDoc() == d2, "tail doc");
+    }
+    static class RecMultiDoc implements javax.print.MultiDoc {
+        final javax.print.Doc doc; final javax.print.MultiDoc next;
+        RecMultiDoc(javax.print.Doc d, javax.print.MultiDoc n) { doc = d; next = n; }
+        public javax.print.Doc getDoc() { return doc; }
+        public javax.print.MultiDoc next() { return next; }
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+
 }

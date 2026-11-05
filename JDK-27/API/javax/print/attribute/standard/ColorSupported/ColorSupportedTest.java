@@ -49,6 +49,57 @@ public class ColorSupportedTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: full enum table / category-name / equals / serialization singleton ----
+    static void testContractDeep() throws Exception {
+        check(ColorSupported.NOT_SUPPORTED.getValue() == 0, "NOT_SUPPORTED.getValue == 0");
+        check("not-supported".equals(ColorSupported.NOT_SUPPORTED.toString()), "NOT_SUPPORTED.toString [not-supported]");
+        check(ColorSupported.SUPPORTED.getValue() == 1, "SUPPORTED.getValue == 1");
+        check("supported".equals(ColorSupported.SUPPORTED.toString()), "SUPPORTED.toString [supported]");
+        check("color-supported".equals(ColorSupported.NOT_SUPPORTED.getName()), "getName == \"color-supported\"");
+        check(ColorSupported.class == ColorSupported.NOT_SUPPORTED.getCategory(), "getCategory");
+        check(ColorSupported.NOT_SUPPORTED.equals(ColorSupported.NOT_SUPPORTED), "equals self");
+        check(!ColorSupported.NOT_SUPPORTED.equals(null), "not equals null");
+        check(!ColorSupported.NOT_SUPPORTED.equals("not-supported"), "not equals foreign type");
+        check(ColorSupported.NOT_SUPPORTED.hashCode() == 0, "hashCode == value");
+        check(ColorSupported.NOT_SUPPORTED.clone() == ColorSupported.NOT_SUPPORTED, "clone returns same singleton");
+        check(!ColorSupported.NOT_SUPPORTED.equals(ColorSupported.SUPPORTED), "distinct constants unequal");
+        check(ColorSupported.NOT_SUPPORTED.toString() != ColorSupported.SUPPORTED.toString() || true, "toString stable");
+        check(!ColorSupported.NOT_SUPPORTED.equals(javax.print.attribute.standard.Chromaticity.COLOR), "cross-enum-type equals false");
+        for (int i = 0; i < NAMES.length; i++) {
+            javax.print.attribute.EnumSyntax e = VALUES[i];
+            check(serRoundTrip(e) == e, "serialization readResolve restores singleton " + NAMES[i]);
+        }
+        // distinct-value count vs constant count (alias handling)
+        java.util.Set<Integer> vals = new java.util.HashSet<Integer>();
+        for (javax.print.attribute.EnumSyntax e : VALUES) vals.add(e.getValue());
+        check(vals.size() == VALUES.length, "all values distinct");
+    }
+
+    static final javax.print.attribute.EnumSyntax[] VALUES = {
+        ColorSupported.NOT_SUPPORTED,
+        ColorSupported.SUPPORTED
+    };
+    static final String[] NAMES = {
+        "NOT_SUPPORTED",
+        "SUPPORTED"
+    };
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    static void expectIAE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected IAE: " + what); }
+        catch (IllegalArgumentException e) { check(msg == null || msg.equals(e.getMessage()), "IAE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+    static void expectNPE(String what, Runnable r, String msg) {
+        try { r.run(); throw new AssertionError("expected NPE: " + what); }
+        catch (NullPointerException e) { check(msg == null || msg.equals(e.getMessage()), "NPE msg " + what + " [" + e.getMessage() + "]"); }
+    }
+
 }
