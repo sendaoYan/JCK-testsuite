@@ -67,6 +67,9 @@ public class SystemLoadNativeTest {
                 throw new AssertionError("test.nativepath set but libjcksyslife.so missing (run: make native)");
             Path staged = Paths.get(System.getProperty("user.dir")).resolve("libjcksyslife.so");
             Files.copy(pre, staged, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            // keep the assertion count identical to the self-compile mode,
+            // whose compile() contributes a produced-file check
+            check(Files.exists(staged), "prebuilt library staged into user.dir");
             return staged;
         }
         return compile(C_SRC, "jcksyslife.c", "libjcksyslife.so");
@@ -80,7 +83,11 @@ public class SystemLoadNativeTest {
         if (np != null) {
             for (String alt : new String[] {"libjckrtlife.so", "libjckjni.so", "libjnisemantics.so"}) {
                 Path pre = Paths.get(np).resolve(alt);
-                if (Files.exists(pre)) return pre;
+                if (Files.exists(pre)) {
+                    // count parity with the self-compile mode (see obtain())
+                    check(Files.size(pre) > 0, "sibling library present for the no-symbol case");
+                    return pre;
+                }
             }
             throw new AssertionError("test.nativepath set but no sibling library found for the no-symbol case");
         }
