@@ -23,3 +23,8 @@ if (!ri.checkMinDegree(objs.size()) || !ri.checkMaxDegree(objs.size())) { /* 拒
 ## 4. 测试用例设计
 - 白盒：public 具体类、实现 Serializable、`ROLE_CARDINALITY_INFINITY == -1`、四个构造器与全部 getter/校验方法存在。
 - 黑盒：三种构造器默认值断言、拷贝构造器独立性、`checkMinDegree`/`checkMaxDegree` 边界（含无穷基数）、`toString` 精确格式、null 参数与 min>max 的精确异常 message。
+
+## 深化（2026-11 批 J）
+- 断言：33 → 63。新增：度校验矩阵（min>max 五组与 min<-1/max<-1 三组，逐一精确 IRIE 消息；合法边界 (-1,-1)/(0,0)/(0,-1)/(5,-1)/(4,4) 原样保存；拷贝构造保 -1/-1）、readable=false&&writable=false **合法**（无可访问性校验，实测）、空名/空类名合法、`no.such.Class` 不加载不抛（声明的 ClassNotFoundException 是死签名）、null 校验先于度校验、checkMinDegree/checkMaxDegree 负值边界（有限度时 -1 一律 false；无穷度接受 -1；-2 永远 false；min=0 接受任意非负）、equals/hashCode 身份语义、null description 的 toString 字面 "null"、序列化 round-trip 全 7 字段 + serialVersionUID=2504952983494636987L。
+- 负例异常表（27 侧实测）：null 名/类/拷贝源 → IAE `Invalid parameter.`；min>max（含 min=-1 配有限 max）→ InvalidRoleInfoException `Minimum degree {min} is greater than maximum degree {max}`；度 <-1 → InvalidRoleInfoException `Minimum or maximum degree has an illegal value, must be [0, ROLE_CARDINALITY_INFINITY].`。
+- 版本差异：仅序列化形态机制（JDK-8 双形态/JDK-27 固定）；校验逻辑与消息两侧一致。

@@ -103,9 +103,105 @@ public class RoleListTest {
         check(new RoleList().addAll((RoleList) null), "addAll(null RoleList) returns true (documented)");
     }
 
+    // ---- deepened (batch j): strict typing, bounds, iteration, serialization ----
+
+    // JDK-27 (unlike JDK-8) rejects non-Role elements through the raw Object overloads immediately,
+    // whether or not asList() has ever been called on the instance
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    static void testStrictTyping() {
+        boolean threw = false;
+        try { new RoleList().add("not-a-role"); }
+        catch (IllegalArgumentException e) {
+            threw = true;
+            check(e.getCause() instanceof ClassCastException, "raw add(non-Role) IAE wraps a ClassCastException");
+        }
+        check(threw, "raw add(non-Role) before asList() throws IAE immediately (JDK-7+ semantics)");
+        threw = false;
+        try { new RoleList().addAll(java.util.Arrays.asList("x", "y")); }
+        catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "raw addAll(Collection) with non-Roles throws IAE");
+        threw = false;
+        try { new RoleList().addAll(0, java.util.Arrays.asList("x")); }
+        catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "raw addAll(index, Collection) with non-Roles throws IAE");
+        // null passes the internal cast: raw add((Object)null) is accepted even in type-safe mode
+        RoleList safe = new RoleList();
+        safe.asList();
+        check(safe.add((Object) null), "raw add((Object)null) accepted (null passes the cast)");
+        check(safe.size() == 1 && safe.get(0) == null, "null element actually stored");
+    }
+
+    static void testBoundsAndCapacity() {
+        try { new RoleList(-1); check(false, "negative capacity must throw"); }
+        catch (IllegalArgumentException e) { check("Illegal Capacity: -1".equals(e.getMessage()),
+              "negative capacity msg: " + e.getMessage()); }
+        boolean threw = false;
+        try { new RoleList().add(5, role("x")); } catch (IndexOutOfBoundsException e) { threw = true; }
+        check(threw, "add(index, Role) beyond size throws IOOBE");
+        threw = false;
+        try { new RoleList().get(0); } catch (IndexOutOfBoundsException e) { threw = true; }
+        check(threw, "get on empty list throws IOOBE");
+        threw = false;
+        try { new RoleList().set(0, role("x")); } catch (IndexOutOfBoundsException e) { threw = true; }
+        check(threw, "set on empty list throws IOOBE");
+        // the ArrayList-level raw set returns the replaced element
+        RoleList rl = new RoleList();
+        rl.add(role("a"));
+        rl.add(role("b"));
+        java.util.ArrayList<Object> asArrayList = rl;
+        Object previous = asArrayList.set(1, role("c"));
+        check("b".equals(((Role) previous).getRoleName()), "raw set returns the previous element");
+        check("c".equals(((Role) rl.get(1)).getRoleName()), "set replaces in place");
+    }
+
+    static void testIterationAndRemoval() {
+        RoleList rl = new RoleList();
+        rl.add(role("a"));
+        rl.add(role("b"));
+        java.util.Iterator<Object> it = rl.iterator();
+        it.next();
+        it.remove();
+        check(rl.size() == 1 && "b".equals(((Role) rl.get(0)).getRoleName()),
+              "iterator.remove drops the first element");
+        Role remaining = (Role) rl.get(0);
+        check(rl.remove(remaining), "remove(Object) removes by identity");
+        check(rl.isEmpty() && !rl.contains(remaining), "list empty, contains false after removal");
+        RoleList one = new RoleList();
+        one.add(role("z"));
+        Object[] arr = one.toArray();
+        check(arr.length == 1 && arr[0] instanceof Role, "toArray returns the elements");
+    }
+
+    static void testSerialization() throws Exception {
+        RoleList orig = new RoleList();
+        orig.add(role("s1"));
+        orig.add(role("s2"));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(orig);
+        oos.close();
+        RoleList back = (RoleList) new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(back.size() == 2, "serial round-trip size");
+        check("s1".equals(((Role) back.get(0)).getRoleName())
+           && "s2".equals(((Role) back.get(1)).getRoleName()), "serial preserves order");
+        back.add(role("s3"));
+        check(back.size() == 3, "deserialized list remains mutable");
+        check(java.io.ObjectStreamClass.lookup(RoleList.class).getSerialVersionUID() == 5568344346499649313L,
+              "RoleList serialVersionUID is 5568344346499649313L");
+        // inherited ArrayList.clone() keeps the RoleList runtime type (shallow copy)
+        Object cl = orig.clone();
+        check(cl instanceof RoleList, "inherited clone() keeps the RoleList runtime type");
+        check(((RoleList) cl).size() == 2 && ((RoleList) cl).get(0) == orig.get(0), "clone is shallow: elements shared");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testStrictTyping();
+        testBoundsAndCapacity();
+        testIterationAndRemoval();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -28,3 +28,8 @@ String vs = Role.roleValueToString(v); // 多行展示
 ## 4. 测试用例设计
 - 白盒：public 具体类、实现 Serializable、关键方法签名存在。
 - 黑盒：构造+getter、构造防御性拷贝、setter 组合、toString 精确格式、`roleValueToString` 换行分隔与空列表、`clone()` 独立副本、五处 null 参数的精确 IAE message（`Invalid parameter` / `Invalid parameter.`）。
+
+## 深化（2026-11 批 J）
+- 断言：30 → 42。新增：构造边界（空名/空值合法；raw 非 ObjectName 元素与 null 元素**被接受**——构造器不做元素类型校验，泛型擦除实测）、getRoleValue 活引用（透过它增删直接改状态）、setRoleValue/setRoleName 防御性拷贝与空串接受、roleValueToString 保序、equals/hashCode **身份语义**（不覆写，同内容 not equal，hashCode==identityHashCode）、序列化 round-trip（保序/独立/ArrayList 类型）+ serialVersionUID=-279985518429862552L、clone 后原对象清空不影响副本。
+- 负例异常表（27 侧实测）：ctor(null,·)/(·,null) → IAE `Invalid parameter`（无句点）；setRoleName/setRoleValue(null) → IAE `Invalid parameter.`（带句点）；roleValueToString(null) → IAE `Invalid parameter`。
+- 版本差异：JDK-8 的 Role 支持遗留 `jmx.serial.form=1.0` 双序列化形态（动态 SUID），JDK-27 固定新形态；默认形态 SUID 两侧一致。其余消息/格式/校验逐字节一致。

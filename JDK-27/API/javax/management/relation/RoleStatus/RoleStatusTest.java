@@ -40,9 +40,45 @@ public class RoleStatusTest {
         check(!RoleStatus.isRoleStatus(-1), "-1 is not a role status");
     }
 
+    // ---- deepened (batch j): constant distinctness, class shape, domain integration ----
+
+    static void testConstantDistinctness() {
+        int[] vals = { RoleStatus.NO_ROLE_WITH_NAME, RoleStatus.ROLE_NOT_READABLE,
+                       RoleStatus.ROLE_NOT_WRITABLE, RoleStatus.LESS_THAN_MIN_ROLE_DEGREE,
+                       RoleStatus.MORE_THAN_MAX_ROLE_DEGREE, RoleStatus.REF_MBEAN_OF_INCORRECT_CLASS,
+                       RoleStatus.REF_MBEAN_NOT_REGISTERED };
+        for (int i = 0; i < vals.length; i++)
+            for (int j = i + 1; j < vals.length; j++)
+                check(vals[i] != vals[j], "constants " + i + " and " + j + " must be distinct");
+        // extended isRoleStatus edges around the [1,7] window
+        check(!RoleStatus.isRoleStatus(-2), "-2 is not a role status");
+        check(!RoleStatus.isRoleStatus(9), "9 is not a role status");
+        check(!RoleStatus.isRoleStatus(Integer.MIN_VALUE), "Integer.MIN_VALUE is not a role status");
+        check(!RoleStatus.isRoleStatus(Integer.MAX_VALUE), "Integer.MAX_VALUE is not a role status");
+    }
+
+    @SuppressWarnings({"deprecation", "removal"}) // RoleStatus() is deprecated for removal since JDK 16
+    static void testClassShapeAndUsage() {
+        check(!java.lang.reflect.Modifier.isAbstract(RoleStatus.class.getModifiers()),
+              "RoleStatus is a concrete utility class");
+        check(new RoleStatus() != null, "deprecated no-arg constructor is instantiable");
+        check(!java.io.Serializable.class.isAssignableFrom(RoleStatus.class),
+              "RoleStatus is not Serializable (utility class, no state)");
+        // integration: the constants form the closed problem-type domain of RoleUnresolved
+        for (int t = 1; t <= 7; t++) {
+            check(new javax.management.relation.RoleUnresolved("n", null, t).getProblemType() == t,
+                  "constant " + t + " usable as a RoleUnresolved problem type");
+        }
+        boolean threw = false;
+        try { new javax.management.relation.RoleUnresolved("n", null, 8); } catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "constants are a closed domain: 8 is rejected as a problem type");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstantDistinctness();
+        testClassShapeAndUsage();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

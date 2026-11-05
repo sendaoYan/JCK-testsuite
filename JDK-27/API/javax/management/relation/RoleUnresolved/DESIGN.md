@@ -23,3 +23,8 @@ String s = ru.toString();              // 诊断展示
 ## 4. 测试用例设计
 - 白盒：public 具体类、实现 Serializable、构造器与全部访问器存在。
 - 黑盒：构造+getter、构造值防御性拷贝、三个 setter 组合（含 `setRoleValue(null)` 置空）、带/不带 value 的 `toString` 精确格式、`clone()` 深拷贝、null name 与非法 problem type 的精确 IAE message。
+
+## 深化（2026-11 批 J）
+- 断言：25 → 51。新增：problemType 闭域矩阵（1..7 构造与 setter 双通道逐一接受；0/8/-1/MIN/MAX 拒绝且消息精确）、空值 toString 保留 `value: ` 段（`role name: e; value: ; problem type: 7`）、setRoleValue(null) 清空 vs setRoleValue(空列表) 保留非 null、空名合法、null 值克隆保 null（名/类型同拷）、equals/hashCode 身份语义、序列化 round-trip（名/类型/值保序）+ serialVersionUID=-48350262537070138L。
+- 负例异常表（27 侧实测）：null 名（构造/setRoleName）→ IAE `Invalid parameter.`；非法 pbType（0/8/-1/MIN/MAX，构造与 setProblemType）→ IAE `Incorrect problem type.`。value=null 合法（读失败标准形态）。
+- 版本差异：仅序列化形态机制（JDK-8 双形态/JDK-27 固定）；SUID 一致。

@@ -92,9 +92,107 @@ public class RoleUnresolvedListTest {
         check(new RoleUnresolvedList().addAll((RoleUnresolvedList) null), "addAll(null) returns true (documented)");
     }
 
+    // ---- deepened (batch j): strict typing, bounds, iteration, serialization ----
+
+    // JDK-27 (unlike JDK-8) rejects non-RoleUnresolved elements through the raw Object overloads immediately
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    static void testStrictTyping() {
+        boolean threw = false;
+        try { new RoleUnresolvedList().add("not-a-role-unresolved"); }
+        catch (IllegalArgumentException e) {
+            threw = true;
+            check(e.getCause() instanceof ClassCastException, "raw add IAE wraps a ClassCastException");
+        }
+        check(threw, "raw add(non-RoleUnresolved) before asList() throws IAE immediately (JDK-7+ semantics)");
+        threw = false;
+        try { new RoleUnresolvedList().addAll(java.util.Arrays.asList("x", "y")); }
+        catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "raw addAll(Collection) with non-RoleUnresolved throws IAE");
+        // a Role is not a RoleUnresolved: the list is strictly typed to its own element kind
+        threw = false;
+        try {
+            List rawWithRole = new ArrayList();
+            rawWithRole.add(new javax.management.relation.Role("r", new ArrayList<ObjectName>()));
+            new RoleUnresolvedList(rawWithRole);
+        } catch (IllegalArgumentException e) { threw = true; }
+        check(threw, "ctor List containing a Role (not RoleUnresolved) throws IAE");
+        // null passes the internal cast: raw add((Object)null) is accepted even in type-safe mode
+        RoleUnresolvedList safe = new RoleUnresolvedList();
+        safe.asList();
+        check(safe.add((Object) null), "raw add((Object)null) accepted (null passes the cast)");
+        check(safe.size() == 1 && safe.get(0) == null, "null element actually stored");
+    }
+
+    static void testBoundsAndCapacity() {
+        try { new RoleUnresolvedList(-1); check(false, "negative capacity must throw"); }
+        catch (IllegalArgumentException e) { check("Illegal Capacity: -1".equals(e.getMessage()),
+              "negative capacity msg: " + e.getMessage()); }
+        boolean threw = false;
+        try { new RoleUnresolvedList().add(5, ru("x")); } catch (IndexOutOfBoundsException e) { threw = true; }
+        check(threw, "add(index, ...) beyond size throws IOOBE");
+        threw = false;
+        try { new RoleUnresolvedList().get(0); } catch (IndexOutOfBoundsException e) { threw = true; }
+        check(threw, "get on empty list throws IOOBE");
+        threw = false;
+        try { new RoleUnresolvedList().set(0, ru("x")); } catch (IndexOutOfBoundsException e) { threw = true; }
+        check(threw, "set on empty list throws IOOBE");
+        // the ArrayList-level raw set returns the replaced element
+        RoleUnresolvedList rul = new RoleUnresolvedList();
+        rul.add(ru("a"));
+        rul.add(ru("b"));
+        java.util.ArrayList<Object> asArrayList = rul;
+        Object previous = asArrayList.set(1, ru("c"));
+        check("b".equals(((RoleUnresolved) previous).getRoleName()), "raw set returns the previous element");
+        check("c".equals(((RoleUnresolved) rul.get(1)).getRoleName()), "set replaces in place");
+    }
+
+    static void testIterationAndRemoval() {
+        RoleUnresolvedList rul = new RoleUnresolvedList();
+        rul.add(ru("a"));
+        rul.add(ru("b"));
+        java.util.Iterator<Object> it = rul.iterator();
+        it.next();
+        it.remove();
+        check(rul.size() == 1 && "b".equals(((RoleUnresolved) rul.get(0)).getRoleName()),
+              "iterator.remove drops the first element");
+        RoleUnresolved remaining = (RoleUnresolved) rul.get(0);
+        check(rul.remove(remaining), "remove(Object) removes by identity");
+        check(rul.isEmpty() && !rul.contains(remaining), "list empty, contains false after removal");
+    }
+
+    static void testSerialization() throws Exception {
+        RoleUnresolvedList orig = new RoleUnresolvedList();
+        orig.add(new RoleUnresolved("u1", null, RoleStatus.NO_ROLE_WITH_NAME));
+        orig.add(new RoleUnresolved("u2", null, RoleStatus.MORE_THAN_MAX_ROLE_DEGREE));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(orig);
+        oos.close();
+        RoleUnresolvedList back = (RoleUnresolvedList) new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check(back.size() == 2, "serial round-trip size");
+        check("u1".equals(((RoleUnresolved) back.get(0)).getRoleName())
+           && ((RoleUnresolved) back.get(0)).getProblemType() == RoleStatus.NO_ROLE_WITH_NAME,
+              "serial first element content");
+        check(((RoleUnresolved) back.get(1)).getProblemType() == RoleStatus.MORE_THAN_MAX_ROLE_DEGREE,
+              "serial second element problem type");
+        back.add(ru("u3"));
+        check(back.size() == 3, "deserialized list remains mutable");
+        check(java.io.ObjectStreamClass.lookup(RoleUnresolvedList.class).getSerialVersionUID()
+              == 4054902803091433324L, "RoleUnresolvedList serialVersionUID is 4054902803091433324L");
+        Object cl = orig.clone();
+        check(cl instanceof RoleUnresolvedList, "inherited clone() keeps the RoleUnresolvedList runtime type");
+        check(((RoleUnresolvedList) cl).size() == 2 && ((RoleUnresolvedList) cl).get(0) == orig.get(0),
+              "clone is shallow: elements shared");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testStrictTyping();
+        testBoundsAndCapacity();
+        testIterationAndRemoval();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -91,9 +91,84 @@ public class RoleTest {
         catch (IllegalArgumentException e) { check("Invalid parameter".equals(e.getMessage()), "roleValueToString null message"); }
     }
 
+    // ---- deepened (batch j): ctor edges, identity equals, serialization ----
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    static void testCtorEdges() throws Exception {
+        // empty name and empty value are legal (only null is rejected)
+        Role empty = new Role("", new ArrayList<ObjectName>());
+        check("".equals(empty.getRoleName()) && empty.getRoleValue().isEmpty(), "empty name/value accepted");
+        check("role name: ; role value: ".equals(empty.toString()), "toString empty form, got: " + empty.toString());
+        // generics are erased at runtime: the constructor performs no per-element type check
+        List raw = new ArrayList();
+        raw.add("not-an-objectname");
+        Role lax = new Role("lax", raw);
+        check(lax.getRoleValue().size() == 1 && "not-an-objectname".equals(lax.getRoleValue().get(0)),
+              "raw list with non-ObjectName element accepted (no element validation)");
+        raw.add(null);
+        Role nullElem = new Role("ne", raw);
+        check(nullElem.getRoleValue().size() == 2 && nullElem.getRoleValue().get(1) == null,
+              "null element accepted and preserved");
+        // getRoleValue exposes the live internal list: structural edits through it change Role state
+        Role live = new Role("live", new ArrayList<ObjectName>(java.util.Arrays.asList(on("d:t=1"))));
+        live.getRoleValue().add(on("d:t=2"));
+        check(live.getRoleValue().size() == 2, "getRoleValue returns the live internal list");
+        // setters defensively copy (complement of the ctor check above)
+        List<ObjectName> repl = new ArrayList<ObjectName>();
+        repl.add(on("d:k=a"));
+        live.setRoleValue(repl);
+        repl.add(on("d:k=b"));
+        check(live.getRoleValue().size() == 1, "setRoleValue defensively copies its argument");
+        live.setRoleName("");
+        check("".equals(live.getRoleName()), "setRoleName accepts empty string");
+        // roleValueToString preserves insertion order (no sorting)
+        check("d:z=1\nd:a=2\nd:m=3".equals(Role.roleValueToString(
+                new ArrayList<ObjectName>(java.util.Arrays.asList(on("d:z=1"), on("d:a=2"), on("d:m=3"))))),
+              "roleValueToString preserves insertion order");
+    }
+
+    // Role does not override equals/hashCode: identity semantics (verified on JDK-27)
+    static void testIdentityEquals() {
+        Role s1 = new Role("x", new ArrayList<ObjectName>(java.util.Arrays.asList(on("d:t=a"))));
+        Role s2 = new Role("x", new ArrayList<ObjectName>(java.util.Arrays.asList(on("d:t=a"))));
+        check(!s1.equals(s2), "no equals override: same-content Roles are not equal");
+        check(s1.equals(s1), "identity equals is reflexive");
+        check(!s1.equals("a string"), "equals against an unrelated type is false");
+        check(s1.hashCode() == System.identityHashCode(s1), "hashCode is the Object identity hash");
+        // clone produces a fresh instance whose value list is independent
+        Role c = (Role) s1.clone();
+        s1.getRoleValue().clear();
+        check(c.getRoleValue().size() == 1, "clone unaffected by later mutation of the original");
+    }
+
+    // serialization round-trip with order preservation and locked serialVersionUID
+    static void testSerialization() throws Exception {
+        Role orig = new Role("ser", new ArrayList<ObjectName>(
+                java.util.Arrays.asList(on("d:t=1"), on("d:t=2"), on("d:t=3"))));
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(orig);
+        oos.close();
+        Role back = (Role) new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check("ser".equals(back.getRoleName()), "serial round-trip name");
+        check(back.getRoleValue().size() == 3
+           && back.getRoleValue().get(0).equals(on("d:t=1"))
+           && back.getRoleValue().get(1).equals(on("d:t=2"))
+           && back.getRoleValue().get(2).equals(on("d:t=3")), "serial preserves value order");
+        check(back.getRoleValue() instanceof ArrayList, "deserialized value is an ArrayList");
+        orig.getRoleValue().clear();
+        check(back.getRoleValue().size() == 3, "deserialized copy independent of the original");
+        check(java.io.ObjectStreamClass.lookup(Role.class).getSerialVersionUID() == -279985518429862552L,
+              "Role serialVersionUID is -279985518429862552L");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCtorEdges();
+        testIdentityEquals();
+        testSerialization();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
