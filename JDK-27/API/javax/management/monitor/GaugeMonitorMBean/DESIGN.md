@@ -18,3 +18,9 @@ gm.setThresholds(100, 10);
 ## 4. 测试用例设计
 - 白盒：接口、继承 MonitorMBean、方法含 setThresholds/getHighThreshold/getLowThreshold/setNotifyHigh/setNotifyLow/setDifferenceMode 等。
 - 黑盒：用 GaugeMonitor 实例通过接口设置并读取高低阈值、通知标志、差异模式。
+
+## 深化（2026-11 批 I：monitor/timer 真闭环）
+
+### 新增覆盖维度
+- **方法集精确对照**：`GaugeMonitorMBean.class.getMethods()` 的 name/参数个数全集（26 个：MonitorMBean 全部 13 + setThresholds/getHighThreshold/getLowThreshold、get/setNotifyHigh、get/setNotifyLow、get/setDifferenceMode、getDerivedGauge×2、getDerivedGaugeTimeStamp×2）。
+- **经接口真闭环**：接口引用完成 setThresholds(3,8) → addObservedObject → start → 真实 high/low 通知按序送达 → stop；通知常量串与类常量逐字节相等。

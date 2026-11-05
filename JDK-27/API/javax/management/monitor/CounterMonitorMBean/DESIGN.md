@@ -19,3 +19,13 @@ cm.setObservedObject(name);
 ## 4. 测试用例设计
 - 白盒：接口、继承 MonitorMBean、方法含 setInitThreshold/getInitThreshold/setOffset/getOffset/setModulus/getModulus 等。
 - 黑盒：用 CounterMonitor 实例通过接口设置并读取 initThreshold/offset/modulus，验证观测对象与粒度。
+
+## 深化（2026-11 批 I：monitor/timer 真闭环）
+
+### 新增覆盖维度
+- **方法集精确对照**：`CounterMonitorMBean.class.getMethods()` 的 name/参数个数全集（30 个：MonitorMBean 全部 13 + get/setInitThreshold、get/setOffset、get/setModulus、get/setNotify、get/setDifferenceMode、getDerivedGauge×2、getDerivedGaugeTimeStamp×2、getThreshold×2、setThreshold）。
+- **经接口真闭环**：`CounterMonitorMBean ref = new CounterMonitor()` 注册进 server 后经接口完成全套配置（initThreshold/offset/modulus/notify/differenceMode）→ start → 真实阈值通知送达 → per-object getThreshold(observedName)/getDerivedGauge(observedName) 回读 → stop。
+- **废弃语义区分**：`ref.setThreshold(9)` 与 setInitThreshold 同步；无参 `ref.getThreshold()` 无观察对象时返回 **null**（它报告的是首个观察对象，不是 initThreshold）。
+
+### 实测锁定（JDK-8 与 JDK-27 完全一致）
+- 接口方法面、废弃方法行为双侧相同。

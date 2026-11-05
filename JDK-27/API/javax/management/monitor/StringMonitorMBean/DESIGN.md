@@ -19,3 +19,9 @@ sm.setObservedObject(name);
 ## 4. 测试用例设计
 - 白盒：接口、继承 MonitorMBean、方法含 getStringToCompare/setStringToCompare/getNotifyMatch/setNotifyMatch/getNotifyDiffer/setNotifyDiffer 等。
 - 黑盒：用 StringMonitor 实例通过接口设置并读取比较串、通知标志、观测对象/属性。
+
+## 深化（2026-11 批 I：monitor/timer 真闭环）
+
+### 新增覆盖维度
+- **方法集精确对照**：`StringMonitorMBean.class.getMethods()` 的 name/参数个数全集（23 个：MonitorMBean 全部 13 + get/setStringToCompare、get/setNotifyMatch、get/setNotifyDiffer、getDerivedGauge×2、getDerivedGaugeTimeStamp×2）。
+- **经接口真闭环**：接口引用配置 stringToCompare/notifyMatch/notifyDiffer → start → 真实 matches/differs 通知按序送达（有界等待）→ stop。
