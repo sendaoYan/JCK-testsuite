@@ -2,11 +2,69 @@
  * @test
  * @summary jdk.jshell.resources.l10n conformance: internal class reflection.
  * @modules jdk.jshell/jdk.jshell.resources:+open
- * @run main l10nTest
+ * @run main/othervm/timeout=180 --add-opens=jdk.jshell/jdk.jshell.resources=ALL-UNNAMED l10nTest
  */
 public class l10nTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- deep contract: the JShell core message catalog ----
+    static final String[] EXPECTED_KEYS = {
+        "jshell.diag.modifier.plural.fatal", "jshell.diag.modifier.plural.ignore",
+        "jshell.diag.modifier.single.fatal", "jshell.diag.modifier.single.ignore",
+        "jshell.diag.object.method.fatal", "jshell.exc.alien", "jshell.exc.closed",
+        "jshell.exc.null", "jshell.exc.var.not.valid" };
+
+    static java.util.ResourceBundle bundle() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.resources.l10n");
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        return (java.util.ResourceBundle) ctor.newInstance();
+    }
+
+    static void testMessageCatalog() throws Exception {
+        java.util.ResourceBundle rb = bundle();
+        java.util.Set<String> keys = new java.util.TreeSet<>(rb.keySet());
+        java.util.Set<String> want = new java.util.TreeSet<>(java.util.Arrays.asList(EXPECTED_KEYS));
+        check(keys.equals(want), "exact key set of the engine catalog: " + keys);
+        check(rb.getString("jshell.exc.null").equals("Snippet must not be null"), "jshell.exc.null text");
+        check(rb.getString("jshell.exc.closed").equals("JShell ({0}) has been closed."), "jshell.exc.closed has {0} placeholder");
+        check(rb.getString("jshell.exc.alien").startsWith("Snippet not from this JShell: {0}"), "jshell.exc.alien has {0} placeholder");
+        check(rb.getString("jshell.exc.var.not.valid").contains("{0}") && rb.getString("jshell.exc.var.not.valid").contains("{1}"),
+              "jshell.exc.var.not.valid has two placeholders");
+        check(rb.getString("jshell.diag.object.method.fatal").startsWith("JShell method names must not match Object methods: {0}"),
+              "object-method diagnostic text");
+        // all messages are MessageFormat-renderable with their placeholders
+        for (String k : EXPECTED_KEYS) {
+            String rendered = new java.text.MessageFormat(rb.getString(k)).format(new Object[]{"x", "y"});
+            check(!rendered.isEmpty(), "MessageFormat renders " + k);
+            if (rb.getString(k).contains("{0}"))
+                check(rendered.contains("x"), "placeholder {0} filled for " + k);
+        }
+        // the {0}-filled messages are exactly what the engine reports
+        try (jdk.jshell.JShell js = jdk.jshell.JShell.builder().executionEngine("local").build()) {
+            jdk.jshell.Snippet bad = js.eval("boolean equals(Object o) { return false; }").get(0).snippet();
+            boolean saw = false;
+            for (jdk.jshell.Diag d : js.diagnostics(bad).toList())
+                if (d.getMessage(null).startsWith("JShell method names must not match Object methods")) saw = true;
+            check(saw, "engine surfaces jshell.diag.object.method.fatal through diagnostics");
+        }
+        jdk.jshell.JShell closed = jdk.jshell.JShell.builder().executionEngine("local").build();
+        closed.close();
+        try { closed.eval("1"); } catch (IllegalStateException expected) {
+            check(expected.getMessage().startsWith("JShell (") && expected.getMessage().endsWith(" has been closed."),
+                  "engine surfaces jshell.exc.closed on a closed shell");
+        }
+        try (jdk.jshell.JShell a = jdk.jshell.JShell.builder().executionEngine("local").build();
+             jdk.jshell.JShell b = jdk.jshell.JShell.builder().executionEngine("local").build()) {
+            jdk.jshell.VarSnippet alien = (jdk.jshell.VarSnippet) a.eval("int av1 = 1;").get(0).snippet();
+            try { b.varValue(alien); } catch (IllegalArgumentException expected) {
+                check(expected.getMessage().startsWith("Snippet not from this JShell"),
+                      "engine surfaces jshell.exc.alien for a foreign snippet");
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         Class<?> c = Class.forName("jdk.jshell.resources.l10n", false, l10nTest.class.getClassLoader());
         check(c != null, "loads");
@@ -40,6 +98,7 @@ public class l10nTest {
             }
             check(String.join(";", s).equals(""), "fields");
         }
+        testMessageCatalog();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -2,7 +2,7 @@
  * @test
  * @summary jdk.jshell.tool.JavaShellToolBuilder conformance: tool builder interface.
  * @modules jdk.jshell
- * @run main JavaShellToolBuilderTest
+ * @run main/othervm/timeout=240 JavaShellToolBuilderTest
  */
 
 import java.lang.reflect.*;
@@ -79,9 +79,75 @@ public class JavaShellToolBuilderTest {
         check(!version.isEmpty() && version.contains("jshell"), "start(--version) prints jshell name");
     }
 
+
+    // ---- deep contract: a real headless REPL session through the tool ----
+    static String session(String input, boolean promptCapture) throws Exception {
+        ByteArrayOutputStream o = new ByteArrayOutputStream();
+        PrintStream ps = new PrintStream(o, true, java.nio.charset.StandardCharsets.UTF_8);
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        JavaShellToolBuilder b = JavaShellToolBuilder.builder()
+                .in(in, new ByteArrayInputStream(new byte[0]))
+                .out(ps).err(ps)
+                .persistence(new HashMap<String, String>())
+                .env(new HashMap<String, String>())
+                .locale(Locale.US)
+                .interactiveTerminal(false)
+                .promptCapture(promptCapture);
+        b.run("-q");
+        ps.flush();
+        return o.toString(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    static void testReplSession() throws Exception {
+        // expressions are evaluated and echoed as $N ==> value
+        String out = session("1 + 2;\n/exit\n", false);
+        check(out.contains("jshell>"), "prompt printed");
+        check(out.contains("$1 ==> 3"), "expression result echoed: $1 ==> 3");
+        // declarations persist across inputs in one session
+        String out2 = session("int vx = 10;\nvx + 5;\n/exit\n", false);
+        check(out2.contains("==> 15"), "second snippet sees the declared variable: " + out2.replace("\n", "|"));
+        // promptCapture suppresses prompt decorations
+        String out3 = session("2 + 2;\n/exit\n", true);
+        check(!out3.contains("jshell>"), "promptCapture suppresses prompts");
+        check(out3.contains("$1 ==> 4"), "promptCapture keeps results");
+    }
+
+    static void testSeparatedChannels() throws Exception {
+        // out(cmdOut, console, userOut): user-code stdout goes only to userOut
+        ByteArrayOutputStream cmdB = new ByteArrayOutputStream(), conB = new ByteArrayOutputStream(), usrB = new ByteArrayOutputStream();
+        PrintStream cmdOut = new PrintStream(cmdB, true, java.nio.charset.StandardCharsets.UTF_8);
+        PrintStream console = new PrintStream(conB, true, java.nio.charset.StandardCharsets.UTF_8);
+        PrintStream userOut = new PrintStream(usrB, true, java.nio.charset.StandardCharsets.UTF_8);
+        ByteArrayInputStream in = new ByteArrayInputStream(
+                "System.out.println(\"user-side\");\n/exit\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        HashMap<String, String> prefs = new HashMap<String, String>();
+        JavaShellToolBuilder.builder()
+                .in(in, new ByteArrayInputStream(new byte[0]))
+                .out(cmdOut, console, userOut)
+                .err(cmdOut)
+                .persistence(prefs)
+                .env(new HashMap<String, String>())
+                .locale(Locale.US)
+                .interactiveTerminal(false)
+                .run("-q");
+        cmdOut.flush(); console.flush(); userOut.flush();
+        check(usrB.toString(java.nio.charset.StandardCharsets.UTF_8).contains("user-side"),
+              "user stdout routed to the userOut channel");
+        check(conB.toString(java.nio.charset.StandardCharsets.UTF_8).contains("jshell>"),
+              "prompts routed to the console channel");
+        check(cmdB.size() == 0, "command channel stays quiet for ordinary snippets");
+        // the persistence map receives the session history and replay state
+        java.util.Set<String> keys = new java.util.TreeSet<>(prefs.keySet());
+        check(keys.contains("HISTORY_LINE_0"), "history line 0 persisted");
+        check(keys.contains("HISTORY_LINE_1"), "history line 1 persisted");
+        check(keys.contains("REPLAY_RESTORE"), "replay state persisted");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testReplSession();
+        testSeparatedChannels();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

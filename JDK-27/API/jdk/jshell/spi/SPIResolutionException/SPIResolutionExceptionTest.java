@@ -25,9 +25,29 @@ public class SPIResolutionExceptionTest {
         check(e instanceof RuntimeException, "runtime exception");
     }
 
+
+    // ---- deep contract: message format and serialization behavior ----
+    static void testDeepSemantics() throws Exception {
+        SPIResolutionException e = new SPIResolutionException(42);
+        check(e.getMessage().equals("resolution exception"), "fixed message 'resolution exception'");
+        check(new SPIResolutionException(-1).id() == -1, "negative ids carried");
+        // the id survives serialization (no declared serialVersionUID)
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oo = new java.io.ObjectOutputStream(bos)) { oo.writeObject(e); }
+        try (java.io.ObjectInputStream oi = new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray()))) {
+            SPIResolutionException back = (SPIResolutionException) oi.readObject();
+            check(back.id() == 42, "id survives serialization");
+            check(back.getMessage().equals("resolution exception"), "message survives serialization");
+        }
+        // it is the engine-side twin of ExecutionControl.ResolutionException
+        Class<?> re = Class.forName("jdk.jshell.spi.ExecutionControl$ResolutionException");
+        check(!re.isAssignableFrom(SPIResolutionException.class), "ResolutionException and SPIResolutionException are unrelated types");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

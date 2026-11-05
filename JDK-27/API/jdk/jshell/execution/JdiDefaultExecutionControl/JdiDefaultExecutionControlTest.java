@@ -39,9 +39,22 @@ public class JdiDefaultExecutionControlTest {
         return false;
     }
 
+
+    // ---- deep contract: factory wiring surface ----
+    static void testDeepShape() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.execution.JdiDefaultExecutionControl");
+        check(hasMethod(c, "create"), "declares static create() factory");
+        // the nested JdiStarter SPI is reachable from the provider
+        Class<?> starter = Class.forName("jdk.jshell.execution.JdiDefaultExecutionControl$JdiStarter");
+        check(starter.isInterface(), "JdiStarter is an interface nested here");
+        Class<?> provider = Class.forName("jdk.jshell.execution.JdiExecutionControlProvider");
+        check(provider.getConstructor(starter) != null, "provider can be built on a custom JdiStarter");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepShape();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

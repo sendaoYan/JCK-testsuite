@@ -2,11 +2,45 @@
  * @test
  * @summary jdk.jshell.resources.l10n_ja conformance: internal class reflection.
  * @modules jdk.jshell/jdk.jshell.resources:+open
- * @run main l10n_jaTest
+ * @run main/othervm --add-opens=jdk.jshell/jdk.jshell.resources=ALL-UNNAMED l10n_jaTest
  */
 public class l10n_jaTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- deep contract: complete translation of the engine catalog ----
+    static void testLocalizedCatalog() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.resources.l10n_ja");
+        check(c.getSuperclass().getName().equals("java.util.ListResourceBundle"), "extends ListResourceBundle");
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        java.util.ResourceBundle rb = (java.util.ResourceBundle) ctor.newInstance();
+        java.util.ResourceBundle base = baseBundle();
+        check(rb.keySet().equals(base.keySet()), "same key set as the base bundle");
+        // every value is translated (differs from English) and non-empty
+        int translated = 0;
+        for (String k : rb.keySet()) {
+            check(!rb.getString(k).isEmpty(), "translated value non-empty: " + k);
+            if (!rb.getString(k).equals(base.getString(k))) translated++;
+        }
+        check(translated == rb.keySet().size(), "all " + rb.keySet().size() + " messages localized (got " + translated + ")");
+
+        check(rb.getString("jshell.exc.null").equals("スニペットはnullにできません"), "Japanese null-message");
+
+        // placeholder counts match the English template
+        for (String k : rb.keySet())
+            check(rb.getString(k).replaceAll("[^{}]", "").replaceAll("\\{\\}", "").length()
+                  == base.getString(k).replaceAll("[^{}]", "").replaceAll("\\{\\}", "").length(),
+                  "placeholder structure preserved: " + k);
+    }
+
+    static java.util.ResourceBundle baseBundle() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.resources.l10n");
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        return (java.util.ResourceBundle) ctor.newInstance();
+    }
+
     public static void main(String[] args) throws Exception {
         Class<?> c = Class.forName("jdk.jshell.resources.l10n_ja", false, l10n_jaTest.class.getClassLoader());
         check(c != null, "loads");
@@ -40,6 +74,7 @@ public class l10n_jaTest {
             }
             check(String.join(";", s).equals(""), "fields");
         }
+        testLocalizedCatalog();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

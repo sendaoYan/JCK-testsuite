@@ -72,9 +72,29 @@ public class JdiExecutionControlTest {
         return false;
     }
 
+
+    // ---- deep contract: streaming command surface and protected hooks ----
+    static void testDeepShape() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.execution.JdiExecutionControl");
+        check(c.getSuperclass().getName().equals("jdk.jshell.execution.StreamingExecutionControl"),
+              "extends StreamingExecutionControl");
+        for (String n : new String[]{"load", "redefine", "invoke", "varValue", "addToClasspath", "stop", "close"})
+            { boolean f=false; for (java.lang.reflect.Method mm : c.getMethods()) if (mm.getName().equals(n)) f=true; check(f, "has " + n); }
+        // the constructor stores the channel pair and is protected
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor(java.io.ObjectOutput.class, java.io.ObjectInput.class);
+        check(java.lang.reflect.Modifier.isProtected(ctor.getModifiers()), "channel constructor is protected");
+        TestJdi jec = new TestJdi(new java.io.ObjectOutputStream(new java.io.ByteArrayOutputStream()),
+                new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(
+                        new byte[]{(byte) 0xAC, (byte) 0xED, 0x00, 0x05})));
+        // close() inherited from StreamingExecutionControl writes CMD_CLOSE and returns
+        jec.close();
+        check(true, "close() writes CMD_CLOSE without throwing");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepShape();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

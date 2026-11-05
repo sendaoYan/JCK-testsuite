@@ -89,9 +89,55 @@ public class ExecutionControlTest {
         g2.close();
     }
 
+
+    // ---- deep contract: provider resolution and spec-string grammar ----
+    static void testGenerateSpecGrammar() throws Throwable {
+        final Class<?> EC = jdk.jshell.spi.ExecutionControl.class;
+        check(EC != null, "ExecutionControl resolved");
+        jdk.jshell.spi.ExecutionEnv env = envFixture();
+        // a bare name resolves the registered provider
+        check(jdk.jshell.spi.ExecutionControl.generate(env, "local") instanceof jdk.jshell.execution.LocalExecutionControl,
+              "spec 'local' resolves the local provider");
+        // a trailing colon with no parameters is tolerated
+        check(jdk.jshell.spi.ExecutionControl.generate(env, "local:") != null, "spec 'local:' accepted (empty parameter list)");
+        // whitespace around separators is skipped
+        check(jdk.jshell.spi.ExecutionControl.generate(env, " local : ") != null, "whitespace skipped in spec");
+        // unknown provider name -> IllegalArgumentException
+        try {
+            jdk.jshell.spi.ExecutionControl.generate(env, "nosuchxyz");
+            check(false, "unknown provider must throw");
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().contains("nosuchxyz"), "unknown provider message names it");
+        }
+        // parameter key not offered by the provider -> IllegalArgumentException
+        try {
+            jdk.jshell.spi.ExecutionControl.generate(env, "local", java.util.Map.of("bogusKey", "v"));
+            check(false, "unknown parameter key must throw");
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().contains("bogusKey"), "unknown key message names it");
+        }
+        // malformed spec strings
+        try { jdk.jshell.spi.ExecutionControl.generate(env, "=x"); check(false, "spec '=x' must throw"); }
+        catch (IllegalArgumentException expected) { check(expected.getMessage().contains("Expected identifier"), "=x -> Expected identifier"); }
+        try { jdk.jshell.spi.ExecutionControl.generate(env, "local:bad"); check(false, "spec 'local:bad' must throw"); }
+        catch (IllegalArgumentException expected) { check(expected.getMessage().contains("Expected '('"), "missing '(' reported"); }
+    }
+
+    static void testRegisteredProviders() throws Throwable {
+        java.util.Set<String> names = new java.util.TreeSet<>();
+        for (jdk.jshell.spi.ExecutionControlProvider p : java.util.ServiceLoader.load(jdk.jshell.spi.ExecutionControlProvider.class))
+            names.add(p.name());
+        check(names.contains("local"), "local provider registered");
+        check(names.contains("jdi"), "jdi provider registered");
+        check(names.contains("failover"), "failover provider registered");
+        check(names.size() >= 3, "at least three providers installed: " + names);
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testGenerateSpecGrammar();
+        testRegisteredProviders();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -71,9 +71,91 @@ public class StreamingExecutionControlTest {
         }
     }
 
+
+    // ---- deep contract: channel-type requirement and a real two-thread wire loop ----
+    static class DefiningDelegate extends ClassLoader implements jdk.jshell.execution.LoaderDelegate {
+        final java.util.List<String> log = new java.util.ArrayList<>();
+        final java.util.Map<String, Class<?>> defined = new java.util.HashMap<>();
+        DefiningDelegate() { super(StreamingExecutionControlTest.class.getClassLoader()); }
+        public void load(jdk.jshell.spi.ExecutionControl.ClassBytecodes[] cbcs) {
+            // log the wire payload only: real class definition happens for the cancel class
+            for (jdk.jshell.spi.ExecutionControl.ClassBytecodes c : cbcs) {
+                log.add("load:" + c.name() + ":" + c.bytecodes()[0]);
+            }
+        }
+        public void classesRedefined(jdk.jshell.spi.ExecutionControl.ClassBytecodes[] cbcs) { log.add("redef"); }
+        public void addToClasspath(String p) { log.add("cp:" + p); }
+        public Class<?> findClass(String name) throws ClassNotFoundException {
+            Class<?> c = defined.get(name);
+            if (c != null) return c;
+            return Class.forName(name, false, StreamingExecutionControlTest.class.getClassLoader());
+        }
+    }
+
+    public static int wireSeven() { return 7; }
+
+    static void testConstructorRequiresObjectInputStream() throws Exception {
+        java.io.ObjectOutput out = new java.io.ObjectOutputStream(new java.io.ByteArrayOutputStream());
+        java.io.ObjectInput fakeIn = (java.io.ObjectInput) java.lang.reflect.Proxy.newProxyInstance(
+                StreamingExecutionControlTest.class.getClassLoader(),
+                new Class<?>[]{java.io.ObjectInput.class}, (p, m, a) -> null);
+        try {
+            new jdk.jshell.execution.StreamingExecutionControl(out, fakeIn);
+            check(false, "non-ObjectInputStream input must be rejected");
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().contains("must be an ObjectInputStream"),
+                  "constructor rejects non-ObjectInputStream: " + expected.getMessage());
+        }
+    }
+
+    static void testRealWireLoop() throws Exception {
+        java.io.PipedInputStream cmdPi = new java.io.PipedInputStream();
+        java.io.PipedOutputStream cmdPo = new java.io.PipedOutputStream(cmdPi);
+        java.io.PipedInputStream respPi = new java.io.PipedInputStream();
+        java.io.PipedOutputStream respPo = new java.io.PipedOutputStream(respPi);
+        java.io.ObjectOutputStream cmdOut = new java.io.ObjectOutputStream(cmdPo);
+        java.io.ObjectOutputStream respOut = new java.io.ObjectOutputStream(respPo);
+        java.io.ObjectInputStream cmdIn = new java.io.ObjectInputStream(cmdPi);
+        java.io.ObjectInputStream respIn = new java.io.ObjectInputStream(respPi);
+        DefiningDelegate del = new DefiningDelegate();
+        Thread back = new Thread(() -> jdk.jshell.execution.Util.forwardExecutionControl(
+                new jdk.jshell.execution.DirectExecutionControl(del), cmdIn, respOut));
+        back.setDaemon(true);
+        back.start();
+        jdk.jshell.execution.StreamingExecutionControl front =
+                new jdk.jshell.execution.StreamingExecutionControl(cmdOut, respIn);
+        String self = StreamingExecutionControlTest.class.getName();
+        check(front.invoke(self, "wireSeven").equals("7"), "wire invoke returns the user value");
+        // ClassBytecodes travel over the wire intact (name and first byte)
+        front.load(new jdk.jshell.spi.ExecutionControl.ClassBytecodes[]{
+                new jdk.jshell.spi.ExecutionControl.ClassBytecodes("Wire.Fake", new byte[]{42}) });
+        check(del.log.contains("load:Wire.Fake:42"), "wire load delivers bytecodes verbatim");
+        front.addToClasspath("/tmp/jck-sec-wire");
+        check(del.log.contains("cp:/tmp/jck-sec-wire"), "wire addToClasspath reaches the delegate");
+        front.stop(); // fire-and-forget: no response is read
+        check(true, "wire stop() does not wait for a response");
+        try {
+            front.extensionCommand("cmd", "arg");
+            check(false, "front extensionCommand must throw NotImplementedException");
+        } catch (jdk.jshell.spi.ExecutionControl.NotImplementedException expected) {
+            check(expected.getMessage().equals("extensionCommand not implemented."), "front extensionCommand message exact");
+        }
+        try {
+            front.invoke(self, "nope");
+            check(false, "wire unknown method must throw InternalException");
+        } catch (jdk.jshell.spi.ExecutionControl.InternalException expected) {
+            check(expected.getMessage().contains("NoSuchMethodException"), "wire unknown method -> InternalException");
+        }
+        front.close();
+        back.join(5000);
+        check(!back.isAlive(), "CMD_CLOSE terminates the command loop");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstructorRequiresObjectInputStream();
+        testRealWireLoop();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

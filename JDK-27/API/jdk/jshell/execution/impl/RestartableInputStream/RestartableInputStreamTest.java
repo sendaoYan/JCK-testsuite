@@ -2,11 +2,28 @@
  * @test
  * @summary jdk.jshell.execution.impl.RestartableInputStream conformance: internal class reflection.
  * @modules jdk.jshell/jdk.jshell.execution.impl:+open
- * @run main RestartableInputStreamTest
+ * @run main/othervm --add-opens=jdk.jshell/jdk.jshell.execution.impl=ALL-UNNAMED RestartableInputStreamTest
  */
 public class RestartableInputStreamTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- deep contract: close-flag lifecycle around a delegate stream ----
+    static void testLifecycle() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.execution.impl.RestartableInputStream");
+        c.getDeclaredConstructor(java.io.InputStream.class).setAccessible(true);
+        java.io.InputStream del = new java.io.ByteArrayInputStream(new byte[]{9, 8});
+        java.io.InputStream ris = (java.io.InputStream)
+                c.getDeclaredConstructor(java.io.InputStream.class).newInstance(del);
+        check(!((Boolean) c.getMethod("isClosed").invoke(ris)), "fresh stream is not closed");
+        check(ris.read() == 9 && ris.read() == 8, "reads pass through to the delegate");
+        check(ris.read() == -1, "EOF passes through");
+        ris.close();
+        check((Boolean) c.getMethod("isClosed").invoke(ris), "close() flips the closed flag");
+        ris.close();
+        check((Boolean) c.getMethod("isClosed").invoke(ris), "close is idempotent");
+    }
+
     public static void main(String[] args) throws Exception {
         Class<?> c = Class.forName("jdk.jshell.execution.impl.RestartableInputStream", false, RestartableInputStreamTest.class.getClassLoader());
         check(c != null, "loads");
@@ -40,6 +57,7 @@ public class RestartableInputStreamTest {
             }
             check(String.join(";", s).equals(""), "fields");
         }
+        testLifecycle();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -44,9 +44,28 @@ public class ExecutionControlProviderTest {
         ec.close();
     }
 
+
+    // ---- deep contract: every installed provider's parameter table ----
+    static void testProviderRegistry() throws Throwable {
+        java.util.Map<String, java.util.Map<String, String>> table = new java.util.TreeMap<>();
+        for (jdk.jshell.spi.ExecutionControlProvider p : java.util.ServiceLoader.load(jdk.jshell.spi.ExecutionControlProvider.class))
+            table.put(p.name(), p.defaultParameters());
+        check(table.keySet().equals(new java.util.TreeSet<>(java.util.Arrays.asList("failover", "jdi", "local"))),
+              "exact installed provider set: " + table.keySet());
+        check(table.get("local").isEmpty(), "local: no parameters");
+        check(table.get("jdi").keySet().equals(new java.util.TreeSet<>(java.util.Arrays.asList(
+              "hostname", "launch", "remoteAgent", "timeout"))), "jdi parameter keys");
+        check(table.get("failover").size() == 10, "failover has ten slots");
+        check(table.get("failover").get("0").equals("jdi"), "failover slot 0 defaults to jdi");
+        // null parameters fall back to defaults for every provider
+        for (jdk.jshell.spi.ExecutionControlProvider p : java.util.ServiceLoader.load(jdk.jshell.spi.ExecutionControlProvider.class))
+            check(p.defaultParameters() != null, "defaultParameters never null: " + p.name());
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testProviderRegistry();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

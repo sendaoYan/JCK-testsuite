@@ -59,9 +59,35 @@ public class LoaderDelegateTest {
               "findClass() resolves a system class by name");
     }
 
+
+    // ---- deep contract: four abstract operations, no defaults ----
+    static void testDeepShape() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.execution.LoaderDelegate");
+        java.util.TreeSet<String> names = new java.util.TreeSet<>();
+        int abstractCount = 0;
+        for (java.lang.reflect.Method m : c.getMethods()) {
+            if (m.getDeclaringClass() == c) {
+                names.add(m.getName());
+                if (java.lang.reflect.Modifier.isAbstract(m.getModifiers())) abstractCount++;
+            }
+        }
+        check(names.equals(new java.util.TreeSet<>(java.util.Arrays.asList(
+                "addToClasspath", "classesRedefined", "findClass", "load"))),
+              "exact operation set: " + names);
+        check(abstractCount == 4, "all four operations are abstract (no defaults)");
+        // RemoteExecutionControl is the partner that actually drives classesRedefined
+        Class<?> remote = Class.forName("jdk.jshell.execution.RemoteExecutionControl");
+        check(hasMethod(remote, "redefine"), "RemoteExecutionControl.redefine forwards to the delegate");
+    }
+    static boolean hasMethod(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
+        return false;
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepShape();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

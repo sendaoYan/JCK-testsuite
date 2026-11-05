@@ -2,11 +2,35 @@
  * @test
  * @summary jdk.jshell.execution.impl.ConsoleImpl.ConsoleProviderImpl conformance: internal class reflection.
  * @modules jdk.jshell/jdk.jshell.execution.impl:+open
- * @run main ConsoleProviderImplTest
+ * @run main/othervm --add-opens=jdk.jshell/jdk.jshell.execution.impl=ALL-UNNAMED ConsoleProviderImplTest
  */
 public class ConsoleProviderImplTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    // ---- deep contract: console appears only once both remote streams are installed ----
+    static void testConsoleLifecycle() throws Exception {
+        Class<?> c = Class.forName("jdk.jshell.execution.impl.ConsoleImpl$ConsoleProviderImpl");
+        check(Class.forName("jdk.internal.io.JdkConsoleProvider").isAssignableFrom(c),
+              "implements JdkConsoleProvider");
+        c.getDeclaredConstructor().setAccessible(true);
+        Object prov = c.getDeclaredConstructor().newInstance();
+        // install remote streams, then the provider hands out a remote console
+        c.getMethod("setRemoteOutput", java.io.InputStream.class).invoke(null,
+                new java.io.ByteArrayInputStream(new byte[0]));
+        c.getMethod("setRemoteInput", java.io.OutputStream.class).invoke(null,
+                new java.io.ByteArrayOutputStream());
+        Object console = c.getMethod("console", boolean.class, java.nio.charset.Charset.class, java.nio.charset.Charset.class)
+                .invoke(prov, false, java.nio.charset.StandardCharsets.UTF_8, java.nio.charset.StandardCharsets.UTF_8);
+        check(console != null, "console() returns a remote console once streams are set");
+        check(Class.forName("jdk.internal.io.JdkConsole").isAssignableFrom(console.getClass()),
+              "remote console implements JdkConsole");
+        // the isTTY flag does not change availability
+        Object consoleTty = c.getMethod("console", boolean.class, java.nio.charset.Charset.class, java.nio.charset.Charset.class)
+                .invoke(prov, true, java.nio.charset.StandardCharsets.UTF_8, java.nio.charset.StandardCharsets.UTF_8);
+        check(consoleTty != null, "console(isTTY=true) also returns a console");
+    }
+
     public static void main(String[] args) throws Exception {
         Class<?> c = Class.forName("jdk.jshell.execution.impl.ConsoleImpl$ConsoleProviderImpl", false, ConsoleProviderImplTest.class.getClassLoader());
         check(c != null, "loads");
@@ -40,6 +64,7 @@ public class ConsoleProviderImplTest {
             }
             check(String.join(";", s).equals(""), "fields");
         }
+        testConsoleLifecycle();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

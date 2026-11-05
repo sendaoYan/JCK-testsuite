@@ -1,10 +1,11 @@
 /*
  * @test
  * @summary jdk.jshell.execution.JdiInitiator conformance: jdi initiator shape.
- * @run main JdiInitiatorTest
+ * @run main/othervm/timeout=180 JdiInitiatorTest
  */
 
 import java.lang.reflect.*;
+import jdk.jshell.execution.*;
 
 public class JdiInitiatorTest {
     static int passed;
@@ -22,9 +23,29 @@ public class JdiInitiatorTest {
         check(true, "no safe instantiable behavior; white-box only");
     }
 
+
+    // ---- deep contract: real debuggee launch over the SocketListen connector ----
+    public static class Agent { public static void main(String[] a) throws Exception { Thread.sleep(60000); } }
+
+    static void testRealLaunch() throws Exception {
+        JdiInitiator ii = new JdiInitiator(0,
+                java.util.List.of("-cp", System.getProperty("java.class.path")),
+                "JdiInitiatorTest$Agent", false, null, 8000, java.util.Map.of());
+        com.sun.jdi.VirtualMachine vm = ii.vm();
+        check(vm != null, "vm() connected to the launched debuggee");
+        check(vm.name().contains("VM"), "vm() name: " + vm.name());
+        check(vm.canBeModified(), "debuggee VM is modifiable");
+        Process p = ii.process();
+        check(p != null && p.isAlive(), "process() is the live debuggee process");
+        check(p.info().command().orElse("").endsWith("java"), "debuggee runs the java launcher");
+        vm.exit(0);
+        check(p.waitFor() == 0, "vm.exit(0) terminates the debuggee with status 0");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealLaunch();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
