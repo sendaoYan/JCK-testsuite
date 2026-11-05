@@ -19,6 +19,15 @@ public class DynValueBoxTest {
         check(org.omg.DynamicAny.DynValueBoxOperations.class.isAssignableFrom(c), "extends org.omg.DynamicAny.DynValueBoxOperations");
         check(org.omg.DynamicAny.DynValueCommon.class.isAssignableFrom(c), "extends org.omg.DynamicAny.DynValueCommon");
         check(org.omg.CORBA.portable.IDLEntity.class.isAssignableFrom(c), "extends org.omg.CORBA.portable.IDLEntity");
+        // ---- deepened (batch C, jdk8u372 probed): interface lattice ----
+        StringBuilder dpIface = new StringBuilder();
+        for (Class<?> i : org.omg.DynamicAny.DynValueBox.class.getInterfaces()) dpIface.append(i.getSimpleName()).append(",");
+        check(dpIface.toString().equals("DynValueBoxOperations,DynValueCommon,IDLEntity,"),
+              "direct interfaces exact order: " + dpIface);
+        check(org.omg.DynamicAny.DynAny.class.isAssignableFrom(org.omg.DynamicAny.DynValueBox.class), "is-a DynAny");
+        check(!org.omg.DynamicAny.DynValue.class.isAssignableFrom(org.omg.DynamicAny.DynValueBox.class),
+              "DynValueBox is NOT a DynValue (sibling branches)");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

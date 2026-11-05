@@ -16,6 +16,22 @@ public class DynEnumHelperTest {
         check(org.omg.DynamicAny.DynEnumHelper.id() != null, "id() non-null");
         check(org.omg.DynamicAny.DynEnumHelper.type() != null, "type() non-null");
         check(org.omg.DynamicAny.DynEnumHelper.narrow(null) == null, "narrow(null) returns null");
+        final org.omg.CORBA.ORB orb = org.omg.CORBA.ORB.init(new String[0], null);
+        org.omg.DynamicAny.DynAnyFactory dpFac = org.omg.DynamicAny.DynAnyFactoryHelper.narrow(
+            (org.omg.CORBA.Object) orb.resolve_initial_references("DynAnyFactory"));
+        // ---- deepened (batch C, jdk8u372 probed): objref helper identity ----
+        check(org.omg.DynamicAny.DynEnumHelper.id().equals("IDL:omg.org/DynamicAny/DynEnum:1.0"), "id() exact");
+        check(org.omg.DynamicAny.DynEnumHelper.type().kind() == org.omg.CORBA.TCKind.tk_objref, "type() tk_objref");
+        check(org.omg.DynamicAny.DynEnumHelper.type().name().equals("DynEnum"), "type().name() DynEnum");
+        check(org.omg.DynamicAny.DynEnumHelper.narrow(null) == null, "narrow(null) -> null");
+        org.omg.CORBA.Any dpNil = orb.create_any();
+        try {
+            org.omg.DynamicAny.DynEnumHelper.insert(dpNil, null);
+            throw new AssertionError("insert(nil) expected MARSHAL");
+        } catch (org.omg.CORBA.MARSHAL expected) {
+            check(true, "insert(nil) -> org.omg.CORBA.MARSHAL (DynamicAny objref helper nil rejection)");
+        }
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
