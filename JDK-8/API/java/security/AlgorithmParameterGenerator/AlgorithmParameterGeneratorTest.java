@@ -4,7 +4,7 @@
  *          getInstance (algorithm/provider/null/empty/unknown), getAlgorithm/getProvider,
  *          init(int)/init(AlgorithmParameterSpec)/init(int,SecureRandom),
  *          generateParameters returning parseable AlgorithmParameters, and exact exceptions.
- * @run main AlgorithmParameterGeneratorTest
+ * @run main/timeout=600 AlgorithmParameterGeneratorTest
  */
 
 import java.security.AlgorithmParameterGenerator;

@@ -97,8 +97,17 @@ public class ImageViewTest {
               "width attribute not exposed");
 
         imageV.setSize(100f, 100f);
-        check(imageV.getPreferredSpan(View.X_AXIS) == 59.0f, "preferred X uses icon fallback size");
-        check(imageV.getPreferredSpan(View.Y_AXIS) == 53.0f, "preferred Y uses icon fallback size");
+        // The exact span depends on the LAF's border/metric stack (observed
+        // 59x53 on x86 temurin, 61x59 on a riscv64 build whose freetype/font
+        // stack differs), so anchor on the contract: the span derives from
+        // the no-image icon plus decorations, never from width=20/height=10.
+        javax.swing.Icon fallback = imageV.getNoImageIcon();
+        float px = imageV.getPreferredSpan(View.X_AXIS);
+        float py = imageV.getPreferredSpan(View.Y_AXIS);
+        check(px >= fallback.getIconWidth() && px - fallback.getIconWidth() < 32,
+              "preferred X derives from the no-image icon, not the width attr (got " + px + ")");
+        check(py >= fallback.getIconHeight() && py - fallback.getIconHeight() < 32,
+              "preferred Y derives from the no-image icon, not the height attr (got " + py + ")");
         check(imageV.getAlignment(View.X_AXIS) == 0.5f, "alignment X 0.5");
         check(imageV.getAlignment(View.Y_AXIS) == 1.0f, "alignment Y 1.0 (bottom)");
         check("ALT".equals(imageV.getToolTipText(1f, 1f, new java.awt.Rectangle(0, 0, 50, 50))),
@@ -114,8 +123,13 @@ public class ImageViewTest {
         check("NO".equals(ivn.getAltText()), "no src -> alt text kept");
         check(ivn.getImage() == null, "no src -> no image");
         ivn.setSize(50f, 50f);
-        check(ivn.getPreferredSpan(View.X_AXIS) == 56.0f, "src-less preferred X");
-        check(ivn.getPreferredSpan(View.Y_AXIS) == 53.0f, "src-less preferred Y");
+        javax.swing.Icon fb2 = ivn.getNoImageIcon();
+        float nx = ivn.getPreferredSpan(View.X_AXIS);
+        float ny = ivn.getPreferredSpan(View.Y_AXIS);
+        check(nx >= fb2.getIconWidth() && nx - fb2.getIconWidth() < 32,
+              "src-less preferred X derives from the icon (got " + nx + ")");
+        check(ny >= fb2.getIconHeight() && ny - fb2.getIconHeight() < 32,
+              "src-less preferred Y derives from the icon (got " + ny + ")");
 
         // url resolution against the document base
         HTMLDocument dabs = load("<html><head><base href='http://ex.com/dir/'></head>"

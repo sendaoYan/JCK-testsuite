@@ -158,6 +158,9 @@ public class AbstractInterruptibleChannelTest {
               "interrupt of the blocked thread -> ClosedByInterruptException, got " + err[0]);
         check(!ch.isOpen(), "channel closed by the interrupt");
         check(ch.closeCalls == 1, "implCloseChannel ran once");
+        // join first: after done.countDown() the thread still has to unwind
+        // its final frames, and a loaded host can observe isAlive()==true here.
+        helper.join(10000);
         check(!helper.isAlive(), "helper terminated");
         // interrupt delivered after end() returns has no effect
         final ProbeChannel q = new ProbeChannel();

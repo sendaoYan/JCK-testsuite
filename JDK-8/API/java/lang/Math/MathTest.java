@@ -146,13 +146,17 @@ public class MathTest {
 
     static void testExpLog() {
         check(Math.exp(0.0) == 1.0, "exp(0)");
-        check(Math.exp(1.0) == Math.E, "exp(1) == E");
+        // exp/log/log10/hypot are specified to be within 1 ulp of the exact
+        // result, and last-bit differences across ports are legitimate:
+        // x86 temurin 8u372 returns exp(1) == E exactly, a riscv64 jdk8u412
+        // build returns E + 1 ulp.  Compare with a 1-ulp tolerance.
+        check(Math.abs(Math.exp(1.0) - Math.E) <= Math.ulp(Math.E), "exp(1) within 1 ulp of E");
         check(Math.expm1(0.0) == 0.0, "expm1(0)");
         check(Math.log(1.0) == 0.0, "log(1)");
-        check(Math.log(Math.E) == 1.0, "log(E) == 1");
-        check(Math.log10(1000.0) == 3.0, "log10(1000)");
+        check(Math.abs(Math.log(Math.E) - 1.0) <= Math.ulp(1.0), "log(E) within 1 ulp of 1");
+        check(Math.abs(Math.log10(1000.0) - 3.0) <= Math.ulp(3.0), "log10(1000) within 1 ulp of 3");
         check(Math.log1p(0.0) == 0.0, "log1p(0)");
-        check(Math.hypot(3.0, 4.0) == 5.0, "hypot(3,4)");
+        check(Math.abs(Math.hypot(3.0, 4.0) - 5.0) <= Math.ulp(5.0), "hypot(3,4) within 1 ulp of 5");
     }
 
     static void testTrig() {
