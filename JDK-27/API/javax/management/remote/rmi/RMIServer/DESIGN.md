@@ -21,3 +21,10 @@ RMIConnection conn = stub.newClient(credentials);
 ## 4. 测试用例设计
 白盒：`isInterface()`、继承 `Remote`、`getVersion/newClient` 存在。
 黑盒轻行为：匿名实现验证 `getVersion/newClient` 可调用。
+
+## 5. 深化（2026-11）
+白盒新增：恰好 2 方法矩阵——`getVersion` 声明 `RemoteException`，`newClient(Object)` 声明 `IOException` 且**不声明** RemoteException（javap 双侧证实，易错点）；接口 abstract。
+黑盒新增：
+- 手写实现：`getVersion` 哨兵、`newClient(null)` 哨兵连接；实现内 `throw new SecurityException(...)` 原样透传（凭据异常不包装）。
+- 真 stub 回环：`(RMIServer) impl.toStub()`、`getVersion` 等值（`"1.0 "` 前缀）、`newClient(null)` → 可用 RMIConnection（getAttribute 真值）；服务器 stop 后死 stub `newClient` → IOException。
+版本差异：方法集与异常声明双侧完全一致。

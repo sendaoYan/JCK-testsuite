@@ -23,3 +23,8 @@ conn.close();
 ## 4. 测试用例设计
 白盒：`isInterface()`、继承 `Closeable` 与 `Remote`、关键方法存在（含 `fetchNotifications`）。
 黑盒轻行为：用 `java.lang.reflect.Proxy` 动态实现（避免手写约 24 个方法），验证 `getConnectionId/fetchNotifications/close` 可调用并返回预期值。
+
+## 5. 深化（2026-11）
+白盒新增：27 方法名+参数计数全集矩阵锁定（createMBean 3/4/5/6 四形态、invoke 5 参、setAttribute 3 参等）；全部方法声明 IOException 且 abstract；`fetchNotifications` 返回 `NotificationResult`。
+黑盒新增（真协议回环，RMIJRMPServerImpl+RMIConnectorServer，127.0.0.1 动态端口）：`newClient(null)` 连接 id 以 `rmi://127.0.0.1 ` 开头；`getAttribute`/`setAttribute(MarshalledObject)`+回读/`invoke add(2)`/`getAttributes`（元素显式 cast）/`getObjectInstance`/远程 `createMBean`/`getMBeanCount`/`unregisterMBean`/`queryNames`/`isInstanceOf`/`getDefaultDomain`/`fetchNotifications(0,10,0)` 立即返回；`rc.close()` 后死 stub 抛 IOException。
+版本差异：与 JDK-8 侧方法集完全一致（27 个）；连接 id 无 Subject 时双空格 quirk 双侧相同；本版本 Subject delegation 已移除（见 RMIConnectionImpl）。

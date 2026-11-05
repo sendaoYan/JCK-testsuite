@@ -25,3 +25,11 @@ server.stop();
 ## 4. 测试用例设计
 白盒：继承 `JMXConnectorServer`、关键方法存在。
 黑盒轻行为：五个常量精确值；构造后 `getMBeanServer` 保留、未激活、`getAddress` 为 null、`getConnectionIds` 为空、`getAttributes` 非 null 且空。
+
+## 5. 深化（2026-11）
+白盒新增：三常量之外的差异锁定（见版本差异）。
+黑盒新增：
+- ctor 负例：null URL → IAE `"Null JMXServiceURL"`；bogus 协议 → `MalformedURLException("Invalid protocol type: bogus")`；坏路径 → `MalformedURLException("URL path must be empty or start with /jndi/")`。
+- 生命周期：start 无 MBS → ISE `"This connector server is not attached to an MBean server"`；未激活 `toJMXConnector` → ISE `"Connector is not active"`；stop-before-start 后 start → IOException `"The server has been stopped."`；start/stop 幂等；未激活 `getAddress()` null/`getConnectionIds()` 空。
+- Live：MBeanServerForwarder 链（`cs.getMBeanServer()==fwd`、`fwd.getMBeanServer()==原`、远程调用经 forwarder）；地址 `/stub/` 前缀；连接 id 记账/关闭移除；`toJMXConnector` 激活态返回 RMIConnector；4 个服务端通知序列+source；注册 MBean 后 preRegister 挂载、`Active`(Boolean)/`Address`(toString 比较，协变返回 JMXServiceURL)/`ConnectionIds`(String[]) 属性路由、start/stop 操作路由。
+**版本差异（关键）**：(1) 本版本新增 `CREDENTIALS_FILTER_PATTERN`/`SERIAL_FILTER_PATTERN` 常量（JDK-8 无）；(2) `service:jmx:rmi+iiop://` URL 在**构造期**即被拒（`MalformedURLException("Invalid protocol type: iiop")`），而 JDK-8 可构造（但 start 会挂死 JVM——CORBA 非守护线程）。
