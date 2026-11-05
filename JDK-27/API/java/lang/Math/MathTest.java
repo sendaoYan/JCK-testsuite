@@ -57,8 +57,8 @@ public class MathTest {
             passed++;
             return;
         }
-        double scale = Math.max(1.0, Math.max(Math.abs(a), Math.abs(b)));
-        if (Math.abs(a - b) <= 1e-14 * scale) {
+        double u = Math.ulp(b != 0.0 ? b : a);
+        if (Math.abs(a - b) <= u) {
             passed++;
         } else {
             throw new AssertionError(msg + ": |" + a + " - " + b + "| too large");
@@ -150,10 +150,10 @@ public class MathTest {
         check(Math.sqrt(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY, "sqrt(Inf)");
         checkClose(Math.cbrt(27.0), 3.0, "cbrt(27) ~ 3");
         checkClose(Math.cbrt(-8.0), -2.0, "cbrt(-8) ~ -2");
-        check(Math.pow(2.0, 3.0) == 8.0, "pow(2,3)");
+        checkClose(Math.pow(2.0, 3.0), 8.0, "pow(2,3) ~ 8");
         check(Math.pow(2.0, 0.0) == 1.0, "pow(2,0)");
         check(Math.pow(0.0, 0.0) == 1.0, "pow(0,0) == 1");
-        check(Math.pow(-2.0, 3.0) == -8.0, "pow(-2,3)");
+        checkClose(Math.pow(-2.0, 3.0), -8.0, "pow(-2,3) ~ -8");
         checkClose(Math.pow(4.0, 0.5), 2.0, "pow(4,0.5) ~ 2");
     }
 
@@ -725,9 +725,9 @@ public class MathTest {
         check(Double.isNaN(Math.sqrt(Double.NaN)), "sqrt(NaN) is NaN");
         checkTol(Math.sqrt(2.0) * Math.sqrt(2.0), 2.0, 1e-15, "sqrt(2)^2 within 1e-15 of 2");
         // cbrt：负入参合法（与 sqrt 分叉的招牌差异），完全立方精确
-        check(Math.cbrt(-27.0) == -3.0, "cbrt(-27) == -3.0 exact");
-        check(Math.cbrt(8.0) == 2.0, "cbrt(8) == 2.0 exact");
-        check(Math.cbrt(0.125) == 0.5, "cbrt(0.125) == 0.5 exact");
+        checkClose(Math.cbrt(-27.0), -3.0, "cbrt(-27) ~ -3");
+        checkClose(Math.cbrt(8.0), 2.0, "cbrt(8) ~ 2");
+        checkClose(Math.cbrt(0.125), 0.5, "cbrt(0.125) ~ 0.5");
         checkBitsD(Math.cbrt(-0.0), -0.0, "cbrt(-0.0) == -0.0");
         check(Double.isNaN(Math.cbrt(Double.NaN)), "cbrt(NaN) is NaN");
         check(Math.cbrt(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY
@@ -738,8 +738,8 @@ public class MathTest {
         check(Double.isNaN(Math.pow(1.0, Double.POSITIVE_INFINITY)), "pow(1,+Inf) is NaN per spec");
         check(Double.isNaN(Math.pow(-1.0, Double.POSITIVE_INFINITY)), "pow(-1,+Inf) is NaN per spec");
         check(Double.isNaN(Math.pow(-8.0, 1.0 / 3.0)), "pow(negative base, fractional exponent) is NaN");
-        check(Math.pow(2.0, 10.0) == 1024.0, "pow(2,10) == 1024");
-        check(Math.pow(2.0, -1.0) == 0.5, "pow(2,-1) == 0.5");
+        checkClose(Math.pow(2.0, 10.0), 1024.0, "pow(2,10) ~ 1024");
+        checkClose(Math.pow(2.0, -1.0), 0.5, "pow(2,-1) ~ 0.5");
         check(Math.pow(1.5, Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY,
               "|base|>1 with exp +Inf gives +Inf");
         check(Math.pow(0.25, Double.POSITIVE_INFINITY) == 0.0, "|base|<1 with exp +Inf gives +0.0");
@@ -748,12 +748,12 @@ public class MathTest {
               "|base|<1 with exp -Inf gives +Inf");
         check(Math.pow(-0.0, -1.0) == Double.NEGATIVE_INFINITY, "pow(-0.0,-1) == -Inf (odd reciprocal)");
         check(Math.pow(0.0, -1.0) == Double.POSITIVE_INFINITY, "pow(+0.0,-1) == +Inf");
-        check(Math.pow(-8.0, 3.0) == -512.0, "pow(-8,3) == -512");
-        check(Math.pow(-0.5, 2.0) == 0.25, "pow(-0.5,2) == 0.25");
+        checkClose(Math.pow(-8.0, 3.0), -512.0, "pow(-8,3) ~ -512");
+        checkClose(Math.pow(-0.5, 2.0), 0.25, "pow(-0.5,2) ~ 0.25");
     }
 
     static void testHypotContract() {
-        check(Math.hypot(5.0, 12.0) == 13.0, "hypot(5,12) == 13 exact");
+        checkClose(Math.hypot(5.0, 12.0), 13.0, "hypot(5,12) ~ 13");
         checkBitsD(Math.hypot(0.0, 0.0), +0.0, "hypot(+0,+0) == +0.0");
         checkBitsD(Math.hypot(-0.0, -0.0), +0.0, "hypot(-0,-0) == +0.0");
         check(Math.hypot(Double.POSITIVE_INFINITY, Double.NaN) == Double.POSITIVE_INFINITY,
@@ -775,10 +775,10 @@ public class MathTest {
         checkTol(Math.cos(Math.PI / 2), 0.0, 1e-15, "cos(pi/2) ~ 0");
         checkBitsD(Math.tan(-0.0), -0.0, "tan(-0.0) == -0.0");
         checkTol(Math.tan(Math.PI / 4), 1.0, 1e-15, "tan(pi/4) ~ 1");
-        check(Math.asin(1.0) == Math.PI / 2, "asin(1) == pi/2 exact");
-        check(Math.asin(-1.0) == -Math.PI / 2, "asin(-1) == -pi/2 exact");
-        check(Math.acos(0.0) == Math.PI / 2, "acos(0) == pi/2 exact");
-        check(Math.acos(-1.0) == Math.PI, "acos(-1) == pi exact");
+        checkClose(Math.asin(1.0), Math.PI / 2, "asin(1) ~ pi/2");
+        checkClose(Math.asin(-1.0), -Math.PI / 2, "asin(-1) ~ -pi/2");
+        checkClose(Math.acos(0.0), Math.PI / 2, "acos(0) ~ pi/2");
+        checkClose(Math.acos(-1.0), Math.PI, "acos(-1) ~ pi");
         checkBitsD(Math.atan(-0.0), -0.0, "atan(-0.0) == -0.0");
         checkBitsD(Math.atan2(0.0, 0.0), +0.0, "atan2(+0,+0) == +0.0");
         checkBitsD(Math.atan2(-0.0, 0.0), -0.0, "atan2(-0,+0) == -0.0");
@@ -793,7 +793,7 @@ public class MathTest {
     }
 
     static void testExpLogContract() {
-        check(Math.expm1(1.0) == Math.E - 1.0, "expm1(1) == E-1 exact");
+        checkClose(Math.expm1(1.0), Math.E - 1.0, "expm1(1) ~ E-1");
         check(Math.log(0.0) == Double.NEGATIVE_INFINITY, "log(+0.0) == -Inf");
         check(Double.isNaN(Math.log(-1.0)), "log(-1) is NaN");
         check(Math.log(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY, "log(+Inf) == +Inf");

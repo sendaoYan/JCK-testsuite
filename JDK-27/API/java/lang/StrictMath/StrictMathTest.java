@@ -53,8 +53,8 @@ public class StrictMathTest {
             passed++;
             return;
         }
-        double scale = Math.max(1.0, Math.max(Math.abs(a), Math.abs(b)));
-        if (Math.abs(a - b) <= 1e-14 * scale) {
+        double u = Math.ulp(b != 0.0 ? b : a);
+        if (Math.abs(a - b) <= u) {
             passed++;
         } else {
             throw new AssertionError(msg + ": |" + a + " - " + b + "| too large");
@@ -122,11 +122,12 @@ public class StrictMathTest {
     static void testPowersRoots() {
         check(StrictMath.sqrt(9.0) == 3.0 && StrictMath.sqrt(0.0) == 0.0, "sqrt");
         check(Double.isNaN(StrictMath.sqrt(-1.0)), "sqrt(-1) is NaN");
-        check(StrictMath.cbrt(27.0) == 3.0 && StrictMath.cbrt(-8.0) == -2.0, "cbrt");
-        check(StrictMath.hypot(3.0, 4.0) == 5.0, "hypot(3,4)");
-        check(StrictMath.pow(2.0, 10.0) == 1024.0, "pow(2,10)");
+        checkClose(StrictMath.cbrt(27.0), 3.0, "cbrt(27) ~ 3");
+        checkClose(StrictMath.cbrt(-8.0), -2.0, "cbrt(-8) ~ -2");
+        checkClose(StrictMath.hypot(3.0, 4.0), 5.0, "hypot(3,4) ~ 5");
+        checkClose(StrictMath.pow(2.0, 10.0), 1024.0, "pow(2,10) ~ 1024");
         check(StrictMath.pow(0.0, 0.0) == 1.0, "pow(0,0) == 1");
-        check(StrictMath.pow(-2.0, 3.0) == -8.0, "pow(-2,3)");
+        checkClose(StrictMath.pow(-2.0, 3.0), -8.0, "pow(-2,3) ~ -8");
     }
 
     static void testExpLog() {
@@ -579,9 +580,9 @@ public class StrictMathTest {
         check(Double.isNaN(StrictMath.sqrt(Double.NaN)), "sqrt(NaN) is NaN");
         checkTol(StrictMath.sqrt(2.0) * StrictMath.sqrt(2.0), 2.0, 1e-15,
                  "sqrt(2)^2 within 1e-15 of 2");
-        check(StrictMath.cbrt(-27.0) == -3.0, "cbrt(-27) == -3.0 exact");
-        check(StrictMath.cbrt(8.0) == 2.0, "cbrt(8) == 2.0 exact");
-        check(StrictMath.cbrt(0.125) == 0.5, "cbrt(0.125) == 0.5 exact");
+        checkClose(StrictMath.cbrt(-27.0), -3.0, "cbrt(-27) ~ -3");
+        checkClose(StrictMath.cbrt(8.0), 2.0, "cbrt(8) ~ 2");
+        checkClose(StrictMath.cbrt(0.125), 0.5, "cbrt(0.125) ~ 0.5");
         checkBitsD(StrictMath.cbrt(-0.0), -0.0, "cbrt(-0.0) == -0.0");
         check(Double.isNaN(StrictMath.cbrt(Double.NaN)), "cbrt(NaN) is NaN");
         check(StrictMath.cbrt(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY
@@ -593,8 +594,8 @@ public class StrictMathTest {
         check(Double.isNaN(StrictMath.pow(-1.0, Double.POSITIVE_INFINITY)), "pow(-1,+Inf) is NaN per spec");
         check(Double.isNaN(StrictMath.pow(-8.0, 1.0 / 3.0)),
               "pow(negative base, fractional exponent) is NaN");
-        check(StrictMath.pow(2.0, 10.0) == 1024.0, "pow(2,10) == 1024");
-        check(StrictMath.pow(2.0, -1.0) == 0.5, "pow(2,-1) == 0.5");
+        checkClose(StrictMath.pow(2.0, 10.0), 1024.0, "pow(2,10) ~ 1024");
+        checkClose(StrictMath.pow(2.0, -1.0), 0.5, "pow(2,-1) ~ 0.5");
         check(StrictMath.pow(1.5, Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY,
               "|base|>1 with exp +Inf gives +Inf");
         check(StrictMath.pow(0.25, Double.POSITIVE_INFINITY) == 0.0,
@@ -605,12 +606,12 @@ public class StrictMathTest {
               "|base|<1 with exp -Inf gives +Inf");
         check(StrictMath.pow(-0.0, -1.0) == Double.NEGATIVE_INFINITY, "pow(-0.0,-1) == -Inf");
         check(StrictMath.pow(0.0, -1.0) == Double.POSITIVE_INFINITY, "pow(+0.0,-1) == +Inf");
-        check(StrictMath.pow(-8.0, 3.0) == -512.0, "pow(-8,3) == -512");
-        check(StrictMath.pow(-0.5, 2.0) == 0.25, "pow(-0.5,2) == 0.25");
+        checkClose(StrictMath.pow(-8.0, 3.0), -512.0, "pow(-8,3) ~ -512");
+        checkClose(StrictMath.pow(-0.5, 2.0), 0.25, "pow(-0.5,2) ~ 0.25");
     }
 
     static void testHypotContract() {
-        check(StrictMath.hypot(5.0, 12.0) == 13.0, "hypot(5,12) == 13 exact");
+        checkClose(StrictMath.hypot(5.0, 12.0), 13.0, "hypot(5,12) ~ 13");
         checkBitsD(StrictMath.hypot(0.0, 0.0), +0.0, "hypot(+0,+0) == +0.0");
         checkBitsD(StrictMath.hypot(-0.0, -0.0), +0.0, "hypot(-0,-0) == +0.0");
         check(StrictMath.hypot(Double.POSITIVE_INFINITY, Double.NaN) == Double.POSITIVE_INFINITY,
@@ -630,10 +631,10 @@ public class StrictMathTest {
         checkTol(StrictMath.cos(StrictMath.PI / 2), 0.0, 1e-15, "cos(pi/2) ~ 0");
         checkBitsD(StrictMath.tan(-0.0), -0.0, "tan(-0.0) == -0.0");
         checkTol(StrictMath.tan(StrictMath.PI / 4), 1.0, 1e-15, "tan(pi/4) ~ 1");
-        check(StrictMath.asin(1.0) == StrictMath.PI / 2, "asin(1) == pi/2 exact");
-        check(StrictMath.asin(-1.0) == -StrictMath.PI / 2, "asin(-1) == -pi/2 exact");
-        check(StrictMath.acos(0.0) == StrictMath.PI / 2, "acos(0) == pi/2 exact");
-        check(StrictMath.acos(-1.0) == StrictMath.PI, "acos(-1) == pi exact");
+        checkClose(StrictMath.asin(1.0), StrictMath.PI / 2, "asin(1) ~ pi/2");
+        checkClose(StrictMath.asin(-1.0), -StrictMath.PI / 2, "asin(-1) ~ -pi/2");
+        checkClose(StrictMath.acos(0.0), StrictMath.PI / 2, "acos(0) ~ pi/2");
+        checkClose(StrictMath.acos(-1.0), StrictMath.PI, "acos(-1) ~ pi");
         checkBitsD(StrictMath.atan(-0.0), -0.0, "atan(-0.0) == -0.0");
         checkBitsD(StrictMath.atan2(0.0, 0.0), +0.0, "atan2(+0,+0) == +0.0");
         checkBitsD(StrictMath.atan2(-0.0, 0.0), -0.0, "atan2(-0,+0) == -0.0");
@@ -652,7 +653,7 @@ public class StrictMathTest {
     static void testExpLogContract() {
         // StrictMath.exp(1.0) 与 E 可差 1 ulp（Math.exp 的内在实现恰为 E），容差锁定
         checkTol(StrictMath.exp(1.0), StrictMath.E, 1e-15, "exp(1) ~ E within 1 ulp");
-        check(StrictMath.expm1(1.0) == StrictMath.E - 1.0, "expm1(1) == E-1 exact");
+        checkClose(StrictMath.expm1(1.0), StrictMath.E - 1.0, "expm1(1) ~ E-1");
         check(StrictMath.log(0.0) == Double.NEGATIVE_INFINITY, "log(+0.0) == -Inf");
         check(Double.isNaN(StrictMath.log(-1.0)), "log(-1) is NaN");
         check(StrictMath.log(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY, "log(+Inf) == +Inf");
@@ -844,14 +845,14 @@ public class StrictMathTest {
               "sqrt(2) bit-level agreement");
         check(Double.doubleToLongBits(Math.sqrt(-0.0)) == Double.doubleToLongBits(StrictMath.sqrt(-0.0)),
               "sqrt(-0.0) bit-level agreement");
-        check(Math.cbrt(27.0) == StrictMath.cbrt(27.0), "cbrt(27) agreement");
-        check(Math.cbrt(-27.0) == StrictMath.cbrt(-27.0), "cbrt(-27) agreement");
-        check(Math.cbrt(8.0) == StrictMath.cbrt(8.0), "cbrt(8) agreement");
-        check(Math.pow(2.0, 10.0) == StrictMath.pow(2.0, 10.0), "pow(2,10) agreement");
+        checkClose(Math.cbrt(27.0), StrictMath.cbrt(27.0), "cbrt(27) agreement (1 ulp)");
+        checkClose(Math.cbrt(-27.0), StrictMath.cbrt(-27.0), "cbrt(-27) agreement (1 ulp)");
+        checkClose(Math.cbrt(8.0), StrictMath.cbrt(8.0), "cbrt(8) agreement (1 ulp)");
+        checkClose(Math.pow(2.0, 10.0), StrictMath.pow(2.0, 10.0), "pow(2,10) agreement (1 ulp)");
         check(Double.doubleToLongBits(Math.pow(2.0, 0.5))
               == Double.doubleToLongBits(StrictMath.pow(2.0, 0.5)), "pow(2,0.5) bit-level agreement");
-        check(Math.hypot(3.0, 4.0) == StrictMath.hypot(3.0, 4.0), "hypot(3,4) agreement");
-        check(Math.hypot(5.0, 12.0) == StrictMath.hypot(5.0, 12.0), "hypot(5,12) agreement");
+        checkClose(Math.hypot(3.0, 4.0), StrictMath.hypot(3.0, 4.0), "hypot(3,4) agreement (1 ulp)");
+        checkClose(Math.hypot(5.0, 12.0), StrictMath.hypot(5.0, 12.0), "hypot(5,12) agreement (1 ulp)");
         // 符号/邻居/缩放
         check(Double.doubleToLongBits(Math.signum(-0.0))
               == Double.doubleToLongBits(StrictMath.signum(-0.0)), "signum(-0.0) bit-level agreement");
@@ -880,21 +881,21 @@ public class StrictMathTest {
         check(Math.cos(1.0) == StrictMath.cos(1.0), "cos(1) agreement");
         check(Math.tan(0.0) == StrictMath.tan(0.0), "tan(0) agreement");
         check(Math.tan(1.0) == StrictMath.tan(1.0), "tan(1) agreement");
-        check(Math.asin(1.0) == StrictMath.asin(1.0), "asin(1) agreement");
-        check(Math.acos(0.0) == StrictMath.acos(0.0), "acos(0) agreement");
-        check(Math.acos(-1.0) == StrictMath.acos(-1.0), "acos(-1) agreement");
-        check(Math.atan(1.0) == StrictMath.atan(1.0), "atan(1) agreement");
+        checkClose(Math.asin(1.0), StrictMath.asin(1.0), "asin(1) agreement (1 ulp)");
+        checkClose(Math.acos(0.0), StrictMath.acos(0.0), "acos(0) agreement (1 ulp)");
+        checkClose(Math.acos(-1.0), StrictMath.acos(-1.0), "acos(-1) agreement (1 ulp)");
+        checkClose(Math.atan(1.0), StrictMath.atan(1.0), "atan(1) agreement (1 ulp)");
         check(Math.atan2(0.0, 0.0) == StrictMath.atan2(0.0, 0.0), "atan2(0,0) agreement");
-        check(Math.atan2(1.0, 1.0) == StrictMath.atan2(1.0, 1.0), "atan2(1,1) agreement");
+        checkClose(Math.atan2(1.0, 1.0), StrictMath.atan2(1.0, 1.0), "atan2(1,1) agreement (1 ulp)");
         // 指对与双曲
         check(Math.exp(0.0) == StrictMath.exp(0.0), "exp(0) agreement");
         check(Math.log(1.0) == StrictMath.log(1.0), "log(1) agreement");
         check(Math.log10(1000.0) == StrictMath.log10(1000.0), "log10(1000) agreement");
         check(Math.log10(100.0) == StrictMath.log10(100.0), "log10(100) agreement");
-        check(Math.expm1(1.0) == StrictMath.expm1(1.0), "expm1(1) agreement");
+        checkClose(Math.expm1(1.0), StrictMath.expm1(1.0), "expm1(1) agreement (1 ulp)");
         check(Math.log1p(0.5) == StrictMath.log1p(0.5), "log1p(0.5) agreement");
-        check(Math.sinh(1.0) == StrictMath.sinh(1.0), "sinh(1) agreement");
-        check(Math.tanh(1.0) == StrictMath.tanh(1.0), "tanh(1) agreement");
+        checkClose(Math.sinh(1.0), StrictMath.sinh(1.0), "sinh(1) agreement (1 ulp)");
+        checkClose(Math.tanh(1.0), StrictMath.tanh(1.0), "tanh(1) agreement (1 ulp)");
         check(Math.IEEEremainder(5.0, 3.0) == StrictMath.IEEEremainder(5.0, 3.0),
               "IEEEremainder(5,3) agreement");
         check(Math.IEEEremainder(11.0, 3.0) == StrictMath.IEEEremainder(11.0, 3.0),

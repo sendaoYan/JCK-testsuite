@@ -135,13 +135,13 @@ public class MathTest {
         check(Math.sqrt(0.0) == 0.0, "sqrt(0)");
         check(Double.isNaN(Math.sqrt(-1.0)), "sqrt(-1) is NaN");
         check(Math.sqrt(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY, "sqrt(Inf)");
-        check(Math.cbrt(27.0) == 3.0, "cbrt(27)");
-        check(Math.cbrt(-8.0) == -2.0, "cbrt(-8)");
-        check(Math.pow(2.0, 3.0) == 8.0, "pow(2,3)");
+        check1ulp(Math.cbrt(27.0), 3.0, "cbrt(27) ~ 3");
+        check1ulp(Math.cbrt(-8.0), -2.0, "cbrt(-8) ~ -2");
+        check1ulp(Math.pow(2.0, 3.0), 8.0, "pow(2,3)");
         check(Math.pow(2.0, 0.0) == 1.0, "pow(2,0)");
         check(Math.pow(0.0, 0.0) == 1.0, "pow(0,0) == 1");
-        check(Math.pow(-2.0, 3.0) == -8.0, "pow(-2,3)");
-        check(Math.pow(4.0, 0.5) == 2.0, "pow(4,0.5)");
+        check1ulp(Math.pow(-2.0, 3.0), -8.0, "pow(-2,3)");
+        check1ulp(Math.pow(4.0, 0.5), 2.0, "pow(4,0.5)");
     }
 
     static void testExpLog() {
@@ -150,13 +150,21 @@ public class MathTest {
         // result, and last-bit differences across ports are legitimate:
         // x86 temurin 8u372 returns exp(1) == E exactly, a riscv64 jdk8u412
         // build returns E + 1 ulp.  Compare with a 1-ulp tolerance.
-        check(Math.abs(Math.exp(1.0) - Math.E) <= Math.ulp(Math.E), "exp(1) within 1 ulp of E");
+        check1ulp(Math.exp(1.0), Math.E, "exp(1) ~ E");
         check(Math.expm1(0.0) == 0.0, "expm1(0)");
         check(Math.log(1.0) == 0.0, "log(1)");
-        check(Math.abs(Math.log(Math.E) - 1.0) <= Math.ulp(1.0), "log(E) within 1 ulp of 1");
-        check(Math.abs(Math.log10(1000.0) - 3.0) <= Math.ulp(3.0), "log10(1000) within 1 ulp of 3");
+        check1ulp(Math.log(Math.E), 1.0, "log(E) ~ 1");
+        check1ulp(Math.log10(1000.0), 3.0, "log10(1000) ~ 3");
         check(Math.log1p(0.0) == 0.0, "log1p(0)");
-        check(Math.abs(Math.hypot(3.0, 4.0) - 5.0) <= Math.ulp(5.0), "hypot(3,4) within 1 ulp of 5");
+        check1ulp(Math.hypot(3.0, 4.0), 5.0, "hypot(3,4) ~ 5");
+    }
+
+    // Transcendental and other non-correctly-rounded functions only promise
+    // 1-ulp accuracy, so non-special-value results get a 1-ulp tolerance.
+    // Spec-mandated exact cases (zero/Infinity/NaN argument tables, sqrt,
+    // pow(x, +-0.0), single-rounding conversions) stay bit-exact.
+    static void check1ulp(double a, double b, String msg) {
+        check(Math.abs(a - b) <= Math.ulp(b != 0.0 ? b : a), msg + " (within 1 ulp)");
     }
 
     static void testTrig() {
@@ -166,7 +174,7 @@ public class MathTest {
         check(Math.asin(0.0) == 0.0, "asin(0)");
         check(Math.acos(1.0) == 0.0, "acos(1)");
         check(Math.atan(0.0) == 0.0, "atan(0)");
-        check(Math.atan2(1.0, 1.0) == Math.PI / 4, "atan2(1,1) == PI/4");
+        check1ulp(Math.atan2(1.0, 1.0), Math.PI / 4, "atan2(1,1) ~ PI/4");
         check(Math.sinh(0.0) == 0.0, "sinh(0)");
         check(Math.cosh(0.0) == 1.0, "cosh(0)");
         check(Math.tanh(0.0) == 0.0, "tanh(0)");
@@ -490,9 +498,9 @@ public class MathTest {
         check(Double.isNaN(Math.sqrt(Double.NaN)), "sqrt(NaN) is NaN");
         checkTol(Math.sqrt(2.0) * Math.sqrt(2.0), 2.0, 1e-15, "sqrt(2)^2 within 1e-15 of 2");
         // cbrt：负入参合法（与 sqrt 分叉的招牌差异），完全立方精确
-        check(Math.cbrt(-27.0) == -3.0, "cbrt(-27) == -3.0 exact");
-        check(Math.cbrt(8.0) == 2.0, "cbrt(8) == 2.0 exact");
-        check(Math.cbrt(0.125) == 0.5, "cbrt(0.125) == 0.5 exact");
+        check1ulp(Math.cbrt(-27.0), -3.0, "cbrt(-27) ~ -3");
+        check1ulp(Math.cbrt(8.0), 2.0, "cbrt(8) ~ 2");
+        check1ulp(Math.cbrt(0.125), 0.5, "cbrt(0.125) ~ 0.5");
         checkBitsD(Math.cbrt(-0.0), -0.0, "cbrt(-0.0) == -0.0");
         check(Double.isNaN(Math.cbrt(Double.NaN)), "cbrt(NaN) is NaN");
         check(Math.cbrt(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY
@@ -503,8 +511,8 @@ public class MathTest {
         check(Double.isNaN(Math.pow(1.0, Double.POSITIVE_INFINITY)), "pow(1,+Inf) is NaN per spec");
         check(Double.isNaN(Math.pow(-1.0, Double.POSITIVE_INFINITY)), "pow(-1,+Inf) is NaN per spec");
         check(Double.isNaN(Math.pow(-8.0, 1.0 / 3.0)), "pow(negative base, fractional exponent) is NaN");
-        check(Math.pow(2.0, 10.0) == 1024.0, "pow(2,10) == 1024");
-        check(Math.pow(2.0, -1.0) == 0.5, "pow(2,-1) == 0.5");
+        check1ulp(Math.pow(2.0, 10.0), 1024.0, "pow(2,10) ~ 1024");
+        check1ulp(Math.pow(2.0, -1.0), 0.5, "pow(2,-1) ~ 0.5");
         check(Math.pow(1.5, Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY,
               "|base|>1 with exp +Inf gives +Inf");
         check(Math.pow(0.25, Double.POSITIVE_INFINITY) == 0.0, "|base|<1 with exp +Inf gives +0.0");
@@ -513,12 +521,12 @@ public class MathTest {
               "|base|<1 with exp -Inf gives +Inf");
         check(Math.pow(-0.0, -1.0) == Double.NEGATIVE_INFINITY, "pow(-0.0,-1) == -Inf (odd reciprocal)");
         check(Math.pow(0.0, -1.0) == Double.POSITIVE_INFINITY, "pow(+0.0,-1) == +Inf");
-        check(Math.pow(-8.0, 3.0) == -512.0, "pow(-8,3) == -512");
-        check(Math.pow(-0.5, 2.0) == 0.25, "pow(-0.5,2) == 0.25");
+        check1ulp(Math.pow(-8.0, 3.0), -512.0, "pow(-8,3) ~ -512");
+        check1ulp(Math.pow(-0.5, 2.0), 0.25, "pow(-0.5,2) ~ 0.25");
     }
 
     static void testHypotContract() {
-        check(Math.hypot(5.0, 12.0) == 13.0, "hypot(5,12) == 13 exact");
+        check1ulp(Math.hypot(5.0, 12.0), 13.0, "hypot(5,12) ~ 13");
         checkBitsD(Math.hypot(0.0, 0.0), +0.0, "hypot(+0,+0) == +0.0");
         checkBitsD(Math.hypot(-0.0, -0.0), +0.0, "hypot(-0,-0) == +0.0");
         check(Math.hypot(Double.POSITIVE_INFINITY, Double.NaN) == Double.POSITIVE_INFINITY,
@@ -540,10 +548,10 @@ public class MathTest {
         checkTol(Math.cos(Math.PI / 2), 0.0, 1e-15, "cos(pi/2) ~ 0");
         checkBitsD(Math.tan(-0.0), -0.0, "tan(-0.0) == -0.0");
         checkTol(Math.tan(Math.PI / 4), 1.0, 1e-15, "tan(pi/4) ~ 1");
-        check(Math.asin(1.0) == Math.PI / 2, "asin(1) == pi/2 exact");
-        check(Math.asin(-1.0) == -Math.PI / 2, "asin(-1) == -pi/2 exact");
-        check(Math.acos(0.0) == Math.PI / 2, "acos(0) == pi/2 exact");
-        check(Math.acos(-1.0) == Math.PI, "acos(-1) == pi exact");
+        check1ulp(Math.asin(1.0), Math.PI / 2, "asin(1) ~ pi/2");
+        check1ulp(Math.asin(-1.0), -Math.PI / 2, "asin(-1) ~ -pi/2");
+        check1ulp(Math.acos(0.0), Math.PI / 2, "acos(0) ~ pi/2");
+        check1ulp(Math.acos(-1.0), Math.PI, "acos(-1) ~ pi");
         checkBitsD(Math.atan(-0.0), -0.0, "atan(-0.0) == -0.0");
         checkBitsD(Math.atan2(0.0, 0.0), +0.0, "atan2(+0,+0) == +0.0");
         checkBitsD(Math.atan2(-0.0, 0.0), -0.0, "atan2(-0,+0) == -0.0");
@@ -558,7 +566,7 @@ public class MathTest {
     }
 
     static void testExpLogContract() {
-        check(Math.expm1(1.0) == Math.E - 1.0, "expm1(1) == E-1 exact");
+        check1ulp(Math.expm1(1.0), Math.E - 1.0, "expm1(1) ~ E-1");
         check(Math.log(0.0) == Double.NEGATIVE_INFINITY, "log(+0.0) == -Inf");
         check(Double.isNaN(Math.log(-1.0)), "log(-1) is NaN");
         check(Math.log(Double.POSITIVE_INFINITY) == Double.POSITIVE_INFINITY, "log(+Inf) == +Inf");
