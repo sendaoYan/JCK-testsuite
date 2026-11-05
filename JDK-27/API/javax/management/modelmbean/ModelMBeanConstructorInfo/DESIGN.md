@@ -1,23 +1,22 @@
-# javax.management.modelmbean.ModelMBeanConstructorInfo — 设计案
+# ModelMBeanConstructorInfo 设计案
 
-## 1. API 功能
-- 具体值类，继承 `MBeanConstructorInfo` 并实现 `DescriptorAccess`。
-- 构造器：`(name,desc,MBeanParameterInfo[])`、带 Descriptor 的 `(name,desc,MBeanParameterInfo[],Descriptor)`、基于 `Constructor<?>` 的 `(description,Constructor<?>)`（其中名字取构造器的声明类名）。
-- Descriptor 默认含 `name` 与 `descriptorType=operation`。
-- 注意：拷贝构造 `ModelMBeanConstructorInfo(ModelMBeanConstructorInfo)` 为包私有，不属于 public API。
+1. API 功能
+- extends MBeanConstructorInfo implements DescriptorAccess；构造器：Constructor 形态[,Descriptor]、(name,desc,params[,Descriptor])
+- name 取 Constructor.getName()（嵌套类为 "Outer$Inner" 形态）
+- 默认 Descriptor：name=构造器名、descriptorType=**operation**（复用操作类型的历史设计）、role=constructor、displayName=构造器名
+- setDescriptor：名须匹配且 descriptorType=operation（同默认约定），否则 ROE；null → 重置默认
+2. Java 用户典型用法
+- ModelMBeanInfoSupport 的构造器数组条目来源；描述符 role=constructor 区分于普通操作
+3. 参考来源
+- Oracle javadoc: javax.management.modelmbean 包（RequiredModelMBean / ModelMBeanInfo / DescriptorSupport 各类文档，含 descriptor 字段语义表：getMethod/setMethod/currencyTimeLimit/visibility/severity/persistPolicy/log）
+- JMX 1.4 Specification（随 JSR-160 分发）Model MBeans 章 与 Descriptor 语义相关章节
+- OpenJDK 源码（行为核对，只借鉴思路、代码自写）: jdk8u-dev jdk/src/share/classes/javax/management/modelmbean/*.java; jdk27 src/java.management/share/classes/javax/management/modelmbean/*.java
+- 实测优先：所有异常类型/消息/默认字段值均在 JDK-8 (8u372) 与 JDK-27 (27.0.1) 上双侧行为探测后锁定
 
-## 2. Java 用户如何使用
-描述 ModelMBean 暴露的构造器元数据，供 MBeanInfo 与动态调用使用。
-```java
-ModelMBeanConstructorInfo c = new ModelMBeanConstructorInfo(
-    "Ctor", "desc", new MBeanParameterInfo[0]);
-```
+4. 测试用例设计（<Simple>Test.java）
+- 无参 Constructor：name/空签名；String(String) 构造器 name="java.lang.String" 签名类型
+- 默认描述符 4 字段（重点断言 descriptorType=operation 而非 constructor）
+- setDescriptor 正/负/重置；clone/序列化；跨父类 equals false；同配置 equals
+## 版本差异
+- javap 两侧一致；serialVersionUID=3862947819818064362L 两侧相同；实测行为一致
 
-## 3. 开源代码实际用法调研
-- JDK `test/jdk/javax/management/modelmbean/ModelMBeanConstructorInfoTest.java` 覆盖构造器与 clone/setDescriptor。
-- 实现权威：`src/java.management/share/classes/javax/management/modelmbean/ModelMBeanConstructorInfo.java`。
-- 说明：基于 `Constructor<?>` 的构造器将第一个字符串参数作为 description，name 由 `constructor.getName()`（声明类二进制名）推导。
-
-## 4. 测试用例设计
-- 白盒：继承 MBeanConstructorInfo、实现 DescriptorAccess、多个 public 构造器。
-- 黑盒：基础构造器字段与签名往返；descriptor 默认 name/descriptorType；带 Descriptor 构造器保留 extra；Constructor 构造器推导 name=二进制名、description=入参、无参签名；clone 相等；setDescriptor 更新。

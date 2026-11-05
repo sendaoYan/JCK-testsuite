@@ -1,20 +1,20 @@
-# javax.management.modelmbean.ModelMBeanInfo — 设计案
+# ModelMBeanInfo 接口设计案
 
-## 1. API 功能
-- 接口，描述 ModelMBean 的完整元数据，扩展普通 MBeanInfo 的描述符访问能力。
-- 核心方法：`getDescriptors(String inDescriptorType)`、`getDescriptor(String name, String descriptorType)`、`getDescriptor(String name)`、`setDescriptor(Descriptor, String)`、`setMBeanDescriptor(Descriptor)`、`getMBeanDescriptor()` 及按类型取 attribute/operation/constructor/notification 的便捷方法。
+1. API 功能
+- 描述 ModelMBean 元数据的接口（不继承 MBeanInfo，而是平行声明 getClassName/getDescription/getAttributes()/getConstructors()/getOperations()/getNotifications()/clone）
+- Descriptor 面：getDescriptors(type)/setDescriptors/getDescriptor(name,type)/setDescriptor/getMBeanDescriptor/setMBeanDescriptor（多数声明受检 MBeanException+RuntimeOperationsException）
+- **quirk**：接口有 getAttribute/getOperation/getNotification 却没有 getConstructor(String)（ModelMBeanInfoSupport 类补充了它）
+2. Java 用户典型用法
+- ModelMBeanInfoSupport 为标准实现；RequiredModelMBean.setModelMBeanInfo(ModelMBeanInfo) 消费之
+3. 参考来源
+- Oracle javadoc: javax.management.modelmbean 包（RequiredModelMBean / ModelMBeanInfo / DescriptorSupport 各类文档，含 descriptor 字段语义表：getMethod/setMethod/currencyTimeLimit/visibility/severity/persistPolicy/log）
+- JMX 1.4 Specification（随 JSR-160 分发）Model MBeans 章 与 Descriptor 语义相关章节
+- OpenJDK 源码（行为核对，只借鉴思路、代码自写）: jdk8u-dev jdk/src/share/classes/javax/management/modelmbean/*.java; jdk27 src/java.management/share/classes/javax/management/modelmbean/*.java
+- 实测优先：所有异常类型/消息/默认字段值均在 JDK-8 (8u372) 与 JDK-27 (27.0.1) 上双侧行为探测后锁定
 
-## 2. Java 用户如何使用
-通过实现类（`ModelMBeanInfoSupport`）构建 ModelMBean 的元数据图，再交给 `RequiredModelMBean`。
-```java
-ModelMBeanInfo info = new ModelMBeanInfoSupport(
-    "C", "desc", attrs, ctors, ops, notifs);
-```
+4. 测试用例设计（<Simple>Test.java）
+- 精确 16 个方法 + getConstructor 缺席 quirk 断言 + 受检异常声明断言（getDescriptor/setDescriptor/clone）
+- 经接口引用全操作：getMBeanDescriptor/getDescriptors/getDescriptor 未知名 null/setMBeanDescriptor 往返/setDescriptors 空数组 no-op/clone equals/类型化查找 null/被 RequiredModelMBean 接受
+## 版本差异
+- 方法集两侧一致（16 个；Declared 顺序无关——名字集合断言）
 
-## 3. 开源代码实际用法调研
-- JDK `test/jdk/javax/management/modelmbean/ModelMBeanInfoSupportTest.java` 覆盖描述符按类型查询/更新。
-- 说明：接口把 JMX 元数据划分为 mbean/attribute/operation/constructor/notification 五类描述符，测试聚焦按名/按类型的检索。
-
-## 4. 测试用例设计
-- 白盒：接口、方法含 getDescriptors/getDescriptor/setMBeanDescriptor/getMBeanDescriptor/getAttribute/getOperation/getConstructor/getNotification。
-- 黑盒：由 ModelMBeanInfoSupport 实现验证各按类型查询返回匹配描述符、`getDescriptor(name)` 单参数搜索、`getDescriptors(null)` 返回全部、setDescriptor 更新指定类型。
