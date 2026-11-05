@@ -68,3 +68,22 @@
 ## 注意事项
 
 - headless 安全，不加 `@key`；结果确定；不依赖默认 Locale/时区。
+
+## 契约深化（2026-11）
+
+- **API 功能补充**：NFE 消息文本逐字契约（`For input string: "..."`、`radix 1 less than Character.MIN_RADIX`、
+  `Zero length string`、`Illegal leading minus sign on unsigned string -1.`、
+  `String value 4294967296 exceeds range of unsigned int.`）；无符号算术与 BigInteger 交叉验证；
+  `divideUnsigned(-1,1)==0xFFFFFFFF`（= -1，非 MAX_VALUE）。
+- **使用方式补充**：`checkNfeMsg`/`checkArithMsg` 辅助器统一"抛出 + 消息逐字比对"；废弃构造
+  `new Integer(...)` 与 `valueOf` 的跨实例 `equals`；`new Integer(42)==new Integer(42)` 恒 false。
+- **参考来源**：实测 Temurin 8u372（所有期望消息在运行时逐字探测后写入）；javap 比对 JDK-8/27
+  方法集差异；OpenJDK 8u `Integer.stringToInteger`/`throwFor` 源码。
+- **新增用例（断言 190→465）**：`testNfeMessageContract`（35 条精确消息）、`testParseRadixRoundTrip`
+  （13 值×5 基 + 符号形式）、`testToStringExactTable`、`testDecodeMatrix`、`testBitOpExactTable`
+  （rotateLeft/rotateRight 对偶环 n=1..31）、`testUnsignedArithmeticTable`（含 BigInteger 闭环）、
+  `testValueOfCacheBoundary`（缓存内外 ==/equals、静态 hashCode）、`testWhiteBoxStructural`、`testBoxing`。
+- **易错细节（跨版本）**：JDK-8 `parseInt(null)` 消息为 `"null"`（27 为 `"Cannot parse null string"`，
+  用 MODERN 分支锁定）；JDK-27 对非 10 基失败消息追加 `" under radix N"` 后缀（8 无）；
+  `parseInt(CharSequence,int,int,int)` 是 9+ API（27 侧另测 `Error at index i in: "..."` 消息），
+  8 侧不编译该调用。

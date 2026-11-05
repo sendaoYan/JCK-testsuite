@@ -81,3 +81,60 @@
 - 不依赖默认 Locale/Charset：显式用 `StandardCharsets.UTF_8` / `Locale.US` / `Locale.forLanguageTag`。
 - 不依赖墙钟/随机/文件/网络；headless 安全，不加 `@key`。
 - `String.valueOf(Object)` 断言用同一实例对比 `obj.toString()`，避免非确定。
+
+## 契约深化（2026-11）
+
+本轮追加 15 个 test 方法（断言 251 → 441），核心是哈希精确值、异常消息逐字锁定、
+indexOf/replace/split 全形态矩阵、intern 闭环与 getBytes 字符集矩阵。
+
+### 新增维度
+
+- **equals/hashCode 契约**：`""`→0、`"a"`→97、`"abc"`→96354、经典碰撞对 `"Aa"`/`"BB"`→2112
+  （哈希相等但 equals false）；手算 `h = 31*h + c` 公式闭环；两次调用稳定；
+  `"abc".equals(StringBuilder)` false 而 `contentEquals` true 的分叉。
+- **索引族负例消息逐字锁定（8 vs 27 实测差异，MODERN 分支）**：
+  - JDK-8：`charAt(-1)` → `"String index out of range: -1"`；`substring(-1/4/3,2)` 均为
+    `"String index out of range: -1"`（begin/end-1 算术后的差值）；`subSequence(1,4)` → `"...: 4"`。
+  - JDK-27：`charAt(-1)` → `"Index -1 out of bounds for length 3"`；substring/subSequence/getChars →
+    `"Range [begin, end) out of bounds for length n"`；`codePointBefore(0)` → `"Index -1 ..."`（注意是 -1 非 0）。
+  - `offsetByCodePoints` 越界两侧均为**无消息**的 `IndexOutOfBoundsException`；`codePointCount`
+    越界 8 侧无消息、27 侧为 Range 形式。
+- **indexOf/lastIndexOf 全形态**：char/String × fromIndex（前后/负/超长全部容错不抛）；
+  `"abc".indexOf("", 99) == 3`（空针 fromIndex 钳到 length）；`"aaa".indexOf("aa", 1) == 1`。
+- **replace 两形态**：`replace(char,char)`/`replace(CS,CS)` 无命中**返回 this（== 实测两侧均真）**；
+  `"aaa".replace("aa","b") == "ba"`（从左到右不重叠）；空针 `"aaa".replace("","-") == "-a-a-a-"`。
+- **split limit 矩阵**：`"a,b,,"` limit0→2 元素 / limit -1→4（保留尾空）；`",,"` limit0→0 / -1→3；
+  `"".split(",")`→`[""]`（1 元素）；`",a"`→`["","a"]`；`"\\."` 元字符。
+- **matches 正则语义**：`.` 不匹配 `\n`（无 DOTALL）、内联 `(?s)` 可匹配、`"".matches("")` true。
+- **trim 空白表**：trim 只去 `<= U+0020`（NUL/U+001F/VT/FF 全去）；U+2003 与 U+00A0 均不去
+  （两侧一致，length 断言）；无变化返回 this。
+- **intern 闭环（JLS 3.10.5）**：`"a"+"b"` 常量折叠 == "ab"；运行时拼接 != 但 intern() == "ab"；
+  substring/StringBuilder 派生串 intern 同归字面量；两个运行时实例 intern 到同一实例。
+- **format 矩阵（Locale.ENGLISH）**：`%05d`→"00042"、`%,d`→"1,234,567"、`%,.2f`、`%x/%X/%o`、
+  `%b(null)`→"false"、`%c(65)`→"A"、`%s null`→"null"、`%%`、`%n`（只断非空）、`%-6d`、`%+d`、
+  `%e`→"1.234568e+03"、`%g` 小/大值两种科学计数、`%5.3s` 截断。
+- **getBytes 字符集矩阵**：UTF-8 `"中"`→3 字节首字节 0xE4（E4 B8 AD）；US-ASCII 不可映射→0x3F '?'；
+  补充平面 U+1D11E→4 字节；默认字符集 ASCII 往返。
+- **构造器族 round-trip**：`new String(int[]{0x1D11E})` == `"𝄞"`；
+  `new String(StringBuilder)` 快照独立；ctor/valueOf/copyValueOf 三路防御拷贝。
+- **regionMatches 容错**：越界一律返回 false 不抛（toffset 4/-1、组合越界）；
+  `regionMatches(3,"",0,0)`（toffset==len 的零长匹配）为 true。
+- **compareTo 精确差值**：`"a" vs "c"` == -2；前缀关系返回**长度差**（`"abc" vs "ab"` == 1，
+  不是 'c' 的值 99——任务书原文有误，以实测为准）；`"A" vs "a"` == -32；反对称精确。
+- **流内容精确**：`chars()`/`codePoints()` toArray 全等（代理对上 chars 给 UTF-16 单元
+  [0xD834,0xDD1E,0x61]、codePoints 解码 [0x1D11E,0x61]）；ASCII chars 经 int[] 构造器往返。
+
+### 易错规范细节（新增锁定）
+
+- 无变化优化返回 this 是**规范允许且两侧一致**的可断言行为（replace 两形态/trim/concat("")/
+  substring(0)/toUpperCase 无变化/valueOf(String)），已用 == 断言。
+- `"".split(",")` 返回**含一个空串的数组**（长度 1），不是空数组；`",,".split(",")` 才是空数组。
+- codePointBefore(0) 的 JDK-8 消息是 `"String index out of range: 0"`，JDK-27 是
+  `"Index -1 out of bounds for length n"`（27 内部把 index-1 再检查）。
+
+### 参考来源
+
+- Oracle javadoc（String.hashCode 公式、replace 返回 this 条款、split limit 语义、regionMatches 容错）。
+- JLS 3.10.5（字符串字面量 intern）、§3.10.6。
+- OpenJDK String 源码：JDK-9+ 越界消息改用 StringIndexOutOfBoundsException.checkIndex/Range 形式。
+- 双侧实测（/tmp 探针程序，jdk8u372-b07 vs jdk-27.0.1.0.2+1）。

@@ -51,3 +51,25 @@
 ## 注意事项
 
 - `System.setProperty` 用 try/finally 恢复，避免污染其他测试；headless 安全，不加 `@key`。
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增维度）
+- **parseBoolean 精确语义**：仅忽略大小写的 "true" 为 true——`"TRue"/"tRUe"` true，`"true1"/"1"/"0"/" true"/"true "/"null"` 全 false（**不 trim**）；`parseBoolean(null)==false` 永不抛异常。
+- **valueOf(String)** 与 parseBoolean 同规则返回 TRUE/FALSE 单例（`" true"`→FALSE 因无 trim）。
+- **compare 精确值**：compare(false,true)==-1、compare(true,false)==+1、同值 0；compareTo 返回值精确（-1/0/1）；compareTo(null)→NPE。
+- **单例与装箱**：`new Boolean(true) != Boolean.TRUE` 但 equals（构造器 9+ 弃用仍保留）；TRUE/FALSE 恒等；装箱 `Boolean b=null` 在条件中拆箱 → NPE。
+- **logicalAnd/Or/Xor 全真值表**（2×2×3 组合 + Java 运算符等价断言）+ compare 真值表。
+- **getBoolean 生命周期**：setProperty("true"/"TRUE"/"false"/"0") 各值路径 + clearProperty + 从未设置；try/finally 保存还原原值。
+- **hashCode/toString**：1231/1237 双侧、静态与实例一致；toString 拼接、String.valueOf 一致。
+
+### 使用方式
+`parseBoolean`/`valueOf(String)`（永不抛）→ `booleanValue`/装箱拆箱 → `compare`/`logicalXxx` → `getBoolean`（系统属性，try/finally 还原）。
+
+### 参考来源
+- Oracle javadoc（parseBoolean 仅 equalsIgnoreCase("true")；TRUE/FALSE 单例；hashCode 1231/1237）。
+- 双侧实测（Temurin 8u372 / 27.0.1）：compareTo(null) NPE、拆箱 NPE 行为一致（消息文本不同，仅锁类型）。
+
+### 测试用例设计 + 易错规范细节
+- 新增方法：`testParseMatrix`（10 parse + 6 valueOf + 5 往返）、`testCompareExact`（7 断言 + NPE）、`testSingletonAndBoxing`（13 断言 + 4×4 循环 + 拆箱 NPE）、`testLogicalMatrixFull`（16 断言）、`testGetBooleanLifecycle`（7 断言）、`testToStringForms`（4 断言）。
+- 易错点：**parseBoolean 不做 trim**（" true" → false）；valueOf(String) 与 parseBoolean 完全同规则；系统属性键用专属前缀 lcB.bool.* 并在 finally 中还原原值。

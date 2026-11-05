@@ -61,3 +61,20 @@
 ## 注意事项
 
 - headless 安全，不加 `@key`；结果确定；不依赖默认 Locale/时区。
+
+## 契约深化（2026-11）
+
+- **API 功能补充**：NFE 消息逐字契约；无符号算术除零消息在 JDK-8 走 BigInteger 路径
+  （`BigInteger divide by zero`）而 27 为 `/ by zero`（MODERN 分支锁定，共 6 变体）；
+  `toUnsignedString(v)` ≡ `new BigInteger(toBinaryString(v),2).toString()` 闭环。
+- **使用方式补充**：64 位位运算对偶环（rotateLeft(x,n)==rotateRight(x,64-n)）；
+  `Long.hashCode(1L<<32)==1`（XOR 折叠公式可反推）；废弃 `new Long` 跨实例 equals。
+- **参考来源**：实测 Temurin 8u372（消息与值全部运行时探测）；javap 双侧比对；JLS 5.1.7 缓存。
+- **新增用例（断言 158→401）**：`testNfeMessageContract`（35 条，含 6 个 MODERN 分支除零消息）、
+  `testParseRadixRoundTrip`（13 值×5 基）、`testToStringExactTable`（19 位 MAX、
+  `toOctalString(-255)=="1777777777777777777401"`、`toString(MIN,8)`）、`testDecodeMatrix`、
+  `testBitOpExactTable`（64 位 rotate、`rotateLeft(0x0123456789abcdef,8)==0x3456789abcdef012L`）、
+  `testUnsignedBigIntegerClosure`、`testValueOfCacheBoundary`、`testWhiteBoxStructural`、`testBoxing`。
+- **易错细节（跨版本）**：`remainderUnsigned(1L,0L)` 在 8 报 `BigInteger divide by zero`、27 报
+  `/ by zero`；负被除数 `divideUnsigned(-1L,0L)` 同理；null/`under radix` 消息差异同 Integer；
+  CS 重载 9+ only。

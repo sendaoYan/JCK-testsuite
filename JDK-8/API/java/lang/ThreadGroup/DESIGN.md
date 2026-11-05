@@ -56,3 +56,37 @@
 
 - 不调用已弃用的 `suspend`/`resume`/`stop`（有死锁/安全风险）；`allowThreadSuspension` 仅 no-op 调用。
 - headless 安全，不加 `@key`；不依赖 sleep 时序，全部用 CountDownLatch + 有界超时。
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增维度）
+- **maxPriority 钳制全表**：越界值（0/-1/11）整体忽略不生效；子组 setMaxPriority(10) 被父组 9 钳→9；
+  先降后升不能超父 max；父组升降会递归传播到已存在子组；孙组继承链。
+- **组 max 与线程 priority 双向**：组 max 4 时新建线程初始 priority 钳 4、setPriority(10)→4；
+  组 max 事后调低不影响已存在线程。
+- **activeCount/enumerate 精确**：latched worker 使 0→1→2→0 可精确断言（有界轮询）；
+  enumerate 一参递归 vs 两参仅本组；sentinel 槽位不被触碰；null 数组 NPE；ThreadGroup[] 枚举。
+- **destroy 真语义（8）**：空组成功 isDestroyed true；二次 destroy ITSE；销毁组内 new Thread/
+  new ThreadGroup ITSE；非空组 destroy ITSE；worker 死后可销毁。
+- **uncaughtException 路由**：组内线程异常先进组（identity 记录）→ 无 per-thread handler 时；
+  默认 handler 兜底；try/finally 还原全局默认。
+- **interrupt 选择性**：组 interrupt 命中组内 worker、不触碰其它组；递归到子组。
+- **toString 精确**：`"java.lang.ThreadGroup[name=fmt-exact,maxpri=10]"`（跟踪 setMaxPriority，
+  下限钳 MIN=1）。
+- **弃用成员在 8 仍存在**：suspend/resume/stop/allowThreadSuspension getDeclaredMethod 命中（不调用）。
+
+### 使用方式
+CountingGroup（继承既有 RecordingGroup 计数）+ awaitActiveCount 有界轮询；worker 全 daemon。
+
+### 参考来源
+双侧实测：钳制传播（父组 raise 传播到子组）经探针 3 次修正后锁定；27 对照（destroy no-op）。
+
+### 测试用例设计 + 易错规范细节
+- 新增 testNestedHierarchy/testMaxPriorityContract/testGroupMaxVsThreadPriority/testEnumeratePrecise/
+  testDestroySemantics/testUncaughtRoutingDeep/testInterruptGroupSelective/testListCapture 等（30→151 断言）。
+- 易错点：**顶层组可升回 10**（父是 main 组 max 10）；**越界 setMaxPriority 不钳制而是整体忽略**；
+  **父组升 max 会传播到子组**（递归传 pri）。
+
+- 易错点（jtreg 环境坑）：**default-handler 分支在根组的 ThreadGroup.uncaughtException 里**；jtreg 的
+  MainThreadGroup 覆写会拦截组链上的死异常并判负。default-routing 的 worker 锚定真实根组
+  （getParent() 链走到头）后行为与独立运行一致。RecordingGroup/CountingGroup 覆写后不再向上委托，安全。

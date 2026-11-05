@@ -22,3 +22,18 @@ Suit s = Enum.valueOf(Suit.class, "HEARTS");
 白盒：`Class.forName("java.lang.Enum")` 验证 abstract、父类 `Object`、实现 `Comparable`、`name/ordinal/equals/hashCode` final。
 黑盒：`values/valueOf`（含异常）；`ordinal/name`；`compareTo/equals/hashCode`（身份语义）；`getDeclaringClass`；常量特定类体。
 对应 `<Simple>Test.java` 黑盒部分。
+## 契约深化（2026-11）
+
+### API 功能（新增覆盖维度）
+与 JDK-8 侧同构：自造 Planet/Op/Severity/Color/Nothing/Labeled 六类枚举全维度契约；另含 12+ 侧 describeConstable/EnumDesc 契约（常量体枚举的 EnumDesc.constantName、constantName 经 valueOf round-trip）。
+
+### 使用方式
+同 JDK-8 侧；27 侧 NPE 消息走 helpful 分支：`compareTo(null)` → `Cannot invoke "Object.getClass()" because "other" is null`；`Enum.valueOf(null,name)` → `Cannot invoke "java.lang.Class.enumConstantDirectory()" because "enumClass" is null`。
+
+### 参考来源
+JLS 8.9；JEP 334（Constable/EnumDesc，12+）。
+
+### 测试用例设计 + 易错规范细节
+- 与 8 侧一致的模板断言（valueOf IAE 消息用 canonical name、compareTo 原始差值、序列化 == 单例、svuid 0L、防御拷贝、常量体 getDeclaringClass、Enum.class.isEnum()==false）。
+- **JDK-8 vs JDK-27 差异（实测锁定）**：NPE helpful message（8 侧 getMessage()==null）；27 侧 Enum 实现 Constable（describeConstable/EnumDesc 仅 27 可测）。
+- EnumTest.java 现有 PASS 断言：179。

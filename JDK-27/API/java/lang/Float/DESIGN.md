@@ -32,3 +32,27 @@
 - **边界**：`MIN_NORMAL/MIN_VALUE/MAX_VALUE` 位模式；`NaN!=NaN`、`equals` 按位模式（NaN==NaN、-0.0!=+0.0）；`compare(-0.0,0.0)<0`。
 - **异常**：`parseFloat(null)` 抛 NPE；空串/`abc`/`1.0.0`/`0x`/`f` 抛 NFE。
 - **健壮性**：用例确定、无全局副作用——不依赖墙钟/随机数/哈希迭代顺序/默认时区/地区；位模式断言精确（`floatToIntBits/intBitsToFloat`/`float16ToFloat`）；无文件/端口/线程/`System.exit`，适配多次运行、并跑、跨平台。
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增维度）
+- **parse 矩阵**：科学计数（`1e3`/`1.23E-10`）、`.5`/`5.` 两形态、尾随 `f/F/d/D` 全组合、十六进制浮点（`0x1.8p1`/`0x1.8P1`/`0x.8p1`/`0x1.0p-126`/`0x1.0p128`）、`+1.5`/`+Infinity` 前导加号、空白 trim（含 tab/换行与 `"  NaN  "`）、`-0.0` 符号位、上溢 ±Infinity/下溢 ±0.0（`-1e-50` 保符号 → -0.0）。
+- **位级 round-trip（招牌闭环）**：`floatToRawIntBits → intBitsToFloat` 对 12 个代表值（0.0/-0.0/MIN_VALUE/MIN_NORMAL/MAX_VALUE/NaN/±Inf/0.1 等）位不变还原；`floatToIntBits` NaN 规范化 0x7fc00000 vs `floatToRawIntBits` payload 保留（0x7fc12345）；signaling NaN 位型（0x7f800001）与负 NaN（0xffc00000）均 isNaN 且 != 自身；MAX/MIN_VALUE/MIN_NORMAL 十六进制位精确（0x7f7fffff/0x1/0x00800000）。
+- **compare 语义（JLS 4.2.3）**：`compare(-0.0,+0.0)==-1` 精确 -1、`0.0==-0.0` 为 true 而 compare 分叉；NaN 视为最大（compare(NaN,±Inf)==±1）、compare(NaN,NaN)==0；任意位型 NaN equals 规范 NaN。
+- **sum/min/max**（JDK-8 起即有，javap 双侧确认）：`sum(+0,-0)==+0.0`、`sum(-0,-0)==-0.0`、NaN 全组合传播、Inf+(-Inf)=NaN、MAX 溢出；`max(+0,-0)==+0.0`（位级断言）、`min(±0,∓0)==-0.0`。
+- **hashCode**：静态 `Float.hashCode(v)` == `floatToIntBits(v)` == 实例 hashCode；NaN 用规范位；±0.0 hash 不同。
+- **toString 版本差异（JDK-19+ Ry 最短表示）**：`Float.toString(bits 0x4c013604)` JDK-8 "3.3871888E7" vs JDK-19+ "3.387189E7"；`Float.toString(MIN_NORMAL)` "1.17549435E-38" vs "1.1754944E-38"——同文件 MODERN 分支各自锁定，且两侧 round-trip 恒等。
+- **toHexString**：全形态（0x1.0p0/-0x0.0p0/NaN/Infinity/MAX/MIN_VALUE/MIN_NORMAL）+ `parseFloat(toHexString(v))` 往返。
+- **数值转换（JLS 5.1.3）**：`(int)` NaN→0、±Inf→Integer.MAX/MIN、3.9→3、-3.9→-3；Number 五个 xxxValue 委托截断/饱和；float→double 无损（0.1f→0.10000000149011612）、double→float 舍入（(float)PI==3.1415927f、1e300→Inf）。
+
+### 使用方式
+`parseFloat`/`valueOf(String)`（NFE/NPE 分叉）→ `floatToIntBits`/`intBitsToFloat` 位级闭环 → `compare`/`equals`/`hashCode` → `toString`/`toHexString` 往返 → `(int)`/Number.xxxValue 截断矩阵。
+
+### 参考来源
+- Oracle javadoc（parseFloat 语法、floatToIntBits NaN 规范化、hashCode 公式、JLS 4.2.3/4.2.4/5.1.3）。
+- JDK-4511638/JDK-8193804（JDK-19 起 Float/Double.toString 最短表示，Ryū 算法）。
+- 双侧实测（Temurin 8u372 / 27.0.1）：toString 差异样本、Unicode 表、NFE/NPE 均为运行时实测值。
+
+### 测试用例设计 + 易错规范细节
+- 新增方法：`testParseMatrix`（21 正例 + 12 往返 + 11 NFE + 2 NPE）、`testBitRoundTrip`（12 值×位不变 + 9 位级断言）、`testCompareSemantics`、`testClassificationMatrix`（静态+实例 5×5）、`testSumMinMaxDetails`（±0/NaN 位级）、`testHashCodeContract`、`testToStringAndHex`（含 MODERN 分支）、`testNumericConversions`。
+- 易错点：**parseFloat(null) 抛 NPE 而非 NFE**（双侧锁定）；空串/纯空白 NFE 消息 "empty String"，多数非法输入 `For input string: "..."`，双小数点 "multiple points"（双侧一致）；`new Float(x)` 不缓存（!= 但 equals），valueOf 缓存规范未承诺不做 == 断言；JDK-8 源码中增补字符一律写代理对转义。

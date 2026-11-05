@@ -53,3 +53,25 @@
 
 - 不断言 `getImplementationVersion()/getImplementationVendor()` 的精确值（随构建商变化），仅断言非 null。
 - headless 安全，不加 `@key`；结果确定。
+
+## 契约深化（2026-11）
+
+### 1. API 功能（本轮新增维度）
+- 实例语义：同包类共享 Package 实例（String/Integer/Object/Runnable/新加载 StringBuilder 同一实例）；**实测锁定：Package 为值对象——静态 Package.getPackage 在发生过 getPackages() 枚举后可能返回内容相同的新实例，跨 API 只断内容相等**；hashCode==name.hashCode()（规范）；equals 为 Object 同一性（未覆写）。
+- manifest 属性（JDK-8 锁定，temurin 8u372 rt.jar）：specTitle "Java Platform API Specification"、specVer "1.8"、specVendor "Oracle Corporation"、implTitle "Java Runtime Environment"、implVer/implVendor 非空；toString "package java.lang, Java Platform API Specification, version 1.8" 精确；classpath 加载 isSealed()==false。
+- isCompatibleWith 版本比较矩阵（1.8 为基）：1.8/1.7/1/1.0/0.9/1.8.0 兼容；1.9/1.10（数值比较非字典序）/2 不兼容；"" → NumberFormatException 'For input string: ""' 精确；null → NPE；非数字 → NFE。
+- definePackage 契约闭环（不受 manifest 影响的确定性路径）：全 getter 回读、toString "package <n>, <specTitle>, version <specVer>" 精确、hashCode==name hash、null sealBase → 不密封、URL sealBase → isSealed、null specVersion isCompatibleWith → NFE、重复定义 → IllegalArgumentException、子 loader 包对 system loader 不可见（命名空间隔离）。
+- 静态查找：getPackage 缺失 → null、getPackage(null) → NPE、getPackages 包含 java.lang/java.util。
+
+### 2. 使用方式
+静态嵌套 PkgLoader fixture（definePackage 全参暴露）。
+
+### 3. 参考来源
+Oracle javadoc（Package.toString 拼接规则、isCompatibleWith 数值比较、hashCode=name hash）；JDK-8 源码（Manifest 版本解析、NumberFormatException 消息）；双侧实测。
+
+### 4. 测试用例设计 + 易错规范细节
+- **易错 1**：Package 实例身份不跨枚举稳定（值对象）——断言 toString/hashCode/equals 内容而非 ==（同 loader 同时刻的 Class.getPackage 间仍可断 ==）。
+- **易错 2**：isCompatibleWith 逐段数值比较："1.10" > "1.8"；尾随段缺失视为更小（1.8.0 >= 1.8）。
+- **易错 3**：空串版本 NFE 消息走 Integer.parseInt 路径（'For input string: ""'），与 27 的 "Empty version string" 不同。
+- **易错 4**：manifest 属性值与构建厂商相关——只锁 spec 三项（规范固定），implVendor/implVersion 断非空。
+- 覆盖：testPackageIdentity/testManifestAttributesExact/testDefinedPackageContract。

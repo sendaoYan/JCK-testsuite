@@ -50,3 +50,27 @@
 ## 注意事项
 
 - headless 安全，不加 `@key`；结果确定；不涉及 JDK-12+ 的 `describeConstable()`。
+## 契约深化（2026-11）
+
+### API 功能（新增覆盖维度）
+自造五类枚举（Planet 字段+带参构造+派生方法、Op 常量体实现抽象方法、Severity 实现接口、Color 简单枚举、Nothing 空 enum、Labeled 覆写 toString）：values() 防御拷贝、valueOf 精确异常消息、compareTo 原始差值与 null/跨枚举负例、序列化单例保持、switch 全分支、Class.isEnum 层面、编译器合成成员白盒。
+
+### 使用方式
+`Color.values()` 每次返回新数组（改元素不影响后续调用）；`Color.valueOf("NOPE")` 抛 IAE，消息逐字 `No enum constant EnumTest.Color.NOPE`（**用的是 getCanonicalName()，嵌套枚举为点分形式，非 getName() 的 $ 形式**）。
+
+### 参考来源
+JLS 8.9（枚举）；Enum.valueOf javadoc（IllegalArgumentException "No enum constant ..."）；java.io.Enum 序列化规范（枚举按 name 序列化，svuid 固定 0）。
+
+### 测试用例设计 + 易错规范细节
+- **compareTo 返回原始 ordinal 差**：`RED.compareTo(BLUE) == -2`（非 Integer.compare 的归一化 -1）。
+- **compareTo(null) → NPE**：JDK-8 消息为 `null`（getMessage()==null），JDK-14+ 为 helpful message（本侧 MODERN=false 走 null 分支）。
+- **Enum.valueOf(cls, null) → NPE 消息两侧一致 "Name is null"**；Enum.valueOf(null, name) 8 侧消息 null。
+- **跨枚举 compareTo（raw 类型）→ ClassCastException**。
+- **values() 防御拷贝**：两次调用返回不同数组引用；置空元素后再调 values() 完好。
+- **序列化往返 == 原常量**（单例保持，与 record 的 equals 语义相对）；`ObjectStreamClass.lookup(任意枚举).getSerialVersionUID() == 0L`。
+- **常量体 getDeclaringClass() == 枚举自身**（getClass() 是匿名子类，二者对照锁定）。
+- 覆写 toString 不影响 name()；默认 toString == name()。
+- 空 enum values().length==0 且 valueOf 负例消息同模板。
+- Enum.class.isEnum() == false（Enum 本身不是枚举）；String/Thread.State 对照。
+- 白盒：Enum.clone()/finalize() protected final、toString 非 final（可覆写）、唯一 protected Enum(String,int) 构造器、编译器合成 static values()/valueOf(String)。
+- EnumTest.java 现有 PASS 断言：172。

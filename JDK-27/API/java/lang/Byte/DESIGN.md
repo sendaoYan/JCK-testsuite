@@ -30,3 +30,17 @@
 - **边界**：`MIN_VALUE/MAX_VALUE`；全区间缓存（-128/0/127 同引用）；`toUnsignedInt(-1)==255`、`toUnsignedInt(MIN)==128`。
 - **异常**：`NumberFormatException`（空串、空白、溢出 128/-129、`ff` 十六进制超出 byte、非法 radix、`decode` 前缀残缺）。
 - **健壮性**：用例确定、无全局副作用——不依赖墙钟/随机数/哈希迭代顺序/默认时区/地区；无文件/端口/线程/`System.exit`，适配多次运行、并跑、跨平台。
+
+## 契约深化（2026-11）
+
+- **API 功能补充**：NFE 消息逐字契约（`Value out of range. Value:"128" Radix:10`）；
+  **全范围缓存**的完整 256 值双循环（`valueOf(b)==valueOf(b)` 引用相同 + `toString/parseByte` 往返）；
+  `Byte.compareUnsigned`（9+，直接调用）方向表。
+- **使用方式补充**：`Byte.toString((byte)128).equals("-128")`（写 128 读 -128 回环）；
+  `Byte.valueOf((byte)128)==Byte.valueOf((byte)-128)`（同一位模式缓存同一引用）。
+- **参考来源**：实测 jdk-27.0.1.0.2；javap 确认 `Byte.compareUnsigned` 9+ 存在；JLS 5.1.7。
+- **新增用例（断言 106→749）**：`testFullRangeCache`（2×256 循环）、`testNfeMessageContract`、
+  `testNarrowingWidening`、`testValueOfCacheBoundary`（new Byte 跨缓存实例）、
+  `testCompareUnsignedTable`（原生直接调用）、`testWhiteBoxStructural`、`testBoxing`。
+- **易错细节**：Byte 无 radix 版 `toUnsignedString`；`(byte)(Byte.MAX_VALUE+1)` 编译期折叠窄化；
+  null/`under radix` 消息差异同 Integer。

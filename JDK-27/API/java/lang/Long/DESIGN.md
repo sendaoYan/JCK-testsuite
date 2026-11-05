@@ -33,3 +33,20 @@
 - **边界**：`MIN_VALUE/MAX_VALUE`；`bitCount/highestOneBit/lowestOneBit/numberOfLeadingZeros` 在 0、-1、MIN_VALUE；`compareUnsigned(-1L,0L)>0`；`valueOf` 缓存 -128..127。
 - **异常**：`NumberFormatException`（空串、空白、`L` 后缀、溢出、非法 radix、`decode` 前缀残缺）；`ArithmeticException`（`divideUnsigned/remainderUnsigned` 除零）。
 - **健壮性**：用例确定、无全局副作用——不依赖墙钟/随机数/哈希迭代顺序/默认时区/地区；无文件/端口/线程/`System.exit`，适配多次运行、并跑、跨平台。
+
+## 契约深化（2026-11）
+
+- **API 功能补充**：NFE 消息逐字契约（null → `Cannot parse null string`、`under radix` 后缀）；
+  无符号除零统一 `/ by zero`（8 侧 BigInteger 路径报 `BigInteger divide by zero`，双侧不同）；
+  `toUnsignedString` 与 BigInteger 二进制串闭环；64 位 rotate 对偶环。
+- **使用方式补充**：`parseLong(CharSequence,int,int,int)`（9+）：`Error at index 15 in: "8000000000000000"`
+  （消息含子串）；无符号 CS 可到 2^64-1。
+- **参考来源**：实测 jdk-27.0.1.0.2（消息与值逐字探测）；javap 双侧比对。
+- **新增用例（断言 191→432）**：`testNfeMessageContract`（含 6 个除零消息 MODERN 分支）、
+  `testParseCharSequenceRange`、`testParseRadixRoundTrip`、`testToStringExactTable`（19 位 MAX、
+  `toOctalString(-255L)=="1777777777777777777401"`）、`testDecodeMatrix`、`testBitOpExactTable`
+  （64 位 rotate、`rotateLeft(0x0123456789abcdef,8)==0x3456789abcdef012L`）、
+  `testUnsignedBigIntegerClosure`、`testValueOfCacheBoundary`（`Long.hashCode(1L<<32)==1`、
+  new Long 跨缓存实例）、`testWhiteBoxStructural`、`testBoxing`。
+- **易错细节（跨版本）**：27 除零消息 `/ by zero` vs 8 `BigInteger divide by zero`；null/`under radix`
+  差异同 Integer；`toString(MIN,8)=="-1000000000000000000000"`（22 位含负号）。

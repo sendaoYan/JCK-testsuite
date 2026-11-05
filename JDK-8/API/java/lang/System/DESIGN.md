@@ -56,3 +56,48 @@
 
 - 不调用 exit/halt/System.exit；properties 测试用专属键并在末尾 clear 清理，不改全局其它键。
 - headless 安全，不加 `@key`；currentTimeMillis 用宽松范围断言（避免墙钟依赖）。
+
+## 契约深化（2026-11）
+
+### 1. API 功能（本轮新增维度）
+
+- **arraycopy 完整矩阵**：8 种基本类型 + 引用数组在 8 组重叠窗口 `{{0,3,5},{2,0,5},{1,4,4},{3,3,3},{0,1,6},{5,0,5},{1,3,4},{2,6,4}}` 下的快照断言；同数组别名拷贝；二维数组整行拷贝；`String[]→Object[]` 协变；`srcPos>length` 但 `len==0` 合法；`MIN_VALUE/MAX_VALUE` 长度负例。
+- **arraycopy 异常时序**：ASE 元素级检查——length-3 首元素不兼容立即抛出且目标 `array[0]` 保持原值；`Integer[]→String[]` 单个 null 元素穿越触发 ASE。
+- **properties 活表**：`getProperties()` 返回 live table，对它的 `put` 与 `System.setProperty` 互相立即可见；24 个标准键非 null。
+- **getenv**：PATH 存在；两次 `getenv()` 返回同一实例（视图身份）；`put/putAll/remove/entrySet().add` 全部 `UnsupportedOperationException`。
+- **identityHashCode**：`null==0`；覆写 `hashCode()` 的类只断稳定性（不断具体值）；`identityHashCode(a) != a.hashCode()` 分歧实证。
+- **SecurityManager 缺席**：`getSecurityManager()==null`（JDK-8 测试全程不安装）。
+- **load/loadLibrary 负例**：精确消息锁定（见下）。
+
+### 2. 使用方式
+
+```java
+Properties live = System.getProperties();   // live table：修改立即全局可见
+System.load("/tmp/definitely-missing-lib"); // 抛 UnsatisfiedLinkError，消息含路径
+```
+
+### 3. 参考来源
+
+- 实测 Temurin 8u372（探针目录 /tmp/lcF）：全部精确消息、重叠窗口期望值、活表语义均先实测再断言。
+- Oracle Java SE 8 javadoc（System / Properties / arraycopy 类型检查规则）。
+- JDK-27 侧同套探针对照（消息文本差异见下）。
+
+### 4. 测试用例设计（映射到 SystemTest.java 新增方法）+ 易错规范细节
+
+| 测试点 | 用例方法 |
+|---|---|
+| 8 原始类型 + 引用数组重叠矩阵、别名、2D 行、协变 | testArraycopyMatrix |
+| IOOBE 5 形态、ASE 元素级时序、null 元素穿越 | testArraycopyExceptions |
+| len==0 越界合法、MIN/MAX 长度负例 | testArraycopyEdges |
+| currentTimeMillis/nanoTime 弱契约 | testTimeWeak |
+| 24 标准键、活表 put/setProperty 互见（finally 清理） | testPropertiesContract |
+| PATH、视图身份、4 种变更 UOE | testEnvContract |
+| null==0、稳定性、内容 hash 分歧 | testIdentityHashCodeContract |
+| getSecurityManager()==null | testSecurityManagerAbsent |
+| load/loadLibrary 精确消息 | testLoadNegatives |
+| mapLibraryName、流类型、flush | testMiscSurface |
+
+- **易错**：JDK-8 侧 arraycopy 的 AIOOBE/ASE **消息为 null**（JDK-27 有 "arraycopy: ..." 文本，分支锁定）。
+- **易错**：ASE 时序按实测断——首元素不兼容即抛，已写入元素保留。
+- **易错**：`loadLibrary` 消息 8 侧精确为 `no lcFNoSuchLib in java.library.path`（27 侧追加 `: <pathlist>`，用前缀匹配）。
+- **易错**：活表测试必须 `finally` 清理专属键；`setProperty` 断言首次 null、之后旧值。

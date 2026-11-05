@@ -68,3 +68,24 @@
 ## 注意事项
 
 - headless 安全，不加 `@key`；结果确定；不做真正多线程竞争（只断言方法含 synchronized 修饰符）。
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增覆盖）
+- 与 StringBuilder 同套矩阵（独立成文不共用 harness）：append 全家精确值（boolean/char/int/long/float/double 边界值/String/char[] 全量与区间/CharSequence 四种来源 + 切片/`append(StringBuffer)`/自追加/appendCodePoint 0/0xFFFF/0x10FFFF/0x1D11E）；insert 全家（合法位 + 返回 this + null 三形态 + null 切片）；delete/deleteCharAt/replace 矩阵；setCharAt/setLength（补 NUL/丢尾/append 落点）；reverse 矩阵（代理对成对整体反转）；codePoint 家族代理对全边界；substring/subSequence（返回 String）；indexOf/lastIndexOf 边界（空串/clamp/负 from/代理 needle）；toString 快照独立 + 每次新实例（toStringCache 每次重新分配）；equals/hashCode 未覆写；CharSequence 多态视图；capacity 契约（16/len+16/0/ensureCapacity 不减/trimToSize==length）。
+- `append((StringBuilder)null)`（经 CharSequence 重载）→ `"null"`。
+
+### 使用方式
+- 同前；新增 `expectExact`（异常类名+消息逐字）与 `MODERN` 常量编码两侧差异。
+
+### 参考来源
+- Oracle javadoc StringBuffer（线程安全契约、toString 每次新分配）；JDK-8 与 JDK-27 双侧实测锁定异常类与消息。
+
+### 测试用例设计 + 易错规范细节（本轮锁定）
+- **StringBuffer 全套矩阵行为与 StringBuilder 完全一致**（同一 AbstractStringBuilder 内核，仅加 synchronized）：所有越界异常类与消息两侧逐字同 StringBuilder（含 `append(char[],off,len)` JDK-8 AIOOBE / JDK-27 纯 IOOBE、`insert(off,char)` JDK-8 AIOOBE / JDK-27 SIOOBE、`insert(off,csq,s,e)` JDK-8 纯 IOOBE `dstOffset n` / JDK-27 SIOOBE）。
+- **`setLength(-1)` 消息 `String index out of range: -1` 两侧逐字相同**；`offsetByCodePoints` 越界两侧均为纯 IOOBE + null 消息。
+- **`delete(2,1)` JDK-8 消息 null**；`replace(2,1,..)` JDK-8 `start > end`；`getChars(2,1,..)` JDK-8 `srcBegin > srcEnd`；JDK-27 均为 Range 消息。
+- **toString 每次返回新 String 实例**（toStringCache 缓存的是值不是对象；append 后缓存失效）—— 与 StringBuilder 一致，已断言 `s1 != s2`。
+- **自追加**：`new StringBuffer("ab").append(自身)` → `"abab"`。
+- **线程安全只做结构性断言**（方法 synchronized 修饰符），不做并发行为断言。
+- **`new StringBuffer(-1)`**：两侧 NegativeArraySizeException（JDK-8 消息 null / JDK-27 `-1`）。

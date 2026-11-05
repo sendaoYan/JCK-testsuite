@@ -34,3 +34,20 @@
 - **边界**：`MIN_VALUE/MAX_VALUE` 解析与格式化；`bitCount/highestOneBit/lowestOneBit/numberOfLeadingZeros` 在 0、-1、MIN_VALUE；`compareUnsigned(-1,0)>0`；`valueOf` 缓存 -128..127 同引用、越界不同引用但 `equals` 相等。
 - **异常**：`NumberFormatException`（空串、空白、下划线、溢出、非法 radix、`decode` 前缀残缺）；`ArithmeticException`（`divideUnsigned/remainderUnsigned` 除零）。
 - **健壮性**：用例确定、无全局副作用——不依赖墙钟/随机数/哈希迭代顺序/默认时区/地区；`System.setProperty`（`getInteger`）用 `try/finally` 恢复；无文件/端口/线程/`System.exit`，适配多次运行、并跑、跨平台。
+
+## 契约深化（2026-11）
+
+- **API 功能补充**：NFE 消息逐字契约（27 特有：null → `Cannot parse null string`；非 10 基失败追加
+  ` under radix N` 后缀）；`parseInt(CharSequence,int,int,int)`（9+ 重载）的值与异常契约：
+  `parseInt("42",1,2,10)==2`、`"7fffffff",0,8,16==MAX`、NFE `Error at index 0 in: "ab"`
+  （消息含被解析**子串**而非整个 CS）、越界抛 `StringIndexOutOfBoundsException`
+  `Range [0, 5) out of bounds for length 2`。
+- **使用方式补充**：`checkIndexMsg` 辅助器统一 IndexOutOfBounds 消息比对；无符号 CS 形式可解析到 2^32-1。
+- **参考来源**：实测 jdk-27.0.1.0.2（消息逐字探测）；javap 确认 9+ 才有 CS 重载；JDK-8 对照面。
+- **新增用例（断言 224→500）**：`testNfeMessageContract`（35 条精确消息，MODERN 分支）、
+  `testParseCharSequenceRange`（CS 直接调用 + `Error at index`/`Range [...]` 消息）、
+  `testParseRadixRoundTrip`、`testToStringExactTable`、`testDecodeMatrix`、`testBitOpExactTable`、
+  `testUnsignedArithmeticTable`、`testValueOfCacheBoundary`、`testWhiteBoxStructural`、`testBoxing`。
+- **易错细节（跨版本）**：27 的 `parseInt(null)` 消息为 `Cannot parse null string`（8 为 `null`）；
+  27 的 `Integer.parseInt("z",16)` 消息为 `For input string: "z" under radix 16`（8 无后缀）；
+  CS 消息引用子串；`divideUnsigned(-1,1)==-1`（位模式 0xFFFFFFFF，非 MAX_VALUE）。

@@ -54,3 +54,17 @@
 ## 注意事项
 
 - headless 安全，不加 `@key`；结果确定；不依赖默认 Locale/时区。
+
+## 契约深化（2026-11）
+
+- **API 功能补充**：NFE 消息逐字契约（`Value out of range. Value:"128" Radix:10`）；
+  **全范围缓存**的完整 256 值循环验证（两个 for 循环 -128..127：`valueOf(b)==valueOf(b)` 引用相同 +
+  `toString/parseByte` 往返）；JLS 5.1.3 窄化。
+- **使用方式补充**：`Byte.toString((byte)128).equals("-128")`（写 128 读 -128 回环）；
+  `Byte.valueOf((byte)128)==Byte.valueOf((byte)-128)`（同一位模式的缓存同一引用）。
+- **参考来源**：实测 Temurin 8u372；javap 确认 8 无 `Byte.compareUnsigned`/CS 重载；JLS 5.1.7。
+- **新增用例（断言 77→734）**：`testFullRangeCache`（2×256 循环）、`testNfeMessageContract`、
+  `testNarrowingWidening`、`testValueOfCacheBoundary`（new Byte 跨缓存实例）、
+  `testCompareUnsignedTable`（Integer.compareUnsigned 兜底）、`testWhiteBoxStructural`、`testBoxing`。
+- **易错细节**：Byte 无 radix 版 `toUnsignedString`（只有 toUnsignedInt/toUnsignedLong）；
+  `(byte)(Byte.MAX_VALUE+1)` 是编译期常量折叠窄化；null 消息/`under radix` 后缀差异同 Integer。

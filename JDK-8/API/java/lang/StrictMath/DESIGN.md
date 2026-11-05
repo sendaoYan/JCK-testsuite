@@ -68,3 +68,39 @@
 
 - 三角/对数结果用 `checkClose`（1e-14 相对容差）而非精确相等；特殊值（NaN/Inf/±0.0）用精确断言。
 - headless 安全，不加 `@key`；不调用 `random()`（非确定）。
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增覆盖）
+
+- 与 Math 侧同一套契约矩阵全部以 `StrictMath.*` 重锁：round 半分向 +无穷、floorDiv/floorMod 四象限+恒等式循环、
+  精确算术族（JDK-8 StrictMath 仅有 add/subtract/multiply/toIntExact）溢出消息、abs/min/max 位级 ±0.0、
+  floor/ceil/rint half-to-even、sqrt/cbrt/pow/hypot 特殊值全表、三角精确点+容差、exp/log 特殊值、
+  signum/ulp/scalb/next 族边界、getExponent 边界、E/PI 字符串+位模式、IEEEremainder。
+- **新增维度**：`testMathStrictMathAgreement` —— Math 与 StrictMath 同入参同返回的逐点位级比对（约 80 点）。
+
+### 使用方式
+
+- `StrictMath` 保证跨平台 bit 级一致；javadoc 只承诺 Math 与 StrictMath 各自在真值 0.5~1 ulp 内，**不承诺两者相等**，
+  但在大量点位上实测位级相同——相等点锁位级、已知分叉点（exp(1)）锁容差，是可移植代码可以依赖的实证边界。
+
+### 参考来源
+
+- Java SE 8/最新 `StrictMath` javadoc + Temurin 8u372 与 JDK 27.0.1 双侧实测（/tmp 探针 diff）。
+- javap 确认 JDK-8 StrictMath 缺 `incrementExact/decrementExact/negateExact`（Math-8 有）与 fma（两侧 Math/StrictMath 均无，Java 9 引入）。
+
+### 测试用例设计 + 易错规范细节（已锁入断言，含对旧文档的勘误）
+
+- **勘误**：旧文档称 `floorDiv(MIN,-1)` "JDK-9+ 才抛 ArithmeticException"——实测 **两侧都不抛**：JDK-8 与 JDK-27 的
+  `StrictMath.floorDiv(Integer.MIN_VALUE,-1)`/`(Long.MIN_VALUE,-1L)` 都回绕返回 `MIN_VALUE`（javadoc 明示该特例）。
+- **`StrictMath.exp(1.0) != StrictMath.E`**（差 1 ulp，两侧一致）；而 `Math.exp(1.0)==Math.E` 精确（HotSpot 内在实现）——
+  同一方法名两个类给出不同位型，均各自满足规格的 1 ulp 承诺；断言只能用容差 `|exp(1)-E|<=1e-15`。
+- Math vs StrictMath 一致性（约 80 点双侧位级相同，已逐点锁定）：abs/min/max（含 ±0.0 位级）、exact 全族、floorDiv/Mod、
+  floor/ceil/rint（含 `ceil(-0.5)==-0.0` 位级）、sqrt(2)/pow(2,0.5)/cbrt、hypot(3,4)/(5,12)、signum(-0.0)、copySign/scalb/ulp/next 族/
+  getExponent、toRadians/toDegrees、sin/cos/tan@{0,1,pi/2,pi/6}、asin/acos/atan/atan2、exp(0)/log(1)/log10、expm1(1)/log1p(0.5)/
+  sinh(1)/tanh(1)、IEEEremainder。唯一已知分叉 exp(1) 以容差收尾。
+- 溢出消息逐字同 Math：`"integer overflow"`（int 族与 toIntExact）、`"long overflow"`、除零 `"/ by zero"`——两侧一致。
+- JDK-8 StrictMath **不得**测 `incrementExact/decrementExact/negateExact/fma/floorDiv(long,int)`（API 不存在，javap 已证）；
+  27 侧文件全测。
+- 其余易错点（round(-1.6)==-2、pow(±1,±Inf)==NaN、nextDown(1.0)==1-2^-53、ulp(MAX_VALUE)==2^971 不锁 toString 等）与 Math 侧 DESIGN 同源同值。
+- 本轮断言数 97 → 634（该文件只用 JDK-8 面 API，故在 JDK-8 与 JDK-27 运行时均 PASS）。

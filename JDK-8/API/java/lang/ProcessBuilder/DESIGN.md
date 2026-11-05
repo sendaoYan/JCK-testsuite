@@ -54,3 +54,26 @@
 
 - 真实进程只用 `sh -c "echo hello"`（立即退出）；不重定向到磁盘文件后再依赖内容（只验证 type/file 元数据）。
 - headless 安全，不加 `@key`；不绑定端口、不联网、不 System.exit。
+
+## 契约深化（2026-11）
+
+### API 功能
+- 命令装配：`command(String...)`/`command(List)`/`command()` 的往返、链式返回 this、返回列表的活性（live view）。
+- 环境与目录：`environment()` 可变 Map 的 put/remove/get 语义与跨 builder 独立性；`directory()` 默认 null 与往返。
+- 重定向族：`redirectInput/Output/Error` 的 Redirect 与 File 形态、`Redirect.from/to/appendTo` 工厂、`Redirect.Type` 枚举（PIPE/INHERIT/READ/WRITE/APPEND 共 5 值，两侧一致）、`inheritIO`、`redirectErrorStream`。
+- 真子进程闭环：`java.home/bin/java -version`、样本类 Out/Cat/Env 的 stdout 重定向文件 round-trip、appendTo 计数、redirectInput 文件喂入、环境变量注入与 cwd 验证。
+
+### 使用方式
+子进程一律用 `System.getProperty("java.home")+"/bin/java"`（JDK-8 指向 `<jdk>/jre`，javac 需回退到 `<jdk>/bin/javac`），避免跨 JDK 混淆；样本源码写入 `/tmp/lcG-pb8-<nano>` 独立目录，由同一 JDK 的 javac 编译，main 的 finally 递归删除；所有子进程均 waitFor。
+
+### 参考来源
+Oracle javadoc `java.lang.ProcessBuilder`（Redirect 语义、environment 快照说明）；两侧 OpenJDK 实测（Temurin 8u372 / 27.0.1）。
+
+### 测试用例设计 + 易错规范细节
+- `command(List)`/List 构造器**按引用保存调用方列表**（`pb.command() == callerList`），varargs 形态返回可变内部列表——传 `Arrays.asList` 后 `add` 会 UOE（8 与 27 实测一致，锁定）。
+- `Redirect.appendTo(f).type()` 是 `Type.APPEND`（不是 WRITE），`to != appendTo` 但各自 equals/hashCode 稳定；`PIPE/INHERIT.file()==null`、toString 分别为 "PIPE"/"INHERIT"，to/appendTo 的 toString 描述含 "write to file"/"append"。
+- JDK-8 无 `Redirect.DISCARD`（JDK-9+ 才有，反射锁定 NoSuchFieldException）；`startPipeline` 缺席（既有断言）。
+- 负例实测：命令不存在 → IOException `Cannot run program "名字": error=2, No such file or directory`（27 为 `Exec failed, error: 2 (...)`，前缀 `Cannot run program "<name>"` 两侧一致故锁前缀）；空命令 start → ArrayIndexOutOfBoundsException（8 消息 "[0]"，27 为 "[Index 0 out of bounds for length 0]"，只锁类型）；目录不存在 → IOException 含 `(in directory "<dir>")`；`command((String[])null)`/`command((List)null)`/`new ProcessBuilder((List)null)`/`redirectXxx(null)`/`Redirect.from/to/appendTo(null)` 均 NPE。
+- `environment()` 同一 builder 返回同一 live Map（`==` 成立）；put(null,·)/put(·,null) NPE；初值 PATH 与 `System.getenv("PATH")` 相等。
+- 环境闭环：父进程 put LCG_VAR → 子进程 Env 打印同值；directory() 与子进程 `new File(".").getCanonicalPath()` 精确相等。
+- `ProcessBuilder.toString()` 是 Object 默认形态（`java.lang.ProcessBuilder@hex`），不含命令内容。

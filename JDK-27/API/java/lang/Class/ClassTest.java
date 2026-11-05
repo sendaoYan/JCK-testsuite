@@ -18,6 +18,27 @@ public class ClassTest {
     public static class PublicMember {}
     static interface Iface extends Runnable {}
 
+    // ===== 契约深化（2026-11）新增 fixtures =====
+    interface IOne {}
+    interface ITwo {}
+    static class Base { public static final int PUB = 1; }
+    static class Derived extends Base {}
+    public static class TwoIface implements IOne, ITwo {}
+    public static class NewInst { public NewInst() {} }
+    static class PrivCtor { private PrivCtor() {} }
+    public static class CtorArgs {
+        public final int sum;
+        public CtorArgs(int a, int b) { sum = a + b; }
+    }
+    static class Overload {
+        public void foo(int x) {}
+        public void foo(Integer x) {}
+    }
+    static class InitCounter { static int count; }
+    static class InitTarget { static { InitCounter.count++; } }
+    record Point(int x, String tag) {}
+
+
     static int passed;
 
     static void check(boolean cond, String msg) {
@@ -305,6 +326,629 @@ public class ClassTest {
         check(int[].class.toString().equals("class [I"), "toString array");
     }
 
+    // ===== 契约深化（2026-11）新增断言 =====
+
+    static boolean hasMethodNamed(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getMethods()) if (m.getName().equals(name)) return true;
+        return false;
+    }
+
+    static boolean hasDeclaredMethodNamed(Class<?> c, String name) {
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (m.getName().equals(name)) return true;
+        return false;
+    }
+
+    static void testPrimitiveNameMatrix() {
+        Class<?>[] prims = { boolean.class, byte.class, char.class, short.class, int.class,
+                             long.class, float.class, double.class, void.class };
+        String[] names = { "boolean", "byte", "char", "short", "int", "long", "float", "double", "void" };
+        Class<?>[] types = { Boolean.TYPE, Byte.TYPE, Character.TYPE, Short.TYPE, Integer.TYPE,
+                             Long.TYPE, Float.TYPE, Double.TYPE, Void.TYPE };
+        for (int i = 0; i < prims.length; i++) {
+            check(prims[i].getName().equals(names[i]), names[i] + ".getName()");
+            check(prims[i].getSimpleName().equals(names[i]), names[i] + ".getSimpleName()");
+            check(prims[i].getCanonicalName().equals(names[i]), names[i] + ".getCanonicalName()");
+            check(prims[i].getTypeName().equals(names[i]), names[i] + ".getTypeName()");
+            check(prims[i].getPackageName().equals("java.lang"),
+                  names[i] + ".getPackageName() == java.lang (spec)");
+            check(prims[i].getSuperclass() == null, names[i] + ".getSuperclass() == null");
+            check(prims[i].getClassLoader() == null, names[i] + ".getClassLoader() == null");
+            check(!prims[i].isArray() && !prims[i].isInterface() && !prims[i].isEnum()
+                  && !prims[i].isAnnotation() && !prims[i].isSynthetic() && !prims[i].isRecord()
+                  && !prims[i].isSealed(), names[i] + " kind flags");
+            check(prims[i] == types[i], names[i] + " == wrapper TYPE");
+            check(prims[i].toString().equals(names[i]), names[i] + ".toString()");
+            check(prims[i].getFields().length == 0, names[i] + ".getFields() empty");
+            check(prims[i].getMethods().length == 0, names[i] + ".getMethods() empty");
+            check(prims[i].getDeclaredFields().length == 0, names[i] + ".getDeclaredFields() empty");
+            check(prims[i].getModule() == String.class.getModule(),
+                  names[i] + " lives in java.base");
+        }
+    }
+
+    static void testArrayNameMatrix() {
+        check(new boolean[0].getClass().getName().equals("[Z"), "boolean[] name [Z");
+        check(new byte[0].getClass().getName().equals("[B"), "byte[] name [B");
+        check(new char[0].getClass().getName().equals("[C"), "char[] name [C");
+        check(new short[0].getClass().getName().equals("[S"), "short[] name [S");
+        check(new int[0].getClass().getName().equals("[I"), "int[] name [I");
+        check(new long[0].getClass().getName().equals("[J"), "long[] name [J");
+        check(new float[0].getClass().getName().equals("[F"), "float[] name [F");
+        check(new double[0].getClass().getName().equals("[D"), "double[] name [D");
+        check(new String[0].getClass().getName().equals("[Ljava.lang.String;"), "String[] name");
+        check(String[][].class.getName().equals("[[Ljava.lang.String;"), "String[][] name");
+        check(int[][].class.getName().equals("[[I"), "int[][] name");
+        check(new int[0].getClass() == int[].class, "array class literal identity");
+        check(int[].class.getSimpleName().equals("int[]"), "int[] simple name");
+        check(String[].class.getSimpleName().equals("String[]"), "String[] simple name");
+        check(int[][].class.getSimpleName().equals("int[][]"), "int[][] simple name");
+        check(int[].class.getCanonicalName().equals("int[]"), "int[] canonical");
+        check(String[].class.getCanonicalName().equals("java.lang.String[]"), "String[] canonical");
+        check(int[][].class.getCanonicalName().equals("int[][]"), "int[][] canonical");
+        check(int[].class.getTypeName().equals("int[]"), "int[] type name");
+        check(String[].class.getTypeName().equals("java.lang.String[]"), "String[] type name");
+        check(int[][].class.getTypeName().equals("int[][]"), "int[][] type name");
+        check(int[].class.toString().equals("class [I"), "int[] toString");
+        check(String[].class.toString().equals("class [Ljava.lang.String;"), "String[] toString");
+        check(Color[].class.getName().equals("[LClassTest$Color;"), "nested enum array name");
+        check(Color[].class.getSimpleName().equals("Color[]"), "nested enum array simple name");
+        check("java.lang".equals(String[].class.getPackageName()), "array package follows component");
+        check("".equals(Color[].class.getPackageName()), "default-package array package empty");
+        check(boolean[].class.getComponentType() == boolean.class, "boolean[] component");
+        check(int[][].class.getComponentType() == int[].class, "int[][] component");
+        check(String[][].class.getComponentType() == String[].class, "String[][] component");
+        check(int[].class.getSuperclass() == Object.class, "array superclass Object");
+        check(int[].class.getComponentType().isPrimitive(), "component is primitive");
+        check(!int[].class.isPrimitive() && !int[].class.isEnum() && !int[].class.isInterface()
+              && !int[].class.isAnnotation(), "array kind flags");
+        check(Object.class.isAssignableFrom(int[].class), "Object assignable from array");
+    }
+
+    static void testNestedNamesDeep() {
+        check(Member.class.getName().equals("ClassTest$Member"), "nested binary name Outer$Inner");
+        check(Member.class.getSimpleName().equals("Member"), "nested simple name");
+        check(Member.class.getCanonicalName().equals("ClassTest.Member"), "nested canonical name");
+        check(Member.class.getDeclaringClass() == ClassTest.class, "nested declaring class");
+        check(Member.class.isMemberClass(), "member class kind");
+        check(Iface.class.getDeclaringClass() == ClassTest.class, "member interface declaring class");
+        check(Color.class.getName().equals("ClassTest$Color"), "enum binary name");
+        check(Color.class.getCanonicalName().equals("ClassTest.Color"), "enum canonical name");
+        check(Color.class.getSimpleName().equals("Color"), "enum simple name");
+        check(Marker.class.getName().equals("ClassTest$Marker"), "annotation binary name");
+        check(Marker.class.toString().equals("interface ClassTest$Marker"), "annotation toString");
+        Object anon = new Object() {};
+        check(anon.getClass().getCanonicalName() == null, "anonymous canonical null");
+        check(anon.getClass().getSimpleName().equals(""), "anonymous simple name empty");
+        check(anon.getClass().getName().matches("ClassTest\\$\\d+"), "anonymous binary name numbered");
+        check(anon.getClass().toString().startsWith("class ClassTest$"), "anonymous toString");
+        check(anon.getClass().getDeclaringClass() == null, "anonymous declaring class null");
+        check(anon.getClass().isAnonymousClass(), "anonymous kind");
+        check(anon.getClass().getEnclosingMethod() != null, "anonymous in method has enclosing method");
+        check("testNestedNamesDeep".equals(anon.getClass().getEnclosingMethod().getName()),
+              "anonymous enclosing method name");
+        check(anon.getClass().getEnclosingConstructor() == null, "anonymous enclosing ctor null");
+        class DeepLocal {}
+        check(DeepLocal.class.getCanonicalName() == null, "local canonical null");
+        check(DeepLocal.class.getSimpleName().equals("DeepLocal"), "local simple name kept");
+        check(DeepLocal.class.isLocalClass(), "local class kind");
+        check(DeepLocal.class.getDeclaringClass() == null, "local declaring class null");
+        check(DeepLocal.class.getEnclosingMethod() != null, "local enclosing method");
+        check("testNestedNamesDeep".equals(DeepLocal.class.getEnclosingMethod().getName()),
+              "local enclosing method name");
+        check(DeepLocal.class.getEnclosingConstructor() == null, "local enclosing ctor null");
+        check(Member.class.getEnclosingMethod() == null, "member has no enclosing method");
+        check(Member.class.getEnclosingClass() == ClassTest.class, "member enclosing class");
+        check(anon.getClass().getEnclosingClass() == ClassTest.class, "anonymous enclosing class");
+        Runnable lambda = () -> {};
+        check(lambda.getClass().getName().contains("Lambda"), "lambda class name contains Lambda");
+        check(lambda.getClass().isSynthetic(), "lambda class is synthetic");
+        check(!lambda.getClass().isLocalClass() && !lambda.getClass().isMemberClass(), "lambda kinds");
+        check(!lambda.getClass().isAnonymousClass(), "lambda is not anonymous class");
+        check(lambda.getClass().getCanonicalName() == null, "hidden class canonical null");
+    }
+
+    static void testToStringFamily() {
+        check(String.class.toString().equals("class java.lang.String"), "class toString");
+        check(Runnable.class.toString().equals("interface java.lang.Runnable"), "interface toString");
+        check(Marker.class.toString().equals("interface ClassTest$Marker"), "annotation toString");
+        check(int[].class.toString().equals("class [I"), "array toString");
+        check(Color.class.toString().equals("class ClassTest$Color"), "enum toString");
+        check(Member.class.toString().equals("class ClassTest$Member"), "nested toString");
+        check(Point.class.toString().equals("class ClassTest$Point"), "record toString");
+        check(String.class.toGenericString().equals("public final class java.lang.String"),
+              "toGenericString String exact");
+        check(int.class.toGenericString().equals("int"), "toGenericString primitive exact");
+        check(int[].class.toGenericString().equals("int[]"), "toGenericString array exact");
+        check(Member.class.toGenericString().equals("static class ClassTest$Member"),
+              "toGenericString nested static exact");
+        check(Base.class.toGenericString().equals("static class ClassTest$Base"),
+              "toGenericString base exact");
+        check(Derived.class.toGenericString().equals("static class ClassTest$Derived"),
+              "toGenericString derived exact");
+        check(Point.class.toGenericString().equals("static final record ClassTest$Point"),
+              "toGenericString record exact");
+        String rg = Runnable.class.toGenericString();
+        check(rg.contains("public") && rg.contains("abstract") && rg.contains("interface")
+              && rg.endsWith("java.lang.Runnable"), "toGenericString interface modifiers");
+        String mg = Marker.class.toGenericString();
+        check(mg.contains("interface") && mg.endsWith("ClassTest$Marker"),
+              "toGenericString annotation contains interface");
+    }
+
+    static void testCastContract() {
+        Object five = Integer.valueOf(5);
+        check(Integer.class.cast(five) == five, "cast returns the same object");
+        check(Number.class.cast(five) == five, "cast to superclass identity");
+        check(Object.class.cast(five) == five, "cast to Object identity");
+        check(Integer.class.cast(null) == null, "cast(null) returns null");
+        check(CharSequence.class.cast("abc") == "abc", "cast to implemented interface");
+        try {
+            Integer.class.cast(Long.valueOf(1));
+            throw new AssertionError("cast(Long as Integer): expected CCE");
+        } catch (ClassCastException e) {
+            check("Cannot cast java.lang.Long to java.lang.Integer".equals(e.getMessage()),
+                  "cast CCE message exact: " + e.getMessage());
+        }
+        try {
+            int.class.cast(five);
+            throw new AssertionError("primitive cast of non-null: expected CCE");
+        } catch (ClassCastException e) {
+            check("Cannot cast java.lang.Integer to int".equals(e.getMessage()),
+                  "primitive cast CCE message exact");
+        }
+        check(int.class.cast(null) == null, "primitive cast(null) returns null");
+        check(Integer.class.isInstance(five), "isInstance true");
+        check(!Integer.class.isInstance("x"), "isInstance wrong type false");
+        check(!Integer.class.isInstance(null), "isInstance(null) false");
+        check(!Object.class.isInstance(null), "Object.isInstance(null) false");
+        check(!int.class.isInstance(five), "primitive isInstance always false");
+        check(Number.class.isInstance(Double.valueOf(1.0)), "Number.isInstance(Double)");
+        check(int[].class.isInstance(new int[0]), "array isInstance");
+        check(!int[].class.isInstance(new long[0]), "array isInstance type strict");
+        check(!int[].class.isInstance(new Integer[0]), "primitive vs boxed array distinct");
+    }
+
+    static void testAsSubclassContract() {
+        check(Integer.class.asSubclass(Number.class) == Integer.class, "asSubclass to superclass");
+        check(Integer.class.asSubclass(Integer.class) == Integer.class, "asSubclass to itself");
+        check(String.class.asSubclass(Object.class) == String.class, "asSubclass to Object");
+        check(String.class.asSubclass(CharSequence.class) == String.class, "asSubclass to interface");
+        check(Member.class.asSubclass(Object.class) == Member.class, "asSubclass nested class");
+        try {
+            String.class.asSubclass(Number.class);
+            throw new AssertionError("asSubclass(Number): expected CCE");
+        } catch (ClassCastException e) {
+            check("class java.lang.String".equals(e.getMessage()),
+                  "asSubclass CCE message exact: " + e.getMessage());
+        }
+        try {
+            int.class.asSubclass(Object.class);
+            throw new AssertionError("primitive asSubclass: expected CCE");
+        } catch (ClassCastException expected) {
+            passed++;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    static void testNewInstanceContract() throws Exception {
+        Object o = NewInst.class.newInstance();
+        check(o instanceof NewInst, "newInstance returns instance");
+        check(o.getClass() == NewInst.class, "newInstance exact class");
+        check("".equals(String.class.newInstance().toString()), "newInstance String empty content");
+        try {
+            System.class.newInstance();
+            throw new AssertionError("private ctor: expected IllegalAccessException");
+        } catch (IllegalAccessException e) {
+            check(e.getMessage() != null && e.getMessage().contains("java.lang.System"),
+                  "IAE message mentions System");
+        }
+        try {
+            Number.class.newInstance();
+            throw new AssertionError("abstract class: expected InstantiationException");
+        } catch (InstantiationException expected) {
+            passed++;
+        }
+        try {
+            Runnable.class.newInstance();
+            throw new AssertionError("interface: expected InstantiationException");
+        } catch (InstantiationException expected) {
+            passed++;
+        }
+        try {
+            CtorArgs.class.newInstance();
+            throw new AssertionError("no nullary ctor: expected InstantiationException");
+        } catch (InstantiationException expected) {
+            passed++;
+        }
+        // JDK-9+ nestmates: the enclosing class CAN reflectively reach a nested
+        // private constructor, so newInstance succeeds (locked behavior).
+        check(PrivCtor.class.newInstance() instanceof PrivCtor,
+              "nested private ctor reachable via nestmates on JDK-27");
+        Object rt = CtorArgs.class.getConstructor(int.class, int.class).newInstance(2, 3);
+        check(rt instanceof CtorArgs && ((CtorArgs) rt).sum == 5,
+              "getConstructor().newInstance() round-trip with args");
+        Object rt2 = CtorArgs.class.getConstructor(Integer.TYPE, Integer.TYPE).newInstance(4, 6);
+        check(((CtorArgs) rt2).sum == 10, "Integer.TYPE resolves to int ctor");
+        try {
+            CtorArgs.class.getConstructor(Integer.class, Integer.class);
+            throw new AssertionError("boxed params: expected NoSuchMethodException (exact match)");
+        } catch (NoSuchMethodException e) {
+            check(e.getMessage() != null
+                  && "ClassTest$CtorArgs.<init>(java.lang.Integer,java.lang.Integer)".equals(e.getMessage()),
+                  "constructor NSME message exact: " + e.getMessage());
+        }
+        try {
+            CtorArgs.class.getConstructor();
+            throw new AssertionError("missing nullary ctor: expected NoSuchMethodException");
+        } catch (NoSuchMethodException expected) {
+            passed++;
+        }
+    }
+
+    static void testFieldLookup() throws Exception {
+        check(Integer.class.getField("MAX_VALUE") != null, "getField MAX_VALUE");
+        check(Integer.class.getField("MIN_VALUE") != null, "getField MIN_VALUE");
+        check(Integer.class.getField("TYPE") != null, "getField TYPE");
+        check(String.class.getField("CASE_INSENSITIVE_ORDER") != null, "getField CASE_INSENSITIVE_ORDER");
+        check(Base.class.getField("PUB") != null, "getField declared public field");
+        check(Derived.class.getField("PUB") != null, "getField finds inherited public field");
+        try {
+            Integer.class.getField("NOPE");
+            throw new AssertionError("missing field: expected NoSuchFieldException");
+        } catch (NoSuchFieldException e) {
+            check("NOPE".equals(e.getMessage()), "NSFE message is the bare field name");
+        }
+        try {
+            Member.class.getField("nope");
+            throw new AssertionError("nested missing field: expected NoSuchFieldException");
+        } catch (NoSuchFieldException expected) {
+            passed++;
+        }
+        try {
+            Integer.class.getField(null);
+            throw new AssertionError("getField(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+        check(int.class.getFields().length == 0, "primitive getFields empty");
+        check(int.class.getDeclaredFields().length == 0, "primitive getDeclaredFields empty");
+        check(Overload.class.getFields().length == 0, "class without public fields");
+        check(Member.class.getDeclaredFields().length == 0, "class without declared fields");
+        check(Member.class.getDeclaredConstructors().length == 1, "implicit ctor still declared");
+        check(String.class.getFields().length > 0, "String has public fields");
+    }
+
+    static void testMethodLookup() throws Exception {
+        java.lang.reflect.Method mInt = Overload.class.getDeclaredMethod("foo", int.class);
+        java.lang.reflect.Method mBox = Overload.class.getDeclaredMethod("foo", Integer.class);
+        check(mInt != null && mBox != null, "both overloads resolvable");
+        check(mInt != mBox, "exact parameter types distinguish overloads");
+        check(mInt.getName().equals("foo") && mBox.getName().equals("foo"), "method names");
+        try {
+            Overload.class.getDeclaredMethod("foo", Long.class);
+            throw new AssertionError("unrelated param box: expected NoSuchMethodException");
+        } catch (NoSuchMethodException e) {
+            check("ClassTest$Overload.foo(java.lang.Long)".equals(e.getMessage()),
+                  "NSME message exact: " + e.getMessage());
+        }
+        try {
+            Overload.class.getDeclaredMethod("nope");
+            throw new AssertionError("missing method: expected NoSuchMethodException");
+        } catch (NoSuchMethodException e) {
+            check("ClassTest$Overload.nope()".equals(e.getMessage()), "no-arg NSME message exact");
+        }
+        check(hasMethodNamed(String.class, "toString"), "String getMethods toString");
+        check(hasMethodNamed(String.class, "equals"), "String getMethods equals");
+        check(hasMethodNamed(String.class, "hashCode"), "String getMethods hashCode");
+        check(hasMethodNamed(String.class, "length"), "String getMethods length");
+        check(hasMethodNamed(String.class, "charAt"), "String getMethods charAt");
+        check(hasMethodNamed(String.class, "isEmpty"), "String getMethods isEmpty");
+        check(hasMethodNamed(Runnable.class, "run"), "Runnable getMethods run");
+        check(!hasMethodNamed(Runnable.class, "toString"), "interface getMethods excludes Object.toString");
+        check(!hasMethodNamed(Runnable.class, "equals"), "interface getMethods excludes Object.equals");
+        check(hasMethodNamed(Member.class, "toString"), "class getMethods includes Object methods");
+        check(hasDeclaredMethodNamed(Overload.class, "foo"), "getDeclaredMethods sees foo");
+        int fooCount = 0;
+        for (java.lang.reflect.Method m : Overload.class.getDeclaredMethods())
+            if (m.getName().equals("foo")) fooCount++;
+        check(fooCount == 2, "declared methods count both overloads");
+        check(Overload.class.getMethod("foo", int.class) != null, "getMethod public overload");
+        check(Member.class.getMethod("toString") != null, "getMethod finds inherited toString");
+        check(int.class.getMethods().length == 0, "primitive getMethods empty");
+        check(int.class.getDeclaredMethods().length == 0, "primitive getDeclaredMethods empty");
+        try {
+            Integer.class.getMethod("nope");
+            throw new AssertionError("missing public method: expected NoSuchMethodException");
+        } catch (NoSuchMethodException e) {
+            check("java.lang.Integer.nope()".equals(e.getMessage()), "public NSME message exact");
+        }
+        try {
+            Integer.class.getMethod(null);
+            throw new AssertionError("getMethod(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+    }
+
+    static void testInterfacesContract() throws Exception {
+        Class<?>[] ifc = TwoIface.class.getInterfaces();
+        check(ifc.length == 2, "two directly declared interfaces");
+        check(ifc[0] == IOne.class && ifc[1] == ITwo.class, "declaration order preserved");
+        check(Derived.class.getInterfaces().length == 0, "plain class has no interfaces");
+        check(Base.class.getInterfaces().length == 0, "base has no interfaces");
+        check(IOne.class.getInterfaces().length == 0, "interface without superinterfaces");
+        check(Marker.class.getInterfaces().length == 1
+              && Marker.class.getInterfaces()[0] == java.lang.annotation.Annotation.class,
+              "annotation directly extends Annotation");
+        check(IOne.class.isAssignableFrom(TwoIface.class), "assignable through interface");
+        check(!IOne.class.isAssignableFrom(Derived.class), "unrelated not assignable");
+        check(!TwoIface.class.isAssignableFrom(IOne.class), "reverse not assignable");
+        Class<?>[] enumIfc = Enum.class.getInterfaces();
+        check(enumIfc.length == 3, "Enum implements 3 interfaces on JDK-27");
+        boolean hasCmp = false, hasSer = false, hasConst = false;
+        for (Class<?> c : enumIfc) {
+            if (c == Comparable.class) hasCmp = true;
+            if (c == java.io.Serializable.class) hasSer = true;
+            if (c == java.lang.constant.Constable.class) hasConst = true;
+        }
+        check(hasCmp && hasSer, "Enum implements Comparable and Serializable");
+        check(hasConst, "Enum implements Constable on JDK-27");
+        check(Color.class.getInterfaces().length == 0, "enum without constant bodies: no direct ifaces");
+        check(Color.class.isAssignableFrom(Color.RED.getClass()), "constant assignable to enum");
+        check(!TwoIface.class.isInterface(), "class not interface");
+        check(TwoIface.class.getConstructor().newInstance() instanceof IOne,
+              "instance of first interface");
+    }
+
+    static void testEnumConstantsContract() {
+        Color[] arr = Color.class.getEnumConstants();
+        check(arr != null && arr.length == 2, "constants array size");
+        check(arr[0] == Color.RED && arr[1] == Color.GREEN, "constants identity and order");
+        arr[0] = Color.GREEN; // mutate the returned array
+        Color[] fresh = Color.class.getEnumConstants();
+        check(fresh[0] == Color.RED, "getEnumConstants returns a defensive copy");
+        check(fresh != arr, "fresh array on each call");
+        check(Color.class.getEnumConstants() != Color.class.getEnumConstants(),
+              "successive calls do not share arrays");
+        check(String.class.getEnumConstants() == null, "non-enum class -> null");
+        check(int.class.getEnumConstants() == null, "primitive -> null");
+        check(int[].class.getEnumConstants() == null, "array -> null");
+        check(Marker.class.getEnumConstants() == null, "annotation -> null");
+        check(Member.class.getEnumConstants() == null, "nested plain class -> null");
+        check(Color.class.isEnum(), "enum kind");
+        check(!String.class.isEnum() && !int.class.isEnum() && !Marker.class.isEnum(),
+              "non-enum kinds");
+        check(Color.RED.getDeclaringClass() == Color.class, "constant declaring class");
+        check(Color.RED.name().equals("RED") && Color.RED.ordinal() == 0, "constant name and ordinal");
+        check(Color.class.getSuperclass() == Enum.class, "enum superclass is Enum");
+        check(Color.GREEN.ordinal() == 1, "second constant ordinal");
+    }
+
+    static void testForNameInitialization() throws Exception {
+        ClassLoader cl = ClassTest.class.getClassLoader();
+        String target = "ClassTest$InitTarget";
+        Class<?> uninit = Class.forName(target, false, cl);
+        check(InitCounter.count == 0, "forName(initialize=false) skips the static initializer");
+        check(uninit == InitTarget.class, "forName(false) still loads the same Class object");
+        Class.forName(target);
+        check(InitCounter.count == 1, "first initializing forName runs the static block once");
+        Class.forName(target, true, cl);
+        check(InitCounter.count == 1, "second initializing forName does not re-run");
+        Class.forName(target);
+        check(InitCounter.count == 1, "repeat default forName does not re-run");
+        Class.forName(target, false, cl);
+        check(InitCounter.count == 1, "forName(false) after init does not re-run");
+        check(Class.forName("ClassTest$Member") == Member.class, "forName nested member");
+        check(Class.forName("ClassTest$Color") == Color.class, "forName nested enum");
+        check(Class.forName("ClassTest$Marker") == Marker.class, "forName nested annotation");
+        check(Class.forName("ClassTest$Point") == Point.class, "forName nested record");
+        check(Class.forName("[I") == int[].class, "forName [I");
+        check(Class.forName("[[I") == int[][].class, "forName [[I");
+        check(Class.forName("[Ljava.lang.String;") == String[].class, "forName [Ljava.lang.String;");
+        check(Class.forName("[LClassTest$Color;") == Color[].class, "forName nested array type");
+        check(Class.forName("java.lang.Runnable", false, cl) == Runnable.class,
+              "forName interface without initialization");
+        try {
+            Class.forName("java.lang.String[]");
+            throw new AssertionError("source-form array name: expected ClassNotFoundException");
+        } catch (ClassNotFoundException e) {
+            check("java/lang/String[]".equals(e.getMessage()),
+                  "source-form array CNFE message exact: " + e.getMessage());
+        }
+        try {
+            Class.forName("int");
+            throw new AssertionError("primitive name: expected ClassNotFoundException");
+        } catch (ClassNotFoundException e) {
+            check("int".equals(e.getMessage()), "primitive name CNFE message exact");
+        }
+        try {
+            Class.forName("java.lang.DoesNotExist");
+            throw new AssertionError("missing class: expected ClassNotFoundException");
+        } catch (ClassNotFoundException e) {
+            check("java.lang.DoesNotExist".equals(e.getMessage()), "missing class CNFE message exact");
+        }
+        try {
+            Class.forName(null);
+            throw new AssertionError("forName(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+    }
+
+    static void testResourcePackageMisc() throws Exception {
+        check(String.class.getResourceAsStream("/java/lang/String.class") != null,
+              "absolute resource lookup");
+        check(String.class.getResourceAsStream("String.class") != null, "relative resource lookup");
+        check(String.class.getResource("String.class") != null, "getResource relative form");
+        check(String.class.getResource("/no/such/thing.bin") == null, "missing resource -> null");
+        check(String.class.getResourceAsStream("Nope.class") == null, "missing stream -> null");
+        check(int.class.getResourceAsStream("x") == null, "primitive has no resources");
+        java.io.InputStream in = String.class.getResourceAsStream("/java/lang/String.class");
+        byte[] magic = new byte[4];
+        int off = 0;
+        while (off < 4) {
+            int r = in.read(magic, off, 4 - off);
+            if (r < 0) break;
+            off += r;
+        }
+        in.close();
+        check(off == 4 && (magic[0] & 0xFF) == 0xCA && (magic[1] & 0xFF) == 0xFE
+              && (magic[2] & 0xFF) == 0xBA && (magic[3] & 0xFF) == 0xBE,
+              "stream starts with the CAFEBABE class-file magic");
+        Package p = String.class.getPackage();
+        check(p != null && "java.lang".equals(p.getName()), "String package is java.lang");
+        check(p == Integer.class.getPackage(), "same Package instance within a package");
+        check(p == Object.class.getPackage(), "Object shares the java.lang Package");
+        Package own = ClassTest.class.getPackage();
+        check(own != null && "".equals(own.getName()),
+              "default package yields an unnamed Package on JDK-27");
+        check(Color.class.getPackage() != null && "".equals(Color.class.getPackage().getName()),
+              "nested enum also reports the default package");
+        check(!String.class.desiredAssertionStatus(), "desiredAssertionStatus false");
+        check(!int.class.desiredAssertionStatus(), "primitive assertion status false");
+        check(!ClassTest.class.desiredAssertionStatus(), "user class assertion status false");
+        check(String.class.getProtectionDomain() != null, "bootstrap ProtectionDomain non-null");
+        check(ClassTest.class.getProtectionDomain() != null, "user ProtectionDomain non-null");
+        check(String.class.getSigners() == null, "bootstrap class has no signers");
+    }
+
+    static void testSuperclassGeneric() {
+        check(Object.class.getSuperclass() == null, "Object superclass null");
+        check(Runnable.class.getSuperclass() == null, "interface superclass null");
+        check(Marker.class.getSuperclass() == null, "annotation superclass null");
+        check(int.class.getSuperclass() == null, "primitive superclass null");
+        check(void.class.getSuperclass() == null, "void superclass null");
+        check(Color.class.getSuperclass() == Enum.class, "enum superclass Enum");
+        check(Point.class.getSuperclass() == java.lang.Record.class, "record superclass java.lang.Record");
+        check(int[].class.getSuperclass() == Object.class, "primitive array superclass Object");
+        check(String[].class.getSuperclass() == Object.class, "reference array superclass Object");
+        check(Derived.class.getSuperclass() == Base.class, "nested chain superclass");
+        check(Base.class.getSuperclass() == Object.class, "nested base superclass Object");
+        check(String.class.getGenericSuperclass() == Object.class, "raw generic superclass");
+        check(Derived.class.getGenericSuperclass() == Base.class, "nested generic superclass");
+        check(Object.class.getGenericSuperclass() == null, "Object generic superclass null");
+        check(int.class.getGenericSuperclass() == null, "primitive generic superclass null");
+        check(Runnable.class.getGenericSuperclass() == null, "interface generic superclass null");
+        check(int[].class.getGenericSuperclass() == Object.class, "array generic superclass Object");
+        check(Derived.class.getGenericInterfaces().length == 0, "no generic interfaces");
+        check(TwoIface.class.getGenericInterfaces().length == 2, "two generic interfaces");
+        check(Integer.class.getGenericInterfaces().length == 3,
+              "Integer implements Comparable, Constable, ConstantDesc on JDK-27");
+        check(Object.class.getGenericInterfaces().length == 0, "Object has no interfaces");
+        boolean strHasCharSeq = false;
+        for (java.lang.reflect.Type t : String.class.getGenericInterfaces())
+            if (String.valueOf(t).contains("CharSequence")) strHasCharSeq = true;
+        check(strHasCharSeq, "String generic interfaces include CharSequence");
+    }
+
+    static void testSyntheticAnnotationFlags() {
+        check(Override.class.isAnnotation(), "Override is an annotation");
+        check(Deprecated.class.isAnnotation(), "Deprecated is an annotation");
+        check(SuppressWarnings.class.isAnnotation(), "SuppressWarnings is an annotation");
+        check(FunctionalInterface.class.isAnnotation(), "FunctionalInterface is an annotation");
+        check(SafeVarargs.class.isAnnotation(), "SafeVarargs is an annotation");
+        check(Marker.class.isAnnotation(), "user annotation is an annotation");
+        check(!Member.class.isAnnotation(), "class not annotation");
+        check(!int.class.isAnnotation(), "primitive not annotation");
+        check(!Color.class.isAnnotation(), "enum not annotation");
+        check(!String[].class.isAnnotation(), "array not annotation");
+        check(!String.class.isSynthetic(), "String not synthetic");
+        check(!Member.class.isSynthetic(), "member not synthetic");
+        check(!int.class.isSynthetic(), "primitive not synthetic");
+        check(!Color.class.isSynthetic(), "enum not synthetic");
+        check(!Marker.class.isSynthetic(), "annotation not synthetic");
+        check(!Point.class.isSynthetic(), "record not synthetic");
+        Runnable r = () -> {};
+        check(r.getClass().isSynthetic(), "lambda class is synthetic");
+        check(Member.class.isMemberClass(), "member kind positive");
+        check(!int.class.isMemberClass(), "primitive not a member class");
+        check(!Color.class.isLocalClass(), "enum not a local class");
+    }
+
+    static void testRecordContract() {
+        check(Point.class.isRecord(), "record isRecord");
+        check(!String.class.isRecord(), "class not a record");
+        check(!int.class.isRecord(), "primitive not a record");
+        check(!Color.class.isRecord(), "enum not a record");
+        check(!Marker.class.isRecord(), "annotation not a record");
+        check(Point.class.getSuperclass() == java.lang.Record.class, "record extends java.lang.Record");
+        java.lang.reflect.RecordComponent[] rc = Point.class.getRecordComponents();
+        check(rc != null && rc.length == 2, "record components count");
+        check("x".equals(rc[0].getName()), "first component named x");
+        check("tag".equals(rc[1].getName()), "second component named tag");
+        check(rc[0].getType() == int.class, "component x type int");
+        check(rc[1].getType() == String.class, "component tag type String");
+        check(rc[0].getDeclaringRecord() == Point.class, "component declaring record");
+        check(String.class.getRecordComponents() == null, "non-record components null");
+        check(int.class.getRecordComponents() == null, "primitive components null");
+        check(Point.class.getName().equals("ClassTest$Point"), "record binary name");
+        check(Point.class.getCanonicalName().equals("ClassTest.Point"), "record canonical name");
+        check(Point.class.getSimpleName().equals("Point"), "record simple name");
+        check(new Point(1, "a").toString().equals("Point[x=1, tag=a]"), "record toString form");
+        check(new Point(1, "a").equals(new Point(1, "a")), "record value equality");
+        check(!new Point(1, "a").equals(new Point(2, "a")), "record equality is value-based");
+        check(new Point(1, "a").hashCode() == new Point(1, "a").hashCode(),
+              "record hashCode consistent with equals");
+        check(!Point.class.isSealed(), "record is not sealed");
+    }
+
+    static void testHiddenAndSealed() {
+        check(!String.class.isHidden(), "normal class not hidden");
+        check(!int.class.isHidden(), "primitive not hidden");
+        check(!Member.class.isHidden(), "member not hidden");
+        check(!Color.class.isHidden(), "enum not hidden");
+        Object anon = new Object() {};
+        check(!anon.getClass().isHidden(), "anonymous class not hidden");
+        class HLocal {}
+        check(!HLocal.class.isHidden(), "local class not hidden");
+        // Lambdas are implemented as hidden classes since JDK-15 (JEP 371).
+        Runnable r = () -> {};
+        check(r.getClass().isHidden(), "lambda class is hidden");
+        check(r.getClass().isSynthetic(), "hidden lambda class is synthetic");
+        check(r.getClass().getCanonicalName() == null, "hidden class has no canonical name");
+        check(!String.class.isSealed(), "String not sealed");
+        check(!Member.class.isSealed(), "member not sealed");
+        check(!Color.class.isSealed(), "enum not sealed");
+        check(String.class.getPermittedSubclasses() == null, "non-sealed permitted subclasses null");
+        check(Member.class.getPermittedSubclasses() == null, "member permitted null");
+        check(Color.class.getPermittedSubclasses() == null, "enum permitted null");
+    }
+
+    static void testModuleAndPackageName() {
+        check("java.lang".equals(String.class.getPackageName()), "String packageName");
+        check("java.lang".equals(Runnable.class.getPackageName()), "Runnable packageName");
+        check("java.lang".equals(int.class.getPackageName()),
+              "primitive getPackageName is java.lang per spec");
+        check("".equals(ClassTest.class.getPackageName()), "default package empty name");
+        check("".equals(Member.class.getPackageName()), "nested class follows top-level package");
+        check(String.class.getModule().isNamed(), "java.base is a named module");
+        check("java.base".equals(String.class.getModule().getName()), "module name java.base");
+        check("module java.base".equals(String.class.getModule().toString()), "module toString");
+        check(int.class.getModule() == String.class.getModule(), "primitives live in java.base");
+        check(Member.class.getModule() == String.class.getModule()
+              || Member.class.getModule() != null, "class module non-null");
+        java.lang.Module own = ClassTest.class.getModule();
+        check(!own.isNamed(), "classpath class lives in an unnamed module");
+        check(own.getName() == null, "unnamed module name is null");
+        check(own != String.class.getModule(), "unnamed module differs from java.base");
+        check("".equals(own.toString()) || own.toString().contains("unnamed"),
+              "unnamed module toString mentions unnamed");
+    }
+
+    static void testDescriptorStrings() {
+        check("Ljava/lang/String;".equals(String.class.descriptorString()), "String descriptor");
+        check("I".equals(int.class.descriptorString()), "int descriptor");
+        check("V".equals(void.class.descriptorString()), "void descriptor");
+        check("Z".equals(boolean.class.descriptorString()), "boolean descriptor");
+        check("[I".equals(int[].class.descriptorString()), "int[] descriptor");
+        check("[Ljava/lang/String;".equals(String[].class.descriptorString()), "String[] descriptor");
+        check("LClassTest$Point;".equals(Point.class.descriptorString()), "nested record descriptor");
+        check(String.class.describeConstable().isPresent(), "String describeConstable present");
+        check(int.class.describeConstable().isPresent(), "int describeConstable present");
+        check(String.class.arrayType().descriptorString().equals("[Ljava/lang/String;"),
+              "arrayType descriptor round-trip");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testPrimitive();
@@ -321,6 +965,25 @@ public class ClassTest {
         testDeclaredMembers();
         testClassKinds();
         testBlackBox();
+        testPrimitiveNameMatrix();
+        testArrayNameMatrix();
+        testNestedNamesDeep();
+        testToStringFamily();
+        testCastContract();
+        testAsSubclassContract();
+        testNewInstanceContract();
+        testFieldLookup();
+        testMethodLookup();
+        testInterfacesContract();
+        testEnumConstantsContract();
+        testForNameInitialization();
+        testResourcePackageMisc();
+        testSuperclassGeneric();
+        testSyntheticAnnotationFlags();
+        testRecordContract();
+        testHiddenAndSealed();
+        testModuleAndPackageName();
+        testDescriptorStrings();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

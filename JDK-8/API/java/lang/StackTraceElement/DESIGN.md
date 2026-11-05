@@ -46,3 +46,26 @@
 ## 注意事项
 
 - 序列化断言用同一字段构造，避免栈内容不确定性；headless 安全，不加 `@key`。
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增维度）
+- fillInStackTrace 真帧闭环：`new Throwable().fillInStackTrace().getStackTrace()[0]` 的 className/methodName/lineNumber/isNativeMethod/fileName 精确断言；`toString` 形如 `Cls.method(Cls.java:N)` 且 `:N` 与 `getLineNumber()` 一致。
+- 真帧类名 `Class.forName` round-trip（含静态嵌套类帧 `StackTraceElementTest$Nested`、递归帧）。
+- `getStackTrace` 防御性拷贝（改返回数组元素不影响再次调用）；`setStackTrace` 拷贝数组、null → NPE、空数组合法。
+- 构造器空参守卫：null className → NPE `"Declaring class is null"`、null methodName → NPE `"Method name is null"`（与 JDK-27 逐字一致）；null fileName 合法。
+- 行号语义矩阵：仅 -2 为 native；-1/0/-3 非 native；toString 全矩阵（null 文件 + 任意行 → `Unknown Source`，负行号（除 -2）省略 `:N`，行 0 字面输出）。
+- equals/hashCode 全契约（自反/对称/传递/null 文件参与比较/equals(null)/跨类型）。
+- `ObjectStreamClass.lookup` 锁 serialVersionUID=6992337162326171013L（**JDK-8 与 JDK-27 实测一致**）；真帧序列化往返保持全部值。
+
+### 使用方式
+- 同前：单一 main 类 + `check` 断言计数。
+
+### 参考来源
+- Oracle Java SE 8 javadoc（StackTraceElement/Throwable.setStackTrace）。
+- 本仓库双 JDK 实测（8u372 与 27.0.1 各跑 /tmp 探针）。
+
+### 测试用例设计 + 易错规范细节
+- 新增方法：testFillInStackTraceClosure、testCallerChainFrames、testNestedClassFrame、testGetStackTraceCopy、testSetStackTrace、testConstructorNullGuards、testLineSemanticsAndToStringMatrix、testEqualsHashCodeContract、testSerialVersionUid、testSerializationRealFrame、testPrintStackTraceFormat、testFillInStackTraceReturnsThis、testRealFrameValueEquality、testRecursionFrames（deep1/2/3 链）、testFrameTupleIndependence。
+- 易错点：toString 的负行号（非 -2）**省略** `:N` 而不是字面打印（初版断言翻车后实测修正）；`setStackTrace(null)` 在 JDK-8 抛无消息 NPE、JDK-27 抛 helpful message NPE（差异见下）；同一捕获点两次 captureFrame 产生**值相等**的真帧（可作 equals 正例）。
+- JDK-8 vs JDK-27 差异（27 侧文件）：JDK-27 多 7 参构造器与 getModuleName/getModuleVersion/getClassLoaderName；JDK-8 无。双侧共有行为（getter/equals/toString 矩阵/NPE 消息/serialVersionUID）逐字一致。

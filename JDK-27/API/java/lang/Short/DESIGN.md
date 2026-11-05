@@ -30,3 +30,18 @@
 - **边界**：`MIN_VALUE/MAX_VALUE`；`valueOf(short)` 缓存 -128..127；`toUnsignedInt(-1)==65535`；`reverseBytes(0x00ff)`。
 - **异常**：`NumberFormatException`（空串、空白、溢出 32768/-32769、非法 radix、`decode` 前缀残缺/L 后缀）。
 - **健壮性**：用例确定、无全局副作用——不依赖墙钟/随机数/哈希迭代顺序/默认时区/地区；无文件/端口/线程/`System.exit`，适配多次运行、并跑、跨平台。
+
+## 契约深化（2026-11）
+
+- **API 功能补充**：NFE 消息逐字契约（`Value out of range. Value:"32768" Radix:10`、
+  radix-2 溢出 16 位串）；`Short.compareUnsigned`（9+，直接调用）方向表；`reverseBytes` 对合。
+- **使用方式补充**：有符号任意基串用 `Integer.toString(Math.abs(v), radix)` 生成再补符号；
+  JLS 5.1.3 窄化（`(short)300→44`、`(byte)128→-128`）。
+- **参考来源**：实测 jdk-27.0.1.0.2；javap 确认 `Short.compareUnsigned` 9+ 存在、8 缺失。
+- **新增用例（断言 106→260）**：`testNfeMessageContract`、`testParseRadixRoundTrip`、
+  `testToStringUnsignedTable`、`testReverseBytesTable`（`reverseBytes(MIN)==128`、对合、
+  `reverseBytes(MAX)==(short)0xff7f`）、`testNarrowingConversions`、`testValueOfCacheBoundary`
+  （new Short 跨缓存实例）、`testCompareUnsignedTable`（原生直接调用）、`testWhiteBoxStructural`
+  （反射断言 compareUnsigned 存在）、`testBoxing`。
+- **易错细节（跨版本）**：16 个 1 = 65535 超 Short 范围；`(short)128` 为正 128（toUnsignedInt==128）；
+  null/`under radix` 消息差异同 Integer。

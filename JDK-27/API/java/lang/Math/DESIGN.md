@@ -38,3 +38,42 @@
 - **精确算术异常**：`addExact/subtractExact/multiplyExact/negateExact/incrementExact/decrementExact/toIntExact` 边界溢出；`divideExact/floorDivExact/ceilDivExact` 的 `MIN/-1`；`absExact(MIN)`；`powExact` 负指数/溢出；`unsignedPowExact/unsignedMultiplyExact` 无符号溢出。
 - **clamp/fma 异常**：`clamp(min>max)`、`clamp(NaN 边界)` 抛 `IllegalArgumentException`；`fma` 的 NaN/Infinity 语义。
 - **健壮性**：用例确定、无全局副作用——`Math.random()` 仅断言值域 [0,1)（结果确定，不依赖具体值）；超越函数断精确可表示值或容差（`atan2(1,1)==PI/4`、`toDegrees(TAU)==360.0` 均确定）；无文件/端口/线程/`System.exit`，适配多次运行、并跑、跨平台。
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增覆盖）
+
+- `round` 半分向 +无穷全矩阵（`0.49999999999999994`、`±Inf`/`MAX_VALUE` 饱和、float 版 `round(Float.MAX_VALUE)→Integer.MAX_VALUE`）。
+- `floorDiv`/`floorMod` 四象限 + 7×6 int/long 恒等式循环（`floorMod(a,b)==a-floorDiv(a,b)*b`）+ 与 `/`、`%` 对照 + `MIN/-1` 回绕特例。
+- 精确算术全族（int+long 全部变体）溢出消息逐字 + 不溢出边界补例。
+- `abs`/`min`/`max` 位级 ±0.0 与 NaN 传播；`floor`/`ceil`/`rint` half-to-even 表 + 负零位级。
+- `sqrt`/`cbrt`/`pow`/`hypot` 特殊值全表；三角精确点（`sin(PI/2)==1`、`acos(-1)==PI`、`toRadians(90)==PI/2`）+ 容差；`log1p`/`expm1` 近零精度。
+- `signum`/`ulp`/`scalb`/`nextUp`/`nextDown`/`nextAfter`/`getExponent` 全边界；`E`/`PI`/`TAU` 字符串与位模式；`IEEEremainder` 语义。
+- **JDK-9+ 新增**：`fma`（单次舍入契约与零符号规则）、mixed-precision 重载 `floorDiv(long,int)`/`floorMod(long,int)`/`multiplyExact(long,int)`。
+
+### 使用方式
+
+- `fma(a,b,c)` 与 `a*b+c` 在可表示差落到舍入位之下时**必然分叉**——数值敏感代码不能互换。
+- mixed-precision 重载用于 long 被除数 + int 步长的分页/分块计算，`floorMod(long,int)` 返回 int。
+
+### 参考来源
+
+- Java SE javadoc `Math.fma`/`floorDiv` 特殊规则 + Temurin 27.0.1 与 8u372 双侧运行实测（/tmp 探针，输出 diff）。
+- javap 确认 JDK-8 无 fma（Math/StrictMath 均无），故 8 侧文件不测 fma。
+
+### 测试用例设计 + 易错规范细节（已锁入断言）
+
+- **fma 分叉样本**（可数学验证）：`a=nextUp(1.0)=1+2^-52`，`c=nextUp(nextUp(1.0))=1+2^-51`；真积 `a*a=1+2^-51+2^-104`。
+  非融合 `fl(a*a)=1+2^-51` 故 `a*a-c==+0.0`；融合一次舍入保住精确差：`fma(a,a,-c)==2^-104==0x1.0p-104`。
+  JLS 明确禁止把 `a*b+c` 融合，故该分叉是语言级保证。
+- fma 零符号：`fma(-0,+0,+0)==+0.0`（就近舍入 -0+0 得 +0）、`fma(-0,+0,-0)==-0.0`；`fma(Inf,0,NaN)`/`fma(1,Inf,-Inf)`==NaN；
+  `fma(2^-1074,2^-1074,0)` 次正规下溢 +0.0。
+- `round(-1.6)==-2`（=floor(-1.1)；"四舍五入"直觉的 -1 是错的）；`round(0.49999999999999994)==0` 规格特例。
+- `pow(±1,+Inf)==NaN`（Java 规格，非 IEEE 的 1.0）；`pow(NaN,0)==1`；`pow(-8,1/3)==NaN`（负底非整指数），`cbrt(-8)==-2` 才是负立方根。
+- `nextDown(1.0)==1.0-2^-53`（非 `1.0-ulp(1.0)`）；`ulp(Double.MAX_VALUE)==2^971` 用位级不用 toString（JDK-19+ Ry 算法改变了次正规/巨值的字符串输出）。
+- 溢出消息逐字（27 侧同 8 侧）：int 族 `"integer overflow"`、long 族 `"long overflow"`、除零 `"/ by zero"`；
+  `multiplyExact(long,int)` 溢出报 `"long overflow"`，正常路径 `multiplyExact(Integer.MAX_VALUE+1L, 2)==4294967296L`。
+- `floorDiv(MIN,-1)==MIN` 回绕不抛（27 与 8 相同；抛的是 `divideExact`/`floorDivExact`）。
+- `Math.exp(1.0)==Math.E` 精确，`StrictMath.exp(1.0)` 差 1 ulp（容差处理，见 StrictMath 侧）。
+- `E` 位模式 `0x4005bf0a8b145769L`、`PI` `0x400921fb54442d18L`；`TAU==Math.TAU`。
+- 本轮断言数 213 → 877。

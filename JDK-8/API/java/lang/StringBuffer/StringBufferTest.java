@@ -354,6 +354,616 @@ public class StringBufferTest {
         check(hasMethod(c, "reverse"), "method reverse()");
     }
 
+    // ===================== contract deepening (2026-11) =====================
+    // Version-adaptive constants: differences between JDK 8 and JDK 27 (exception
+    // classes and exact messages) are encoded here once and asserted per side.
+
+    static final boolean MODERN = !System.getProperty("java.version").startsWith("1.");
+    static final String CLASS_SIOOBE = "java.lang.StringIndexOutOfBoundsException";
+    static final String CLASS_IOOBE = "java.lang.IndexOutOfBoundsException";
+    static final String CLASS_AIOOBE = "java.lang.ArrayIndexOutOfBoundsException";
+
+    /** Exact-class + exact-message catcher: 2 assertions per successful call. */
+    static void expectExact(Runnable r, String className, String message, String label) {
+        try {
+            r.run();
+            throw new AssertionError(label + ": expected " + className + " but no exception was thrown");
+        } catch (AssertionError up) {
+            throw up;
+        } catch (Throwable t) {
+            check(t.getClass().getName().equals(className),
+                  label + " type: expected " + className + " but got " + t.getClass().getName());
+            check(message == null ? t.getMessage() == null : message.equals(t.getMessage()),
+                  label + " message: expected \"" + message + "\" but got \"" + t.getMessage() + "\"");
+        }
+    }
+
+    /** Class-only catcher (used where the message text differs per release): 1 assertion. */
+    static void expectClass(Runnable r, String className, String label) {
+        try {
+            r.run();
+            throw new AssertionError(label + ": expected " + className + " but no exception was thrown");
+        } catch (AssertionError up) {
+            throw up;
+        } catch (Throwable t) {
+            check(t.getClass().getName().equals(className),
+                  label + " type: expected " + className + " but got " + t.getClass().getName());
+        }
+    }
+
+    /** Minimal user CharSequence so append/insert polymorphism runs off the JDK path. */
+    static class WrapCs implements CharSequence {
+        private final String s;
+        WrapCs(String s) { this.s = s; }
+        public int length() { return s.length(); }
+        public char charAt(int index) { return s.charAt(index); }
+        public CharSequence subSequence(int start, int end) { return s.subSequence(start, end); }
+        public String toString() { return s; }
+    }
+
+    static void testAppendPrimitivesExact() {
+        check(new StringBuffer().append(false).toString().equals("false"), "append(false)");
+        check(new StringBuffer().append('Z').toString().equals("Z"), "append(char) exact");
+        check(new StringBuffer().append(0).toString().equals("0"), "append(0)");
+        check(new StringBuffer().append(-1).toString().equals("-1"), "append(-1)");
+        check(new StringBuffer().append(Integer.MIN_VALUE).toString().equals("-2147483648"), "append(Integer.MIN_VALUE)");
+        check(new StringBuffer().append(Integer.MAX_VALUE).toString().equals("2147483647"), "append(Integer.MAX_VALUE)");
+        check(new StringBuffer().append(0L).toString().equals("0"), "append(0L)");
+        check(new StringBuffer().append(Long.MIN_VALUE).toString().equals("-9223372036854775808"), "append(Long.MIN_VALUE)");
+        check(new StringBuffer().append(Long.MAX_VALUE).toString().equals("9223372036854775807"), "append(Long.MAX_VALUE)");
+        check(new StringBuffer().append(0.0f).toString().equals("0.0"), "append(0.0f)");
+        check(new StringBuffer().append(1.5f).toString().equals("1.5"), "append(1.5f)");
+        check(new StringBuffer().append(-2.5f).toString().equals("-2.5"), "append(-2.5f)");
+        check(new StringBuffer().append(0.1f).toString().equals("0.1"), "append(0.1f)");
+        check(new StringBuffer().append(0.5).toString().equals("0.5"), "append(0.5)");
+        check(new StringBuffer().append(-0.25).toString().equals("-0.25"), "append(-0.25)");
+        check(new StringBuffer().append(1.0E-5).toString().equals("1.0E-5"), "append(1.0E-5)");
+        check(new StringBuffer().append(100.0).toString().equals("100.0"), "append(100.0)");
+        StringBuffer keep = new StringBuffer("ab");
+        keep.append("");
+        check(keep.length() == 2 && keep.toString().equals("ab"), "append(\"\") keeps content");
+        StringBuffer th = new StringBuffer();
+        check(th.append(true) == th && th.append('c') == th && th.append(1) == th
+              && th.append(1L) == th && th.append(1f) == th && th.append(1d) == th
+              && th.append(new char[]{'x'}) == th && th.append("s") == th
+              && th.append((CharSequence) "cs") == th, "every append overload returns this");
+        check(th.toString().equals("truec111.01.0xscs"), "chained appends exact");
+    }
+
+    static void testAppendCharSequenceSources() {
+        // CharSequence dispatch from String / StringBuffer / StringBuilder / a custom impl.
+        check(new StringBuffer().append((CharSequence) "world").toString().equals("world"), "append(CharSequence from String)");
+        check(new StringBuffer().append((CharSequence) new StringBuffer("bld")).toString().equals("bld"), "append(CharSequence from StringBuffer)");
+        check(new StringBuffer().append((CharSequence) new StringBuilder("buf")).toString().equals("buf"), "append(CharSequence from StringBuilder)");
+        check(new StringBuffer().append((CharSequence) new WrapCs("wrap")).toString().equals("wrap"), "append(custom CharSequence)");
+        // (start, end) slices from each source kind
+        check(new StringBuffer().append((CharSequence) "hello", 1, 3).toString().equals("el"), "slice from String");
+        check(new StringBuffer().append((CharSequence) new StringBuffer("hello"), 1, 3).toString().equals("el"), "slice from StringBuffer");
+        check(new StringBuffer().append((CharSequence) new StringBuilder("hello"), 1, 3).toString().equals("el"), "slice from StringBuilder");
+        check(new StringBuffer().append((CharSequence) new WrapCs("hello"), 1, 3).toString().equals("el"), "slice from custom CharSequence");
+        check(new StringBuffer().append((CharSequence) "hello", 2, 2).toString().equals(""), "empty slice");
+        check(new StringBuffer().append((CharSequence) "hello", 0, 5).toString().equals("hello"), "full-range slice");
+        // null CharSequence with (start, end): spec treats null as "null" and slices that literal.
+        check(new StringBuffer().append((CharSequence) null, 1, 4).toString().equals("ull"), "append(null CS,1,4) slices \"null\"");
+        check(new StringBuffer().append((CharSequence) null, 0, 4).toString().equals("null"), "append(null CS,0,4) whole \"null\"");
+        check(new StringBuffer().append((CharSequence) null, 4, 4).toString().equals(""), "append(null CS,4,4) empty slice");
+        check(new StringBuffer().append((CharSequence) null, 0, 0).toString().equals(""), "append(null CS,0,0) empty slice");
+    }
+
+    static void testAppendSelfAndCross() {
+        StringBuffer one = new StringBuffer("a");
+        one.append(one);
+        check(one.length() == 2 && one.toString().equals("aa"), "self-append \"a\" -> \"aa\"");
+        StringBuffer two = new StringBuffer("ab");
+        two.append(two);
+        check(two.length() == 4 && two.toString().equals("abab"), "self-append \"ab\" -> \"abab\"");
+        check(new StringBuffer("x").append(new StringBuilder("y")).toString().equals("xy"), "append(StringBuilder) cross-type");
+        check(new StringBuffer("x").append((CharSequence) new StringBuffer("z")).toString().equals("xz"), "append(StringBuffer) via CharSequence");
+        check(new StringBuffer("x").append((CharSequence) new StringBuilder("y")).toString().equals("xy"), "append(StringBuilder) via CharSequence");
+        check(new StringBuffer("x").append((StringBuilder) null).toString().equals("xnull"), "append((StringBuilder)null) appends \"null\"");
+    }
+
+    static void testAppendCodePointEdges() {
+        StringBuffer nul = new StringBuffer();
+        check(nul.appendCodePoint(0) == nul && nul.length() == 1 && nul.charAt(0) == '\0',
+              "appendCodePoint(0) writes a single NUL char");
+        StringBuffer max = new StringBuffer();
+        max.appendCodePoint(0x10FFFF);
+        check(max.length() == 2 && max.charAt(0) == '\udbff' && max.charAt(1) == '\udfff',
+              "appendCodePoint(MAX_CODE_POINT) writes a surrogate pair");
+        check(max.codePointAt(0) == 0x10FFFF, "MAX_CODE_POINT round-trips via codePointAt");
+        StringBuffer bmp = new StringBuffer();
+        bmp.appendCodePoint(0xFFFF);
+        check(bmp.length() == 1 && bmp.charAt(0) == '\uffff', "appendCodePoint(0xFFFF) writes one char");
+        StringBuffer mus = new StringBuffer();
+        mus.appendCodePoint(0x1D11E);
+        check(mus.length() == 2 && mus.codePointCount(0, 2) == 1, "appendCodePoint(MUSICAL G CLEF) pair, +2 UTF-16 units");
+        expectExact(() -> new StringBuffer().appendCodePoint(Character.MIN_CODE_POINT - 1),
+              "java.lang.IllegalArgumentException",
+              MODERN ? "Not a valid Unicode code point: 0xFFFFFFFF" : null,
+              "appendCodePoint(-1)");
+        expectExact(() -> new StringBuffer().appendCodePoint(Character.MAX_CODE_POINT + 1),
+              "java.lang.IllegalArgumentException",
+              MODERN ? "Not a valid Unicode code point: 0x110000" : null,
+              "appendCodePoint(0x110000)");
+    }
+
+    static void testAppendCharArrayBoundsExact() {
+        // JDK 8 surfaces these as raw ArrayIndexOutOfBoundsException (null message);
+        // JDK 27 pre-checks and throws plain IndexOutOfBoundsException with a Range message.
+        expectExact(() -> new StringBuffer().append(new char[]{'a'}, -1, 1),
+              MODERN ? CLASS_IOOBE : CLASS_AIOOBE,
+              MODERN ? "Range [-1, 0) out of bounds for length 1" : null,
+              "append(char[],-1,1)");
+        expectExact(() -> new StringBuffer().append(new char[]{'a'}, 0, 2),
+              MODERN ? CLASS_IOOBE : CLASS_AIOOBE,
+              MODERN ? "Range [0, 2) out of bounds for length 1" : null,
+              "append(char[],0,2)");
+        expectExact(() -> new StringBuffer().append(new char[]{'a'}, 1, -1),
+              MODERN ? CLASS_IOOBE : CLASS_AIOOBE,
+              MODERN ? "Range [1, 0) out of bounds for length 1" : null,
+              "append(char[],1,-1)");
+        expectExact(() -> new StringBuffer().append((CharSequence) "ab", -1, 1),
+              CLASS_IOOBE,
+              MODERN ? "Range [-1, 1) out of bounds for length 2" : "start -1, end 1, s.length() 2",
+              "append(CharSequence,-1,1)");
+        expectExact(() -> new StringBuffer().append((CharSequence) null, 0, 5),
+              CLASS_IOOBE,
+              MODERN ? "Range [0, 5) out of bounds for length 4" : "start 0, end 5, s.length() 4",
+              "append(null CharSequence,0,5)");
+    }
+
+    static void testInsertBoundariesAndTypes() {
+        check(new StringBuffer("bc").insert(0, 'a').toString().equals("abc"), "insert(char) at 0");
+        check(new StringBuffer("ac").insert(1, 'b').toString().equals("abc"), "insert(char) middle");
+        check(new StringBuffer("ab").insert(2, 'c').toString().equals("abc"), "insert(char) at length");
+        check(new StringBuffer("ac").insert(1, "b").toString().equals("abc"), "insert(String) middle");
+        check(new StringBuffer("ac").insert(1, 5).toString().equals("a5c"), "insert(int) middle");
+        check(new StringBuffer("ac").insert(1, 7L).toString().equals("a7c"), "insert(long) middle");
+        check(new StringBuffer("ac").insert(1, 2.5f).toString().equals("a2.5c"), "insert(float) middle");
+        check(new StringBuffer("ac").insert(1, 3.5).toString().equals("a3.5c"), "insert(double) middle");
+        check(new StringBuffer("ac").insert(1, true).toString().equals("atruec"), "insert(boolean) middle");
+        check(new StringBuffer("ac").insert(1, Integer.valueOf(9)).toString().equals("a9c"), "insert(Object) middle");
+        check(new StringBuffer("ac").insert(1, new char[]{'X', 'Y'}).toString().equals("aXYc"), "insert(char[]) middle");
+        check(new StringBuffer("ac").insert(1, (CharSequence) "XY").toString().equals("aXYc"), "insert(CharSequence) middle");
+        check(new StringBuffer("ac").insert(1, new char[]{'X', 'Y', 'Z'}, 1, 2).toString().equals("aYZc"), "insert(char[],off,len) slice");
+        check(new StringBuffer("ac").insert(1, (CharSequence) "XYZ", 1, 3).toString().equals("aYZc"), "insert(CharSequence,s,e) slice");
+        check(new StringBuffer("ac").insert(1, (CharSequence) "XYZ", 2, 2).toString().equals("ac"), "insert(CharSequence,2,2) empty slice");
+        StringBuffer th = new StringBuffer("ab");
+        check(th.insert(1, "X") == th && th.insert(1, 'X') == th && th.insert(1, 5) == th
+              && th.insert(1, 5L) == th && th.insert(1, 5f) == th && th.insert(1, 5d) == th
+              && th.insert(1, true) == th && th.insert(1, (Object) null) == th
+              && th.insert(1, new char[]{'c'}) == th && th.insert(1, (CharSequence) "cs") == th,
+              "every insert overload returns this");
+        // null argument forms insert the four characters "null"
+        check(new StringBuffer("qw").insert(0, (String) null).toString().equals("nullqw"), "insert(0,(String)null)");
+        check(new StringBuffer("qw").insert(1, (String) null).toString().equals("qnullw"), "insert(mid,(String)null)");
+        check(new StringBuffer("qw").insert(2, (String) null).toString().equals("qwnull"), "insert(end,(String)null)");
+        check(new StringBuffer("qw").insert(1, (Object) null).toString().equals("qnullw"), "insert(mid,(Object)null)");
+        check(new StringBuffer("qw").insert(1, (CharSequence) null).toString().equals("qnullw"), "insert(mid,(CharSequence)null)");
+        check(new StringBuffer("qz").insert(1, (CharSequence) null, 1, 3).toString().equals("qulz"), "insert(mid,null CS,1,3) inserts \"ul\"");
+        check(new StringBuffer("qz").insert(2, (CharSequence) null, 0, 0).toString().equals("qz"), "insert(end,null CS,0,0) inserts nothing");
+        // out-of-range: exact class and message locked per release
+        expectExact(() -> new StringBuffer("ab").insert(-1, 'x'),
+              MODERN ? CLASS_SIOOBE : CLASS_AIOOBE,
+              MODERN ? "Range [-1, 2) out of bounds for length 2" : null,
+              "insert(-1,char)");
+        expectExact(() -> new StringBuffer("ab").insert(3, 'x'),
+              MODERN ? CLASS_SIOOBE : CLASS_AIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : null,
+              "insert(3,char)");
+        expectExact(() -> new StringBuffer("ab").insert(-1, "x"),
+              CLASS_SIOOBE,
+              MODERN ? "Range [-1, 2) out of bounds for length 2" : "String index out of range: -1",
+              "insert(-1,String)");
+        expectExact(() -> new StringBuffer("ab").insert(3, "x"),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,String)");
+        expectExact(() -> new StringBuffer("ab").insert(3, 5),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,int)");
+        expectExact(() -> new StringBuffer("ab").insert(3, 5L),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,long)");
+        expectExact(() -> new StringBuffer("ab").insert(3, 5f),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,float)");
+        expectExact(() -> new StringBuffer("ab").insert(3, 5d),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,double)");
+        expectExact(() -> new StringBuffer("ab").insert(3, true),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,boolean)");
+        expectExact(() -> new StringBuffer("ab").insert(3, new Object()),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,Object)");
+        expectExact(() -> new StringBuffer("ab").insert(3, new char[]{'x'}),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,char[])");
+        expectExact(() -> new StringBuffer("ab").insert(3, (CharSequence) "x"),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,CharSequence)");
+        expectExact(() -> new StringBuffer("ab").insert(3, new char[]{'x'}, 0, 1),
+              CLASS_SIOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "String index out of range: 3",
+              "insert(3,char[],0,1)");
+        expectExact(() -> new StringBuffer("ab").insert(3, (CharSequence) "x", 0, 1),
+              MODERN ? CLASS_SIOOBE : CLASS_IOOBE,
+              MODERN ? "Range [3, 2) out of bounds for length 2" : "dstOffset 3",
+              "insert(3,CharSequence,0,1)");
+    }
+
+    static void testDeleteMatrix() {
+        check(new StringBuffer("abc").delete(0, 0).toString().equals("abc"), "delete(0,0) identity");
+        check(new StringBuffer("abc").delete(3, 3).toString().equals("abc"), "delete(len,len) identity");
+        check(new StringBuffer("abc").delete(0, 3).toString().equals(""), "delete(0,len) empties");
+        check(new StringBuffer("abcdef").delete(0, 1).toString().equals("bcdef"), "delete head");
+        check(new StringBuffer("abcdef").delete(5, 6).toString().equals("abcde"), "delete tail");
+        check(new StringBuffer("abcdef").delete(2, 99).toString().equals("ab"), "delete clamps end past length");
+        StringBuffer d = new StringBuffer("abc");
+        check(d.delete(1, 2) == d && d.toString().equals("ac"), "delete(1,2) middle returns this");
+        StringBuffer dc = new StringBuffer("abc");
+        check(dc.deleteCharAt(0) == dc && dc.toString().equals("bc"), "deleteCharAt(0) returns this");
+        check(new StringBuffer("abc").deleteCharAt(1).toString().equals("ac"), "deleteCharAt middle");
+        check(new StringBuffer("abc").deleteCharAt(2).toString().equals("ab"), "deleteCharAt tail");
+        expectExact(() -> new StringBuffer("abc").delete(-1, 2),
+              CLASS_SIOOBE,
+              MODERN ? "Range [-1, 2) out of bounds for length 3" : "String index out of range: -1",
+              "delete(-1,2)");
+        expectExact(() -> new StringBuffer("abc").delete(2, 1),
+              CLASS_SIOOBE,
+              MODERN ? "Range [2, 1) out of bounds for length 3" : null,
+              "delete(2,1) begin>end");
+        expectExact(() -> new StringBuffer("abc").deleteCharAt(-1),
+              CLASS_SIOOBE,
+              MODERN ? "Index -1 out of bounds for length 3" : "String index out of range: -1",
+              "deleteCharAt(-1)");
+        expectExact(() -> new StringBuffer("abc").deleteCharAt(3),
+              CLASS_SIOOBE,
+              MODERN ? "Index 3 out of bounds for length 3" : "String index out of range: 3",
+              "deleteCharAt(len)");
+    }
+
+    static void testReplaceMatrix() {
+        check(new StringBuffer("ac").replace(0, 0, "b").toString().equals("bac"), "replace(0,0,s) is a pure insert");
+        check(new StringBuffer("ac").replace(2, 2, "b").toString().equals("acb"), "replace(len,len,s) appends");
+        check(new StringBuffer("abcdef").replace(1, 3, "XY").toString().equals("aXYdef"), "replace equal length");
+        check(new StringBuffer("abcdef").replace(1, 3, "XYZW").toString().equals("aXYZWdef"), "replace grows");
+        check(new StringBuffer("abcdef").replace(1, 4, "Z").toString().equals("aZef"), "replace shrinks");
+        check(new StringBuffer("abcdef").replace(1, 3, "").toString().equals("adef"), "replace with empty deletes the range");
+        check(new StringBuffer("abc").replace(0, 3, "z").toString().equals("z"), "replace full range");
+        StringBuffer r = new StringBuffer("abc");
+        check(r.replace(1, 2, "Q") == r && r.toString().equals("aQc"), "replace returns this");
+        expectClass(() -> new StringBuffer("abc").replace(0, 1, null), "java.lang.NullPointerException",
+              "replace(0,1,null)");
+        expectExact(() -> new StringBuffer("abc").replace(-1, 1, "x"),
+              CLASS_SIOOBE,
+              MODERN ? "Range [-1, 1) out of bounds for length 3" : "String index out of range: -1",
+              "replace(-1,1,x)");
+        expectExact(() -> new StringBuffer("abc").replace(2, 1, "x"),
+              CLASS_SIOOBE,
+              MODERN ? "Range [2, 1) out of bounds for length 3" : "start > end",
+              "replace(2,1,x) start>end");
+    }
+
+    static void testSetCharAtSetLength() {
+        StringBuffer h = new StringBuffer("abc");
+        h.setCharAt(0, 'X');
+        check(h.toString().equals("Xbc"), "setCharAt(0,..)");
+        StringBuffer t = new StringBuffer("abc");
+        t.setCharAt(2, 'X');
+        check(t.toString().equals("abX"), "setCharAt(len-1,..)");
+        StringBuffer n0 = new StringBuffer("abc");
+        n0.setLength(0);
+        check(n0.length() == 0, "setLength(0) empties");
+        StringBuffer same = new StringBuffer("abc");
+        same.setLength(3);
+        check(same.toString().equals("abc"), "setLength(len) unchanged");
+        StringBuffer tr = new StringBuffer("abcdef");
+        tr.setLength(3);
+        check(tr.length() == 3 && tr.toString().equals("abc"), "setLength shrink drops the tail");
+        StringBuffer grow = new StringBuffer("ab");
+        grow.setLength(4);
+        check(grow.length() == 4 && grow.charAt(2) == '\u0000' && grow.charAt(3) == '\u0000',
+              "setLength grow pads with NUL");
+        grow.append("c");
+        check(grow.length() == 5 && grow.charAt(4) == 'c' && grow.charAt(2) == '\u0000',
+              "append lands right after the NUL padding");
+        // The negative setLength message is byte-identical on JDK 8 and JDK 27: lock it.
+        expectExact(() -> new StringBuffer("abc").setLength(-1),
+              CLASS_SIOOBE, "String index out of range: -1", "setLength(-1)");
+        expectExact(() -> new StringBuffer("abc").setLength(Integer.MIN_VALUE),
+              CLASS_SIOOBE, "String index out of range: -2147483648", "setLength(MIN_VALUE)");
+        expectExact(() -> new StringBuffer("abc").setCharAt(-1, 'x'),
+              CLASS_SIOOBE,
+              MODERN ? "Index -1 out of bounds for length 3" : "String index out of range: -1",
+              "setCharAt(-1,..)");
+        expectExact(() -> new StringBuffer("abc").setCharAt(3, 'x'),
+              CLASS_SIOOBE,
+              MODERN ? "Index 3 out of bounds for length 3" : "String index out of range: 3",
+              "setCharAt(len,..)");
+    }
+
+    static void testCapacityContract() {
+        check(new StringBuffer().capacity() == 16, "default capacity is 16");
+        check(new StringBuffer("abc").capacity() == 19, "String ctor capacity = str.length() + 16");
+        check(new StringBuffer((CharSequence) "hello").capacity() == 21, "CharSequence ctor capacity = csq.length() + 16");
+        check(new StringBuffer(0).capacity() == 0, "zero-capacity ctor is legal");
+        StringBuffer noShrink = new StringBuffer("abc");
+        noShrink.ensureCapacity(-5);
+        check(noShrink.capacity() == 19, "ensureCapacity(negative) is a no-op");
+        noShrink.ensureCapacity(0);
+        check(noShrink.capacity() == 19, "ensureCapacity(0) never shrinks");
+        noShrink.ensureCapacity(10);
+        check(noShrink.capacity() == 19, "ensureCapacity(below current) keeps capacity");
+        noShrink.ensureCapacity(100);
+        check(noShrink.capacity() >= 100, "ensureCapacity(minimum) grows to at least minimum");
+        StringBuffer grow = new StringBuffer();
+        for (int i = 0; i < 40; i++) grow.append("0123456789");
+        check(grow.length() == 400 && grow.capacity() >= grow.length(), "capacity >= length invariant after growth");
+        StringBuffer trim = new StringBuffer("hello");
+        trim.trimToSize();
+        check(trim.capacity() == 5 && trim.length() == 5, "trimToSize makes capacity == length");
+        trim.trimToSize();
+        check(trim.capacity() == 5, "trimToSize is idempotent");
+        trim.append("!");
+        check(trim.toString().equals("hello!"), "append still works after trimToSize");
+        StringBuffer empt = new StringBuffer("temp");
+        empt.setLength(0);
+        empt.trimToSize();
+        check(empt.capacity() == 0, "trimToSize down to length 0");
+    }
+
+    static void testCodePointFamily() {
+        // "a<UD834 UDD1E>b": one BMP char, one supplementary pair, one BMP char.
+        StringBuffer sb = new StringBuffer("a\ud834\udd1eb");
+        check(sb.length() == 4, "length counted in UTF-16 units");
+        check(sb.charAt(1) == '\ud834' && sb.charAt(2) == '\udd1e', "charAt exposes both surrogate units");
+        check(sb.codePointAt(0) == 'a', "codePointAt(0)");
+        check(sb.codePointAt(1) == 0x1D11E, "codePointAt(high surrogate index) reads the whole pair");
+        check(sb.codePointAt(2) == 0xDD1E, "codePointAt(lone low surrogate index) returns the unit itself");
+        check(sb.codePointBefore(1) == 'a', "codePointBefore(1)");
+        check(sb.codePointBefore(2) == 0xD834, "codePointBefore(2) sees unpaired high unit");
+        check(sb.codePointBefore(3) == 0x1D11E, "codePointBefore(3) reads the pair backwards");
+        check(sb.codePointBefore(4) == 'b', "codePointBefore(len)");
+        check(sb.codePointCount(0, 4) == 3, "codePointCount over the full range");
+        check(sb.codePointCount(1, 3) == 1, "codePointCount over the pair");
+        check(sb.codePointCount(1, 2) == 1, "codePointCount over half a pair");
+        check(sb.codePointCount(0, 0) == 0, "codePointCount over an empty range");
+        check(sb.offsetByCodePoints(0, 1) == 1, "offsetByCodePoints 0->1");
+        check(sb.offsetByCodePoints(0, 2) == 3, "offsetByCodePoints skips the whole pair");
+        check(sb.offsetByCodePoints(1, 1) == 3, "offsetByCodePoints from inside the pair");
+        check(sb.offsetByCodePoints(3, 1) == 4, "offsetByCodePoints over the last char");
+        check(sb.offsetByCodePoints(4, 0) == 4, "offsetByCodePoints with zero shift");
+        StringBuffer abc = new StringBuffer("abc");
+        expectExact(() -> abc.codePointAt(-1),
+              CLASS_SIOOBE,
+              MODERN ? "Index -1 out of bounds for length 3" : "String index out of range: -1",
+              "codePointAt(-1)");
+        expectExact(() -> abc.codePointAt(3),
+              CLASS_SIOOBE,
+              MODERN ? "Index 3 out of bounds for length 3" : "String index out of range: 3",
+              "codePointAt(len)");
+        expectExact(() -> abc.codePointBefore(0),
+              CLASS_SIOOBE,
+              MODERN ? "Index -1 out of bounds for length 3" : "String index out of range: 0",
+              "codePointBefore(0)");
+        expectExact(() -> abc.codePointBefore(4),
+              CLASS_SIOOBE,
+              MODERN ? "Index 3 out of bounds for length 3" : "String index out of range: 4",
+              "codePointBefore(len+1)");
+        expectExact(() -> abc.codePointCount(2, 1),
+              CLASS_IOOBE,
+              MODERN ? "Range [2, 1) out of bounds for length 3" : null,
+              "codePointCount(begin>end)");
+        // Plain IndexOutOfBoundsException with a null message on BOTH releases: lock it.
+        expectExact(() -> abc.offsetByCodePoints(0, 4),
+              CLASS_IOOBE, null, "offsetByCodePoints past the end");
+        expectExact(() -> abc.offsetByCodePoints(-1, 1),
+              CLASS_IOOBE, null, "offsetByCodePoints(negative index)");
+    }
+
+    static void testReverseMatrix() {
+        check(new StringBuffer().reverse().length() == 0, "reverse of empty stays empty");
+        check(new StringBuffer("x").reverse().toString().equals("x"), "reverse of a single char");
+        StringBuffer r = new StringBuffer("abc");
+        check(r.reverse() == r && r.toString().equals("cba"), "reverse returns this");
+        StringBuffer pali = new StringBuffer("aba");
+        check(pali.reverse().toString().equals("aba"), "reverse of a palindrome equals the original");
+        // reverse treats a surrogate pair as a single unit and keeps it well-formed.
+        StringBuffer sur = new StringBuffer("a\ud834\udd1eb");
+        sur.reverse();
+        check(sur.length() == 4, "reverse preserves the UTF-16 length");
+        check(sur.charAt(0) == 'b' && sur.charAt(1) == '\ud834' && sur.charAt(2) == '\udd1e' && sur.charAt(3) == 'a',
+              "reverse moves the pair as one unit (\"b<clef>a\")");
+        check(sur.codePointCount(0, 4) == 3, "reversed content still holds 3 code points");
+        check(sur.codePointAt(1) == 0x1D11E, "the reversed pair still decodes");
+        StringBuffer pair = new StringBuffer("\ud834\udd1e");
+        pair.reverse();
+        check(pair.charAt(0) == '\ud834' && pair.charAt(1) == '\udd1e', "a lone pair reverses to itself");
+        StringBuffer loneHigh = new StringBuffer("\ud800");
+        loneHigh.reverse();
+        check(loneHigh.charAt(0) == '\ud800', "an unpaired high surrogate reverses to itself");
+        StringBuffer loneLow = new StringBuffer("\udc00ab");
+        loneLow.reverse();
+        check(loneLow.charAt(0) == 'b' && loneLow.charAt(1) == 'a' && loneLow.charAt(2) == '\udc00',
+              "an unpaired low surrogate travels as a plain unit");
+        StringBuffer twice = new StringBuffer("stressed");
+        twice.reverse().reverse();
+        check(twice.toString().equals("stressed"), "reverse twice is the identity");
+    }
+
+    static void testSubstringSubSequence() {
+        StringBuffer sb = new StringBuffer("abcdef");
+        check(sb.substring(0).equals("abcdef"), "substring(0) whole content");
+        check(sb.substring(6).equals(""), "substring(len) is empty");
+        check(sb.substring(2, 6).equals("cdef"), "substring(2,len)");
+        check(sb.substring(0, 0).equals(""), "substring(0,0) is empty");
+        check(sb.substring(2, 2).equals(""), "substring(mid,mid) is empty");
+        String a1 = sb.substring(1);
+        String a2 = sb.substring(1);
+        check(a1.equals(a2) && a1 != a2, "substring allocates a fresh String per call");
+        CharSequence sub = sb.subSequence(1, 4);
+        check(sub.getClass() == String.class, "subSequence returns a String");
+        check(sub.toString().equals("bcd") && sub.length() == 3 && sub.charAt(0) == 'b', "subSequence content");
+        check(sb.subSequence(6, 6).toString().equals(""), "subSequence(len,len) is empty");
+        StringBuffer abc = new StringBuffer("abc");
+        expectExact(() -> abc.substring(-1),
+              CLASS_SIOOBE,
+              MODERN ? "Range [-1, 3) out of bounds for length 3" : "String index out of range: -1",
+              "substring(-1)");
+        expectExact(() -> abc.substring(4),
+              CLASS_SIOOBE,
+              MODERN ? "Range [4, 3) out of bounds for length 3" : "String index out of range: -1",
+              "substring(len+1)");
+        expectExact(() -> abc.substring(2, 1),
+              CLASS_SIOOBE,
+              MODERN ? "Range [2, 1) out of bounds for length 3" : "String index out of range: -1",
+              "substring(begin>end)");
+        expectExact(() -> abc.substring(0, 4),
+              CLASS_SIOOBE,
+              MODERN ? "Range [0, 4) out of bounds for length 3" : "String index out of range: 4",
+              "substring(end past length)");
+        expectExact(() -> abc.subSequence(2, 1),
+              CLASS_SIOOBE,
+              MODERN ? "Range [2, 1) out of bounds for length 3" : "String index out of range: -1",
+              "subSequence(begin>end)");
+        expectExact(() -> abc.subSequence(0, 4),
+              CLASS_SIOOBE,
+              MODERN ? "Range [0, 4) out of bounds for length 3" : "String index out of range: 4",
+              "subSequence(end past length)");
+    }
+
+    static void testIndexOfLastIndexOf() {
+        StringBuffer sb = new StringBuffer("abc");
+        check(sb.indexOf("") == 0, "indexOf(\"\") is 0");
+        check(sb.indexOf("", 1) == 1, "indexOf(\"\",1)");
+        check(sb.indexOf("", 3) == 3, "indexOf(\"\",len)");
+        check(sb.indexOf("", 4) == 3, "indexOf(\"\",past len) clamps to len");
+        check(sb.lastIndexOf("") == 3, "lastIndexOf(\"\") is len");
+        check(sb.lastIndexOf("", 2) == 2, "lastIndexOf(\"\",2)");
+        check(sb.lastIndexOf("", -1) == -1, "lastIndexOf(\"\",-1) is -1");
+        check(sb.indexOf("abc") == 0, "indexOf whole content");
+        check(sb.indexOf("abcd") == -1, "needle longer than haystack");
+        check(sb.indexOf("b", 9) == -1, "fromIndex past length");
+        StringBuffer aaa = new StringBuffer("aaa");
+        check(aaa.indexOf("aa") == 0, "indexOf overlapping prefix");
+        check(aaa.indexOf("aa", 1) == 1, "indexOf from inside the overlap");
+        check(aaa.lastIndexOf("aa") == 1, "lastIndexOf prefers the last match");
+        check(new StringBuffer("abc").indexOf("B") == -1, "indexOf is case sensitive");
+        StringBuffer uni = new StringBuffer("a\ud834\udd1eb");
+        check(uni.indexOf("\ud834\udd1e") == 1, "indexOf finds a supplementary needle");
+        check(uni.lastIndexOf("\ud834\udd1e") == 1, "lastIndexOf with a supplementary needle");
+        StringBuffer empty = new StringBuffer();
+        check(empty.indexOf("") == 0 && empty.lastIndexOf("") == 0, "empty builder, empty needle");
+        check(empty.indexOf("a") == -1 && empty.lastIndexOf("a") == -1, "empty builder, missing needle");
+        StringBuffer ban = new StringBuffer("banana");
+        check(ban.lastIndexOf("a", 5) == 5 && ban.lastIndexOf("a", 4) == 3, "lastIndexOf(str,from) scans backwards");
+    }
+
+    static void testToStringSnapshot() {
+        StringBuffer sb = new StringBuffer("hello");
+        String snap = sb.toString();
+        sb.append(" world");
+        check(snap.equals("hello"), "toString snapshot is independent of later appends");
+        sb.setCharAt(0, 'H');
+        check(snap.equals("hello"), "snapshot unaffected by setCharAt");
+        String s1 = sb.toString();
+        String s2 = sb.toString();
+        check(s1.equals(s2), "two toString calls are equal");
+        check(s1 != s2, "each toString call allocates a new String");
+        check(s1.equals("Hello world"), "toString reflects the current content");
+        sb.delete(0, sb.length());
+        check(sb.toString().equals(""), "toString of an emptied builder");
+        StringBuffer hw = new StringBuffer("hello");
+        check("hello".contentEquals(hw), "String.contentEquals sees the same chars");
+        check(!"hell".contentEquals(hw), "contentEquals detects different content");
+    }
+
+    static void testEqualsHashCode() {
+        // StringBuffer does not override equals/hashCode: identity semantics.
+        StringBuffer a = new StringBuffer("a");
+        StringBuffer b = new StringBuffer("a");
+        check(!a.equals(b), "two same-content builders are NOT equals");
+        check(a.equals(a), "equals is reflexive");
+        check(!a.equals(null), "equals(null) is false");
+        check(!a.equals("a"), "equals against a String is false");
+        check(a.hashCode() == a.hashCode(), "hashCode is stable across calls");
+        check(a.toString().equals(b.toString()), "toString().equals bridges equal content");
+        check(!a.equals(b), "contrast locked: content equal, instances not");
+    }
+
+    static void testCharSequencePolymorphism() {
+        CharSequence cs = new StringBuffer("hello");
+        check(cs.length() == 5, "CharSequence.length");
+        check(cs.charAt(1) == 'e', "CharSequence.charAt");
+        check(cs.subSequence(1, 3).toString().equals("el"), "CharSequence.subSequence");
+        check(cs.toString().equals("hello"), "CharSequence.toString");
+        check(cs.chars().count() == 5, "default chars() streams over the builder");
+        check(cs.codePoints().count() == 5, "default codePoints() streams over the builder");
+        CharSequence empty = new StringBuffer();
+        check(empty.length() == 0, "empty builder viewed as CharSequence");
+        StringBuffer sink = new StringBuffer("[");
+        sink.append(cs, 1, 4);
+        sink.append(']');
+        check(sink.toString().equals("[ell]"), "append(CharSequence,int,int) composed from a builder view");
+    }
+
+    static void testGetCharsMatrix() {
+        char[] full = new char[3];
+        new StringBuffer("abc").getChars(0, 3, full, 0);
+        check(full[0] == 'a' && full[1] == 'b' && full[2] == 'c', "getChars full copy");
+        char[] part = new char[4];
+        new StringBuffer("abcd").getChars(1, 4, part, 1);
+        check(part[0] == '\0' && part[1] == 'b' && part[2] == 'c' && part[3] == 'd',
+              "getChars honors dst offset and leaves other slots untouched");
+        char[] big = new char[8];
+        new StringBuffer("abc").getChars(0, 3, big, 5);
+        check(big[5] == 'a' && big[6] == 'b' && big[7] == 'c', "getChars into the tail of a large destination");
+        StringBuffer sb = new StringBuffer("abc");
+        expectExact(() -> sb.getChars(2, 1, new char[3], 0),
+              CLASS_SIOOBE,
+              MODERN ? "Range [2, 1) out of bounds for length 3" : "srcBegin > srcEnd",
+              "getChars(srcBegin>srcEnd)");
+        expectExact(() -> sb.getChars(0, 3, new char[2], 0),
+              MODERN ? CLASS_IOOBE : CLASS_AIOOBE,
+              MODERN ? "Range [0, 3) out of bounds for length 2" : null,
+              "getChars destination too small");
+        expectExact(() -> sb.getChars(0, 3, new char[3], 5),
+              MODERN ? CLASS_IOOBE : CLASS_AIOOBE,
+              MODERN ? "Range [5, 8) out of bounds for length 3" : null,
+              "getChars destination offset out of range");
+    }
+
+    static void testNegativeCapacityCtorMessage() {
+        expectExact(() -> new StringBuffer(-1),
+              "java.lang.NegativeArraySizeException",
+              MODERN ? "-1" : null,
+              "new StringBuffer(-1) message");
+    }
+
+    static void testCharAtExactMessages() {
+        StringBuffer abc = new StringBuffer("abc");
+        expectExact(() -> abc.charAt(-1),
+              CLASS_SIOOBE,
+              MODERN ? "Index -1 out of bounds for length 3" : "String index out of range: -1",
+              "charAt(-1)");
+        expectExact(() -> abc.charAt(3),
+              CLASS_SIOOBE,
+              MODERN ? "Index 3 out of bounds for length 3" : "String index out of range: 3",
+              "charAt(len)");
+        check(abc.toString().equals("abc"), "failed charAt leaves content intact");
+    }
+
     public static void main(String[] args) throws Exception {
         testConstructors();
         testConstructorExceptions();
@@ -371,6 +981,26 @@ public class StringBufferTest {
         testSynchronized();
         testBoundaryEquivalence();
         testWhiteBox();
+        testAppendPrimitivesExact();
+        testAppendCharSequenceSources();
+        testAppendSelfAndCross();
+        testAppendCodePointEdges();
+        testAppendCharArrayBoundsExact();
+        testInsertBoundariesAndTypes();
+        testDeleteMatrix();
+        testReplaceMatrix();
+        testSetCharAtSetLength();
+        testCapacityContract();
+        testCodePointFamily();
+        testReverseMatrix();
+        testSubstringSubSequence();
+        testIndexOfLastIndexOf();
+        testToStringSnapshot();
+        testEqualsHashCode();
+        testCharSequencePolymorphism();
+        testGetCharsMatrix();
+        testNegativeCapacityCtorMessage();
+        testCharAtExactMessages();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

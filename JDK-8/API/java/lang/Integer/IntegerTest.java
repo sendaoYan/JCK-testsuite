@@ -310,6 +310,325 @@ public class IntegerTest {
         check(Integer.min(Integer.MIN_VALUE, Integer.MAX_VALUE) == Integer.MIN_VALUE, "min");
     }
 
+    // ================= 契约深化（2026-11）追加 =================
+
+    /** true 当运行在 JDK 9+（版本串不再以 "1." 开头），用于锁定异常消息文本差异。 */
+    static final boolean MODERN = !System.getProperty("java.version").startsWith("1.");
+
+    /** 捕获 NumberFormatException 并逐字比对消息文本（双侧实测锁定）。 */
+    static void checkNfeMsg(String expected, Runnable r, String label) {
+        try {
+            r.run();
+            throw new AssertionError(label + ": expected NumberFormatException with <" + expected + ">");
+        } catch (NumberFormatException e) {
+            check(expected.equals(e.getMessage()),
+                  label + ": expected message <" + expected + "> but got <" + e.getMessage() + ">");
+        }
+    }
+
+    /** 捕获 ArithmeticException 并逐字比对消息文本。 */
+    static void checkArithMsg(String expected, Runnable r, String label) {
+        try {
+            r.run();
+            throw new AssertionError(label + ": expected ArithmeticException with <" + expected + ">");
+        } catch (ArithmeticException e) {
+            check(expected.equals(e.getMessage()),
+                  label + ": expected message <" + expected + "> but got <" + e.getMessage() + ">");
+        }
+    }
+
+    /** parseInt(null) 的消息：JDK-8 为 "null"，JDK-19+ 为 "Cannot parse null string"。 */
+    static String nullParseMsg() {
+        return MODERN ? "Cannot parse null string" : "null";
+    }
+
+    /** 非 10 进制的解析失败消息：JDK-19+ 追加 " under radix N"。 */
+    static String radixMsg(String s, int radix) {
+        return MODERN ? ("For input string: \"" + s + "\" under radix " + radix)
+                      : ("For input string: \"" + s + "\"");
+    }
+
+    static void testNfeMessageContract() {
+        // radix 越界消息（两侧文本一致，实测逐字锁定）
+        checkNfeMsg("radix 1 less than Character.MIN_RADIX",
+              () -> Integer.parseInt("10", 1), "radix MIN_RADIX-1");
+        checkNfeMsg("radix 37 greater than Character.MAX_RADIX",
+              () -> Integer.parseInt("10", 37), "radix MAX_RADIX+1");
+        checkNfeMsg("radix 0 less than Character.MIN_RADIX",
+              () -> Integer.parseInt("10", 0), "radix 0");
+        checkNfeMsg("radix 1 less than Character.MIN_RADIX",
+              () -> Integer.parseInt("10", Character.MIN_RADIX - 1), "radix Character.MIN_RADIX-1");
+        checkNfeMsg("radix 37 greater than Character.MAX_RADIX",
+              () -> Integer.parseInt("10", Character.MAX_RADIX + 1), "radix Character.MAX_RADIX+1");
+        // 非法字符 NFE 消息 `For input string: "..."` 逐字锁定（10 进制两侧一致）
+        checkNfeMsg("For input string: \"z\"", () -> Integer.parseInt("z"), "alpha");
+        checkNfeMsg("For input string: \"\"", () -> Integer.parseInt(""), "empty");
+        checkNfeMsg("For input string: \" 42\"", () -> Integer.parseInt(" 42"), "leading space");
+        checkNfeMsg("For input string: \"42 \"", () -> Integer.parseInt("42 "), "trailing space");
+        checkNfeMsg("For input string: \"12a\"", () -> Integer.parseInt("12a"), "trailing alpha");
+        // 超范围 NFE 消息含原文
+        checkNfeMsg("For input string: \"2147483648\"", () -> Integer.parseInt("2147483648"), "MAX+1");
+        checkNfeMsg("For input string: \"-2147483649\"", () -> Integer.parseInt("-2147483649"), "MIN-1");
+        checkNfeMsg("For input string: \"999999999999999999999999\"",
+              () -> Integer.parseInt("999999999999999999999999"), "far overflow");
+        // null → NFE（而非 NPE），消息含 "null"
+        checkNfeMsg(nullParseMsg(), () -> Integer.parseInt(null), "parseInt(null)");
+        checkNfeMsg(nullParseMsg(), () -> Integer.parseUnsignedInt(null), "parseUnsignedInt(null)");
+        // 非 10 进制失败消息：JDK-19+ 追加 " under radix N"
+        checkNfeMsg(radixMsg("80000000", 16), () -> Integer.parseInt("80000000", 16), "hex overflow");
+        checkNfeMsg(radixMsg("z", 16), () -> Integer.parseInt("z", 16), "hex alpha");
+        checkNfeMsg(radixMsg("10000000000000000000000000000000", 2),
+              () -> Integer.parseInt("10000000000000000000000000000000", 2), "binary overflow");
+        // 无符号解析消息（两侧一致）
+        checkNfeMsg("Illegal leading minus sign on unsigned string -1.",
+              () -> Integer.parseUnsignedInt("-1"), "unsigned minus");
+        checkNfeMsg("String value 4294967296 exceeds range of unsigned int.",
+              () -> Integer.parseUnsignedInt("4294967296"), "unsigned 2^32");
+        checkNfeMsg("For input string: \"z\"", () -> Integer.parseUnsignedInt("z"), "unsigned alpha");
+        // decode 负例消息
+        checkNfeMsg("Zero length string", () -> Integer.decode(""), "decode empty");
+        checkNfeMsg(radixMsg("", 16), () -> Integer.decode("0x"), "decode 0x bare");
+        checkNfeMsg(radixMsg("", 16), () -> Integer.decode("#"), "decode # bare");
+        checkNfeMsg("For input string: \"\"", () -> Integer.decode("+"), "decode bare +");
+        checkNfeMsg("For input string: \"-\"", () -> Integer.decode("-"), "decode bare -");
+        checkNfeMsg("For input string: \"123y\"", () -> Integer.decode("123y"), "decode 123y");
+        checkNfeMsg("For input string: \"10l\"", () -> Integer.decode("10l"), "decode l suffix");
+        checkNfeMsg("For input string: \"10L\"", () -> Integer.decode("10L"), "decode L suffix");
+        checkNfeMsg(radixMsg("g", 16), () -> Integer.decode("0xg"), "decode 0xg");
+        checkNfeMsg(radixMsg("80000000", 16), () -> Integer.decode("0x80000000"), "decode hex overflow");
+        checkNfeMsg(radixMsg("2147483647", 8), () -> Integer.decode("02147483647"), "decode octal overflow");
+        // 无符号除零 ArithmeticException "/ by zero" 逐字
+        checkArithMsg("/ by zero", () -> Integer.divideUnsigned(1, 0), "divideUnsigned by 0");
+        checkArithMsg("/ by zero", () -> Integer.remainderUnsigned(1, 0), "remainderUnsigned by 0");
+    }
+
+    static void testParseRadixRoundTrip() {
+        int[] values = {0, 1, -1, 7, 42, 127, -128, 255, 4095,
+                        0x7ffffffe, 0x80000001, Integer.MAX_VALUE, Integer.MIN_VALUE};
+        int[] radixes = {2, 8, 10, 16, 36};
+        // parse(toString(v, radix), radix) == v 对全进制表闭环
+        for (int radix : radixes) {
+            for (int v : values) {
+                check(Integer.parseInt(Integer.toString(v, radix), radix) == v,
+                      "round-trip toString/parse " + v + " radix " + radix);
+            }
+        }
+        // "+5" 的各进制写法均被接受（如 radix 2 的 "+101"）
+        for (int radix : radixes) {
+            check(Integer.parseInt("+" + Integer.toString(5, radix), radix) == 5,
+                  "parseInt(+5," + radix + ")");
+        }
+        // "0" / "-0" 在所有进制下均为 0
+        for (int radix : radixes) {
+            check(Integer.parseInt("0", radix) == 0, "parseInt(0," + radix + ")");
+            check(Integer.parseInt("-0", radix) == 0, "parseInt(-0," + radix + ")");
+        }
+        // 进制边界
+        check(Integer.parseInt("10", Character.MIN_RADIX) == 2, "parse at MIN_RADIX");
+        check(Integer.parseInt("1z", Character.MAX_RADIX) == 71, "parse 1z at MAX_RADIX");
+        check(Integer.parseInt("+2147483647") == Integer.MAX_VALUE, "parse +MAX");
+        // 16 进制补码边界（负数经符号位解析）
+        check(Integer.parseInt("-80000000", 16) == Integer.MIN_VALUE, "hex -80000000");
+        check(Integer.parseInt("7fffffff", 16) == Integer.MAX_VALUE, "hex 7fffffff");
+    }
+
+    static void testToStringExactTable() {
+        // toString(int, radix) 精确全等表
+        check(Integer.toString(0, 2).equals("0"), "toString(0,2)");
+        check(Integer.toString(1, 2).equals("1"), "toString(1,2)");
+        check(Integer.toString(-255, 2).equals("-11111111"), "toString(-255,2)");
+        check(Integer.toString(0, 8).equals("0"), "toString(0,8)");
+        check(Integer.toString(-255, 8).equals("-377"), "toString(-255,8)");
+        check(Integer.toString(0, 16).equals("0"), "toString(0,16)");
+        check(Integer.toString(-255, 16).equals("-ff"), "toString(-255,16)");
+        check(Integer.toString(-1, 36).equals("-1"), "toString(-1,36)");
+        check(Integer.toString(0, 36).equals("0"), "toString(0,36)");
+        check(Integer.toString(35, 36).equals("z"), "toString(35,36)");
+        check(Integer.toString(36, 36).equals("10"), "toString(36,36)");
+        check(Integer.toString(Integer.MAX_VALUE, 2).equals(
+              "1111111111111111111111111111111"), "toString(MAX,2)");
+        check(Integer.toString(Integer.MIN_VALUE, 8).equals("-20000000000"), "toString(MIN,8)");
+        // toBinaryString/toHexString/toOctalString 对 -1/255/MIN 的精确串
+        check(Integer.toBinaryString(-1).equals(
+              "11111111111111111111111111111111"), "toBinaryString(-1)");
+        check(Integer.toBinaryString(255).equals("11111111"), "toBinaryString(255)");
+        check(Integer.toBinaryString(-255).equals(
+              "11111111111111111111111100000001"), "toBinaryString(-255)");
+        check(Integer.toHexString(0).equals("0"), "toHexString(0)");
+        check(Integer.toHexString(-255).equals("ffffff01"), "toHexString(-255)");
+        check(Integer.toOctalString(0).equals("0"), "toOctalString(0)");
+        check(Integer.toOctalString(-255).equals("37777777401"), "toOctalString(-255)");
+        // toUnsignedString(int, radix) 精确表
+        check(Integer.toUnsignedString(0, 36).equals("0"), "toUnsignedString(0,36)");
+        check(Integer.toUnsignedString(255, 36).equals("73"), "toUnsignedString(255,36)");
+        check(Integer.toUnsignedString(-1, 8).equals("37777777777"), "toUnsignedString(-1,8)");
+        check(Integer.toUnsignedString(-1, 2).equals(
+              "11111111111111111111111111111111"), "toUnsignedString(-1,2)");
+        check(Integer.toUnsignedString(-256, 16).equals("ffffff00"), "toUnsignedString(-256,16)");
+        check(Integer.toUnsignedString(-2).equals("4294967294"), "toUnsignedString(-2)");
+    }
+
+    static void testDecodeMatrix() {
+        // 0x/0X/#/前导 0(八进制)/符号矩阵
+        check(Integer.decode("0x1f") == 31, "decode(0x1f)");
+        check(Integer.decode("0X1F") == 31, "decode(0X1F)");
+        check(Integer.decode("017") == 15, "decode(017) octal");
+        check(Integer.decode("#f") == 15, "decode(#f)");
+        check(Integer.decode("#F") == 15, "decode(#F)");
+        check(Integer.decode("-#f") == -15, "decode(-#f)");
+        check(Integer.decode("+#f") == 15, "decode(+#f)");
+        check(Integer.decode("-017") == -15, "decode(-017)");
+        check(Integer.decode("+0x7fffffff") == Integer.MAX_VALUE, "decode(+0x7fffffff)");
+        // 尾部 l/L 后缀不被 decode 接受（Integer 语义）
+        expectNFE(() -> Integer.decode("#ffffffff"), "decode(#ffffffff) overflow");
+        check(Integer.decode("00") == 0, "decode(00)");
+        check(Integer.decode("0x0") == 0, "decode(0x0)");
+        check(Integer.decode("#0") == 0, "decode(#0)");
+        expectNFE(() -> Integer.decode("10l"), "decode(10l)");
+        expectNFE(() -> Integer.decode("0xfl"), "decode(0xfl)");
+        expectNFE(() -> Integer.decode("02147483647"), "decode octal overflow");
+    }
+
+    static void testBitOpExactTable() {
+        check(Integer.bitCount(1) == 1, "bitCount(1)");
+        check(Integer.bitCount(255) == 8, "bitCount(255)");
+        check(Integer.bitCount(0x7fffffff) == 31, "bitCount(MAX)");
+        check(Integer.bitCount(Integer.MIN_VALUE) == 1, "bitCount(MIN)");
+        check(Integer.bitCount(0xF0F0F0F0) == 16, "bitCount(0xF0F0F0F0)");
+        check(Integer.highestOneBit(0x7fffffff) == 0x40000000, "highestOneBit(MAX)");
+        check(Integer.highestOneBit(255) == 128, "highestOneBit(255)");
+        check(Integer.highestOneBit(Integer.MIN_VALUE) == Integer.MIN_VALUE, "highestOneBit(MIN)");
+        check(Integer.lowestOneBit(255) == 1, "lowestOneBit(255)");
+        check(Integer.lowestOneBit(0x7fffffff) == 1, "lowestOneBit(MAX)");
+        check(Integer.numberOfLeadingZeros(-1) == 0, "numberOfLeadingZeros(-1)");
+        check(Integer.numberOfLeadingZeros(0x7fffffff) == 1, "numberOfLeadingZeros(MAX)");
+        check(Integer.numberOfTrailingZeros(-1) == 0, "numberOfTrailingZeros(-1)");
+        check(Integer.numberOfTrailingZeros(0x7fffffff) == 0, "numberOfTrailingZeros(MAX)");
+        check(Integer.reverse(0x000000FF) == 0xFF000000, "reverse(0x000000FF)");
+        check(Integer.reverse(0xFFFFFFFF) == 0xFFFFFFFF, "reverse(0xFFFFFFFF)");
+        check(Integer.reverse(0x12345678) == 0x1e6a2c48, "reverse(0x12345678)");
+        check(Integer.reverseBytes(0x000000FF) == 0xFF000000, "reverseBytes(0x000000FF)");
+        check(Integer.reverseBytes(0xFFFFFFFF) == 0xFFFFFFFF, "reverseBytes(0xFFFFFFFF)");
+        check(Integer.reverse(Integer.reverse(0x0f0f0f0f)) == 0x0f0f0f0f, "reverse involution");
+        check(Integer.reverseBytes(Integer.reverseBytes(0x0f0f0f0f)) == 0x0f0f0f0f, "reverseBytes involution");
+        // rotate 恒等律：0、32、-32 均为恒等
+        int x = 0x12345678;
+        check(Integer.rotateLeft(x, 0) == x, "rotateLeft(x,0) identity");
+        check(Integer.rotateLeft(x, 32) == x, "rotateLeft(x,32) identity");
+        check(Integer.rotateLeft(x, -32) == x, "rotateLeft(x,-32) identity");
+        check(Integer.rotateRight(x, 0) == x, "rotateRight(x,0) identity");
+        check(Integer.rotateRight(x, 32) == x, "rotateRight(x,32) identity");
+        check(Integer.rotateLeft(x, 8) == 0x34567812, "rotateLeft(0x12345678,8)");
+        check(Integer.rotateRight(x, 8) == 0x78123456, "rotateRight(0x12345678,8)");
+        check(Integer.rotateLeft(0, 9) == 0, "rotateLeft(0,9)");
+        check(Integer.rotateRight(0, 9) == 0, "rotateRight(0,9)");
+        // rotateLeft(x,n) == rotateRight(x,32-n) 对偶关系全 n 扫描
+        for (int n = 1; n <= 31; n++) {
+            check(Integer.rotateLeft(x, n) == Integer.rotateRight(x, 32 - n),
+                  "rotateLeft/rotateRight duality n=" + n);
+        }
+        check(Integer.signum(0x7fffffff) == 1, "signum(MAX)");
+        // bitCount 补恒等式与 highest/lowestOneBit 的推导关系
+        check(Integer.bitCount(x) + Integer.bitCount(~x) == 32, "bitCount complement identity");
+        check(Integer.highestOneBit(x) == (1 << (31 - Integer.numberOfLeadingZeros(x))),
+              "highestOneBit derivation");
+        check(Integer.lowestOneBit(x) == (1 << Integer.numberOfTrailingZeros(x)),
+              "lowestOneBit derivation");
+    }
+
+    static void testUnsignedArithmeticTable() {
+        // compareUnsigned 各方向（-1 视为最大无符号值）
+        check(Integer.compareUnsigned(0, -1) < 0, "compareUnsigned(0,-1) < 0");
+        check(Integer.compareUnsigned(-2, -1) < 0, "compareUnsigned(-2,-1) < 0");
+        check(Integer.compareUnsigned(-1, -2) > 0, "compareUnsigned(-1,-2) > 0");
+        check(Integer.compareUnsigned(-1, -1) == 0, "compareUnsigned(-1,-1) == 0");
+        check(Integer.compareUnsigned(Integer.MIN_VALUE, -1) < 0, "compareUnsigned(MIN,-1) < 0");
+        check(Integer.compareUnsigned(-1, Integer.MAX_VALUE) > 0, "compareUnsigned(-1,MAX) > 0");
+        // 0xFFFFFFFF / 1 = 0xFFFFFFFF（补码即 -1，实测锁定；非 MAX_VALUE）
+        check(Integer.divideUnsigned(-1, 1) == -1, "divideUnsigned(-1,1) == 0xFFFFFFFF");
+        check(Integer.divideUnsigned(-1, 3) == 1431655765, "divideUnsigned(-1,3)");
+        check(Integer.divideUnsigned(-2, 1) == -2, "divideUnsigned(-2,1)");
+        check(Integer.divideUnsigned(0, 5) == 0, "divideUnsigned(0,5)");
+        check(Integer.remainderUnsigned(-1, 10) == 5, "remainderUnsigned(-1,10)");
+        check(Integer.remainderUnsigned(-1, 3) == 0, "remainderUnsigned(-1,3) == 0");
+        check(Integer.remainderUnsigned(0, 7) == 0, "remainderUnsigned(0,7)");
+        // toUnsignedLong 精确表
+        check(Integer.toUnsignedLong(255) == 255L, "toUnsignedLong(255)");
+        check(Integer.toUnsignedLong(-2) == 4294967294L, "toUnsignedLong(-2)");
+        // 无符号除法与 BigInteger 对照闭环
+        java.math.BigInteger u = new java.math.BigInteger("4294967295");
+        check(Integer.divideUnsigned(-1, 7) == u.divide(java.math.BigInteger.valueOf(7)).intValue(),
+              "divideUnsigned(-1,7) matches BigInteger");
+        check(Integer.remainderUnsigned(-1, 7) == u.mod(java.math.BigInteger.valueOf(7)).intValue(),
+              "remainderUnsigned(-1,7) matches BigInteger");
+    }
+
+    static void testValueOfCacheBoundary() {
+        // -128 与 127 同一实例（==）、-129 与 128 不同实例但 equals
+        check(Integer.valueOf(-128) == Integer.valueOf(-128), "cache -128 identity");
+        check(Integer.valueOf(127) == Integer.valueOf(127), "cache 127 identity");
+        check(Integer.valueOf(128) != Integer.valueOf(128), "128 not cached");
+        check(Integer.valueOf(-129) != Integer.valueOf(-129), "-129 not cached");
+        check(Integer.valueOf(128).equals(Integer.valueOf(128)), "128 equals by value");
+        check(Integer.valueOf(-129).equals(Integer.valueOf(-129)), "-129 equals by value");
+        check(Integer.valueOf(127).equals(Integer.valueOf(127)), "127 equals");
+        // 与 new Integer 跨缓存实例：引用不同、值相等（构造器已弃用但两侧仍存在）
+        @SuppressWarnings("deprecation")
+        Integer fresh127 = new Integer(127);
+        check(fresh127 != Integer.valueOf(127), "new Integer(127) bypasses cache");
+        check(fresh127.equals(Integer.valueOf(127)), "new Integer(127).equals cached");
+        @SuppressWarnings("deprecation")
+        Integer freshMin = new Integer(Integer.MIN_VALUE);
+        check(freshMin.intValue() == Integer.MIN_VALUE, "new Integer(MIN).intValue");
+        check(freshMin.equals(Integer.valueOf(Integer.MIN_VALUE)), "new Integer(MIN).equals");
+        // 静态 hashCode(int) 与实例 hashCode 一致
+        check(Integer.hashCode(12345) == Integer.valueOf(12345).hashCode(), "static hashCode == instance");
+        check(Integer.hashCode(-1) == -1, "hashCode(-1) == -1");
+        check(Integer.hashCode(0) == 0, "hashCode(0) == 0");
+    }
+
+    // ---- White-box / structural ----
+    static void testWhiteBoxStructural() {
+        try {
+            Class<?> c = Class.forName("java.lang.Integer");
+            check(!c.isInterface(), "Integer is not an interface");
+            check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "Integer is final");
+            check(c.getSuperclass() == Number.class, "Integer extends Number");
+            check(Number.class.getSuperclass() == Object.class, "Number extends Object");
+            check(Comparable.class.isAssignableFrom(c), "Integer implements Comparable");
+            check(java.io.Serializable.class.isAssignableFrom(c), "Integer implements Serializable");
+            check(c.getField("MAX_VALUE").getType() == int.class
+                  && java.lang.reflect.Modifier.isStatic(c.getField("MAX_VALUE").getModifiers())
+                  && java.lang.reflect.Modifier.isFinal(c.getField("MAX_VALUE").getModifiers()),
+                  "MAX_VALUE is public static final int");
+            check(c.getMethod("parseInt", String.class).getReturnType() == int.class,
+                  "parseInt(String) returns int");
+            check(c.getMethod("valueOf", int.class).getReturnType() == Integer.class,
+                  "valueOf(int) returns Integer");
+            check(c.getMethod("toString", int.class, int.class).getReturnType() == String.class,
+                  "toString(int,int) returns String");
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    static void testBoxing() {
+        // JLS 5.1.7: autoboxing maps the int literal through Integer.valueOf(int).
+        Integer boxed = 42;
+        check(boxed == Integer.valueOf(42), "autobox 42 uses cached valueOf");
+        int unboxed = boxed;                       // unboxing via intValue()
+        check(unboxed == 42, "unboxing recovers int");
+        Integer sum = boxed + 8;                   // unbox, add, rebox
+        check(sum == Integer.valueOf(50), "boxed arithmetic re-boxes");
+        check(sum.compareTo(boxed) > 0, "compareTo after arithmetic");
+        check(!sum.equals(boxed), "!equals distinct values");
+        check(sum.hashCode() == 50, "hashCode follows value");
+        Integer big1 = 128, big2 = 128;
+        check(big1 != big2, "autobox 128 not cached (distinct references)");
+        check(big1.equals(big2) && big1.intValue() == big2.intValue(),
+              "distinct autobox instances are equal by value");
+    }
+
     public static void main(String[] args) {
         testConstants();
         testParseInt();
@@ -326,6 +645,16 @@ public class IntegerTest {
         testBitOps();
         testUnsignedOps();
         testSumMaxMin();
+        // 契约深化（2026-11）
+        testNfeMessageContract();
+        testParseRadixRoundTrip();
+        testToStringExactTable();
+        testDecodeMatrix();
+        testBitOpExactTable();
+        testUnsignedArithmeticTable();
+        testValueOfCacheBoundary();
+        testWhiteBoxStructural();
+        testBoxing();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

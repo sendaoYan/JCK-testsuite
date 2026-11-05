@@ -29,3 +29,18 @@
 - **边界**：`Double` NaN/±Inf 缩窄饱和（NaN→0、+Inf→MAX、-Inf→MIN）；`Float` NaN/±Inf 同样饱和。
 - **异常**：无（Number 访问器不抛异常）。
 - **健壮性**：用例确定、无全局副作用——不依赖墙钟/随机数/哈希迭代顺序/默认时区/地区；截断/饱和结果确定；无文件/端口/线程/`System.exit`，适配多次运行、并跑、跨平台。
+
+## 契约深化（2026-11）
+
+- **API 功能补充**：四整型包装 × 六访问器的 42 全表；2^24/2^53 精度损失值锁定；
+  BigInteger 按位窄化（2^64-1→-1L、2^32→0、2^70→0L）；BigDecimal 向零截断（2.5→2、-2.5→-2）；
+  跨包装类型 equals 恒 false 的 6×6 矩阵；公有实例方法名恰为 6 个 xxxValue 的集合断言。
+- **使用方式补充**：`-0.0` 用 `Double.doubleToLongBits`/`Float.floatToIntBits` 位级断言（== 混同 ±0）；
+  `Long.MAX_VALUE→double` 锁定 `9.223372036854776E18` 与位模式 `0x43E0000000000000L`。
+- **参考来源**：实测 jdk-27.0.1.0.2 与 Temurin 8u372 双侧（值完全一致）；JLS 5.1.2/5.1.3。
+- **新增用例（断言 58→180）**：`testWrapperConversionSuite`、`testDoubleFloatPrecision`
+  （3.9 截断、257.75→byteValue 1、-0.0 位保真）、`testLongPrecisionLoss`、`testSaturationExtremes`、
+  `testStructuralContract`、`testBigDecimalBigIntegerExact`、`testCrossTypeEquals`（6×6 + null）。
+- **易错细节**：`(byte)+Inf==-1`（低位截断而非饱和）；`2^53+1→double` round-to-even 到 2^53；
+  `Double(1.0).equals(Float(1.0f))==false`；`Boolean/Character` 非 Number（经 Object 变量断言，
+  直接 instanceof 编译不过）。

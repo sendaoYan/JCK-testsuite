@@ -50,3 +50,26 @@
 
 - 真实进程只用 `sh -c "echo hello"`（立即退出，不挂起）；其余用 in-memory mock。
 - headless 安全，不加 `@key`；不绑定端口、不联网、不 System.exit。
+
+## 契约深化（2026-11）
+
+### API 功能
+- 生命周期：`isAlive`/`exitValue`/`waitFor()`/`waitFor(long,TimeUnit)`/`destroy`/`destroyForcibly` 在真子进程上的完整语义（运行中 ITSE、销毁后非零退出、退出码稳定性）。
+- 流契约：四个流非 null；stdin 写入回显（Cat）；`redirectErrorStream(true)` 后 `getErrorStream()` 立即 EOF。
+- 退出码精度：`System.exit(N)` 逐码表（0/3/7/200/255）。
+- 白盒：JDK-8 的 API 面锁定（waitFor(long,TimeUnit)/isAlive/destroyForcibly 存在；pid/toHandle/info/onExit/children/descendants/supportsNormalTermination/close/inputReader/waitFor(Duration) 均不存在）。
+
+### 使用方式
+子进程一律用 `System.getProperty("java.home")+"/bin/java"`（JDK-8 的 java.home 是 `<jdk>/jre`，javac 在 `<jdk>/bin`）；样本类 Sleeper（sleep 10000）/ExitN/Cat 写入 `/tmp/lcG-p8-<nano>` 由同一 JDK javac 编译，finally 递归删除；每个子进程必 waitFor（Sleeper 先 destroy 再 waitFor），不留悬挂。
+
+### 参考来源
+Oracle javadoc `java.lang.Process`；两侧 OpenJDK 实测（Temurin 8u372 / 27.0.1）。
+
+### 测试用例设计 + 易错规范细节
+- 运行中 `exitValue()` → `IllegalThreadStateException`，**消息两侧一致为 "process hasn't exited"**，逐字锁定。
+- `destroy()`（SIGTERM）退出码 143、`destroyForcibly()`（SIGKILL）为 137——Linux 实测值，断言只锁 `!= 0`（信号映射属实现细节）。
+- `waitFor(200ms)/waitFor(0)/waitFor(-5)` 运行中均 false；`waitFor(1, null unit)` → NPE（8 消息 "null"，27 为 helpful 消息，只锁类型）；退出后 `waitFor(timeout)` true、`waitFor()` 稳定返回同码。
+- `redirectErrorStream(true)` 时 `getErrorStream()` 读到 EOF（长度 0）——流互斥核心契约。
+- Cat 闭环：写 "lcgCat42\n" + flush + close → 读回精确同串 + 平台换行结尾，exit 0。
+- GateProcess（自造 mock，exitValue 未完成前抛 ITSE）证明具体 `isAlive()`/`waitFor(timeout)` 由 `exitValue()` 派生。
+- 白盒锁定 JDK-8 缺席的 9+/17+/19+ 成员（NoSuchMethodException 负例）。

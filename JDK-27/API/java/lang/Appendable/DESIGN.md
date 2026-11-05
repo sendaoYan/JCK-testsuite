@@ -29,3 +29,29 @@
 - 异常契约：`append` 三态在 `fail=true` 时抛 `IOException`（受检，验证声明）；`append(null,0,5)`（越界）抛 `IndexOutOfBoundsException`。
 - 不变量：三个方法都返回 `this`；`StringBuilder`/`StringBuffer` 作为 `Appendable` 时行为一致。
 - 自动化实现：`AppendableTest.testWhiteBox()`（反射：接口/抽象方法/`throws IOException`）+ `testBlackBox()`（`testAppend`、`testBounds`、`testContract`、`testIOException`、`testNullAndOtherImpls`）。
+
+## 契约深化（2026-11）
+
+本轮追加 8 个 test 方法（断言 28 → 61）：三重载路由实证 + null 子区间语义 + 精确越界消息 +
+CharBuffer/StringWriter 多实现。
+
+### 新增维度
+
+- **Router 路由实证**：csq/sub/char 三重载各自独立路由（调用日志全等
+  `csq(A);sub(BC:1,2);char(D);`）；`append(null)` 走 **csq 重载**（非 (csq,s,e)）。
+- **null 子区间语义**：`append(null, 1, 3)` → `"ul"`（对字面量 "null" 取区间）、
+  `append(null, 0, 4)` → `"null"`、`append(null, 0, 5)` → IOOBE 精确消息。
+- **越界消息逐字锁定（JDK-27 形式）**：`append("ab", -1, 1)` →
+  `"Range [-1, 1) out of bounds for length 2"`（JDK-8 为 `"start -1, end 1, s.length() 2"`，
+  MODERN 分支双锁）。
+- **CharBuffer 作为 Appendable**：三重载返回 this + 内容经 flip 读出。
+- **StringWriter（Writer）作为 Appendable**：Writer.append 返回 Writer（协变），经接口引用 == 原实例。
+- **StringBuffer 三重载接收者同一性**。
+- **边界值**：空区间 (1,1) 不追加、NUL/Character.MAX_VALUE 可追加、builder 作 csq 实参、
+  `append(csq,s,e) == append(csq.subSequence(s,e))` 等价条款。
+- **IOException 同一实例穿透**（匿名实现抛指定实例，捕获 == 同一对象）。
+
+### 易错规范细节（新增锁定）
+
+- `append(null, start, end)` 对 null 应用区间而非整体追加 "null"；区间越界仍 IOOBE。
+- 越界消息两代 JDK 形式不同（start/end/s.length() vs Range [s,e) for length n）。
