@@ -16,6 +16,10 @@ public class CurrentOperationsTest {
         Class<?> c = Class.forName("org.omg.CORBA.CurrentOperations");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "interfaces have null superclass");
+
+        // ---- deepened: exact method surface (javap-verified on jdk8u372) ----
+        check(org.omg.CORBA.CurrentOperations.class.getMethods().length == 0, "CurrentOperations declares no operations");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

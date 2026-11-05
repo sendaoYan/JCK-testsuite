@@ -19,6 +19,12 @@ public class DomainManagerTest {
         check(org.omg.CORBA.DomainManagerOperations.class.isAssignableFrom(c), "extends org.omg.CORBA.DomainManagerOperations");
         check(org.omg.CORBA.Object.class.isAssignableFrom(c), "extends org.omg.CORBA.Object");
         check(org.omg.CORBA.portable.IDLEntity.class.isAssignableFrom(c), "extends org.omg.CORBA.portable.IDLEntity");
+
+        // ---- deepened: exact method surface (javap-verified on jdk8u372) ----
+        check(org.omg.CORBA.DomainManager.class.getMethods().length == 0
+              || org.omg.CORBA.DomainManager.class.getDeclaredMethods().length == 0,
+              "DomainManager adds no operations of its own (marker over its *Operations base)");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -19,6 +19,16 @@ public class InvalidSeqTest {
         org.omg.CORBA.DynAnyPackage.InvalidSeq e = new org.omg.CORBA.DynAnyPackage.InvalidSeq();
         org.omg.CORBA.DynAnyPackage.InvalidSeq em = new org.omg.CORBA.DynAnyPackage.InvalidSeq("msg");
         check(em.getMessage() != null && em.getMessage().endsWith("msg"), "message ctor");
+
+        // ---- deepened: default state, toString, finality (jdk8u372 measured) ----
+        org.omg.CORBA.DynAnyPackage.InvalidSeq d0 = new org.omg.CORBA.DynAnyPackage.InvalidSeq();
+        check(d0.getMessage() == null, "InvalidSeq() default message null");
+        check(d0.toString().contains("org.omg.CORBA.DynAnyPackage.InvalidSeq"), "InvalidSeq toString contains FQCN");
+        org.omg.CORBA.DynAnyPackage.InvalidSeq d1 = new org.omg.CORBA.DynAnyPackage.InvalidSeq("custom");
+        check("custom".equals(d1.getMessage()), "InvalidSeq(String) message readback");
+        check(java.lang.reflect.Modifier.isFinal(org.omg.CORBA.DynAnyPackage.InvalidSeq.class.getModifiers()), "InvalidSeq is final");
+        check(org.omg.CORBA.DynAnyPackage.InvalidSeq.class.getConstructors().length == 2, "InvalidSeq exposes exactly () and (String) ctors");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

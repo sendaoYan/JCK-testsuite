@@ -19,6 +19,12 @@ public class PolicyTest {
         check(org.omg.CORBA.PolicyOperations.class.isAssignableFrom(c), "extends org.omg.CORBA.PolicyOperations");
         check(org.omg.CORBA.Object.class.isAssignableFrom(c), "extends org.omg.CORBA.Object");
         check(org.omg.CORBA.portable.IDLEntity.class.isAssignableFrom(c), "extends org.omg.CORBA.portable.IDLEntity");
+
+        // ---- deepened: exact method surface (javap-verified on jdk8u372) ----
+        check(org.omg.CORBA.Policy.class.getMethods().length == 0
+              || org.omg.CORBA.Policy.class.getDeclaredMethods().length == 0,
+              "Policy adds no operations of its own (marker over its *Operations base)");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

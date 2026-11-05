@@ -19,6 +19,16 @@ public class BoundsTest {
         org.omg.CORBA.TypeCodePackage.Bounds e = new org.omg.CORBA.TypeCodePackage.Bounds();
         org.omg.CORBA.TypeCodePackage.Bounds em = new org.omg.CORBA.TypeCodePackage.Bounds("msg");
         check(em.getMessage() != null && em.getMessage().endsWith("msg"), "message ctor");
+
+        // ---- deepened: default state, toString, finality (jdk8u372 measured) ----
+        org.omg.CORBA.TypeCodePackage.Bounds d0 = new org.omg.CORBA.TypeCodePackage.Bounds();
+        check(d0.getMessage() == null, "Bounds() default message null");
+        check(d0.toString().contains("org.omg.CORBA.TypeCodePackage.Bounds"), "Bounds toString contains FQCN");
+        org.omg.CORBA.TypeCodePackage.Bounds d1 = new org.omg.CORBA.TypeCodePackage.Bounds("custom");
+        check("custom".equals(d1.getMessage()), "Bounds(String) message readback");
+        check(java.lang.reflect.Modifier.isFinal(org.omg.CORBA.TypeCodePackage.Bounds.class.getModifiers()), "Bounds is final");
+        check(org.omg.CORBA.TypeCodePackage.Bounds.class.getConstructors().length == 2, "Bounds exposes exactly () and (String) ctors");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

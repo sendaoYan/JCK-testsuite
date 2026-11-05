@@ -19,6 +19,16 @@ public class InvalidNameTest {
         org.omg.CORBA.ORBPackage.InvalidName e = new org.omg.CORBA.ORBPackage.InvalidName();
         org.omg.CORBA.ORBPackage.InvalidName em = new org.omg.CORBA.ORBPackage.InvalidName("msg");
         check(em.getMessage() != null && em.getMessage().endsWith("msg"), "message ctor");
+
+        // ---- deepened: default state, toString, finality (jdk8u372 measured) ----
+        org.omg.CORBA.ORBPackage.InvalidName d0 = new org.omg.CORBA.ORBPackage.InvalidName();
+        check(d0.getMessage() == null, "InvalidName() default message null");
+        check(d0.toString().contains("org.omg.CORBA.ORBPackage.InvalidName"), "InvalidName toString contains FQCN");
+        org.omg.CORBA.ORBPackage.InvalidName d1 = new org.omg.CORBA.ORBPackage.InvalidName("custom");
+        check("custom".equals(d1.getMessage()), "InvalidName(String) message readback");
+        check(java.lang.reflect.Modifier.isFinal(org.omg.CORBA.ORBPackage.InvalidName.class.getModifiers()), "InvalidName is final");
+        check(org.omg.CORBA.ORBPackage.InvalidName.class.getConstructors().length == 2, "InvalidName exposes exactly () and (String) ctors");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

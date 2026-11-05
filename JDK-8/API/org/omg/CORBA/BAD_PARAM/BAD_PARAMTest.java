@@ -27,6 +27,20 @@ public class BAD_PARAMTest {
         check("m2".equals(e3.getMessage()), "full ctor message");
         check(e3.minor == 8, "full ctor minor");
         check(e3.completed == org.omg.CORBA.CompletionStatus.COMPLETED_MAYBE, "full ctor completed");
+
+        // ---- deepened: toString format and family membership (jdk8u372 measured) ----
+        org.omg.CORBA.BAD_PARAM t0 = new org.omg.CORBA.BAD_PARAM();
+        check(t0.toString().startsWith("org.omg.CORBA.BAD_PARAM: "), "BAD_PARAM default toString class prefix");
+        check(t0.toString().contains("vmcid: 0x0"), "BAD_PARAM default toString vmcid 0x0");
+        check(t0.toString().contains("minor code: 0"), "BAD_PARAM default toString minor code: 0");
+        check(t0.toString().contains("completed: No"), "BAD_PARAM default toString completed: No");
+        check(t0 instanceof org.omg.CORBA.SystemException, "BAD_PARAM instanceof SystemException");
+        org.omg.CORBA.BAD_PARAM tF = new org.omg.CORBA.BAD_PARAM("m", 77, org.omg.CORBA.CompletionStatus.COMPLETED_MAYBE);
+        check(tF.toString().contains("minor code: 77"), "BAD_PARAM full ctor toString minor 77");
+        check(tF.toString().contains("completed: Maybe"), "BAD_PARAM full ctor toString completed: Maybe");
+        check(tF.minor == 77 && tF.completed == org.omg.CORBA.CompletionStatus.COMPLETED_MAYBE,
+              "BAD_PARAM full ctor field readback");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -27,6 +27,20 @@ public class BAD_INV_ORDERTest {
         check("m2".equals(e3.getMessage()), "full ctor message");
         check(e3.minor == 8, "full ctor minor");
         check(e3.completed == org.omg.CORBA.CompletionStatus.COMPLETED_MAYBE, "full ctor completed");
+
+        // ---- deepened: toString format and family membership (jdk8u372 measured) ----
+        org.omg.CORBA.BAD_INV_ORDER t0 = new org.omg.CORBA.BAD_INV_ORDER();
+        check(t0.toString().startsWith("org.omg.CORBA.BAD_INV_ORDER: "), "BAD_INV_ORDER default toString class prefix");
+        check(t0.toString().contains("vmcid: 0x0"), "BAD_INV_ORDER default toString vmcid 0x0");
+        check(t0.toString().contains("minor code: 0"), "BAD_INV_ORDER default toString minor code: 0");
+        check(t0.toString().contains("completed: No"), "BAD_INV_ORDER default toString completed: No");
+        check(t0 instanceof org.omg.CORBA.SystemException, "BAD_INV_ORDER instanceof SystemException");
+        org.omg.CORBA.BAD_INV_ORDER tF = new org.omg.CORBA.BAD_INV_ORDER("m", 77, org.omg.CORBA.CompletionStatus.COMPLETED_MAYBE);
+        check(tF.toString().contains("minor code: 77"), "BAD_INV_ORDER full ctor toString minor 77");
+        check(tF.toString().contains("completed: Maybe"), "BAD_INV_ORDER full ctor toString completed: Maybe");
+        check(tF.minor == 77 && tF.completed == org.omg.CORBA.CompletionStatus.COMPLETED_MAYBE,
+              "BAD_INV_ORDER full ctor field readback");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
