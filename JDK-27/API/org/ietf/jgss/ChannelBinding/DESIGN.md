@@ -31,3 +31,8 @@ byte[] data = cb.getApplicationData();   // 返回副本
 - equals：自反、按数据相等、不同数据不等、null/非 ChannelBinding 不等、地址+数据组合相等、不同 initiator 地址不等。
 - hashCode：相等对象哈希相等；全 null=1；仅 initiator=其哈希；仅 acceptor=其哈希；仅 appData=Arrays.hashCode。
 白盒（`testWhiteBox()`）：public 类、继承 Object、两个构造器 + 五个方法。
+
+## 5. 深化补充（本轮契约深化）
+新增：应用数据双向防御拷贝闭环（传入后改外层不影响、取出后改不影响再取）、地址成员同一性、
+equals 全矩阵（数据/地址/空组合）、hashCode 契约与全 null 组合稳定值；注意 27 侧
+`hashCode()` 与 8 侧实现一致（Arrays.hashCode 语义），断言双侧同型。

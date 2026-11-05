@@ -73,12 +73,26 @@ public class MessagePropTest {
         check(mp.getMinorStatus() == 0, "minorStatus reset to 0");
         check(mp.getMinorString() == null, "minorString reset to null");
 
+        // the complementary combination
+        mp.setSupplementaryStates(false, true, false, true, 4, "swap");
+        check(!mp.isDuplicateToken(), "duplicate token false after swap");
+        check(mp.isOldToken(), "old token true after swap");
+        check(!mp.isUnseqToken(), "unseq token false after swap");
+        check(mp.isGapToken(), "gap token true after swap");
+        check(mp.getMinorStatus() == 4, "minorStatus after swap");
+        check("swap".equals(mp.getMinorString()), "minorString after swap");
+
         // all four supplementary flags simultaneously true
         MessageProp mp3 = new MessageProp(0, false);
         mp3.setSupplementaryStates(true, true, true, true, 9, "all");
         check(mp3.isDuplicateToken() && mp3.isOldToken() && mp3.isUnseqToken() && mp3.isGapToken(),
                 "all supplementary states true");
         check(mp3.getMinorStatus() == 9 && "all".equals(mp3.getMinorString()), "minor status/string");
+
+        // setSupplementaryStates does not disturb QOP/privacy and vice versa
+        check(mp3.getQOP() == 0 && !mp3.getPrivacy(), "QOP/privacy unchanged by setSupplementaryStates");
+        mp3.setQOP(5);
+        check(mp3.isDuplicateToken(), "supplementary states unchanged by setQOP");
     }
 
     public static void main(String[] args) throws Exception {

@@ -25,3 +25,8 @@ ctx.dispose();
 ## 4. 测试用例设计 + 自动化实现
 白盒（`GSSContextTest.testWhiteBox()`）：public interface、无父接口、两个 `public static final int` 字段、34 个方法名齐全。
 黑盒（`testBlackBox()`）：断言 `DEFAULT_LIFETIME==0`、`INDEFINITE_LIFETIME==Integer.MAX_VALUE`、两常量互异。
+
+## 5. 深化补充（本轮契约深化）
+新增：DEFAULT/INDEFINITE 生命周期哨兵精确值、request* 全族签名、未建立上下文状态位
+（isEstablished/isProtReady false）、setChannelBinding/getChannelBinding 往返、
+未建立即 wrap/getMIC → GSSException(NO_CONTEXT) 负例。

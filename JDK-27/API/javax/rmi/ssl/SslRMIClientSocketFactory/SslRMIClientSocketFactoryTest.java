@@ -41,6 +41,38 @@ public class SslRMIClientSocketFactoryTest {
         SslRMIClientSocketFactory f3 = (SslRMIClientSocketFactory) oin.readObject();
         check(f1.equals(f3), "serialization round trip equals");
         check(f3.hashCode() == f1.hashCode(), "serialization round trip hashCode");
+
+        // createSocket to a dead local port fails with IOException (loopback only,
+        // no external network involved)
+        try {
+            f1.createSocket("127.0.0.1", 1);
+            check(false, "expected IOException connecting to closed port");
+        } catch (java.io.IOException expected) {
+            check(true, "createSocket to closed port -> IOException");
+        }
+
+        // null host is rejected by the underlying socket layer
+        try {
+            f1.createSocket(null, 0);
+            check(false, "expected exception for null host");
+        } catch (Exception expected) {
+            check(true, "createSocket(null, 0) rejected");
+        }
+
+        // version difference: the RMI-IIOP half of javax.rmi was removed in JDK 11;
+        // on JDK 27 only javax.rmi.ssl survives
+        try {
+            Class.forName("javax.rmi.CORBA.Util");
+            check(false, "expected CNFE for javax.rmi.CORBA.Util on JDK 27");
+        } catch (ClassNotFoundException expected) {
+            check(true, "javax.rmi.CORBA.Util removed in JDK 27");
+        }
+        try {
+            Class.forName("javax.rmi.PortableRemoteObject");
+            check(false, "expected CNFE for javax.rmi.PortableRemoteObject on JDK 27");
+        } catch (ClassNotFoundException expected) {
+            check(true, "javax.rmi.PortableRemoteObject removed in JDK 27");
+        }
     }
 
     public static void main(String[] args) throws Exception {

@@ -36,3 +36,8 @@ JDK 自身 `test/jdk` 是主要用户（GSS/Kerberos 测试均以 Oid 表示机�
 - `getDER` 往返（byte[] 与 InputStream）+ 返回副本语义（改返回数组不影响后续取值）。
 - 非法输入：空串/字母/负分量/多余点/前导尾随空格 → `GSSException`，`getMajor()==FAILURE`；非法 DER 字节同样抛 `FAILURE`。
 白盒（`testWhiteBox()`）：public 类、非接口、继承 Object、三个构造器 + 五个方法的形态。
+
+## 5. 深化补充（本轮契约深化）
+在原断言只增不删的前提下新增：构造器参数型反射矩阵、`getDER()` DER 字节与点分文本的
+规范形式互推（"01.02.03" 与 "1.2.3" equals/hashCode/getDER 全等、toString 保留原输入）、
+DER 副本语义二次验证、非法输入错误码精确 FAILURE(11)、白盒成员面（方法/构造器清单）整锁。

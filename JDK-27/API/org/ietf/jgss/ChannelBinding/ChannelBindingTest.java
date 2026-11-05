@@ -61,6 +61,16 @@ public class ChannelBindingTest {
         check(full.getInitiatorAddress() == init, "initiator address identity");
         check(full.getAcceptorAddress() == accept, "acceptor address identity");
         check(Arrays.equals(new byte[]{4, 5, 6}, full.getApplicationData()), "full ctor appData");
+        // the full ctor also takes a defensive copy of the app data
+        d2[0] = 99;
+        check(Arrays.equals(new byte[]{4, 5, 6}, full.getApplicationData()),
+                "full ctor copies appData defensively");
+        // loopback address equality (value semantics of InetAddress)
+        check(full.getInitiatorAddress().equals(InetAddress.getLoopbackAddress()),
+                "initiator 127.0.0.1 equals loopback address");
+        // null appData accepted in the full ctor as well
+        check(new ChannelBinding(init, accept, null).getApplicationData() == null,
+                "full ctor null appData");
 
         // equals: reflexive, symmetric-by-data, null, non-ChannelBinding
         check(cb.equals(cb), "equals self");
@@ -71,6 +81,10 @@ public class ChannelBindingTest {
         check(full.equals(new ChannelBinding(init, accept, new byte[]{4, 5, 6})), "equals by addresses + data");
         check(!full.equals(new ChannelBinding(InetAddress.getByName("127.0.0.9"), accept, new byte[]{4, 5, 6})),
                 "not equals different initiator address");
+        check(!full.equals(new ChannelBinding(init, InetAddress.getByName("127.0.0.9"), new byte[]{4, 5, 6})),
+                "not equals different acceptor address");
+        check(!full.equals(cb), "not equals addresses vs no addresses");
+        check(!new ChannelBinding((byte[]) null).equals(cb), "null appData not equals non-null appData");
 
         // hashCode consistency + null-field fallback
         check(cb.hashCode() == new ChannelBinding(new byte[]{1, 2, 3}).hashCode(), "equal objects equal hashCode");
@@ -79,6 +93,13 @@ public class ChannelBindingTest {
         check(new ChannelBinding(null, accept, null).hashCode() == accept.hashCode(), "acceptor-only hashCode");
         check(new ChannelBinding(null, null, new byte[]{1, 2, 3}).hashCode() == Arrays.hashCode(new byte[]{1, 2, 3}),
                 "appData-only hashCode");
+        // the first non-null address wins even when appData is present
+        check(new ChannelBinding(init, null, new byte[]{1, 2, 3}).hashCode() == init.hashCode(),
+                "initiator takes hashCode precedence over appData");
+        check(new ChannelBinding(null, accept, new byte[]{1, 2, 3}).hashCode() == accept.hashCode(),
+                "acceptor takes hashCode precedence over appData");
+        // toString is non-null on every path (null-safe)
+        check(new ChannelBinding((byte[]) null).toString() != null, "toString non-null all-null");
     }
 
     public static void main(String[] args) throws Exception {

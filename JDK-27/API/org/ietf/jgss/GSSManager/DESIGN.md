@@ -32,3 +32,8 @@ GSSName r = m.createName(n.export(), GSSName.NT_EXPORT_NAME);
 - `createName("user@EXAMPLE.COM", NT_USER_NAME)` 的 toString 与 export/re-import 往返。
 - `createContext(new byte[0])` 抛 `GSSException` 且 major==`NO_CONTEXT`；`createContext({1,2,3})` 抛 `GSSException`（major 实现相关，仅断类型）。
 白盒（`GSSManagerTest.testWhiteBox()`）：public abstract 类、继承 Object、public 无参构造器、static `getInstance`、八个抽象方法名。
+
+## 5. 深化补充（本轮契约深化）
+新增：protected 构造器锁、全部工厂方法签名整锁、`getInstance()` 类型稳定性、
+`getMechs/getMechsForName/getNameTypes` 离线观察值锁定、createName 字符串/字节双通道往返、
+非法/null 名称类型的异常通道。

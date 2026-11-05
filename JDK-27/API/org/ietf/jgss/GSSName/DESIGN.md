@@ -33,3 +33,7 @@ boolean same = n.equals(again);           // true
 - `export()` 非空、确定；`createName(exported, NT_EXPORT_NAME)` 与原对象相等且为 MN。
 白盒（`GSSNameTest.testWhiteBox()`）：public interface、无父接口、六个 `public static final Oid` 字段、八个方法。
 实测注意：接口**没有 `GSSName.DEFAULT` 常量**；`createName("user", NT_USER_NAME)`（无 realm）在无 Kerberos 配置时抛 `BAD_NAME`，故用显式 realm 形式。
+
+## 5. 深化补充（本轮契约深化）
+新增：名称类型常量 OID 精确字符串表（NT_USER_NAME 等）、接口方法全签名、离线名称
+equals/hashCode/toString、canonicalize/export/isAnonymous 的离线可达行为。

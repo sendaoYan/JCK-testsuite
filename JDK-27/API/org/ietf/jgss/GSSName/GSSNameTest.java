@@ -74,6 +74,16 @@ public class GSSNameTest {
         check(GSSName.NT_USER_NAME.equals(n1.getStringNameType()), "getStringNameType == NT_USER_NAME");
         check(n1.equals(n2), "equal names");
         check(n1.hashCode() == n2.hashCode(), "equal names equal hashCode");
+        check(!n1.equals(m.createName("other@EXAMPLE.COM", GSSName.NT_USER_NAME)), "different names not equal");
+        check(!n1.equals("user@EXAMPLE.COM"), "name not equals String");
+        // GSSNameImpl.equals dereferences the other name before its null check ->
+        // NPE (deterministic on JDK 8 and JDK 27; documented implementation quirk)
+        try {
+            n1.equals(null);
+            check(false, "expected NPE for GSSName.equals(null)");
+        } catch (NullPointerException expected) {
+            check(true, "GSSName.equals(null) -> NPE (implementation quirk)");
+        }
 
         // canonicalize to Kerberos mech is identity-equivalent for an MN
         Oid krb5 = new Oid("1.2.840.113554.1.2.2");

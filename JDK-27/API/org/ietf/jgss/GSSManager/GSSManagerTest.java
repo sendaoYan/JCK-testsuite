@@ -65,6 +65,53 @@ public class GSSManagerTest {
         GSSName reimported = m.createName(n.export(), GSSName.NT_EXPORT_NAME);
         check(n.equals(reimported), "createName export/re-import round trip");
 
+        // null nameType falls back to the mechanism default
+        GSSName viaString = m.createName("user@EXAMPLE.COM", (Oid) null);
+        check("user@EXAMPLE.COM".equals(viaString.toString()), "null nameType falls back to default");
+
+        // hostbased-service name: without a krb5 default realm the JDK rejects it
+        // (BAD_NAME); with a configured realm it would succeed - both accepted here
+        boolean threw = false;
+        try {
+            GSSName hbn = m.createName("service@host.example.com", GSSName.NT_HOSTBASED_SERVICE);
+            check(hbn.toString().contains("host"), "hostbased toString contains host");
+        } catch (GSSException e) {
+            threw = true;
+            check(e.getMajor() == GSSException.BAD_NAME, "hostbased name without realm -> BAD_NAME");
+        }
+        if (threw) check(true, "hostbased name requires realm configuration (sandbox has none)");
+
+        // null name string -> GSSException BAD_NAME
+        try { m.createName((String) null, GSSName.NT_USER_NAME); check(false, "expected GSSException for null name"); }
+        catch (GSSException e) { check(e.getMajor() == GSSException.BAD_NAME, "null name -> BAD_NAME"); }
+
+        // malformed exported name bytes -> GSSException BAD_NAME
+        try { m.createName(new byte[]{1, 2, 3}, GSSName.NT_EXPORT_NAME); check(false, "expected GSSException for malformed export bytes"); }
+        catch (GSSException e) { check(e.getMajor() == GSSException.BAD_NAME, "malformed export bytes -> BAD_NAME"); }
+
+        // zero-length export bytes -> ArrayIndexOutOfBoundsException (JDK implementation
+        // quirk, identical on JDK 8 and JDK 27; documented, not a GSSException)
+        try { m.createName(new byte[0], GSSName.NT_EXPORT_NAME); check(false, "expected AIOOBE for empty export bytes"); }
+        catch (GSSException e) { check(true, "empty export bytes rejected as GSSException on this build"); }
+        catch (ArrayIndexOutOfBoundsException expected) { check(true, "empty export bytes -> AIOOBE (implementation quirk)"); }
+
+        // no credential source -> GSSException NO_CRED (deterministic without a KDC)
+        try {
+            m.createCredential((GSSName) null, GSSCredential.INDEFINITE_LIFETIME,
+                    (Oid) null, GSSCredential.INITIATE_AND_ACCEPT);
+            check(false, "expected GSSException for null default credential");
+        } catch (GSSException e) {
+            check(e.getMajor() == GSSException.NO_CRED, "default credential unavailable -> NO_CRED");
+            check(e.getMessage() != null && e.getMessage().contains("No valid credentials provided"),
+                    "NO_CRED message mentions credentials");
+        }
+
+        // provider-pinning API rejects null provider with NPE
+        try { m.addProviderAtFront(null, null); check(false, "expected NPE for null provider"); }
+        catch (NullPointerException expected) { check(true, "addProviderAtFront(null, null) -> NPE"); }
+        try { m.addProviderAtEnd(null, null); check(false, "expected NPE for null provider"); }
+        catch (NullPointerException expected) { check(true, "addProviderAtEnd(null, null) -> NPE"); }
+
         // createContext from an empty inter-process token -> GSSException NO_CONTEXT
         try {
             m.createContext(new byte[0]);

@@ -32,3 +32,7 @@ if (p.isDuplicateToken()) { ... }        // unwrap/verifyMIC 返回后读取补�
 - 重置为全 false/0/null。
 - 四个补充标志同时为 true 的组合断言。
 白盒（`testWhiteBox()`）：public 类、继承 Object、两个构造器 + 11 个方法。
+
+## 5. 深化补充（本轮契约深化）
+新增：构造矩阵 qop×privacy 全枚举往返、setter 覆盖链（qop/privacy 重设）、补充标志五元组
+默认值与只读性、minor 通道默认值（0/null）、白盒 12 方法精确签名面与返回型锁。

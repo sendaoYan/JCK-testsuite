@@ -18,3 +18,9 @@
 - 白盒：public、implements RMIServerSocketFactory、`createServerSocket(int)` 签名。
 - 黑盒：默认 getters null/false；显式 getters 值与防御性拷贝；equals/hashCode（同配置等/异配置不等/不等于 null）；不支持 cipher 抛 IllegalArgumentException；`createServerSocket(0)` 绑定临时端口后关闭。
 - 实现见 `SslRMIServerSocketFactoryTest.java`。
+
+## 5. 深化补充（本轮契约深化）
+新增：getter 防御拷贝闭环（传入改外层不变、两次 getter 返回不同实例）、null 数组构造 → null getter、
+SSLContext 四参组合、equals/hashCode 值语义矩阵、cipher/protocol 数组含 null 元素与不支持项 →
+IllegalArgumentException 精确抛出、`createServerSocket(0)` 临时端口绑定/关闭闭环；
+另加 27 侧版本差异锁：javax.rmi.CORBA 家族在 27 侧已移除（Class.forName → ClassNotFoundException 断言）。

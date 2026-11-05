@@ -68,8 +68,37 @@ public class OidTest {
         der[0] = (byte) 0xFF;
         check(krb5.equals(new Oid(krb5.getDER())), "getDER returns a clone (mutating result does not corrupt)");
 
+        // DER-text duality: canonical Kerberos v5 DER bytes <-> dotted form
+        byte[] krb5Der = {6, 9, 42, -122, 72, -122, -9, 18, 1, 2, 2};
+        Oid fromDer = new Oid(krb5Der);
+        check("1.2.840.113554.1.2.2".equals(fromDer.toString()), "DER bytes -> dotted toString");
+        check(fromDer.equals(krb5), "DER-built equals string-built");
+        check(java.util.Arrays.equals(krb5Der, krb5.getDER()), "string-built getDER -> canonical DER bytes");
+
+        // second well-known OID
+        Oid dn = new Oid("2.5.13.1");
+        check("2.5.13.1".equals(dn.toString()), "2.5.13.1 toString");
+        check(dn.equals(new Oid(dn.getDER())), "2.5.13.1 DER round trip");
+
+        // exact offending string appears in the message
+        try { new Oid("bogus"); check(false, "expected GSSException for bogus"); }
+        catch (GSSException e) {
+            check("Improperly formatted Object Identifier String - bogus".equals(e.getMessage()),
+                    "invalid OID message includes offending string");
+        }
+
+        // containedIn exact membership two-state
+        check(new Oid("1.2").containedIn(new Oid[]{new Oid("1.2.3"), new Oid("1.2")}),
+                "containedIn true two-state member");
+        check(!new Oid("1.4").containedIn(new Oid[]{new Oid("1.2.3"), new Oid("1.9")}),
+                "containedIn false two-state non-member");
+
+        // null byte[] -> NPE (implementation dereferences before validating)
+        try { new Oid((byte[]) null); check(false, "expected NPE for null DER bytes"); }
+        catch (NullPointerException expected) { check(true, "null DER bytes -> NullPointerException"); }
+
         // invalid OID strings -> GSSException FAILURE (there is no BAD_OID constant)
-        String[] bad = { "", "abc", "1.-2", ".1.2", "1.2.", "a.b.c", " 1.2.3", "1.2.3 ", "1.2.3.4.-5" };
+        String[] bad = { "", "abc", "bogus", "1..2", "1.-2", ".1.2", "1.2.", "a.b.c", " 1.2.3", "1.2.3 ", "1.2.3.4.-5" };
         for (String s : bad) {
             try {
                 new Oid(s);

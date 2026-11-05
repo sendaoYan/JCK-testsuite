@@ -62,6 +62,19 @@ public class GSSExceptionTest {
             check(codes[i] == i + 1, "major code " + (i + 1) + " value");
         }
 
+        // sentinel majors used across the jgss batch
+        check(GSSException.BAD_MECH == 2, "BAD_MECH == 2");
+        check(GSSException.BAD_NAME == 3, "BAD_NAME == 3");
+        check(GSSException.FAILURE == 11, "FAILURE == 11");
+        check(GSSException.CONTEXT_EXPIRED == 7, "CONTEXT_EXPIRED == 7");
+        check(GSSException.NO_CONTEXT == 12, "NO_CONTEXT == 12");
+        check(GSSException.NO_CRED == 13, "NO_CRED == 13");
+
+        // every defined major has a non-null message from the table
+        for (int i = 0; i < codes.length; i++) {
+            check(new GSSException(codes[i]).getMajorString() != null, "majorString defined for code " + (i + 1));
+        }
+
         // default ctor(int): major string derived from code, minor not set
         GSSException e = new GSSException(GSSException.BAD_NAME);
         check(e.getMajor() == GSSException.BAD_NAME, "getMajor BAD_NAME");

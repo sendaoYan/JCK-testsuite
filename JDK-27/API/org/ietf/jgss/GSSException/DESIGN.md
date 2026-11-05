@@ -35,3 +35,7 @@ e.setMinor(7, "new");
 - `setMinor` 更新 minor 与 message。
 - `toString()` 前缀 `GSSException: `。
 白盒（`testWhiteBox()`）：public 类、继承 `java.lang.Exception`、两个 public 构造器 + 七个方法 + 22 个 `public static final int` 字段。
+
+## 5. 深化补充（本轮契约深化）
+新增：全部 major 常量精确数值表（BAD_MECH=1 … FAILURE=11 逐一对号）、major 通道精确 message、
+minor 默认值、自定义 msg 参与 getMessage/toString 的格式锁、未知 major 码的降级消息。

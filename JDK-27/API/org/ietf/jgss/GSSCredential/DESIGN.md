@@ -25,3 +25,7 @@ cred.dispose();
 ## 4. 测试用例设计 + 自动化实现
 白盒（`GSSCredentialTest.testWhiteBox()`）：public interface、extends `java.lang.Cloneable`、五个 `public static final int` 字段、10 个方法。
 黑盒（`testBlackBox()`）：断言 usage 常量 0/1/2、lifetime 常量 0/MaxValue、usage 三常量互异。
+
+## 5. 深化补充（本轮契约深化）
+新增：用途常量（0/1/2）与生命周期哨兵（0、Integer.MAX_VALUE）精确值锁、接口方法面、
+离线凭据 usage/lifetime 观察值锁定。

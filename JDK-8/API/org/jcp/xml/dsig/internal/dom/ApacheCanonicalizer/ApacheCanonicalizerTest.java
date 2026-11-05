@@ -30,6 +30,49 @@ public class ApacheCanonicalizerTest {
         check(hasMethod(c, "isFeatureSupported"), "declares isFeatureSupported");
         check(hasMethod(c, "marshalParams"), "declares marshalParams");
         check(hasMethod(c, "transform"), "declares transform");
+        deepen();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+    // ---- deepening: exact member face + behavior (contract lock) ----
+    static void deepen() throws Exception {
+        Class<?> c = Class.forName("org.jcp.xml.dsig.internal.dom.ApacheCanonicalizer");
+        check("javax.xml.crypto.dsig.TransformService".equals(c.getSuperclass().getName()), "superclass javax.xml.crypto.dsig.TransformService");
+        java.util.Set<String> ifaces = new java.util.HashSet<String>();
+        for (Class<?> i : c.getInterfaces()) ifaces.add(i.getName());
+        check(ifaces.isEmpty(), "no directly declared interfaces");
+        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()) && java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !java.lang.reflect.Modifier.isFinal(c.getModifiers()), "modifier set [public abstract]");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        java.util.Set<String> staticNames = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+            int mod = m.getModifiers();
+            if (java.lang.reflect.Modifier.isPublic(mod) || java.lang.reflect.Modifier.isProtected(mod)) {
+                names.add(m.getName());
+                if (java.lang.reflect.Modifier.isStatic(mod)) staticNames.add(m.getName());
+            }
+        }
+        check(names.equals(new java.util.HashSet<String>(java.util.Arrays.asList("canonicalize", "getParameterSpec", "init", "isFeatureSupported", "marshalParams", "transform"))),
+                "exact public/protected method face (6 names): " + names);
+        java.util.Set<String> ctorFace = new java.util.HashSet<String>();
+        for (java.lang.reflect.Constructor<?> k : c.getDeclaredConstructors()) {
+            if (java.lang.reflect.Modifier.isPrivate(k.getModifiers())) continue;
+            StringBuilder sb = new StringBuilder();
+            for (Class<?> t : k.getParameterTypes()) sb.append(t.getName()).append(",");
+            ctorFace.add(sb.toString());
+        }
+        check(ctorFace.size() == 1, "exactly 1 declared constructors, got " + ctorFace.size());
+        check(ctorFace.contains(""), "constructor(no-arg) present");
+        // black-box behavior
+        javax.xml.crypto.dsig.TransformService c14n =
+                javax.xml.crypto.dsig.TransformService.getInstance(
+                        javax.xml.crypto.dsig.CanonicalizationMethod.INCLUSIVE, "DOM");
+        check(c14n instanceof org.jcp.xml.dsig.internal.dom.ApacheCanonicalizer,
+                "the registered INCLUSIVE c14n service extends ApacheCanonicalizer");
+        javax.xml.crypto.dsig.TransformService exc =
+                javax.xml.crypto.dsig.TransformService.getInstance(
+                        javax.xml.crypto.dsig.CanonicalizationMethod.EXCLUSIVE_WITH_COMMENTS, "DOM");
+        check(exc instanceof org.jcp.xml.dsig.internal.dom.ApacheCanonicalizer,
+                "the registered exclusive c14n service also extends ApacheCanonicalizer");
+        check(!org.jcp.xml.dsig.internal.dom.ApacheCanonicalizer.class.equals(c14n.getClass()),
+                "ApacheCanonicalizer itself stays abstract");
     }
 }

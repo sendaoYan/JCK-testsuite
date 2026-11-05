@@ -18,3 +18,7 @@
 - 白盒：public、implements RMIClientSocketFactory/Serializable、`createSocket(String,int)` 签名。
 - 黑盒：两默认实例 equals/hashCode 相等；不等于 null/其他类型；Java 序列化往返保持 equals/hashCode。
 - 实现见 `SslRMIClientSocketFactoryTest.java`。
+
+## 5. 深化补充（本轮契约深化）
+新增：无状态值语义（任意两实例 equals 且 hashCode 相等）、序列化往返保持 equals/hashCode、
+`createSocket(null,0)` 与已关端口 → IOException 精确抛出、白盒两接口形态。

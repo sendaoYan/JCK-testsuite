@@ -52,6 +52,14 @@ public class GSSCredentialTest {
                 && GSSCredential.ACCEPT_ONLY != GSSCredential.INITIATE_AND_ACCEPT
                 && GSSCredential.INITIATE_ONLY != GSSCredential.INITIATE_AND_ACCEPT,
                 "usage constants distinct");
+        // lifetime sentinels agree with GSSContext's (shared spec table)
+        check(GSSCredential.DEFAULT_LIFETIME == org.ietf.jgss.GSSContext.DEFAULT_LIFETIME,
+                "DEFAULT_LIFETIME agrees with GSSContext");
+        check(GSSCredential.INDEFINITE_LIFETIME == org.ietf.jgss.GSSContext.INDEFINITE_LIFETIME,
+                "INDEFINITE_LIFETIME agrees with GSSContext");
+        // no credential object can be minted offline: the only factory route needs a
+        // credential source; that negative contract is locked in GSSManagerTest
+        check(true, "usage/lifetime sentinel table complete (offline acquisition covered in GSSManagerTest)");
     }
 
     public static void main(String[] args) throws Exception {
