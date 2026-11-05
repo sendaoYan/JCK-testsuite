@@ -1,0 +1,1 @@
+# java.lang.management.MemoryMXBean — MemoryMXBean 设计方案（JDK-8）

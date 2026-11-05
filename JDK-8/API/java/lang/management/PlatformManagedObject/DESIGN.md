@@ -1,0 +1,1 @@
+# java.lang.management.PlatformManagedObject — PlatformManagedObject 设计方案（JDK-8）

@@ -1,0 +1,1 @@
+# java.lang.management.GarbageCollectorMXBean — GarbageCollectorMXBean 设计方案（JDK-8）

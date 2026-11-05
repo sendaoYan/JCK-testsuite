@@ -1,0 +1,1 @@
+# java.lang.management.ThreadInfo — ThreadInfo 设计方案（JDK-8）

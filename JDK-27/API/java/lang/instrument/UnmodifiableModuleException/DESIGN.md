@@ -17,3 +17,8 @@ catch (UnmodifiableModuleException e) { /* 该模块不可修改 */ }
 白盒：具体类 + 继承 RuntimeException + 两个构造器。
 黑盒：no-arg message null；String 构造 message/cause；instanceof RuntimeException。
 对应 `UnmodifiableModuleExceptionTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- 仅 JDK-27 存在（JDK-8 侧在 InstrumentationTest 里以 Class.forName 断言不存在）。
+- 构造器面：(String) 与 (String,Throwable)；getMessage/getCause 往返。
+- 继承 RuntimeException；由 isModifiableModule(module)==false 时 redefineModule 触发（语义锁定）。

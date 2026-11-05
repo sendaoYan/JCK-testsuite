@@ -18,3 +18,9 @@ String level = log.getLoggerLevel("com.example");
 白盒：接口 + 继承 PlatformManagedObject + 四个方法返回类型。
 黑盒：创建父子 logger 后 getLoggerNames 包含；setLoggerLevel/getLoggerLevel 往返；getParentLoggerName 解析；reset null；objectName 非空。
 对应 `PlatformLoggingMXBeanTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- ObjectName 精确 `java.lang:type=PlatformLogging`；单例身份（重复 getPlatformMXBean 同一实例）。
+- 跨 API 闭环：setLoggerLevel(name, "INFO") 后 java.util.logging.Logger.getLogger(name).getLevel().getName() == "INFO"，反向 getLoggerLevel(name) 亦一致。
+- setLoggerLevel(name, null) → level 置 null 继承 parent；getParentLoggerName 闭环。
+- 负例：未注册 logger 的 getLoggerLevel → null；setLoggerLevel 不存在 logger 不抛（懒创建语义，实证）。

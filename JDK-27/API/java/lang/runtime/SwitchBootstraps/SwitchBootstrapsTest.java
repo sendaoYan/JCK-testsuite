@@ -98,9 +98,43 @@ public class SwitchBootstrapsTest {
         check((int) mh.invoke((Object) "x", 3) == 3, "resume past all -> default");
     }
 
+
+    static void testDeepPrimitiveClassLabel() throws Throwable {
+        // primitive class labels match their boxed values (probed on jdk-27.0.1)
+        MethodType tsType = MethodType.methodType(int.class, Object.class, int.class);
+        CallSite cs = SwitchBootstraps.typeSwitch(LOOKUP, "", tsType, int.class, String.class);
+        MethodHandle mh = cs.dynamicInvoker();
+        check((int) mh.invoke((Object) 42, 0) == 0, "boxed int matches int.class label");
+        check((int) mh.invoke((Object) Integer.valueOf(42), 0) == 0, "Integer matches int.class label");
+        check((int) mh.invoke((Object) "s", 0) == 1, "String matches its label");
+        check((int) mh.invoke((Object) 3.5d, 0) == 2, "no match -> default index == label count");
+        check((int) mh.invoke((Object) null, 0) == -1, "null selector -> -1");
+        check((int) mh.invoke((Object) Long.valueOf(42L), 0) == 2, "Long does not match int.class");
+    }
+
+    static void testDeepEnumSwitchResume() throws Throwable {
+        MethodType esType = MethodType.methodType(int.class, Color.class, int.class);
+        CallSite es = SwitchBootstraps.enumSwitch(LOOKUP, "", esType, new Object[]{"RED", "BLUE"});
+        MethodHandle eh = es.dynamicInvoker();
+        check((int) eh.invoke(Color.RED, 0) == 0, "RED at start index 0");
+        check((int) eh.invoke(Color.RED, 1) == 2, "resume from 1 skips RED -> default (count)");
+        check((int) eh.invoke(Color.RED, 2) == 2, "resume past all labels -> default");
+        check((int) eh.invoke(Color.BLUE, 1) == 1, "resume from 1 still finds BLUE");
+        check((int) eh.invoke(Color.GREEN, 0) == 2, "unlisted constant -> default");
+        check((int) eh.invoke(null, 0) == -1, "null enum selector -> -1");
+        // labels are matched by constant name, not ordinals
+        CallSite reordered = SwitchBootstraps.enumSwitch(LOOKUP, "", esType,
+                new Object[]{"BLUE", "RED"});
+        MethodHandle rh = reordered.dynamicInvoker();
+        check((int) rh.invoke(Color.RED, 0) == 1, "label order defines the index (BLUE first)");
+        check((int) rh.invoke(Color.BLUE, 0) == 0, "label order defines the index (BLUE at 0)");
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepPrimitiveClassLabel();
+        testDeepEnumSwitchResume();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

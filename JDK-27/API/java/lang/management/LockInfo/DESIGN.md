@@ -18,3 +18,10 @@ int id = lock.getIdentityHashCode();
 白盒：具体类 + 继承 Object + 构造器 + getter + from 返回类型。
 黑盒：构造后 getClassName/getIdentityHashCode 往返；identity hash 0；toString 含 className。
 对应 `LockInfoTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- 构造 null className → NPE；className/identityHashCode 正负值（含 Integer.MIN/MAX）原样回读。
+- toString 精确格式 `类名@十六进制身份哈希`（与 `Integer.toHexString` 一致）。
+- equals/hashCode 为 identity 语义（未重写）：两个同 className 同 hash 的实例不等。
+- `from(null)` → null。
+- 真实场景身份：blocked 线程的 `ThreadInfo.getLockInfo().getClassName()` 等于持锁 monitor 的对象类名（锁链 fixture 实证）。

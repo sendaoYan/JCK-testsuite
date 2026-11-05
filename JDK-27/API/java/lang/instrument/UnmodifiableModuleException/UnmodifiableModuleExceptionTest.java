@@ -30,9 +30,34 @@ public class UnmodifiableModuleExceptionTest {
         check(e2.getCause() == null, "cause null");
     }
 
+
+    static void testDeepConstructorSurface() throws Exception {
+        check(UnmodifiableModuleException.class.getConstructors().length == 2,
+              "exactly two public constructors: () and (String)");
+        check(RuntimeException.class.isAssignableFrom(UnmodifiableModuleException.class),
+              "extends RuntimeException");
+        UnmodifiableModuleException e = new UnmodifiableModuleException("sealed");
+        check("sealed".equals(e.getMessage()), "message round-trip");
+        check(e.getCause() == null, "no cause");
+        check(e instanceof java.io.Serializable, "serializable");
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(e);
+        oos.close();
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        UnmodifiableModuleException back = (UnmodifiableModuleException) ois.readObject();
+        ois.close();
+        check("sealed".equals(back.getMessage()), "serialization preserves the message");
+        check(new UnmodifiableModuleException().getMessage() == null, "no-arg message null");
+        check(Class.forName("java.lang.instrument.UnmodifiableModuleException") != null,
+              "class present in java.lang.instrument (JDK 9+)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepConstructorSurface();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

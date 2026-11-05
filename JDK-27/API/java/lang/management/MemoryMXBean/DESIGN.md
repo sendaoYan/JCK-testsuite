@@ -18,3 +18,11 @@ m.gc();
 白盒：接口 + 继承 PlatformManagedObject + 各方法返回类型。
 黑盒：heap/non-heap 的 used>=0、committed>=used、max>=-1；pending>=0；objectName 非空；totalGcCpuTime>=-1；setVerbose 生效并恢复；gc 可调用（不断效果）。
 对应 `MemoryMXBeanTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- 使用不变式（弱断言）：heap/nonHeap 的 used <= committed、init >= -1、max >= -1 或 >= used。
+- gc() 调用无异常；getObjectPendingFinalizationCount() >= 0。
+- setVerbose 往返 true/false 回读一致。
+- ObjectName 精确 `java.lang:type=Memory`。
+- 通知路径弱断言：addNotificationListener/removeNotificationListener 往返不抛（不断言实际触发，防 flaky）。
+- 版本差异：JDK-27 getTotalGcCpuTime() >= 0（JDK 16+ 默认方法，直接断言）。

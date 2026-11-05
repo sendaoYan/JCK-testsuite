@@ -17,3 +17,10 @@ new ManagementPermission("monitor", null);
 白盒：final 类 + 继承 BasicPermission + 两个构造器。
 黑盒：getName/getActions（null/空 actions）；implies 同名校验；非空 actions 抛 IllegalArgumentException；点分扩展名可接受。
 对应 `ManagementPermissionTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- implies 矩阵（实证，任务书猜测被推翻）：control 不 implies monitor、monitor 不 implies control（与常规 BasicPermission 的子名蕴含不同——management 的两目标名互不蕴含）；自身 implies 自身为真；null → false。
+- 构造负例精确异常：null name → NPE；空串 → IllegalArgumentException；"foo" → IAE `Unknown management permission name`（消息含非法名）。
+- equals/hashCode：同名相等、异名不等、hashCode == name.hashCode()。
+- 序列化往返 + SUID 锁定；PermissionCollection implies 语义与单权限一致。
+- SecurityManager 路径：无该权限时访问受控 API → SecurityException（有权限时放行）。

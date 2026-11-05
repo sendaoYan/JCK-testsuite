@@ -157,9 +157,94 @@ public class ObjectMethodsTest {
               "single-component equals/hashCode");
     }
 
+
+    // record fixture with a nullable reference component (JDK-27 only file)
+    public record Labeled(int id, String tag) {
+    }
+
+    public static class Bare {
+    }
+
+    static void testDeepNullComponentRecord() {
+        Labeled a = new Labeled(1, null);
+        Labeled b = new Labeled(1, null);
+        Labeled c = new Labeled(1, "x");
+        check(a.equals(b), "null component: equals holds for same values");
+        check(!a.equals(c), "null vs non-null component differ");
+        check(a.hashCode() == b.hashCode(), "null component: hashCode consistent");
+        check(a.toString().equals("Labeled[id=1, tag=null]"),
+              "null component renders as 'tag=null', got " + a);
+        check(!a.equals(null), "record equals(null) false");
+        check(a.equals(a), "record equals self");
+    }
+
+    static void testDeepZeroComponentBootstrap() throws Throwable {
+        // a zero-component bootstrap degenerates to the Object defaults:
+        // hashCode 0, toString "Bare[]", equals = instanceof check
+        Object hcBoot = ObjectMethods.bootstrap(LOOKUP, "hashCode",
+                MethodType.methodType(int.class, Bare.class), Bare.class, "", new MethodHandle[]{});
+        MethodHandle hc = ((CallSite) hcBoot).dynamicInvoker();
+        check((int) hc.invokeExact(new Bare()) == 0, "zero-component hashCode is 0");
+        Object tsBoot = ObjectMethods.bootstrap(LOOKUP, "toString",
+                MethodType.methodType(String.class, Bare.class), Bare.class, "", new MethodHandle[]{});
+        MethodHandle ts = ((CallSite) tsBoot).dynamicInvoker();
+        check("Bare[]".equals((String) ts.invokeExact(new Bare())),
+              "zero-component toString is 'Bare[]'");
+        Object eqBoot = ObjectMethods.bootstrap(LOOKUP, "equals",
+                MethodType.methodType(boolean.class, Bare.class, Object.class),
+                Bare.class, "", new MethodHandle[]{});
+        MethodHandle eq = ((CallSite) eqBoot).dynamicInvoker();
+        check((boolean) eq.invokeExact(new Bare(), (Object) new Bare()),
+              "zero-component equals: same type true");
+        check(!(boolean) eq.invokeExact(new Bare(), (Object) null),
+              "zero-component equals: null false");
+        check(!(boolean) eq.invokeExact(new Bare(), (Object) "s"),
+              "zero-component equals: other type false");
+    }
+
+    static void testDeepNullReceiver() throws Throwable {
+        MethodHandle[] acc = pairAccessors();
+        MethodHandle eq = ((CallSite) ObjectMethods.bootstrap(LOOKUP, "equals", EQ_DESC,
+                Pair.class, "a;b", acc)).dynamicInvoker();
+        try {
+            boolean r = (boolean) eq.invokeExact((Pair) null, (Object) new Pair(1, 1));
+            check(false, "null receiver equals must throw NPE, got " + r);
+        } catch (NullPointerException expected) {
+            check(true, "null receiver equals throws NPE");
+        }
+        MethodHandle hc = ((CallSite) ObjectMethods.bootstrap(LOOKUP, "hashCode", HC_DESC,
+                Pair.class, "a;b", acc)).dynamicInvoker();
+        try {
+            int h = (int) hc.invokeExact((Pair) null);
+            check(false, "null receiver hashCode must throw NPE, got " + h);
+        } catch (NullPointerException expected) {
+            check(true, "null receiver hashCode throws NPE");
+        }
+        MethodHandle ts = ((CallSite) ObjectMethods.bootstrap(LOOKUP, "toString", TS_DESC,
+                Pair.class, "a;b", acc)).dynamicInvoker();
+        try {
+            String str = (String) ts.invokeExact((Pair) null);
+            check(false, "null receiver toString must throw NPE, got " + str);
+        } catch (NullPointerException expected) {
+            check(true, "null receiver toString throws NPE");
+        }
+        // each bootstrap call returns a fresh CallSite (no cross-invocation caching)
+        Object c1 = ObjectMethods.bootstrap(LOOKUP, "hashCode", HC_DESC, Pair.class, "a;b", acc);
+        Object c2 = ObjectMethods.bootstrap(LOOKUP, "hashCode", HC_DESC, Pair.class, "a;b", acc);
+        check(c1 != c2, "repeated bootstrap returns a fresh CallSite");
+        check((int) ((CallSite) c2).dynamicInvoker().invokeExact(new Pair(7, 8)) == 7 * 31 + 8,
+              "bootstrapped handles from separate calls are equivalent");
+        // mixed record component types combine int/String hashing correctly
+        Labeled x = new Labeled(5, "s");
+        check(x.hashCode() == 5 * 31 + "s".hashCode(), "mixed components hash combiner x*31+y");
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
+        testDeepNullComponentRecord();
+        testDeepZeroComponentBootstrap();
+        testDeepNullReceiver();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

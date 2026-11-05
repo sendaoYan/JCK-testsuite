@@ -17,3 +17,8 @@ catch (UnmodifiableClassException e) { /* 该类不可重转换 */ }
 白盒：具体类 + 继承 Exception + 两个构造器。
 黑盒：no-arg message null；String 构造 message/cause；instanceof Exception。
 对应 `UnmodifiableClassExceptionTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- 构造器面：()/(String)/(String,Throwable)/(Throwable) 四形态全有（与 IllegalClassFormatException 的关键差异：UCE 有 cause 通道）。
+- getMessage/getCause 往返：(String,Throwable) 构造后两值一致；(Throwable) 单参 → message == cause.toString()。
+- 继承 Exception；serialVersionUID 未显式声明（与 ICFE 同）。

@@ -19,3 +19,8 @@ public byte[] transform(...) throws IllegalClassFormatException {
 白盒：具体类 + 继承 Exception + 两个构造器。
 黑盒：no-arg message null；String 构造 message/cause；instanceof Exception。
 对应 `IllegalClassFormatExceptionTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- 构造器面锁定（javap + 反射实证，任务书"有 cause 构造器"猜测被推翻）：仅 () 与 (String) 两个构造器，无 (Throwable)/(String,Throwable) 形态——与 UnmodifiableClassException 的差异点。
+- getMessage() 往返：null → null，"x" → "x"。
+- 继承链：extends Exception；getCause() 恒 null（无 cause 通道）。

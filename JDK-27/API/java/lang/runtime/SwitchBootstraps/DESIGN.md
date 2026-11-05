@@ -27,3 +27,8 @@ int idx = (int) cs.dynamicInvoker().invoke((Object) "hi", 0); // 0
 - enumSwitch：常量名命中/缺省/null；
 - 非法输入（null labels）在引导期抛 NPE/IAE；resume 语义。
 对应 `SwitchBootstrapsTest.java` 的 `testBlackBox()`。
+
+## 5. 契约深化（本批）
+- typeSwitch 标签语义：int.class 标签匹配装箱 Integer（装箱匹配原始类标签）；无匹配 → 返回标签数（default 索引）；null selector → -1；Long 不匹配 int.class 标签。
+- enumSwitch resume 语义：第二参为起始索引，跳过之前的标签；resume 越过全部标签 → 标签数（default）；标签顺序由常量名数组定义而非 ordinal；未列出常量 → default；null → -1。
+- 两类 bootstrap 共享 null==-1 / default==labels.length 常量约定（契约级不变式）。

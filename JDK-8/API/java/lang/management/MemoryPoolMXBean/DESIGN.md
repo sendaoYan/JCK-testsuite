@@ -1,0 +1,1 @@
+# java.lang.management.MemoryPoolMXBean — MemoryPoolMXBean 设计方案（JDK-8）

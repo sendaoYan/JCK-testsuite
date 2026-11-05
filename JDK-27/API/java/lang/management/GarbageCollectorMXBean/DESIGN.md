@@ -17,3 +17,8 @@ for (GarbageCollectorMXBean g : ManagementFactory.getGarbageCollectorMXBeans())
 白盒：接口 + 继承 MemoryManagerMXBean + 两个方法返回类型。
 黑盒：`getGarbageCollectorMXBeans()` 非空；每 GC 名称非空/计数/时间非负/有效/管理至少一池/objectName 非空；名称排序后互异。
 对应 `GarbageCollectorMXBeanTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- 逐 GC 契约：getName() 非空；getCollectionCount() >= 0；getCollectionTime() >= 0；getMemoryPoolNames() 非空；ObjectName canonical `java.lang:name=X,type=GarbageCollector`。
+- 弱推进断言：System.gc() 后全部 GC 的 collectionCount 之和增长 >= 1（不绑定特定 GC，防 flaky）。
+- 列表与 MemoryManagerMXBean 交叉：GC ⊆ manager（见 MemoryManagerMXBean）。

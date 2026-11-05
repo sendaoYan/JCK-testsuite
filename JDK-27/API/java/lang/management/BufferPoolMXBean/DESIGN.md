@@ -17,3 +17,8 @@ for (BufferPoolMXBean b : ManagementFactory.getPlatformMXBeans(BufferPoolMXBean.
 白盒：接口 + 继承 PlatformManagedObject + 四个方法返回类型。
 黑盒：`getPlatformMXBeans(BufferPoolMXBean.class)` 非空；每池 name 非空、count/capacity/used 非负、objectName 非空；存在 direct 池。
 对应 `BufferPoolMXBeanTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- ObjectName canonical 精确 `java.nio:name=X,type=BufferPool`（键按字典序排序——本批实证踩坑：toString 为插入序 `type=...,name=...`，getCanonicalName 为 `name=...,type=...`）。
+- 列表稳定：getPlatformMXBeans 恒含 direct/mapped 两个池，重复调用内容一致。
+- 分配记账（弱断言）：ByteBuffer.allocateDirect(n) 后 direct 池 getCount() 增长、getMemoryUsed() 增量 >= n；getCapacity/getTotalCapacity >= 0。

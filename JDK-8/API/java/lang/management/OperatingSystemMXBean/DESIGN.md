@@ -1,0 +1,1 @@
+# java.lang.management.OperatingSystemMXBean — OperatingSystemMXBean 设计方案（JDK-8）

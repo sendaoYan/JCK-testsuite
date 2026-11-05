@@ -25,3 +25,9 @@ else /* fallback */;
 - float：精确表示值（2e9f、-32768.0f）、小数（100.5f）失真、NaN/±Inf、-0.0f 排除；
 - double：int/long 饱和边界（0x1p63 排除、1e19 溢出）、2^53 精确、0.5→float 精确 vs 0.1 失真、NaN。
 对应 `ExactConversionsSupportTest.java` 的 `testBlackBox()`。
+
+## 5. 契约深化（本批）
+- 21 个谓词 × 边界值矩阵：期望值由 JLS 5.1.3 规则公式计算（整型目标=范围检查、FP 目标=round-trip、统一排除负零、long→float/double 排除 Long.MAX_VALUE、double→long 排除 2^63）。
+- 公式先在 jdk-27.0.1 上与实现逐值对照 438/438 全一致后嵌入（断言的是规范公式，不是实现镜像）。
+- NaN/±Infinity 对所有目标均为 false；isDoubleToFloatExact 仅要求 (double)(float)v == v。
+- 边界点覆盖：各目标类型的 MIN/MAX±1、2^24/2^53（float/double 尾数边界）、-0.0、0.5（非整）。

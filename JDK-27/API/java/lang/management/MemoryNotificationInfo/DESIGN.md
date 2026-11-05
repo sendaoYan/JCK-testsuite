@@ -17,3 +17,9 @@ if (MemoryNotificationInfo.MEMORY_THRESHOLD_EXCEEDED.equals(type)) { ... }
 白盒：具体类 + 继承 Object + 构造器 + getter + 两个常量。
 黑盒：构造后 getPoolName/getUsage/getCount 往返；两个通知类型常量非空且互异。
 对应 `MemoryNotificationInfoTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- 构造负例矩阵：poolName null → NPE；usage null → NPE；count < 0 → IAE（精确消息含 count 字样）。
+- 常量精确值锁定：MEMORY_THRESHOLD_EXCEEDED == "java.management.memory.threshold.exceeded"，MEMORY_COLLECTION_THRESHOLD_EXCEEDED == "java.management.memory.collection.threshold.exceeded"。
+- `from(CompositeData)` poolName/usage/count 往返；`from(null)` → null（非 NPE）。
+- getCount/getUsage/getPoolName 与构造参数一致；usage 为构造时同一引用（无拷贝）。

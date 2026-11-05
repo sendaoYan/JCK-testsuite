@@ -1,0 +1,1 @@
+# java.lang.management.LockInfo — LockInfo 设计方案（JDK-8）

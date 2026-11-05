@@ -17,3 +17,9 @@ for (MemoryPoolMXBean p : ManagementFactory.getMemoryPoolMXBeans())
 白盒：枚举 + 继承 Enum + 两个常量 + values/valueOf 返回类型。
 黑盒：values 长度 2；valueOf HEAP/NON_HEAP；name/toString/ordinal；valueOf bogus 抛 IAE。
 对应 `MemoryTypeTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- values() 内容恒为 {HEAP, NON_HEAP} 且顺序稳定；返回数组是防御性副本（改动不影响后续调用）。
+- toString() == name()（"HEAP"/"NON_HEAP"，非 "Heap memory"）；valueOf 大小写敏感，`valueOf("heap")` → IllegalArgumentException。
+- Enum 用 identity hashCode：`HEAP.hashCode() != "HEAP".hashCode()`（本批踩坑实证后修正断言为稳定性检查）；equals 为枚举身份。
+- 两侧（JDK-8/27）该类型无版本差异。

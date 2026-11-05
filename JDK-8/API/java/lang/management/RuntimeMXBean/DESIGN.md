@@ -1,0 +1,1 @@
+# java.lang.management.RuntimeMXBean — RuntimeMXBean 设计方案（JDK-8）

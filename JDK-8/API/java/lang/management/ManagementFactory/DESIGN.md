@@ -46,3 +46,11 @@
 - heap/non-heap `committed>=used`；`max>=-1`（-1 表示未指定）；`getObjectPendingFinalizationCount()>=0`。
 - `getCompilationMXBean()` 可能为 null（无 JIT），需守卫。
 - 断言数随 JVM 内存池/GC 数量变化（JDK-8 109 条，JDK-27 123 条）。
+
+## 5. 契约深化（本批）
+- 单例身份矩阵：getMemoryMXBean/getThreadMXBean/getRuntimeMXBean/... 重复调用均返回同一实例。
+- getPlatformMBeanServer() 单例身份 + 默认域 "DefaultDomain"；平台 bean 均已注册。
+- ObjectName 精确表：全部平台 bean 的 canonical ObjectName 逐一锁定。
+- 代理闭环：newPlatformMXBeanProxy(server, "java.lang:type=Threading", ThreadMXBean.class) 后 getThreadCount() 等方法与本地 bean 返回值一致（跨 MBeanServer 真值对照）。
+- 代理负例矩阵：错误 ObjectName 类型（值不匹配 bean）/非法名 → 相应运行时异常精确。
+- 列表交叉引用：getMemoryManagerMXBeans 名称集 ⊇ GarbageCollectorMXBeans 名称集；pool.getMemoryManagerNames() 与 manager.getMemoryPoolNames() 双向一致。

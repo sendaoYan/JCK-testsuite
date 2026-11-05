@@ -30,3 +30,10 @@ boolean eq = (boolean) cs.dynamicInvoker().invokeExact(p, (Object) q);
 - `MethodHandle.class` 描述符返回裸句柄可 invokeExact；
 - 非法 name/类型/名字数不匹配抛 IAE、null lookup 抛 NPE；单组件 record 行为。
 对应 `ObjectMethodsTest.java` 的 `testBlackBox()`。
+
+## 5. 契约深化（本批）
+- null 组件 record：equals 同值成立、hashCode 一致、toString 渲染 "tag=null"。
+- 零组件 bootstrap：hashCode == 0、toString == "Bare[]"、equals 退化为 instanceof 判定（含 null false / 异类型 false）。
+- null receiver：bootstrapped equals/hashCode/toString 句柄以 null 接收者调用均抛 NPE。
+- 每次 bootstrap 返回新 CallSite（无跨调用缓存）；hash 组合器 x*31+y（混合 int/String 组件验证）。
+- 工程坑（本批实证）：invokeExact 必须处于 cast 上下文——语句位置会被 javac 定型为 void 触发 WrongMethodTypeException，掩盖真正的 NPE。

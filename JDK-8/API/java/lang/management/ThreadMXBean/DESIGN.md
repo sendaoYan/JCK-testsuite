@@ -1,0 +1,1 @@
+# java.lang.management.ThreadMXBean — ThreadMXBean 设计方案（JDK-8）

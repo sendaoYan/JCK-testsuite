@@ -17,3 +17,8 @@ for (MemoryManagerMXBean m : ManagementFactory.getMemoryManagerMXBeans())
 白盒：接口 + 继承 PlatformManagedObject + 三个方法返回类型。
 黑盒：`getMemoryManagerMXBeans()` 非空；每管理器 name 非空/valid/poolNames 非空/objectName 非空；名称排序互异。
 对应 `MemoryManagerMXBeanTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- GC 是 manager 子集：getGarbageCollectorMXBeans 的名称集 ⊆ getMemoryManagerMXBeans 名称集。
+- 逐 manager 契约：getName() 非空、isValid() == true、getMemoryPoolNames() 为数组（可为空但非 null）。
+- ObjectName canonical `java.lang:name=X,type=MemoryManager`。

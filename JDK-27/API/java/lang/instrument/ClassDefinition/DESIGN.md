@@ -17,3 +17,9 @@ instrumentation.redefineClasses(cd);
 白盒：final 具体类 + 继承 Object + 构造器 + getter 返回类型。
 黑盒：构造后 getDefinitionClass/getDefinitionClassFile 的类与字节码往返（长度+内容），空字节码场景。
 对应 `ClassDefinitionTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- null 负例：new ClassDefinition(null, bytes) / (class, null) → NPE。
+- 数组共享语义（实证，任务书"防御拷贝"猜测被推翻）：getDefinitionClassFile() 返回构造时同一数组引用——外部修改数组后回读可见变化；构造后修改外部数组同样可见（无任何拷贝）。
+- getDefinitionClass() 为同一 Class 引用（identity）；equals/hashCode 未重写（identity 语义）。
+- JDK-8/27 两侧该 API 无版本差异（同为 final 值类）。

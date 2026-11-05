@@ -18,3 +18,9 @@ double load = os.getSystemLoadAverage();
 白盒：接口 + 继承 PlatformManagedObject + 五个方法返回类型。
 黑盒：name/arch/version 非空、availableProcessors>=1、loadAverage>=-1.0（Windows 返回 -1）、objectName 非空。
 对应 `OperatingSystemMXBeanTest.java` 白盒 + 黑盒部分。
+
+## 5. 契约深化（本批）
+- ObjectName 精确 `java.lang:type=OperatingSystem`。
+- getAvailableProcessors() >= 1 且 == Runtime.getRuntime().availableProcessors()（跨 API 一致性）。
+- getName()/getVersion()/getArch() 与 System.getProperty("os.name"/"os.version"/"os.arch") 逐一精确相等。
+- getSystemLoadAverage() >= 0 或 == -1（-1 语义：不可用），不依赖具体负载值。

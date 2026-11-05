@@ -1,0 +1,1 @@
+# java.lang.management.BufferPoolMXBean — BufferPoolMXBean 设计方案（JDK-8）

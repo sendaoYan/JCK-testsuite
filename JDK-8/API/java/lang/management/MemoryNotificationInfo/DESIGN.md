@@ -1,0 +1,1 @@
+# java.lang.management.MemoryNotificationInfo — MemoryNotificationInfo 设计方案（JDK-8）
