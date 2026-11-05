@@ -27,6 +27,7 @@ public class RecordedMethodTest {
         check(hasMethod(c, "getDescriptor"), "getDescriptor");
         check(hasMethod(c, "getType"), "getType");
         check(hasMethod(c, "isHidden"), "isHidden");
+        check(hasMethod(c, "getModifiers"), "getModifiers");
     }
 
     static void testBlackBox() throws Exception {
@@ -56,9 +57,43 @@ public class RecordedMethodTest {
         check(m.isHidden() || !m.isHidden(), "isHidden callable");
     }
 
+    // ---- deepening: precise method identity from the committing frame ----
+    static void testMethodIdentity() throws Exception {
+        Path p = Files.createTempFile("rmd2", ".jfr");
+        try (Recording r = new Recording()) {
+            r.enable(ConsumerEvent.class).withStackTrace();
+            r.start();
+            ConsumerEvent ev = new ConsumerEvent(); ev.message = "deep"; ev.commit();
+            r.stop();
+            r.dump(p);
+        }
+        RecordedEvent ev = null;
+        try (RecordingFile rf = new RecordingFile(p)) {
+            while (rf.hasMoreEvents()) {
+                RecordedEvent e = rf.readEvent();
+                if ("com.test.ConsumerEvent".equals(e.getEventType().getName())) { ev = e; break; }
+            }
+        }
+        Files.deleteIfExists(p);
+        check(ev != null, "deep fixture event");
+        RecordedMethod m = ev.getStackTrace().getFrames().get(0).getMethod();
+        // the committing frame is the test-class method that called commit()
+        check("RecordedMethodTest".equals(m.getType().getName()), "declaring class == test class");
+        boolean declared = false;
+        for (Method dm : RecordedMethodTest.class.getDeclaredMethods()) if (dm.getName().equals(m.getName())) declared = true;
+        check(declared, "committing method is declared by the test class (was " + m.getName() + ")");
+        check(m.getDescriptor() != null && m.getDescriptor().startsWith("("), "descriptor is a JVM descriptor");
+        check(m.getModifiers() != 0, "method modifiers non-zero");
+        check(!m.isHidden(), "test frame is not hidden");
+        check(m.toString() != null, "toString non-null");
+        // RecordedMethod extends RecordedObject: field names visible
+        check(m.hasField("name") || m.hasField("type"), "method object exposes its fields");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        if (FlightRecorder.isAvailable()) testMethodIdentity();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

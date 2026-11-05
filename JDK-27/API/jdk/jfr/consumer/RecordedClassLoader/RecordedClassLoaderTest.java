@@ -19,6 +19,11 @@ public class RecordedClassLoaderTest {
         @Label("message") String message;
     }
 
+    @Name("test.RecordedClassLoader.E")
+    static class E extends Event {
+        @Label("cls") Class<?> cls;
+    }
+
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("jdk.jfr.consumer.RecordedClassLoader");
         check(Modifier.isPublic(c.getModifiers()), "public");
@@ -53,9 +58,58 @@ public class RecordedClassLoaderTest {
         check(cl == null || cl.getName() != null, "class loader name callable when present");
     }
 
+    // ---- deepening: full loader attribute round-trip on JDK-27 ----
+    static void testLoaderAttributes() throws Exception {
+        Path p = Files.createTempFile("rcl2", ".jfr");
+        try (Recording r = new Recording()) {
+            r.enable(E.class).withStackTrace();
+            r.start();
+            E e = new E(); e.cls = RecordedClassLoaderTest.class; e.commit();
+            r.stop();
+            r.dump(p);
+        }
+        RecordedEvent ev = null;
+        try (RecordingFile rf = new RecordingFile(p)) {
+            while (rf.hasMoreEvents()) {
+                RecordedEvent x = rf.readEvent();
+                if ("test.RecordedClassLoader.E".equals(x.getEventType().getName())) { ev = x; break; }
+            }
+        }
+        Files.deleteIfExists(p);
+        check(ev != null, "fixture event");
+        RecordedClassLoader cl = ev.getClass("cls").getClassLoader();
+        check(cl != null, "app loader recorded");
+        check("app".equals(cl.getName()), "getName == \"app\" (JDK-27 app loader name)");
+        check(cl.getId() > 0, "loader id > 0");
+        RecordedClass type = cl.getType();
+        check(type != null, "getType non-null");
+        check("jdk.internal.loader.ClassLoaders$AppClassLoader".equals(type.getName()), "type name is AppClassLoader binary name");
+        // RecordedClassLoader is a RecordedObject: field channel also works
+        check(cl.hasField("name") || cl.hasField("type"), "loader object exposes fields");
+        check(cl.toString() != null, "loader toString non-null");
+        // stable identity: re-recording yields the same loader id
+        Path p2 = Files.createTempFile("rcl3", ".jfr");
+        try (Recording r = new Recording()) {
+            r.enable(E.class);
+            r.start();
+            E e = new E(); e.cls = RecordedClassLoaderTest.class; e.commit();
+            r.stop();
+            r.dump(p2);
+        }
+        RecordedEvent ev2 = null;
+        for (RecordedEvent x : RecordingFile.readAllEvents(p2)) {
+            if ("test.RecordedClassLoader.E".equals(x.getEventType().getName())) { ev2 = x; break; }
+        }
+        Files.deleteIfExists(p2);
+        check(ev2 != null, "second fixture event");
+        RecordedClassLoader cl2 = ev2.getClass("cls").getClassLoader();
+        check(cl2.getId() == cl.getId(), "loader id stable across recordings");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        if (FlightRecorder.isAvailable()) testLoaderAttributes();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

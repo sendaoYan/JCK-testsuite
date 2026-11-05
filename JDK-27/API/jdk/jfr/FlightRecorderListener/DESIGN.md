@@ -11,3 +11,9 @@ JFR 监听器接口，默认方法 recorderInitialized/recordingStateChanged。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。白盒 interface/方法存在；黑盒 匿名实现调用默认方法不抛异常。
+
+## 5. 深化（2026-11-05）：契约覆盖扩展
+- 接口面：恰好 2 方法、各 1 参数、均 default（双侧一致，isDefault 实证）。
+- 回调到达：init 立即（同步于 addListener）；RUNNING/STOPPED/CLOSED 有界等待(≤2s)；recorderInitialized 收到单例本体；recordingStateChanged 收到我们的 Recording 实例。
+- removeListener 幂等（重复移除不抛）。
+负例：无（本接口无异常契约）。
