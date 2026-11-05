@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.helpers.XMLReaderFactory）与 JDK `test/jdk` 内
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XMLReaderFactoryTest.testBlackBox()`）覆盖：默认 reader parse + 指定类名。
+
+### 深化轮次2（行为契约）
+黑盒：无属性返回内置 com.sun.org.apache.xerces.internal.parsers.SAXParser（两侧同）；createXMLReader(null)→NPE（javadoc 称 SAXException，实测 NPE）；org.xml.sax.driver 属性生效。

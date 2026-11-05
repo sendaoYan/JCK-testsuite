@@ -14,7 +14,7 @@ public class SAXExceptionTest {
         passed++;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         // ---- hierarchy ----
         check(Exception.class.isAssignableFrom(SAXException.class), "extends Exception");
         check(!RuntimeException.class.isAssignableFrom(SAXException.class), "is a checked exception");
@@ -51,6 +51,35 @@ public class SAXExceptionTest {
         SAXException e4 = new SAXException((String) null);
         check(e4.getMessage() == null, "null message getMessage null");
 
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: behavioral SAXException contract (chaining/toString/propagation) ----
+    static void deepContract() throws Exception {
+        RuntimeException inner = new RuntimeException("in");
+        org.xml.sax.SAXException w = new org.xml.sax.SAXException(inner);
+        check(w.getException() == inner, "(Exception) constructor stores the wrapped exception");
+        check(w.getCause() == inner, "getCause mirrors getException");
+        check(w.getMessage() != null && w.getMessage().contains("in"), "message derives from the wrapped exception");
+        org.xml.sax.SAXException both = new org.xml.sax.SAXException("msg", inner);
+        check("msg".equals(both.getMessage()) && both.getException() == inner, "(String,Exception) constructor keeps both");
+        org.xml.sax.SAXException plain = new org.xml.sax.SAXException();
+        check(plain.getMessage() == null && plain.getException() == null, "no-arg constructor: message and exception null");
+        check(plain.toString().contains("SAXException"), "toString names the class");
+        // a wrapped SAXException propagates out of a real parse unchanged
+        javax.xml.parsers.SAXParserFactory spf = javax.xml.parsers.SAXParserFactory.newInstance();
+        org.xml.sax.XMLReader xr = spf.newSAXParser().getXMLReader();
+        final org.xml.sax.SAXException sentinel = new org.xml.sax.SAXException("sentinel");
+        org.xml.sax.SAXException got = null;
+        try { xr.parse(new org.xml.sax.InputSource(new java.io.StringReader("<r/>"))); }
+        catch (org.xml.sax.SAXException e) { got = e; }
+        check(got == null, "clean parse throws nothing");
+        xr.setContentHandler(new org.xml.sax.helpers.DefaultHandler() {
+            public void startElement(String u, String l, String q, org.xml.sax.Attributes a) throws org.xml.sax.SAXException { throw sentinel; }
+        });
+        try { xr.parse(new org.xml.sax.InputSource(new java.io.StringReader("<r/>"))); }
+        catch (org.xml.sax.SAXException e) { got = e; }
+        check(got == sentinel, "handler-thrown SAXException propagates out of parse as the same instance");
     }
 }

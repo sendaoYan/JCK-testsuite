@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.ext.DefaultHandler2）与 JDK `test/jdk` 内 JAXP
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`DefaultHandler2Test.testBlackBox()`）覆盖：3 接口、词法事件回调。
+
+### 深化轮次2（行为契约）
+黑盒：同一实例挂 content/lexical/declaration 三槽；子类一次收齐三通道事件且保序（startDTD→attDecl→CDATA）；getExternalSubset 默认 null；四接口类型关系。

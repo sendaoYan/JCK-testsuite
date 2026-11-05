@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.XMLFilter）与 JDK `test/jdk` 内 JAXP/XML 用�
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XMLFilterTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+### 深化轮次2（行为契约）
+黑盒：getParent/setParent 往返、初值 null；自定义 filter 链（child→parent→真 reader）事件逐级转发；孤儿 filter（无 parent）parse → NPE；接口方法集锁定。实现见 helpers.XMLFilterImpl。

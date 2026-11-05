@@ -78,6 +78,29 @@ public class DocumentHandlerTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: behavioral DocumentHandler contract (SAX1 event set) ----
+    static void deepContract() throws Exception {
+        javax.xml.parsers.SAXParserFactory spf = javax.xml.parsers.SAXParserFactory.newInstance();
+        org.xml.sax.Parser p1 = spf.newSAXParser().getParser();
+        final java.util.List<String> log = new java.util.ArrayList<String>();
+        p1.setDocumentHandler(new org.xml.sax.DocumentHandler() {
+            public void setDocumentLocator(org.xml.sax.Locator l) { log.add("locator"); }
+            public void startDocument() { log.add("start"); }
+            public void endDocument() { log.add("end"); }
+            public void startElement(String name, org.xml.sax.AttributeList a) { log.add("se(" + name + "#" + a.getLength() + ")"); }
+            public void endElement(String name) { log.add("ee(" + name + ")"); }
+            public void characters(char[] c, int s, int n) { log.add("ch(" + new String(c, s, n).trim() + ")"); }
+            public void ignorableWhitespace(char[] c, int s, int n) { log.add("ws"); }
+            public void processingInstruction(String t, String d) { log.add("pi(" + t + ")"); }
+        });
+        p1.parse(new org.xml.sax.InputSource(new java.io.StringReader("<r x='1'>T</r>")));
+        check(log.get(0).equals("locator") && log.get(1).equals("start"), "SAX1 order: locator then startDocument");
+        check(log.contains("se(r#1)") && log.contains("ch(T)") && log.contains("ee(r)"), "SAX1 element/characters/end sequence with attribute count");
+        check(log.get(log.size() - 1).equals("end"), "endDocument terminates the SAX1 stream");
+        check(org.xml.sax.DocumentHandler.class.isInterface(), "DocumentHandler is an interface");
     }
 }

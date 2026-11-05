@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.SAXNotRecognizedException）与 JDK `test/jdk` �
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`SAXNotRecognizedExceptionTest.testBlackBox()`）覆盖：message/no-arg。
+
+### 深化轮次2（行为契约）
+黑盒：真实触发矩阵——reader 四访问器 × 未知 ID 全部抛本异常（非 SAXNotSupportedException）；XMLFilterImpl 孤儿 filter 上同样触发；构造链默认。

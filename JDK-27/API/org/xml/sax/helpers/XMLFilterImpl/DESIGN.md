@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.helpers.XMLFilterImpl）与 JDK `test/jdk` 内 JA
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XMLFilterImplTest.testBlackBox()`）覆盖：父委托、handler、parse、未知 feature。
+
+### 深化轮次2（行为契约）
+黑盒：事件 parent→filter→handler 保序；filter 层 EntityResolver 拦截（systemId 已绝对化）；子类按 qName 裁剪元素；两级链；孤儿 parse→NPE、feature 访问→SAXNotRecognizedException。

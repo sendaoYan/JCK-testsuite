@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.helpers.LocatorImpl）与 JDK `test/jdk` 内 JAXP
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`LocatorImplTest.testBlackBox()`）覆盖：四字段 + 拷贝。
+
+### 深化轮次2（行为契约）
+黑盒：新对象位置 0/0（JDK 实现默认，非文档 -1）；拷贝构造是快照非活视图。

@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.InputSource）与 JDK `test/jdk` 内 JAXP/XML 用
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`InputSourceTest.testBlackBox()`）覆盖：构造、setter 往返、isEmpty。
+
+### 深化轮次2（行为契约）
+黑盒：四构造器字段初值（流 null/systemId null）+ 全 setter/getter 往返；systemId 构造器与 setSystemId 等价；encoding 独立槽。

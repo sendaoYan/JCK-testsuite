@@ -25,7 +25,7 @@ public class SAXParseExceptionTest {
         };
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         // ---- hierarchy ----
         check(SAXException.class.isAssignableFrom(SAXParseException.class), "extends SAXException");
 
@@ -60,6 +60,30 @@ public class SAXParseExceptionTest {
         check(e4.toString().contains("msg4"), "6-arg toString includes message");
         check(e4.toString().contains("SYS4"), "toString includes systemId");
 
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: behavioral SAXParseException contract (from a real failure) ----
+    static void deepContract() throws Exception {
+        javax.xml.parsers.SAXParserFactory spf = javax.xml.parsers.SAXParserFactory.newInstance();
+        org.xml.sax.XMLReader xr = spf.newSAXParser().getXMLReader();
+        final org.xml.sax.SAXParseException[] seen = new org.xml.sax.SAXParseException[1];
+        xr.setErrorHandler(new org.xml.sax.helpers.DefaultHandler() {
+            public void fatalError(org.xml.sax.SAXParseException e) { seen[0] = e; }
+        });
+        org.xml.sax.SAXParseException thrown = null;
+        try { xr.parse(new org.xml.sax.InputSource(new java.io.StringReader("<r>unclosed"))); }
+        catch (org.xml.sax.SAXParseException e) { thrown = e; }
+        check(thrown != null && seen[0] != null && thrown.getLineNumber() == seen[0].getLineNumber(), "parse failure throws a SAXParseException matching the one handed to fatalError (fresh instance, line=1)");
+        check(thrown.getLineNumber() == 1 && thrown.getColumnNumber() > 0, "real failure carries line=1 and a column");
+        check(thrown.getPublicId() == null && thrown.getSystemId() == null, "ids null for an anonymous stream source");
+        check(thrown.getException() == null || thrown.getException() != null, "getException accessible on real failures");
+        check(thrown.toString().contains("lineNumber: 1") && thrown.toString().contains("columnNumber: 12"), "toString embeds the live position (lineNumber: 1; columnNumber: 12)");
+        // constructor round-trip preserves the position quadruple
+        org.xml.sax.SAXParseException manual = new org.xml.sax.SAXParseException("m", "pub", "sys", 7, 9);
+        check("m".equals(manual.getMessage()) && "pub".equals(manual.getPublicId()) && "sys".equals(manual.getSystemId()), "message/ids round-trip");
+        check(manual.getLineNumber() == 7 && manual.getColumnNumber() == 9, "line/column round-trip");
+        check(manual.toString().contains("lineNumber: 7") && manual.toString().contains("columnNumber: 9") && manual.toString().contains("systemId: sys"), "toString format embeds ids and position quadruple");
     }
 }

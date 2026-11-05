@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.Locator）与 JDK `test/jdk` 内 JAXP/XML 用例�
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`LocatorTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+### 深化轮次2（行为契约）
+黑盒：setDocumentLocator 交付活对象；换行后元素行号=2；匿名流 systemId/publicId=null；接口锁定；扩展见 ext.Locator2。

@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.ext.LexicalHandler）与 JDK `test/jdk` 内 JAXP/
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`LexicalHandlerTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+### 深化轮次2（行为契约）
+黑盒：lexical-handler 属性注入往返；startDTD 三参；文档注释与 DTD 内注释都回调；CDATA 括号成对；内部实体展开被 startEntity/endEntity 包裹。

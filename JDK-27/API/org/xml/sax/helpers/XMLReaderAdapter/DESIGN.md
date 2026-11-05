@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.helpers.XMLReaderAdapter）与 JDK `test/jdk` 内
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XMLReaderAdapterTest.testBlackBox()`）覆盖：构造 + handler。
+
+### 深化轮次2（行为契约）
+黑盒：无参构造自举 Xerces reader；SAX1 事件全序带 AttributeList(type=CDATA)；带前缀元素以原始 qName 报告；setLocale→SAXNotSupportedException。

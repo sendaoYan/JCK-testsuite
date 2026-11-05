@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.SAXNotSupportedException）与 JDK `test/jdk` 内
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`SAXNotSupportedExceptionTest.testBlackBox()`）覆盖：message/no-arg。
+
+### 深化轮次2（行为契约）
+黑盒：真实触发——JAXPSAXParser 的 is-standalone 特征 get/set 均抛本异常（识别但不可变）；lexical-handler 属性赋错型值抛本异常；与 SAXNotRecognizedException 区分断言。

@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.ContentHandler）与 JDK `test/jdk` 内 JAXP/XML 
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`ContentHandlerTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+### 深化轮次2（行为契约）
+黑盒：真解析完整时序（locator→startDocument→根前 PI→startPM→start→…→endPM→根后 PI→endDocument）；前缀映射先于其元素、endPM 在 endElement 之后；长文本分块拼接 70 字符；external-general-entities=false 时外部实体走 skippedEntity；内容模型下空白走 ignorableWhitespace。

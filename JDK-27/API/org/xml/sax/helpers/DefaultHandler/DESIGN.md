@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.helpers.DefaultHandler）与 JDK `test/jdk` 内 J
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`DefaultHandlerTest.testBlackBox()`）覆盖：4 接口、回调内容、resolveEntity。
+
+### 深化轮次2（行为契约）
+黑盒：resolveEntity 默认 null；warning/error 无操作而 fatalError 重抛包装异常；JAXP parse(InputStream,DefaultHandler) 带 DTD/记号/NDATA 文档静默通过。

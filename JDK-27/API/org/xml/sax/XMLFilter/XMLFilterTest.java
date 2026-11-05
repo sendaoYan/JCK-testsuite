@@ -89,6 +89,34 @@ public class XMLFilterTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: behavioral XMLFilter contract (parent chaining) ----
+    static void deepContract() throws Exception {
+        check(org.xml.sax.XMLReader.class.isAssignableFrom(org.xml.sax.XMLFilter.class), "XMLFilter extends XMLReader");
+        javax.xml.parsers.SAXParserFactory spf = javax.xml.parsers.SAXParserFactory.newInstance();
+        org.xml.sax.XMLReader parent = spf.newSAXParser().getXMLReader();
+        org.xml.sax.helpers.XMLFilterImpl filter = new org.xml.sax.helpers.XMLFilterImpl(parent);
+        check(filter.getParent() == parent, "constructor wires the parent reader");
+        org.xml.sax.XMLReader other = spf.newSAXParser().getXMLReader();
+        filter.setParent(other);
+        check(filter.getParent() == other, "setParent/getParent round-trip");
+        filter.setParent(parent);
+        // filter chain: parsing through the filter drives the parent and delivers events to the filter's handler
+        final java.util.List<String> events = new java.util.ArrayList<String>();
+        filter.setContentHandler(new org.xml.sax.helpers.DefaultHandler() {
+            public void startElement(String u, String l, String q, org.xml.sax.Attributes a) { events.add(q); }
+        });
+        filter.parse(new org.xml.sax.InputSource(new java.io.StringReader("<chain/>")));
+        check(events.size() == 1 && events.get(0).equals("chain"), "events flow parent -> filter -> content handler");
+        // no parent: parse refuses
+        org.xml.sax.helpers.XMLFilterImpl orphan = new org.xml.sax.helpers.XMLFilterImpl();
+        check(orphan.getParent() == null, "no-arg constructor leaves parent null");
+        boolean npe = false;
+        try { orphan.parse(new org.xml.sax.InputSource(new java.io.StringReader("<x/>"))); }
+        catch (NullPointerException e) { npe = true; }
+        check(npe, "parse without a parent -> NullPointerException");
     }
 }

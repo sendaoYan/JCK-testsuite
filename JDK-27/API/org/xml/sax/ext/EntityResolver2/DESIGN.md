@@ -11,3 +11,6 @@ JDK 源码自用（org.xml.sax.ext.EntityResolver2）与 JDK `test/jdk` 内 JAXP
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`EntityResolver2Test.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+### 深化轮次2（行为契约）
+黑盒：外部 DTD 子集引用走四参 resolveEntity(name=null, systemId)；返回 null → 默认解析（FileNotFoundException）；纯 EntityResolver 两参通道对照。
