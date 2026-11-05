@@ -19,3 +19,10 @@ MBeanNotificationInfo ni = new MBeanNotificationInfo(
 ## 4. 测试用例设计 + 自动化实现
 - 黑盒：getNotifTypes 返回入参数组；clone 等值；equals 对通知类型数组敏感；带 Descriptor 构造返回该值。
 - 白盒：public 类、父类 MBeanFeatureInfo、implements Cloneable、含 getNotifTypes。
+
+## 5. 深化（批 B 追加）
+- null notifTypes → 空数组；空数组实例在多次 getNotifTypes() 间共享（`==`）。
+- equals 顺序敏感：{"a","b"} 与 {"b","a"} 不等；notifTypes、name、description、descriptor 全参与。
+- 带 descriptor 构造 round-trip；toString 含 notifTypes 内容。
+- 序列化 round-trip。
+- 版本差异：无。

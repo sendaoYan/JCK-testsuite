@@ -18,3 +18,10 @@ MBeanParameterInfo p = new MBeanParameterInfo("count", "int", "the count");
 ## 4. 测试用例设计 + 自动化实现
 - 黑盒：getType 返回入参；clone 等值；equals 敏感；带 Descriptor 构造返回该值。
 - 白盒：public 类、父类 MBeanFeatureInfo、implements Cloneable、含 getType。
+
+## 5. 深化（批 B 追加）
+- equals 参与矩阵：name、type、description、descriptor 全参与。
+- hashCode 仅由 name+type 决定。
+- null descriptor → 空 ImmutableDescriptor（无字段，非 null）。
+- toString 格式含类名、name、type；序列化 round-trip。
+- 版本差异：无。

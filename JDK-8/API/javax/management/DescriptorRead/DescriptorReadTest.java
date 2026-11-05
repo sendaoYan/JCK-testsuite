@@ -18,6 +18,7 @@ import javax.management.MBeanNotificationInfo;
 import javax.management.MBeanOperationInfo;
 import javax.management.MBeanParameterInfo;
 import javax.management.Descriptor;
+import javax.management.DescriptorRead;
 
 public class DescriptorReadTest {
     static int passed;

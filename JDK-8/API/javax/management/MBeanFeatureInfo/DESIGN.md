@@ -18,3 +18,10 @@ Descriptor d = feature.getDescriptor();
 ## 4. 测试用例设计 + 自动化实现
 - 黑盒：通过子类验证 getName/getDescription 返回构造入参；默认 descriptor 为空；带 Descriptor 构造后 getDescriptor 返回该值；clone 等值。
 - 白盒：public 抽象类、implements Cloneable、implements Serializable、含 getName/getDescription/getDescriptor。
+
+## 5. 深化（批 B 追加）
+- null 语义：name/description 为 null 时原样保留；equals 对 null 字段安全（null==null 判等）；hashCode 在 name 为 null 时抛 NPE。
+- 子类不对称 equals：`new MBeanFeatureInfo(f).equals(new MBeanAttributeInfo(f))` == true，反向 == false（MBeanAttributeInfo.equals 要求对方是 MBeanAttributeInfo）——记录既有契约而非缺陷。
+- 默认描述符为空 ImmutableDescriptor；null descriptor 同样得到空描述符。
+- 序列化 round-trip：name/description/descriptor 保持。
+- 版本差异：无。

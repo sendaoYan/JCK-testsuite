@@ -18,3 +18,10 @@ MBeanConstructorInfo ci = new MBeanConstructorInfo("Sample", "ctor", params);
 ## 4. 测试用例设计 + 自动化实现
 - 黑盒：getSignature 返回入参数组；clone 返回等值副本；equals 对 name/description/signature 敏感；带 Descriptor 构造后 getDescriptor 返回该值。
 - 白盒：public 类、父类 MBeanFeatureInfo、implements Cloneable、含 getSignature。
+
+## 5. 深化（批 B 追加）
+- `Constructor` 反射构造：name 等于二进制类名、参数名 p1/p2。
+- 空签名共享同一空数组实例；descriptor 构造 round-trip（equals 保持）。
+- equals：name、signature、description、descriptor 全参与；hashCode = name ^ Arrays.hashCode(signature)。
+- 序列化 round-trip。
+- 版本差异：无。

@@ -20,3 +20,9 @@ public @interface Units {
 ## 4. 测试用例设计 + 自动化实现
 - 黑盒：反射读取方法上的 @DescriptorKey，value() 返回声明的字段名。
 - 白盒：isAnnotation、RUNTIME 保留、value() 返回 String 且无默认值（getDefaultValue()==null）、带 @Target。
+
+## 5. 深化（批 B 追加）
+- 元事实：@Target 恰为 {ElementType.METHOD}、@Documented、RUNTIME、value() String 无默认。
+- 【真实闭环（重点）】@CacheSpec（String/int/Class/enum/String[] 五种元素类型）标注 MBean 接口 getter，registerMBean 后属性描述符出现 units="bytes"、defVal=Integer(5)、cls="java.lang.Thread"、mode="FAST"、tags=[a,b]；操作与参数描述符同样收敛；未标注参数无字段。
+- getter/setter 同字段冲突 → NotCompliantMBeanException(IAE "Inconsistent values for descriptor field units: g :: s")。
+- 版本差异：无。
