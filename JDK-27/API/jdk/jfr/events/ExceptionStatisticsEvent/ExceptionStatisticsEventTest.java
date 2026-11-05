@@ -87,13 +87,14 @@ public class ExceptionStatisticsEventTest {
             stRec.stop();
             stRec.dump(stDir.resolve("dump.jfr"));
             stRec.close();
-            int stCnt = 0; long stThrowables = -1;
+            int stCnt = 0; long stThrowables = -1; boolean stAllTimes = true;
             for (jdk.jfr.consumer.RecordedEvent e : jdk.jfr.consumer.RecordingFile.readAllEvents(stDir.resolve("dump.jfr"))) {
                 if (!"jdk.ExceptionStatistics".equals(e.getEventType().getName())) continue;
                 stCnt++;
                 stThrowables = e.getLong("throwables");
-                check(e.getStartTime() != null, "统计事件 startTime 非空");
+                stAllTimes &= e.getStartTime() != null;
             }
+            check(stAllTimes, "统计事件 startTime 非空 (全部 " + stCnt + " 条)");
             check(stCnt >= 1, "1.3s 窗口内 jdk.ExceptionStatistics >= 1 条, 实得 " + stCnt);
             check(stThrowables >= 0, "throwables >= 0, 实得 " + stThrowables);
         } finally {
