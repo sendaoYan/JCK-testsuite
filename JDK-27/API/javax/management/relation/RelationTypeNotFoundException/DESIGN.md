@@ -17,3 +17,10 @@
 ## 4. 测试用例设计
 - 白盒：public 具体类、非接口、非抽象、父类为 `javax.management.relation.RelationException`、恰 2 个 public 构造器（无参 + String）、`serialVersionUID` 为 long。
 - 黑盒：无参构造器 `getMessage()==null`；String 构造器 message 原样保留；继承链 instanceof（`Exception`/`JMException`/`RelationException`）；`toString()` 为 `<fqcn>: <message>`。
+
+## 深化（2026-11 批 K：构造链/cause/serialVersionUID/序列化 + 真实触发点）
+
+- 构造与序列化契约：无参构造 message/cause 均 null；String 构造 message 原样保留、cause 恒 null（无 cause 形态构造器，javap 双侧确认仅 ()/(String) 两个构造器）；`ObjectStreamClass.lookup(...).getSerialVersionUID()` 锁定为 **1274155316284300752**（序列化兼容契约）；序列化 round-trip 保留具体类与消息。
+- 实测层级链：`RelationTypeNotFoundException` → RelationException → JMException → Exception（instanceof 三级全断言）。
+- 真实触发：createRelation(未知类型名) / getRoleInfos(未知) / getRoleInfo(未知, role) / removeRelationType(未知)，统一消息 "No relation type created in the Relation Service with the name <name>"。
+- 基础设施：`MBeanServerFactory.newMBeanServer()` + 注册 `RelationService(true)` 于 `jck.rel:type=RelationService` + `createRelationType("jck.T", RoleInfo("counterRole", 嵌套 Observed.class, true,true,1,2))`，全部闭环不依赖远程连接。

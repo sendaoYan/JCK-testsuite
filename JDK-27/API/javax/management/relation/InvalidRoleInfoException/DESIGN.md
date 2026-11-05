@@ -17,3 +17,10 @@
 ## 4. 测试用例设计
 - 白盒：public 具体类、非接口、非抽象、父类为 `javax.management.relation.RelationException`、恰 2 个 public 构造器（无参 + String）、`serialVersionUID` 为 long。
 - 黑盒：无参构造器 `getMessage()==null`；String 构造器 message 原样保留；继承链 instanceof（`Exception`/`JMException`/`RelationException`）；`toString()` 为 `<fqcn>: <message>`。
+
+## 深化（2026-11 批 K：构造链/cause/serialVersionUID/序列化 + 真实触发点）
+
+- 构造与序列化契约：无参构造 message/cause 均 null；String 构造 message 原样保留、cause 恒 null（无 cause 形态构造器，javap 双侧确认仅 ()/(String) 两个构造器）；`ObjectStreamClass.lookup(...).getSerialVersionUID()` 锁定为 **7517834705158932074**（序列化兼容契约）；序列化 round-trip 保留具体类与消息。
+- 实测层级链：`InvalidRoleInfoException` → RelationException → JMException → Exception（instanceof 三级全断言）。
+- 真实触发：RoleInfo 度约束校验（min>max → "Minimum degree 3 is greater than maximum degree 2"；min=ROLE_CARDINALITY_INFINITY(-1) 而 max 有限 → "Minimum degree -1 is greater than maximum degree 5"；度 < -1 → "Minimum or maximum degree has an illegal value, must be [0, ROLE_CARDINALITY_INFINITY]."）；非法 RoleInfo 在构造期即被拒，永远到不了 RelationService（记录原因）。
+- 基础设施：`MBeanServerFactory.newMBeanServer()` + 注册 `RelationService(true)` 于 `jck.rel:type=RelationService` + `createRelationType("jck.T", RoleInfo("counterRole", 嵌套 Observed.class, true,true,1,2))`，全部闭环不依赖远程连接。
