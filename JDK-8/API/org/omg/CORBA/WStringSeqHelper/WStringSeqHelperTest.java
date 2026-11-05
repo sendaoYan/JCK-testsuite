@@ -15,6 +15,21 @@ public class WStringSeqHelperTest {
     public static void main(String[] args) throws Exception {
         check(org.omg.CORBA.WStringSeqHelper.id() != null, "id() non-null");
         check(org.omg.CORBA.WStringSeqHelper.type() != null, "type() non-null");
+        // ---- deepened: Holder/Helper wire contract over offline ORB (jdk8u372 probed) ----
+        final org.omg.CORBA.ORB orb = org.omg.CORBA.ORB.init(new String[0], null);
+        check(org.omg.CORBA.WStringSeqHelper.id().equals("IDL:omg.org/CORBA/WStringSeq:1.0"),
+              "WStringSeqHelper.id() exact repository id");
+        check(org.omg.CORBA.WStringSeqHelper.type().kind() == org.omg.CORBA.TCKind.tk_alias,
+              "WStringSeqHelper.type().kind() == tk_alias");
+        org.omg.CORBA.portable.OutputStream osH = orb.create_output_stream();
+        org.omg.CORBA.WStringSeqHelper.write(osH, new String[]{"\u4f60\u597d", "w"});
+        check(java.util.Arrays.equals(org.omg.CORBA.WStringSeqHelper.read(osH.create_input_stream()), new String[]{"\u4f60\u597d", "w"}),
+              "WStringSeqHelper.write/read CDR round-trip");
+        org.omg.CORBA.Any anyH = orb.create_any();
+        org.omg.CORBA.WStringSeqHelper.insert(anyH, new String[]{"\u4f60\u597d", "w"});
+        check(java.util.Arrays.equals(org.omg.CORBA.WStringSeqHelper.extract(anyH), new String[]{"\u4f60\u597d", "w"}),
+              "WStringSeqHelper.insert/extract Any round-trip");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

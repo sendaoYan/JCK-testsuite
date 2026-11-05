@@ -16,6 +16,17 @@ public class IDLTypeHelperTest {
         check(org.omg.CORBA.IDLTypeHelper.id() != null, "id() non-null");
         check(org.omg.CORBA.IDLTypeHelper.type() != null, "type() non-null");
         check(org.omg.CORBA.IDLTypeHelper.narrow(null) == null, "narrow(null) returns null");
+        // ---- deepened: Holder/Helper wire contract over offline ORB (jdk8u372 probed) ----
+        final org.omg.CORBA.ORB orb = org.omg.CORBA.ORB.init(new String[0], null);
+        check(org.omg.CORBA.IDLTypeHelper.id().equals("IDL:omg.org/CORBA/IDLType:1.0"),
+              "IDLTypeHelper.id() exact repository id");
+        check(org.omg.CORBA.IDLTypeHelper.type().kind() == org.omg.CORBA.TCKind.tk_objref,
+              "IDLTypeHelper.type().kind() == tk_objref");
+        org.omg.CORBA.Any anyIt = orb.create_any();
+        org.omg.CORBA.IDLTypeHelper.insert(anyIt, null);
+        check(org.omg.CORBA.IDLTypeHelper.extract(anyIt) == null, "insert(null)/extract round-trips null");
+        check(org.omg.CORBA.IDLTypeHelper.narrow(null) == null, "narrow(null) returns null");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
