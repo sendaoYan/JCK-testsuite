@@ -25,6 +25,18 @@ public class InvokeInstructionTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+
+    // 触发 ConstantDescs 完整初始化，规避本 JDK 构建的 MethodTypeDesc.ofDescriptor 静态初始化环
+    static final ClassDesc TOUCH = ConstantDescs.CD_Object;
+
+    // 发射-回读辅助：build 唯一类名 + parse 回全部 CodeElement
+    static java.util.List<CodeElement> emit(String m, MethodTypeDesc mtd, java.util.function.Consumer<CodeBuilder> body) throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("EmIVI" + m), cb -> cb.withMethodBody(m, mtd, ClassFile.ACC_STATIC, body));
+        java.util.List<CodeElement> els = new ArrayList<>();
+        for (MethodModel mm : ClassFile.of().parse(b).methods())
+            if (mm.code().isPresent()) els.addAll(mm.code().get().elementList());
+        return els;
+    }
     static final ClassReader[] cap = new ClassReader[1];
     static final BufWriter[] cap2 = new BufWriter[1];
     static final BranchInstruction[] br = new BranchInstruction[1];
@@ -71,9 +83,82 @@ public class InvokeInstructionTest {
 
     }
 
+
+    // ---- Part 3: 发射-回读（核心）：invokestatic/virtual/interface ----
+    static void testEmitReadback() throws Exception {
+        // invokestatic java.lang.Math.abs(I)I
+        java.util.List<CodeElement> els = emit("ist", MethodTypeDesc.ofDescriptor("(I)I"),
+                cob -> cob.iconst_m1().invokestatic(ClassDesc.of("java.lang.Math"), "abs", MethodTypeDesc.ofDescriptor("(I)I")).ireturn());
+        InvokeInstruction i = null;
+        for (CodeElement e : els) if (e instanceof InvokeInstruction x) i = x;
+        check(i != null, "invokestatic emitted + read back");
+        check(i.opcode() == Opcode.INVOKESTATIC, "INVOKESTATIC opcode");
+        check(i.sizeInBytes() == 3, "INVOKESTATIC sizeInBytes 3");
+        check(i.opcode().kind() == Opcode.Kind.INVOKE, "kind INVOKE");
+        check(i.owner().asInternalName().equals("java/lang/Math"), "owner");
+        check(i.name().stringValue().equals("abs"), "name");
+        check(i.type().stringValue().equals("(I)I"), "type utf8");
+        check(i.typeSymbol().descriptorString().equals("(I)I"), "typeSymbol");
+        check(i.typeSymbol().parameterCount() == 1, "parameterCount 1");
+        check(i.method() != null, "method() non-null");
+        check(!i.isInterface(), "invokestatic isInterface false");
+        check(i.count() == 0, "invokestatic count 0");
+        // invokevirtual java.lang.String.length()
+        els = emit("ivt", MethodTypeDesc.ofDescriptor("(Ljava/lang/String;)I"),
+                cob -> cob.aload(0).invokevirtual(ClassDesc.of("java.lang.String"), "length", MethodTypeDesc.ofDescriptor("()I")).ireturn());
+        for (CodeElement e : els) if (e instanceof InvokeInstruction x) {
+            check(x.opcode() == Opcode.INVOKEVIRTUAL, "INVOKEVIRTUAL opcode");
+            check(x.owner().asInternalName().equals("java/lang/String"), "owner String");
+            check(x.name().stringValue().equals("length"), "name length");
+            check(!x.isInterface(), "virtual isInterface false");
+        }
+        // invokeinterface CharSequence.length()：count==1（receiver）
+        els = emit("ifc", MethodTypeDesc.ofDescriptor("(Ljava/lang/CharSequence;)I"),
+                cob -> cob.aload(0).invokeinterface(ClassDesc.of("java.lang.CharSequence"), "length", MethodTypeDesc.ofDescriptor("()I")).ireturn());
+        for (CodeElement e : els) if (e instanceof InvokeInstruction x) {
+            check(x.opcode() == Opcode.INVOKEINTERFACE, "INVOKEINTERFACE opcode");
+            check(x.isInterface(), "interface isInterface true");
+            check(x.count() == 1, "count 1 (receiver)");
+            check(x.sizeInBytes() == 5, "INVOKEINTERFACE sizeInBytes 5");
+        }
+        // invokeinterface 带实参：count = 1 + argCount
+        els = emit("ifc2", MethodTypeDesc.ofDescriptor("(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)I"),
+                cob -> cob.aload(0).aload(1).invokeinterface(ClassDesc.of("java.lang.CharSequence"), "compareTo", MethodTypeDesc.ofDescriptor("(Ljava/lang/CharSequence;)I")).ireturn());
+        for (CodeElement e : els) if (e instanceof InvokeInstruction x) {
+            check(x.count() == 2, "count 2 (receiver + 1 arg)");
+            check(x.method() instanceof InterfaceMethodRefEntry, "method() InterfaceMethodRefEntry");
+        }
+        check(els.stream().filter(e -> e instanceof InvokeInstruction).count() == 1, "last emission has 1 invoke");
+    }
+
+    // ---- Part 4: 工厂 3 重载 + 负例 ----
+    static void testFactoryNegative() {
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        MethodRefEntry mr = cpb.methodRefEntry(ClassDesc.of("java.lang.Object"), "toString", MethodTypeDesc.ofDescriptor("()Ljava/lang/String;"));
+        InvokeInstruction a = InvokeInstruction.of(Opcode.INVOKEVIRTUAL, mr);
+        check(a.opcode() == Opcode.INVOKEVIRTUAL && a.method() == mr, "of(op,MemberRefEntry) identity");
+        ClassEntry owner = cpb.classEntry(ClassDesc.of("java.lang.CharSequence"));
+        InvokeInstruction b2 = InvokeInstruction.of(Opcode.INVOKEINTERFACE, owner, cpb.utf8Entry("length"), cpb.utf8Entry("()I"), true);
+        check(b2.opcode() == Opcode.INVOKEINTERFACE, "of(op,ClassEntry,Utf8,Utf8,bool) opcode");
+        check(b2.isInterface() && b2.name().stringValue().equals("length") && b2.type().stringValue().equals("()I"), "5-arg accessors");
+        NameAndTypeEntry nat = cpb.nameAndTypeEntry("run", MethodTypeDesc.ofDescriptor("()V"));
+        InvokeInstruction c = InvokeInstruction.of(Opcode.INVOKESTATIC, owner, nat, false);
+        check(c.name().stringValue().equals("run") && c.type().stringValue().equals("()V"), "of(op,ClassEntry,NameAndType,bool) accessors");
+        try { InvokeInstruction.of(null, mr); check(false, "of(null,mr) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null,mr) NPE"); }
+        try { InvokeInstruction.of(Opcode.INVOKESTATIC, (MemberRefEntry) null); check(false, "of(INVOKESTATIC,null) must throw"); }
+        catch (NullPointerException e) { check(true, "of(INVOKESTATIC,null) NPE"); }
+        try { InvokeInstruction.of(Opcode.NOP, mr); check(false, "of(NOP,mr) must throw"); }
+        catch (IllegalArgumentException e) { check(true, "of(NOP,mr) IAE wrong kind"); }
+        try { InvokeInstruction.of(Opcode.IADD, mr); check(false, "of(IADD,mr) must throw"); }
+        catch (IllegalArgumentException e) { check(true, "of(IADD,mr) IAE wrong kind"); }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEmitReadback();
+        testFactoryNegative();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

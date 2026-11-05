@@ -64,9 +64,55 @@ public class SourceDebugExtensionAttributeTest {
 
     }
 
+
+    // ---- Part 3: of(byte[]) 值域 + null 负例 ----
+    static void testFactoryOverloads() {
+        byte[] data = {1, 2, 3, -128, 0, 127, (byte) 0xFF};
+        SourceDebugExtensionAttribute a = SourceDebugExtensionAttribute.of(data);
+        check(a.contents().length == 7, "contents length");
+        check(Arrays.equals(a.contents(), data), "contents value equality");
+        check(SourceDebugExtensionAttribute.of(new byte[0]).contents().length == 0, "empty contents");
+        check(a.attributeName().stringValue().equals("SourceDebugExtension")
+                && a.attributeName().stringValue().equals(Attributes.NAME_SOURCE_DEBUG_EXTENSION), "NAME_SOURCE_DEBUG_EXTENSION");
+        check(a.attributeMapper() == Attributes.sourceDebugExtension(), "mapper identity");
+        check(a.attributeMapper().stability() == AttributeMapper.AttributeStability.STATELESS, "stability STATELESS");
+        check(!a.attributeMapper().allowMultiple(), "allowMultiple false");
+        try { SourceDebugExtensionAttribute.of(null); check(false, "of(null) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null) NPE"); }
+    }
+
+    // ---- Part 4: 注入闭环（javac 从不产生该属性——注入是唯一通道）----
+    static void testInjectRoundTrip() throws Exception {
+        byte[] data = {83, 68, 69, 0, 10, 11, 12};
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynSDE"), cb -> cb.withSuperclass(ConstantDescs.CD_Object)
+                .with(SourceDebugExtensionAttribute.of(data)));
+        ClassModel m = ClassFile.of().parse(b);
+        var at = m.findAttribute(Attributes.sourceDebugExtension()).get();
+        check(Arrays.equals(at.contents(), data), "inject contents roundtrip");
+        check(at.contents().length == 7, "inject length");
+        check(at.attributeMapper() == Attributes.sourceDebugExtension(), "parsed mapper identity");
+        check(ClassFile.of().verify(m).isEmpty(), "verify clean");
+        // 重复注入（allowMultiple=false）只保留一个
+        byte[] b2 = ClassFile.of().build(ClassDesc.of("DynSDE2"), cb -> cb
+                .with(SourceDebugExtensionAttribute.of(new byte[]{1}))
+                .with(SourceDebugExtensionAttribute.of(new byte[]{2, 2})));
+        int cnt = 0;
+        for (Attribute<?> at2 : ClassFile.of().parse(b2).attributes()) if (at2 instanceof SourceDebugExtensionAttribute) cnt++;
+        check(cnt == 1, "single SDE after double inject: " + cnt);
+    }
+
+    // ---- Part 5: javac 不产（负空间断言）----
+    static void testJavacAbsence() throws Exception {
+        byte[] self = SourceDebugExtensionAttributeTest.class.getResourceAsStream("SourceDebugExtensionAttributeTest.class").readAllBytes();
+        check(ClassFile.of().parse(self).findAttribute(Attributes.sourceDebugExtension()).isEmpty(), "javac never emits SDE");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFactoryOverloads();
+        testInjectRoundTrip();
+        testJavacAbsence();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

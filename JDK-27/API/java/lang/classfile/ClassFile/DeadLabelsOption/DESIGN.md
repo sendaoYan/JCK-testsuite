@@ -11,3 +11,11 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`DeadLabelsOptionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassFile$DeadLabelsOption")` + public/enum/继承 + 关键成员。黑盒（`DeadLabelsOptionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05：死标签两态实测，JDK-8361908 片段族）
+新增 `testOptionSemantics()`（46 断言，12→46）：
+- **FAIL_ON_DEAD_LABELS（默认）**：8 个死标签片段（exceptionCatchAll 三位置死 label ×3、localVariable 死 label ×2、localVariableType 死 label ×2、characterRange 死 label ×1，对齐 FilterDeadLabelsTest.deadLabelFragments）逐一 build → 全部 IAE；exception handler 死标签消息精确 **"Unbound label in exception handler"**。
+- **DROP_DEAD_LABELS**：同一批片段合并进一个 build 成功；产物：exceptionHandlers 空；LVT/LVTy/CRT **属性仍写但行清空**；verify 干净。
+- **混合场景**：live handler（bound label）+ dead handler 共存 → 只留 live（handlers==1，catchType=Optional.empty() 即 any）。
+- **不可救场景（实测边界）**：分支跳到从未绑定的 label 在**两种选项下都失败**（IAE "Detected branch target out of bytecode range"）——DROP 只能丢调试伪指令里的死标签，救不了悬空跳转目标。
+- 枚举 ordinal 0 = FAIL_ON_DEAD_LABELS（默认）；valueOf 双向。

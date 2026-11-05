@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`LocalVarTargetInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$LocalVarTargetInfo")` + public/interface/继承 + 关键成员。黑盒（`LocalVarTargetInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，11 → 28 断言）
+- 访问器实名锁定：`startLabel()/endLabel()/index()`（**Label 视图而非 startPc/length/tableIndex**，与 JVMS 的 u2 三元组一一对应，经 `CodeAttribute.labelToBci` 折算 bci）。
+- 校验矩阵：`of(null,e,0)`/`of(s,null,0)` NPE；`of(s,e,-1)` IAE "Invalid slot index :-1"；slot 0/255 合法。
+- 真 javac 产物：局部变量注解的 start/end Label 落在其声明作用域内、index 为真实槽位号；注入 2 行表（两对 Label）经 build → re-parse 精确回读 slot 与行数。
+

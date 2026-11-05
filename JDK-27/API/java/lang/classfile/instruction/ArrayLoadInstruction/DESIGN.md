@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ArrayLoadInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.ArrayLoadInstruction")` + public/interface/继承 + 关键成员。黑盒（`ArrayLoadInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- testEmitReadback：8 opcode 全族发射（iaload/laload/faload/daload/aaload/baload/caload/saload，CodeBuilder 快捷方法）→ parse 回读 instanceof ArrayLoadInstruction，逐条断言 opcode/sizeInBytes(1)/kind==ARRAY_LOAD/typeKind 精确对应；arrayLoad(TypeKind) 泛型通道同表断言。
+- 工厂矩阵：ArrayLoadInstruction.of(Opcode) 8 个正例 + of(null) NPE + of(NOP/GETSTATIC) IAE（错误 kind）。
+- 分类断言：instanceof Instruction/CodeElement，非 PseudoInstruction。断言 10→70（实测运行计数）。

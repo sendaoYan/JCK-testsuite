@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModuleOpenInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModuleOpenInfo")` + public/interface/继承 + 关键成员。黑盒（`ModuleOpenInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，43 断言）
+- testFactoryOverloads：8 个 of 全重载（PackageEntry/PackageDesc × int/Collection × List/varargs）；opensFlagsMask 0x1000/0x8000/0x9000；has() 三态；openedPackage().name() Utf8 斜杠形式（p/t）；AccessFlag.SYNTHETIC/MANDATED 的 MODULE_OPENS 位置。
+- testNegatives：of(null pkg/modules/entry) NPE（消息可 null，仅断类型）；**构造期不校验标志位**（bad mask 0x1 保留），opensFlags() 转换时 IAE "Unmatched bit position 0x1 for location MODULE_OPENS"（实测精确消息）。
+- testBuildModuleRoundTrip：ModuleAttribute.of(...mb.opens(info)/opens(pkg,mask,mods)) → buildModule → parse → opens() 包名/掩码/opensTo 表全回读 + verify 干净。

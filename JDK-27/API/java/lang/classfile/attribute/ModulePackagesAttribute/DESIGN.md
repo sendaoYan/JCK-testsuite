@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModulePackagesAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModulePackagesAttribute")` + public/interface/继承 + 关键成员。黑盒（`ModulePackagesAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，30 断言）
+- testFactoryOverloads：of(entry...)/of(List<PackageEntry>)/ofNames(varargs)/ofNames(List) 4 重载；entry 身份保留（==）；asSymbol() 点名 vs name() Utf8 斜杠名；ofNames(empty) 合法 0 包；NAME_MODULE_PACKAGES/mapper 身份/CP_REFS。
+- testNegatives：of(null List)/ofNames(null) NPE。
+- testInjectRoundTrip：普通类 cb.with 注入（build 不做语义校验——实测记录）；module-info 产物 transformClass endHandler 注入后 isModuleInfo 仍真 + verify 干净。
+- testRealModuleInfo：jrt:/java.logging/module-info.class 真产物 packages 精确 4 包表 + PackageEntry.matches。

@@ -1,13 +1,19 @@
 # java.lang.classfile.Superclass — 设计案
 
 ## 1. API 功能
-`java.lang.classfile.Superclass`（interface）。工厂/静态方法：of。查询/实例方法：superclassEntry。
+`java.lang.classfile.Superclass`（interface，extends `ClassElement`）。静态工厂：`of(ClassEntry)`。实例方法：`superclassEntry()`（ClassEntry）。
 
 ## 2. Java 用户如何使用
-通过 `ClassFile.of()` 构建/解析 class（或 `ConstantPoolBuilder.of()` 建常量池条目、`ClassFile.of().build()`/`parse()` 往返）得到真实实例；实例通过 `of(...)` 工厂创建后逐方法断言访问器；涉及 label 的类型在 `ClassFile.of().build(...)` 回调内用 `CodeBuilder.newLabel()` 捕获。 本测试在 `SuperclassTest.testBlackBox()` 中按「构建 → 解析/创建 → 组合断言」链路覆盖。
+`cb.withSuperclass(ClassDesc)` / `cb.withSuperclass(ClassEntry)` 两重载；不指定时**默认 java/lang/Object** 且 Superclass 元素仍写入 elementList。`cm.superclass()`（Optional）回读——Object.class 与 module-info（buildModule）为 **empty**；接口类的 superclass 仍是 java/lang/Object。null 负例 NPE。
 
-## 3. 开源代码实际用法调研
-JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesTest、ModuleBuilderTest、Utf8EntryTest、AttributesTest）与 JDK 源码自用（`src/java.base/.../java/lang/Module.java`、`jdk.jartool/.../FingerPrint.java`、`java.lang.reflect.ProxyGenerator`）大量使用 `java.lang.classfile` 族 API；本测试的 `java.lang.classfile.Superclass` 断言按上述真实用法模式编写。
+## 3. 参考来源
+- JDK 27 javadoc + `javap java.lang.classfile.Superclass`。
+- OpenJDK `test/jdk/jdk/classfile/`（ClassBuildingTest、ModuleBuilderTest）。
+- 本机实测：Superclass.of(null)→NPE（消息 null）；withSuperclass((ClassDesc)null)→NPE 消息含 `Cannot invoke "java.lang.constant.ClassDesc.isClassOrInterface()" because "cd" is null`；默认 build 产物 superclass==java/lang/Object 且 elementList 恰 1 个 Superclass 元素；元素 entry 与 cm.superclass().get() **同一对象**。
 
-## 4. 测试用例设计 + 自动化实现
-白盒（`SuperclassTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Superclass")` + public/interface/继承 + 关键成员。黑盒（`SuperclassTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+## 4. 测试用例设计 + 易错规范细节
+- 白盒（原有）+ 黑盒（原有：of(entry) 回读 + build 往返）。
+- `testNullAndDefaults`（深化）：**Superclass.of(null) NPE**、**withSuperclass((ClassDesc)null) NPE 精确消息**、层次 instanceof。
+- `testBuildReadback`（深化）：不指定 superclass → 默认 Object + elementList 恰 1 个 Superclass 元素；withSuperclass(ClassDesc)/(ClassEntry) 两重载往返；**Superclass 元素 superclassEntry()==cm.superclass().get()（身份）**；Object.class superclass empty；**module-info superclass empty**；接口 build superclass==Object + ACC_INTERFACE；真类 self superclass==Object；verify 干净。
+- `testDefineClassLoop`（深化）：DynSuperclass+seq 继承 Exception + 生成 `<init>(String)`（ACC_PUBLIC + aload/aload/invokespecial Exception.&lt;init&gt;）→ defineClass → `getConstructor(String).newInstance("boom").getMessage()=="boom"`（**继承链真实例化闭环**）。
+- 易错点：`<init>` 需显式 ACC_PUBLIC 才能被 getConstructor 找到；Object.class 资源经 `java.lang.Object.class.getResourceAsStream("Object.class")` 可读；单继承——interfaces 里不出现父类。

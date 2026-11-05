@@ -73,9 +73,46 @@ public class KindTest {
 
     }
 
+    // ---- Part 3: 枚举全值矩阵（顺序 + tag + valueOf 双向 + 负例 + Enum 契约） ----
+    static void testEnumMatrix() {
+        TypeAnnotation.TypePathComponent.Kind[] vs = TypeAnnotation.TypePathComponent.Kind.values();
+        check(vs.length == 4, "values() length 4");
+        String[] names = {"ARRAY", "INNER_TYPE", "WILDCARD", "TYPE_ARGUMENT"};
+        int[] tags = {0, 1, 2, 3};
+        for (int i = 0; i < 4; i++) {
+            check(vs[i].name().equals(names[i]), "ordinal " + i + " name " + names[i]);
+            check(vs[i].ordinal() == i, names[i] + " ordinal " + i);
+            check(vs[i].tag() == tags[i], names[i] + " tag " + tags[i]);
+            check(TypeAnnotation.TypePathComponent.Kind.valueOf(names[i]) == vs[i], "valueOf(" + names[i] + ") round-trip");
+            check(vs[i].toString().contains(names[i]), names[i] + " toString contains name");
+            check(vs[i].compareTo(vs[i]) == 0, names[i] + " self compareTo 0");
+            check(vs[i].getDeclaringClass() == TypeAnnotation.TypePathComponent.Kind.class, names[i] + " declaringClass");
+        }
+        for (int i = 0; i < 3; i++)
+            check(vs[i].compareTo(vs[i + 1]) < 0, "compareTo ordering at " + i);
+        check(vs[0].equals(vs[0]) && !vs[0].equals(vs[1]), "equals same/different");
+        check(vs[0].hashCode() == vs[0].hashCode(), "hashCode stable");
+        try { TypeAnnotation.TypePathComponent.Kind.valueOf("NOPE"); check(false, "valueOf(NOPE) must IAE"); }
+        catch (IllegalArgumentException e) { check(e.getMessage().contains("No enum constant"), "valueOf(NOPE) IAE msg"); }
+        try { TypeAnnotation.TypePathComponent.Kind.valueOf(null); check(false, "valueOf(null) must NPE"); }
+        catch (NullPointerException e) { check(true, "valueOf(null) NPE"); }
+        // values() 每次返回新数组（可安全修改）
+        TypeAnnotation.TypePathComponent.Kind[] v2 = TypeAnnotation.TypePathComponent.Kind.values();
+        check(v2 != vs, "values() fresh array");
+        check(java.util.Arrays.equals(v2, vs), "values() content equal");
+        // tag 唯一性：4 个 tag 互不相同
+        java.util.Set<Integer> tagSet = new java.util.HashSet<>();
+        for (TypeAnnotation.TypePathComponent.Kind k : vs) tagSet.add(k.tag());
+        check(tagSet.size() == 4, "4 distinct tags");
+        // Kind 与 TypePathComponent 工厂互通
+        check(TypeAnnotation.TypePathComponent.of(TypeAnnotation.TypePathComponent.Kind.WILDCARD, 0).typePathKind()
+                == TypeAnnotation.TypePathComponent.Kind.WILDCARD, "Kind feeds TypePathComponent.of");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEnumMatrix();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

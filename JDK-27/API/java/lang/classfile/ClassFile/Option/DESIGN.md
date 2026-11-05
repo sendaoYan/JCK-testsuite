@@ -11,3 +11,11 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`OptionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassFile$Option")` + public/interface/继承 + 关键成员。黑盒（`OptionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05：选项体系与工厂语义实测）
+新增 `testOptionHierarchy()`/`testFactorySemantics()`（76 断言，7→76）：
+- **层次断言**：`ClassFile$Option` 的具体实现共 **10 个**（8 枚举 DebugElementsOption/LineNumbersOption/StackMapsOption/AttributesProcessingOption/DeadLabelsOption/DeadCodeOption/ShortJumpsOption/ConstantPoolSharingOption + 2 接口 AttributeMapperOption/ClassHierarchyResolverOption），逐一 `isAssignableFrom` + 编译期 `ClassFile.Option[]` 见证数组断言。
+- **枚举面**：8 枚举 values() 计数 {2,2,3,3,2,2,2,2}；全部常量 valueOf(name) 双向；**每个枚举 ordinal 0 即其默认语义值**（PASS_DEBUG/PASS_LINE_NUMBERS/STACK_MAPS_WHEN_REQUIRED/PASS_ALL_ATTRIBUTES/FAIL_ON_DEAD_LABELS/PATCH_DEAD_CODE/FIX_SHORT_JUMPS/SHARED_POOL）——反射 `values()[0]` 逐名核对。
+- **工厂语义（实测）**：`ClassFile.of()` 单例（==）；`of(zero-varargs)`/`withOptions()`（空可变参）均返回**新实例**（≠ 单例）；`of((Option[])null)`/`withOptions((Option[])null)` → NPE（消息 "Cannot read the array length because ..."）。空 withOptions 与默认上下文行为等价（build 字节数相同、parse 等价）。
+- **链式 last-wins**：`withOptions(DROP_DEBUG).withOptions(PASS_DEBUG)` 实测后者覆盖前者（LVT 属性仍写出）。
+- 易错点：不要断言 `withOptions()` 返回同一实例——实测是新实例；`ClassFile.of()` 才是单例。

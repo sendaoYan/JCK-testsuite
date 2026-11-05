@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`InvokeDynamicInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.InvokeDynamicInstruction")` + public/interface/继承 + 关键成员。黑盒（`InvokeDynamicInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回读：invokedynamic(DynamicCallSiteDesc) → name/type()/bootstrap owner+methodName/args 全等、常量池 InvokeDynamicEntry 关联；多 bootstrap 参数（args=3）。
+- javac 真产物：static Runnable r = () -> {} 与 IntSupplier s = () -> 7 → LambdaMetafactory altMetafactory bsm 回读断言。断言 13→32（实测运行计数）。

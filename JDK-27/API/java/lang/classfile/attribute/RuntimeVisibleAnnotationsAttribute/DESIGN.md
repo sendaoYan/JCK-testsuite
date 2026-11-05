@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`RuntimeVisibleAnnotationsAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.RuntimeVisibleAnnotationsAttribute")` + public/interface/继承 + 关键成员。黑盒（`RuntimeVisibleAnnotationsAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，36 断言）
+- testRealProduct：@Deprecated 方法/字段/嵌套类真产物（className Ljava/lang/Deprecated;、裸形式 elements 空、无 RITA 孪生）。
+- testFactoryOverloads：of(List)/of(varargs)/empty；NAME/CP_REFS/allowMultiple=false；NPE×2。
+- testInjectRoundTrip：类/字段/方法三级注入 → className/AnnotationElement(OfInt/OfString) 值级回读 + verify 干净。

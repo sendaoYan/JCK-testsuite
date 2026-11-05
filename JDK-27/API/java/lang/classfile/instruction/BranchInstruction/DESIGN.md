@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`BranchInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.BranchInstruction")` + public/interface/继承 + 关键成员。黑盒（`BranchInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- testEmitReadback：if_icmpge 发射回读 sizeInBytes(3)、kind==BRANCH、labelToBci(target)==7 精确位置；goto/goto_w size 3/5；一元条件+引用条件族（ifeq/ifne/ifnull/ifnonnull/if_acmpeq/if_acmpne）顺序表；int 比较全 6 族（if_icmplt/ge/gt/le/eq/ne）顺序表；同目标多分支 target== 同一 Label 实例。
+- 工厂：of(GOTO,l) target 身份（==）保持、size 3；of(null,l)/of(GOTO,null) NPE、of(NOP,l)/of(IADD,l) IAE。断言 10→32（实测运行计数）。

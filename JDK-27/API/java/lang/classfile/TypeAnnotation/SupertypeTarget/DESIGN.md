@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`SupertypeTargetTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$SupertypeTarget")` + public/interface/继承 + 关键成员。黑盒（`SupertypeTargetTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，8 → 40 断言）
+- u2 边界：`ofClassExtends(0/1/65535)` 合法回读 + `size()==2`；`-1/65536` IAE 精确消息 "supertype index out of range of u2: N"。
+- 真 javac 产物：`class H extends @A Base implements @A Cl, @A R1` 实测三条 CLASS_EXTENDS——**extends 父类编为 65535 哨兵（JVMS 4.7.20.1），implements 按声明序 0/1**；与 `ClassModel.superclass()/interfaces()` 交叉对照。
+- 注入闭环：类级 `cb.with(RuntimeVisibleTypeAnnotationsAttribute.of(...))` 注入 65535 → re-parse 精确回读。
+

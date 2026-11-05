@@ -1,13 +1,19 @@
 # java.lang.classfile.ClassFileVersion — 设计案
 
 ## 1. API 功能
-`java.lang.classfile.ClassFileVersion`（interface）。工厂/静态方法：of。查询/实例方法：majorVersion, minorVersion。
+`java.lang.classfile.ClassFileVersion`（interface，extends `ClassElement`）。静态工厂：`of(int major, int minor)`（唯一工厂，**无 latest()**）。实例方法：`majorVersion()`、`minorVersion()`。无 equals/hashCode 值语义（**身份相等**，实测）。
 
 ## 2. Java 用户如何使用
-通过 `ClassFile.of()` 构建/解析 class（或 `ConstantPoolBuilder.of()` 建常量池条目、`ClassFile.of().build()`/`parse()` 往返）得到真实实例；实例通过 `of(...)` 工厂创建后逐方法断言访问器；涉及 label 的类型在 `ClassFile.of().build(...)` 回调内用 `CodeBuilder.newLabel()` 捕获。 本测试在 `ClassFileVersionTest.testBlackBox()` 中按「构建 → 解析/创建 → 组合断言」链路覆盖。
+`cb.with(ClassFileVersion.of(52,0))` 或 `cb.withVersion(52,0)`（ClassBuilder default）注入版本；`cm.majorVersion()/minorVersion()` 回读。范围校验：两参数均按 u2（0..65535），越界抛 IAE。parse 侧：major ∈ [45..latestMajorVersion(=71)]，超出抛 IAE "Unsupported class file version: N"；minor 65535（预览位）可正常解析。
 
-## 3. 开源代码实际用法调研
-JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesTest、ModuleBuilderTest、Utf8EntryTest、AttributesTest）与 JDK 源码自用（`src/java.base/.../java/lang/Module.java`、`jdk.jartool/.../FingerPrint.java`、`java.lang.reflect.ProxyGenerator`）大量使用 `java.lang.classfile` 族 API；本测试的 `java.lang.classfile.ClassFileVersion` 断言按上述真实用法模式编写。
+## 3. 参考来源
+- JDK 27 javadoc + `javap java.lang.classfile.ClassFileVersion`。
+- OpenJDK `test/jdk/jdk/classfile/`（ClassVersionTest 形态）。
+- 本机实测（关键事实全部锁定）：of(-1,0)→IAE "major version out of range of u2: -1"；of(71,-5)→IAE "minor version out of range of u2: -5"；of(65536,0)→IAE；**两个 of(52,0) equals 为 false（无值相等）**；toString=="ClassFileVersion[majorVersion=52, minorVersion=0]"；**parse major 72/80/100/65535 → IAE "Unsupported class file version: N"**；minor 65535 parse 正常。
 
-## 4. 测试用例设计 + 自动化实现
-白盒（`ClassFileVersionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassFileVersion")` + public/interface/继承 + 关键成员。黑盒（`ClassFileVersionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+## 4. 测试用例设计 + 易错规范细节
+- 白盒（原有）+ 黑盒（原有：of 回读、preview minor、build 注入往返）。
+- `testFactoryMatrix`（深化）：of(71,0)/of(45,3)/of(0,0)/of(65535,65535) 回读；**u2 边界负例矩阵**（-1 major、-5 minor、65536 major → IAE 精确消息）；toString 精确串；**值语义实测**：a.equals(a) true、a.equals(of(52,0)) **false**（身份语义记录）、equals(null) false、hashCode 自洽；层次 instanceof ClassElement/ClassFileElement。
+- `testBuildInjection`（深化）：with(ClassFileVersion(50,0)) 注入→re-parse 50.0 + elementList 含该元素；withVersion(45,3) 默认方法往返；withVersion(71,65535) 预览 minor 往返；**future 版本（72）build 成功但 parse IAE 精确消息**；默认 build 版本==latestMajorVersion==JAVA_27_VERSION==71 且 minor==latestMinorVersion==0；注入后 verify 仍干净。
+- `testDefineClassLoop`（深化）：DynClassFileVersion+seq v52 类 → defineClass → go()==7（低版本类仍可定义运行）。
+- 易错点：**不要断言两个 of(52,0) equals**（无值相等）；parse 支持上限是 ClassFile.latestMajorVersion() 而非 u2 上限 65535。

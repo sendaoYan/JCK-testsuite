@@ -11,3 +11,11 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`TypeVarSigTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Signature$TypeVarSig")` + public/interface/继承 + 关键成员。黑盒（`TypeVarSigTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，9 → 69 断言）
+- **五个语法位置全矩阵**（`testParsePositions`）：参数位/返回位（`(TT;)TT;`）、throws 位（`()V^TT;`）、类型实参位（`Map<TK;TV;>` 双标识符）、type param classBound 位（`<T:TT;>`）、数组元素位（`[TT;`）+ 有界通配 bound 位（`<+TT;>`）。
+- **of 工厂矩阵**（`testFactoryMatrix`）：of("X")→`TX;`、of("Element")→`TElement;`；**实测 of("") → IAE `Not a valid identifier`**、of(null) → NPE 消息含 `"st" is null`。
+- **畸形 IAE 表**（`testMalformedMatrix`）：实测 "T;" → `Unexpected character ; at position 1, expected an identifier`；"TT" → `Unexpected end … expected ;`；"T" → `Unexpected end … expected an identifier`；parseFrom(null)→NPE。
+- **类型层次**（`testSubtypingMatrix`）：RefTypeSig + ThrowableSig 双身份；6 串 round-trip 幂等。
+- **equals/hashCode**（`testEqualityContract`）。
+- **真类闭环**（`testRealClassGenericLoop`）：javac `TT;` 参数/返回 → TypeVarSig identifier=="T"。

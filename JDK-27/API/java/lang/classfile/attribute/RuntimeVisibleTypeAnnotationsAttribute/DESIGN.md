@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`RuntimeVisibleTypeAnnotationsAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.RuntimeVisibleTypeAnnotationsAttribute")` + public/interface/继承 + 关键成员。黑盒（`RuntimeVisibleTypeAnnotationsAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，40 断言）
+- testRealProduct：`<@RVTAnno U> m(U)` 真产物 METHOD_TYPE_PARAMETER target + 空 targetPath；@RVTAnno 字段 FIELD target + EmptyTarget instanceof；无 RITA 孪生。
+- testFactoryOverloads：of(List)/of(varargs)/empty；**stability UNSTABLE**；NPE×2；TypePathComponent 常量 ARRAY/INNER_TYPE/WILDCARD + of(Kind,int) + Kind 4 值。
+- testInjectRoundTrip：FIELD/METHOD_RETURN 双 target 注入（含 ARRAY 路径 + OfInt 元素）类/字段/方法三级回读。

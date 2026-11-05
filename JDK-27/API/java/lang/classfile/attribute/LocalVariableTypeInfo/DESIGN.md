@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`LocalVariableTypeInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.LocalVariableTypeInfo")` + public/interface/继承 + 关键成员。黑盒（`LocalVariableTypeInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：无公开工厂——cob.localVariableType 双重载（Signature.parseFrom / Utf8Entry 通道）→ 发射→re-parse slot/name/signature（泛型签名精确串）/startPc/length + LocalVariableType 伪指令计数 + DROP_DEBUG 双侧交叉 + javac 默认不产 LVTT。
+易错点（实测）：length 覆盖整个方法体（含 return 指令，aconst_null+pop+return_ 体为 3）。

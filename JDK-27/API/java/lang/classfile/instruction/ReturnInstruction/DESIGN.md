@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ReturnInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.ReturnInstruction")` + public/interface/继承 + 关键成员。黑盒（`ReturnInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 六族按方法描述符发射回读：IRETURN/LRETURN/FRETURN/DRETURN/ARETURN/RETURN 各配 ()I/()J/()F/()D/()Object/()V 方法形状，typeKind 精确、sizeInBytes 全 1、kind==RETURN。
+- 工厂窄化实测：of(BYTE/SHORT/CHAR/BOOLEAN) 全部 IRETURN；of(TypeKind) 6 正例 + of((TypeKind)null) NPE + of((Opcode)null) NPE + of(NOP/IADD) IAE。断言 11→63（实测运行计数）。

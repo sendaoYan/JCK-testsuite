@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`IncrementInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.IncrementInstruction")` + public/interface/继承 + 关键成员。黑盒（`IncrementInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 宽窄自动选择实测锁定：iinc(1,1)→IINC size 3；iinc(256,32767)→IINC_W size 6；负 delta 合法；访问器实名 constant()（不是 delta()）。
+- 工厂边界：of(slot,const) const ±127 窄 / ±128 起 IINC_W；of(1,32768)/of(1,-32769) IAE（"cannot encode as S2" 实测）；slot 边界；of(-1,1) IAE。断言 12→49（实测运行计数）。

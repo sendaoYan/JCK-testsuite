@@ -11,3 +11,11 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ClassTypeSigTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Signature$ClassTypeSig")` + public/interface/继承 + 关键成员。黑盒（`ClassTypeSigTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，13 → 91 断言）
+- **parseFrom 结构矩阵**（`testParseMatrix`）：plain/List&lt;String&gt;/Map&lt;TK;TV;&gt;/`LOuter<TT;>.Inner;` 内部类点形式/List&lt;*&gt;——className/outerType/typeArgs/classDesc 逐访问器；**实测 inner.classDesc().descriptorString()=="LOuter$Inner;"、displayName()=="Outer$Inner"**；6 串 round-trip 幂等。
+- **of 工厂全 4 重载**（`testFactoryMatrix`）：of(CD)/of(String)/of(CD, args…)/of(String, args…)/嵌套 of(outer,"Inner")→`Lpkg/Outer.Inner;`（outer 实参保留 → `Lpkg/Outer<Ljava/lang/String;>.Inner<*>;`）+ deprecated of(outer, CD) 形态 + of==parseFrom 值 equals。
+- **负例**（`testNegativeMatrix`）：**实测嵌套第二段必须是简单标识符：of(outer,"pkg/Outer$Inner") → IAE `Not a valid identifier`**；of((ClassDesc)null) NPE 消息含 `"cd" is null`；of((String)null) 含 `"st" is null`。
+- **类型层次**（`testSubtypingMatrix`）：RefTypeSig + ThrowableSig 双身份，可直接作 throws 段成员。
+- **真类闭环**（`testRealClassFieldLoop`）：javac 泛型字段 == `Ljava/util/List<Ljava/lang/String;>;` → className/typeArgs/classDesc。
+- **build 注入闭环**（`testBuildAttributeLoop`）+ **equals/hashCode**（类名/实参差异不等）。

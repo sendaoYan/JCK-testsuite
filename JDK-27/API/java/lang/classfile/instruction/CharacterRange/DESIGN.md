@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`CharacterRangeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.CharacterRange")` + public/interface/继承 + 关键成员。黑盒（`CharacterRangeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回读：CharacterRange.of(labels[0], labels[1], 100, 200, 5) 经 CodeBuilder.with 注入 → parse 回读 startBci/extentFlags 精确；CharacterRangeTable 属性出现与条目数；9 个 FLAG_* 常量精确值 0x1..0x100 全等；多重 range 顺序保持。
+- 分类断言：instanceof PseudoInstruction 且非 Instruction（伪指令族）；of 负例 null label NPE。断言 13→42（实测运行计数）。

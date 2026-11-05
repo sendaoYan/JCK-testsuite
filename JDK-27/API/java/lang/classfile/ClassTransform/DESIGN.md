@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ClassTransformTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassTransform")` + public/interface/继承 + 关键成员。黑盒（`ClassTransformTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，10→53 断言）：变换/组合/生命周期全契约
+新增 testAcceptAllConservation（元素守恒：elementList/成员/属性逐项、常量池大小守恒（facts §5 拷贝语义）、verify 干净、幂等）；testDroppingSelective（剥字段/剥方法/剥属性三类谓词 + 恒 false 守恒 + 恒 true 等价 DROP_ALL 且保留 superclass）；testEndHandlerAndThenOrder（两个 endHandler 都生效、eh1 先于 eh2、注入字段按序追加 [f,f1,f2]）；testOfStateful（Supplier 每 transformClass 调用一次（实测 2 次）、每实例状态隔离、null NPE）；testBridges（transformingMethods/transformingMethodBodies/transformingFields 三桥 + 带谓词重载 false 跳过 + 桥 andThen 组合）；testLifecycleHooks（自造匿名 ClassTransform：atStart→accept×N→atEnd 次序、atStart/atEnd 注入元素落盘、默认 hook 为 no-op、ClassFileTransform 层次白盒）。易错点：ClassTransform 无 DROP_ALL（用 dropping(e->true)）；ofStateful Supplier 是每次 transform 调用求值而非构造时。

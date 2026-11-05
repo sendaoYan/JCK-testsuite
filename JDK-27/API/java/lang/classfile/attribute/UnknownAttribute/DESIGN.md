@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`UnknownAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.UnknownAttribute")` + public/interface/继承 + 关键成员。黑盒（`UnknownAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，24 断言）
+- testUnknownPresentation：自定义 mapper build（类+方法级）→ 无 mapper parse → **以 UnknownAttribute 呈现**：attributeName=="MyAttr"、contents==payload 逐字节（该类唯一自然产生通道）。
+- testOptionCross：DROP_UNKNOWN_ATTRIBUTES transform 剥除；注册 mapper 的 parse 走 readAttribute 自定义通道（非 Unknown）；AttributesProcessingOption 3 值。
+- testWhiteBoxSurface：四 element 面（Class/Method/Field/Code）；**Attributes 无 unknown() mapper 方法**（只能 instanceof 发现——白盒负断言）。

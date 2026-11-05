@@ -1,13 +1,19 @@
 # java.lang.classfile.FieldModel — 设计案
 
 ## 1. API 功能
-`java.lang.classfile.FieldModel`（interface）。工厂/静态方法：(none)。查询/实例方法：flags, parent, fieldName, fieldType, fieldTypeSymbol。
+`java.lang.classfile.FieldModel`（interface，extends `CompoundElement<FieldElement>` + `AttributedElement` + **`ClassElement`**）。实例方法：`flags()`、`parent()`（Optional&lt;ClassModel&gt;）、`fieldName()`/`fieldType()`（Utf8Entry）、`fieldTypeSymbol()`（default，ClassDesc）。
 
 ## 2. Java 用户如何使用
-通过 `ClassFile.of()` 构建/解析 class（或 `ConstantPoolBuilder.of()` 建常量池条目、`ClassFile.of().build()`/`parse()` 往返）得到真实实例；实例通过 `of(...)` 工厂创建后逐方法断言访问器；涉及 label 的类型在 `ClassFile.of().build(...)` 回调内用 `CodeBuilder.newLabel()` 捕获。 本测试在 `FieldModelTest.testBlackBox()` 中按「构建 → 解析/创建 → 组合断言」链路覆盖。
+`ClassFile.of().parse(bytes).fields()` 按声明序取得；`fieldType().stringValue()` 是擦除后描述符（泛型字段为 `Ljava/util/List;` 而非签名形式）；常量值经 `findAttribute(Attributes.constantValue())` 的 `constant()`（ConstantValueEntry，按类型 cast：int/boolean→IntegerEntry、long→LongEntry、String→StringEntry）。
 
-## 3. 开源代码实际用法调研
-JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesTest、ModuleBuilderTest、Utf8EntryTest、AttributesTest）与 JDK 源码自用（`src/java.base/.../java/lang/Module.java`、`jdk.jartool/.../FingerPrint.java`、`java.lang.reflect.ProxyGenerator`）大量使用 `java.lang.classfile` 族 API；本测试的 `java.lang.classfile.FieldModel` 断言按上述真实用法模式编写。
+## 3. 参考来源
+- JDK 27 javadoc + `javap java.lang.classfile.FieldModel`。
+- OpenJDK `test/jdk/jdk/classfile/`（ClassBuildingTest、AttributesTest）。
+- 本机实测：CONST=42 ConstantValue 回读、long/boolean/String 常量分型、gfield Signature、elementList=[AccessFlags]（无属性字段）/[AccessFlags, ConstantValue]（有属性）。
 
-## 4. 测试用例设计 + 自动化实现
-白盒（`FieldModelTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.FieldModel")` + public/interface/继承 + 关键成员。黑盒（`FieldModelTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+## 4. 测试用例设计 + 易错规范细节
+- 白盒（原有）+ 黑盒（原有：build→parse name/descriptor/typeSymbol/flags/parent/elements）。
+- `testSelfFields`（深化）：真类字段族全断言 —— `static final int CONST=42`→`((IntegerEntry)cv.constant()).intValue()==42`、flagsMask==0x0018（STATIC|FINAL）、location()==FIELD；`long`→LongEntry.longValue()、`boolean`→IntegerEntry 1、`String`→StringEntry.stringValue()；泛型字段 Signature=="Ljava/util/List&lt;Ljava/lang/String;&gt;;" 且 fieldType=="Ljava/util/List;"（**擦除**）；@Deprecated 字段双属性；volatile 字段 flag；elementList instanceof 计数；parent 身份。
+- `testFieldShapes`（深化）：无属性字段 elementList 恰 [AccessFlags]；`fb.withFlags(int)` + `with(ConstantValueAttribute.of(7))` 注入回读；`SignatureAttribute.of(Signature.parseFrom(...))` 回读。
+- `testDefineClassLoop`（深化）：DynFieldModel+seq 带常量 99 字段 + getstatic 方法 → defineClass → 反射 CV==99、get()==99 运行闭环。
+- 易错点：**boolean 常量在 ConstantValue 里是 IntegerEntry(1)**；泛型字段 fieldType 是擦除描述符、Signature 才含类型实参；`withField(String,ClassDesc,int,Consumer)` 重载**不存在**——flags 与回调分两套（`withField(name,desc,fb->fb.withFlags(...).with(attr))`）。

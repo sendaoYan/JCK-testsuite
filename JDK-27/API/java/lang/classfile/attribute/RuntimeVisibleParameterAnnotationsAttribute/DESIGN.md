@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`RuntimeVisibleParameterAnnotationsAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.RuntimeVisibleParameterAnnotationsAttribute")` + public/interface/继承 + 关键成员。黑盒（`RuntimeVisibleParameterAnnotationsAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，35 断言）
+- testRealProduct：javac 参数声明注解进 RVPA——(@Deprecated int, int, @Deprecated String) → sizes [1,0,1]（未注解参数空列表、参数顺序保留）；不在方法 RVA/RIPA。
+- testFactoryOverloads：**仅 of(List<List>) 单重载**（反射计数断言）；矩阵 identity；empty；NAME/CP_REFS；of(null) NPE。
+- testInjectRoundTrip：2×2 矩阵注入回读（元素名/值）。

@@ -70,9 +70,77 @@ public class UninitializedVerificationTypeInfoTest {
 
     }
 
+
+    // ---- real-product member（NEW 与 <init> 之间的分支 → uninit vti，newTarget 指向 NEW）----
+    static class UVReal {
+        UVReal(int i) {}
+        static Object g(boolean c) { return new UVReal(c ? 1 : 2); }
+    }
+
+    // ---- Part 3: of(Label) + tag ----
+    static void testOfFactory() throws Exception {
+        byte[] rb = UninitializedVerificationTypeInfoTest.class.getResourceAsStream("UninitializedVerificationTypeInfoTest$UVReal.class").readAllBytes();
+        ClassModel m = ClassFile.of().parse(rb);
+        CodeAttribute ca = null;
+        for (MethodModel mm : m.methods())
+            if (mm.methodName().stringValue().equals("g")) ca = (CodeAttribute) mm.code().get();
+        StackMapFrameInfo.UninitializedVerificationTypeInfo parsed = null;
+        outer:
+        for (StackMapFrameInfo f : ca.findAttribute(Attributes.stackMapTable()).get().entries())
+            for (StackMapFrameInfo.VerificationTypeInfo v : f.stack())
+                if (v instanceof StackMapFrameInfo.UninitializedVerificationTypeInfo u) { parsed = u; break outer; }
+        check(parsed != null, "javac uninit vti found in frames");
+        check(parsed.tag() == StackMapFrameInfo.VerificationTypeInfo.ITEM_UNINITIALIZED, "tag ITEM_UNINITIALIZED 8");
+        int bci = ca.labelToBci(parsed.newTarget());
+        check(bci >= 0 && bci < ca.codeLength(), "newTarget bci in range");
+        check((ca.codeArray()[bci] & 0xff) == 187, "newTarget points at NEW opcode (187)");
+        var made = StackMapFrameInfo.UninitializedVerificationTypeInfo.of(parsed.newTarget());
+        check(made.newTarget() == parsed.newTarget(), "of(Label) target identity");
+        check(made.tag() == 8, "of tag 8");
+        check(made instanceof StackMapFrameInfo.VerificationTypeInfo, "is VerificationTypeInfo");
+        try { StackMapFrameInfo.UninitializedVerificationTypeInfo.of(null); check(false, "of(null) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null) NPE"); }
+    }
+
+    // ---- Part 4: javac 真产物（两个分支各自 NEW 偏移）----
+    static void testRealFramesDistinctOffsets() throws Exception {
+        byte[] rb = UninitializedVerificationTypeInfoTest.class.getResourceAsStream("UninitializedVerificationTypeInfoTest$UVReal.class").readAllBytes();
+        ClassModel m = ClassFile.of().parse(rb);
+        CodeAttribute ca = null;
+        for (MethodModel mm : m.methods())
+            if (mm.methodName().stringValue().equals("g")) ca = (CodeAttribute) mm.code().get();
+        Set<Integer> offsets = new HashSet<>();
+        int uninitCount = 0;
+        for (StackMapFrameInfo f : ca.findAttribute(Attributes.stackMapTable()).get().entries())
+            for (StackMapFrameInfo.VerificationTypeInfo v : f.stack())
+                if (v instanceof StackMapFrameInfo.UninitializedVerificationTypeInfo u) {
+                    uninitCount++;
+                    offsets.add(ca.labelToBci(u.newTarget()));
+                }
+        check(uninitCount >= 2, "stack carries two uninit copies (new+dup): " + uninitCount);
+        check(offsets.size() == 1, "both copies share one NEW offset");
+        for (int off : offsets) check((ca.codeArray()[off] & 0xff) == 187, "offset is NEW");
+    }
+
+    // ---- Part 5: build 侧对照（fresh build 不产 uninit vti——builder 类型推导只有引用类型）----
+    static void testBuildSideNoUninit() throws Exception {
+        byte[] bb = ClassFile.of().build(ClassDesc.of("DynUVT"), cb -> cb.withMethodBody("m",
+                MethodTypeDesc.ofDescriptor("(I)I"), ClassFile.ACC_STATIC,
+                cob -> { Label l = cob.newLabel(); cob.iconst_0().iload(0).if_icmpge(l); cob.iconst_1().ireturn(); cob.labelBinding(l).iconst_m1().ireturn(); }));
+        CodeAttribute ca = (CodeAttribute) ClassFile.of().parse(bb).methods().get(0).code().get();
+        boolean sawUninit = false;
+        for (StackMapFrameInfo f : ca.findAttribute(Attributes.stackMapTable()).get().entries())
+            for (StackMapFrameInfo.VerificationTypeInfo v : f.stack())
+                if (v instanceof StackMapFrameInfo.UninitializedVerificationTypeInfo) sawUninit = true;
+        check(!sawUninit, "int-only branch frames carry no uninit vti");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testOfFactory();
+        testRealFramesDistinctOffsets();
+        testBuildSideNoUninit();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

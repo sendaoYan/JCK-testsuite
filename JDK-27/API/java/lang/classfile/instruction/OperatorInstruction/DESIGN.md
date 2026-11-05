@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`OperatorInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.OperatorInstruction")` + public/interface/继承 + 关键成员。黑盒（`OperatorInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 41 操作符全表发射回读：int 12（IADD..IUSHR/INEG）+ long 13（LADD..LNEG/LCMP）+ float 8（FADD..FCMPG）+ double 8（DADD..DCMPG），顺序表逐条 opcode/sizeInBytes(1)/kind==OPERATOR/typeKind 四族归属（LCMP→LONG、DCMPG→DOUBLE 实测）。
+- 工厂：of(opcode).typeKind() 四族 + of(null) NPE + of(NOP/IRETURN/GETSTATIC) IAE。断言 10→185（实测运行计数）。

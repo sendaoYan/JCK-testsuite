@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`CompilationIDAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.CompilationIDAttribute")` + public/interface/继承 + 关键成员。黑盒（`CompilationIDAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：of(String)/of(Utf8Entry) 双工厂 + 各自 null NPE + 注入 class 级 → 回读 + ClassElement 通道可见 + allowMultiple=false 语义（同属性二次注入仅保留最后写入，实测 n==1 值为后写者）+ javac 不产该属性（HotSpot 内部属性）。

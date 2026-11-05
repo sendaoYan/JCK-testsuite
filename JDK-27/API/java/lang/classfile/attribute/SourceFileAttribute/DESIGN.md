@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`SourceFileAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.SourceFileAttribute")` + public/interface/继承 + 关键成员。黑盒（`SourceFileAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，24 断言）
+- testFactoryOverloads：of(String)/of(Utf8Entry)（entry 身份保留）；NAME_SOURCE_FILE/CP_REFS；NPE×2。
+- testRealProduct：javac 真产物 sourceFile=="SourceFileAttributeTest.java"（含嵌套类共享同源文件）。
+- testInjectRoundTrip：注入改写文件名回读；fresh build 无 SourceFile（不自动生成）；双注入只保留 1。

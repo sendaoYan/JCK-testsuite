@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ConvertInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.ConvertInstruction")` + public/interface/继承 + 关键成员。黑盒（`ConvertInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 15 转换全表发射回读（i2l/i2f/i2d/i2b/i2c/i2s/l2i/l2f/l2d/f2i/f2l/f2d/d2i/d2l/d2f）逐条 opcode/fromType/toType 三元组精确；sizeInBytes 全 1；kind==CONVERT。
+- 工厂：of(TypeKind,TypeKind) 全 15 组合 + of(INT,INT) IAE（恒等转换拒绝）+ of(null,..) NPE；javac i2l 自产物对照。断言 12→99（实测运行计数）。

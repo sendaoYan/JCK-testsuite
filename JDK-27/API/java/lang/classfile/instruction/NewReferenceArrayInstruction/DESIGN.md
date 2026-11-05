@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`NewReferenceArrayInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.NewReferenceArrayInstruction")` + public/interface/继承 + 关键成员。黑盒（`NewReferenceArrayInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回读：iconst_2().anewarray(String) → ANEWARRAY size 3、kind==NEW_REF_ARRAY、componentType().asInternalName()=="java/lang/String"；数组元素类型（"[Ljava/lang/String;"）与 ClassEntry 重载通道。
+- 工厂：of(ClassEntry) 身份 + of(null) NPE。断言 9→22（实测运行计数）。

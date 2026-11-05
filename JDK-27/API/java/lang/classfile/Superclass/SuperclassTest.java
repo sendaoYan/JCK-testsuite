@@ -65,9 +65,92 @@ public class SuperclassTest {
 
     }
 
+
+    // ---- Part 3: null 负例 + 默认 superclass + 层次 ----
+    static void testNullAndDefaults() {
+        // Superclass.of(null) → NPE（实测）
+        try { Superclass.of(null); check(false, "Superclass.of(null) must throw"); }
+        catch (NullPointerException e) { check(true, "Superclass.of(null) NPE"); }
+        // withSuperclass((ClassDesc)null) → NPE（实测，消息含 ClassDesc.isClassOrInterface）
+        try {
+            ClassFile.of().build(ClassDesc.of("pkg.Bad"), cb -> cb.withSuperclass((ClassDesc) null));
+            check(false, "withSuperclass(null) must throw");
+        } catch (NullPointerException e) {
+            check(e.getMessage() != null && e.getMessage().contains("isClassOrInterface"), "withSuperclass(null) NPE msg: " + e.getMessage());
+        }
+        // 层次
+        Superclass sc = Superclass.of(ConstantPoolBuilder.of().classEntry(ClassDesc.of("java.lang.Object")));
+        check(sc instanceof ClassElement, "Superclass instanceof ClassElement");
+        check(sc instanceof ClassFileElement, "Superclass instanceof ClassFileElement");
+    }
+
+    // ---- Part 4: build 注入 → re-parse（默认/自定义/元素一致性/Object/module-info 空） ----
+    static void testBuildReadback() throws Exception {
+        ClassFile cf = ClassFile.of();
+        // 不指定 superclass：默认 java/lang/Object 且 Superclass 元素存在
+        byte[] db = cf.build(ClassDesc.of("pkg.Def"), cb -> cb.withMethodBody("m", ConstantDescs.MTD_void, ClassFile.ACC_STATIC, c -> c.return_()));
+        ClassModel dm = cf.parse(db);
+        check(dm.superclass().isPresent() && dm.superclass().get().asInternalName().equals("java/lang/Object"), "default superclass Object");
+        int scCount = 0;
+        for (ClassElement e : dm.elementList()) if (e instanceof Superclass) scCount++;
+        check(scCount == 1, "default Superclass element exactly 1");
+        // withSuperclass(ClassDesc) + withSuperclass(ClassEntry) 两重载
+        byte[] b1 = cf.build(ClassDesc.of("pkg.Ex"), cb -> cb.withSuperclass(ClassDesc.of("java.lang.Exception")));
+        ClassModel m1 = cf.parse(b1);
+        check(m1.superclass().get().asInternalName().equals("java/lang/Exception"), "withSuperclass(ClassDesc) roundtrip");
+        byte[] b2 = cf.build(ClassDesc.of("pkg.Ex2"), cb -> cb.withSuperclass(ConstantPoolBuilder.of().classEntry(ClassDesc.of("java.lang.RuntimeException"))));
+        ClassModel m2 = cf.parse(b2);
+        check(m2.superclass().get().asInternalName().equals("java/lang/RuntimeException"), "withSuperclass(ClassEntry) roundtrip");
+        // Superclass 元素与 cm.superclass() 同一 entry
+        Superclass elem = null;
+        for (ClassElement e : m1.elementList()) if (e instanceof Superclass x) elem = x;
+        check(elem != null, "Superclass element present in elementList");
+        check(elem.superclassEntry() == m1.superclass().get(), "element entry identity == cm.superclass().get()");
+        check(elem.superclassEntry().asSymbol().equals(ClassDesc.of("java.lang.Exception")), "element entry asSymbol");
+        check(cf.verify(m1).isEmpty() && cf.verify(m2).isEmpty(), "superclass verify clean");
+        // Object.class：superclass empty（JVMS：Object 无父类）
+        byte[] ob = java.lang.Object.class.getResourceAsStream("Object.class").readAllBytes();
+        ClassModel om = cf.parse(ob);
+        check(om.superclass().isEmpty(), "Object.class superclass empty");
+        // module-info：superclass empty
+        ModuleAttribute ma = ModuleAttribute.of(ModuleDesc.of("m.sc"), mb -> {});
+        ClassModel mm = cf.parse(cf.buildModule(ma));
+        check(mm.superclass().isEmpty(), "module-info superclass empty");
+        // 接口 build：superclass 仍是 java/lang/Object
+        byte[] ib = cf.build(ClassDesc.of("pkg.MyIf"), cb -> cb.withFlags(ClassFile.ACC_INTERFACE | ClassFile.ACC_ABSTRACT));
+        ClassModel im = cf.parse(ib);
+        check(im.superclass().get().asInternalName().equals("java/lang/Object"), "interface superclass Object");
+        check(im.flags().has(AccessFlag.INTERFACE), "interface has INTERFACE flag");
+        // 真实 javac 产物
+        byte[] self = SuperclassTest.class.getResourceAsStream("SuperclassTest.class").readAllBytes();
+        ClassModel sm = cf.parse(self);
+        check(sm.superclass().get().asInternalName().equals("java/lang/Object"), "self superclass Object");
+    }
+
+    // ---- Part 5: defineClass 运行闭环（继承 Exception 真实例化） ----
+    static int dynSeq;
+    static void testDefineClassLoop() throws Exception {
+        ClassFile cf = ClassFile.of();
+        String name = "DynSuperclass" + (++dynSeq);
+        byte[] b = cf.build(ClassDesc.of(name), cb -> cb
+                .withSuperclass(ClassDesc.of("java.lang.Exception"))
+                .withMethod("<init>", MethodTypeDesc.ofDescriptor("(Ljava/lang/String;)V"), ClassFile.ACC_PUBLIC,
+                        mb -> mb.withCode(c -> c.aload(0).aload(1).invokespecial(ClassDesc.of("java.lang.Exception"), "<init>",
+                                MethodTypeDesc.ofDescriptor("(Ljava/lang/String;)V")).return_())));
+        ClassModel rm = cf.parse(b);
+        check(rm.superclass().get().asInternalName().equals("java/lang/Exception"), "dyn superclass Exception");
+        check(cf.verify(rm).isEmpty(), "dyn verify clean");
+        Class<?> dc = MethodHandles.lookup().defineClass(b);
+        Exception ex = (Exception) dc.getConstructor(String.class).newInstance("boom");
+        check(ex.getMessage().equals("boom"), "dyn Exception 消息运行闭环");
+        check(ex instanceof java.lang.Exception, "dyn instanceof Exception");
+    }
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNullAndDefaults();
+        testBuildReadback();
+        testDefineClassLoop();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

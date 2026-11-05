@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ArrayStoreInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.ArrayStoreInstruction")` + public/interface/继承 + 关键成员。黑盒（`ArrayStoreInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- testEmitReadback：8 opcode 全族（iastore..sastore）发射回读，opcode/sizeInBytes(1)/kind==ARRAY_STORE/typeKind 精确；aastore 引用族 + arrayStore(TypeKind) 泛型通道；javac 自产物（本测试类 int[]/Object[] 辅助方法）回读对照。
+- 工厂矩阵：of(Opcode) 8 正例 + of(null) NPE + 非 ARRAY_STORE kind IAE。断言 9→62（实测运行计数）。

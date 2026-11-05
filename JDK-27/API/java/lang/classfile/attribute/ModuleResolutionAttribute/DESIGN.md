@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModuleResolutionAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModuleResolutionAttribute")` + public/interface/继承 + 关键成员。黑盒（`ModuleResolutionAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，25 断言）
+- testFactoryAndFlags：of(0/1/2/3/0xFFFF)（1=DO_NOT_RESOLVE_BY_DEFAULT、2=WARN_DEPRECATED 是 JVMS 4.7.26 位，**接口不导出常量**——getFields().length==0 白盒负空间）；STATELESS；allowMultiple=false。
+- testInjectRoundTrip：普通类 + module-info transform 注入回读 + verify 干净。
+- testRealProducts：javac 从不产；jrt java.logging 无该属性。

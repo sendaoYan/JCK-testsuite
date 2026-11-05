@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`StackInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.StackInstruction")` + public/interface/继承 + 关键成员。黑盒（`StackInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 9 栈操作全表发射回读（SWAP/DUP/DUP2/DUP_X1/DUP2_X1/DUP_X2/DUP2_X2/POP/POP2）：各配平栈形状（cat1/cat2 组合），逐条 sizeInBytes(1)/kind==STACK；总条数 22（9 目标 + 13 清理 pop）与首次出现顺序断言。
+- 工厂：of(opcode) 9 正例 + of(null) NPE + of(NOP/IADD/RETURN) IAE。断言 9→112（实测运行计数）。

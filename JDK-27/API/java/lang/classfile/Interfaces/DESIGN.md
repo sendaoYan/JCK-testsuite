@@ -1,13 +1,19 @@
 # java.lang.classfile.Interfaces — 设计案
 
 ## 1. API 功能
-`java.lang.classfile.Interfaces`（interface）。工厂/静态方法：of, ofSymbols。查询/实例方法：interfaces。
+`java.lang.classfile.Interfaces`（interface，extends `ClassElement`）。静态工厂 4 个：`of(ClassEntry...)`、`of(List&lt;ClassEntry&gt;)`、`ofSymbols(ClassDesc...)`、`ofSymbols(List&lt;ClassDesc&gt;)`。实例方法：`interfaces()`（List&lt;ClassEntry&gt;，**不可变视图**）。
 
 ## 2. Java 用户如何使用
-通过 `ClassFile.of()` 构建/解析 class（或 `ConstantPoolBuilder.of()` 建常量池条目、`ClassFile.of().build()`/`parse()` 往返）得到真实实例；实例通过 `of(...)` 工厂创建后逐方法断言访问器；涉及 label 的类型在 `ClassFile.of().build(...)` 回调内用 `CodeBuilder.newLabel()` 捕获。 本测试在 `InterfacesTest.testBlackBox()` 中按「构建 → 解析/创建 → 组合断言」链路覆盖。
+`cb.withInterfaceSymbols(descs...)`（varargs/List 两重载）在 build 时声明；`cb.with(Interfaces.of(...))` 以元素形式注入；`cm.interfaces()` 回读。空列表合法（生成 count==0 的 interfaces 段）；**重复接口不去重**；null 负例全部 NPE。
 
-## 3. 开源代码实际用法调研
-JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesTest、ModuleBuilderTest、Utf8EntryTest、AttributesTest）与 JDK 源码自用（`src/java.base/.../java/lang/Module.java`、`jdk.jartool/.../FingerPrint.java`、`java.lang.reflect.ProxyGenerator`）大量使用 `java.lang.classfile` 族 API；本测试的 `java.lang.classfile.Interfaces` 断言按上述真实用法模式编写。
+## 3. 参考来源
+- JDK 27 javadoc + `javap java.lang.classfile.Interfaces`。
+- OpenJDK `test/jdk/jdk/classfile/`（ClassBuildingTest）。
+- 本机实测：of(null arr)→NPE "Cannot read the array length"；of(null list)→NPE "Cannot invoke java.util.Collection.isEmpty()"；ofSymbols((ClassDesc)null)→NPE；ofSymbols(null list)→NPE；dup（Runnable×2）size==2；interfaces().add→UOE。
 
-## 4. 测试用例设计 + 自动化实现
-白盒（`InterfacesTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Interfaces")` + public/interface/继承 + 关键成员。黑盒（`InterfacesTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+## 4. 测试用例设计 + 易错规范细节
+- 白盒（原有）+ 黑盒（原有：ofSymbols 2 接口 + build 往返）。
+- `testFactoryMatrix`（深化）：**4 个工厂全重载**（varargs/List × entries/symbols）+ 条目身份（== 同一 ClassEntry）；空工厂（of()/ofSymbols() size 0）；重复接口保留 size 2；**null 负例 4 种精确 NPE**；**interfaces() 不可变**（add/remove → UOE）；层次 instanceof。
+- `testBuildReadback`（深化）：3 接口 build 全量回读（顺序精确）；**Interfaces 元素在 elementList 且其 entries 与 cm.interfaces() 同一对象（==）**；空接口 build → interfaces() 空 + 空 Interfaces 元素仍存在；withInterfaceSymbols(List) 重载；真实 javac 嵌套 implements 类（精确顺序 [Runnable, InterfacesTest$NestedIf, Serializable]）；标记接口（无 extends）interfaces() 空；verify 干净。
+- `testDefineClassLoop`（深化）：DynInterfaces+seq 实现 Runnable → defineClass → `Runnable.class.isAssignableFrom(dc)`。
+- 易错点：interfaces() 是不可修改视图；`ClassBuilder.withInterfaceSymbols` 与元素注入 `with(Interfaces.of(...))` 等价（后者会在 elementList 出现独立元素）。

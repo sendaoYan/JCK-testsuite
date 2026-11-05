@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`UnboundedTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Signature$TypeArg$Unbounded")` + public/interface/继承 + 关键成员。黑盒（`UnboundedTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，6 → 47 断言）
+- **标记接口 + 单例**（`testMarkerAndSingleton`）：实测无自有方法、直接 extends TypeArg；**unbounded() 是单例（==、equals、hashCode 稳定）**；instanceof TypeArg 是、Bounded 否。
+- **解析嵌入矩阵**（`testParseEmbedding`）：`List<*>` 单实参；**`Map<**>` 双无界**；混合 `Map<*Ljava/lang/String;>` 分型；嵌套 `List<List<*>;>` 内层 Unbounded；4 串 round-trip 幂等。
+- **组合发射**（`testCompositionEmission`）：of(List, unbounded)→`Ljava/util/List<*>;`、of(Map, unbounded×2)→`Ljava/util/Map<**>;`，发射产物 re-parse 回到 Unbounded 且 equals unbounded()；数组元素位含无界通配。
+- **真类闭环**（`testRealClassFieldLoop`）：**javac `List<?>` → `Ljava/util/List<*>;`、`Map<?,?>` → `Ljava/util/Map<**>;`**，逐实参 instanceof Unbounded。

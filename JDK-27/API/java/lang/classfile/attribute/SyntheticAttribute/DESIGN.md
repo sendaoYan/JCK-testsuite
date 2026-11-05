@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`SyntheticAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.SyntheticAttribute")` + public/interface/继承 + 关键成员。黑盒（`SyntheticAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，24 断言）
+- testInjectRoundTrip：of() 类/字段/方法三级注入 → re-parse 存在 + verify 干净。
+- testAttributeSurface：NAME_SYNTHETIC/STATELESS/**allowMultiple=true（双注入两个都保留——实测）**。
+- testRealProduct：javac v49+ 用 ACC_SYNTHETIC 标志而非属性——enum $VALUES 字段有标志无属性、values() mask==9 无属性、本类无属性（三重负空间断言）。

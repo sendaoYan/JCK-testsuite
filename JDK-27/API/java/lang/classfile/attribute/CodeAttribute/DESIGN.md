@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`CodeAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.CodeAttribute")` + public/interface/继承 + 关键成员。黑盒（`CodeAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：build 分支方法 → maxStack/maxLocals/codeLength/codeArray().length 全等 + codeArray 字节内容（首字节/末字节 opcode）+ labelToBci（从解析出的 LabelTarget 取 Label）+ method.findAttribute(Attributes.code()) 与 method.code() 同一实例 + try-catch exceptionHandlers（catchType Optional 精确、handler bci）+ 抽象方法无 Code + 元数据（CP_REFS/allowMultiple false）。
+易错点（实测）：codeArray()[i] 是有符号 byte，比较 opcode 要 & 0xff；CodeAttribute 经 CodeModel 通道访问（method.code() cast），findAttribute(code()) 返回同实例。

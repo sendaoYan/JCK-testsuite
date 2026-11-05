@@ -70,9 +70,90 @@ public class LineNumbersOptionTest {
 
     }
 
+    // ---- Part 3: option semantics measured on JDK 27 ----
+    static byte[] buildLnClass(ClassFile cf, String name) {
+        return cf.build(ClassDesc.of(name), cb -> cb.withMethodBody("m", ConstantDescs.MTD_void, ClassFile.ACC_STATIC, cob -> {
+            Label s = cob.newLabel(), e = cob.newLabel();
+            cob.labelBinding(s).return_();
+            cob.labelBinding(e);
+            cob.localVariable(1, "lv", ConstantDescs.CD_int, s, e);
+            cob.lineNumber(9);
+        }));
+    }
+
+    static int[] pseudoCounts(CodeModel code) {
+        int lv = 0, ln = 0;
+        for (CodeElement el : code.elementList()) {
+            if (el instanceof LocalVariable) lv++;
+            if (el instanceof LineNumber) ln++;
+        }
+        return new int[]{lv, ln};
+    }
+
+    static void testOptionSemantics() throws Exception {
+        ClassFile cf = ClassFile.of();
+        byte[] bytes = buildLnClass(cf, "LnEO1");
+
+        // default parse == PASS_LINE_NUMBERS element stream
+        CodeModel def = cf.parse(bytes).methods().get(0).code().get();
+        int[] cDefault = pseudoCounts(def);
+        check(cDefault[0] == 1 && cDefault[1] == 1, "default parse keeps LocalVariable + LineNumber");
+        CodeModel pass = cf.withOptions(ClassFile.LineNumbersOption.PASS_LINE_NUMBERS).parse(bytes).methods().get(0).code().get();
+        check(Arrays.equals(pseudoCounts(pass), cDefault), "PASS_LINE_NUMBERS identical pseudo counts");
+
+        // DROP_LINE_NUMBERS: strips LineNumber pseudo only, LocalVariable untouched
+        CodeModel drop = cf.withOptions(ClassFile.LineNumbersOption.DROP_LINE_NUMBERS).parse(bytes).methods().get(0).code().get();
+        int[] cDrop = pseudoCounts(drop);
+        check(cDrop[1] == 0, "DROP_LINE_NUMBERS strips LineNumber pseudo");
+        check(cDrop[0] == 1, "DROP_LINE_NUMBERS keeps LocalVariable pseudo (governed by DebugElementsOption)");
+        // no LabelTarget count change sanity: instructions still present
+        int ins = 0;
+        for (CodeElement el : drop.elementList()) if (el instanceof Instruction) ins++;
+        check(ins >= 1, "instructions intact under DROP_LINE_NUMBERS");
+
+        // raw attributes survive every parse-side state
+        for (ClassFile.LineNumbersOption o : ClassFile.LineNumbersOption.values()) {
+            CodeModel cm = cf.withOptions(o).parse(bytes).methods().get(0).code().get();
+            check(cm.findAttribute(Attributes.lineNumberTable()).isPresent(), o + " keeps LNT attribute");
+            check(cm.findAttribute(Attributes.localVariableTable()).isPresent(), o + " keeps LVT attribute");
+        }
+
+        // build side: LineNumbersOption does NOT suppress LNT writing (unlike DebugElementsOption which does)
+        byte[] builtDrop = buildLnClass(cf.withOptions(ClassFile.LineNumbersOption.DROP_LINE_NUMBERS), "LnEO2");
+        CodeModel bd = cf.parse(builtDrop).methods().get(0).code().get();
+        check(bd.findAttribute(Attributes.lineNumberTable()).isPresent(),
+                "build with DROP_LINE_NUMBERS still writes LNT attribute (parse-side-only option)");
+        check(pseudoCounts(bd)[1] == 1, "LineNumber pseudo present after building with DROP_LINE_NUMBERS");
+        LineNumberTableAttribute lnt = bd.findAttribute(Attributes.lineNumberTable()).get();
+        check(lnt.lineNumbers().size() == 1 && lnt.lineNumbers().get(0).lineNumber() == 9,
+                "LNT row survives build with DROP_LINE_NUMBERS with line 9");
+
+        // LNT row precise readback under PASS state
+        LineNumberTableAttribute lntDef = def.findAttribute(Attributes.lineNumberTable()).get();
+        check(lntDef.lineNumbers().size() == 1, "default LNT one row");
+        check(lntDef.lineNumbers().get(0).lineNumber() == 9, "default LNT line 9");
+        check(lntDef.lineNumbers().get(0).startPc() >= 0, "default LNT startPc non-negative");
+
+        // enum matrix
+        check(ClassFile.LineNumbersOption.values()[0] == ClassFile.LineNumbersOption.PASS_LINE_NUMBERS,
+                "ordinal 0 is PASS_LINE_NUMBERS (the default semantic)");
+        for (ClassFile.LineNumbersOption o : ClassFile.LineNumbersOption.values())
+            check(ClassFile.LineNumbersOption.valueOf(o.name()) == o, "valueOf round-trip " + o);
+        check(ClassFile.LineNumbersOption.PASS_LINE_NUMBERS.compareTo(ClassFile.LineNumbersOption.DROP_LINE_NUMBERS) < 0,
+                "PASS_LINE_NUMBERS < DROP_LINE_NUMBERS by declaration order");
+        check(cf.withOptions(ClassFile.LineNumbersOption.DROP_LINE_NUMBERS) != cf, "withOptions returns new instance");
+        // orthogonal combination with DebugElementsOption: both pseudo families stripped
+        CodeModel both = cf.withOptions(ClassFile.LineNumbersOption.DROP_LINE_NUMBERS,
+                                        ClassFile.DebugElementsOption.DROP_DEBUG)
+                          .parse(bytes).methods().get(0).code().get();
+        int[] cBoth = pseudoCounts(both);
+        check(cBoth[0] == 0 && cBoth[1] == 0, "DROP_LINE_NUMBERS + DROP_DEBUG strips both pseudo families");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testOptionSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

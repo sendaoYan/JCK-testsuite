@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`SourceIDAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.SourceIDAttribute")` + public/interface/继承 + 关键成员。黑盒（`SourceIDAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，22 断言）
+- testFactoryOverloads：of(String)/of(Utf8Entry)（entry 身份保留）；NAME_SOURCE_ID/CP_REFS；NPE×2。
+- testInjectRoundTrip：注入回读 + verify 干净；双注入（allowMultiple=false）只保留 1；javac 从不产（负空间）。

@@ -66,9 +66,56 @@ public class ModuleProvideInfoTest {
 
     }
 
+
+    // ---- Part 3: 工厂全重载矩阵（4 个 of，javap 锁定）----
+    static void testFactoryOverloads() {
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        ClassEntry svc = cpb.classEntry(ClassDesc.of("java.lang.Runnable"));
+        ClassEntry p1 = cpb.classEntry(ClassDesc.of("p.Impl1"));
+        ClassEntry p2 = cpb.classEntry(ClassDesc.of("p.Impl2"));
+        ModuleProvideInfo i1 = ModuleProvideInfo.of(svc, List.of(p1, p2));
+        check(i1.provides() == svc && i1.providesWith().get(0) == p1 && i1.providesWith().get(1) == p2, "of(entry,List) identity");
+        ModuleProvideInfo i2 = ModuleProvideInfo.of(svc, p1);
+        check(i2.providesWith().size() == 1 && i2.providesWith().get(0) == p1, "of(entry,varargs)");
+        ModuleProvideInfo i3 = ModuleProvideInfo.of(ClassDesc.of("java.lang.Comparable"), List.of(ClassDesc.of("p.A")));
+        check(i3.provides().asInternalName().equals("java/lang/Comparable"), "of(desc,List) service");
+        check(i3.providesWith().get(0).asInternalName().equals("p/A"), "of(desc,List) provider");
+        ModuleProvideInfo i4 = ModuleProvideInfo.of(ClassDesc.of("java.util.List"), ClassDesc.of("p.B"), ClassDesc.of("p.C"));
+        check(i4.providesWith().size() == 2 && i4.providesWith().get(1).asInternalName().equals("p/C"), "of(desc,varargs)");
+        check(i4.provides().asSymbol().descriptorString().equals("Ljava/util/List;"), "service asSymbol");
+        check(i3.provides().asSymbol().descriptorString().equals("Ljava/lang/Comparable;"), "of(entry) service asSymbol");
+    }
+
+    // ---- Part 4: null 负例 ----
+    static void testNegatives() {
+        try { ModuleProvideInfo.of((ClassDesc) null, new ClassDesc[0]); check(false, "of(null svc) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null svc) NPE"); }
+        try { ModuleProvideInfo.of(ClassDesc.of("S"), (List<ClassDesc>) null); check(false, "of(null list) must throw"); }
+        catch (NullPointerException e) { check(e.getMessage() != null, "of(null list) NPE"); }
+    }
+
+    // ---- Part 5: buildModule 注入→re-parse 全链闭环 ----
+    static void testBuildModuleRoundTrip() throws Exception {
+        ModuleProvideInfo pi = ModuleProvideInfo.of(ClassDesc.of("java.lang.Runnable"), ClassDesc.of("p.ImplA"), ClassDesc.of("p.ImplB"));
+        ModuleAttribute ma = ModuleAttribute.of(ModuleDesc.of("m.mpi"), mb -> mb
+                .provides(pi)
+                .provides(ClassDesc.of("java.lang.Comparable"), ClassDesc.of("p.Cmp")));
+        ClassModel mm = ClassFile.of().parse(ClassFile.of().buildModule(ma));
+        List<ModuleProvideInfo> ps = mm.findAttribute(Attributes.module()).get().provides();
+        check(ps.size() == 2, "provides count");
+        check(ps.get(0).provides().asInternalName().equals("java/lang/Runnable"), "p0 service");
+        check(ps.get(0).providesWith().size() == 2 && ps.get(0).providesWith().get(0).asInternalName().equals("p/ImplA"), "p0 providers");
+        check(ps.get(1).provides().asInternalName().equals("java/lang/Comparable"), "p1 service");
+        check(ps.get(1).providesWith().get(0).asInternalName().equals("p/Cmp"), "p1 provider");
+        check(ClassFile.of().verify(mm).isEmpty(), "verify clean");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFactoryOverloads();
+        testNegatives();
+        testBuildModuleRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

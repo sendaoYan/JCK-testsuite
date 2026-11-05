@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`RetInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.DiscontinuedInstruction$RetInstruction")` + public/interface/继承 + 关键成员。黑盒（`RetInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- v50 发射回读：RET size 2、slot() 精确；slot 300 自动 RET_W size 4；slot 边界 255(RET)/256(RET_W) 实测锁定。
+- 工厂：of(1) slot 回读、of(-1) IAE、of(300)→RET_W；v71 可达 ret IAE。断言 9→32（实测运行计数）。

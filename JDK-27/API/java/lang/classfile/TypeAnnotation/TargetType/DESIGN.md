@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`TargetTypeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$TargetType")` + public/enum/继承 + 关键成员。黑盒（`TargetTypeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，15 → 183 断言）
+- `testEnumMatrix()`：22 个常量按声明顺序全表断言 `name()/ordinal()/targetTypeValue()/sizeIfFixed()`，`valueOf` 双向、`toString` 含 name、`compareTo` 顺序、`equals/hashCode/getDeclaringClass` Enum 契约、`values()` 每次返回新数组且内容等价、`valueOf("NOPE")` IAE（消息 "No enum constant ..."）、`valueOf(null)` NPE。
+- 反射对照：以 `TargetInfo` 的 22 个 `TARGET_*` int 常量逐一核对 `targetTypeValue()`（22/22 全对上），锁死枚举与 JVMS 4.7.20 target_type 编码的一致性。
+- 实测锁定值集：CLASS_TYPE_PARAMETER=0, METHOD_TYPE_PARAMETER=1, CLASS_EXTENDS=16, CLASS_TYPE_PARAMETER_BOUND=17, METHOD_TYPE_PARAMETER_BOUND=18, FIELD=19, METHOD_RETURN=20, METHOD_RECEIVER=21, METHOD_FORMAL_PARAMETER=22, THROWS=23, LOCAL_VARIABLE=64, RESOURCE_VARIABLE=65, EXCEPTION_PARAMETER=66, INSTANCEOF=67, NEW=68, CONSTRUCTOR_REFERENCE=69, METHOD_REFERENCE=70, CAST=71, CONSTRUCTOR_INVOCATION_TYPE_ARGUMENT=72, METHOD_INVOCATION_TYPE_ARGUMENT=73, CONSTRUCTOR_REFERENCE_TYPE_ARGUMENT=74, METHOD_REFERENCE_TYPE_ARGUMENT=75；sizeIfFixed 依次 {1,1,2,2,2,0,0,0,1,2,-1,-1,2,2,2,2,2,3,3,3,3,3}（LOCAL_VARIABLE/RESOURCE_VARIABLE 为 -1 变长）。
+

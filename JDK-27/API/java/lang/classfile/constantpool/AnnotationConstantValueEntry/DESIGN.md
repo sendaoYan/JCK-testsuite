@@ -11,3 +11,15 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`AnnotationConstantValueEntryTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.constantpool.AnnotationConstantValueEntry")` + public/interface/继承 + 关键成员。黑盒（`AnnotationConstantValueEntryTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05）：注解常量值条目契约
+- 实现集矩阵（实测）：Utf8Entry/IntegerEntry/LongEntry/FloatEntry/DoubleEntry 是 AnnotationConstantValueEntry；StringEntry/ClassEntry/NameAndTypeEntry/MemberRef 均**不是**（注解 element_value 的 const_value_index 只指向这五种 tag：UTF8/INTEGER/LONG/FLOAT/DOUBLE）。
+- constantValue() 多态回读：utf8→String 文本、int→Integer、long→Long、float→Float、double→Double（精确值）。
+- 通用面 tag/width/index/constantPool + 去重（同值 put == 且同 index）。
+- 真类池实证：解析自身字节（含 CONST_INT/CONST_DOUBLE 常量与 ConstantValue 属性）经 ACVE 面回读。
+- **易错**：ConstantValueEntry 有 StringEntry 而 ACVE 没有——String ldc 不能作注解常量值（注解里字符串用 Utf8Entry）。
+### 深化通用要点（2026-11-05，全部实测锁定）
+- 去重契约：同值 put 两次返回**同一实例**（==）且 index() 相同；不同值不同 index。
+- 发射闭环三段：build 发射指令 → re-parse 常量池含对应条目 → 访问器值回读。
+- JDK-27 类初始化环：`MethodTypeDesc.ofDescriptor("(I)V")` 若是程序首个 AMHC 触点会触发 ConstantDescs↔PrimitiveClassDescImpl 初始化环（ExceptionInInitializerError）；本测试以 testConstantDescsPreinit()（先引用 ConstantDescs.CD_Object）规避，新增方法必须在 testBlackBox 之后运行。
+- javac 产物真类池断言用测试类自带成员（static final 常量 / lambda 字段）保证条目存在。

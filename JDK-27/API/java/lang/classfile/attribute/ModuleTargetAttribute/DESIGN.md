@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModuleTargetAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModuleTargetAttribute")` + public/interface/继承 + 关键成员。黑盒（`ModuleTargetAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，23 断言）
+- testFactoryOverloads：of(String)/of(Utf8Entry)（entry 身份保留）；of(null×2) NPE；NAME_MODULE_TARGET/CP_REFS。
+- testInjectRoundTrip：普通类 + module-info transform 注入回读。
+- testRealProducts：jrt java.logging ModuleTarget=="linux-amd64"（本机 Temurin 实测值）；javac 普通类不产。

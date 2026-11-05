@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`NopInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.NopInstruction")` + public/interface/继承 + 关键成员。黑盒（`NopInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回回读：nop().nop().nop() → 3 条 NOP、sizeInBytes(1)、kind==NOP；CodeAttribute 级白盒：codeLength==3、codeArray()[0..2] 逐字节 == NOP/NOP/RETURN（bytecode() 通道）。
+- 工厂：of() 单例式 + Opcode.NOP.bytecode()==0。断言 8→33（实测运行计数）。

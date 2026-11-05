@@ -63,9 +63,58 @@ public class NestHostAttributeTest {
 
     }
 
+
+    // ---- real-product members ----
+    static class NHInner { static class NHDeeper {} }
+
+    // ---- Part 3: javac 真产物（嵌套类 NestHost == 顶层宿主内名）----
+    static void testRealNestedProduct() throws Exception {
+        byte[] inner = NestHostAttributeTest.class.getResourceAsStream("NestHostAttributeTest$NHInner.class").readAllBytes();
+        var nh = ClassFile.of().parse(inner).findAttribute(Attributes.nestHost()).get();
+        check(nh.nestHost().asInternalName().equals("NestHostAttributeTest"), "member nestHost == top-level internal name");
+        check(nh.nestHost().asSymbol().descriptorString().equals("LNestHostAttributeTest;"), "nestHost asSymbol");
+        check(nh.attributeMapper() == Attributes.nestHost(), "parsed mapper identity");
+        check(nh.attributeName().stringValue().equals("NestHost"), "parsed attributeName");
+        byte[] deeper = NestHostAttributeTest.class.getResourceAsStream("NestHostAttributeTest$NHInner$NHDeeper.class").readAllBytes();
+        check(ClassFile.of().parse(deeper).findAttribute(Attributes.nestHost()).get().nestHost().asInternalName().equals("NestHostAttributeTest"),
+                "deep member nestHost still top-level host");
+        byte[] self = NestHostAttributeTest.class.getResourceAsStream("NestHostAttributeTest.class").readAllBytes();
+        check(ClassFile.of().parse(self).findAttribute(Attributes.nestHost()).isEmpty(), "top-level class has no NestHost");
+    }
+
+    // ---- Part 4: 工厂 of(ClassDesc)/of(ClassEntry) + null 负例 + 属性面 ----
+    static void testFactoryOverloads() {
+        NestHostAttribute a = NestHostAttribute.of(ClassDesc.of("SomeHost"));
+        check(a.nestHost().asInternalName().equals("SomeHost"), "of(ClassDesc)");
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        ClassEntry ce = cpb.classEntry(ClassDesc.of("EntryHost"));
+        check(NestHostAttribute.of(ce).nestHost() == ce, "of(ClassEntry) entry identity");
+        check(a.attributeName().stringValue().equals("NestHost")
+                && a.attributeName().stringValue().equals(Attributes.NAME_NEST_HOST), "NAME_NEST_HOST");
+        check(a.attributeMapper() == Attributes.nestHost(), "mapper identity");
+        check(a.attributeMapper().stability() == AttributeMapper.AttributeStability.CP_REFS, "stability CP_REFS");
+        check(!a.attributeMapper().allowMultiple(), "allowMultiple false");
+        try { NestHostAttribute.of((ClassDesc) null); check(false, "of(null) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null ClassDesc) NPE"); }
+        try { NestHostAttribute.of((ClassEntry) null); check(false, "of(null entry) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null ClassEntry) NPE"); }
+    }
+
+    // ---- Part 5: 注入顶层类（非规范产物，build 不做语义校验——实测记录）----
+    static void testInjectRoundTrip() throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynNHA"), cb -> cb.withSuperclass(ConstantDescs.CD_Object)
+                .with(NestHostAttribute.of(ClassDesc.of("FakeHost"))));
+        ClassModel m = ClassFile.of().parse(b);
+        check(m.findAttribute(Attributes.nestHost()).get().nestHost().asInternalName().equals("FakeHost"), "inject top-level readback");
+        check(m.findAttribute(Attributes.nestHost()).get().attributeMapper() == Attributes.nestHost(), "parsed mapper identity");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealNestedProduct();
+        testFactoryOverloads();
+        testInjectRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

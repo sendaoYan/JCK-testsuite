@@ -64,9 +64,70 @@ public class SyntheticAttributeTest {
 
     }
 
+
+    // ---- real-product member（javac 用 ACC_SYNTHETIC 标志而非 Synthetic 属性——v49+）----
+    enum SynE { X }
+
+    // ---- Part 3: of() 三级注入→re-parse 存在 + verify 干净 ----
+    static void testInjectRoundTrip() throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynSYN"), cb -> cb
+                .withSuperclass(ConstantDescs.CD_Object)
+                .with(SyntheticAttribute.of())
+                .withField("f", ConstantDescs.CD_int, fb -> fb.with(SyntheticAttribute.of()))
+                .withMethod("m", MethodTypeDesc.ofDescriptor("()V"), 0, mb -> mb
+                        .with(SyntheticAttribute.of()).withCode(cob -> cob.return_())));
+        ClassModel m = ClassFile.of().parse(b);
+        check(m.findAttribute(Attributes.synthetic()).isPresent(), "class-level present");
+        check(m.fields().get(0).findAttribute(Attributes.synthetic()).isPresent(), "field-level present");
+        check(m.methods().get(0).findAttribute(Attributes.synthetic()).isPresent(), "method-level present");
+        check(m.findAttribute(Attributes.synthetic()).get().attributeMapper() == Attributes.synthetic(), "parsed mapper identity");
+        check(ClassFile.of().verify(m).isEmpty(), "verify clean");
+    }
+
+    // ---- Part 4: 属性面（NAME/稳定性/多重性）----
+    static void testAttributeSurface() {
+        SyntheticAttribute a = SyntheticAttribute.of();
+        check(a.attributeName().stringValue().equals("Synthetic")
+                && a.attributeName().stringValue().equals(Attributes.NAME_SYNTHETIC), "NAME_SYNTHETIC");
+        check(a.attributeMapper() == Attributes.synthetic(), "mapper identity");
+        check(a.attributeMapper().stability() == AttributeMapper.AttributeStability.STATELESS, "stability STATELESS");
+        check(a.attributeMapper().allowMultiple(), "allowMultiple true");
+        // allowMultiple=true：双注入两个都保留
+        try {
+            byte[] b2 = ClassFile.of().build(ClassDesc.of("DynSYN2"), cb -> cb
+                    .with(SyntheticAttribute.of()).with(SyntheticAttribute.of()));
+            int cnt = 0;
+            for (Attribute<?> at : ClassFile.of().parse(b2).attributes()) if (at instanceof SyntheticAttribute) cnt++;
+            check(cnt == 2, "double synthetic both kept: " + cnt);
+        } catch (Throwable t) {
+            check(false, "double synthetic build failed: " + t);
+        }
+    }
+
+    // ---- Part 5: javac 真产物（ACC_SYNTHETIC 标志 vs 属性负空间）----
+    static void testRealProduct() throws Exception {
+        byte[] eb = SyntheticAttributeTest.class.getResourceAsStream("SyntheticAttributeTest$SynE.class").readAllBytes();
+        ClassModel em = ClassFile.of().parse(eb);
+        FieldModel valuesField = null;
+        for (FieldModel f : em.fields()) if (f.fieldName().stringValue().equals("$VALUES")) valuesField = f;
+        check(valuesField != null, "$VALUES field present");
+        check(valuesField.flags().has(AccessFlag.SYNTHETIC), "$VALUES carries ACC_SYNTHETIC flag");
+        check(!valuesField.findAttribute(Attributes.synthetic()).isPresent(), "but no SyntheticAttribute (v49+ uses flag)");
+        for (MethodModel mm : em.methods())
+            if (mm.methodName().stringValue().equals("values")) {
+                check(mm.flags().flagsMask() == 0x0009, "values() PUBLIC|STATIC mask 9");
+                check(!mm.findAttribute(Attributes.synthetic()).isPresent(), "values() no SyntheticAttribute");
+            }
+        byte[] self = SyntheticAttributeTest.class.getResourceAsStream("SyntheticAttributeTest.class").readAllBytes();
+        check(ClassFile.of().parse(self).findAttribute(Attributes.synthetic()).isEmpty(), "test class itself no SyntheticAttribute");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testInjectRoundTrip();
+        testAttributeSurface();
+        testRealProduct();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -70,9 +70,109 @@ public class AttributesProcessingOptionTest {
 
     }
 
+    // ---- Part 3: option semantics measured on JDK 27 ----
+    // Real UNSTABLE-stability attribute: RUNTIME-retention type annotation on a method type parameter
+    // (javac emits RuntimeVisibleTypeAnnotations, whose built-in mapper stability is UNSTABLE).
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    @java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE_PARAMETER)
+    @interface ApTA {}
+    static <@ApTA T> void gen(T t) {}
+
+    static class ApAttribute extends CustomAttribute<ApAttribute> {
+        public ApAttribute() { super(AP_MAPPER); }
+    }
+    static final AttributeMapper<ApAttribute> AP_MAPPER = new AttributeMapper<>() {
+        public String name() { return "ApAttr"; }
+        public ApAttribute readAttribute(AttributedElement encl, ClassReader cf, int pos) { return new ApAttribute(); }
+        public void writeAttribute(BufWriter buf, ApAttribute attr) {
+            buf.writeIndex(buf.constantPool().utf8Entry(name()));
+            buf.writeInt(0);
+        }
+        public AttributeMapper.AttributeStability stability() { return AttributeMapper.AttributeStability.STATELESS; }
+    };
+
+    static boolean hasRtvta(ClassModel cm) {
+        for (MethodModel m : cm.methods())
+            if (m.methodName().stringValue().equals("gen"))
+                return m.findAttribute(Attributes.runtimeVisibleTypeAnnotations()).isPresent();
+        return false;
+    }
+
+    static void testOptionSemantics() throws Exception {
+        ClassFile cf = ClassFile.of();
+
+        // enum matrix
+        check(ClassFile.AttributesProcessingOption.values()[0] == ClassFile.AttributesProcessingOption.PASS_ALL_ATTRIBUTES,
+                "ordinal 0 is PASS_ALL_ATTRIBUTES (the default semantic)");
+        for (ClassFile.AttributesProcessingOption o : ClassFile.AttributesProcessingOption.values())
+            check(ClassFile.AttributesProcessingOption.valueOf(o.name()) == o, "valueOf round-trip " + o);
+        check(cf.withOptions(ClassFile.AttributesProcessingOption.DROP_UNKNOWN_ATTRIBUTES) != cf,
+                "withOptions returns new instance");
+
+        // unknown (unregistered) attribute at class level: transform filter matrix
+        byte[] withAttr = cf.withOptions(ClassFile.AttributeMapperOption.of(
+                        e -> e.equalsString("ApAttr") ? AP_MAPPER : null))
+                .build(ClassDesc.of("ApT1"), cb -> cb.with(new ApAttribute())
+                        .withMethodBody("m", ConstantDescs.MTD_void, ClassFile.ACC_STATIC, CodeBuilder::return_));
+        ClassModel unknownParsed = cf.parse(withAttr);
+        check(unknownParsed.attributes().size() == 1, "unregistered parse keeps the unknown attribute");
+        check(unknownParsed.attributes().get(0) instanceof UnknownAttribute, "unregistered parse yields UnknownAttribute");
+
+        ClassModel kept = cf.parse(cf.withOptions(ClassFile.AttributesProcessingOption.PASS_ALL_ATTRIBUTES)
+                .transformClass(unknownParsed, ClassTransform.ACCEPT_ALL));
+        check(kept.attributes().size() == 1, "PASS_ALL_ATTRIBUTES keeps unknown attribute");
+        ClassModel droppedUnknown = cf.parse(cf.withOptions(ClassFile.AttributesProcessingOption.DROP_UNKNOWN_ATTRIBUTES)
+                .transformClass(unknownParsed, ClassTransform.ACCEPT_ALL));
+        check(droppedUnknown.attributes().isEmpty(), "DROP_UNKNOWN_ATTRIBUTES strips unknown attribute");
+        ClassModel droppedUnstable = cf.parse(cf.withOptions(ClassFile.AttributesProcessingOption.DROP_UNSTABLE_ATTRIBUTES)
+                .transformClass(unknownParsed, ClassTransform.ACCEPT_ALL));
+        check(droppedUnstable.attributes().isEmpty(),
+                "DROP_UNSTABLE_ATTRIBUTES also strips unknown attributes (unknown stability ranks below UNSTABLE)");
+
+        // registered custom attribute (parsed into a user object, STATELESS): never stripped by any processing option
+        ClassModel regParsed = cf.withOptions(ClassFile.AttributeMapperOption.of(
+                e -> e.equalsString("ApAttr") ? AP_MAPPER : null)).parse(withAttr);
+        check(regParsed.attributes().get(0) instanceof ApAttribute, "registered parse materializes ApAttribute");
+        for (ClassFile.AttributesProcessingOption o : ClassFile.AttributesProcessingOption.values()) {
+            ClassModel out = cf.parse(cf.withOptions(o).transformClass(regParsed, ClassTransform.ACCEPT_ALL));
+            check(out.attributes().size() == 1,
+                    o + " keeps registered STATELESS custom attribute");
+        }
+
+        // real UNSTABLE bound attribute (RuntimeVisibleTypeAnnotations) is stripped by DROP_UNSTABLE only
+        byte[] self = AttributesProcessingOptionTest.class.getResourceAsStream(
+                "AttributesProcessingOptionTest.class").readAllBytes();
+        ClassModel selfM = cf.parse(self);
+        check(hasRtvta(selfM), "self class carries RuntimeVisibleTypeAnnotations on gen()");
+        for (ClassFile.AttributesProcessingOption o : ClassFile.AttributesProcessingOption.values()) {
+            // NEW_POOL forces element replay, so the per-stability filter applies
+            ClassModel outNew = cf.parse(cf.withOptions(ClassFile.ConstantPoolSharingOption.NEW_POOL, o)
+                    .transformClass(selfM, ClassTransform.ACCEPT_ALL));
+            boolean keptRtvta = hasRtvta(outNew);
+            check(keptRtvda(o, keptRtvta), o + " + NEW_POOL: UNSTABLE attribute kept=" + keptRtvta);
+            // SHARED_POOL bulk-copies members verbatim, so the attribute survives every processing option
+            ClassModel outShared = cf.parse(cf.withOptions(ClassFile.ConstantPoolSharingOption.SHARED_POOL, o)
+                    .transformClass(selfM, ClassTransform.ACCEPT_ALL));
+            check(hasRtvta(outShared), o + " + SHARED_POOL keeps member attributes (bulk copy)");
+            // transforming method bodies forces rebuild, filter applies again
+            ClassModel outTfm = cf.parse(cf.withOptions(o).transformClass(selfM,
+                    ClassTransform.transformingMethodBodies(CodeTransform.ACCEPT_ALL)));
+            check(keptRtvda(o, hasRtvta(outTfm)), o + " + transformingMethodBodies: kept=" + hasRtvta(outTfm));
+        }
+
+        // sanity: default (no option) transform behaves as PASS_ALL
+        check(hasRtvta(cf.parse(cf.transformClass(selfM, ClassTransform.ACCEPT_ALL))),
+                "default transform passes UNSTABLE attribute through");
+    }
+
+    static boolean keptRtvda(ClassFile.AttributesProcessingOption o, boolean kept) {
+        return kept == (o != ClassFile.AttributesProcessingOption.DROP_UNSTABLE_ATTRIBUTES);
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testOptionSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

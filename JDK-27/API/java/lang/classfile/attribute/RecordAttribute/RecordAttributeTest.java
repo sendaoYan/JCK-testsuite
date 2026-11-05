@@ -66,9 +66,77 @@ public class RecordAttributeTest {
 
     }
 
+
+    // ---- real-product members ----
+    record RAPoint(int x, int y) {}
+    record RAGeneric<T>(T v, java.util.List<String> names) {}
+
+    // ---- Part 3: javac 真产物（record 组件表）----
+    static void testRealProduct() throws Exception {
+        byte[] rb = RecordAttributeTest.class.getResourceAsStream("RecordAttributeTest$RAPoint.class").readAllBytes();
+        var at = ClassFile.of().parse(rb).findAttribute(Attributes.record()).get();
+        check(at.components().size() == 2, "RAPoint component count");
+        check(at.components().get(0).name().stringValue().equals("x"), "comp0 name");
+        check(at.components().get(0).descriptor().stringValue().equals("I"), "comp0 descriptor");
+        check(at.components().get(1).name().stringValue().equals("y"), "comp1 name");
+        check(at.components().get(1).descriptor().stringValue().equals("I"), "comp1 descriptor");
+        check(at.components().get(0).attributes().isEmpty(), "plain component no attrs");
+        check(at.attributeMapper() == Attributes.record(), "parsed mapper identity");
+        // 泛型 record 组件携带 Signature
+        byte[] gb = RecordAttributeTest.class.getResourceAsStream("RecordAttributeTest$RAGeneric.class").readAllBytes();
+        var ga = ClassFile.of().parse(gb).findAttribute(Attributes.record()).get();
+        check(ga.components().size() == 2, "RAGeneric component count");
+        check(ga.components().get(0).descriptor().stringValue().equals("Ljava/lang/Object;"), "generic comp descriptor erased");
+        boolean sigV = false, sigN = false;
+        for (Attribute<?> a : ga.components().get(0).attributes())
+            if (a instanceof SignatureAttribute s && s.signature().stringValue().equals("TT;")) sigV = true;
+        for (Attribute<?> a : ga.components().get(1).attributes())
+            if (a instanceof SignatureAttribute s && s.signature().stringValue().equals("Ljava/util/List<Ljava/lang/String;>;")) sigN = true;
+        check(sigV, "generic comp Signature TT;");
+        check(sigN, "list comp Signature");
+    }
+
+    // ---- Part 4: 工厂 of(List)/of(varargs) + null 负例 + 属性面 ----
+    static void testFactoryOverloads() {
+        RecordComponentInfo c1 = RecordComponentInfo.of("a", ConstantDescs.CD_int, List.of());
+        RecordComponentInfo c2 = RecordComponentInfo.of("b", ConstantDescs.CD_String);
+        RecordAttribute a1 = RecordAttribute.of(List.of(c1, c2));
+        check(a1.components().size() == 2 && a1.components().get(0) == c1, "of(List) identity");
+        RecordAttribute a2 = RecordAttribute.of(c1);
+        check(a2.components().get(0) == c1, "of(varargs)");
+        check(RecordAttribute.of(new RecordComponentInfo[0]).components().isEmpty(), "of(empty varargs)");
+        check(RecordAttribute.of(List.of()).components().isEmpty(), "of(empty List)");
+        check(a1.attributeName().stringValue().equals("Record")
+                && a1.attributeName().stringValue().equals(Attributes.NAME_RECORD), "NAME_RECORD");
+        check(a1.attributeMapper() == Attributes.record(), "mapper identity");
+        check(a1.attributeMapper().stability() == AttributeMapper.AttributeStability.CP_REFS, "stability CP_REFS");
+        check(!a1.attributeMapper().allowMultiple(), "allowMultiple false");
+        try { RecordAttribute.of((List<RecordComponentInfo>) null); check(false, "of(null) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null List) NPE"); }
+    }
+
+    // ---- Part 5: 注入闭环（组件名/描述符/携带属性全回读）----
+    static void testInjectRoundTrip() throws Exception {
+        RecordComponentInfo rc = RecordComponentInfo.of("n", ConstantDescs.CD_Object,
+                List.of(SignatureAttribute.of(Signature.parseFrom("TT;"))));
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynRDA"), cb -> cb.withSuperclass(ConstantDescs.CD_Object)
+                .with(RecordAttribute.of(List.of(RecordComponentInfo.of("x", ConstantDescs.CD_int, List.of()), rc))));
+        ClassModel m = ClassFile.of().parse(b);
+        var at = m.findAttribute(Attributes.record()).get();
+        check(at.components().size() == 2, "inject component count");
+        check(at.components().get(0).name().stringValue().equals("x"), "inject comp0 name");
+        check(at.components().get(0).descriptor().stringValue().equals("I"), "inject comp0 descriptor");
+        check(at.components().get(1).attributes().size() == 1, "inject comp1 attr count");
+        check(((SignatureAttribute) at.components().get(1).attributes().get(0)).signature().stringValue().equals("TT;"), "inject comp1 Signature");
+        check(at.attributeMapper() == Attributes.record(), "parsed mapper identity");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealProduct();
+        testFactoryOverloads();
+        testInjectRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

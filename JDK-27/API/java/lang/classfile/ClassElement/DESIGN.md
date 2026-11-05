@@ -1,13 +1,19 @@
 # java.lang.classfile.ClassElement — 设计案
 
 ## 1. API 功能
-`java.lang.classfile.ClassElement`（interface）。工厂/静态方法：(none)。查询/实例方法：(none)。
+`java.lang.classfile.ClassElement`（空标记接口，extends `ClassFileElement`）。实现者（实测分类）：`FieldModel`、`MethodModel`（成员层面）、`ClassFileVersion`、`Superclass`、`Interfaces`、`AccessFlags`（同时实现 Class/Method/Field 三种元素）、`SourceFileAttribute`、`DeprecatedAttribute`、`SignatureAttribute`、`RuntimeVisibleAnnotationsAttribute`、`CustomAttribute`（实现全部四种元素接口）。**非**实现者：`CodeModel`（是 MethodElement）、指令/伪指令、`ExceptionsAttribute`（MethodElement 专属）、`ConstantValueAttribute`（FieldElement 专属）、`StackMapTableAttribute`（CodeElement 专属）。
 
 ## 2. Java 用户如何使用
-通过 `ClassFile.of()` 构建/解析 class（或 `ConstantPoolBuilder.of()` 建常量池条目、`ClassFile.of().build()`/`parse()` 往返）得到真实实例；实例通过 `of(...)` 工厂创建后逐方法断言访问器；涉及 label 的类型在 `ClassFile.of().build(...)` 回调内用 `CodeBuilder.newLabel()` 捕获。 本测试在 `ClassElementTest.testBlackBox()` 中按「构建 → 解析/创建 → 组合断言」链路覆盖。
+`ClassModel.elementList()` 的元素类型；`ClassTransform.accept(ClassBuilder, ClassElement)` 的元素币种；build 侧 `cb.with(ClassElement)`。属性按其声明的层级参与（SourceFile 只在类层、Exceptions 只在方法层）。
 
-## 3. 开源代码实际用法调研
-JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesTest、ModuleBuilderTest、Utf8EntryTest、AttributesTest）与 JDK 源码自用（`src/java.base/.../java/lang/Module.java`、`jdk.jartool/.../FingerPrint.java`、`java.lang.reflect.ProxyGenerator`）大量使用 `java.lang.classfile` 族 API；本测试的 `java.lang.classfile.ClassElement` 断言按上述真实用法模式编写。
+## 3. 参考来源
+- JDK 27 javadoc + `javap` 各属性接口的 extends 子句（LineNumberTable/LocalVariableTable/LocalVariableTypeTable **只** extends Attribute&lt;&gt;，不实现任何元素接口——编译器级事实）。
+- OpenJDK `test/jdk/jdk/classfile/`（ClassTransform 各用例）。
+- 本机实测：CodeModel instanceof ClassElement == false；StackMapTable instanceof CodeElement == true 且 ClassElement == false。
 
-## 4. 测试用例设计 + 自动化实现
-白盒（`ClassElementTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassElement")` + public/interface/继承 + 关键成员。黑盒（`ClassElementTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+## 4. 测试用例设计 + 易错规范细节
+- 白盒（原有）+ 黑盒（原有：Superclass/ClassFileVersion 两正例）。
+- `testPositiveFamily`（深化）：工厂产物（Superclass/ClassFileVersion/Interfaces/Deprecated/SourceFile/Signature/CustomAttribute）+ 模型产物（FieldModel/MethodModel/class AccessFlags）+ assignable 关系 + **真类 bound 属性**（SourceFile/字段 Deprecated）+ self elementList 全员 instanceof 循环。
+- `testNegativeFamily`（深化）：CodeModel NOT ClassElement（但 IS MethodElement，正确定位）；Instruction/PseudoInstruction/ExceptionsAttribute/ConstantValueAttribute NOT；code.elementList 中指令全非；StackMapTableAttribute **is CodeElement only**（双断言）。
+- `testTransformChannel`（深化）：DynClassElement+seq → 以 ClassElement 谓词只保留 MethodModel 的 transform → methods==1/fields==0/superclass 保留 → defineClass → go()==5 运行闭环 + verify 干净。
+- 易错点：`LineNumberTableAttribute` 等调试属性**不是任何元素**（只挂在 attributes()）；负例 instanceof 部分编译不过，用 `Class.isInstance`。

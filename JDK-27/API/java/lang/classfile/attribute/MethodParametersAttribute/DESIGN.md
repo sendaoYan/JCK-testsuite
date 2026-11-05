@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`MethodParametersAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.MethodParametersAttribute")` + public/interface/继承 + 关键成员。黑盒（`MethodParametersAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：of(List)/of(varargs) + 空表 + null NPE + 条目数 u1 边界（255 合法 / 300 IAE，method_parameters 计数是 u1 非 u2）+ 注入四参数 → 回读（名字有序表 + flagsMask 表 [0,10,1000,8000]）+ MethodElement 通道 + javac 默认不产（-parameters 才产）。

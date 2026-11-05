@@ -68,9 +68,119 @@ public class AttributedElementTest {
 
     }
 
+    // ---- Part 3: findAttribute(不存在)→empty / findAttributes 缺失→空表 / findAttribute(null)→NPE ----
+    static void testFindNegative() throws Exception {
+        ClassFile cf = ClassFile.of();
+        byte[] b = cf.build(ClassDesc.of("AET"), cb -> cb
+                .with(SourceFileAttribute.of("AET.java"))
+                .with(DeprecatedAttribute.of())
+                .withField("x", ConstantDescs.CD_int, fb -> fb.with(ConstantValueAttribute.of(9))));
+        ClassModel cm = cf.parse(b);
+        // 不存在的 mapper → empty
+        check(cm.findAttribute(Attributes.signature()).isEmpty(), "findAttribute(missing) empty");
+        check(cm.fields().get(0).findAttribute(Attributes.deprecated()).isEmpty(), "field findAttribute(missing) empty");
+        // findAttributes 缺失 → 空列表（非 null）
+        List<SignatureAttribute> none = cm.findAttributes(Attributes.signature());
+        check(none != null && none.isEmpty(), "findAttributes(missing) empty list");
+        // findAttributes 命中 → 全部同类（两个 Deprecated 实测可共存）
+        byte[] b2 = cf.build(ClassDesc.of("AET2"), cb -> cb.with(DeprecatedAttribute.of()).with(DeprecatedAttribute.of()));
+        List<DeprecatedAttribute> two = cf.parse(b2).findAttributes(Attributes.deprecated());
+        check(two.size() == 2, "findAttributes returns all matches: " + two.size());
+        // findAttribute(null) → NPE（实测）
+        try {
+            cm.findAttribute(null);
+            check(false, "findAttribute(null) must throw");
+        } catch (NullPointerException expected) {
+            check(true, "findAttribute(null) NPE");
+        }
+    }
+
+    // ---- Part 4: attributes() 只读快照语义（add → UnsupportedOperationException）----
+    static void testAttributesReadOnly() throws Exception {
+        ClassFile cf = ClassFile.of();
+        byte[] b = cf.build(ClassDesc.of("AER"), cb -> cb
+                .with(SourceFileAttribute.of("AER.java"))
+                .with(DeprecatedAttribute.of()));
+        ClassModel cm = cf.parse(b);
+        List<Attribute<?>> attrs = cm.attributes();
+        check(attrs.size() == 2, "attributes list size 2");
+        try {
+            attrs.add(DeprecatedAttribute.of());
+            check(false, "attributes() add must throw UOE");
+        } catch (UnsupportedOperationException expected) {
+            check(true, "attributes() add UOE (read-only snapshot)");
+        }
+        try {
+            attrs.remove(0);
+            check(false, "attributes() remove must throw");
+        } catch (UnsupportedOperationException expected) {
+            check(true, "attributes() remove UOE");
+        }
+        // 原模型不受影响
+        check(cm.attributes().size() == 2, "attributes unchanged after rejected mutation");
+        // MethodModel/FieldModel 的 attributes() 同为只读
+        byte[] b2 = cf.build(ClassDesc.of("AER2"), cb -> cb
+                .withMethod("m", ConstantDescs.MTD_void, 0, mb -> mb.withCode(cob -> cob.return_()).with(DeprecatedAttribute.of()))
+                .withField("x", ConstantDescs.CD_int, fb -> fb.with(DeprecatedAttribute.of())));
+        ClassModel cm2 = cf.parse(b2);
+        try {
+            cm2.methods().get(0).attributes().add(DeprecatedAttribute.of());
+            check(false, "method attributes() add must throw");
+        } catch (UnsupportedOperationException expected) {
+            check(true, "method attributes() UOE");
+        }
+        try {
+            cm2.fields().get(0).attributes().clear();
+            check(false, "field attributes() clear must throw");
+        } catch (UnsupportedOperationException expected) {
+            check(true, "field attributes() UOE");
+        }
+    }
+
+    // ---- Part 5: Model 与 Code 都实现 AttributedElement（instanceof 断言）+ 混合遍历 ----
+    static void testImplementors() throws Exception {
+        ClassFile cf = ClassFile.of();
+        byte[] b = cf.build(ClassDesc.of("AEI"), cb -> cb
+                .with(SourceFileAttribute.of("AEI.java"))
+                .withField("x", ConstantDescs.CD_int, fb -> fb.with(ConstantValueAttribute.of(1)))
+                .withMethodBody("m", MethodTypeDesc.of(ConstantDescs.CD_int), ClassFile.ACC_STATIC, cob -> {
+                    Label l = cob.newLabel();
+                    cob.iconst_0().ifne(l);
+                    cob.iconst_1().ireturn();
+                    cob.labelBinding(l).iconst_2().ireturn();
+                }));
+        ClassModel cm = cf.parse(b);
+        check(cm instanceof AttributedElement, "ClassModel is AttributedElement");
+        check(cm.fields().get(0) instanceof AttributedElement, "FieldModel is AttributedElement");
+        check(cm.methods().get(0) instanceof AttributedElement, "MethodModel is AttributedElement");
+        CodeModel code = cm.methods().get(0).code().get();
+        check(code instanceof AttributedElement, "CodeModel is AttributedElement");
+        // CodeModel 属性：分支体 → StackMapTable 可查
+        check(code.findAttribute(Attributes.stackMapTable()).isPresent(), "code findAttribute StackMapTable");
+        check(!code.attributes().isEmpty(), "code attributes non-empty");
+        // 多形态统一遍历：4 类被饰元素的属性名字均可读
+        Set<String> allNames = new HashSet<>();
+        for (AttributedElement ae : List.of(cm, cm.fields().get(0), cm.methods().get(0), code))
+            for (Attribute<?> a : ae.attributes()) allNames.add(a.attributeName().stringValue());
+        check(allNames.contains("SourceFile"), "traversal saw class attr");
+        check(allNames.contains("ConstantValue"), "traversal saw field attr");
+        check(allNames.contains("Code"), "traversal saw method attr");
+        check(allNames.contains("StackMapTable"), "traversal saw code attr");
+        // findAttribute 与 attributes() 自洽：findAttribute 命中者必在 attributes() 列表
+        boolean consistent = false;
+        for (Attribute<?> a : cm.attributes())
+            if (a.attributeName().stringValue().equals("SourceFile")) consistent = true;
+        check(consistent && cm.findAttribute(Attributes.sourceFile()).isPresent(), "findAttribute/attributes() consistent");
+        // AttributedElement 是 ClassFileElement（层次白盒）
+        check(ClassFileElement.class.isAssignableFrom(AttributedElement.class), "AttributedElement is-a ClassFileElement");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFindNegative();
+        testAttributesReadOnly();
+        testImplementors();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

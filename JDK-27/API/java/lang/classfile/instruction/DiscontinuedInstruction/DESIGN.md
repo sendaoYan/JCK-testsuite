@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`DiscontinuedInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.DiscontinuedInstruction")` + public/interface/继承 + 关键成员。黑盒（`DiscontinuedInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 密封 permits {JsrInstruction, RetInstruction}；CodeBuilder 无 jsr()/ret() 方法（反射断言）。
+- 类版本门：ClassFileVersion.of(50,0) 下 jsr/ret 发射回读成功；v71 下可达 jsr/ret → IAE "must not appear in the class file version >= 51.0"（不可达则静默丢弃，实测锁定）。断言 9→31（实测运行计数）。

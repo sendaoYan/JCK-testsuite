@@ -11,3 +11,10 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`TypeParamTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Signature$TypeParam")` + public/interface/继承 + 关键成员。黑盒（`TypeParamTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，12 → 61 断言）
+- **解析矩阵**（`testParseMatrix`）：classBound 存在（`<T:Ljava/lang/Object;>`）/缺失（`<T::…>`）/TypeVar（`<T:TT;>`）/无 bound（**`<T:>` 实测合法 quirk**）；多 interface bound `<E:…:…:…>` 有序；多类型参数 `<T:…;U::…;>` 顺序保持；MethodSignature 侧同语义。
+- **工厂全重载**（`testFactoryMatrix`）：of(String, RefTypeSig, …)/of(String, Optional, …)；**实测 of("T", (RefTypeSig)null) → classBound 为 empty（合法）**；多 bound 工厂精确渲染 `<E:Ljava/lang/Object;:Ljava/lang/Runnable;:Ljava/io/Serializable;>Ljava/lang/Object;` + re-parse equals。
+- **负例**（`testNegativeMatrix`）：of(null id) → NPE 消息含 `"st" is null`；**interfaceBounds() 不可变（add → UnsupportedOperationException）**。
+- **equals/hashCode**（`testEqualityContract`）：工厂==解析值等。
+- **真类闭环**（`testRealClassGenericLoop`）：**javac `<T extends Object, U extends Comparable<?>> void genTP(T,U)` → `<T:Ljava/lang/Object;U::Ljava/lang/Comparable<*>;>(TT;TU;)V`**，T/U 逐访问器 + U 的 ib 实参 Unbounded。

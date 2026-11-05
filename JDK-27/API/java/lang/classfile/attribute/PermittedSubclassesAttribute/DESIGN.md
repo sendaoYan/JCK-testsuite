@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`PermittedSubclassesAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.PermittedSubclassesAttribute")` + public/interface/继承 + 关键成员。黑盒（`PermittedSubclassesAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，28 断言）
+- testRealProduct：sealed interface 真产物——permits 顺序保留精确表；非 sealed 接口/子类自身均无该属性。
+- testFactoryOverloads：of/ofSymbols × List/varargs 4 重载 + empty + entry 身份 + NAME_PERMITTED_SUBCLASSES/CP_REFS + NPE×2。
+- testInjectRoundTrip：ofSymbols 注入回读顺序保留 + verify 干净。

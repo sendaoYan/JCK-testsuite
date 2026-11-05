@@ -70,9 +70,75 @@ public class ConstantPoolSharingOptionTest {
 
     }
 
+    // ---- Part 3: option semantics measured on JDK 27 ----
+    static void testOptionSemantics() throws Exception {
+        ClassFile cf = ClassFile.of();
+
+        // enum matrix
+        check(ClassFile.ConstantPoolSharingOption.values()[0] == ClassFile.ConstantPoolSharingOption.SHARED_POOL,
+                "ordinal 0 is SHARED_POOL (the default semantic)");
+        for (ClassFile.ConstantPoolSharingOption o : ClassFile.ConstantPoolSharingOption.values())
+            check(ClassFile.ConstantPoolSharingOption.valueOf(o.name()) == o, "valueOf round-trip " + o);
+        check(ClassFile.ConstantPoolSharingOption.SHARED_POOL.compareTo(ClassFile.ConstantPoolSharingOption.NEW_POOL) < 0,
+                "SHARED_POOL < NEW_POOL by declaration order");
+
+        // source class with one field and one method
+        byte[] src = cf.build(ClassDesc.of("CpsT1"), cb -> cb
+                .withField("f1", ConstantDescs.CD_int, ClassFile.ACC_PRIVATE)
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("()I"), ClassFile.ACC_STATIC,
+                        c -> c.bipush(7).ireturn()));
+        ClassModel srcM = cf.parse(src);
+        int srcCp = srcM.constantPool().size();
+
+        // neutral transform: both options produce equivalent classes; pool sizes identical here
+        for (ClassFile.ConstantPoolSharingOption o : ClassFile.ConstantPoolSharingOption.values()) {
+            byte[] out = cf.withOptions(o).transformClass(srcM, ClassTransform.ACCEPT_ALL);
+            ClassModel om = cf.parse(out);
+            check(om.elementList().size() == srcM.elementList().size(),
+                    o + " ACCEPT_ALL preserves element count");
+            check(om.fields().size() == 1 && om.methods().size() == 1, o + " ACCEPT_ALL preserves members");
+            check(om.constantPool().size() == srcCp, o + " keeps pool size on neutral transform");
+        }
+
+        // observable difference: after dropping a member, SHARED_POOL retains the (now unused) entries,
+        // NEW_POOL rebuilds the pool from scratch and drops them
+        ClassTransform dropFields = ClassTransform.dropping(e -> e instanceof FieldModel);
+        ClassModel sharedOut = cf.parse(cf.withOptions(ClassFile.ConstantPoolSharingOption.SHARED_POOL)
+                .transformClass(srcM, dropFields));
+        ClassModel newOut = cf.parse(cf.withOptions(ClassFile.ConstantPoolSharingOption.NEW_POOL)
+                .transformClass(srcM, dropFields));
+        check(sharedOut.fields().isEmpty() && newOut.fields().isEmpty(), "both options drop the field");
+        check(sharedOut.constantPool().size() == srcCp,
+                "SHARED_POOL retains unused entries: " + sharedOut.constantPool().size() + " vs " + srcCp);
+        check(newOut.constantPool().size() < sharedOut.constantPool().size(),
+                "NEW_POOL drops unused entries: " + newOut.constantPool().size() + " < " + sharedOut.constantPool().size());
+
+        // both products stay faithful: same this class, same method body semantics
+        for (ClassModel m : java.util.List.of(sharedOut, newOut)) {
+            check(m.thisClass().asInternalName().startsWith("CpsT1"), "thisClass preserved");
+            boolean found = false;
+            for (MethodModel mm : m.methods())
+                if (mm.methodName().stringValue().equals("m")) found = mm.code().isPresent();
+            check(found, "method m with code preserved");
+        }
+
+        // build side: fresh builds unaffected by the option (no shared source pool exists)
+        byte[] b1 = cf.withOptions(ClassFile.ConstantPoolSharingOption.NEW_POOL)
+                .build(ClassDesc.of("CpsT2"), cb -> cb.withMethodBody("m", ConstantDescs.MTD_void,
+                        ClassFile.ACC_STATIC, CodeBuilder::return_));
+        byte[] b2 = cf.withOptions(ClassFile.ConstantPoolSharingOption.SHARED_POOL)
+                .build(ClassDesc.of("CpsT3"), cb -> cb.withMethodBody("m", ConstantDescs.MTD_void,
+                        ClassFile.ACC_STATIC, CodeBuilder::return_));
+        check(cf.parse(b1).methods().size() == 1 && cf.parse(b2).methods().size() == 1,
+                "fresh builds succeed under both options");
+        check(cf.verify(b1).isEmpty() && cf.verify(b2).isEmpty(), "fresh builds verify clean under both options");
+        check(cf.withOptions(ClassFile.ConstantPoolSharingOption.NEW_POOL) != cf, "withOptions returns new instance");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testOptionSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

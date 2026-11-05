@@ -1,13 +1,19 @@
 # java.lang.classfile.FieldElement — 设计案
 
 ## 1. API 功能
-`java.lang.classfile.FieldElement`（interface）。工厂/静态方法：(none)。查询/实例方法：(none)。
+`java.lang.classfile.FieldElement`（空标记接口，extends `ClassFileElement`）。实现者（实测分类）：字段级 `AccessFlags`、`ConstantValueAttribute`、`DeprecatedAttribute`、`SignatureAttribute`、`RuntimeVisibleAnnotationsAttribute`、`CustomAttribute`。**非**实现者：`FieldModel`（本身是 **ClassElement**）、`SourceFileAttribute`、`ExceptionsAttribute`、`Superclass`、`ClassFileVersion`、`Interfaces`、`MethodModel`、指令/伪指令。
 
 ## 2. Java 用户如何使用
-通过 `ClassFile.of()` 构建/解析 class（或 `ConstantPoolBuilder.of()` 建常量池条目、`ClassFile.of().build()`/`parse()` 往返）得到真实实例；实例通过 `of(...)` 工厂创建后逐方法断言访问器；涉及 label 的类型在 `ClassFile.of().build(...)` 回调内用 `CodeBuilder.newLabel()` 捕获。 本测试在 `FieldElementTest.testBlackBox()` 中按「构建 → 解析/创建 → 组合断言」链路覆盖。
+`FieldModel.elementList()` 的元素类型（实测直方图：无属性字段 `[AccessFlags]`；带 ConstantValue 字段 `[AccessFlags, ConstantValueAttribute]`）；`FieldTransform`/`fb.with(FieldElement)` 的元素币种。
 
-## 3. 开源代码实际用法调研
-JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesTest、ModuleBuilderTest、Utf8EntryTest、AttributesTest）与 JDK 源码自用（`src/java.base/.../java/lang/Module.java`、`jdk.jartool/.../FingerPrint.java`、`java.lang.reflect.ProxyGenerator`）大量使用 `java.lang.classfile` 族 API；本测试的 `java.lang.classfile.FieldElement` 断言按上述真实用法模式编写。
+## 3. 参考来源
+- JDK 27 javadoc + `javap java.lang.classfile.FieldElement` 及属性接口 extends 子句。
+- OpenJDK `test/jdk/jdk/classfile/`。
+- 本机实测：FieldModel instanceof FieldElement == **false**；plain 字段 elementList==[AccessFlags]。
 
-## 4. 测试用例设计 + 自动化实现
-白盒（`FieldElementTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.FieldElement")` + public/interface/继承 + 关键成员。黑盒（`FieldElementTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+## 4. 测试用例设计 + 易错规范细节
+- 白盒（原有）+ 黑盒（原有：ConstantValue is FieldElement、字段 elementList 成员断言）。
+- `testPositiveFamily`（深化）：工厂产物（ConstantValue/Deprecated/Signature/CustomAttribute）+ 模型产物（字段 AccessFlags）+ **真类 bound 属性族**（CONST 的 ConstantValue、gfield 的 Signature、depField 的 Deprecated+RuntimeVisibleAnnotations）+ CONST elementList 直方图 [AccessFlags=1, ConstantValue=1] + 全员非空 + verify。
+- `testNegativeFamily`（深化）：SourceFile/Exceptions/Superclass/ClassFileVersion/Instruction/LineNumber NOT；plain 字段 elementList 恰 [AccessFlags]；MethodModel NOT；**FieldModel NOT FieldElement（实测，易错）**。
+- `testTransformChannel`（深化）：DynFieldElement+seq（静态常量字段+getstatic 方法）→ ClassElement 谓词剥全部字段 → dst.fields() 空 → defineClass（原始 bytes）→ get()==11 运行闭环。
+- 易错点：**FieldModel ≠ FieldElement**（同 MethodModel 的坑）；`ConstantValueAttribute.of(int)` 直接收值。

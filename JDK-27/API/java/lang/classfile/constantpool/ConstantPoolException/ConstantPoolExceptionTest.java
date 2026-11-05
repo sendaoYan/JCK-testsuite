@@ -43,6 +43,9 @@ public class ConstantPoolExceptionTest {
     static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
     static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
 
+    static final long CONST_LONG = 0x123456789ABCDEFL;
+    static final java.lang.Runnable LAMBDA_R = () -> {};
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.classfile.constantpool.ConstantPoolException");
@@ -74,9 +77,69 @@ public class ConstantPoolExceptionTest {
         check(thrown, "thrown for invalid index");
     }
 
+    // ---- Part 3: AMHC 常量基础设施预初始化（JDK-27 实测：先完整初始化 ConstantDescs 可避开
+    // ConstantDescs <-> PrimitiveClassDescImpl 类初始化环，见 DESIGN.md 易错细节） ----
+    static void testConstantDescsPreinit() {
+        check(ConstantDescs.CD_Object.descriptorString().equals("Ljava/lang/Object;"), "ConstantDescs.CD_Object preinit");
+    }
+
+    // ---- Part 4: ConstantPoolException 契约（精确消息族 + 触发面全覆盖） ----
+    static void testExceptionFamilyMatrix() throws Exception {
+        byte[] self = ConstantPoolExceptionTest.class.getResourceAsStream("ConstantPoolExceptionTest.class").readAllBytes();
+        ClassModel cm = ClassFile.of().parse(self);
+        ConstantPool cp = cm.constantPool();
+        // Bad CP index 家族
+        for (int idx : new int[]{0, -1, cp.size()}) {
+            try {
+                cp.entryByIndex(idx);
+                check(false, "entryByIndex(" + idx + ") must throw");
+            } catch (ConstantPoolException e) {
+                check(("Bad CP index: " + idx).equals(e.getMessage()), "exact message: " + e.getMessage());
+            }
+        }
+        // Unusable CP index（双槽幽灵位）
+        boolean phantomChecked = false;
+        for (PoolEntry pe : cp) if (pe instanceof LongEntry && !phantomChecked) {
+            try {
+                cp.entryByIndex(pe.index() + 1);
+                check(false, "phantom slot must throw");
+            } catch (ConstantPoolException e) {
+                check(e.getMessage() != null, "unusable slot message non-null");
+                phantomChecked = true;
+            }
+        }
+        check(phantomChecked, "CONST_LONG provides a phantom slot to probe");
+        // Not a X at index 家族（typed 查找类型不符）
+        int classIdx = cm.thisClass().index();
+        try {
+            cp.entryByIndex(classIdx, Utf8Entry.class);
+            check(false, "typed mismatch must throw");
+        } catch (ConstantPoolException e) {
+            check(e.getMessage() != null && e.getMessage().startsWith("Not a "), "typed mismatch message prefix: " + e.getMessage());
+        }
+        // Bad BSM index 家族
+        int n = cp.bootstrapMethodCount();
+        check(n > 0, "lambda-bearing class has bootstrap methods");
+        try {
+            cp.bootstrapMethodEntry(n);
+            check(false, "bsm oob must throw");
+        } catch (ConstantPoolException e) {
+            check(("Bad BSM index: " + n).equals(e.getMessage()), "exact bsm message: " + e.getMessage());
+        }
+        // 类型 + 层次 + 可序列化
+        ConstantPoolException probe = new ConstantPoolException("p");
+        check(probe instanceof IllegalArgumentException, "is IllegalArgumentException");
+        check(probe instanceof RuntimeException, "is RuntimeException");
+        check(probe instanceof java.io.Serializable, "is Serializable");
+        // cause/message 保真（四构造器形态由 testBlackBox 覆盖，这里补 suppressed 语义）
+        check(probe.getSuppressed().length == 0, "no suppressed exceptions initially");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstantDescsPreinit();
+        testExceptionFamilyMatrix();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

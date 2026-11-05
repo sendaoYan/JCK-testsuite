@@ -74,9 +74,83 @@ public class UnknownAttributeTest {
 
     }
 
+
+    // ---- 自定义未注册属性（facts §9 模板）：唯一自然产生通道 ----
+    static final byte[] UK_PAYLOAD = {1, 2, 3, 4};
+    static final AttributeMapper<CA> UK_MAPPER = new AttributeMapper<>() {
+        public String name() { return "MyAttr"; }
+        public CA readAttribute(AttributedElement encl, ClassReader r, int pos) { return new CA(UK_MAPPER); }
+        public void writeAttribute(BufWriter buf, CA attr) {
+            buf.writeIndex(buf.constantPool().utf8Entry(name()));
+            buf.writeInt(UK_PAYLOAD.length);
+            buf.writeBytes(UK_PAYLOAD);
+        }
+        public AttributeMapper.AttributeStability stability() { return AttributeMapper.AttributeStability.CP_REFS; }
+    };
+
+    static byte[] buildWithCustomAttr() {
+        return ClassFile.of(ClassFile.AttributeMapperOption.of(e -> e.equalsString("MyAttr") ? UK_MAPPER : null))
+                .build(ClassDesc.of("DynUK"), cb -> cb
+                        .with(new CA(UK_MAPPER))
+                        .withMethod("m", MethodTypeDesc.ofDescriptor("()V"), 0, mb -> mb
+                                .with(new CA(UK_MAPPER)).withCode(cob -> cob.return_())));
+    }
+
+    // ---- Part 3: 注册 mapper build → 无 mapper parse → UnknownAttribute 呈现 ----
+    static void testUnknownPresentation() throws Exception {
+        ClassModel m = ClassFile.of().parse(buildWithCustomAttr()); // 未注册 mapper
+        UnknownAttribute cls = null;
+        for (Attribute<?> at : m.attributes()) if (at instanceof UnknownAttribute u) cls = u;
+        check(cls != null, "class-level UnknownAttribute present");
+        check(cls.attributeName().stringValue().equals("MyAttr"), "custom name preserved: " + cls.attributeName().stringValue());
+        check(Arrays.equals(cls.contents(), UK_PAYLOAD), "payload bytes exact: " + Arrays.toString(cls.contents()));
+        UnknownAttribute mth = null;
+        for (Attribute<?> at : m.methods().get(0).attributes()) if (at instanceof UnknownAttribute u) mth = u;
+        check(mth != null && mth.contents().length == 4, "method-level UnknownAttribute present");
+        check(mth.attributeName().stringValue().equals("MyAttr"), "method-level name");
+    }
+
+    // ---- Part 4: 选项交叉（DROP_UNKNOWN_ATTRIBUTES 剥除；注册后 readAttribute 走自定义通道）----
+    static void testOptionCross() throws Exception {
+        ClassModel m = ClassFile.of().parse(buildWithCustomAttr());
+        byte[] dropped = ClassFile.of().withOptions(ClassFile.AttributesProcessingOption.DROP_UNKNOWN_ATTRIBUTES)
+                .transformClass(m, ClassTransform.ACCEPT_ALL);
+        int cnt = 0;
+        for (Attribute<?> at : ClassFile.of().parse(dropped).attributes()) if (at instanceof UnknownAttribute) cnt++;
+        check(cnt == 0, "DROP_UNKNOWN_ATTRIBUTES strips custom attr");
+        // 注册 mapper 的 parse 走 readAttribute 自定义通道（不再 Unknown）
+        ClassModel reg = ClassFile.of(ClassFile.AttributeMapperOption.of(e -> e.equalsString("MyAttr") ? UK_MAPPER : null))
+                .parse(buildWithCustomAttr());
+        boolean sawCustom = false, sawUnknown = false;
+        for (Attribute<?> at : reg.attributes()) {
+            if (at instanceof UnknownAttribute) sawUnknown = true;
+            if (at.attributeName().stringValue().equals("MyAttr") && !(at instanceof UnknownAttribute)) sawCustom = true;
+        }
+        check(sawCustom, "registered parse reads CustomAttribute");
+        check(!sawUnknown, "registered parse no UnknownAttribute");
+        // 默认 PASS_ALL_ATTRIBUTES 保留（Part 3 已证）
+        check(ClassFile.AttributesProcessingOption.values().length == 3, "AttributesProcessingOption 3 values");
+    }
+
+    // ---- Part 5: 白盒面（接口层次 + 无 Attributes.unknown() mapper）----
+    static void testWhiteBoxSurface() {
+        Class<?> c = UnknownAttribute.class;
+        check(c.isInterface(), "is interface");
+        check(Attribute.class.isAssignableFrom(c), "extends Attribute");
+        check(ClassElement.class.isAssignableFrom(c) && MethodElement.class.isAssignableFrom(c)
+                && FieldElement.class.isAssignableFrom(c) && CodeElement.class.isAssignableFrom(c), "4 element faces");
+        check(declares(c, "contents"), "declares contents");
+        boolean hasUnknownMapper = false;
+        for (Method mm : Attributes.class.getMethods()) if (mm.getName().equals("unknown")) hasUnknownMapper = true;
+        check(!hasUnknownMapper, "Attributes has no unknown() mapper (only instanceof discovery)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testUnknownPresentation();
+        testOptionCross();
+        testWhiteBoxSurface();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

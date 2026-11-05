@@ -66,9 +66,60 @@ public class SourceFileAttributeTest {
 
     }
 
+
+    // ---- Part 3: 工厂 of(String)/of(Utf8Entry) + null + 属性面 ----
+    static void testFactoryOverloads() {
+        SourceFileAttribute a1 = SourceFileAttribute.of("X.java");
+        check(a1.sourceFile().stringValue().equals("X.java"), "of(String)");
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        Utf8Entry u = cpb.utf8Entry("Y.java");
+        SourceFileAttribute a2 = SourceFileAttribute.of(u);
+        check(a2.sourceFile() == u, "of(Utf8Entry) entry identity");
+        check(a1.attributeName().stringValue().equals("SourceFile")
+                && a1.attributeName().stringValue().equals(Attributes.NAME_SOURCE_FILE), "NAME_SOURCE_FILE");
+        check(a1.attributeMapper() == Attributes.sourceFile(), "mapper identity");
+        check(a1.attributeMapper().stability() == AttributeMapper.AttributeStability.CP_REFS, "stability CP_REFS");
+        check(!a1.attributeMapper().allowMultiple(), "allowMultiple false");
+        try { SourceFileAttribute.of((String) null); check(false, "of(null String) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null String) NPE"); }
+        try { SourceFileAttribute.of((Utf8Entry) null); check(false, "of(null Utf8) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null Utf8) NPE"); }
+    }
+
+    // ---- Part 4: javac 真产物（源文件名 == <Simple>Test.java）----
+    static void testRealProduct() throws Exception {
+        byte[] self = SourceFileAttributeTest.class.getResourceAsStream("SourceFileAttributeTest.class").readAllBytes();
+        var at = ClassFile.of().parse(self).findAttribute(Attributes.sourceFile()).get();
+        check(at.sourceFile().stringValue().equals("SourceFileAttributeTest.java"), "javac sourceFile exact");
+        check(at.attributeMapper() == Attributes.sourceFile(), "parsed mapper identity");
+        byte[] nested = SourceFileAttributeTest.class.getResourceAsStream("SourceFileAttributeTest$CA.class").readAllBytes();
+        check(ClassFile.of().parse(nested).findAttribute(Attributes.sourceFile()).get().sourceFile().stringValue().equals("SourceFileAttributeTest.java"),
+                "nested class shares same source file");
+    }
+
+    // ---- Part 5: 注入回读 + 单实例语义 ----
+    static void testInjectRoundTrip() throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynSFA"), cb -> cb.withSuperclass(ConstantDescs.CD_Object)
+                .with(SourceFileAttribute.of("Other.java")));
+        check(ClassFile.of().parse(b).findAttribute(Attributes.sourceFile()).get().sourceFile().stringValue().equals("Other.java"),
+                "inject overrides default name");
+        // 默认 build 无 SourceFile（未显式注入时不自动生成）
+        byte[] b2 = ClassFile.of().build(ClassDesc.of("DynSFA2"), cb -> cb.withSuperclass(ConstantDescs.CD_Object));
+        check(ClassFile.of().parse(b2).findAttribute(Attributes.sourceFile()).isEmpty(), "fresh build no SourceFile");
+        // 双注入只保留一个
+        byte[] b3 = ClassFile.of().build(ClassDesc.of("DynSFA3"), cb -> cb
+                .with(SourceFileAttribute.of("A.java")).with(SourceFileAttribute.of("B.java")));
+        int cnt = 0;
+        for (Attribute<?> at : ClassFile.of().parse(b3).attributes()) if (at instanceof SourceFileAttribute) cnt++;
+        check(cnt == 1, "single SourceFile after double inject");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFactoryOverloads();
+        testRealProduct();
+        testInjectRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

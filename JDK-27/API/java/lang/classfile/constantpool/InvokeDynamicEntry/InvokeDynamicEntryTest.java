@@ -43,6 +43,9 @@ public class InvokeDynamicEntryTest {
     static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
     static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
 
+    static final java.lang.Runnable LAMBDA_R = () -> {};
+    private static void touchLambda() { LAMBDA_R.run(); }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.classfile.constantpool.InvokeDynamicEntry");
@@ -71,9 +74,99 @@ public class InvokeDynamicEntryTest {
 
     }
 
+    // ---- Part 3: AMHC 常量基础设施预初始化（JDK-27 实测：先完整初始化 ConstantDescs 可避开
+    // ConstantDescs <-> PrimitiveClassDescImpl 类初始化环，见 DESIGN.md 易错细节） ----
+    static void testConstantDescsPreinit() {
+        check(ConstantDescs.CD_Object.descriptorString().equals("Ljava/lang/Object;"), "ConstantDescs.CD_Object preinit");
+    }
+
+    // ---- Part 4: InvokeDynamicEntry 契约（双工厂/去重/符号面/invokedynamic 发射闭环/真 lambda 池） ----
+    static void testIndyPutDedup() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        BootstrapMethodEntry bsm = b.bsmEntry(ConstantDescs.BSM_NULL_CONSTANT, List.of());
+        NameAndTypeEntry nat = b.nameAndTypeEntry("im", MethodTypeDesc.ofDescriptor("()Ljava/lang/Object;"));
+        InvokeDynamicEntry i1 = b.invokeDynamicEntry(bsm, nat);
+        InvokeDynamicEntry i2 = b.invokeDynamicEntry(bsm, nat);
+        check(i1 == i2, "same bsm+nat indy dedup identity");
+        check(b.invokeDynamicEntry(bsm, b.nameAndTypeEntry("in", MethodTypeDesc.ofDescriptor("()Ljava/lang/Object;"))) != i1, "different nat different entry");
+        DynamicCallSiteDesc dcs = DynamicCallSiteDesc.of(ConstantDescs.BSM_NULL_CONSTANT, "im", MethodTypeDesc.ofDescriptor("()Ljava/lang/Object;"));
+        check(b.invokeDynamicEntry(dcs) == i1, "invokeDynamicEntry(DynamicCallSiteDesc) dedups with equal (bsm,nat)");
+    }
+
+    static void testIndyFace() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        BootstrapMethodEntry bsm = b.bsmEntry(ConstantDescs.BSM_NULL_CONSTANT, List.of());
+        NameAndTypeEntry nat = b.nameAndTypeEntry("im", MethodTypeDesc.ofDescriptor("()Ljava/lang/Object;"));
+        InvokeDynamicEntry i = b.invokeDynamicEntry(bsm, nat);
+        check(i.bootstrap() == bsm, "bootstrap identity");
+        check(i.bootstrapMethodIndex() == bsm.bsmIndex(), "bootstrapMethodIndex");
+        check(i.nameAndType() == nat, "nameAndType identity");
+        check(i.name().stringValue().equals("im"), "name");
+        check(i.type().stringValue().equals("()Ljava/lang/Object;"), "type");
+        check(i.typeSymbol().descriptorString().equals("()Ljava/lang/Object;"), "typeSymbol");
+        check(i.typeSymbol().parameterCount() == 0, "typeSymbol parameterCount");
+        check(i.asSymbol() instanceof DynamicCallSiteDesc, "asSymbol is DynamicCallSiteDesc");
+        check(i.asSymbol().invocationName().equals("im"), "asSymbol invocationName");
+        check(i.asSymbol().invocationType().descriptorString().equals("()Ljava/lang/Object;"), "asSymbol invocationType");
+        check(i.tag() == PoolEntry.TAG_INVOKE_DYNAMIC && i.tag() == 18, "tag TAG_INVOKE_DYNAMIC == 18");
+        check(i.width() == 1 && i.index() > 0 && i.constantPool() == b, "pool face");
+        check(i instanceof DynamicConstantPoolEntry, "hierarchy DynamicConstantPoolEntry");
+        check(!(((Object) i) instanceof LoadableConstantEntry), "indy is NOT loadable");
+        check(!(((Object) i) instanceof ConstantDynamicEntry), "indy is NOT ConstantDynamicEntry");
+    }
+
+    static void testIndyEmissionAndRealPool() throws Exception {
+        // 发射闭环：DynamicCallSiteDesc -> invokedynamic 指令 -> 池条目 -> 全访问器回读
+        DynamicCallSiteDesc dcs = DynamicCallSiteDesc.of(ConstantDescs.BSM_NULL_CONSTANT, "ev", MethodTypeDesc.ofDescriptor("()Ljava/lang/Object;"));
+        byte[] bytes = ClassFile.of().build(ClassDesc.of("pkg.EmitIdy"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("()Ljava/lang/Object;"), ClassFile.ACC_STATIC,
+                        cob -> cob.invokedynamic(dcs).areturn()));
+        ConstantPool cp2 = ClassFile.of().parse(bytes).constantPool();
+        boolean saw = false;
+        for (PoolEntry pe : cp2) if (pe instanceof InvokeDynamicEntry ie && ie.name().stringValue().equals("ev")) {
+            saw = true;
+            check(ie.type().stringValue().equals("()Ljava/lang/Object;"), "emitted indy type");
+            check(ie.bootstrapMethodIndex() >= 0 && ie.bootstrapMethodIndex() < cp2.bootstrapMethodCount(), "emitted bsm index valid");
+            check(ie.bootstrap() == cp2.bootstrapMethodEntry(ie.bootstrapMethodIndex()), "bootstrap identity in parsed pool");
+            check(ie.asSymbol().equals(dcs), "asSymbol roundtrip equals source");
+        }
+        check(saw, "emitted invokedynamic leaves InvokeDynamicEntry");
+        // 真 lambda 池：javac 产物 LambdaMetafactory
+        byte[] self = InvokeDynamicEntryTest.class.getResourceAsStream("InvokeDynamicEntryTest.class").readAllBytes();
+        ClassModel cm = ClassFile.of().parse(self);
+        ConstantPool cp = cm.constantPool();
+        boolean sawLmf = false;
+        for (PoolEntry pe : cp) if (pe instanceof InvokeDynamicEntry ie) {
+            check(ie.bootstrapMethodIndex() >= 0 && ie.bootstrapMethodIndex() < cp.bootstrapMethodCount(), "real indy bsm index valid");
+            if (ie.bootstrap().bootstrapMethod().reference().owner().asInternalName().equals("java/lang/invoke/LambdaMetafactory")) {
+                sawLmf = true;
+                check(ie.typeSymbol() != null, "real indy typeSymbol non-null");
+                check(ie.name().stringValue() != null && !ie.name().stringValue().isEmpty(), "real indy name non-empty");
+            }
+        }
+        check(sawLmf, "real pool contains LambdaMetafactory InvokeDynamicEntry (LAMBDA_R)");
+    }
+
+    static void testIndyNullNegative() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        try {
+            b.invokeDynamicEntry((BootstrapMethodEntry) null, null);
+            check(false, "invokeDynamicEntry(null bsm) must throw");
+        } catch (NullPointerException e) { check(true, "invokeDynamicEntry(null bsm) NPE"); }
+        try {
+            b.invokeDynamicEntry((DynamicCallSiteDesc) null);
+            check(false, "invokeDynamicEntry(null desc) must throw");
+        } catch (NullPointerException e) { check(true, "invokeDynamicEntry(null desc) NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstantDescsPreinit();
+        testIndyPutDedup();
+        testIndyFace();
+        testIndyEmissionAndRealPool();
+        testIndyNullNegative();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`TypeArgumentTargetTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$TypeArgumentTarget")` + public/interface/继承 + 关键成员。黑盒（`TypeArgumentTargetTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，11 → 74 断言）
+- 工厂矩阵：6 个命名工厂 `ofCastExpr/ofConstructorInvocationTypeArgument/ofMethodInvocationTypeArgument/ofConstructorReferenceTypeArgument/ofMethodReferenceTypeArgument(Label,int)` + 通用 `ofTypeArgument(TargetType,Label,int)` 覆盖全部 5 种形态（CAST/CONSTRUCTOR_INVOCATION/METHOD_INVOCATION/CONSTRUCTOR_REFERENCE/METHOD_REFERENCE ×TYPE_ARGUMENT）；`typeArgumentIndex()/target()` Label 同一性、`size()==3`。
+- 负例：`ofCastExpr(null,0)`、`ofMethodInvocationTypeArgument(null,0)` NPE；`ofTypeArgument(FIELD,..)`/`ofTypeArgument(INSTANCEOF,..)` IAE（消息含 "Wrong target type"）。
+- 真 javac 产物：`(@A String) o` → CAST taIdx=0 path=[] 锚第 1 条 CHECKCAST bci；`(List<@A String>) o` → CAST path=[TYPE_ARGUMENT 0] 锚第 2 条 CHECKCAST；`Collections.<@A String>singleton(x)` → METHOD_INVOCATION_TYPE_ARGUMENT（锚点跟随实参加载处，只断言 label 在范围内，不断言精确 bci）；泛型局部声明 `List<@A String> gcs = (List<@A String>) ...` 实测同时产生 LOCAL_VARIABLE（声明位 value=gcta）与 CAST（造型位 value=gcast）两条注解——value 命名分离以保持 findOne 唯一性。
+

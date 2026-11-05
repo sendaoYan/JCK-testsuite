@@ -43,6 +43,9 @@ public class MethodTypeEntryTest {
     static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
     static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
 
+    static final java.lang.Runnable LAMBDA_R = () -> {};
+    private static void touchLambda() { LAMBDA_R.run(); }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.classfile.constantpool.MethodTypeEntry");
@@ -68,9 +71,86 @@ public class MethodTypeEntryTest {
 
     }
 
+    // ---- Part 3: AMHC 常量基础设施预初始化（JDK-27 实测：先完整初始化 ConstantDescs 可避开
+    // ConstantDescs <-> PrimitiveClassDescImpl 类初始化环，见 DESIGN.md 易错细节） ----
+    static void testConstantDescsPreinit() {
+        check(ConstantDescs.CD_Object.descriptorString().equals("Ljava/lang/Object;"), "ConstantDescs.CD_Object preinit");
+    }
+
+    // ---- Part 4: MethodTypeEntry 契约（双工厂/跨重载去重/matches/ldc 发射闭环/真类池） ----
+    static void testMtPutDedup() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        MethodTypeDesc mtd = MethodTypeDesc.ofDescriptor("(I)V");
+        MethodTypeEntry m1 = b.methodTypeEntry(mtd);
+        MethodTypeEntry m2 = b.methodTypeEntry(mtd);
+        check(m1 == m2, "same-value methodTypeEntry dedup identity");
+        MethodTypeEntry m3 = b.methodTypeEntry(b.utf8Entry("(I)V"));
+        check(m3 == m1, "cross-overload dedup: (MethodTypeDesc) == (Utf8Entry)");
+        check(b.methodTypeEntry(MethodTypeDesc.ofDescriptor("()V")) != m1, "different descriptor different entry");
+        check(b.methodTypeEntry(MethodTypeDesc.ofDescriptor("()V")).index() != m1.index(), "different descriptor different index");
+    }
+
+    static void testMtFace() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        MethodTypeEntry m = b.methodTypeEntry(MethodTypeDesc.ofDescriptor("(I)V"));
+        check(m.descriptor().stringValue().equals("(I)V"), "descriptor utf8");
+        check(m.descriptor() == b.utf8Entry("(I)V"), "descriptor is the shared utf8 entry");
+        check(m.asSymbol().descriptorString().equals("(I)V"), "asSymbol descriptorString");
+        check(m.asSymbol().parameterCount() == 1, "asSymbol parameterCount");
+        check(m.matches(MethodTypeDesc.ofDescriptor("(I)V")), "matches positive");
+        check(!m.matches(MethodTypeDesc.ofDescriptor("()V")), "matches negative");
+        check(m.constantValue() instanceof MethodTypeDesc, "constantValue is MethodTypeDesc");
+        check(m.constantValue().equals(m.asSymbol()), "constantValue equals asSymbol");
+        check(m.tag() == PoolEntry.TAG_METHOD_TYPE && m.tag() == 16, "tag TAG_METHOD_TYPE == 16");
+        check(m.width() == 1 && m.index() > 0 && m.constantPool() == b, "pool face");
+        check(m instanceof LoadableConstantEntry && m instanceof PoolEntry, "hierarchy Loadable+PoolEntry");
+        check(!(((Object) m) instanceof ConstantValueEntry), "MethodTypeEntry is NOT ConstantValueEntry");
+        check(m.typeKind() == TypeKind.REFERENCE, "typeKind REFERENCE");
+    }
+
+    static void testMtEmissionAndRealPool() throws Exception {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        MethodTypeEntry m = b.methodTypeEntry(MethodTypeDesc.ofDescriptor("(Ljava/lang/Object;)V"));
+        byte[] bytes = ClassFile.of().build(ClassDesc.of("pkg.EmitMt"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("()V"), ClassFile.ACC_STATIC,
+                        cob -> cob.ldc(m).pop().return_()));
+        ConstantPool cp2 = ClassFile.of().parse(bytes).constantPool();
+        boolean saw = false;
+        for (PoolEntry pe : cp2) if (pe instanceof MethodTypeEntry mt && mt.descriptor().stringValue().equals("(Ljava/lang/Object;)V")
+                && mt.asSymbol().descriptorString().equals("(Ljava/lang/Object;)V")) saw = true;
+        check(saw, "emitted ldc(MethodType) leaves MethodTypeEntry roundtrip");
+        byte[] self = MethodTypeEntryTest.class.getResourceAsStream("MethodTypeEntryTest.class").readAllBytes();
+        ClassModel cm = ClassFile.of().parse(self);
+        ConstantPool cp = cm.constantPool();
+        int mtCount = 0; boolean sawLambdaArg = false;
+        for (PoolEntry pe : cp) if (pe instanceof MethodTypeEntry mt) {
+            mtCount++;
+            if (mt.descriptor().stringValue().equals("()V")) sawLambdaArg = true;
+        }
+        check(mtCount > 0, "real pool has MethodTypeEntry entries (lambda bootstrap args)");
+        check(sawLambdaArg, "real pool MethodTypeEntry ()V (lambda functional signature)");
+    }
+
+    static void testMtNullNegative() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        try {
+            b.methodTypeEntry((MethodTypeDesc) null);
+            check(false, "methodTypeEntry(null MethodTypeDesc) must throw");
+        } catch (NullPointerException e) { check(true, "methodTypeEntry(null MethodTypeDesc) NPE"); }
+        try {
+            b.methodTypeEntry((Utf8Entry) null);
+            check(false, "methodTypeEntry(null Utf8Entry) must throw");
+        } catch (NullPointerException e) { check(true, "methodTypeEntry(null Utf8Entry) NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstantDescsPreinit();
+        testMtPutDedup();
+        testMtFace();
+        testMtEmissionAndRealPool();
+        testMtNullNegative();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

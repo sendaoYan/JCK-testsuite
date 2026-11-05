@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`KindTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$TypePathComponent$Kind")` + public/enum/继承 + 关键成员。黑盒（`KindTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，17 → 55 断言）
+- `testEnumMatrix()`：4 值全表——声明顺序 ARRAY/INNER_TYPE/WILDCARD/TYPE_ARGUMENT，ordinal 0..3，`tag()` 依次 0/1/2/3（**4 个 tag 互不相同**，与 JVMS 4.7.20.2 type_path_kind 编码一致）；`valueOf` 双向 + `valueOf("NOPE")` IAE（消息 "No enum constant ..."）+ `valueOf(null)` NPE；Enum 契约（compareTo 顺序、equals/hashCode、getDeclaringClass、toString 含 name）；`values()` 每次新数组且内容等价。
+- 互通断言：`Kind` 喂给 `TypePathComponent.of(Kind,int)` 后 `typePathKind()` 精确回读（WILDCARD 验证）。
+

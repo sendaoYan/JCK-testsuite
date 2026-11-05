@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ExceptionsAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ExceptionsAttribute")` + public/interface/继承 + 关键成员。黑盒（`ExceptionsAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：四工厂（of(List)/of(varargs)/ofSymbols(List)/ofSymbols(varargs)）+ 空/单/双异常 + 数组 null/列表 null/元素 null 三种 NPE + ofSymbols 65535/66000 u2 IAE + 游离池条目注入（写入时拷贝进目标池）与符号注入双通道回读 + MethodElement 通道 + javac 真类 throws 表精确（[java/io/IOException, java/lang/IllegalStateException]）。

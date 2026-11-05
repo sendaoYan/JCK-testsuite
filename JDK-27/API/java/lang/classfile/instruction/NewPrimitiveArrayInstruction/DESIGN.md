@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`NewPrimitiveArrayInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.NewPrimitiveArrayInstruction")` + public/interface/继承 + 关键成员。黑盒（`NewPrimitiveArrayInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 访问器实名 typeKind()（任务提示）；发射-回读：iconst_5().newarray(TypeKind.INT) → NEWARRAY size 2、typeKind INT；BOOLEAN 变体。
+- 工厂全 8 原始类型矩阵（BOOLEAN/BYTE/CHAR/SHORT/INT/LONG/FLOAT/DOUBLE 全 NEWARRAY size 2）；of(null) NPE、of(VOID)/of(REFERENCE) IAE；TypeKind.newarrayCode()/fromNewarrayCode() 双向表（INT=10/BOOLEAN=4/LONG=11/DOUBLE=7）。断言 10→50（实测运行计数）。

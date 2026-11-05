@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`LocalVariableTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.LocalVariable")` + public/interface/继承 + 关键成员。黑盒（`LocalVariableTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回读：3 变量（int/String/自定义）→ 回读 slot/name/type Utf8 精确 + typeSymbol ClassDesc；LocalVariableTable 属性 startPc/length 实测（startPc=0 length=2）；Utf8/ClassDesc 重载通道一致。
+- DROP_DEBUG 剥离伪指令保留属性实测；工厂负例 of(-1,..) slot 越界 IAE、null NPE。断言 9→47（实测运行计数）。

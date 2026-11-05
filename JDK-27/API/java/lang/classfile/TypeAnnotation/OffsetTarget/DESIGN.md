@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`OffsetTargetTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$OffsetTarget")` + public/interface/继承 + 关键成员。黑盒（`OffsetTargetTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，9 → 55 断言）
+- 工厂矩阵：4 个命名工厂 `ofInstanceofExpr/ofNewExpr/ofConstructorReference/ofMethodReference(Label)` + 通用 `ofOffset(TargetType,Label)`（INSTANCEOF/NEW/CONSTRUCTOR_REFERENCE/METHOD_REFERENCE 四形态）；`target()` Label 同一性、`size()==2`、`targetType()` 精确。
+- 负例：`ofCastExpr` 等错型 → IAE；`ofOffset(FIELD, null)` IAE（**targetType 校验先于 Label 判空**）、`ofNewExpr(null)` NPE。
+- 真 javac 产物锚点：`o instanceof @A String` 锚定 INSTANCEOF 指令 bci、`new @A Base()` 锚定 NEW 指令 bci、`@A String::isEmpty` 锚定 INVOKEDYNAMIC（lambda 引导）bci——全部用 `CodeAttribute.labelToBci(target())` 与 elementList 累计 sizeInBytes 求得的第 N 条指令偏移精确相等断言；注入 `cob.with(attr)` 代码级闭环。
+

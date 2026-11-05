@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`NestHostAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.NestHostAttribute")` + public/interface/继承 + 关键成员。黑盒（`NestHostAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，24 断言）
+- testRealNestedProduct：javac 真产物——成员类与深层成员类（NHInner$NHDeeper）nestHost 均==**顶层宿主**内名（非直接外围类！）；顶层类自身无 NestHost；asSymbol descriptorString。
+- testFactoryOverloads：of(ClassDesc)/of(ClassEntry) 身份保留 + NAME_NEST_HOST/CP_REFS + NPE×2。
+- testInjectRoundTrip：注入顶层类（非规范产物，build 不校验——实测记录）回读。

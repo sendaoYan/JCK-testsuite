@@ -11,3 +11,10 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`RefTypeSigTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Signature$RefTypeSig")` + public/interface/继承 + 关键成员。黑盒（`RefTypeSigTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，7 → 47 断言）
+- **标记接口白盒**（`testMarkerInterfaceShape`）：实测无自有方法（getDeclaredMethods()==0）、直接 extends Signature；isAssignableFrom 矩阵（ClassTypeSig/ArrayTypeSig/TypeVarSig 是，**BaseTypeSig 否**）。
+- **三实现多态矩阵**（`testPolymorphismMatrix`）：parseFrom 与工厂双通道，3 类实例 signatureString 多态分派 + 精确 kind。
+- **四类消费位**（`testUsagePositions`）：TypeArg.bounded 的 boundType / TypeParam classBound / ArrayTypeSig componentSignature / throws 段（ClassTypeSig+TypeVarSig 均可）。
+- **深结构递归**（`testDeepStructure`）：`Map<String,int[]>` 双实参分型；`LOuter<TT;>.Inner;` outerType 也是 RefTypeSig；跨类型不等。
+- **真类闭环**（`testRealClassGenericLoop`）：javac `TT;` 参数/返回 → RefTypeSig（精确 TypeVarSig）+ List&lt;String&gt; 实参 bound 也是 RefTypeSig。

@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModuleExportInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModuleExportInfo")` + public/interface/继承 + 关键成员。黑盒（`ModuleExportInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：八工厂全重载（条目版 4：int+List/AccessFlag+List/int+varargs/AccessFlag+varargs；符号版 4 同构）+ 访问器（exportedPackage identity/matches()/name() Utf8/exportsFlagsMask/exportsFlags/has/exportsTo 有序）+ 无目标=非限定导出（exportsTo 空）+ null NPE（package/targets 双态）+ 目标模块数 65535/66000 u2 IAE + 经 ModuleAttribute → buildModule → 回读。
+易错点（实测）：PackageEntry.name().stringValue() 是内部形式 "a/b"（斜杠不是点）。

@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModuleAttributeBuilderTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModuleAttribute$ModuleAttributeBuilder")` + public/interface/继承 + 关键成员。黑盒（`ModuleAttributeBuilderTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：8 个链式方法全部返回 self（moduleName/moduleFlags/moduleVersion/requires/exports/opens/uses/provides，二段回调内 == 捕获断言）+ moduleName 后写覆盖 + requires/exports/opens/uses/provides 多值累积 + 每方法三重载（int 版 / AccessFlag 集合版 / Info 对象版）等价断言 + uses 双通道（ClassDesc/ClassEntry）+ provides 双通道（varargs/ModuleProvideInfo）+ 空 builder → 最小 module-info + buildModule→parse 端到端全表回读。

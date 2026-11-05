@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`TypeParameterBoundTargetTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$TypeParameterBoundTarget")` + public/interface/继承 + 关键成员。黑盒（`TypeParameterBoundTargetTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，10 → 37 断言）
+- 工厂三入口：`ofClassTypeParameterBound/ofMethodTypeParameterBound(tpIdx,boundIdx)` + 通用 `ofTypeParameterBound(TargetType,..)`（CLASS/METHOD_TYPE_PARAMETER_BOUND 两形态）；`size()==2`。
+- u1 负例：typeParameterIndex 与 boundIndex **各自独立校验**——`(-1,0)` 报 "type parameter index out of range of u1"、`(0,-1)` 报 "bound index out of range of u1"、`(0,300)` 同理；`(255,255)` 合法；错型 FIELD → IAE。
+- 真 javac 产物：`<T, U extends @A Number & @A Runnable>` 实测两条 METHOD_TYPE_PARAMETER_BOUND，typeParameterIndex=1（第二个类型参数），boundIndex 0/1（首个 bound 即类 bound 计 0，接口 bound 计 1）；单 bound 方法对照 idx (1,0)；path 恒空。
+

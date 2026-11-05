@@ -65,9 +65,95 @@ public class RuntimeVisibleTypeAnnotationsAttributeTest {
 
     }
 
+
+    // ---- real-product members（TYPE_USE + RUNTIME → RVTA）----
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    @java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE_USE)
+    @interface RVTAnno { int v() default 1; }
+    static <@RVTAnno U> java.util.List<U> rvtM(U u) { return null; }
+    @RVTAnno String rvtField;
+
+    // ---- Part 3: javac 真产物（方法类型参数 + 字段两个 target）----
+    static void testRealProduct() throws Exception {
+        byte[] self = RuntimeVisibleTypeAnnotationsAttributeTest.class.getResourceAsStream("RuntimeVisibleTypeAnnotationsAttributeTest.class").readAllBytes();
+        ClassModel cm = ClassFile.of().parse(self);
+        MethodModel mm = null;
+        for (MethodModel m : cm.methods()) if (m.methodName().stringValue().equals("rvtM")) mm = m;
+        check(mm != null, "rvtM found");
+        var at = mm.findAttribute(Attributes.runtimeVisibleTypeAnnotations()).get();
+        check(at.annotations().size() == 1, "method RVTA count");
+        check(at.annotations().get(0).targetInfo().targetType() == TypeAnnotation.TargetType.METHOD_TYPE_PARAMETER, "METHOD_TYPE_PARAMETER target");
+        check(at.annotations().get(0).targetPath().isEmpty(), "empty target path");
+        check(at.annotations().get(0).annotation().className().stringValue().equals("LRuntimeVisibleTypeAnnotationsAttributeTest$RVTAnno;"), "className");
+        check(at.attributeMapper() == Attributes.runtimeVisibleTypeAnnotations(), "parsed mapper identity");
+        check(mm.findAttribute(Attributes.runtimeInvisibleTypeAnnotations()).isEmpty(), "no RITA twin");
+        FieldModel fm = null;
+        for (FieldModel f : cm.fields()) if (f.fieldName().stringValue().equals("rvtField")) fm = f;
+        var fat = fm.findAttribute(Attributes.runtimeVisibleTypeAnnotations()).get();
+        check(fat.annotations().get(0).targetInfo().targetType() == TypeAnnotation.TargetType.FIELD, "FIELD target");
+        check(fat.annotations().get(0).targetInfo() instanceof TypeAnnotation.EmptyTarget, "FIELD EmptyTarget instance");
+    }
+
+    // ---- Part 4: 工厂 of(List)/of(varargs) + null + 属性面（UNSTABLE 稳定性）----
+    static void testFactoryOverloads() {
+        TypeAnnotation t1 = TypeAnnotation.of(TypeAnnotation.TargetInfo.ofField(), List.of(),
+                Annotation.of(ClassDesc.of("T1"), List.of()));
+        TypeAnnotation t2 = TypeAnnotation.of(TypeAnnotation.TargetInfo.ofMethodReturn(),
+                List.of(TypeAnnotation.TypePathComponent.of(TypeAnnotation.TypePathComponent.Kind.ARRAY, 0)),
+                Annotation.of(ClassDesc.of("T2"), List.of(AnnotationElement.ofInt("n", 2))));
+        RuntimeVisibleTypeAnnotationsAttribute at = RuntimeVisibleTypeAnnotationsAttribute.of(List.of(t1, t2));
+        check(at.annotations().size() == 2 && at.annotations().get(0) == t1, "of(List) identity");
+        check(RuntimeVisibleTypeAnnotationsAttribute.of(t1).annotations().get(0) == t1, "of(varargs)");
+        check(RuntimeVisibleTypeAnnotationsAttribute.of(List.of()).annotations().isEmpty(), "of(empty)");
+        check(at.attributeName().stringValue().equals("RuntimeVisibleTypeAnnotations")
+                && at.attributeName().stringValue().equals(Attributes.NAME_RUNTIME_VISIBLE_TYPE_ANNOTATIONS), "NAME");
+        check(at.attributeMapper() == Attributes.runtimeVisibleTypeAnnotations(), "mapper identity");
+        check(at.attributeMapper().stability() == AttributeMapper.AttributeStability.UNSTABLE, "stability UNSTABLE");
+        try { RuntimeVisibleTypeAnnotationsAttribute.of((List<TypeAnnotation>) null); check(false, "of(null List) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null List) NPE"); }
+        try { RuntimeVisibleTypeAnnotationsAttribute.of((TypeAnnotation[]) null); check(false, "of(null varargs) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null varargs) NPE"); }
+        // TypePathComponent 常量与 of(Kind,int)
+        check(TypeAnnotation.TypePathComponent.ARRAY.typePathKind() == TypeAnnotation.TypePathComponent.Kind.ARRAY, "TPC.ARRAY constant");
+        check(TypeAnnotation.TypePathComponent.INNER_TYPE.typePathKind() == TypeAnnotation.TypePathComponent.Kind.INNER_TYPE, "TPC.INNER_TYPE constant");
+        check(TypeAnnotation.TypePathComponent.WILDCARD.typePathKind() == TypeAnnotation.TypePathComponent.Kind.WILDCARD, "TPC.WILDCARD constant");
+        check(TypeAnnotation.TypePathComponent.Kind.values().length == 4, "Kind 4 values");
+        check(TypeAnnotation.TypePathComponent.of(TypeAnnotation.TypePathComponent.Kind.TYPE_ARGUMENT, 1).typeArgumentIndex() == 1, "TPC.of(Kind,int)");
+    }
+
+    // ---- Part 5: 类/字段/方法三级注入→re-parse 回读 ----
+    static void testInjectRoundTrip() throws Exception {
+        TypeAnnotation tf = TypeAnnotation.of(TypeAnnotation.TargetInfo.ofField(), List.of(),
+                Annotation.of(ClassDesc.of("F"), List.of()));
+        TypeAnnotation tr = TypeAnnotation.of(TypeAnnotation.TargetInfo.ofMethodReturn(),
+                List.of(TypeAnnotation.TypePathComponent.ARRAY),
+                Annotation.of(ClassDesc.of("R"), List.of(AnnotationElement.ofInt("q", 3))));
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynRVTA"), cb -> cb
+                .withSuperclass(ConstantDescs.CD_Object)
+                .with(RuntimeVisibleTypeAnnotationsAttribute.of(List.of(tf, tr)))
+                .withField("f", ConstantDescs.CD_Object, fb -> fb.with(RuntimeVisibleTypeAnnotationsAttribute.of(tf)))
+                .withMethod("m", MethodTypeDesc.ofDescriptor("()V"), 0, mb -> mb
+                        .with(RuntimeVisibleTypeAnnotationsAttribute.of(tr)).withCode(cob -> cob.return_())));
+        ClassModel cm = ClassFile.of().parse(b);
+        var cls = cm.findAttribute(Attributes.runtimeVisibleTypeAnnotations()).get().annotations();
+        check(cls.size() == 2, "class inject count");
+        check(cls.get(0).targetInfo().targetType() == TypeAnnotation.TargetType.FIELD, "t0 FIELD");
+        check(cls.get(0).targetPath().isEmpty(), "t0 empty path");
+        check(cls.get(1).targetInfo().targetType() == TypeAnnotation.TargetType.METHOD_RETURN, "t1 METHOD_RETURN");
+        check(cls.get(1).targetPath().size() == 1
+                && cls.get(1).targetPath().get(0).typePathKind() == TypeAnnotation.TypePathComponent.Kind.ARRAY, "t1 ARRAY path");
+        check(cls.get(1).annotation().elements().get(0).value() instanceof AnnotationValue.OfInt, "t1 element OfInt");
+        check(cm.fields().get(0).findAttribute(Attributes.runtimeVisibleTypeAnnotations()).get().annotations().size() == 1, "field inject");
+        check(cm.methods().get(0).findAttribute(Attributes.runtimeVisibleTypeAnnotations()).get().annotations().get(0).targetInfo().targetType() == TypeAnnotation.TargetType.METHOD_RETURN, "method inject");
+        check(cm.findAttribute(Attributes.runtimeVisibleTypeAnnotations()).get().attributeMapper() == Attributes.runtimeVisibleTypeAnnotations(), "parsed mapper identity");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealProduct();
+        testFactoryOverloads();
+        testInjectRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

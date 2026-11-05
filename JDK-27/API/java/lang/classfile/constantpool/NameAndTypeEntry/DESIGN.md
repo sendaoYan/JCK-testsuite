@@ -11,3 +11,14 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`NameAndTypeEntryTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.constantpool.NameAndTypeEntry")` + public/interface/继承 + 关键成员。黑盒（`NameAndTypeEntryTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05）：NameAndTypeEntry 契约
+- 三工厂去重语义（实测，注意不对称）：(String,MethodTypeDesc) 与 (Utf8,Utf8) **去重**（同实例）；但 (String,ClassDesc) 与 (Utf8,Utf8) **不去重**（分派路径不同）；字段型与方法型 NAT 互不相同；同名同型重复==。
+- 面：name()/type()（均==共享 utf8 身份）；tag TAG_NAME_AND_TYPE(12) width 1；仅 PoolEntry 层。
+- 发射闭环：getstatic → FieldRefEntry.nameAndType() name/type 回读。
+- 真类池：NAT 数>0、Object.<init> 的 NAT 存在；null 两形态 NPE。
+### 深化通用要点（2026-11-05，全部实测锁定）
+- 去重契约：同值 put 两次返回**同一实例**（==）且 index() 相同；不同值不同 index。
+- 发射闭环三段：build 发射指令 → re-parse 常量池含对应条目 → 访问器值回读。
+- JDK-27 类初始化环：`MethodTypeDesc.ofDescriptor("(I)V")` 若是程序首个 AMHC 触点会触发 ConstantDescs↔PrimitiveClassDescImpl 初始化环（ExceptionInInitializerError）；本测试以 testConstantDescsPreinit()（先引用 ConstantDescs.CD_Object）规避，新增方法必须在 testBlackBox 之后运行。
+- javac 产物真类池断言用测试类自带成员（static final 常量 / lambda 字段）保证条目存在。

@@ -73,9 +73,93 @@ public class LocalVariableInfoTest {
 
     }
 
+    // ---- Part 3: 发射 → re-parse 全访问器回读（LocalVariableInfo 无公开工厂，经 LVT 属性取得实例）----
+    static void testEmissionReadback() {
+        ClassFile cf = ClassFile.of();
+        byte[] b = cf.build(ClassDesc.of("LVIT1"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("(IJ)V"), ClassFile.ACC_STATIC, c -> {
+                    Label s = c.startLabel(), e = c.endLabel();
+                    c.localVariable(0, "a", ConstantDescs.CD_int, s, e);
+                    c.localVariable(1, "b", ConstantDescs.CD_long, s, e);
+                    c.return_();
+                }));
+        CodeModel code = cf.parse(b).methods().get(0).code().get();
+        var lvt = code.findAttribute(Attributes.localVariableTable());
+        check(lvt.isPresent(), "localVariable emission produces LVT");
+        List<LocalVariableInfo> vs = lvt.get().localVariables();
+        check(vs.size() == 2, "2 vars: " + vs.size());
+        LocalVariableInfo va = vs.get(0), vb = vs.get(1);
+        check(va.slot() == 0 && va.name().stringValue().equals("a") && va.type().stringValue().equals("I"), "var a slot/name/type");
+        check(va.typeSymbol().descriptorString().equals("I"), "var a typeSymbol");
+        check(va.startPc() == 0 && va.length() == 1, "var a startPc=0 length=codeLength(1)");
+        check(vb.slot() == 1 && vb.name().stringValue().equals("b") && vb.type().stringValue().equals("J"), "var b long");
+        check(vb.typeSymbol().descriptorString().equals("J"), "var b typeSymbol");
+        // 引用类型描述符
+        byte[] b2 = cf.build(ClassDesc.of("LVIT2"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("()V"), 0, c -> {
+                    Label s = c.startLabel(), e = c.endLabel();
+                    c.localVariable(1, "s", ClassDesc.of("java.lang.String"), s, e);
+                    c.return_();
+                }));
+        LocalVariableInfo vr = cf.parse(b2).methods().get(0).code().get()
+                .findAttribute(Attributes.localVariableTable()).get().localVariables().get(0);
+        check(vr.type().stringValue().equals("Ljava/lang/String;"), "ref descriptor");
+        check(vr.typeSymbol().equals(ClassDesc.of("java.lang.String")), "typeSymbol ClassDesc");
+        // Utf8Entry 通道发射（localVariable(int, Utf8Entry, Utf8Entry, Label, Label)）
+        byte[] b3 = cf.build(ClassDesc.of("LVIT3"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("()V"), 0, c -> {
+                    Label s = c.startLabel(), e = c.endLabel();
+                    c.localVariable(1, c.constantPool().utf8Entry("u"), c.constantPool().utf8Entry("D"), s, e);
+                    c.dconst_0().pop().return_();
+                }));
+        LocalVariableInfo vu = cf.parse(b3).methods().get(0).code().get()
+                .findAttribute(Attributes.localVariableTable()).get().localVariables().get(0);
+        check(vu.name().stringValue().equals("u") && vu.type().stringValue().equals("D"), "Utf8Entry overload readback");
+        // LocalVariable 伪指令与属性表条目一致
+        int pseudos = 0;
+        for (CodeElement el : code.elementList()) if (el instanceof java.lang.classfile.instruction.LocalVariable) pseudos++;
+        check(pseudos == 2, "2 LocalVariable pseudos");
+    }
+
+    // ---- Part 4: 选项交叉 ----
+    static void testOptionCross() {
+        ClassFile cf = ClassFile.of();
+        byte[] b = cf.build(ClassDesc.of("LVIT4"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("(I)V"), ClassFile.ACC_STATIC, c -> {
+                    Label s = c.startLabel(), e = c.endLabel();
+                    c.localVariable(1, "lv", ConstantDescs.CD_int, s, e).return_();
+                }));
+        // parse 侧 DROP_DEBUG：剥伪指令、保留属性
+        CodeModel dropped = cf.withOptions(ClassFile.DebugElementsOption.DROP_DEBUG).parse(b).methods().get(0).code().get();
+        int pseudos = 0;
+        for (CodeElement el : dropped.elementList()) if (el instanceof java.lang.classfile.instruction.LocalVariable) pseudos++;
+        check(pseudos == 0, "DROP_DEBUG strips pseudos");
+        check(dropped.findAttribute(Attributes.localVariableTable()).isPresent(), "DROP_DEBUG keeps LVT attribute");
+        check(!dropped.findAttribute(Attributes.localVariableTable()).get().localVariables().isEmpty(), "entries still readable");
+        // build 侧 DROP_DEBUG：不产 LVT
+        byte[] b2 = cf.withOptions(ClassFile.DebugElementsOption.DROP_DEBUG).build(ClassDesc.of("LVIT5"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("(I)V"), ClassFile.ACC_STATIC, c -> {
+                    Label s = c.startLabel(), e = c.endLabel();
+                    c.localVariable(1, "lv", ConstantDescs.CD_int, s, e).return_();
+                }));
+        check(cf.parse(b2).methods().get(0).code().get().findAttribute(Attributes.localVariableTable()).isEmpty(), "build DROP_DEBUG omits LVT");
+    }
+
+    // ---- Part 5: javac 默认（无 -g）不产 LVT；-g:vars 才产 ----
+    static void testRealClass() throws Exception {
+        byte[] self = LocalVariableInfoTest.class.getResourceAsStream("LocalVariableInfoTest.class").readAllBytes();
+        boolean any = false;
+        for (MethodModel mm : ClassFile.of().parse(self).methods())
+            if (mm.code().isPresent()) any |= mm.code().get().findAttribute(Attributes.localVariableTable()).isPresent();
+        check(!any, "javac without -g emits no LocalVariableTable");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEmissionReadback();
+        testOptionCross();
+        testRealClass();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

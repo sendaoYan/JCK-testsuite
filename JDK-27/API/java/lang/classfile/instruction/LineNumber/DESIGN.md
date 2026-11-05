@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`LineNumberTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.LineNumber")` + public/interface/继承 + 关键成员。黑盒（`LineNumberTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回读：lineNumber(9) → 回读 line()==9 + LineNumberTable 属性条目精确；u2 范围实测：of(65535) OK / of(65536) IAE "line number out of range of u2"；Integer.MAX_VALUE 同 IAE。
+- ClassFile.DropOption DROP_LINE_NUMBERS 剥离伪指令但保留属性实测；javac 无 -g 时无 LNT（注意）。断言 9→30（实测运行计数）。

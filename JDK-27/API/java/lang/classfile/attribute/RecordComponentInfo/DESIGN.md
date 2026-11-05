@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`RecordComponentInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.RecordComponentInfo")` + public/interface/继承 + 关键成员。黑盒（`RecordComponentInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，30 断言）
+- testFactoryOverloads：of(utf,utf,List)/of(utf,utf,varargs)/of(String,ClassDesc,List)/of(String,ClassDesc,varargs)；Utf8 entry 身份保留；descriptorSymbol() default 方法；携带属性身份保留；of(nulls) NPE。
+- testRealProduct：record RCBox<T>(T v) 真产物——name v / **descriptor 擦除 Ljava/lang/Object;** / descriptorSymbol / 组件 Signature=="TT;" / 组件属性 mapper 身份。
+- testInjectRoundTrip：经 RecordAttribute 写入类再回读（含 Signature）。

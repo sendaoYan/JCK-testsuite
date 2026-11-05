@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ThrowInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.ThrowInstruction")` + public/interface/继承 + 关键成员。黑盒（`ThrowInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回读：(Exception)V → aload(0).athrow() → ATHROW size 1、kind==THROW_EXCEPTION；new+dup+invokespecial+athrow 完整抛出序列含 1 条 ATHROW；javac throw 自产物对照；CodeBuilder 方法实名 athrow()（反射断言）。
+- 工厂：of() + Opcode.ATHROW.bytecode()==191。断言 8→22（实测运行计数）。

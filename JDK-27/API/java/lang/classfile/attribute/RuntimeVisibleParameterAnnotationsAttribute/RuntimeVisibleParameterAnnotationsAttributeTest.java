@@ -65,9 +65,76 @@ public class RuntimeVisibleParameterAnnotationsAttributeTest {
 
     }
 
+
+    // ---- real-product member（参数声明注解进 RVPA；未注解参数为空列表）----
+    void rvpaM(@Deprecated int a, int b, @Deprecated String c) {}
+
+    // ---- Part 3: javac 真产物 ----
+    static void testRealProduct() throws Exception {
+        byte[] self = RuntimeVisibleParameterAnnotationsAttributeTest.class.getResourceAsStream("RuntimeVisibleParameterAnnotationsAttributeTest.class").readAllBytes();
+        ClassModel cm = ClassFile.of().parse(self);
+        MethodModel mm = null;
+        for (MethodModel m : cm.methods()) if (m.methodName().stringValue().equals("rvpaM")) mm = m;
+        check(mm != null, "rvpaM found");
+        var at = mm.findAttribute(Attributes.runtimeVisibleParameterAnnotations()).get();
+        check(at.parameterAnnotations().size() == 3, "3 params -> 3 lists");
+        check(at.parameterAnnotations().get(0).size() == 1, "param0 annotated");
+        check(at.parameterAnnotations().get(1).isEmpty(), "param1 empty list");
+        check(at.parameterAnnotations().get(2).size() == 1, "param2 annotated");
+        check(at.parameterAnnotations().get(0).get(0).className().stringValue().equals("Ljava/lang/Deprecated;"), "param0 className");
+        check(at.attributeMapper() == Attributes.runtimeVisibleParameterAnnotations(), "parsed mapper identity");
+        check(mm.findAttribute(Attributes.runtimeInvisibleParameterAnnotations()).isEmpty(), "no RIPA twin");
+        check(mm.findAttribute(Attributes.runtimeVisibleAnnotations()).isEmpty(), "param annos not in method RVA");
+    }
+
+    // ---- Part 4: 工厂（仅 of(List<List>)）+ null + 属性面 ----
+    static void testFactoryOverloads() {
+        Annotation d = Annotation.of(ClassDesc.of("D"), List.of());
+        RuntimeVisibleParameterAnnotationsAttribute at = RuntimeVisibleParameterAnnotationsAttribute.of(
+                List.of(List.of(d), List.of(), List.of(d, d)));
+        check(at.parameterAnnotations().size() == 3, "of matrix size");
+        check(at.parameterAnnotations().get(0).get(0) == d, "of identity");
+        check(at.parameterAnnotations().get(1).isEmpty(), "empty param list kept");
+        check(at.parameterAnnotations().get(2).size() == 2, "two annos per param kept");
+        check(RuntimeVisibleParameterAnnotationsAttribute.of(List.of()).parameterAnnotations().isEmpty(), "of(empty)");
+        check(at.attributeName().stringValue().equals("RuntimeVisibleParameterAnnotations")
+                && at.attributeName().stringValue().equals(Attributes.NAME_RUNTIME_VISIBLE_PARAMETER_ANNOTATIONS), "NAME");
+        check(at.attributeMapper() == Attributes.runtimeVisibleParameterAnnotations(), "mapper identity");
+        check(at.attributeMapper().stability() == AttributeMapper.AttributeStability.CP_REFS, "stability CP_REFS");
+        check(!at.attributeMapper().allowMultiple(), "allowMultiple false");
+        // 无 varargs 重载（javap 锁定唯一 of）
+        int ofCount = 0;
+        for (Method m : RuntimeVisibleParameterAnnotationsAttribute.class.getMethods())
+            if (m.getName().equals("of")) ofCount++;
+        check(ofCount == 1, "single of overload");
+        try { RuntimeVisibleParameterAnnotationsAttribute.of(null); check(false, "of(null) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null) NPE"); }
+    }
+
+    // ---- Part 5: 方法级注入→re-parse 矩阵回读 ----
+    static void testInjectRoundTrip() throws Exception {
+        Annotation d = Annotation.of(ClassDesc.of("P"), List.of(AnnotationElement.ofInt("i", 1)));
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynRVPA"), cb -> cb
+                .withSuperclass(ConstantDescs.CD_Object)
+                .withMethod("m", MethodTypeDesc.ofDescriptor("(II)I"), 0, mb -> mb
+                        .with(RuntimeVisibleParameterAnnotationsAttribute.of(List.of(List.of(d), List.of())))
+                        .withCode(cob -> cob.iconst_1().ireturn())));
+        ClassModel cm = ClassFile.of().parse(b);
+        var at = cm.methods().get(0).findAttribute(Attributes.runtimeVisibleParameterAnnotations()).get();
+        check(at.parameterAnnotations().size() == 2, "inject 2x2 size");
+        check(at.parameterAnnotations().get(0).size() == 1, "inject p0 count");
+        check(at.parameterAnnotations().get(0).get(0).className().stringValue().equals("LP;"), "inject p0 className");
+        check(at.parameterAnnotations().get(0).get(0).elements().get(0).name().stringValue().equals("i"), "inject element name");
+        check(at.parameterAnnotations().get(1).isEmpty(), "inject p1 empty");
+        check(at.attributeMapper() == Attributes.runtimeVisibleParameterAnnotations(), "parsed mapper identity");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealProduct();
+        testFactoryOverloads();
+        testInjectRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

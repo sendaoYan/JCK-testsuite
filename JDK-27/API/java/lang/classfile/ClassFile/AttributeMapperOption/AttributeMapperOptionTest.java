@@ -66,9 +66,96 @@ public class AttributeMapperOptionTest {
 
     }
 
+    // ---- Part 3: option semantics measured on JDK 27 ----
+    static class ProbeAttribute extends CustomAttribute<ProbeAttribute> {
+        public ProbeAttribute() { super(AMO_MAPPER); }
+    }
+    static final AttributeMapper<ProbeAttribute> AMO_MAPPER = new AttributeMapper<>() {
+        public String name() { return "AmoAttr"; }
+        public ProbeAttribute readAttribute(AttributedElement encl, ClassReader cf, int pos) { return new ProbeAttribute(); }
+        public void writeAttribute(BufWriter buf, ProbeAttribute attr) {
+            buf.writeIndex(buf.constantPool().utf8Entry(name()));
+            buf.writeInt(0);
+        }
+        public AttributeMapper.AttributeStability stability() { return AttributeMapper.AttributeStability.STATELESS; }
+    };
+
+    static void testOptionSemantics() throws Exception {
+        ClassFile cf = ClassFile.of();
+
+        // factory/getter identity: of(fn) hands the exact function object back via attributeMapper()
+        java.util.function.Function<Utf8Entry, AttributeMapper<?>> fn1 = e -> e.equalsString("AmoAttr") ? AMO_MAPPER : null;
+        java.util.function.Function<Utf8Entry, AttributeMapper<?>> fn2 = e -> null;
+        ClassFile.AttributeMapperOption o1 = ClassFile.AttributeMapperOption.of(fn1);
+        ClassFile.AttributeMapperOption o2 = ClassFile.AttributeMapperOption.of(fn2);
+        check(o1.attributeMapper() == fn1, "attributeMapper() returns the same function instance");
+        check(o2.attributeMapper() == fn2, "second option keeps its own function instance");
+        check(o1.attributeMapper() != o2.attributeMapper(), "distinct options expose distinct functions");
+        try {
+            ClassFile.AttributeMapperOption.of(null);
+            check(false, "of(null) must reject null");
+        } catch (NullPointerException npe) {
+            check(true, "of(null) throws NPE (no detail message)");
+        }
+
+        // function is actually consulted during parse, keyed by attribute name Utf8Entry
+        int[] consulted = new int[1];
+        boolean[] rightName = new boolean[1];
+        java.util.function.Function<Utf8Entry, AttributeMapper<?>> counting = e -> {
+            consulted[0]++;
+            rightName[0] |= e.equalsString("AmoAttr");
+            return e.equalsString("AmoAttr") ? AMO_MAPPER : null;
+        };
+        byte[] withAttr = cf.withOptions(ClassFile.AttributeMapperOption.of(counting))
+                .build(ClassDesc.of("AmoT1"), cb -> cb.with(new ProbeAttribute())
+                        .withMethodBody("m", ConstantDescs.MTD_void, ClassFile.ACC_STATIC, CodeBuilder::return_));
+        check(withAttr.length > 8, "custom attribute class built");
+        ClassModel counted = cf.withOptions(ClassFile.AttributeMapperOption.of(counting)).parse(withAttr);
+        check(counted.attributes().size() == 1, "attribute materialized through counting mapper");
+        check(consulted[0] >= 1, "mapper function consulted at least once, got " + consulted[0]);
+        check(rightName[0], "mapper function saw the AmoAttr name entry");
+
+        // registered round-trip: parse yields the custom attribute type with its mapper readable
+        ClassModel reg = cf.withOptions(ClassFile.AttributeMapperOption.of(fn1)).parse(withAttr);
+        check(reg.attributes().size() == 1, "one attribute on registered parse");
+        Attribute<?> attr = reg.attributes().get(0);
+        check(attr instanceof ProbeAttribute, "registered parse materializes ProbeAttribute, got " + attr.getClass().getName());
+        check(attr.attributeMapper() == AMO_MAPPER, "attributeMapper() identity from parsed attribute");
+        check(attr.attributeMapper().name().equals("AmoAttr"), "mapper name readback");
+        check(attr.attributeMapper().stability() == AttributeMapper.AttributeStability.STATELESS, "mapper stability readback");
+        check(attr.attributeName().stringValue().equals("AmoAttr"), "attributeName readback");
+
+        // unregistered parse: preserved as UnknownAttribute with name intact (no exception)
+        ClassModel unreg = cf.parse(withAttr);
+        check(unreg.attributes().size() == 1, "unregistered parse keeps one attribute");
+        Attribute<?> unknown = unreg.attributes().get(0);
+        check(!(unknown instanceof ProbeAttribute), "unregistered parse does not materialize ProbeAttribute");
+        check(unknown.attributeName().stringValue().equals("AmoAttr"), "unknown attribute name preserved");
+        check(unknown instanceof UnknownAttribute, "unregistered parse yields UnknownAttribute");
+
+        // fn returning null everywhere: same default UnknownAttribute path
+        ClassModel nullFn = cf.withOptions(o2).parse(withAttr);
+        check(nullFn.attributes().get(0) instanceof UnknownAttribute, "null-returning fn falls back to UnknownAttribute");
+        check(nullFn.attributes().get(0).attributeName().stringValue().equals("AmoAttr"), "fallback keeps attribute name");
+
+        // build-side use + re-build round-trip stays stable
+        byte[] again = cf.withOptions(ClassFile.AttributeMapperOption.of(fn1))
+                .build(ClassDesc.of("AmoT2"), cb -> cb.with(new ProbeAttribute())
+                        .withMethodBody("m", ConstantDescs.MTD_void, ClassFile.ACC_STATIC, CodeBuilder::return_));
+        check(cf.parse(again).attributes().size() == 1, "rebuild with registered mapper keeps attribute");
+        check(Arrays.equals(again, withAttr) || again.length == withAttr.length, "deterministic rebuild size stable");
+
+        // combination: mapper option composes with parse options into a new ClassFile instance
+        ClassFile combo = cf.withOptions(ClassFile.AttributeMapperOption.of(fn1), ClassFile.DebugElementsOption.DROP_DEBUG);
+        check(combo != cf, "withOptions returns new instance");
+        check(combo.parse(withAttr).attributes().get(0) instanceof ProbeAttribute, "combo still resolves custom mapper");
+        check(ClassFile.of(ClassFile.AttributeMapperOption.of(fn1)) instanceof ClassFile, "ClassFile.of(mapperOption) usable");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testOptionSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -66,9 +66,67 @@ public class RecordComponentInfoTest {
 
     }
 
+
+    // ---- real-product member ----
+    record RCBox<T>(T v) {}
+
+    // ---- Part 3: 工厂 4 重载（javap 锁定）----
+    static void testFactoryOverloads() {
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        Utf8Entry n = cpb.utf8Entry("f");
+        Utf8Entry d = cpb.utf8Entry("I");
+        RecordComponentInfo i1 = RecordComponentInfo.of(n, d, List.of());
+        check(i1.name() == n && i1.descriptor() == d, "of(utf,utf,List) entry identity");
+        check(i1.attributes().isEmpty(), "of(utf,utf,List) empty attrs");
+        RecordComponentInfo i2 = RecordComponentInfo.of(n, d, new Attribute<?>[0]);
+        check(i2.attributes().isEmpty(), "of(utf,utf,varargs)");
+        SignatureAttribute sig = SignatureAttribute.of(Signature.parseFrom("I"));
+        RecordComponentInfo i3 = RecordComponentInfo.of("g", ConstantDescs.CD_int, List.of(sig));
+        check(i3.name().stringValue().equals("g") && i3.descriptor().stringValue().equals("I"), "of(String,ClassDesc,List)");
+        check(i3.attributes().get(0) == sig, "attr carried by identity");
+        RecordComponentInfo i4 = RecordComponentInfo.of("h", ConstantDescs.CD_String);
+        check(i4.descriptor().stringValue().equals("Ljava/lang/String;"), "of(String,ClassDesc,empty varargs)");
+        check(i4.attributes().isEmpty(), "no attrs default");
+        check(i4.descriptorSymbol().descriptorString().equals("Ljava/lang/String;"), "descriptorSymbol default method");
+        try { RecordComponentInfo.of(null, (ClassDesc) null, (Attribute<?>[]) null); check(false, "of(nulls) must throw"); }
+        catch (NullPointerException e) { check(true, "of(nulls) NPE"); }
+    }
+
+    // ---- Part 4: javac 真产物（泛型 record 组件）----
+    static void testRealProduct() throws Exception {
+        byte[] bb = RecordComponentInfoTest.class.getResourceAsStream("RecordComponentInfoTest$RCBox.class").readAllBytes();
+        var at = ClassFile.of().parse(bb).findAttribute(Attributes.record()).get();
+        check(at.components().size() == 1, "RCBox single component");
+        RecordComponentInfo c = at.components().get(0);
+        check(c.name().stringValue().equals("v"), "component name");
+        check(c.descriptor().stringValue().equals("Ljava/lang/Object;"), "component descriptor erased");
+        check(c.descriptorSymbol().descriptorString().equals("Ljava/lang/Object;"), "descriptorSymbol");
+        boolean sig = false;
+        for (Attribute<?> a : c.attributes())
+            if (a instanceof SignatureAttribute s && s.signature().stringValue().equals("TT;")) sig = true;
+        check(sig, "component Signature == TT;");
+        check(c.attributes().get(0).attributeMapper() == Attributes.signature(), "component attr mapper identity");
+    }
+
+    // ---- Part 5: 注入闭环（经 RecordAttribute 写入类再回读）----
+    static void testInjectRoundTrip() throws Exception {
+        RecordComponentInfo rc = RecordComponentInfo.of("p", ConstantDescs.CD_long,
+                List.of(SignatureAttribute.of(Signature.parseFrom("J"))));
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynRCI"), cb -> cb.withSuperclass(ConstantDescs.CD_Object)
+                .with(RecordAttribute.of(List.of(rc))));
+        RecordComponentInfo back = ClassFile.of().parse(b).findAttribute(Attributes.record()).get().components().get(0);
+        check(back.name().stringValue().equals("p"), "inject name roundtrip");
+        check(back.descriptor().stringValue().equals("J"), "inject descriptor roundtrip");
+        check(back.attributes().size() == 1, "inject attr roundtrip count");
+        check(((SignatureAttribute) back.attributes().get(0)).signature().stringValue().equals("J"), "inject Signature roundtrip");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFactoryOverloads();
+        testRealProduct();
+        testInjectRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

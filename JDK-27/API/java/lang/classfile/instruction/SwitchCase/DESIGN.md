@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`SwitchCaseTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.SwitchCase")` + public/interface/继承 + 关键成员。黑盒（`SwitchCaseTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 值对象契约：caseValue MIN_VALUE/MAX_VALUE/1 边界；target() 身份（==）保持；equals/hashCode 一致（同值同 target 相等且 hashCode 同、异值不等、与 null/异类不等）。
+- 组合使用：lookupswitch(List<SwitchCase>) 构建回读 case 值可见；of(1,null) NPE；SwitchCase 非 CodeElement/非 Instruction（纯值对象）。断言 11→25（实测运行计数）。

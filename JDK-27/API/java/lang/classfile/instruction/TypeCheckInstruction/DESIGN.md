@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`TypeCheckInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.TypeCheckInstruction")` + public/interface/继承 + 关键成员。黑盒（`TypeCheckInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 双 opcode：checkcast(String) → CHECKCAST size 3、type().asInternalName() 精确；CodeBuilder 方法实名 instanceOf（大写 O，非 instanceof_，反射实测）→ INSTANCEOF size 3。
+- javac 自产物对照：castHelper (String) 强转 → CHECKCAST String；instanceofHelper → INSTANCEOF String。
+- 工厂 2 重载（opcode+ClassDesc / opcode+ClassEntry）身份；of(null,ce)/of(CHECKCAST,(ClassDesc)null)/of(CHECKCAST,(ClassEntry)null) NPE；of(NOP,..) IAE 消息含 TYPE_CHECK、of(IADD,..) IAE；数组类型 ClassDesc.ofDescriptor("[I") 通道。断言 11→33（实测运行计数）。

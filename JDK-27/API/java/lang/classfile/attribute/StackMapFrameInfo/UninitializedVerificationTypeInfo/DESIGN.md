@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`UninitializedVerificationTypeInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.StackMapFrameInfo$UninitializedVerificationTypeInfo")` + public/interface/继承 + 关键成员。黑盒（`UninitializedVerificationTypeInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，22 断言）
+- testOfFactory：javac 真帧中 uninit 实例（tag==ITEM_UNINITIALIZED==8）；**newTarget() 的 bci 处字节码==187(NEW)**——实测锁定；of(Label) 身份；of(null) NPE。
+- testRealFramesDistinctOffsets：`new X(c ? 1 : 2)` 模式真产物——栈上两份 uninit（new+dup）共享同一 NEW 偏移。
+- testBuildSideNoUninit：fresh build 分支帧不含 uninit vti（builder 类型推导无 uninit 概念）。

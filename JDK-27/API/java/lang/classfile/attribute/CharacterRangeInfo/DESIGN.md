@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`CharacterRangeInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.CharacterRangeInfo")` + public/interface/继承 + 关键成员。黑盒（`CharacterRangeInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：of(startPc,endPc,characterRangeStart,characterRangeEnd,flags) 参数序锁定 + 全零/65535 合法边界 + startPc/endPc/flags 三参数 u2 校验 IAE（消息含 "start pc"/"end pc"/"flags"）+ characterRangeStart/End 不校验（u4 语义，可载任意 int 含负值）+ CodeBuilder.characterRange 发射 → CRT 属性回读。
+易错点（实测）：JDK-27 的 CharacterRangeInfo 没有 FLAG_* 常量（旧预览有）；CRT endPc 是「最后一条被覆盖指令的偏移」（含端点），单 return_ 体为 0-0。

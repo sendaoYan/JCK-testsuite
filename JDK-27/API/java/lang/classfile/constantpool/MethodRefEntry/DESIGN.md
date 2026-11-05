@@ -11,3 +11,13 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`MethodRefEntryTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.constantpool.MethodRefEntry")` + public/interface/继承 + 关键成员。黑盒（`MethodRefEntryTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05）：MethodRefEntry 契约
+- 双工厂跨重载去重；owner/name/type/typeSymbol()MethodTypeDesc+parameterCount；tag TAG_METHODREF(10) width 1；instanceof MemberRefEntry、非 InterfaceMethodRefEntry、非 Loadable。
+- 发射闭环：invokevirtual Object.toString → re-parse 三元组 + verify 全绿。
+- 真类池：隐式构造器保证 Object.<init> MethodRefEntry 存在；null 两形态 NPE。
+### 深化通用要点（2026-11-05，全部实测锁定）
+- 去重契约：同值 put 两次返回**同一实例**（==）且 index() 相同；不同值不同 index。
+- 发射闭环三段：build 发射指令 → re-parse 常量池含对应条目 → 访问器值回读。
+- JDK-27 类初始化环：`MethodTypeDesc.ofDescriptor("(I)V")` 若是程序首个 AMHC 触点会触发 ConstantDescs↔PrimitiveClassDescImpl 初始化环（ExceptionInInitializerError）；本测试以 testConstantDescsPreinit()（先引用 ConstantDescs.CD_Object）规避，新增方法必须在 testBlackBox 之后运行。
+- javac 产物真类池断言用测试类自带成员（static final 常量 / lambda 字段）保证条目存在。

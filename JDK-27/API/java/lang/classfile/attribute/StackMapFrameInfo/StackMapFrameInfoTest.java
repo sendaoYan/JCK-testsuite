@@ -70,9 +70,68 @@ public class StackMapFrameInfoTest {
 
     }
 
+
+    // ---- real-product member ----
+    static class SFReal { static String pick(boolean c, String a, String b) { String r = a; if (c) r = b; return r; } }
+
+    static byte[] buildBranchy() {
+        return ClassFile.of().build(ClassDesc.of("DynSFI"), cb -> cb.withMethodBody("m",
+                MethodTypeDesc.ofDescriptor("(I)I"), ClassFile.ACC_STATIC,
+                cob -> { Label l = cob.newLabel(); cob.iconst_0().iload(0).if_icmpge(l); cob.iconst_1().ireturn(); cob.labelBinding(l).iconst_m1().ireturn(); }));
+    }
+
+    // ---- Part 3: build 产物 frame 四访问器 ----
+    static void testBuildGeneratedFrames() throws Exception {
+        CodeAttribute ca = (CodeAttribute) ClassFile.of().parse(buildBranchy()).methods().get(0).code().get();
+        StackMapFrameInfo f = ca.findAttribute(Attributes.stackMapTable()).get().entries().get(0);
+        check(f.target() != null, "target label non-null");
+        check(ca.labelToBci(f.target()) >= 0, "target resolvable to bci");
+        check(f.frameType() >= 0 && f.frameType() <= 255, "frameType u1");
+        check(f.locals().size() == 1, "locals expanded full list");
+        check(f.locals().get(0) instanceof StackMapFrameInfo.SimpleVerificationTypeInfo, "int local is simple vti");
+        check(f.stack().isEmpty(), "empty stack");
+    }
+
+    // ---- Part 4: javac 真产物（局部变量展开 + 引用类型 vti）----
+    static void testRealJavacFrames() throws Exception {
+        byte[] rb = StackMapFrameInfoTest.class.getResourceAsStream("StackMapFrameInfoTest$SFReal.class").readAllBytes();
+        ClassModel m = ClassFile.of().parse(rb);
+        boolean sawObj = false, sawSimple = false;
+        for (MethodModel mm : m.methods()) {
+            if (!mm.methodName().stringValue().equals("pick") || mm.code().isEmpty()) continue;
+            CodeAttribute ca = (CodeAttribute) mm.code().get();
+            for (StackMapFrameInfo f : ca.findAttribute(Attributes.stackMapTable()).get().entries()) {
+                check(f.frameType() >= 0 && f.frameType() <= 255, "javac frameType u1");
+                for (StackMapFrameInfo.VerificationTypeInfo v : f.locals()) {
+                    if (v instanceof StackMapFrameInfo.ObjectVerificationTypeInfo) sawObj = true;
+                    if (v instanceof StackMapFrameInfo.SimpleVerificationTypeInfo) sawSimple = true;
+                }
+            }
+        }
+        check(sawObj && sawSimple, "locals mix of Object/Simple vti");
+    }
+
+    // ---- Part 5: of(Label, locals, stack) 工厂 + null 负例 ----
+    static void testOfFactory() throws Exception {
+        CodeAttribute ca = (CodeAttribute) ClassFile.of().parse(buildBranchy()).methods().get(0).code().get();
+        Label lbl = ca.findAttribute(Attributes.stackMapTable()).get().entries().get(0).target();
+        var obj = StackMapFrameInfo.ObjectVerificationTypeInfo.of(ClassDesc.of("java.lang.String"));
+        var simple = StackMapFrameInfo.SimpleVerificationTypeInfo.INTEGER;
+        StackMapFrameInfo f = StackMapFrameInfo.of(lbl, List.of(obj, simple), List.of(simple));
+        check(f.target() == lbl, "of target identity");
+        check(f.locals().size() == 2 && f.locals().get(0) == obj, "of locals identity");
+        check(f.stack().size() == 1 && f.stack().get(0) == simple, "of stack identity");
+        check(f.frameType() == 255, "constructed frame full-frame type 255");
+        try { StackMapFrameInfo.of(null, null, null); check(false, "of(nulls) must throw"); }
+        catch (NullPointerException e) { check(true, "of(nulls) NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testBuildGeneratedFrames();
+        testRealJavacFrames();
+        testOfFactory();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

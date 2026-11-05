@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`EmptyTargetTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$EmptyTarget")` + public/interface/继承 + 关键成员。黑盒（`EmptyTargetTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，6 → 48 断言）
+- `of(TargetType)` 精确收窄矩阵：只接受 FIELD/METHOD_RETURN/METHOD_RECEIVER 三种（size()==0 的 target_info 空负载形态）；其余 19 种 TargetType 循环逐一断言 IAE（消息 "Wrong target type specified X"）。
+- 真 javac 产物：`@A String f` 字段 → FIELD EmptyTarget；`@A List<String> m()` 返回值 → METHOD_RETURN EmptyTarget；path 恒空。
+- 注入闭环：三种合法 target 全部经 `withField`/`withMethod` 注入 RuntimeVisibleTypeAnnotations → re-parse 回读 targetType 精确、verify 通过。
+

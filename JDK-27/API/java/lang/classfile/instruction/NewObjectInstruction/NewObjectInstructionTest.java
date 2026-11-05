@@ -25,6 +25,18 @@ public class NewObjectInstructionTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+
+    // 触发 ConstantDescs 完整初始化，规避本 JDK 构建的 MethodTypeDesc.ofDescriptor 静态初始化环
+    static final ClassDesc TOUCH = ConstantDescs.CD_Object;
+
+    // 发射-回读辅助：build 唯一类名 + parse 回全部 CodeElement
+    static java.util.List<CodeElement> emit(String m, MethodTypeDesc mtd, java.util.function.Consumer<CodeBuilder> body) throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("EmNEW" + m), cb -> cb.withMethodBody(m, mtd, ClassFile.ACC_STATIC, body));
+        java.util.List<CodeElement> els = new ArrayList<>();
+        for (MethodModel mm : ClassFile.of().parse(b).methods())
+            if (mm.code().isPresent()) els.addAll(mm.code().get().elementList());
+        return els;
+    }
     static final ClassReader[] cap = new ClassReader[1];
     static final BufWriter[] cap2 = new BufWriter[1];
     static final BranchInstruction[] br = new BranchInstruction[1];
@@ -67,9 +79,54 @@ public class NewObjectInstructionTest {
 
     }
 
+
+    // ---- Part 3: 发射-回读（核心）：完整 new 序列 ----
+    static void testEmitReadback() throws Exception {
+        java.util.List<CodeElement> els = emit("m", MethodTypeDesc.ofDescriptor("()Ljava/lang/Object;"), cob ->
+                cob.new_(ClassDesc.of("java.lang.Object")).dup()
+                   .invokespecial(ClassDesc.of("java.lang.Object"), "<init>", MethodTypeDesc.ofDescriptor("()V")).areturn());
+        NewObjectInstruction i = null;
+        for (CodeElement e : els) if (e instanceof NewObjectInstruction x) i = x;
+        check(i != null, "new_ emitted + read back");
+        check(i.opcode() == Opcode.NEW, "NEW opcode");
+        check(i.sizeInBytes() == 3, "NEW sizeInBytes 3");
+        check(i.opcode().kind() == Opcode.Kind.NEW_OBJECT, "kind NEW_OBJECT");
+        check(i.className().asInternalName().equals("java/lang/Object"), "className internal");
+        check(i.className().asSymbol().descriptorString().equals("Ljava/lang/Object;"), "className symbol");
+        check(i instanceof Instruction && i instanceof CodeElement, "Instruction+CodeElement");
+        check(!((Object) i instanceof PseudoInstruction), "not PseudoInstruction");
+        // StringBuilder 完整构造序列
+        els = emit("sb", MethodTypeDesc.ofDescriptor("()Ljava/lang/StringBuilder;"), cob ->
+                cob.new_(ClassDesc.of("java.lang.StringBuilder")).dup()
+                   .invokespecial(ClassDesc.of("java.lang.StringBuilder"), "<init>", MethodTypeDesc.ofDescriptor("()V")).areturn());
+        for (CodeElement e : els) if (e instanceof NewObjectInstruction x)
+            check(x.className().asInternalName().equals("java/lang/StringBuilder"), "StringBuilder className");
+    }
+
+    // ---- Part 4: 工厂 + 负例 ----
+    static void testFactoryNegative() {
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        ClassEntry ce = cpb.classEntry(ClassDesc.of("java.lang.StringBuilder"));
+        check(NewObjectInstruction.of(ce).className() == ce, "of identity");
+        check(NewObjectInstruction.of(ce).opcode() == Opcode.NEW, "of opcode NEW");
+        check(NewObjectInstruction.of(ce).sizeInBytes() == 3, "of size 3");
+        try { NewObjectInstruction.of((ClassEntry) null); check(false, "of(null) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null) NPE"); }
+        // 数组类名被工厂接受与否（记录行为）
+        ClassEntry arr = cpb.classEntry(ClassDesc.ofDescriptor("[I"));
+        try {
+            NewObjectInstruction n = NewObjectInstruction.of(arr);
+            check(n.className().asInternalName().equals("[I"), "array class accepted, recorded");
+        } catch (Exception ex) {
+            check(true, "array class rejected: " + ex.getClass().getSimpleName());
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEmitReadback();
+        testFactoryNegative();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

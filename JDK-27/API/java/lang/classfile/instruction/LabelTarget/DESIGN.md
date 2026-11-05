@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`LabelTargetTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.LabelTarget")` + public/interface/继承 + 关键成员。黑盒（`LabelTargetTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 分支目标 Label 必产生 LabelTarget（labelToBci==7 精确）；非目标 Label 不产生；LabelTarget 无 of() 工厂（反射断言）；CodeModel 可迭代 == elementList（迭代通道一致性）。
+- 分类断言：PseudoInstruction 且非 Instruction。断言 7→17（实测运行计数）。

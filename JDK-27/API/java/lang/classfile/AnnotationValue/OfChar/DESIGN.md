@@ -11,3 +11,16 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`OfCharTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.AnnotationValue$OfChar")` + public/interface/继承 + 关键成员。黑盒（`OfCharTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 契约深化补遗（2026-11-05，12→50 断言）
+
+- tag 'C'==67；ofChar(IntegerEntry)（char 存 int 槽）；resolvedValue 运行时类型 Character；`of(Character)` 分派。
+- 边界 '\0'/'\uffff'/'Z' 序列化往返全等；javac 真类 @CharAnno(c='\0', d='Z') + default 'x'。
+- 新增维度（testDeep* 系列，仅追加不删既有断言）：
+  1. 工厂全矩阵：值形态 + 池条目形态（条目同一性复用 `constant() == 原条目`）+ tag 精确字符值；
+  2. build→re-parse 全等闭环：`ClassFile.of().build(... with(RuntimeVisibleAnnotationsAttribute.of(...)))` → parse → 逐元素 instanceof + 值/tag 全等（注解真序列化往返）；
+  3. 边界值矩阵；
+  4. null 负例（精确异常类型 + 关键消息片段）；
+  5. 层次链 `AV ← OfConstant ← OfX` 与跨形态不相交（`Of*.class.isInstance` 运行时判定；OfEnum/OfClass/OfArray/OfAnnotation 对 OfConstant 的 instanceof 在**编译期即被 javac 证伪报错**，只能用 isInstance）；
+  6. equals/hashCode/toString 实测；
+  7. javac 真类产物闭环：嵌套 @interface（@Retention(RUNTIME)）+ 被注解字段 → RuntimeVisibleAnnotations 模型逐元素回读 + @interface 方法上的 AnnotationDefault 值回读 + 无 default 成员无该属性 + "仅显式元素被序列化（default 不出现）"。

@@ -69,9 +69,96 @@ public class LoadableConstantEntryTest {
 
     }
 
+    // ---- Part 3: AMHC 常量基础设施预初始化（JDK-27 实测：先完整初始化 ConstantDescs 可避开
+    // ConstantDescs <-> PrimitiveClassDescImpl 类初始化环，见 DESIGN.md 易错细节） ----
+    static void testConstantDescsPreinit() {
+        check(ConstantDescs.CD_Object.descriptorString().equals("Ljava/lang/Object;"), "ConstantDescs.CD_Object preinit");
+    }
+
+    // ---- Part 4: LoadableConstantEntry 契约（17 类 instanceof 矩阵/constantValue 多态/typeKind 表/分派工厂/ldc 发射） ----
+    static void testLceHierarchyMatrix() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        MethodRefEntry mre = b.methodRefEntry(ClassDesc.of("java.lang.Object"), "toString", MethodTypeDesc.ofDescriptor("()Ljava/lang/String;"));
+        Object[] loadable = {
+                b.intEntry(1), b.longEntry(2L), b.floatEntry(3f), b.doubleEntry(4d),
+                b.stringEntry("s"), b.classEntry(ClassDesc.of("p.C")),
+                b.methodHandleEntry(6, mre), b.methodTypeEntry(MethodTypeDesc.ofDescriptor("()V")),
+        };
+        for (Object o : loadable) check(o instanceof LoadableConstantEntry, "loadable kind: " + o.getClass().getSimpleName());
+        BootstrapMethodEntry bsm = b.bsmEntry(b.methodHandleEntry(6, mre), List.of());
+        check(b.constantDynamicEntry(bsm, b.nameAndTypeEntry("c", ClassDesc.of("java.lang.Object"))) instanceof LoadableConstantEntry, "condy is loadable");
+        Object[] notLoadable = {
+                b.utf8Entry("u"), b.nameAndTypeEntry("n", ClassDesc.of("I")),
+                b.fieldRefEntry(ClassDesc.of("p.C"), "f", ClassDesc.of("I")),
+                mre,
+                b.interfaceMethodRefEntry(ClassDesc.of("p.I"), "g", MethodTypeDesc.ofDescriptor("()V")),
+                b.moduleEntry(ModuleDesc.of("m")), b.packageEntry(PackageDesc.of("p")),
+                b.invokeDynamicEntry(bsm, b.nameAndTypeEntry("i", MethodTypeDesc.ofDescriptor("()V"))),
+        };
+        for (Object o : notLoadable) check(!(o instanceof LoadableConstantEntry), "not loadable: " + o.getClass().getSimpleName());
+        // 实测矩阵：Loadable 中只有 5 种 ConstantValue；Utf8 不 Loadable
+        for (Object o : loadable) check(o instanceof PoolEntry, "loadable implies PoolEntry");
+    }
+
+    static void testLceConstantValuePolymorphism() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        check(b.intEntry(5).constantValue().equals(5), "IntegerEntry -> Integer");
+        check(b.longEntry(6L).constantValue().equals(6L), "LongEntry -> Long");
+        check(b.floatEntry(7f).constantValue().equals(7f), "FloatEntry -> Float");
+        check(b.doubleEntry(8d).constantValue().equals(8d), "DoubleEntry -> Double");
+        check(b.stringEntry("x").constantValue().equals("x"), "StringEntry -> String");
+        check(b.classEntry(ClassDesc.of("java.lang.String")).constantValue() instanceof ClassDesc, "ClassEntry -> ClassDesc");
+        check(b.classEntry(ClassDesc.of("java.lang.String")).constantValue().equals(ClassDesc.of("java.lang.String")), "ClassDesc value equality");
+        MethodHandleEntry mh = b.methodHandleEntry(6, b.methodRefEntry(ClassDesc.of("java.lang.Object"), "toString", MethodTypeDesc.ofDescriptor("()Ljava/lang/String;")));
+        check(mh.constantValue() instanceof DirectMethodHandleDesc, "MethodHandleEntry -> DirectMethodHandleDesc");
+        check(mh.constantValue().equals(mh.asSymbol()), "DirectMethodHandleDesc equals asSymbol");
+        MethodTypeEntry mt = b.methodTypeEntry(MethodTypeDesc.ofDescriptor("(I)V"));
+        check(mt.constantValue() instanceof MethodTypeDesc, "MethodTypeEntry -> MethodTypeDesc");
+        check(mt.constantValue().equals(MethodTypeDesc.ofDescriptor("(I)V")), "MethodTypeDesc value equality");
+    }
+
+    static void testLceTypeKindTable() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        MethodHandleEntry mh = b.methodHandleEntry(6, b.methodRefEntry(ClassDesc.of("java.lang.Object"), "toString", MethodTypeDesc.ofDescriptor("()Ljava/lang/String;")));
+        check(b.intEntry(1).typeKind() == TypeKind.INT, "int typeKind INT");
+        check(b.longEntry(1L).typeKind() == TypeKind.LONG, "long typeKind LONG");
+        check(b.floatEntry(1f).typeKind() == TypeKind.FLOAT, "float typeKind FLOAT");
+        check(b.doubleEntry(1d).typeKind() == TypeKind.DOUBLE, "double typeKind DOUBLE");
+        check(b.stringEntry("s").typeKind() == TypeKind.REFERENCE, "string typeKind REFERENCE");
+        check(b.classEntry(ClassDesc.of("p.C")).typeKind() == TypeKind.REFERENCE, "class typeKind REFERENCE");
+        check(mh.typeKind() == TypeKind.REFERENCE, "methodhandle typeKind REFERENCE");
+        check(b.methodTypeEntry(MethodTypeDesc.ofDescriptor("()V")).typeKind() == TypeKind.REFERENCE, "methodtype typeKind REFERENCE");
+    }
+
+    static void testLceDispatchAndEmission() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        check(b.loadableConstantEntry(31) == b.intEntry(31), "loadableConstantEntry(Integer) identity");
+        check(b.loadableConstantEntry("ls") == b.stringEntry("ls"), "loadableConstantEntry(String) identity");
+        check(b.loadableConstantEntry(32L) == b.longEntry(32L), "loadableConstantEntry(Long) identity");
+        check(b.loadableConstantEntry(ClassDesc.of("q.D")) == b.classEntry(ClassDesc.of("q.D")), "loadableConstantEntry(ClassDesc) identity");
+        try {
+            b.loadableConstantEntry(null);
+            check(false, "loadableConstantEntry(null) must throw");
+        } catch (NullPointerException e) { check(true, "loadableConstantEntry(null) NPE"); }
+        // ldc(LoadableConstantEntry) 发射闭环
+        StringEntry se = b.stringEntry("ldcFace");
+        byte[] bytes = ClassFile.of().build(ClassDesc.of("pkg.EmitLce"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("()V"), ClassFile.ACC_STATIC,
+                        cob -> cob.ldc(se).pop().return_()));
+        boolean saw = false;
+        for (PoolEntry pe : ClassFile.of().parse(bytes).constantPool())
+            if (pe instanceof StringEntry s2 && s2.stringValue().equals("ldcFace")) saw = true;
+        check(saw, "ldc(LoadableConstantEntry) emission roundtrip");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstantDescsPreinit();
+        testLceHierarchyMatrix();
+        testLceConstantValuePolymorphism();
+        testLceTypeKindTable();
+        testLceDispatchAndEmission();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

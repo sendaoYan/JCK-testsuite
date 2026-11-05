@@ -65,9 +65,66 @@ public class ModuleHashInfoTest {
 
     }
 
+    // ---- Part 3: 双工厂全重载 + 访问器矩阵 ----
+    static void testFactories() {
+        ConstantPoolBuilder cp = ConstantPoolBuilder.of();
+        ModuleEntry me = cp.moduleEntry(ModuleDesc.of("m.a"));
+        // 条目版
+        ModuleHashInfo e = ModuleHashInfo.of(me, new byte[]{1, 2, 3});
+        check(e.moduleName() == me, "entry factory identity");
+        check(e.moduleName().asSymbol().name().equals("m.a"), "entry factory name");
+        check(e.moduleName().matches(ModuleDesc.of("m.a")), "matches()");
+        check(e.hash().length == 3, "entry factory hash len");
+        // 符号版
+        ModuleHashInfo s = ModuleHashInfo.of(ModuleDesc.of("m.b"), new byte[0]);
+        check(s.moduleName().asSymbol().name().equals("m.b"), "symbol factory name");
+        check(s.hash().length == 0, "empty hash legal");
+        // hash 内容精确
+        byte[] h = {10, 20, 30, 40};
+        ModuleHashInfo t = ModuleHashInfo.of(ModuleDesc.of("m.c"), h);
+        check(t.hash()[0] == 10 && t.hash()[1] == 20 && t.hash()[2] == 30 && t.hash()[3] == 40, "hash bytes exact");
+        // 注：hash() 不做防御拷贝（返回内部数组）——JDK 实测语义，断言共享
+        byte[] mut = {1};
+        ModuleHashInfo m = ModuleHashInfo.of(ModuleDesc.of("m.d"), mut);
+        mut[0] = 99;
+        check(m.hash()[0] == 99, "hash array shared (no defensive copy)");
+    }
+
+    // ---- Part 4: null 负例 ----
+    static void testNegatives() {
+        try { ModuleHashInfo.of((ModuleDesc) null, new byte[1]); check(false, "of((ModuleDesc)null,..) must NPE"); }
+        catch (NullPointerException e) {
+            check(e.getMessage() != null && e.getMessage().contains("moduleDesc"), "moduleDesc null NPE msg");
+        }
+        try { ModuleHashInfo.of(ModuleDesc.of("m"), null); check(false, "of(..,null) must NPE"); }
+        catch (NullPointerException e) { check(true, "hash null NPE"); }
+        try { ModuleHashInfo.of((ModuleEntry) null, new byte[1]); check(false, "of((ModuleEntry)null,..) must NPE"); }
+        catch (NullPointerException e) { check(true, "entry null NPE"); }
+    }
+
+    // ---- Part 5: 经 ModuleHashes → buildModule → re-parse 字节级回读 ----
+    static void testRoundtrip() {
+        ClassFile cf = ClassFile.of();
+        byte[] hash = new byte[32];
+        for (int i = 0; i < 32; i++) hash[i] = (byte) i;
+        ModuleAttribute ma = ModuleAttribute.of(ModuleDesc.of("m.r"), mb -> {});
+        byte[] b = cf.buildModule(ma, cb -> cb
+                .with(ModuleHashesAttribute.of("SHA-256", ModuleHashInfo.of(ModuleDesc.of("dep"), hash))));
+        ModuleHashInfo r = cf.parse(b).findAttribute(Attributes.moduleHashes()).get().hashes().get(0);
+        check(r.moduleName().asSymbol().name().equals("dep"), "roundtrip module name");
+        check(r.hash().length == 32, "roundtrip hash length");
+        boolean all = true;
+        for (int i = 0; i < 32; i++) all &= (r.hash()[i] == (byte) i);
+        check(all, "roundtrip 32 hash bytes exact");
+        check(cf.verify(b).isEmpty(), "verifies");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFactories();
+        testNegatives();
+        testRoundtrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

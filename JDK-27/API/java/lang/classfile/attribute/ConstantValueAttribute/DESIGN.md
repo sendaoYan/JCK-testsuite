@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ConstantValueAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ConstantValueAttribute")` + public/interface/继承 + 关键成员。黑盒（`ConstantValueAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：of(ConstantDesc) 五型（int/long/float/double/String）→ ConstantValueEntry 类型化回读 + MIN/MAX/NaN/±Inf/空串边界 + of(ConstantValueEntry)（ConstantPoolBuilder 条目 identity）+ 双 null NPE + build static final 六字段注入 → 回读 + CP tag 表（Integer=3/Float=4/Long=5/Double=6/String=8）+ 非 static 字段注入容忍 + 无注入无属性 + javac 真类五型 static final 精确值。

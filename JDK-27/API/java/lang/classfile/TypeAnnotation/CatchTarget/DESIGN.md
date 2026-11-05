@@ -11,3 +11,9 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`CatchTargetTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$CatchTarget")` + public/interface/继承 + 关键成员。黑盒（`CatchTargetTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，8 → 43 断言）
+- 工厂边界：`ofExceptionParameter(0/1/255/65535)` 回读 + `targetType()==EXCEPTION_PARAMETER` + `size()==2`；`-1/65536` IAE 消息 "exception table index out of range of u2: N"（65535 合法）。
+- 真 javac 产物：multi-catch `catch (@A IOException | @A IllegalStateException e)` 实测产生**两条**注解，exceptionTableIndex 0 与 1（每个备选类型各一条，JVMS 4.7.20.1）；普通 catch 链后续 handler 依次 2、3；异常类用简单名（import java.io.IOException），限定名前注解会被 javac 拒绝。
+- 访问器防御：`exceptionTableIndex()` 精确回读、instanceof TargetInfo 成立；`instanceof` 表达式经 `((Object) x)` 视图转换避免编译期类型冲突。
+

@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`LocalVariableInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.LocalVariableInfo")` + public/interface/继承 + 关键成员。黑盒（`LocalVariableInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：无公开工厂（经 LVT 属性取得实例）——cob.localVariable 双重载（ClassDesc/Utf8Entry 通道）→ 发射→re-parse slot/name/type/typeSymbol/startPc/length 全等（int/long/String/double 描述符表）+ LocalVariable 伪指令计数 + DROP_DEBUG parse（剥伪指令保留属性）/build（不产 LVT）交叉 + javac 默认（无 -g）不产 LVT。

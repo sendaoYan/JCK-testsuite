@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`AttributedElementTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.AttributedElement")` + public/interface/继承 + 关键成员。黑盒（`AttributedElementTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，12→35 断言）：查找/只读/实现者全契约
+新增 testFindNegative（findAttribute(不存在)→empty（类/字段两级）、findAttributes(缺失)→空表非 null、findAttributes(deprecated) 双 Deprecated 全回（实测可共存 2 个）、findAttribute(null)→NPE）；testAttributesReadOnly（attributes() add/remove/clear → UnsupportedOperationException 只读快照（类/方法/字段三级实测）、拒绝后模型不变）；testImplementors（ClassModel/FieldModel/MethodModel/CodeModel 四类 instanceof AttributedElement、四类实例统一 List.of(...) 多态遍历属性名（SourceFile/ConstantValue/Code/StackMapTable 各归其位）、findAttribute 与 attributes() 自洽、is-a ClassFileElement）。

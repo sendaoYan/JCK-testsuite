@@ -1,13 +1,19 @@
 # java.lang.classfile.CompoundElement — 设计案
 
 ## 1. API 功能
-`java.lang.classfile.CompoundElement`（interface）。工厂/静态方法：(none)。查询/实例方法：forEach, iterator, elementStream, elementList, toDebugString。
+`java.lang.classfile.CompoundElement&lt;E extends ClassFileElement&gt;`（interface，extends `ClassFileElement` + **`Iterable&lt;E&gt;**`）。方法：`forEach(Consumer)`（抽象）、`iterator()`（default）、`elementStream()`（default，Stream&lt;E&gt;）、`elementList()`（default，List&lt;E&gt;）、`toDebugString()`（default，String）。四个模型实现：`ClassModel : CompoundElement<ClassElement>`、`MethodModel : CompoundElement<MethodElement>`、`FieldModel : CompoundElement<FieldElement>`、`CodeModel : CompoundElement<CodeElement>`。
 
 ## 2. Java 用户如何使用
-通过 `ClassFile.of()` 构建/解析 class（或 `ConstantPoolBuilder.of()` 建常量池条目、`ClassFile.of().build()`/`parse()` 往返）得到真实实例；实例通过 `of(...)` 工厂创建后逐方法断言访问器；涉及 label 的类型在 `ClassFile.of().build(...)` 回调内用 `CodeBuilder.newLabel()` 捕获。 本测试在 `CompoundElementTest.testBlackBox()` 中按「构建 → 解析/创建 → 组合断言」链路覆盖。
+任何模型都可直接 for-each（Iterable）；`elementList()` 给快照列表（**每次调用元素可能是新包装对象**——类型序列稳定但实例身份不保证）；`elementStream()` 支持流式过滤；`toDebugString()` 人类可读。
 
-## 3. 开源代码实际用法调研
-JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesTest、ModuleBuilderTest、Utf8EntryTest、AttributesTest）与 JDK 源码自用（`src/java.base/.../java/lang/Module.java`、`jdk.jartool/.../FingerPrint.java`、`java.lang.reflect.ProxyGenerator`）大量使用 `java.lang.classfile` 族 API；本测试的 `java.lang.classfile.CompoundElement` 断言按上述真实用法模式编写。
+## 3. 参考来源
+- JDK 27 javadoc + `javap java.lang.classfile.CompoundElement`。
+- OpenJDK `test/jdk/jdk/classfile/`（遍历形态遍布全部用例）。
+- 本机实测：for-each/forEach/elementStream/elementList 四方计数一致；两次 elementList() 元素**类型相同但对象身份不同**；iterator() 每次新实例。
 
-## 4. 测试用例设计 + 自动化实现
-白盒（`CompoundElementTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.CompoundElement")` + public/interface/继承 + 关键成员。黑盒（`CompoundElementTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+## 4. 测试用例设计 + 易错规范细节
+- 白盒（原有）+ 黑盒（原有：elementList 过滤 FieldModel、elementStream 计数、toDebugString 非空）。
+- `testHierarchy`（深化）：四模型 instanceof CompoundElement（运行时 `CompoundElement.class.isInstance`）；`Iterable.isAssignableFrom(CompoundElement)`；`ClassFileElement.isAssignableFrom(CompoundElement)`。
+- `testIterationConsistency`（深化）：**四方计数一致**（for-each == forEach 计数 == elementStream().count() == elementList().size()）；elementStream 过滤 FieldModel 计数；两个独立 iterator 各自完整迭代且互不干扰、耗尽后 hasNext()==false；**elementList() 稳定性**（两次调用 size 相同、逐位元素类型相同——实例身份不保证，实测）；toDebugString 含类名；CodeModel 迭代全为指令时的计数一致；verify 干净。
+- `testDefineClassLoop`（深化）：DynCompoundElement+seq → for-each 计数字段/方法 → defineClass → go()==7 运行闭环。
+- 易错点：elementStream() 是单次消费流（重复用需再调）；不要断言两次 elementList() 的元素 `==`。

@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`JsrInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.DiscontinuedInstruction$JsrInstruction")` + public/interface/继承 + 关键成员。黑盒（`JsrInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- v50 发射回读：JSR size 3 / JSR_W size 5 精确；kind==DISCONTINUED_JSR；target 非空。
+- v71 拒绝：可达 jsr → IAE（消息含 "version"）；工厂 of(JSR,label)/of(JSR_W,label) + of(null,label)/of(JSR,null) NPE + of(NOP,label) IAE。断言 9→29（实测运行计数）。

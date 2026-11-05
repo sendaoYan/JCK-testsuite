@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`LookupSwitchInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.LookupSwitchInstruction")` + public/interface/继承 + 关键成员。黑盒（`LookupSwitchInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回读：乱序 keys [9,1,5] 输入 → 回读 cases 排序 [1,5,9]（实测锁定：构建时排序）；sizeInBytes 35（bci1 起 2 字节 padding 的 4 对齐规则实测）；MIN_VALUE/负 key 合法；defaultTarget labelToBci 精确。
+- javac 稀疏 switch 自产物对照；of() 工厂 keys 身份 + of(null,..) NPE + low>high 语义（lookup 无此限制，keys 任意）。断言 13→37（实测运行计数）。

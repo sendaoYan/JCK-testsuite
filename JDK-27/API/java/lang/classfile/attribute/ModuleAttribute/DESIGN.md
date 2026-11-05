@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModuleAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModuleAttribute")` + public/interface/继承 + 关键成员。黑盒（`ModuleAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：of(ModuleDesc,builder) 全链（flags 0x1020=[OPEN,SYNTHETIC]/version/requires×2（含 TRANSITIVE+version）/exports×2（qualified 目标有序、unqualified 空 targets）/opens/uses/provides）→ buildModule → parse 全表回读 + verify 干净 + 空 builder 最小 module-info + of(ModuleEntry,builder) 条目版（uses 走 ClassEntry）+ of(ModuleEntry,int,Utf8Entry,Collection×5) 8 参版 + requires 66000 u2 IAE + buildModule(ma, cb.with(hashes)) 携带额外 class 属性 + 元数据（CP_REFS/allowMultiple false）。
+易错点（实测）：ACC_MODULE flag 在 class access_flags 上；moduleVersion 传 null → Optional.empty；无目标的 exports 是「非限定导出」（targets 空）。

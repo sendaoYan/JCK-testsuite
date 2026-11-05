@@ -11,3 +11,11 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`DebugElementsOptionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassFile$DebugElementsOption")` + public/enum/继承 + 关键成员。黑盒（`DebugElementsOptionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05：DROP_DEBUG 语义实测矩阵）
+新增 `testOptionSemantics()`（44 断言，13→44）。发射 localVariable+localVariableType+characterRange+lineNumber 四种伪指令后按选项解析，实测锁定：
+- **parse 侧 DROP_DEBUG**：剥 LocalVariable/LocalVariableType/CharacterRange 伪指令（1→0），**保留 LineNumber 伪指令**（归 LineNumbersOption 管）；LVT/LVTy/CRT/LNT 四个**属性全部保留**（选项只影响元素模型不动原始属性）。
+- **build 侧 DROP_DEBUG 也生效**：重新 build 时 LVT/LVTy/CRT 属性**根本不写**（findAttribute 为 empty），但 **LNT 属性仍写**；伪指令不再发射。
+- 属性内容精确回读：LVT 行 slot=1/name=lv/type=I；LNT 行 lineNumber=9。
+- PASS_DEBUG 与默认解析计数完全一致；链式 `DROP_DEBUG→PASS_DEBUG` last-wins 实测覆盖。
+- 易错点：误以为 DROP_DEBUG 连 LineNumber 一起剥——实测不剥；误以为属性被剥——parse 侧属性保留，只有 build 侧才不写。

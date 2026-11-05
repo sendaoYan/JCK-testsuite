@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`KindTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Opcode$Kind")` + public/enum/继承 + 关键成员。黑盒（`KindTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化，19 → 35 断言）
+- `testValueOfSemantics`：26 名 valueOf 全量双向；不存在名 → IAE 精确消息 `No enum constant java.lang.classfile.Opcode.Kind.NO_SUCH_KIND`（**注意消息用 `.` 分隔嵌套名而非 `$`**）；valueOf(null) → NPE "Name is null"；values() 防御拷贝；ordinal 严格递增 + LOAD=0/DISCONTINUED_RET=25；toString==name。
+- `testKindCoverage`：**每 kind 至少 1 个 opcode + 26 类完整精确计数表**（LOAD=30, STORE=30, OPERATOR=42, CONSTANT=20, BRANCH=18, CONVERT=15, STACK=9, ARRAY_LOAD=8, ARRAY_STORE=8, RETURN=6, FIELD_ACCESS=4, INVOKE=4, INCREMENT/TYPE_CHECK/MONITOR/DISCONTINUED_JSR/DISCONTINUED_RET=2, 九个单例=1）+ 计数和==213 + 代表成员反查。

@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`EnclosingMethodAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.EnclosingMethodAttribute")` + public/interface/继承 + 关键成员。黑盒（`EnclosingMethodAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：of(ClassEntry,Optional<NameAndTypeEntry>)/of(ClassDesc,Optional<String>,Optional<MethodTypeDesc>) 双族 + 默认方法三兄弟（enclosingMethodName/enclosingMethodType/enclosingMethodTypeSymbol，方法空则全空）+ 双 null NPE + build 注入回读（有方法/空方法）+ javac 真类：匿名类（外围类+外围方法名与描述符精确）与方法内 local class；顶层类无该属性。
+易错点（实测）：匿名类资源名是 Outer$1.class、local class 是 Outer$1LocalIn.class（共享编号计数）。

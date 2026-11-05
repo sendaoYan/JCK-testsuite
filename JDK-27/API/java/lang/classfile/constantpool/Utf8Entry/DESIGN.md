@@ -11,3 +11,16 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`Utf8EntryTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.constantpool.Utf8Entry")` + public/interface/继承 + 关键成员。黑盒（`Utf8EntryTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05）：Utf8Entry 契约
+- 三工厂重载互相去重：utf8Entry(String)==utf8Entry(new String(同文))（值语义）==utf8Entry(ClassDesc)(字段描述符文本)==utf8Entry(MethodTypeDesc)(方法描述符文本)（等文本时同实例）。
+- CharSequence 全面：length/charAt/subSequence/toString(==stringValue)；**equals/hashCode 跨池值语义**（实测：两池同文本 equals==true、hashCode 相同、异文本 false）。
+- modified UTF-8：非 ASCII（中文+é）round-trip 无损，length 按 UTF-16 计。
+- isFieldType/isMethodType 正反例（字段描述符↔ClassDesc、方法描述符↔MethodTypeDesc、普通文本两者皆非）。
+- 层次：instanceof AnnotationConstantValueEntry、**非** Loadable；constantValue()==文本；tag TAG_UTF8(1) width 1。
+- 发射闭环：getstatic → name()/type() utf8 回读；真类池 equalsString("java/lang/Object") 命中；entryByIndex(0) → ConstantPoolException；null 三工厂 NPE。
+### 深化通用要点（2026-11-05，全部实测锁定）
+- 去重契约：同值 put 两次返回**同一实例**（==）且 index() 相同；不同值不同 index。
+- 发射闭环三段：build 发射指令 → re-parse 常量池含对应条目 → 访问器值回读。
+- JDK-27 类初始化环：`MethodTypeDesc.ofDescriptor("(I)V")` 若是程序首个 AMHC 触点会触发 ConstantDescs↔PrimitiveClassDescImpl 初始化环（ExceptionInInitializerError）；本测试以 testConstantDescsPreinit()（先引用 ConstantDescs.CD_Object）规避，新增方法必须在 testBlackBox 之后运行。
+- javac 产物真类池断言用测试类自带成员（static final 常量 / lambda 字段）保证条目存在。

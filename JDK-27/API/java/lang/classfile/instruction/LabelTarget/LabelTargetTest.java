@@ -25,6 +25,18 @@ public class LabelTargetTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+
+    // 触发 ConstantDescs 完整初始化，规避本 JDK 构建的 MethodTypeDesc.ofDescriptor 静态初始化环
+    static final ClassDesc TOUCH = ConstantDescs.CD_Object;
+
+    // 发射-回读辅助：build 唯一类名 + parse 回全部 CodeElement
+    static java.util.List<CodeElement> emit(String m, MethodTypeDesc mtd, java.util.function.Consumer<CodeBuilder> body) throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("EmLBT" + m), cb -> cb.withMethodBody(m, mtd, ClassFile.ACC_STATIC, body));
+        java.util.List<CodeElement> els = new ArrayList<>();
+        for (MethodModel mm : ClassFile.of().parse(b).methods())
+            if (mm.code().isPresent()) els.addAll(mm.code().get().elementList());
+        return els;
+    }
     static final ClassReader[] cap = new ClassReader[1];
     static final BufWriter[] cap2 = new BufWriter[1];
     static final BranchInstruction[] br = new BranchInstruction[1];
@@ -65,9 +77,56 @@ public class LabelTargetTest {
 
     }
 
+
+    // ---- Part 3: 发射-回读（核心）：分支目标标签 vs 无目标标签 ----
+    static void testEmitReadback() throws Exception {
+        // 分支目标 → 解析模型含 LabelTarget，labelToBci 可定位
+        byte[] b = ClassFile.of().build(ClassDesc.of("EmLBT"), cb -> cb.withMethodBody("m", MethodTypeDesc.ofDescriptor("(I)I"), ClassFile.ACC_STATIC, cob -> {
+            Label l = cob.newLabel();
+            cob.iconst_0().iload(0).if_icmpge(l).iconst_1().ireturn().labelBinding(l).iconst_m1().ireturn();
+        }));
+        CodeAttribute ca = (CodeAttribute) ClassFile.of().parse(b).methods().get(0).code().get();
+        LabelTarget lt = null;
+        for (CodeElement e : ca.elementList()) if (e instanceof LabelTarget x) lt = x;
+        check(lt != null, "LabelTarget present for branch target label");
+        check(lt.label() != null, "label() non-null");
+        check(ca.labelToBci(lt.label()) == 7, "labelToBci == 7 (after iconst_1+ireturn)");
+        check(lt instanceof PseudoInstruction, "PseudoInstruction");
+        check(!((Object) lt instanceof Instruction), "not Instruction");
+        check(lt instanceof CodeElement, "CodeElement");
+        // 多标签：每个分支目标一个 LabelTarget
+        java.util.List<CodeElement> els = emit("multi", MethodTypeDesc.ofDescriptor("(I)I"), cob -> {
+            Label a = cob.newLabel(), b2 = cob.newLabel();
+            cob.iload(0).ifeq(a).iload(0).ifne(b2).iconst_0().ireturn();
+            cob.labelBinding(a).iconst_1().ireturn();
+            cob.labelBinding(b2).iconst_2().ireturn();
+        });
+        int n = 0;
+        for (CodeElement e : els) if (e instanceof LabelTarget) n++;
+        check(n == 2, "2 branch-target LabelTargets, got " + n);
+        // 非目标标签：javap 语义下不产生 LabelTarget（解析期丢弃）
+        els = emit("dead", MethodTypeDesc.ofDescriptor("()V"), cob -> {
+            Label unused = cob.newLabel();
+            cob.labelBinding(unused).return_();
+        });
+        n = 0;
+        for (CodeElement e : els) if (e instanceof LabelTarget) n++;
+        check(n == 0, "non-targeted bound label yields no LabelTarget in parse, got " + n);
+        // for-each CodeModel 迭代与 elementList 一致
+        int iterN = 0;
+        CodeModel cm = ClassFile.of().parse(b).methods().get(0).code().get();
+        for (CodeElement e : cm) iterN++;
+        check(iterN == cm.elementList().size(), "CodeModel iterable == elementList size");
+        // LabelTarget 无静态工厂（唯一访问器 label()）
+        boolean hasOf = false;
+        for (Method m : LabelTarget.class.getDeclaredMethods()) if (m.getName().equals("of")) hasOf = true;
+        check(!hasOf, "LabelTarget has no of() factory (emission-only)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEmitReadback();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

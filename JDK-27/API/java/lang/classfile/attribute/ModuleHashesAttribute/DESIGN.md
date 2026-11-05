@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModuleHashesAttributeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModuleHashesAttribute")` + public/interface/继承 + 关键成员。黑盒（`ModuleHashesAttributeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化）
+新增维度：四工厂（String+List/String+varargs/Utf8Entry+List/Utf8Entry+varargs，Utf8Entry 版保持条目 identity）+ 空 hash 表 + 三种 null NPE + 65535/66000 u2 IAE + 元数据（CP_REFS/allowMultiple false）+ buildModule(ma, cb.with(ha)) 注入 → 回读（algorithm/每条 module+字节）+ 普通 class 注入容忍。

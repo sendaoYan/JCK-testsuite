@@ -25,6 +25,18 @@ public class NopInstructionTest {
             if (m.getName().equals(name)) return true;
         return false;
     }
+
+    // 触发 ConstantDescs 完整初始化，规避本 JDK 构建的 MethodTypeDesc.ofDescriptor 静态初始化环
+    static final ClassDesc TOUCH = ConstantDescs.CD_Object;
+
+    // 发射-回读辅助：build 唯一类名 + parse 回全部 CodeElement
+    static java.util.List<CodeElement> emit(String m, MethodTypeDesc mtd, java.util.function.Consumer<CodeBuilder> body) throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("EmNOP" + m), cb -> cb.withMethodBody(m, mtd, ClassFile.ACC_STATIC, body));
+        java.util.List<CodeElement> els = new ArrayList<>();
+        for (MethodModel mm : ClassFile.of().parse(b).methods())
+            if (mm.code().isPresent()) els.addAll(mm.code().get().elementList());
+        return els;
+    }
     static final ClassReader[] cap = new ClassReader[1];
     static final BufWriter[] cap2 = new BufWriter[1];
     static final BranchInstruction[] br = new BranchInstruction[1];
@@ -63,9 +75,45 @@ public class NopInstructionTest {
 
     }
 
+
+    // ---- Part 3: 发射-回读（核心） ----
+    static void testEmitReadback() throws Exception {
+        java.util.List<CodeElement> els = emit("m", ConstantDescs.MTD_void, cob -> cob.nop().nop().nop().return_());
+        int n = 0;
+        for (CodeElement e : els) if (e instanceof NopInstruction x) {
+            n++;
+            check(x.opcode() == Opcode.NOP, "NOP opcode");
+            check(x.sizeInBytes() == 1, "NOP sizeInBytes 1");
+            check(x.opcode().kind() == Opcode.Kind.NOP, "kind NOP");
+            check(x instanceof Instruction && x instanceof CodeElement, "Instruction+CodeElement");
+            check(!((Object) x instanceof PseudoInstruction), "not PseudoInstruction");
+        }
+        check(n == 3, "3 nops emitted, got " + n);
+        // NOP 指令在 CodeAttribute 中位置正确（bci 0,1,2）
+        byte[] b = ClassFile.of().build(ClassDesc.of("EmNOP2"), cb -> cb.withMethodBody("m", ConstantDescs.MTD_void, ClassFile.ACC_STATIC,
+                cob -> cob.nop().nop().return_()));
+        CodeAttribute ca = (CodeAttribute) ClassFile.of().parse(b).methods().get(0).code().get();
+        check(ca.codeLength() == 3, "codeLength 3 (2 nop + return)");
+        check(ca.codeArray().length == 3, "codeArray length 3");
+        check((ca.codeArray()[0] & 0xff) == Opcode.NOP.bytecode(), "byte 0 is NOP");
+        check((ca.codeArray()[1] & 0xff) == Opcode.NOP.bytecode(), "byte 1 is NOP");
+        check((ca.codeArray()[2] & 0xff) == Opcode.RETURN.bytecode(), "byte 2 is RETURN");
+    }
+
+    // ---- Part 4: 工厂 ----
+    static void testFactory() {
+        NopInstruction i = NopInstruction.of();
+        check(i.opcode() == Opcode.NOP, "of() NOP");
+        check(i.sizeInBytes() == 1, "of() size 1");
+        check(NopInstruction.of() instanceof NopInstruction, "of() type");
+        check(Opcode.NOP.bytecode() == 0, "NOP bytecode 0");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEmitReadback();
+        testFactory();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

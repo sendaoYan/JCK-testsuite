@@ -66,9 +66,88 @@ public class MethodRefEntryTest {
 
     }
 
+    // ---- Part 3: AMHC 常量基础设施预初始化（JDK-27 实测：先完整初始化 ConstantDescs 可避开
+    // ConstantDescs <-> PrimitiveClassDescImpl 类初始化环，见 DESIGN.md 易错细节） ----
+    static void testConstantDescsPreinit() {
+        check(ConstantDescs.CD_Object.descriptorString().equals("Ljava/lang/Object;"), "ConstantDescs.CD_Object preinit");
+    }
+
+    // ---- Part 4: MethodRefEntry 契约（双工厂/去重/MemberRef 面/invokevirtual 发射闭环/真类池 <init>） ----
+    static void testMrefPutDedup() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        MethodTypeDesc mtd = MethodTypeDesc.ofDescriptor("()Ljava/lang/String;");
+        MethodRefEntry m1 = b.methodRefEntry(ClassDesc.of("java.lang.Object"), "toString", mtd);
+        MethodRefEntry m2 = b.methodRefEntry(ClassDesc.of("java.lang.Object"), "toString", mtd);
+        check(m1 == m2, "same-value methodRefEntry dedup identity");
+        MethodRefEntry m3 = b.methodRefEntry(m1.owner(), m1.nameAndType());
+        check(m3 == m1, "cross-overload dedup");
+        MethodRefEntry m4 = b.methodRefEntry(ClassDesc.of("java.lang.Object"), "hashCode", MethodTypeDesc.ofDescriptor("()I"));
+        check(m4 != m1 && m4.index() != m1.index(), "different member different entry");
+        check(b.methodRefEntry(m1.owner(), m1.nameAndType()).index() == m1.index(), "dedup index stable");
+    }
+
+    static void testMrefFace() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        MethodRefEntry m = b.methodRefEntry(ClassDesc.of("java.lang.Object"), "toString", MethodTypeDesc.ofDescriptor("()Ljava/lang/String;"));
+        check(m.owner().asInternalName().equals("java/lang/Object"), "owner");
+        check(m.name().stringValue().equals("toString"), "name");
+        check(m.type().stringValue().equals("()Ljava/lang/String;"), "type descriptor");
+        check(m.nameAndType().name() == m.name() && m.nameAndType().type() == m.type(), "name()/type() delegate to NAT");
+        check(m.typeSymbol().descriptorString().equals("()Ljava/lang/String;"), "typeSymbol MethodTypeDesc");
+        check(m.typeSymbol().parameterCount() == 0, "typeSymbol parameterCount");
+        check(m.tag() == PoolEntry.TAG_METHODREF && m.tag() == 10, "tag TAG_METHODREF == 10");
+        check(m.width() == 1 && m.index() > 0 && m.constantPool() == b, "pool face");
+        check(m instanceof MemberRefEntry, "is MemberRefEntry");
+        check(!(((Object) m) instanceof InterfaceMethodRefEntry), "method ref is NOT InterfaceMethodRefEntry");
+        check(!(((Object) m) instanceof LoadableConstantEntry), "not loadable");
+    }
+
+    static void testMrefEmissionAndRealPool() throws Exception {
+        byte[] bytes = ClassFile.of().build(ClassDesc.of("pkg.EmitMr"), cb -> cb
+                .withMethodBody("m", MethodTypeDesc.ofDescriptor("(Ljava/lang/Object;)V"), ClassFile.ACC_STATIC,
+                        cob -> cob.aload(0).invokevirtual(ClassDesc.of("java.lang.Object"), "toString", MethodTypeDesc.ofDescriptor("()Ljava/lang/String;")).pop().return_()));
+        ClassModel cm2 = ClassFile.of().parse(bytes);
+        boolean saw = false;
+        for (PoolEntry pe : cm2.constantPool()) if (pe instanceof MethodRefEntry mr
+                && mr.owner().asInternalName().equals("java/lang/Object")
+                && mr.name().stringValue().equals("toString")
+                && mr.type().stringValue().equals("()Ljava/lang/String;")) saw = true;
+        check(saw, "emitted invokevirtual leaves MethodRefEntry roundtrip");
+        check(ClassFile.of().verify(cm2).isEmpty(), "emitted invokevirtual class verifies clean");
+        // 真类池：隐式构造器 super() 一定引用 Object.<init>
+        byte[] self = MethodRefEntryTest.class.getResourceAsStream("MethodRefEntryTest.class").readAllBytes();
+        ClassModel cm = ClassFile.of().parse(self);
+        ConstantPool cp = cm.constantPool();
+        boolean sawInit = false; int mrefCount = 0;
+        for (PoolEntry pe : cp) if (pe instanceof MethodRefEntry mr) {
+            mrefCount++;
+            if (mr.owner().asInternalName().equals("java/lang/Object") && mr.name().stringValue().equals("<init>")
+                    && mr.type().stringValue().equals("()V")) sawInit = true;
+        }
+        check(mrefCount > 0, "real pool has MethodRefEntry entries");
+        check(sawInit, "real pool references Object.<init> via implicit constructor");
+    }
+
+    static void testMrefNullNegative() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        try {
+            b.methodRefEntry(null, "m", MethodTypeDesc.ofDescriptor("()V"));
+            check(false, "methodRefEntry(null owner) must throw");
+        } catch (NullPointerException e) { check(true, "methodRefEntry(null owner) NPE"); }
+        try {
+            b.methodRefEntry(null, null);
+            check(false, "methodRefEntry(null,null) must throw");
+        } catch (NullPointerException e) { check(true, "methodRefEntry(null,null) NPE"); }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstantDescsPreinit();
+        testMrefPutDedup();
+        testMrefFace();
+        testMrefEmissionAndRealPool();
+        testMrefNullNegative();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

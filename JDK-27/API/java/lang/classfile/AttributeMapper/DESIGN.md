@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`AttributeMapperTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.AttributeMapper")` + public/interface/继承 + 关键成员。黑盒（`AttributeMapperTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，12→353 断言）：注册表全量+稳定性精确表
+新增 testFullRegistry（36 个 mapper 工厂全量反射循环：非 null/name()==NAME_* 常量/规范字面量/重复调用同实例（==）/stability 非 null，≥30 组配对；反射计数恰 36 工厂+36 常量（javap 锁定））；testStabilityAndAllowMultipleTable（stability 精确表：deprecated/synthetic/moduleResolution/sourceDebugExtension=STATELESS、sourceFile/signature/code/…=CP_REFS、stackMapTable/lineNumberTable/localVariableTable/localVariableTypeTable/characterRangeTable=LABELS、唯二 UNSTABLE=runtime{Visible,Invisible}TypeAnnotations；闭域断言标准属性无 UNKNOWN；allowMultiple 恰 6 个 true（deprecated/synthetic/characterRangeTable/lineNumberTable/localVariableTable/localVariableTypeTable）——全表经独立探针实测）；testCustomMapperInterface（readAttribute/writeAttribute/stability/allowMultiple 声明白盒+default 标记、自造最小 mapper 的 allowMultiple 默认 false、自造 mapper 作 findAttribute 键闭环）。易错点：brief 所称 4 值 STATELESS/RELAXED/LABILE/UNSTABLE 与本 JDK 不符——实测为 STATELESS/CP_REFS/LABELS/UNSTABLE/UNKNOWN 5 值。

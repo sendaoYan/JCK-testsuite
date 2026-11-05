@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`SimpleVerificationTypeInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.StackMapFrameInfo$SimpleVerificationTypeInfo")` + public/enum/继承 + 关键成员。黑盒（`SimpleVerificationTypeInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，52 断言）
+- testEnumTable：7 值精确序 TOP/INTEGER/FLOAT/DOUBLE/LONG/NULL/UNINITIALIZED_THIS；**tag()==ordinal()==0..6**；valueOf 双向；与 VerificationTypeInfo.ITEM_* 常量对应。
+- testRealFrames：javac 真帧 int/long 局部 → INTEGER/LONG Simple vti。
+- testAssemblyReadback：枚举常量直接组装 frame locals/stack。

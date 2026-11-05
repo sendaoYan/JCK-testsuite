@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ThrowsTargetTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.TypeAnnotation$ThrowsTarget")` + public/interface/继承 + 关键成员。黑盒（`ThrowsTargetTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（第 2 轮，8 → 36 断言）
+- u2 边界：`ofThrows(0/1/65535)` 合法回读 + `size()==2`；`-1/65536` IAE 精确消息 "throws type index out of range of u2: N"。
+- 真 javac 产物：`void th() throws @A IllegalArgumentException, @A IllegalStateException` 实测两条 THROWS，throwsTargetIndex 0/1 按 throws 列表声明序；与 `ExceptionsAttribute.exceptions()` 的异常名表逐一对照（internal name `java/lang/IllegalArgumentException` 等）；单异常 throws → 单注解 idx 0；path 恒空。
+

@@ -11,3 +11,12 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`StackMapsOptionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassFile$StackMapsOption")` + public/enum/继承 + 关键成员。黑盒（`StackMapsOptionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05：三值语义实测，含 v48 版本差）
+新增 `testOptionSemantics()`（39 断言，12→39）：
+- **v71 build 矩阵**：直线方法（无分支）三种选项都**无 SMT**；分支方法 WHEN_REQUIRED/GENERATE 有 SMT、DROP_STACK_MAPS 无。
+- **WHEN_REQUIRED vs GENERATE 的真实区别在 ≤49 版本**：`withVersion(JAVA_4_VERSION)` build 分支方法，WHEN_REQUIRED 无 SMT（JVMS 不要求）、**GENERATE_STACK_MAPS 照发 SMT**——这是唯一能区分两值的场景（实测锁定）。
+- **DROP_STACK_MAPS 三段**：fresh build 省 SMT；parse 侧模型保留属性；transform(ACCEPT_ALL) 拷贝 bound 属性保留。
+- **verify 三态**：正常分支产物 0 错；缺 SMT 的分支类 1 个 VerifyError（消息含 "Expecting a stackmap frame at branch target"）；缺 SMT 的直线类仍 0 错（不缺省失败）。
+- GENERATE 与 WHEN_REQUIRED 产物帧数相同（entries().size() 相等断言）。
+- 易错点：在 v71 上断言 WHEN_REQUIRED≠GENERATE 是错的——两值在最新版产物相同；需降到 v48 才可观测。

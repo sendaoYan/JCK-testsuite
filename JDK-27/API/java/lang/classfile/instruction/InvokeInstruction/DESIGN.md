@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`InvokeInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.InvokeInstruction")` + public/interface/继承 + 关键成员。黑盒（`InvokeInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 发射-回读：invokestatic/invokevirtual/invokeinterface 三通道 → opcode/sizeInBytes(5/3/5)/kind==INVOKE/owner/name/type 全等；count() 语义实测锁定：invokestatic/virtual 恒 0，invokeinterface count=1+参数 slot 数（1/2 两例）。
+- 工厂 3 重载（MethodDesc 直描 / MemberRefEntry / InterfaceMethodRefEntry）；of(null,..) NPE、非 INVOKE kind IAE。断言 14→45（实测运行计数）。

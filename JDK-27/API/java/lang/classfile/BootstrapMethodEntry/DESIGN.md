@@ -11,3 +11,15 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`BootstrapMethodEntryTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.BootstrapMethodEntry")` + public/interface/继承 + 关键成员。黑盒（`BootstrapMethodEntryTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 4.1 深化（契约覆盖版，80 断言）
+
+- `testLambdaRealClass()`：解析本测试类自身字节码（javac 产物）——BootstrapMethodsAttribute 存在且 bootstrapMethodsSize()==list.size()；LambdaMetafactory 条目：handle 方法名 metafactory、kind==6（REF_invokeStatic）、3 个静态参数类型表 [MethodTypeEntry(sam), MethodHandleEntry(impl), MethodTypeEntry(instantiated)]、args 均为 LoadableConstantEntry、bsmIndex>=0、constantPool()==model 池；StringConcatFactory 条目（字符串 + 拼接）同在；InvokeDynamicInstruction 联动（name/typeSymbol/bootstrapArgs/owner）。
+- `testBsmEntryBuilder()`：ConstantPoolBuilder.bsmEntry 双重载——同 desc+args 去重（==，bsmIndex 相同）；List.of("a","b") ConstantDesc 参数自动转池条目（StringEntry 回读、绑定同一池）；bsmEntry(MethodHandleEntry, List) 重载；bootstrapMethod() 的 reference 面（owner/name/MethodRefEntry）；池身份。
+- `testInvokeDynamicInjection()`：build 注入 invokedynamic(DynamicCallSiteDesc) → BootstrapMethodsAttribute 自动生成（无需手动 with）：1 条目、3 args、bsmIndex 0、owner==LambdaMetafactory，verify 干净；指令↔条目联动——InvokeDynamicInstruction.invokedynamic().bootstrapMethodIndex()==attr 条目 bsmIndex()；InvokeDynamicEntry.bootstrap()/nameAndType() 链；build 回调内 cb.constantPool().bsmEntry(...) 可用；BootstrapMethodsAttribute 无公开 of() 工厂（实测遍历 getMethods 断言）。
+
+实测锁定契约事实：
+1. BootstrapMethodsAttribute 只能由 build 自动生成或从既有字节码解析获得，公开 API 无 of 工厂（与大多数标准属性不同）。
+2. BSM 条目去重键 = (MethodHandle desc, 参数表)；参数以 LoadableConstantEntry 形态挂池。
+3. InvokeDynamicInstruction 无 bsmIndex() 访问器，须经 invokedynamic()（InvokeDynamicEntry）→ bootstrapMethodIndex()；InvokeDynamicEntry 继承 DynamicConstantPoolEntry，另有 bootstrap()/nameAndType() 面。
+4. javac 对 lambda 与字符串 + 拼接分别注入 LambdaMetafactory.metafactory 与 StringConcatFactory.makeConcat* 两族 BSM。

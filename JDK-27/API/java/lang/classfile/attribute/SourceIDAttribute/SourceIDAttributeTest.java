@@ -65,9 +65,49 @@ public class SourceIDAttributeTest {
 
     }
 
+
+    // ---- Part 3: 工厂 of(Utf8Entry)/of(String) + null + 属性面 ----
+    static void testFactoryOverloads() {
+        SourceIDAttribute a1 = SourceIDAttribute.of("hash-1234");
+        check(a1.sourceId().stringValue().equals("hash-1234"), "of(String)");
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        Utf8Entry u = cpb.utf8Entry("hash-5678");
+        SourceIDAttribute a2 = SourceIDAttribute.of(u);
+        check(a2.sourceId() == u, "of(Utf8Entry) entry identity");
+        check(a1.attributeName().stringValue().equals("SourceID")
+                && a1.attributeName().stringValue().equals(Attributes.NAME_SOURCE_ID), "NAME_SOURCE_ID");
+        check(a1.attributeMapper() == Attributes.sourceId(), "mapper identity");
+        check(a1.attributeMapper().stability() == AttributeMapper.AttributeStability.CP_REFS, "stability CP_REFS");
+        check(!a1.attributeMapper().allowMultiple(), "allowMultiple false");
+        try { SourceIDAttribute.of((String) null); check(false, "of(null String) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null String) NPE"); }
+        try { SourceIDAttribute.of((Utf8Entry) null); check(false, "of(null Utf8) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null Utf8) NPE"); }
+    }
+
+    // ---- Part 4: 注入回读 + javac 不产（负空间）----
+    static void testInjectRoundTrip() throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynSID"), cb -> cb.withSuperclass(ConstantDescs.CD_Object)
+                .with(SourceIDAttribute.of("id-xyz")));
+        ClassModel m = ClassFile.of().parse(b);
+        check(m.findAttribute(Attributes.sourceId()).get().sourceId().stringValue().equals("id-xyz"), "inject readback");
+        check(m.findAttribute(Attributes.sourceId()).get().attributeMapper() == Attributes.sourceId(), "parsed mapper identity");
+        check(ClassFile.of().verify(m).isEmpty(), "verify clean");
+        // 双注入（allowMultiple=false）只保留一个
+        byte[] b2 = ClassFile.of().build(ClassDesc.of("DynSID2"), cb -> cb
+                .with(SourceIDAttribute.of("a")).with(SourceIDAttribute.of("b")));
+        int cnt = 0;
+        for (Attribute<?> at : ClassFile.of().parse(b2).attributes()) if (at instanceof SourceIDAttribute) cnt++;
+        check(cnt == 1, "single SourceID after double inject");
+        byte[] self = SourceIDAttributeTest.class.getResourceAsStream("SourceIDAttributeTest.class").readAllBytes();
+        check(ClassFile.of().parse(self).findAttribute(Attributes.sourceId()).isEmpty(), "javac never emits SourceID");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFactoryOverloads();
+        testInjectRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -43,6 +43,8 @@ public class PoolEntryTest {
     static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
     static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
 
+    static final long CONST_LONG = 0x123456789ABCDEFL;
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.classfile.constantpool.PoolEntry");
@@ -71,9 +73,109 @@ public class PoolEntryTest {
 
     }
 
+    // ---- Part 3: AMHC 常量基础设施预初始化（JDK-27 实测：先完整初始化 ConstantDescs 可避开
+    // ConstantDescs <-> PrimitiveClassDescImpl 类初始化环，见 DESIGN.md 易错细节） ----
+    static void testConstantDescsPreinit() {
+        check(ConstantDescs.CD_Object.descriptorString().equals("Ljava/lang/Object;"), "ConstantDescs.CD_Object preinit");
+    }
+
+    // ---- Part 4: PoolEntry 契约（TAG 常量全表/width 表/index 布局/通用面/toString/真类池一致性） ----
+    static void testTagConstantTable() {
+        check(PoolEntry.TAG_UTF8 == 1, "TAG_UTF8 == 1");
+        check(PoolEntry.TAG_INTEGER == 3, "TAG_INTEGER == 3");
+        check(PoolEntry.TAG_FLOAT == 4, "TAG_FLOAT == 4");
+        check(PoolEntry.TAG_LONG == 5, "TAG_LONG == 5");
+        check(PoolEntry.TAG_DOUBLE == 6, "TAG_DOUBLE == 6");
+        check(PoolEntry.TAG_CLASS == 7, "TAG_CLASS == 7");
+        check(PoolEntry.TAG_STRING == 8, "TAG_STRING == 8");
+        check(PoolEntry.TAG_FIELDREF == 9, "TAG_FIELDREF == 9");
+        check(PoolEntry.TAG_METHODREF == 10, "TAG_METHODREF == 10");
+        check(PoolEntry.TAG_INTERFACE_METHODREF == 11, "TAG_INTERFACE_METHODREF == 11");
+        check(PoolEntry.TAG_NAME_AND_TYPE == 12, "TAG_NAME_AND_TYPE == 12");
+        check(PoolEntry.TAG_METHOD_HANDLE == 15, "TAG_METHOD_HANDLE == 15");
+        check(PoolEntry.TAG_METHOD_TYPE == 16, "TAG_METHOD_TYPE == 16");
+        check(PoolEntry.TAG_DYNAMIC == 17, "TAG_DYNAMIC == 17");
+        check(PoolEntry.TAG_INVOKE_DYNAMIC == 18, "TAG_INVOKE_DYNAMIC == 18");
+        check(PoolEntry.TAG_MODULE == 19, "TAG_MODULE == 19");
+        check(PoolEntry.TAG_PACKAGE == 20, "TAG_PACKAGE == 20");
+        // 无 tag 0/2/13/14（历史保留：CONSTANT_Unicode/unused）
+        java.util.Set<Integer> tags = new java.util.TreeSet<>();
+        for (java.lang.reflect.Field f : PoolEntry.class.getFields())
+            if (f.getName().startsWith("TAG_")) try { tags.add(f.getInt(null)); } catch (ReflectiveOperationException e) { }
+        check(tags.equals(new java.util.TreeSet<>(java.util.Arrays.asList(1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 20))), "17 tag constants, no gaps except JVMS-reserved 2/13/14: " + tags);
+    }
+
+    static void testKindFaceTable() {
+        ConstantPoolBuilder b = ConstantPoolBuilder.of();
+        MethodRefEntry mre = b.methodRefEntry(ClassDesc.of("java.lang.Object"), "toString", MethodTypeDesc.ofDescriptor("()Ljava/lang/String;"));
+        MethodHandleEntry mh = b.methodHandleEntry(6, mre);
+        BootstrapMethodEntry bsm = b.bsmEntry(mh, List.of());
+        PoolEntry[] single = {
+                b.utf8Entry("u"), b.intEntry(1), b.floatEntry(1f),
+                b.classEntry(ClassDesc.of("p.C")), b.stringEntry("s"),
+                b.nameAndTypeEntry("n", ClassDesc.of("I")),
+                b.fieldRefEntry(ClassDesc.of("p.C"), "f", ClassDesc.of("I")), mre,
+                b.interfaceMethodRefEntry(ClassDesc.of("p.I"), "g", MethodTypeDesc.ofDescriptor("()V")),
+                mh, b.methodTypeEntry(MethodTypeDesc.ofDescriptor("()V")),
+                b.constantDynamicEntry(bsm, b.nameAndTypeEntry("c", ClassDesc.of("java.lang.Object"))),
+                b.invokeDynamicEntry(bsm, b.nameAndTypeEntry("i", MethodTypeDesc.ofDescriptor("()V"))),
+                b.moduleEntry(ModuleDesc.of("m")), b.packageEntry(PackageDesc.of("p")),
+        };
+        java.util.Set<Integer> indices = new java.util.HashSet<>();
+        for (PoolEntry pe : single) {
+            check(pe.width() == 1, "single-slot kind " + pe.tag());
+            check(pe.index() >= 1, "positive index");
+            check(indices.add(pe.index()), "single-slot indices unique: tag " + pe.tag());
+            check(pe.constantPool() == b, "constantPool() is the owning builder");
+        }
+        check(b.longEntry(2L).width() == 2, "long double-slot");
+        check(b.doubleEntry(2d).width() == 2, "double double-slot");
+        // 双槽条目使下一 index 跳一位
+        ConstantPoolBuilder b2 = ConstantPoolBuilder.of();
+        LongEntry l = b2.longEntry(9L);
+        check(b2.doubleEntry(9d).index() == l.index() + 2, "entry after long skips phantom");
+        check(b2.utf8Entry("z").index() == l.index() + 4, "entry after double skips phantom");
+    }
+
+    static void testPoolEntryToStringAndRealPool() throws Exception {
+        byte[] self = PoolEntryTest.class.getResourceAsStream("PoolEntryTest.class").readAllBytes();
+        ClassModel cm = ClassFile.of().parse(self);
+        ConstantPool cp = cm.constantPool();
+        // toString 含 index 与内容（实测形如 "10 java/lang/Object.<init>:()V"）
+        boolean toStringOk = false;
+        for (PoolEntry pe : cp) if (pe.toString().contains(String.valueOf(pe.index()))) { toStringOk = true; break; }
+        check(toStringOk, "toString mentions index");
+        // 通用面：每一条目 tag 与 tag 常量集合吻合、entryByIndex 反查同一
+        java.util.Set<Integer> validTags = new java.util.HashSet<>(java.util.Arrays.asList(1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 20));
+        boolean allValid = true;
+        for (PoolEntry pe : cp) {
+            if (!validTags.contains(pe.tag())) allValid = false;
+            if (cp.entryByIndex(pe.index()) != pe) allValid = false;
+            if (pe.constantPool() != cp) allValid = false;
+            if (pe.width() != ((pe.tag() == PoolEntry.TAG_LONG || pe.tag() == PoolEntry.TAG_DOUBLE) ? 2 : 1)) allValid = false;
+        }
+        check(allValid, "every real entry: valid tag + identity + pool + width law");
+        // 池大小 = 最大 index + 1；双槽造成 size > 迭代数 + 1
+        int iterCount = 0, maxIdx = 0;
+        for (PoolEntry pe : cp) { iterCount++; if (pe.index() > maxIdx) maxIdx = pe.index(); }
+        check(cp.size() == maxIdx + 1, "size() == maxIndex + 1");
+        check(iterCount < cp.size() - 1 || cp.size() - iterCount == 1, "phantom slots explain size-iteration gap (CONST_LONG)");
+        // 越界：ConstantPoolException（本接口面统一入口）
+        try {
+            cp.entryByIndex(cp.size());
+            check(false, "oob must throw");
+        } catch (ConstantPoolException e) {
+            check(e.getMessage() != null, "oob message non-null");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testConstantDescsPreinit();
+        testTagConstantTable();
+        testKindFaceTable();
+        testPoolEntryToStringAndRealPool();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

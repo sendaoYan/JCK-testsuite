@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`WildcardIndicatorTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Signature$TypeArg$Bounded$WildcardIndicator")` + public/enum/继承 + 关键成员。黑盒（`WildcardIndicatorTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，14 → 48 断言）
+- **枚举精确表**（`testEnumValueTable`）：实测 values() 恰 3 个且声明顺序 **NONE, EXTENDS, SUPER**，ordinal 0/1/2；name()==toString()；compareTo 全序；EnumSet.allOf==3。
+- **valueOf 矩阵**（`testValueOfMatrix`）：3 值双向 round-trip；valueOf("BOGUS") → IAE `No enum constant …BOGUS`；valueOf("") → IAE；**valueOf(null) → NPE `Name is null`**；valueOf("extends") 大小写敏感 IAE。
+- **语义映射**（`testSemanticParseMapping`）：签名串裸形/+/-/* ↔ NONE/EXTENDS/SUPER/非 Bounded；bounded(ind,·) 经 signatureString 再解析指示器保持（三指示器全过）。

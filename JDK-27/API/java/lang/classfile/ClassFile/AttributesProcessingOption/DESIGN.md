@@ -11,3 +11,11 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`AttributesProcessingOptionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassFile$AttributesProcessingOption")` + public/enum/继承 + 关键成员。黑盒（`AttributesProcessingOptionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05：三值过滤矩阵 + 稳定性阈值实测）
+新增 `testOptionSemantics()`（37 断言，12→37）。过滤规则实测（Util.isAttributeAllowed：`4? 否——5 - stability.ordinal() > processingOption.ordinal()`，AttributeStability 共 5 值 STATELESS=0/CP_REFS=1/LABELS=2/UNSTABLE=3/UNKNOWN=4，仅对 **bound** 属性生效）：
+- **未知属性（未注册 parse，stability=UNKNOWN）**：PASS_ALL 保留；DROP_UNKNOWN 剥；**DROP_UNSTABLE 也剥**（UNKNOWN 排在 UNSTABLE 之后）。
+- **注册过的自定义属性（parse 成用户对象，STATELESS、非 bound）**：三个选项**全保留**——readAttribute 产物不再是 BoundAttribute，过滤只作用于 bound 属性（实测锁定，易错点）。
+- **真 UNSTABLE bound 属性**（自类 `static <@ApTA T> void gen(T)` 的 RuntimeVisibleTypeAnnotations，内置 mapper stability=UNSTABLE）：需强制元素重放才能观测——**NEW_POOL** 或 **transformingMethodBodies** 路径下 DROP_UNSTABLE 剥掉、PASS_ALL/DROP_UNKNOWN 保留；**SHARED_POOL + ACCEPT_ALL 走整成员字节快拷，三个选项全保留**（MethodImpl.writeTo canWriteDirect 快路径）。
+- 默认（无选项）transform 行为=PASS_ALL。
+- 易错点：ACCEPT_ALL+默认池下断言 DROP_UNSTABLE 剥属性会失败——必须配 NEW_POOL 或方法体 transform 才能触发过滤。

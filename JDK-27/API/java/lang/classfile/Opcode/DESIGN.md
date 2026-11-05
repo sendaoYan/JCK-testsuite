@@ -11,3 +11,12 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`OpcodeTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.Opcode")` + public/enum/继承 + 关键成员。黑盒（`OpcodeTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05 契约深化，23 → 215 断言）
+- `testBytecodeTable`：57 项 bytecode() 精确表（NOP=0x00 … GOTO_W=0xC8/GOTO_W/JSR_W，全按 JVMS+JDK-27 实测）。
+- `testBytecodeBijection`：213 个 bytecode() 全互异（Set 大小 213）；**宽型编码实测锁定：`ILOAD_W.bytecode()==0xC415` 即 `(0xC4<<8)|base`**（枚举无独立 WIDE 常量），12 个 `_W` 全族断言 X_W==(WIDE<<8)|X；非宽型值域 [0,0xC9]。
+- `testKindTable`：36 个知名 opcode 的 kind() 精确分类（facts §4 的 30 项 + LADD/ASTORE/IALOAD/DUP/SWAP/ICONST_2 等扩展）+ 遍历 213 个 kind() 非 null + **26 类完整计数表**（LOAD=30/STORE=30/OPERATOR=42/CONSTANT=20/BRANCH=18/CONVERT=15/STACK=9/ARRAY_LOAD=8/ARRAY_STORE=8/RETURN=6/FIELD_ACCESS=4/INVOKE=4/INCREMENT=2/TYPE_CHECK=2/MONITOR=2/DISCONTINUED_*=2×2/九个单例=1）+ 计数和==213。
+- `testSizeTable`：sizeIfFixed 精确表（单字节=1、BIPUSH/LDC/ILOAD/RET=2、SIPUSH/LDC_W/LDC2_W/IINC/GOTO/IF比较/字段/调用/NEW=3、MULTIANEWARRAY=4、INVOKEINTERFACE/INVOKEDYNAMIC/GOTO_W/JSR_W=5、IINC_W=6、TABLESWITCH/LOOKUPSWITCH=-1 变长哨兵）+ **全域分布 {-1:2, 1:147, 2:14, 3:33, 4:12, 5:4, 6:1}** + 遍历 >=-1。
+- `testWideFamily`：**GOTO_W/JSR_W 是独立操作码（0xC8/0xC9），isWide()==false**（易错！与 facts 预期相反）；恰 12 个 isWide==true（loads/stores×10+RET_W+IINC_W）；LDC_W/LDC2_W 名带 _W 但非 wide。
+- `testEnumSemantics`：valueOf 不存在名 → IAE 精确消息 `No enum constant java.lang.classfile.Opcode.NOT_AN_OPCODE`；valueOf(null) → NPE "Name is null"；values() 防御拷贝；ordinal 头部 0/1/2。
+- `testEmissionCrossCheck`：真实发射-回读 8 指令序列（ICONST_2,LDC,POP,ICONST_3,IMUL,GETSTATIC,POP,IRETURN 的 opcode + sizeInBytes 双一致）；ldc(long) 自动 LDC2_W；iinc(256,1)/iload(256) 自动升级 IINC_W/ILOAD_W。

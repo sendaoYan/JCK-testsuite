@@ -11,3 +11,8 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`ModuleProvideInfoTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.attribute.ModuleProvideInfo")` + public/interface/继承 + 关键成员。黑盒（`ModuleProvideInfoTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化条目（2026-11-05 B 批，26 断言）
+- testFactoryOverloads：of(entry,List)/of(entry,varargs)/of(desc,List)/of(desc,varargs)；provides/providesWith entry 身份保留 + asInternalName/asSymbol。
+- testNegatives：of(null svc)/of(null List) NPE（注意 ClassDesc 与 List<ClassEntry> 无混搭重载）。
+- testBuildModuleRoundTrip：provides(info)+provides(desc,descs) 双通道 → parse 服务/提供者表全回读 + verify 干净。

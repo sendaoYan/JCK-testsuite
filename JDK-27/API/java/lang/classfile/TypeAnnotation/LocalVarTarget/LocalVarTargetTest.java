@@ -72,9 +72,108 @@ public class LocalVarTargetTest {
 
     }
 
+    // ===== 深化：真 javac 产物载体（局部变量声明 + try-with-resources 资源变量） =====
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    @java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE, java.lang.annotation.ElementType.LOCAL_VARIABLE})
+    @interface LVA { String value() default "x"; }
+
+    static class Holder {
+        void code() throws Exception {
+            @LVA("lv") String s = "x";
+            java.util.List<@LVA("lvta") String> gl = java.util.List.of();
+            try (@LVA("res") AutoCloseable r = null) { }
+            System.out.print(s + gl);
+        }
+    }
+
+    static String aval(TypeAnnotation t) {
+        for (AnnotationElement e : t.annotation().elements())
+            if (e.name().stringValue().equals("value"))
+                return ((AnnotationValue.OfString) e.value()).stringValue();
+        return "?";
+    }
+    static TypeAnnotation findOne(java.util.List<TypeAnnotation> l, String val) {
+        TypeAnnotation r = null;
+        for (TypeAnnotation t : l) {
+            if (aval(t).equals(val)) {
+                if (r != null) throw new AssertionError("duplicate " + val);
+                r = t;
+            }
+        }
+        if (r == null) throw new AssertionError("missing " + val);
+        return r;
+    }
+
+    // ---- Part 3: 工厂族（ofVariable/ofLocalVariable/ofResourceVariable + 变长 size 公式 2+6n） ----
+    static void testFactoryMatrix() {
+        ClassFile.of().build(ClassDesc.of("pkg.LVT"), cb -> cb.withMethodBody("m", MethodTypeDesc.ofDescriptor("()V"), 0, cob -> {
+            Label s = cob.newLabel();
+            Label e = cob.newLabel();
+            TypeAnnotation.LocalVarTargetInfo i1 = TypeAnnotation.LocalVarTargetInfo.of(s, e, 1);
+            TypeAnnotation.LocalVarTargetInfo i2 = TypeAnnotation.LocalVarTargetInfo.of(s, e, 2);
+            TypeAnnotation.LocalVarTargetInfo i3 = TypeAnnotation.LocalVarTargetInfo.of(s, e, 3);
+            TypeAnnotation.LocalVarTarget empty = TypeAnnotation.TargetInfo.ofLocalVariable(java.util.List.of());
+            check(empty.targetType() == TypeAnnotation.TargetType.LOCAL_VARIABLE && empty.table().isEmpty() && empty.size() == 2,
+                    "ofLocalVariable(empty) size 2（空表合法，仅 u2 计数字节）");
+            TypeAnnotation.LocalVarTarget one = TypeAnnotation.TargetInfo.ofLocalVariable(java.util.List.of(i1));
+            check(one.table().size() == 1 && one.table().get(0).index() == 1 && one.size() == 8, "table1 size 8");
+            TypeAnnotation.LocalVarTarget three = TypeAnnotation.TargetInfo.ofLocalVariable(java.util.List.of(i1, i2, i3));
+            check(three.table().size() == 3 && three.size() == 2 + 6 * 3, "table3 size 2+6*3=20");
+            TypeAnnotation.LocalVarTarget rv = TypeAnnotation.TargetInfo.ofResourceVariable(java.util.List.of(i1));
+            check(rv.targetType() == TypeAnnotation.TargetType.RESOURCE_VARIABLE && rv.size() == 8, "ofResourceVariable");
+            check(TypeAnnotation.TargetInfo.ofVariable(TypeAnnotation.TargetType.LOCAL_VARIABLE, java.util.List.of(i1)).table().size() == 1,
+                    "ofVariable(LOCAL_VARIABLE,..) table");
+            check(TypeAnnotation.TargetInfo.ofVariable(TypeAnnotation.TargetType.RESOURCE_VARIABLE, java.util.List.of(i1)).targetType()
+                    == TypeAnnotation.TargetType.RESOURCE_VARIABLE, "ofVariable(RESOURCE_VARIABLE,..)");
+            // targetType 与表格形态不符 → IAE（实测 Wrong target type specified）
+            try {
+                TypeAnnotation.TargetInfo.ofVariable(TypeAnnotation.TargetType.FIELD, java.util.List.of(i1));
+                check(false, "ofVariable(FIELD) must IAE");
+            } catch (IllegalArgumentException ex) { check(ex.getMessage() != null && ex.getMessage().contains("Wrong target type"), "ofVariable(FIELD) IAE msg"); }
+            cob.labelBinding(s).labelBinding(e).return_();
+        }));
+    }
+
+    // ---- Part 4: 真 javac 产物（LOCAL_VARIABLE / RESOURCE_VARIABLE 表格 + 不可变视图） ----
+    static void testRealProduct() throws Exception {
+        byte[] hb = LocalVarTargetTest.class.getResourceAsStream("LocalVarTargetTest$Holder.class").readAllBytes();
+        ClassModel cm = ClassFile.of().parse(hb);
+        MethodModel mm = cm.methods().stream().filter(m -> m.methodName().stringValue().equals("code")).findFirst().orElseThrow();
+        CodeAttribute ca = (CodeAttribute) mm.code().get();
+        java.util.List<TypeAnnotation> anns = ca.findAttribute(Attributes.runtimeVisibleTypeAnnotations()).orElseThrow().annotations();
+        check(anns.size() == 3, "3 local annotations, got " + anns.size());
+        TypeAnnotation lv = findOne(anns, "lv");
+        check(lv.targetInfo() instanceof TypeAnnotation.LocalVarTarget, "lv LocalVarTarget");
+        check(lv.targetInfo().targetType() == TypeAnnotation.TargetType.LOCAL_VARIABLE, "lv LOCAL_VARIABLE");
+        check(lv.targetPath().isEmpty(), "lv path empty");
+        java.util.List<TypeAnnotation.LocalVarTargetInfo> tbl = ((TypeAnnotation.LocalVarTarget) lv.targetInfo()).table();
+        check(tbl.size() == 1, "lv table size 1");
+        int lvSlot = tbl.get(0).index();
+        check(lv.targetInfo().size() == 2 + 6 * tbl.size(), "lv size 2+6n matches encoding");
+        try { tbl.add(null); check(false, "table() must be immutable"); }
+        catch (UnsupportedOperationException e) { check(true, "table() UOE"); }
+        try { tbl.remove(0); check(false, "table() remove must fail"); }
+        catch (UnsupportedOperationException e) { check(true, "table() remove UOE"); }
+        TypeAnnotation lvta = findOne(anns, "lvta");
+        check(lvta.targetInfo().targetType() == TypeAnnotation.TargetType.LOCAL_VARIABLE, "lvta LOCAL_VARIABLE");
+        check(lvta.targetPath().size() == 1
+                && lvta.targetPath().get(0).typePathKind() == TypeAnnotation.TypePathComponent.Kind.TYPE_ARGUMENT, "lvta path TYPE_ARGUMENT");
+        check(((TypeAnnotation.LocalVarTarget) lvta.targetInfo()).table().get(0).index() != lvSlot, "lv/lvta different slots");
+        TypeAnnotation res = findOne(anns, "res");
+        check(res.targetInfo() instanceof TypeAnnotation.LocalVarTarget, "res LocalVarTarget");
+        check(res.targetInfo().targetType() == TypeAnnotation.TargetType.RESOURCE_VARIABLE, "res RESOURCE_VARIABLE");
+        java.util.List<TypeAnnotation.LocalVarTargetInfo> rtbl = ((TypeAnnotation.LocalVarTarget) res.targetInfo()).table();
+        check(rtbl.size() == 1, "res table size 1");
+        check(rtbl.get(0).index() != lvSlot, "res separate slot");
+        check(ca.labelToBci(rtbl.get(0).startLabel()) >= 0, "res startLabel bound");
+        check(ca.labelToBci(rtbl.get(0).endLabel()) > ca.labelToBci(rtbl.get(0).startLabel()), "res start<end");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFactoryMatrix();
+        testRealProduct();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

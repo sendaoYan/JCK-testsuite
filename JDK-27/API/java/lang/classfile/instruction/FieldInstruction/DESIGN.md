@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`FieldInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.FieldInstruction")` + public/interface/继承 + 关键成员。黑盒（`FieldInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 4 opcode 发射回读：getstatic/getfield/putstatic/putfield（自建类双通道：get 用本类静态字段 + 实例字段）；opcode/sizeInBytes(3)/kind==FIELD_ACCESS/owner/name/type 全等；fieldAccess(TypeKind) 泛型通道。
+- 工厂 3 重载（opcode+ClassDesc+name+MethodTypeDesc / opcode+MemberRefEntry / 直接 Field_ref）身份断言；of(null,..) NPE、非 FIELD_ACCESS kind IAE（消息含 FIELD_ACCESS）。断言 13→48（实测运行计数）。

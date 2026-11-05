@@ -39,6 +39,7 @@ public class NestMembersAttributeTest {
     static final TypeAnnotation.OffsetTarget[] ot = new TypeAnnotation.OffsetTarget[1];
 
     // ---- custom attribute support for black-box above ----
+    static class NMExtra {}
     static class CA extends CustomAttribute<CA> { CA(AttributeMapper<CA> m) { super(m); } }
     static class CA2 extends CustomAttribute<CA2> { CA2(AttributeMapper<CA2> m) { super(m); } }
     static class CA3 extends CustomAttribute<CA3> { CA3(AttributeMapper<CA3> m) { super(m); } }
@@ -65,9 +66,67 @@ public class NestMembersAttributeTest {
 
     }
 
+
+    // ---- Part 3: javac 真产物（精确 nest 成员集合）----
+    static void testRealProduct() throws Exception {
+        byte[] self = NestMembersAttributeTest.class.getResourceAsStream("NestMembersAttributeTest.class").readAllBytes();
+        var nm = ClassFile.of().parse(self).findAttribute(Attributes.nestMembers()).get();
+        Set<String> names = new HashSet<>();
+        for (ClassEntry e : nm.nestMembers()) names.add(e.asInternalName());
+        check(names.size() == nm.nestMembers().size(), "no duplicate nest members");
+        check(names.equals(new HashSet<>(List.of("NestMembersAttributeTest$CA", "NestMembersAttributeTest$CA2",
+                "NestMembersAttributeTest$CA3", "NestMembersAttributeTest$NMExtra"))), "exact nest member set: " + names);
+        byte[] inner = NestMembersAttributeTest.class.getResourceAsStream("NestMembersAttributeTest$NMExtra.class").readAllBytes();
+        check(ClassFile.of().parse(inner).findAttribute(Attributes.nestMembers()).isEmpty(), "member class itself has no NestMembers");
+        check(ClassFile.of().parse(inner).findAttribute(Attributes.nestHost()).isPresent(), "member class has NestHost");
+        check(nm.attributeMapper() == Attributes.nestMembers(), "parsed mapper identity");
+    }
+
+    // ---- Part 4: 工厂 4 重载 + null 负例 + 属性面 ----
+    static void testFactoryOverloads() {
+        ConstantPoolBuilder cpb = ConstantPoolBuilder.of();
+        ClassEntry ce1 = cpb.classEntry(ClassDesc.of("N$A"));
+        ClassEntry ce2 = cpb.classEntry(ClassDesc.of("N$B"));
+        NestMembersAttribute a1 = NestMembersAttribute.of(List.of(ce1, ce2));
+        check(a1.nestMembers().size() == 2 && a1.nestMembers().get(0) == ce1, "of(List) entry identity");
+        NestMembersAttribute a2 = NestMembersAttribute.of(ce1);
+        check(a2.nestMembers().get(0) == ce1, "of(varargs)");
+        NestMembersAttribute a3 = NestMembersAttribute.ofSymbols(List.of(ClassDesc.of("N$C")));
+        check(a3.nestMembers().get(0).asInternalName().equals("N$C"), "ofSymbols(List)");
+        NestMembersAttribute a4 = NestMembersAttribute.ofSymbols(ClassDesc.of("N$D"), ClassDesc.of("N$E"));
+        check(a4.nestMembers().size() == 2 && a4.nestMembers().get(1).asInternalName().equals("N$E"), "ofSymbols(varargs)");
+        check(NestMembersAttribute.ofSymbols().nestMembers().isEmpty(), "ofSymbols(empty)");
+        check(a1.attributeName().stringValue().equals("NestMembers")
+                && a1.attributeName().stringValue().equals(Attributes.NAME_NEST_MEMBERS), "NAME_NEST_MEMBERS");
+        check(a1.attributeMapper() == Attributes.nestMembers(), "mapper identity");
+        check(a1.attributeMapper().stability() == AttributeMapper.AttributeStability.CP_REFS, "stability CP_REFS");
+        check(!a1.attributeMapper().allowMultiple(), "allowMultiple false");
+        try { NestMembersAttribute.of((List<ClassEntry>) null); check(false, "of(null List) must throw"); }
+        catch (NullPointerException e) { check(true, "of(null List) NPE"); }
+        try { NestMembersAttribute.ofSymbols((List<ClassDesc>) null); check(false, "ofSymbols(null) must throw"); }
+        catch (NullPointerException e) { check(true, "ofSymbols(null) NPE"); }
+        try { NestMembersAttribute.ofSymbols((ClassDesc[]) null); check(false, "ofSymbols(null varargs) must throw"); }
+        catch (NullPointerException e) { check(true, "ofSymbols(null varargs) NPE"); }
+    }
+
+    // ---- Part 5: 注入闭环 ----
+    static void testInjectRoundTrip() throws Exception {
+        byte[] b = ClassFile.of().build(ClassDesc.of("DynNMA"), cb -> cb.withSuperclass(ConstantDescs.CD_Object)
+                .with(NestMembersAttribute.ofSymbols(ClassDesc.of("DynNMA$X"), ClassDesc.of("DynNMA$Y"))));
+        ClassModel m = ClassFile.of().parse(b);
+        List<String> names = new ArrayList<>();
+        for (ClassEntry e : m.findAttribute(Attributes.nestMembers()).get().nestMembers()) names.add(e.asInternalName());
+        check(names.equals(List.of("DynNMA$X", "DynNMA$Y")), "inject readback order preserved: " + names);
+        check(m.findAttribute(Attributes.nestMembers()).get().attributeMapper() == Attributes.nestMembers(), "parsed mapper identity");
+        check(ClassFile.of().verify(m).isEmpty(), "verify clean");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealProduct();
+        testFactoryOverloads();
+        testInjectRoundTrip();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

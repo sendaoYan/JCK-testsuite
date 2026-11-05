@@ -1,13 +1,19 @@
 # java.lang.classfile.MethodElement — 设计案
 
 ## 1. API 功能
-`java.lang.classfile.MethodElement`（interface）。工厂/静态方法：(none)。查询/实例方法：(none)。
+`java.lang.classfile.MethodElement`（空标记接口，extends `ClassFileElement`）。实现者（实测分类）：`CodeModel`、方法级 `AccessFlags`、`DeprecatedAttribute`、`ExceptionsAttribute`、`SignatureAttribute`、`MethodParametersAttribute`、`RuntimeVisibleAnnotationsAttribute`、`CustomAttribute`。**非**实现者：`MethodModel`（本身是 **ClassElement**，其元素才是 MethodElement）、`SourceFileAttribute`、`ConstantValueAttribute`、`Superclass`、`ClassFileVersion`、`Interfaces`、`FieldModel`、指令/伪指令。
 
 ## 2. Java 用户如何使用
-通过 `ClassFile.of()` 构建/解析 class（或 `ConstantPoolBuilder.of()` 建常量池条目、`ClassFile.of().build()`/`parse()` 往返）得到真实实例；实例通过 `of(...)` 工厂创建后逐方法断言访问器；涉及 label 的类型在 `ClassFile.of().build(...)` 回调内用 `CodeBuilder.newLabel()` 捕获。 本测试在 `MethodElementTest.testBlackBox()` 中按「构建 → 解析/创建 → 组合断言」链路覆盖。
+`MethodModel.elementList()` 的元素类型（实测直方图：`[AccessFlags, CodeModel]`，有 code 的方法恰好两元素；abstract/native 方法仅 `[AccessFlags]`）；`MethodTransform`/`mb.with(MethodElement)` 的元素币种。
 
-## 3. 开源代码实际用法调研
-JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesTest、ModuleBuilderTest、Utf8EntryTest、AttributesTest）与 JDK 源码自用（`src/java.base/.../java/lang/Module.java`、`jdk.jartool/.../FingerPrint.java`、`java.lang.reflect.ProxyGenerator`）大量使用 `java.lang.classfile` 族 API；本测试的 `java.lang.classfile.MethodElement` 断言按上述真实用法模式编写。
+## 3. 参考来源
+- JDK 27 javadoc + `javap java.lang.classfile.MethodElement` 及属性接口 extends 子句。
+- OpenJDK `test/jdk/jdk/classfile/`（transform 用例）。
+- 本机实测：MethodModel instanceof MethodElement == **false**（它是 ClassElement）；CodeModel instanceof MethodElement == true；方法 elementList=[AccessFlags, CodeModel]。
 
-## 4. 测试用例设计 + 自动化实现
-白盒（`MethodElementTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.MethodElement")` + public/interface/继承 + 关键成员。黑盒（`MethodElementTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+## 4. 测试用例设计 + 易错规范细节
+- 白盒（原有）+ 黑盒（原有：CodeModel/DeprecatedAttribute 两正例）。
+- `testPositiveFamily`（深化）：工厂产物（Deprecated/Exceptions/Signature/**MethodParameters**/CustomAttribute）+ 模型产物（CodeModel/方法 AccessFlags）+ 方法 elementList 直方图 [AccessFlags=1, CodeModel=1] + 全员非空循环 + **真类 bound 属性**（depMethod 的 Deprecated、throwsM 的 Exceptions、genericM 的 Signature 均 MethodElement；SourceFile NOT）。
+- `testNegativeFamily`（深化）：Superclass/ClassFileVersion/Interfaces/SourceFile/ConstantValue/Instruction/LineNumber NOT MethodElement；FieldModel NOT；**MethodModel NOT MethodElement（实测，易错）**。
+- `testTransformChannel`（深化）：DynMethodElement+seq → ClassElement 谓词按方法名过滤 → kept==1 → defineClass → go()==2 运行闭环 + verify 干净。
+- 易错点：**MethodModel ≠ MethodElement**（泛型参数是 MethodElement 不代表自身实现它）；负例 instanceof 部分编译不过（如 SourceFileAttribute instanceof MethodElement），须用 `Class.isInstance`。

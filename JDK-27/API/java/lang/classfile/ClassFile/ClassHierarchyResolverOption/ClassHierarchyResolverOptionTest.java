@@ -66,9 +66,103 @@ public class ClassHierarchyResolverOptionTest {
 
     }
 
+    // ---- Part 3: option semantics measured on JDK 27 ----
+    static void testOptionSemantics() throws Exception {
+        ClassFile cf = ClassFile.of();
+
+        // factory/getter identity + null rejection
+        ClassHierarchyResolver chain = ClassHierarchyResolver.of(java.util.List.of(), java.util.Map.of(
+                ClassDesc.of("ChrMrgA"), ConstantDescs.CD_Object,
+                ClassDesc.of("ChrMrgB"), ClassDesc.of("ChrMrgA")));
+        ClassHierarchyResolver sib = ClassHierarchyResolver.of(java.util.List.of(), java.util.Map.of(
+                ClassDesc.of("ChrMrgA"), ConstantDescs.CD_Object,
+                ClassDesc.of("ChrMrgB"), ConstantDescs.CD_Object));
+        ClassFile.ClassHierarchyResolverOption o = ClassFile.ClassHierarchyResolverOption.of(chain);
+        check(o.classHierarchyResolver() == chain, "classHierarchyResolver() returns the same resolver instance");
+        check(ClassFile.ClassHierarchyResolverOption.of(sib).classHierarchyResolver() == sib,
+                "second option keeps its own resolver");
+        try {
+            ClassFile.ClassHierarchyResolverOption.of(null);
+            check(false, "of(null) must reject null");
+        } catch (NullPointerException npe) {
+            check(true, "of(null) throws NPE");
+        }
+
+        // resolver map semantics: chain (MrgB extends MrgA) vs siblings vs default class-loading resolution
+        check(chain.getClassInfo(ClassDesc.of("ChrMrgB")) != null, "chain resolver knows ChrMrgB");
+        check(chain.getClassInfo(ClassDesc.of("NoSuchClass")) == null, "static resolver returns null for unknown class");
+        check(ClassHierarchyResolver.defaultResolver().getClassInfo(ConstantDescs.CD_Object) != null,
+                "defaultResolver resolves java/lang/Object");
+        check(ClassHierarchyResolver.of(java.util.List.of(ClassDesc.of("ChrIface")), java.util.Map.of())
+                        .getClassInfo(ClassDesc.of("ChrIface")) != null,
+                "interface collection entry resolvable");
+        check(ClassHierarchyResolver.ClassHierarchyInfo.ofInterface()
+                        != ClassHierarchyResolver.ClassHierarchyInfo.ofClass(ConstantDescs.CD_Object),
+                "ofInterface and ofClass produce distinct infos");
+        check(chain.orElse(sib).getClassInfo(ClassDesc.of("ChrMrgA")) != null,
+                "orElse fallback chain still resolves known entries");
+
+        // build-side: merging two reference types at a join consults the resolver
+        byte[] merged = cf.withOptions(ClassFile.ClassHierarchyResolverOption.of(chain))
+                .build(ClassDesc.of("ChrT1"), cb -> cb.withMethodBody("m",
+                        MethodTypeDesc.ofDescriptor("(Z)V"), ClassFile.ACC_STATIC, cob -> {
+                            Label join = cob.newLabel(), l1 = cob.newLabel();
+                            cob.iload(0).ifeq(l1);
+                            cob.aconst_null().checkcast(ClassDesc.of("ChrMrgA")).goto_(join);
+                            cob.labelBinding(l1);
+                            cob.aconst_null().checkcast(ClassDesc.of("ChrMrgB"));
+                            cob.labelBinding(join);
+                            cob.astore(0).return_();
+                        }));
+        check(merged.length > 8, "hierarchy-dependent merge builds under custom resolver");
+        // default resolver cannot resolve the synthetic classes -> build fails with resolution error
+        boolean threw = false;
+        String msg = null;
+        try {
+            cf.build(ClassDesc.of("ChrT2"), cb -> cb.withMethodBody("m",
+                    MethodTypeDesc.ofDescriptor("(Z)V"), ClassFile.ACC_STATIC, cob -> {
+                        Label join = cob.newLabel(), l1 = cob.newLabel();
+                        cob.iload(0).ifeq(l1);
+                        cob.aconst_null().checkcast(ClassDesc.of("ChrMrgA")).goto_(join);
+                        cob.labelBinding(l1);
+                        cob.aconst_null().checkcast(ClassDesc.of("ChrMrgB"));
+                        cob.labelBinding(join);
+                        cob.astore(0).return_();
+                    }));
+        } catch (IllegalArgumentException iae) {
+            threw = true;
+            msg = iae.getMessage();
+        }
+        check(threw, "same merge fails under default resolver");
+        check(msg != null && msg.contains("Could not resolve class"), "default resolver failure message: " + msg);
+
+        // verify-side: same bytes, three resolver outcomes
+        check(cf.withOptions(ClassFile.ClassHierarchyResolverOption.of(chain)).verify(merged).isEmpty(),
+                "verify clean under matching hierarchy resolver");
+        java.util.List<VerifyError> sibErrs = cf.withOptions(ClassFile.ClassHierarchyResolverOption.of(sib)).verify(merged);
+        check(sibErrs.size() == 1, "verify flags assignability under sibling resolver: " + sibErrs.size());
+        check(sibErrs.get(0).getMessage().contains("not assignable from"),
+                "sibling resolver message: " + sibErrs.get(0).getMessage());
+        java.util.List<VerifyError> defErrs = cf.verify(merged);
+        check(defErrs.size() == 1, "verify flags unresolved hierarchy under default resolver");
+        check(defErrs.get(0).getMessage().contains("Could not resolve class"),
+                "default resolver verify message: " + defErrs.get(0).getMessage());
+
+        // plain class needs no hierarchy: verify clean under any resolver option
+        byte[] plain = cf.build(ClassDesc.of("ChrT3"), cb -> cb.withMethodBody("m",
+                ConstantDescs.MTD_void, ClassFile.ACC_STATIC, CodeBuilder::return_));
+        check(cf.withOptions(ClassFile.ClassHierarchyResolverOption.of(chain)).verify(plain).isEmpty(),
+                "plain class verifies clean with custom resolver");
+        check(cf.withOptions(ClassFile.ClassHierarchyResolverOption.of(
+                ClassHierarchyResolver.defaultResolver())).verify(plain).isEmpty(),
+                "plain class verifies clean with defaultResolver option");
+        check(cf.withOptions(o) != cf, "withOptions returns new instance");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testOptionSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

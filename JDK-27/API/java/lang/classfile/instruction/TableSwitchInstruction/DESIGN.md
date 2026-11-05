@@ -11,3 +11,7 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`TableSwitchInstructionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.instruction.TableSwitchInstruction")` + public/interface/继承 + 关键成员。黑盒（`TableSwitchInstructionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（发射-回读矩阵批）
+- 访问器实名 lowValue()/highValue()（任务提示）；发射-回读：tableswitch(0,2,def,3 cases) → low 0/high 2/cases 键 [0,1,2]（high-low+1 完整表）/sizeInBytes 27（bci1 起 padding 规则）/default bci>case0 bci；负 low(-1,0) 变体；自动推导重载 tableswitch(Label,List) → low/high 由 cases 推导（5-6 实测）。
+- javac dense switch 自产物（case 0/1/2 → TABLESWITCH 非 LOOKUPSWITCH）；of() 工厂身份 + of(2,0,..) low>high IAE + of(0,1,null,null) NPE。断言 13→36（实测运行计数）。

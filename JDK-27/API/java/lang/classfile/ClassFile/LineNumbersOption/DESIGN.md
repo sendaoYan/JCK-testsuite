@@ -11,3 +11,11 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`LineNumbersOptionTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.ClassFile$LineNumbersOption")` + public/enum/继承 + 关键成员。黑盒（`LineNumbersOptionTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+## 5. 深化条目（2026-11-05：DROP_LINE_NUMBERS 语义实测矩阵）
+新增 `testOptionSemantics()`（33 断言，12→33）：
+- **parse 侧 DROP_LINE_NUMBERS**：剥 LineNumber 伪指令（1→0），**保留 LocalVariable**（归 DebugElementsOption 管）；LNT/LVT **属性保留**；指令流完好。
+- **build 侧不生效**（与 DebugElementsOption 的关键差异）：`withOptions(DROP_LINE_NUMBERS).build(...)` 产物里 **LNT 属性照样写入**、LineNumber 照样回读（line 9）——实测此选项只在解析路径消费（ClassFileImpl.passLineNumbers() 仅 CodeImpl.inflateMetadata 调用）。
+- 正交组合：DROP_LINE_NUMBERS + DROP_DEBUG 把两类伪指令全剥。
+- 枚举：ordinal 0 = PASS_LINE_NUMBERS；valueOf 双向；withOptions 返回新实例。
+- 易错点：不能照搬 DROP_DEBUG 的 build 侧行为——两选项 build 侧生效性不同（实测）。

@@ -11,3 +11,6 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（`FieldTransformTest.testWhiteBox()`）：`Class.forName("java.lang.classfile.FieldTransform")` + public/interface/继承 + 关键成员。黑盒（`FieldTransformTest.testBlackBox()`）：多步组合操作——构造/解析真实实例 → 逐访问器精确断言 → 常量/标签/往返校验。
+
+### 深化（2026-11-05，11→32 断言）：字段级变换全契约
+新增 testAcceptAll（ACCEPT_ALL 经 transformingFields：名称/类型/flags/ConstantValue/Deprecated 全守恒、单例身份）；testDroppingAndEndHandler（dropping 剥 ConstantValue/剥全部属性、endHandler with(SyntheticAttribute.of()) 注入→re-parse、dropping.andThen(endHandler) 双效）；testOfStateful（Supplier 每字段一次（实测 2 字段→2 次）、ofStateful/endHandler/dropping null NPE）。易错点：dropping 作用在 FieldElement（字段属性）上；剥整个字段在 ClassTransform 层。
