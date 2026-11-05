@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary com.sun.tools.attach.VirtualMachine conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main VirtualMachineTest
  */
 

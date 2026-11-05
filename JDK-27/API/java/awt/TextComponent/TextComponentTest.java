@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary java.awt.TextComponent conformance: white-box structure + black-box behavior.
+ * @key headful
  * @run main TextComponentTest
  */
 

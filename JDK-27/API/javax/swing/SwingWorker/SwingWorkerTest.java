@@ -1,6 +1,7 @@
 /*
  * @test
- * @summary javax.swing.SwingWorker conformance: type shape + lifecycle/process/cancel semantics (headless-safe).
+ * @summary javax.swing.SwingWorker conformance: type shape + lifecycle/process/cancel semantics.
+ * @key headful
  * @run main SwingWorkerTest
  */
 
