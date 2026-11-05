@@ -18,3 +18,8 @@ tools/pit-pilot/lib/
 tools/pit-pilot/classes/
 tools/pit-pilot/testclasses/
 tools/pit-pilot/pit-out/
+
+# native build artifacts (tools/build-native.sh)
+build/
+*.so
+*.o
