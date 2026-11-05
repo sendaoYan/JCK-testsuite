@@ -1,80 +1,47 @@
 /*
  * @test
- * @summary javax.xml.crypto.OctetStreamData conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.OctetStreamData conformance.
  * @run main OctetStreamDataTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.crypto.Data;
+import javax.xml.crypto.OctetStreamData;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 
 public class OctetStreamDataTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
-    }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.crypto.OctetStreamData");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasInterface(c, "javax.xml.crypto.Data"), "interface javax.xml.crypto.Data");
-        check(hasMethod(c, "getMimeType"), "method getMimeType");
-        check(hasMethod(c, "getOctetStream"), "method getOctetStream");
-        check(hasMethod(c, "getURI"), "method getURI");
-
-        javax.xml.crypto.OctetStreamData d = new javax.xml.crypto.OctetStreamData(
-            new java.io.ByteArrayInputStream(new byte[]{1,2,3}), "urn:u", "application/octet-stream");
-        check("urn:u".equals(d.getURI()), "uri");
-        check("application/octet-stream".equals(d.getMimeType()), "mime");
-        check(d.getOctetStream() != null, "stream");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        javax.xml.crypto.OctetStreamData d = new javax.xml.crypto.OctetStreamData(
-            new java.io.ByteArrayInputStream(new byte[]{1,2,3}));
-        check(d.getURI() == null, "default URI null");
-        check(d.getMimeType() == null, "default mimeType null");
-        check(d.getOctetStream() != null, "octet stream non-null");
-        javax.xml.crypto.OctetStreamData d2 = new javax.xml.crypto.OctetStreamData(
-            new java.io.ByteArrayInputStream(new byte[]{7,8}), "urn:u", "application/octet-stream");
-        check("urn:u".equals(d2.getURI()), "URI");
-        check("application/octet-stream".equals(d2.getMimeType()), "mimeType");
-        java.io.InputStream in = d2.getOctetStream();
-        check(in != null && in.read() == 7 && in.read() == 8, "stream bytes readable");
-        check(d2.getOctetStream() == in, "getOctetStream stable");
-
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.xml.crypto.OctetStreamData");
+        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "concrete");
+        check(javax.xml.crypto.Data.class.isAssignableFrom(c), "implements Data");
+        // both constructors reject a null stream with the precise message
+        try { OctetStreamData t = new OctetStreamData(null); check(false, "1-arg null: " + t); }
+        catch (NullPointerException e) { check("octetStream is null".equals(e.getMessage()), "1-arg null message"); }
+        try { OctetStreamData t = new OctetStreamData(null, "u", "m"); check(false, "3-arg null: " + t); }
+        catch (NullPointerException e) { check("octetStream is null".equals(e.getMessage()), "3-arg null message"); }
+        // one-arg form: stream identity, uri/mime default to null
+        InputStream in = new ByteArrayInputStream(new byte[] {1, 2, 3});
+        OctetStreamData d = new OctetStreamData(in);
+        check(d.getOctetStream() == in, "stream identity round-trip");
+        check(d.getURI() == null, "uri defaults to null");
+        check(d.getMimeType() == null, "mime defaults to null");
+        check(d instanceof Data, "is Data");
+        // three-arg form carries uri and mime verbatim, including empty strings
+        OctetStreamData d2 = new OctetStreamData(in, "http://example/payload", "application/octet-stream");
+        check("http://example/payload".equals(d2.getURI()), "uri round-trip");
+        check("application/octet-stream".equals(d2.getMimeType()), "mime round-trip");
+        check(d2.getOctetStream() == in, "3-arg stream identity");
+        OctetStreamData d3 = new OctetStreamData(in, "", "");
+        check("".equals(d3.getURI()) && "".equals(d3.getMimeType()), "empty uri/mime preserved");
+        // stream remains readable through the wrapper
+        check(d.getOctetStream().read() == 1 && d.getOctetStream().read() == 2, "wrapped stream readable");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

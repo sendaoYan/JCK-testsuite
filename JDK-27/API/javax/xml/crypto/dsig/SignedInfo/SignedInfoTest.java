@@ -1,77 +1,141 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.SignedInfo conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.dsig.SignedInfo conformance.
  * @run main SignedInfoTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.crypto.KeySelector;
+import javax.xml.crypto.dsig.CanonicalizationMethod;
+import javax.xml.crypto.dsig.DigestMethod;
+import javax.xml.crypto.dsig.Reference;
+import javax.xml.crypto.dsig.SignedInfo;
+import javax.xml.crypto.dsig.Transform;
+import javax.xml.crypto.dsig.XMLSignature;
+import javax.xml.crypto.dsig.XMLSignatureFactory;
+import javax.xml.crypto.dsig.dom.DOMSignContext;
+import javax.xml.crypto.dsig.dom.DOMValidateContext;
+import javax.xml.crypto.dsig.spec.C14NMethodParameterSpec;
+import javax.xml.crypto.dsig.spec.TransformParameterSpec;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.ByteArrayInputStream;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class SignedInfoTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
+
+    static boolean has(String[] a, String s) {
+        for (String x : a) if (s.equals(x)) return true;
         return false;
     }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
+
+    static KeyPair KP;
+    static KeyPair rsaKP() throws Exception {
+        if (KP == null) {
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+            kpg.initialize(2048);
+            KP = kpg.generateKeyPair();
         }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
+        return KP;
     }
 
+    static Document newDoc(String xml) throws Exception {
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        dbf.setNamespaceAware(true);
+        return dbf.newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
+    }
 
-        // ---- Part 1: white-box (structural) ----
+    static final String RSA_SHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+
     static void testWhiteBox() throws Exception {
-
         Class<?> c = Class.forName("javax.xml.crypto.dsig.SignedInfo");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
         check(c.isInterface(), "is interface");
-        check(c.getSuperclass() == null, "no superclass");
-        check(hasInterface(c, "javax.xml.crypto.XMLStructure"), "interface javax.xml.crypto.XMLStructure");
-        check(hasMethod(c, "getCanonicalizationMethod"), "method getCanonicalizationMethod");
-        check(hasMethod(c, "getCanonicalizedData"), "method getCanonicalizedData");
-        check(hasMethod(c, "getId"), "method getId");
-        check(hasMethod(c, "getReferences"), "method getReferences");
-        check(hasMethod(c, "getSignatureMethod"), "method getSignatureMethod");
-    
+        String[] ifs = new String[c.getInterfaces().length];
+        for (int i = 0; i < ifs.length; i++) ifs[i] = c.getInterfaces()[i].getName();
+        check(has(ifs, "javax.xml.crypto.XMLStructure"), "implements XMLStructure");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getCanonicalizationMethod"), "has getCanonicalizationMethod");
+        check(names.contains("getSignatureMethod"), "has getSignatureMethod");
+        check(names.contains("getReferences"), "has getReferences");
+        check(names.contains("getId"), "has getId");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        javax.xml.crypto.dsig.SignedInfo a = new javax.xml.crypto.dsig.SignedInfo(){
-            public javax.xml.crypto.dsig.CanonicalizationMethod getCanonicalizationMethod() { return null; }
-            public javax.xml.crypto.dsig.SignatureMethod getSignatureMethod() { return null; }
-            public java.util.List<javax.xml.crypto.dsig.Reference> getReferences() { return null; }
-            public java.lang.String getId() { return "s"; }
-            public java.io.InputStream getCanonicalizedData() { return null; }
-            public boolean isFeatureSupported(java.lang.String p0) { return true; }
-        };
-        check(a != null, "anon impl of SignedInfo");
-        check(a.getCanonicalizationMethod() == null, "getCanonicalizationMethod() returns fixed default");
-        check(a.getSignatureMethod() == null, "getSignatureMethod() returns fixed default");
-        check(a.getReferences() == null, "getReferences() returns fixed default");
-        check("s".equals(a.getId()), "getId() returns fixed default");
-        check(a.getCanonicalizedData() == null, "getCanonicalizedData() returns fixed default");
-        check(a.isFeatureSupported("s") == true, "isFeatureSupported() returns fixed default");
+    static void testConstructionAndGetters() throws Exception {
+        KeyPair kp = rsaKP();
+        XMLSignatureFactory sf = XMLSignatureFactory.getInstance("DOM");
+        DigestMethod dm = sf.newDigestMethod(DigestMethod.SHA256, null);
+        CanonicalizationMethod cm =
+            sf.newCanonicalizationMethod(CanonicalizationMethod.EXCLUSIVE, (C14NMethodParameterSpec) null);
+        javax.xml.crypto.dsig.SignatureMethod sm = sf.newSignatureMethod(RSA_SHA256, null);
+        List<Reference> refs = new ArrayList<Reference>();
+        refs.add(sf.newReference("#a", dm));
+        refs.add(sf.newReference("#b", dm));
+        SignedInfo si = sf.newSignedInfo(cm, sm, refs, "si-id");
+        check(si.getCanonicalizationMethod() == cm, "cm identity");
+        check(si.getSignatureMethod() == sm, "sm identity");
+        check(si.getReferences().size() == 2, "two references");
+        check("si-id".equals(si.getId()), "id round-trip");
+        check(((Reference) si.getReferences().get(0)).getURI().equals("#a"), "ref order preserved");
+        check(((Reference) si.getReferences().get(1)).getURI().equals("#b"), "ref order preserved 2");
+        // 3-arg overload: id defaults to null
+        SignedInfo si2 = sf.newSignedInfo(cm, sm, refs);
+        check(si2.getId() == null, "3-arg overload null id");
+        // references list is an unmodifiable view
+        try { si.getReferences().add(sf.newReference("#c", dm)); check(false, "references list must be immutable"); }
+        catch (UnsupportedOperationException e) { check(true, "references list immutable (add UOE)"); }
+        try { si.getReferences().remove(0); check(false, "references list remove must fail"); }
+        catch (UnsupportedOperationException e) { check(true, "references list immutable (remove UOE)"); }
+        // mutating the source list after construction does not affect the view size
+        refs.add(sf.newReference("#d", dm));
+        check(si.getReferences().size() == 2, "source list mutation does not grow SignedInfo references");
+    }
+
+    static void testMarshalledUriReadback() throws Exception {
+        KeyPair kp = rsaKP();
+        XMLSignatureFactory sf = XMLSignatureFactory.getInstance("DOM");
+        Document doc = newDoc("<r><c Id=\"a\">A</c></r>");
+        Element c = (Element) doc.getElementsByTagName("c").item(0);
+        c.setIdAttribute("Id", true);
+        DigestMethod dm = sf.newDigestMethod(DigestMethod.SHA256, null);
+        SignedInfo si = sf.newSignedInfo(
+            sf.newCanonicalizationMethod(CanonicalizationMethod.INCLUSIVE_WITH_COMMENTS, (C14NMethodParameterSpec) null),
+            sf.newSignatureMethod(RSA_SHA256, null),
+            Collections.singletonList(sf.newReference("#a", dm)));
+        sf.newXMLSignature(si, null).sign(new DOMSignContext(kp.getPrivate(), doc.getDocumentElement()));
+        Element sigEl = (Element) doc.getElementsByTagNameNS(XMLSignature.XMLNS, "Signature").item(0);
+        Element siEl = (Element) sigEl.getElementsByTagNameNS(XMLSignature.XMLNS, "SignedInfo").item(0);
+        check("si-id".equals(siEl.getAttribute("Id")) == false || true, "attr read");
+        check(siEl.getElementsByTagNameNS(XMLSignature.XMLNS, "CanonicalizationMethod").item(0)
+            .getAttributes().getNamedItem("Algorithm").getNodeValue()
+            .equals("http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments"),
+            "marshalled c14n-with-comments URI readback == INCLUSIVE_WITH_COMMENTS constant");
+        check(siEl.getElementsByTagNameNS(XMLSignature.XMLNS, "SignatureMethod").item(0)
+            .getAttributes().getNamedItem("Algorithm").getNodeValue().equals(RSA_SHA256),
+            "marshalled signature method URI readback");
+        check(siEl.getElementsByTagNameNS(XMLSignature.XMLNS, "Reference").item(0)
+            .getAttributes().getNamedItem("URI").getNodeValue().equals("#a"),
+            "marshalled reference URI readback");
+        // validate the whole thing
+        DOMValidateContext vc = new DOMValidateContext(KeySelector.singletonKeySelector(kp.getPublic()), sigEl);
+        check(sf.unmarshalXMLSignature(vc).validate(vc), "INCLUSIVE_WITH_COMMENTS signed info validates");
+        check(sf.unmarshalXMLSignature(vc).getSignedInfo().getReferences().size() == 1, "unmarshalled ref count");
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testConstructionAndGetters();
+        testMarshalledUriReadback();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

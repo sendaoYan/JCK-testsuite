@@ -1,70 +1,42 @@
 /*
  * @test
- * @summary javax.xml.crypto.KeySelector.Purpose conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.KeySelector.Purpose conformance: key selector purpose constants.
  * @run main PurposeTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
-
 public class PurposeTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
-    }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.crypto.KeySelector$Purpose");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasMethod(c, "toString"), "method toString");
-        check(hasField(c, "DECRYPT"), "field DECRYPT");
-        check(hasField(c, "ENCRYPT"), "field ENCRYPT");
-        check(hasField(c, "SIGN"), "field SIGN");
-        check(hasField(c, "VERIFY"), "field VERIFY");
-
-        check(javax.xml.crypto.KeySelector.Purpose.SIGN != javax.xml.crypto.KeySelector.Purpose.VERIFY, "distinct");
-        check(javax.xml.crypto.KeySelector.Purpose.ENCRYPT.toString() != null, "toString");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        check("sign".equals(javax.xml.crypto.KeySelector.Purpose.SIGN.toString()), "SIGN");
-        check("verify".equals(javax.xml.crypto.KeySelector.Purpose.VERIFY.toString()), "VERIFY");
-        check("encrypt".equals(javax.xml.crypto.KeySelector.Purpose.ENCRYPT.toString()), "ENCRYPT");
-        check("decrypt".equals(javax.xml.crypto.KeySelector.Purpose.DECRYPT.toString()), "DECRYPT");
-
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.xml.crypto.KeySelector$Purpose");
+        // typesafe-enum pattern: plain class with singleton constants, NOT a java.lang.Enum
+        check(!java.lang.Enum.class.isAssignableFrom(c), "not java.lang.Enum");
+        check(c.getConstructors().length == 0, "no public constructors (singleton instances)");
+        javax.xml.crypto.KeySelector.Purpose[] vals = new javax.xml.crypto.KeySelector.Purpose[] {
+            javax.xml.crypto.KeySelector.Purpose.SIGN, javax.xml.crypto.KeySelector.Purpose.VERIFY,
+            javax.xml.crypto.KeySelector.Purpose.ENCRYPT, javax.xml.crypto.KeySelector.Purpose.DECRYPT };
+        check(vals.length == 4, "exactly four constants");
+        check(vals[0] != null && vals[1] != null && vals[2] != null && vals[3] != null,
+            "SIGN/VERIFY/ENCRYPT/DECRYPT present");
+        // lowercase display names
+        check(javax.xml.crypto.KeySelector.Purpose.SIGN.toString().equals("sign"), "SIGN toString sign");
+        check(javax.xml.crypto.KeySelector.Purpose.VERIFY.toString().equals("verify"), "VERIFY toString verify");
+        check(javax.xml.crypto.KeySelector.Purpose.ENCRYPT.toString().equals("encrypt"), "ENCRYPT toString encrypt");
+        check(javax.xml.crypto.KeySelector.Purpose.DECRYPT.toString().equals("decrypt"), "DECRYPT toString decrypt");
+        // distinctness: all pairwise-unequal singleton instances
+        javax.xml.crypto.KeySelector.Purpose[] all = vals;
+        for (int i = 0; i < all.length; i++)
+            for (int j = i + 1; j < all.length; j++)
+                check(all[i] != all[j], "distinct " + all[i] + " vs " + all[j]);
+        check(javax.xml.crypto.KeySelector.Purpose.SIGN.equals(javax.xml.crypto.KeySelector.Purpose.SIGN), "self equals");
+        check(!javax.xml.crypto.KeySelector.Purpose.SIGN.equals(javax.xml.crypto.KeySelector.Purpose.VERIFY), "cross unequal");
+        check(javax.xml.crypto.KeySelector.Purpose.SIGN.hashCode() == javax.xml.crypto.KeySelector.Purpose.SIGN.hashCode(),
+            "hashCode stable");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

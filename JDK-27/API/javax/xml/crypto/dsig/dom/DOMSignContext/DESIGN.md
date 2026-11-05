@@ -1,13 +1,22 @@
 # javax.xml.crypto.dsig.dom.DOMSignContext — 设计案
 
 ## 1. API 功能
-javax.xml.crypto.dsig.dom.DOMSignContext 类。实例/声明方法：setParent, setNextSibling, getParent, getNextSibling。
+javax.xml.crypto.dsig.dom.DOMSignContext 类（javax.xml.crypto 家族）。测试文件：DOMSignContextTest.java。
 
 ## 2. Java 用户如何使用
-四个构造器（Key/KeySelector × 2/3 参数）→ getParent/getNextSibling/setParent/setNextSibling。
+XML 数字签名（XMLDSig）API：工厂（XMLSignatureFactory/KeyInfoFactory "DOM" 机制）构造对象图 → DOMSignContext 签名 → DOMValidateContext 验证；算法以 URI 标识；密钥经 KeySelector/KeyInfo 交付。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（javax.xml.crypto.dsig.dom.DOMSignContext）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 DOMSignContextTest 白盒结构 + 黑盒行为。
+JDK 内建 Santuario 实现（com.sun.org.apache.xml.internal.security / org.jcp.xml.dsig.internal.dom）与 JDK `test/jdk/javax/xml/crypto` 用例；本仓库 DOMSignContextTest 白盒结构 + 黑盒行为双轨。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒（`DOMSignContextTest.testBlackBox()`）覆盖：父/兄弟节点读写、四个构造器字段。。
+## 4. 测试用例设计 + 自动化实现（本轮深化，JDK-27 版）
+构造器 null 矩阵消息级（signingKey/parent/nextSibling/key selector cannot be null）；setParent(null) NPE；插入位置控制（ctor nextSibling/setNextSibling/默认 append/setParent 重定向 四种落点断言子元素序列）；setDefaultNamespacePrefix("ds")→序列化含 ds:Signature；putNamespacePrefix/getNamespacePrefix 默认值；baseURI/setProperty 返回旧值/URIDereferencer 恒等；Key 构造器自动包装 singleton key selector；put 覆盖
+
+## 5. JDK-27 独有补充断言
+（本目录无 JDK-27 独有 API；与 JDK-8 行为一致，差异见第 6 节。）
+
+## 6. 已知版本差异（JDK-27 侧记录）
+- JDK-8 X509Data.getContent() 为 raw List；JDK-27 为 List<?>。
+- JDK-8 XPathFilterParameterSpec/ExcC14NParameterSpec 对 null 前缀键/元素抛 RuntimeException/CCE；JDK-27 接受并保留。
+- JDK-8 NoSuchMechanismException 消息形如 "java.security.NoSuchAlgorithmException: Bogus ..."；JDK-27 为 "Mechanism Bogus not available"。
+- JDK-27 默认开启 secure validation（禁 1999 XPath transform 等）、RSA 密钥默认 3072 位；JDK-8 无此默认。

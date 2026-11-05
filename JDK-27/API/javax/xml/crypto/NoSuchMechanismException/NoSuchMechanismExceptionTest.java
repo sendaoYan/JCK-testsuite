@@ -1,76 +1,53 @@
 /*
  * @test
- * @summary javax.xml.crypto.NoSuchMechanismException conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.NoSuchMechanismException conformance.
  * @run main NoSuchMechanismExceptionTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.crypto.NoSuchMechanismException;
 
 public class NoSuchMechanismExceptionTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
-    }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.crypto.NoSuchMechanismException");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
-        check(c.getSuperclass().getName().equals("java.lang.RuntimeException"), "superclass java.lang.RuntimeException");
-        check(hasMethod(c, "getCause"), "method getCause");
-        check(hasMethod(c, "printStackTrace"), "method printStackTrace");
-
-        javax.xml.crypto.NoSuchMechanismException e = new javax.xml.crypto.NoSuchMechanismException("m");
-        check("m".equals(e.getMessage()), "msg");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        javax.xml.crypto.NoSuchMechanismException e = new javax.xml.crypto.NoSuchMechanismException("msg");
-        check("msg".equals(e.getMessage()), "message ctor");
-        check(e.getCause() == null, "no cause by default");
-        javax.xml.crypto.NoSuchMechanismException e0 = new javax.xml.crypto.NoSuchMechanismException();
-        check(e0.getMessage() == null, "null message ctor");
-        java.lang.RuntimeException cause = new java.lang.RuntimeException("r");
-        javax.xml.crypto.NoSuchMechanismException et = new javax.xml.crypto.NoSuchMechanismException(cause);
-        check(cause.toString().equals(et.getMessage()), "throwable ctor message");
-        check(cause == et.getCause(), "throwable ctor cause");
-        javax.xml.crypto.NoSuchMechanismException est = new javax.xml.crypto.NoSuchMechanismException("msg2", cause);
-        check("msg2".equals(est.getMessage()) && est.getCause() == cause, "message+cause ctor");
-        check(e instanceof java.lang.RuntimeException, "exception family");
-        check(e.toString().startsWith("javax.xml.crypto.NoSuchMechanismException"), "toString prefix");
-
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        check(NoSuchMechanismException.class.getSuperclass().getName().equals("java.lang.RuntimeException"), "extends RuntimeException");
+        NoSuchMechanismException e1 = new NoSuchMechanismException("m");
+        check("m".equals(e1.getMessage()) && e1.getCause() == null, "message ctor");
+        Throwable cause = new IllegalStateException("root");
+        NoSuchMechanismException e2 = new NoSuchMechanismException("m2", cause);
+        check("m2".equals(e2.getMessage()) && e2.getCause() == cause, "message+cause ctor");
+        NoSuchMechanismException e3 = new NoSuchMechanismException(cause);
+        check(e3.getCause() == cause && cause.toString().equals(e3.getMessage()), "cause-only ctor");
+        // unchecked: no throws clause needed
+        boolean caught = false;
+        try { throw new NoSuchMechanismException("unchecked"); }
+        catch (RuntimeException re) { caught = re instanceof NoSuchMechanismException; }
+        check(caught, "catchable as RuntimeException");
+        // serialization round-trip
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) { oos.writeObject(e2); }
+        NoSuchMechanismException back = (NoSuchMechanismException) new java.io.ObjectInputStream(
+            new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+        check("m2".equals(back.getMessage()), "message survives serialization");
+        check(back.getCause() != null && "root".equals(back.getCause().getMessage()), "cause survives serialization");
+        // real triggers from both factory families name the missing mechanism
+        try {
+            javax.xml.crypto.dsig.XMLSignatureFactory.getInstance("BogusMech");
+            check(false, "signature factory bogus mechanism should throw");
+        } catch (NoSuchMechanismException nsme) {
+            check(nsme.getMessage().contains("BogusMech"), "signature factory message names mechanism");
+        }
+        try {
+            javax.xml.crypto.dsig.keyinfo.KeyInfoFactory.getInstance("BogusMech");
+            check(false, "keyinfo factory bogus mechanism should throw");
+        } catch (NoSuchMechanismException nsme) {
+            check(nsme.getMessage().contains("BogusMech"), "keyinfo factory message names mechanism");
+        }
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

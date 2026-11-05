@@ -1,88 +1,51 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.XMLSignContext conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.dsig.XMLSignContext conformance.
  * @run main XMLSignContextTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
-
 public class XMLSignContextTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
+
+    static boolean has(String[] a, String s) {
+        for (String x : a) if (s.equals(x)) return true;
         return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.crypto.dsig.XMLSignContext");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(c.isInterface(), "is interface");
-        check(c.getSuperclass() == null, "no superclass");
-        check(hasInterface(c, "javax.xml.crypto.XMLCryptoContext"), "interface javax.xml.crypto.XMLCryptoContext");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        javax.xml.crypto.dsig.XMLSignContext a = new javax.xml.crypto.dsig.XMLSignContext(){
-            public java.lang.String getBaseURI() { return "s"; }
-            public void setBaseURI(java.lang.String p0) { }
-            public javax.xml.crypto.KeySelector getKeySelector() { return null; }
-            public void setKeySelector(javax.xml.crypto.KeySelector p0) { }
-            public javax.xml.crypto.URIDereferencer getURIDereferencer() { return null; }
-            public void setURIDereferencer(javax.xml.crypto.URIDereferencer p0) { }
-            public java.lang.String getNamespacePrefix(java.lang.String p0, java.lang.String p1) { return "s"; }
-            public java.lang.String putNamespacePrefix(java.lang.String p0, java.lang.String p1) { return "s"; }
-            public java.lang.String getDefaultNamespacePrefix() { return "s"; }
-            public void setDefaultNamespacePrefix(java.lang.String p0) { }
-            public java.lang.Object setProperty(java.lang.String p0, java.lang.Object p1) { return null; }
-            public java.lang.Object getProperty(java.lang.String p0) { return null; }
-            public java.lang.Object get(java.lang.Object p0) { return null; }
-            public java.lang.Object put(java.lang.Object p0, java.lang.Object p1) { return null; }
-        };
-        check(a != null, "anon impl of XMLSignContext");
-        check("s".equals(a.getBaseURI()), "getBaseURI() returns fixed default");
-        a.setBaseURI("s");
-        check(a.getKeySelector() == null, "getKeySelector() returns fixed default");
-        a.setKeySelector((javax.xml.crypto.KeySelector) null);
-        check(a.getURIDereferencer() == null, "getURIDereferencer() returns fixed default");
-        a.setURIDereferencer((javax.xml.crypto.URIDereferencer) null);
-        check("s".equals(a.getNamespacePrefix("s", "s")), "getNamespacePrefix() returns fixed default");
-        check("s".equals(a.putNamespacePrefix("s", "s")), "putNamespacePrefix() returns fixed default");
-        check("s".equals(a.getDefaultNamespacePrefix()), "getDefaultNamespacePrefix() returns fixed default");
-        a.setDefaultNamespacePrefix("s");
-        check(a.setProperty("s", (java.lang.Object) null) == null, "setProperty() returns fixed default");
-        check(a.getProperty("s") == null, "getProperty() returns fixed default");
-        check(a.get((java.lang.Object) null) == null, "get() returns fixed default");
-        check(a.put((java.lang.Object) null, (java.lang.Object) null) == null, "put() returns fixed default");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.xml.crypto.dsig.XMLSignContext");
+        check(c.isInterface(), "is interface");
+        String[] ifs = new String[c.getInterfaces().length];
+        for (int i = 0; i < ifs.length; i++) ifs[i] = c.getInterfaces()[i].getName();
+        check(has(ifs, "javax.xml.crypto.XMLCryptoContext"), "extends javax.xml.crypto.XMLCryptoContext");
+        // declares no additional members beyond the context contract
+        check(c.getDeclaredMethods().length == 0, "no additional declared methods");
+        // sole JDK implementation: DOMSignContext
+        check(javax.xml.crypto.dsig.dom.DOMSignContext.class
+            .getInterfaces()[0].getName().equals("javax.xml.crypto.dsig.XMLSignContext"), "DOMSignContext implements it");
+        // a sign context is accepted by XMLSignature.sign
+        org.w3c.dom.Document d = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+        org.w3c.dom.Node root = d.createElement("root");
+        d.appendChild(root);
+        javax.xml.crypto.dsig.XMLSignatureFactory sf = javax.xml.crypto.dsig.XMLSignatureFactory.getInstance("DOM");
+        javax.crypto.SecretKey hmacKey = new javax.crypto.spec.SecretKeySpec(new byte[32], "HmacSHA256");
+        javax.xml.crypto.dsig.XMLSignContext ctx = new javax.xml.crypto.dsig.dom.DOMSignContext(hmacKey, root);
+        ctx.setBaseURI("http://sign/");
+        check("http://sign/".equals(ctx.getBaseURI()), "sign context carries XMLCryptoContext state");
+        javax.xml.crypto.dsig.SignedInfo si = sf.newSignedInfo(
+            sf.newCanonicalizationMethod(javax.xml.crypto.dsig.CanonicalizationMethod.INCLUSIVE,
+                (javax.xml.crypto.dsig.spec.C14NMethodParameterSpec) null),
+            sf.newSignatureMethod("http://www.w3.org/2001/04/xmldsig-more#hmac-sha256", null),
+            java.util.Collections.singletonList(sf.newReference("#o",
+                sf.newDigestMethod(javax.xml.crypto.dsig.DigestMethod.SHA256, null))));
+        sf.newXMLSignature(si, null,
+            java.util.Collections.singletonList(sf.newXMLObject(null, "o", null, null)), null, null).sign(ctx);
+        check(root.getFirstChild().getLocalName().equals("Signature"), "sign(ctx) produced a Signature element");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

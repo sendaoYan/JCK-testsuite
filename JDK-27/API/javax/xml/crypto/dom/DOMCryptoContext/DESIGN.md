@@ -1,13 +1,22 @@
 # javax.xml.crypto.dom.DOMCryptoContext — 设计案
 
 ## 1. API 功能
-javax.xml.crypto.dom.DOMCryptoContext 类。实例/声明方法：getNamespacePrefix, putNamespacePrefix, getDefaultNamespacePrefix, setDefaultNamespacePrefix, getBaseURI, setBaseURI, getURIDereferencer, setURIDereferencer, getProperty, setProperty, getKeySelector, setKeySelector, getElementById, setIdAttributeNS, iterator, get, put。
+javax.xml.crypto.dom.DOMCryptoContext 抽象类（javax.xml.crypto 家族）。测试文件：DOMCryptoContextTest.java。
 
 ## 2. Java 用户如何使用
-经 DOMSignContext 实例化 → baseURI/命名空间前缀/属性/Map/id 属性映射的组合读写。
+XML 数字签名（XMLDSig）API：工厂（XMLSignatureFactory/KeyInfoFactory "DOM" 机制）构造对象图 → DOMSignContext 签名 → DOMValidateContext 验证；算法以 URI 标识；密钥经 KeySelector/KeyInfo 交付。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（javax.xml.crypto.dom.DOMCryptoContext）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 DOMCryptoContextTest 白盒结构 + 黑盒行为。
+JDK 内建 Santuario 实现（com.sun.org.apache.xml.internal.security / org.jcp.xml.dsig.internal.dom）与 JDK `test/jdk/javax/xml/crypto` 用例；本仓库 DOMCryptoContextTest 白盒结构 + 黑盒行为双轨。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒（`DOMCryptoContextTest.testBlackBox()`）覆盖：各字段默认 null、putNamespacePrefix 首次返回 null、getNamespacePrefix fallback、setIdAttributeNS+getElementById、iterator 计数。。
+## 4. 测试用例设计 + 自动化实现（本轮深化，JDK-27 版）
+抽象基类可匿名子类化；id 注册/解析 getElementById/setIdAttributeNS（null element → NPE "element is null"）；iterator 产出 id→Element 的 Map.Entry 且 remove→UOE；get/put 覆盖语义；前缀映射 putNamespacePrefix 返回旧值；baseURI/property/keySelector 槽位往返
+
+## 5. JDK-27 独有补充断言
+（本目录无 JDK-27 独有 API；与 JDK-8 行为一致，差异见第 6 节。）
+
+## 6. 已知版本差异（JDK-27 侧记录）
+- JDK-8 X509Data.getContent() 为 raw List；JDK-27 为 List<?>。
+- JDK-8 XPathFilterParameterSpec/ExcC14NParameterSpec 对 null 前缀键/元素抛 RuntimeException/CCE；JDK-27 接受并保留。
+- JDK-8 NoSuchMechanismException 消息形如 "java.security.NoSuchAlgorithmException: Bogus ..."；JDK-27 为 "Mechanism Bogus not available"。
+- JDK-27 默认开启 secure validation（禁 1999 XPath transform 等）、RSA 密钥默认 3072 位；JDK-8 无此默认。

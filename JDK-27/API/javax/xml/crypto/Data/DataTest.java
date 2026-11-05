@@ -1,61 +1,43 @@
 /*
  * @test
- * @summary javax.xml.crypto.Data conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.Data conformance.
  * @run main DataTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
-
 public class DataTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
+
+    static boolean has(String[] a, String s) {
+        for (String x : a) if (s.equals(x)) return true;
         return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.crypto.Data");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(c.isInterface(), "is interface");
-        check(c.getSuperclass() == null, "no superclass");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        javax.xml.crypto.Data a = new javax.xml.crypto.Data(){
-
-        };
-        check(a != null, "anon impl of Data");
-        check(true, "marker interface instantiated");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.xml.crypto.Data");
+        check(c.isInterface(), "is interface");
+        check(c.getInterfaces().length == 0, "marker interface, extends nothing");
+        check(c.getDeclaredMethods().length == 0, "no declared methods");
+        // the two shipped subtypes
+        check(javax.xml.crypto.OctetStreamData.class.getInterfaces()[0].getName().equals("javax.xml.crypto.Data"),
+            "OctetStreamData implements Data");
+        check(javax.xml.crypto.Data.class.isAssignableFrom(javax.xml.crypto.NodeSetData.class),
+            "NodeSetData extends Data");
+        // a bare anonymous Data is constructible and usable as a return value
+        javax.xml.crypto.Data bare = new javax.xml.crypto.Data() { };
+        check(bare != null, "anonymous Data constructible");
+        // both subtypes flow through a dereferencer contract
+        javax.xml.crypto.OctetStreamData osd = new javax.xml.crypto.OctetStreamData(
+            new java.io.ByteArrayInputStream(new byte[] {9}), "u", "m");
+        check(osd instanceof javax.xml.crypto.Data, "octet stream is Data");
+        javax.xml.crypto.NodeSetData nsd = new javax.xml.crypto.NodeSetData() {
+            public java.util.Iterator iterator() { return java.util.Collections.emptyIterator(); }
+        };
+        check(nsd instanceof javax.xml.crypto.Data, "node set is Data");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

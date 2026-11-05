@@ -1,68 +1,63 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.XPathType.Filter conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.dsig.spec.XPathType.Filter conformance.
  * @run main FilterTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.crypto.dsig.spec.XPathType;
 
 public class FilterTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
 
-
-        // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
-
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.XPathType$Filter");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()) && !c.isInterface(), "is concrete class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasMethod(c, "toString"), "method toString");
-        check(hasField(c, "INTERSECT"), "field INTERSECT");
-        check(hasField(c, "SUBTRACT"), "field SUBTRACT");
-        check(hasField(c, "UNION"), "field UNION");
-
-        check(javax.xml.crypto.dsig.spec.XPathType.Filter.INTERSECT != javax.xml.crypto.dsig.spec.XPathType.Filter.UNION, "distinct");
-        check(javax.xml.crypto.dsig.spec.XPathType.Filter.SUBTRACT.toString() != null, "toString");
-    
+        // typesafe-enum pattern: final class, NOT a java.lang.Enum
+        check(!java.lang.Enum.class.isAssignableFrom(c), "not java.lang.Enum");
+        check(c.getConstructors().length == 0, "no public constructors (singleton instances)");
+        java.lang.reflect.Field inter = c.getField("INTERSECT");
+        java.lang.reflect.Field sub = c.getField("SUBTRACT");
+        java.lang.reflect.Field uni = c.getField("UNION");
+        check(java.lang.reflect.Modifier.isStatic(inter.getModifiers())
+           && java.lang.reflect.Modifier.isFinal(inter.getModifiers())
+           && inter.getType() == c, "INTERSECT public static final Filter");
+        check(sub.getType() == c && uni.getType() == c, "SUBTRACT/UNION typed Filter");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        check("intersect".equals(javax.xml.crypto.dsig.spec.XPathType.Filter.INTERSECT.toString()), "INTERSECT");
-        check("subtract".equals(javax.xml.crypto.dsig.spec.XPathType.Filter.SUBTRACT.toString()), "SUBTRACT");
-        check("union".equals(javax.xml.crypto.dsig.spec.XPathType.Filter.UNION.toString()), "UNION");
-
+    static void testSemantics() {
+        check(XPathType.Filter.INTERSECT.toString().equals("intersect"), "INTERSECT toString intersect");
+        check(XPathType.Filter.SUBTRACT.toString().equals("subtract"), "SUBTRACT toString subtract");
+        check(XPathType.Filter.UNION.toString().equals("union"), "UNION toString union");
+        // exactly three distinct canonical instances
+        check(XPathType.Filter.INTERSECT != XPathType.Filter.SUBTRACT, "INTERSECT != SUBTRACT");
+        check(XPathType.Filter.SUBTRACT != XPathType.Filter.UNION, "SUBTRACT != UNION");
+        check(XPathType.Filter.INTERSECT != XPathType.Filter.UNION, "INTERSECT != UNION");
+        // the three display names are pairwise distinct
+        check(!XPathType.Filter.INTERSECT.toString().equals(XPathType.Filter.SUBTRACT.toString()), "names distinct 1");
+        check(!XPathType.Filter.SUBTRACT.toString().equals(XPathType.Filter.UNION.toString()), "names distinct 2");
+        // toString is stable across calls
+        check(XPathType.Filter.INTERSECT.toString().equals(XPathType.Filter.INTERSECT.toString()), "stable toString");
+        // constants usable in XPathType round-trip for every filter
+        check(new javax.xml.crypto.dsig.spec.XPathType("i", XPathType.Filter.INTERSECT).getFilter()
+            == XPathType.Filter.INTERSECT, "INTERSECT usable in XPathType");
+        check(new javax.xml.crypto.dsig.spec.XPathType("s", XPathType.Filter.SUBTRACT).getFilter()
+            == XPathType.Filter.SUBTRACT, "SUBTRACT usable in XPathType");
+        check(new javax.xml.crypto.dsig.spec.XPathType("u", XPathType.Filter.UNION).getFilter()
+            == XPathType.Filter.UNION, "UNION usable in XPathType");
+        // equals inherited from Object: identity semantics
+        check(XPathType.Filter.INTERSECT.equals(XPathType.Filter.INTERSECT), "self equals");
+        check(!XPathType.Filter.INTERSECT.equals(XPathType.Filter.UNION), "cross unequal");
+        check(XPathType.Filter.INTERSECT.hashCode() == XPathType.Filter.INTERSECT.hashCode(), "hashCode stable");
+        // not null-safe comparisons: constants never null
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

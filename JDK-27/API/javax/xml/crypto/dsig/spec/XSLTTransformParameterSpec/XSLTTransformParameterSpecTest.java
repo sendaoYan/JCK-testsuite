@@ -1,71 +1,69 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec conformance.
  * @run main XSLTTransformParameterSpecTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.crypto.XMLStructure;
+import javax.xml.crypto.dom.DOMStructure;
+import javax.xml.crypto.dsig.XMLSignatureFactory;
+import javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.ByteArrayInputStream;
 
 public class XSLTTransformParameterSpecTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
+
+    static Document newDoc(String xml) throws Exception {
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        dbf.setNamespaceAware(true);
+        return dbf.newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
     }
 
-
-        // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
-
         Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(java.lang.reflect.Modifier.isFinal(c.getModifiers()), "is final class");
-        check(c.getSuperclass() == java.lang.Object.class, "superclass Object");
-        check(hasInterface(c, "javax.xml.crypto.dsig.spec.TransformParameterSpec"), "interface javax.xml.crypto.dsig.spec.TransformParameterSpec");
-        check(hasMethod(c, "getStylesheet"), "method getStylesheet");
-
-        org.w3c.dom.Node n = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().createElement("x");
-        javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec s =
-            new javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec(new javax.xml.crypto.dom.DOMStructure(n));
-        check(s.getStylesheet() != null, "getStylesheet");
-    
+        check(!java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "concrete");
+        String[] ifs = new String[c.getInterfaces().length];
+        for (int i = 0; i < ifs.length; i++) ifs[i] = c.getInterfaces()[i].getName();
+        boolean tp = false;
+        for (String i : ifs) if (i.equals("javax.xml.crypto.dsig.spec.TransformParameterSpec")) tp = true;
+        check(tp, "implements TransformParameterSpec");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getStylesheet"), "has getStylesheet");
     }
 
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-
-        org.w3c.dom.Document doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
-            .newDocumentBuilder().newDocument();
-        org.w3c.dom.Element el = doc.createElement("xsl:stylesheet");
-        javax.xml.crypto.dom.DOMStructure st = new javax.xml.crypto.dom.DOMStructure(el);
-        javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec p = new javax.xml.crypto.dsig.spec.XSLTTransformParameterSpec(st);
-        check(p.getStylesheet() == st, "getStylesheet round-trip");
-
+    static void testSemantics() throws Exception {
+        Document d = newDoc("<r/>");
+        Element ss = d.createElementNS("http://www.w3.org/1999/XSL/Transform", "stylesheet");
+        ss.setAttribute("version", "1.0");
+        DOMStructure wrapper = new DOMStructure(ss);
+        XSLTTransformParameterSpec spec = new XSLTTransformParameterSpec(wrapper);
+        check(spec.getStylesheet() == wrapper, "stylesheet identity round-trip");
+        check(((DOMStructure) spec.getStylesheet()).getNode() == ss, "wrapped node identity");
+        // null stylesheet rejected
+        try { new XSLTTransformParameterSpec(null); check(false, "null stylesheet"); }
+        catch (NullPointerException e) { check(true, "null stylesheet NPE"); }
+        // usable to build an XSLT transform
+        XMLSignatureFactory sf = XMLSignatureFactory.getInstance("DOM");
+        javax.xml.crypto.dsig.Transform tr = sf.newTransform(javax.xml.crypto.dsig.Transform.XSLT, spec);
+        check(tr.getAlgorithm().equals(javax.xml.crypto.dsig.Transform.XSLT), "XSLT transform algorithm");
+        check(tr.getParameterSpec() == spec, "XSLT transform spec identity round-trip");
+        // XSLT without params rejected
+        try { sf.newTransform(javax.xml.crypto.dsig.Transform.XSLT, (javax.xml.crypto.dsig.spec.TransformParameterSpec) null); check(false, "XSLT requires spec"); }
+        catch (java.security.InvalidAlgorithmParameterException e) { check(true, "XSLT requires spec IAE"); }
     }
 
     public static void main(String[] args) throws Exception {
         testWhiteBox();
-        testBlackBox();
+        testSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

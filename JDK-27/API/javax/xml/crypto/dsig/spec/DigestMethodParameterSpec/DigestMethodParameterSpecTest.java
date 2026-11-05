@@ -1,62 +1,56 @@
 /*
  * @test
- * @summary javax.xml.crypto.dsig.spec.DigestMethodParameterSpec conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.dsig.spec.DigestMethodParameterSpec conformance: interface hierarchy and methods.
  * @run main DigestMethodParameterSpecTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import javax.xml.crypto.dsig.DigestMethod;
+import javax.xml.crypto.dsig.XMLSignatureFactory;
+import javax.xml.crypto.dsig.spec.DigestMethodParameterSpec;
+
 
 public class DigestMethodParameterSpecTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
+
+    static boolean has(String[] a, String s) {
+        for (String x : a) if (s.equals(x)) return true;
         return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.DigestMethodParameterSpec");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(c.isInterface(), "is interface");
-        check(c.getSuperclass() == null, "no superclass");
-        check(hasInterface(c, "java.security.spec.AlgorithmParameterSpec"), "interface java.security.spec.AlgorithmParameterSpec");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        javax.xml.crypto.dsig.spec.DigestMethodParameterSpec a = new javax.xml.crypto.dsig.spec.DigestMethodParameterSpec(){
-
-        };
-        check(a != null, "anon impl of DigestMethodParameterSpec");
-        check(true, "marker interface instantiated");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.xml.crypto.dsig.spec.DigestMethodParameterSpec");
+        check(c.isInterface(), "is interface");
+        check(c.getSuperclass() == null, "no superclass");
+        String[] ifs = new String[c.getInterfaces().length];
+        for (int i = 0; i < ifs.length; i++) ifs[i] = c.getInterfaces()[i].getName();
+        check(ifs.length == 1 && ifs[0].equals("java.security.spec.AlgorithmParameterSpec"),
+            "extends java.security.spec.AlgorithmParameterSpec only");
+        // pure marker
+        check(c.getDeclaredMethods().length == 0, "marker interface, no declared methods");
+        check(java.lang.reflect.Modifier.isInterface(c.getModifiers()), "interface modifier");
+        // no JDK implementation shipped in this release; anonymous impls are constructible
+        DigestMethodParameterSpec anon = new DigestMethodParameterSpec() { };
+        check(anon != null, "anonymous implementation constructible");
+        // the DOM provider rejects any digest parameters for standard digest algorithms
+        XMLSignatureFactory sf = XMLSignatureFactory.getInstance("DOM");
+        for (String uri : new String[] {DigestMethod.SHA1, DigestMethod.SHA256, DigestMethod.SHA512}) {
+            try {
+                sf.newDigestMethod(uri, anon);
+                check(false, "digest params should be rejected for " + uri);
+            } catch (java.security.InvalidAlgorithmParameterException e) {
+                check(e.getMessage().contains("no parameters should be specified"), "rejection message for " + uri);
+            }
+        }
+        // null parameters remain the legal form and yield getParameterSpec() == null
+        check(sf.newDigestMethod(DigestMethod.SHA256, null).getParameterSpec() == null,
+            "null params legal, getParameterSpec null");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

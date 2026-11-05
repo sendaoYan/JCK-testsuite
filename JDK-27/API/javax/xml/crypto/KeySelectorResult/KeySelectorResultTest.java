@@ -1,62 +1,57 @@
 /*
  * @test
- * @summary javax.xml.crypto.KeySelectorResult conformance: white-box structure + black-box behavior.
+ * @summary javax.xml.crypto.KeySelectorResult conformance.
  * @run main KeySelectorResultTest
  */
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.io.*;
-import java.math.*;
-import java.security.*;
-import java.security.spec.*;
+import javax.xml.crypto.KeySelector;
+import javax.xml.crypto.KeySelectorResult;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 
 public class KeySelectorResultTest {
     static int passed;
-    static void check(boolean c, String m) {
-        if (!c) throw new AssertionError(m);
+
+    static void check(boolean cond, String msg) {
+        if (!cond) throw new AssertionError(msg);
         passed++;
     }
-    static boolean hasMethod(Class<?> c, String n) {
-        for (java.lang.reflect.Method m : c.getMethods()) {
-            if (m.getName().equals(n)) return true;
-        }
+
+    static boolean has(String[] a, String s) {
+        for (String x : a) if (s.equals(x)) return true;
         return false;
-    }
-    static boolean hasInterface(Class<?> c, String n) {
-        for (Class<?> i : c.getInterfaces()) {
-            if (i.getName().equals(n)) return true;
-        }
-        return false;
-    }
-    static boolean hasField(Class<?> c, String n) {
-        try { c.getField(n); return true; } catch (NoSuchFieldException e) { return false; }
-    }
-
-
-        // ---- Part 1: white-box (structural) ----
-    static void testWhiteBox() throws Exception {
-
-        Class<?> c = Class.forName("javax.xml.crypto.KeySelectorResult");
-        check(java.lang.reflect.Modifier.isPublic(c.getModifiers()), "public");
-        check(c.isInterface(), "is interface");
-        check(c.getSuperclass() == null, "no superclass");
-        check(hasMethod(c, "getKey"), "method getKey");
-    
-    }
-
-    // ---- Part 2: black-box (behavioral) ----
-    static void testBlackBox() throws Exception {
-        javax.xml.crypto.KeySelectorResult a = new javax.xml.crypto.KeySelectorResult(){
-            public java.security.Key getKey() { return null; }
-        };
-        check(a != null, "anon impl of KeySelectorResult");
-        check(a.getKey() == null, "getKey() returns fixed default");
     }
 
     public static void main(String[] args) throws Exception {
-        testWhiteBox();
-        testBlackBox();
+        Class<?> c = Class.forName("javax.xml.crypto.KeySelectorResult");
+        check(c.isInterface(), "is interface");
+        check(c.getInterfaces().length == 0, "extends nothing");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : c.getMethods()) names.add(m.getName());
+        check(names.contains("getKey"), "has getKey");
+        // custom result carrying the key by identity
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        final KeyPair kp = kpg.generateKeyPair();
+        KeySelectorResult r = new KeySelectorResult() {
+            public java.security.Key getKey() { return kp.getPublic(); }
+        };
+        check(r.getKey() == kp.getPublic(), "getKey identity round-trip");
+        // result permitting a null key (selector could not resolve one)
+        KeySelectorResult nullKey = new KeySelectorResult() {
+            public java.security.Key getKey() { return null; }
+        };
+        check(nullKey.getKey() == null, "null key representable");
+        // singletonKeySelector results expose the fixed key
+        KeySelectorResult sr = KeySelector.singletonKeySelector(kp.getPublic())
+            .select(null, KeySelector.Purpose.VERIFY, null, null);
+        check(sr != null && sr.getKey() == kp.getPublic(), "singleton result key identity");
+        // a secret key flows through equally
+        final javax.crypto.SecretKey sk = new javax.crypto.spec.SecretKeySpec(new byte[32], "HmacSHA256");
+        KeySelectorResult skr = new KeySelectorResult() {
+            public java.security.Key getKey() { return sk; }
+        };
+        check(skr.getKey() == sk && skr.getKey().getAlgorithm().equals("HmacSHA256"), "secret key result");
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

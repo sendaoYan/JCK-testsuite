@@ -1,13 +1,22 @@
 # javax.xml.crypto.dsig.TransformService — 设计案
 
 ## 1. API 功能
-javax.xml.crypto.dsig.TransformService 抽象类。静态入口：getInstance。 实例/声明方法：getMechanismType, getAlgorithm, getProvider, init, marshalParams。
+javax.xml.crypto.dsig.TransformService 抽象类（javax.xml.crypto 家族）。测试文件：TransformServiceTest.java。
 
 ## 2. Java 用户如何使用
-c14n/base64/enveloped/xpath 四种 getInstance → getAlgorithm/getMechanismType/getProvider；init + marshalParams。
+XML 数字签名（XMLDSig）API：工厂（XMLSignatureFactory/KeyInfoFactory "DOM" 机制）构造对象图 → DOMSignContext 签名 → DOMValidateContext 验证；算法以 URI 标识；密钥经 KeySelector/KeyInfo 交付。
 
 ## 3. 开源代码实际用法调研
-JDK 源码自用（javax.xml.crypto.dsig.TransformService）与 JDK `test/jdk` 内 JAXP/XML 用例；本仓库 TransformServiceTest 白盒结构 + 黑盒行为。
+JDK 内建 Santuario 实现（com.sun.org.apache.xml.internal.security / org.jcp.xml.dsig.internal.dom）与 JDK `test/jdk/javax/xml/crypto` 用例；本仓库 TransformServiceTest 白盒结构 + 黑盒行为双轨。
 
-## 4. 测试用例设计 + 自动化实现
-黑盒（`TransformServiceTest.testBlackBox()`）覆盖：算法名精确、c14n init(null)、xpath init(XPathFilterParameterSpec)、marshalParams 不抛。。
+## 4. 测试用例设计 + 自动化实现（本轮深化，JDK-27 版）
+9 种算法实例矩阵（全部 "XMLDSig" provider）；负例（bogus URI/机制 → NSA 消息含 URI/机制）；init(null) NPE；对已 marshal 的 ENVELOPED 元素 init+marshalParams 生命周期
+
+## 5. JDK-27 独有补充断言
+（本目录无 JDK-27 独有 API；与 JDK-8 行为一致，差异见第 6 节。）
+
+## 6. 已知版本差异（JDK-27 侧记录）
+- JDK-8 X509Data.getContent() 为 raw List；JDK-27 为 List<?>。
+- JDK-8 XPathFilterParameterSpec/ExcC14NParameterSpec 对 null 前缀键/元素抛 RuntimeException/CCE；JDK-27 接受并保留。
+- JDK-8 NoSuchMechanismException 消息形如 "java.security.NoSuchAlgorithmException: Bogus ..."；JDK-27 为 "Mechanism Bogus not available"。
+- JDK-27 默认开启 secure validation（禁 1999 XPath transform 等）、RSA 密钥默认 3072 位；JDK-8 无此默认。
