@@ -18,3 +18,11 @@ open data 结构错误。链路：构造(非法结构) → throw new OpenDataExc
 - 白盒：public、extends JMException（受检）、两个构造器存在、Serializable。
 - 黑盒：无参构造 getMessage==null、带 message 构造 getMessage 精确；instanceof Exception/JMException；
   CompositeType 重复 item 名构造抛该类型。
+
+## 深化（2026-11，批 G）
+- checked（extends JMException，非 RuntimeException）；恰好两个公开构造器 ()/(String)；无 cause 构造；
+  initCause 单次；SUID=8346311255433349870L；round-trip 消息保留。
+- 真实触发点精确消息：值错型 "Argument value of wrong type for item a: value str, type
+  javax.management.openmbean.SimpleType(name=java.lang.Integer)"；item 名不匹配
+  "Item names do not match CompositeType…"；Info 构造错型 default 含 "defaultValue"。
+- 版本差异：零差异。

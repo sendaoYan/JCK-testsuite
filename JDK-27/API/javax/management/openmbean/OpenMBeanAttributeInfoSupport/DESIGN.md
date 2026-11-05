@@ -21,3 +21,10 @@ isIs[, defaultValue...])。链路：构造 → isReadable/isWritable/isIs → ge
 - 白盒：public、implements OpenMBeanAttributeInfo、继承 MBeanAttributeInfo、get/is 系列方法存在。
 - 黑盒：构造（含/不含默认值）getter 组合；isReadable/isWritable/isIs 取值；getOpenType；isValue；
   equals/hashCode（等值相等、读写位/is 不同不等）；toString 前缀；异常精确 message（null name NPE/IAE、默认值非法）。
+
+## 深化（2026-11，批 G：104→124 断言）
+- isIs 双负例精确消息："Cannot have an \"is\" getter for a non-readable attribute" /
+  "Cannot have an \"is\" getter for a non-boolean attribute"；合法 isIs 形态读写布尔。
+- 跨类 equals 不对称锁定：param.equals(attr)==true 而 attr.equals(param)==false。
+- equals 含三布尔与 descriptor；default/min/max/legal 逐项参与；SUID 锁定。
+- 版本差异：零差异。

@@ -21,3 +21,9 @@ OpenMBeanOperationInfo 接口实现：操作名、描述、签名（OpenMBeanPar
 - 黑盒：各构造器 getter 组合；getReturnOpenType/getImpact（含默认 UNKNOWN 重载）；getSignature 副本；
   equals/hashCode（等值相等、impact/返回类型不同不等）；toString 前缀；异常精确 message（null name NPE/IAE、
   null returnType IAE、null signature IAE）。
+
+## 深化（2026-11，批 G：64→79 断言）
+- getReturnOpenType 单例；VOID；impact 常量 0..3。
+- getSignature 独立性（新数组/内容相等/构造拷贝/元素共享浅拷贝）。
+- equals：desc 不参与、signature Arrays.equals 顺序敏感、impact 参与；SUID 锁定。
+- 版本差异：零差异。

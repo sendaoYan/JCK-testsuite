@@ -21,3 +21,12 @@ OpenMBeanInfo 接口实现：聚合 open MBean 的类名、描述、属性、构
 - 黑盒：构造后 getClassName/getDescription；getAttributes/getConstructors/getOperations/getNotifications 副本；
   equals/hashCode（等值相等、字段不同不等）；toString 前缀与字段；异常精确 message（null className NPE/IAE、
   null attributes/constructors/operations IAE）。
+
+## 深化（2026-11，批 G：70 断言）
+- null 四段 → 空；getter 防御拷贝；构造拷贝调用方数组。
+- equals 集合语义（数组换序仍等、hashCode 一致）；desc 不参与、className 参与；plain MBeanInfo
+  同内容不等。
+- MXBean 真闭环（内嵌 PointMXBean）：registerMBean → getMBeanInfo 属性 instanceof
+  OpenMBeanAttributeInfo、CompositeType(x,y INTEGER)、descriptor openType==getOpenType()、
+  mxbean=true、getAttribute 返回 CompositeData(x=1,y=2)。
+- SUID=4349395935420511492L。版本差异：零差异。

@@ -11,3 +11,9 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。黑盒用 OpenMBeanAttributeInfoSupport 构造+查询。
+
+## 深化（2026-11，批 G）
+- 精确方法集 18 个（+isReadable/isWritable/isIs）；无公开字段；extends OpenMBeanParameterInfo。
+- 三布尔经接口引用取真值；isIs 形态（readable-only boolean）；equals 参与三布尔。
+- 属性对象可直接当 OpenMBeanParameterInfo 视图用（子接口赋值兼容）。
+- 版本差异：零差异。

@@ -18,3 +18,11 @@ CompositeDataSupport.get(itemName) 在 item 名不存在时抛 InvalidKeyExcepti
 - 白盒：public、extends IllegalArgumentException、两个构造器存在、Serializable。
 - 黑盒：无参构造 getMessage==null、带 message 构造 getMessage 精确；实例 instanceof IllegalArgumentException；
   CompositeDataSupport.get(缺失键) 抛该类型。
+
+## 深化（2026-11，批 G）
+- 父类精确 IllegalArgumentException；**不是** KeyAlreadyExistsException 子类（兄弟）；unchecked；
+  两构造器；SUID=4224269443946322062L；round-trip。
+- 真实触发点精确消息：get("missing") → "Argument key=\"missing\" is not an existing item name
+  for this CompositeData instance."；对照 get(null) → 普通 IAE "Argument key cannot be a null or
+  empty String."（空/坏 key 与不存在 key 走不同异常）。
+- 版本差异：零差异。

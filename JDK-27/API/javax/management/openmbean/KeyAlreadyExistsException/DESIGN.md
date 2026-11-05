@@ -18,3 +18,13 @@ TabularDataSupport.put(行) 在索引列值已存在（index 重复）时抛 Key
 - 白盒：public、extends IllegalArgumentException、两个构造器存在、Serializable。
 - 黑盒：无参构造 getMessage==null、带 message 构造 getMessage 精确；instanceof IllegalArgumentException；
   TabularDataSupport.put(重复索引) 抛该类型。
+
+## 深化（2026-11，批 G）
+- 父类精确 IllegalArgumentException；unchecked；两构造器；SUID=1845183636745282866L；round-trip。
+- 触发语义锁定（易错）：
+  - putAll 批内同索引（空表）→ "Argument elements values[1] and values[0] have the same indexes,
+    calculated according to this TabularData instance's tabularType."
+  - put/putAll 撞已有行、Map 视图 put(Object[],v) → "Argument value's index, calculated according
+    to this TabularData instance's tabularType, already refers to a value in this table."
+  - put 非替换语义：重复索引一律抛（Map 视图也不替换）；remove 后才可重放；putAll 失败零副作用。
+- 版本差异：零差异。

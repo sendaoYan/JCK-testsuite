@@ -19,3 +19,8 @@ desc, signature)。链路：构造 → getName/getDescription/getSignature → e
 - 白盒：public、implements OpenMBeanConstructorInfo、getName/getDescription/getSignature 方法存在。
 - 黑盒：构造后 getter 组合；getSignature 返回副本（改动原数组不影响）；equals/hashCode（等值相等、签名不同不等）；
   toString 前缀与字段；异常精确 message（null name NPE/IAE、null signature IAE）。
+
+## 深化（2026-11，批 G：46→57 断言）
+- null 签名 → 空；防御拷贝双通道（getter 新数组、构造拷贝）、元素共享。
+- equals 只看 name+signature（desc 不参与）；SUID 锁定。
+- 版本差异：零差异。

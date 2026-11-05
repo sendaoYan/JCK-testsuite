@@ -11,3 +11,8 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。黑盒用 Support 构造+签名查询。
+
+## 深化（2026-11，批 G）
+- 精确方法集 6 个；无公开字段。
+- getSignature 元素是 OpenMBeanParameterInfo；null 签名归一化长度 0；equals 只看 name+signature。
+- 版本差异：零差异。

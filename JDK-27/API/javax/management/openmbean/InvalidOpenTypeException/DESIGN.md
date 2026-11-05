@@ -18,3 +18,10 @@ CompositeDataSupport 构造时 item 名不在 CompositeType 或值类型不匹�
 - 白盒：public、extends IllegalArgumentException、两个构造器存在、Serializable。
 - 黑盒：无参构造 getMessage==null、带 message 构造 getMessage 精确；instanceof IllegalArgumentException；
   CompositeDataSupport 非法类型构造抛该类型。
+
+## 深化（2026-11，批 G）
+- 父类精确 IllegalArgumentException；unchecked；两构造器；SUID=-2837312755412327534L；round-trip。
+- 真实触发点：TabularDataSupport.put 行型不符 → "Argument value's composite type […]
+  is not assignable to this TabularData instance's row type […]."（两端类型全打印）；被拒行不入表；
+  与 KeyAlreadyExistsException 无继承关系；OpenType.isValue 错型返回 false 不抛（对照）。
+- 版本差异：零差异。
