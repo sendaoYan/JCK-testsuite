@@ -35,6 +35,23 @@ public class DocumentViewTest {
         check(c.isInterface(), "org.w3c.dom.views.DocumentView is an interface");
         check(c.getInterfaces().length == 0, "no direct superinterfaces");
         check(declares(c, "getDefaultView"), "declares getDefaultView");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: DocumentView contract ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("Views", "2.0") && impl.getFeature("Views", "2.0") == null, "Views module unimplemented");
+        org.w3c.dom.Document d = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+        check(!org.w3c.dom.views.DocumentView.class.isInstance(d), "Document is not a DocumentView (module absent)");
+        final org.w3c.dom.views.DocumentView[] holder = new org.w3c.dom.views.DocumentView[1];
+        org.w3c.dom.views.AbstractView view = new org.w3c.dom.views.AbstractView() {
+            public org.w3c.dom.views.DocumentView getDocument() { return holder[0]; }
+        };
+        holder[0] = new org.w3c.dom.views.DocumentView() {
+            public org.w3c.dom.views.AbstractView getDefaultView() { return view; }
+        };
+        check(holder[0].getDefaultView() == view && view.getDocument() == holder[0], "defaultView/getDocument mutual routing");
     }
 }

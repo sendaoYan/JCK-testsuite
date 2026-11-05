@@ -40,6 +40,33 @@ public class HTMLTableRowElementTest {
         check(declares(c, "getAlign"), "declares getAlign");
         check(declares(c, "setAlign"), "declares setAlign");
         check(declares(c, "getBgColor"), "declares getBgColor");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLTableRowElement.class), "HTMLTableRowElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLTableRowElement.class.isInterface(), "HTMLTableRowElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLTableRowElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 15, "HTMLTableRowElement declares exactly 15 methods");
+        check(names.contains("deleteCell"), "deleteCell declared");
+        check(names.contains("getAlign"), "getAlign declared");
+        check(names.contains("getBgColor"), "getBgColor declared");
+        check(names.contains("getCells"), "getCells declared");
+        check(names.contains("getCh"), "getCh declared");
+        check(names.contains("getChOff"), "getChOff declared");
+        check(names.contains("getRowIndex"), "getRowIndex declared");
+        check(names.contains("getSectionRowIndex"), "getSectionRowIndex declared");
+        check(names.contains("getVAlign"), "getVAlign declared");
+        check(names.contains("insertCell"), "insertCell declared");
+        check(names.contains("setAlign"), "setAlign declared");
+        check(names.contains("setBgColor"), "setBgColor declared");
+        check(names.contains("setCh"), "setCh declared");
+        check(names.contains("setChOff"), "setChOff declared");
+        check(names.contains("setVAlign"), "setVAlign declared");
     }
 }

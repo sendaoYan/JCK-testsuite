@@ -36,6 +36,28 @@ public class CSSCharsetRuleTest {
         check(ifaceNames(c).equals(set("org.w3c.dom.css.CSSRule")), "direct superinterfaces");
         check(declares(c, "getEncoding"), "declares getEncoding");
         check(declares(c, "setEncoding"), "declares setEncoding");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: CSSCharsetRule contract (encoding accessor + rule typing) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.css.CSSRule.class.isAssignableFrom(org.w3c.dom.css.CSSCharsetRule.class), "CSSCharsetRule extends CSSRule");
+        org.w3c.dom.css.CSSCharsetRule r = new org.w3c.dom.css.CSSCharsetRule() {
+            String enc = "UTF-8";
+            public String getEncoding() { return enc; }
+            public void setEncoding(String e) { enc = e; }
+            public String getCssText() { return null; }
+            public void setCssText(String t) { }
+            public short getType() { return org.w3c.dom.css.CSSRule.CHARSET_RULE; }
+            public org.w3c.dom.css.CSSStyleSheet getParentStyleSheet() { return null; }
+            public org.w3c.dom.css.CSSRule getParentRule() { return null; }
+        };
+        check("UTF-8".equals(r.getEncoding()), "getEncoding round-trip");
+        r.setEncoding("ISO-8859-1");
+        check("ISO-8859-1".equals(r.getEncoding()), "setEncoding mutates the wired field");
+        check(r.getType() == org.w3c.dom.css.CSSRule.CHARSET_RULE, "rule reports CHARSET_RULE(2)");
     }
 }

@@ -37,6 +37,22 @@ public class CounterTest {
         check(declares(c, "getIdentifier"), "declares getIdentifier");
         check(declares(c, "getListStyle"), "declares getListStyle");
         check(declares(c, "getSeparator"), "declares getSeparator");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: Counter contract (shape + anonymous routing) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        java.util.Set<String> ms = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.css.Counter.class.getDeclaredMethods()) ms.add(m.getName());
+        check(ms.contains("getIdentifier") && ms.contains("getListStyle") && ms.contains("getSeparator") && ms.size() == 3, "three accessor methods, no constants");
+        org.w3c.dom.css.Counter c = new org.w3c.dom.css.Counter() {
+            public String getIdentifier() { return "c"; }
+            public String getListStyle() { return "decimal"; }
+            public String getSeparator() { return "."; }
+        };
+        check("c".equals(c.getIdentifier()) && "decimal".equals(c.getListStyle()) && ".".equals(c.getSeparator()), "anonymous Counter returns the wired strings");
     }
 }

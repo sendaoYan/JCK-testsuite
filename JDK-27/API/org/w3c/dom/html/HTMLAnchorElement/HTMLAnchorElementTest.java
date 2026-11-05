@@ -231,6 +231,44 @@ public class HTMLAnchorElementTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLAnchorElement.class), "HTMLAnchorElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLAnchorElement.class.isInterface(), "HTMLAnchorElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLAnchorElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 26, "HTMLAnchorElement declares exactly 26 methods");
+        check(names.contains("blur"), "blur declared");
+        check(names.contains("focus"), "focus declared");
+        check(names.contains("getAccessKey"), "getAccessKey declared");
+        check(names.contains("getCharset"), "getCharset declared");
+        check(names.contains("getCoords"), "getCoords declared");
+        check(names.contains("getHref"), "getHref declared");
+        check(names.contains("getHreflang"), "getHreflang declared");
+        check(names.contains("getName"), "getName declared");
+        check(names.contains("getRel"), "getRel declared");
+        check(names.contains("getRev"), "getRev declared");
+        check(names.contains("getShape"), "getShape declared");
+        check(names.contains("getTabIndex"), "getTabIndex declared");
+        check(names.contains("getTarget"), "getTarget declared");
+        check(names.contains("getType"), "getType declared");
+        check(names.contains("setAccessKey"), "setAccessKey declared");
+        check(names.contains("setCharset"), "setCharset declared");
+        check(names.contains("setCoords"), "setCoords declared");
+        check(names.contains("setHref"), "setHref declared");
+        check(names.contains("setHreflang"), "setHreflang declared");
+        check(names.contains("setName"), "setName declared");
+        check(names.contains("setRel"), "setRel declared");
+        check(names.contains("setRev"), "setRev declared");
+        check(names.contains("setShape"), "setShape declared");
+        check(names.contains("setTabIndex"), "setTabIndex declared");
+        check(names.contains("setTarget"), "setTarget declared");
+        check(names.contains("setType"), "setType declared");
     }
 }

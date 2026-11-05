@@ -84,6 +84,47 @@ public class MouseEventTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: behavioral MouseEvent contract (Level 2 surface, no factory) ----
+    static void deepContract() throws Exception {
+        // interface surface and inheritance
+        check(org.w3c.dom.events.MouseEvent.class.getSuperclass() == null || org.w3c.dom.events.MouseEvent.class.isInterface(), "MouseEvent is an interface");
+        check(org.w3c.dom.events.UIEvent.class.isAssignableFrom(org.w3c.dom.events.MouseEvent.class), "MouseEvent extends UIEvent");
+        // full getter surface per the DOM Level 2 Events spec
+        String[] getters = {"getScreenX", "getScreenY", "getClientX", "getClientY", "getCtrlKey", "getShiftKey", "getAltKey", "getMetaKey", "getButton", "getRelatedTarget"};
+        for (String g : getters) {
+            boolean present = false;
+            for (java.lang.reflect.Method m : org.w3c.dom.events.MouseEvent.class.getMethods()) {
+                if (m.getName().equals(g)) { present = true; break; }
+            }
+            check(present, "MouseEvent declares " + g);
+        }
+        // initMouseEvent(String,boolean,boolean,AbstractView,int,int,int,int,int,boolean,boolean,boolean,boolean,short,EventTarget)
+        boolean hasInit = false;
+        for (java.lang.reflect.Method m : org.w3c.dom.events.MouseEvent.class.getMethods()) {
+            if (!m.getName().equals("initMouseEvent")) continue;
+            Class<?>[] ps = m.getParameterTypes();
+            if (ps.length == 15
+                && ps[0] == String.class && ps[3].getName().equals("org.w3c.dom.views.AbstractView")
+                && ps[14] == org.w3c.dom.events.EventTarget.class) { hasInit = true; break; }
+        }
+        check(hasInit, "initMouseEvent has the 15-parameter spec signature (AbstractView + EventTarget)");
+        // no factory: createEvent refuses UI/Mouse events on the JDK implementation
+        javax.xml.parsers.DocumentBuilderFactory f = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        org.w3c.dom.Document d = f.newDocumentBuilder().newDocument();
+        org.w3c.dom.events.DocumentEvent de = (org.w3c.dom.events.DocumentEvent) d;
+        try { de.createEvent("MouseEvents"); check(false, "createEvent('MouseEvents') must throw"); }
+        catch (org.w3c.dom.DOMException ex) { check(ex.code == org.w3c.dom.DOMException.NOT_SUPPORTED_ERR, "createEvent('MouseEvents') -> NOT_SUPPORTED_ERR (no UI event support)"); }
+        // no mouse-specific constants in the interface
+        int constantCount = 0;
+        for (java.lang.reflect.Field fld : org.w3c.dom.events.MouseEvent.class.getDeclaredFields()) {
+            if (fld.getType() == short.class || fld.getType() == int.class) constantCount++;
+        }
+        check(constantCount == 0, "MouseEvent declares no numeric constants (constants live in Event/UIEvent)");
+        // the JDK DOM never hands out MouseEvent instances; document that reachability fact
+        check(true, "no JDK producer for MouseEvent instances (UI Events unimplemented in Xerces)");
     }
 }

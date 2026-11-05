@@ -40,6 +40,26 @@ public class HTMLMetaElementTest {
         check(declares(c, "setHttpEquiv"), "declares setHttpEquiv");
         check(declares(c, "getName"), "declares getName");
         check(declares(c, "setName"), "declares setName");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLMetaElement.class), "HTMLMetaElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLMetaElement.class.isInterface(), "HTMLMetaElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLMetaElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 8, "HTMLMetaElement declares exactly 8 methods");
+        check(names.contains("getContent"), "getContent declared");
+        check(names.contains("getHttpEquiv"), "getHttpEquiv declared");
+        check(names.contains("getName"), "getName declared");
+        check(names.contains("getScheme"), "getScheme declared");
+        check(names.contains("setContent"), "setContent declared");
+        check(names.contains("setHttpEquiv"), "setHttpEquiv declared");
+        check(names.contains("setName"), "setName declared");
+        check(names.contains("setScheme"), "setScheme declared");
     }
 }

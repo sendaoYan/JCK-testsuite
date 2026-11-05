@@ -533,6 +533,23 @@ public class CSS2PropertiesTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: CSS2Properties shape-lock (whole generated accessor family) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        java.util.Set<String> ms = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.css.CSS2Properties.class.getDeclaredMethods()) ms.add(m.getName());
+        check(ms.size() >= 200, "approximately 240 get/set accessors declared");
+        for (String n : new String[]{"getAzimuth", "setAzimuth", "getColor", "setColor", "getMargin", "setMargin", "getZIndex", "setZIndex", "getFontSize", "setBackgroundColor"})
+            check(ms.contains(n), n + " declared");
+        check(org.w3c.dom.css.CSS2Properties.class.isInterface(), "CSS2Properties is an interface");
+        boolean paired = true;
+        for (String p : new String[]{"Background", "Border", "Font", "Padding", "Position"})
+            paired = paired && ms.contains("get" + p) == ms.contains("set" + p) || !ms.contains("get" + p);
+        check(paired, "accessors come in get/set pairs");
     }
 }

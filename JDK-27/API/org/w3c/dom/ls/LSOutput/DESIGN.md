@@ -11,3 +11,7 @@ JDK 源码自用（org.w3c.dom.ls.LSOutput）与 JDK `test/jdk` 内 JAXP/XML 用
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`LSOutputTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 深化第 2 轮（契约级，2026-11-05）
+- 工厂 LSOutput 缺省 null，systemId/encoding/byteStream/characterStream 往返。
+- 行为闭环：LSSerializer.write(doc, LSOutput) 向接入的 characterStream 写出，writeToString 与之正文一致。

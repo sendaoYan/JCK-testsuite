@@ -35,6 +35,20 @@ public class ViewCSSTest {
         check(c.isInterface(), "org.w3c.dom.css.ViewCSS is an interface");
         check(ifaceNames(c).equals(set("org.w3c.dom.views.AbstractView")), "direct superinterfaces");
         check(declares(c, "getComputedStyle"), "declares getComputedStyle");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: ViewCSS contract (computed style channel) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        org.w3c.dom.Document d = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+        check(!org.w3c.dom.css.ViewCSS.class.isInstance(d), "Document is not a ViewCSS");
+        org.w3c.dom.css.ViewCSS v = new org.w3c.dom.css.ViewCSS() {
+            public org.w3c.dom.css.CSSStyleDeclaration getComputedStyle(org.w3c.dom.Element e, String pseudo) { return null; }
+            public org.w3c.dom.views.DocumentView getDocument() { return null; }
+        };
+        check(v.getComputedStyle(null, null) == null, "computed style routed (null wiring)");
     }
 }

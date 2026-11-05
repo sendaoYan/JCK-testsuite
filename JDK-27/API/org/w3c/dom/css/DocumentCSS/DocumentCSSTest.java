@@ -43,6 +43,20 @@ public class DocumentCSSTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: DocumentCSS contract (override-style channel) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        org.w3c.dom.Document d = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+        check(!org.w3c.dom.css.DocumentCSS.class.isInstance(d), "Document is not a DocumentCSS (module absent)");
+        org.w3c.dom.css.DocumentCSS dc = new org.w3c.dom.css.DocumentCSS() {
+            public org.w3c.dom.css.CSSStyleDeclaration getOverrideStyle(org.w3c.dom.Element e, String pseudo) { return null; }
+            public org.w3c.dom.stylesheets.StyleSheetList getStyleSheets() { return null; }
+        };
+        check(dc.getOverrideStyle(null, ":hover") == null, "override style routed (null wiring)");
     }
 }

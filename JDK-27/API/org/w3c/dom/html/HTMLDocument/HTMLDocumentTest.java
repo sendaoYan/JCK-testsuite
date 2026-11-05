@@ -222,6 +222,37 @@ public class HTMLDocumentTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.Document.class.isAssignableFrom(org.w3c.dom.html.HTMLDocument.class), "HTMLDocument extends org.w3c.dom.Document");
+        check(org.w3c.dom.html.HTMLDocument.class.isInterface(), "HTMLDocument is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLDocument.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 19, "HTMLDocument declares exactly 19 methods");
+        check(names.contains("close"), "close declared");
+        check(names.contains("getAnchors"), "getAnchors declared");
+        check(names.contains("getApplets"), "getApplets declared");
+        check(names.contains("getBody"), "getBody declared");
+        check(names.contains("getCookie"), "getCookie declared");
+        check(names.contains("getDomain"), "getDomain declared");
+        check(names.contains("getElementsByName"), "getElementsByName declared");
+        check(names.contains("getForms"), "getForms declared");
+        check(names.contains("getImages"), "getImages declared");
+        check(names.contains("getLinks"), "getLinks declared");
+        check(names.contains("getReferrer"), "getReferrer declared");
+        check(names.contains("getTitle"), "getTitle declared");
+        check(names.contains("getURL"), "getURL declared");
+        check(names.contains("open"), "open declared");
+        check(names.contains("setBody"), "setBody declared");
+        check(names.contains("setCookie"), "setCookie declared");
+        check(names.contains("setTitle"), "setTitle declared");
+        check(names.contains("write"), "write declared");
+        check(names.contains("writeln"), "writeln declared");
     }
 }

@@ -36,6 +36,20 @@ public class HTMLHeadingElementTest {
         check(ifaceNames(c).equals(set("org.w3c.dom.html.HTMLElement")), "direct superinterfaces");
         check(declares(c, "getAlign"), "declares getAlign");
         check(declares(c, "setAlign"), "declares setAlign");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLHeadingElement.class), "HTMLHeadingElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLHeadingElement.class.isInterface(), "HTMLHeadingElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLHeadingElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 2, "HTMLHeadingElement declares exactly 2 methods");
+        check(names.contains("getAlign"), "getAlign declared");
+        check(names.contains("setAlign"), "setAlign declared");
     }
 }

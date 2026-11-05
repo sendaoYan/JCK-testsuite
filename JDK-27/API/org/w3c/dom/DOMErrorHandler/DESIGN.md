@@ -11,3 +11,6 @@ JDK 源码自用（org.w3c.dom.DOMErrorHandler）与 JDK `test/jdk` 内 JAXP/XML
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`DOMErrorHandlerTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 深化第 2 轮（契约级，2026-11-05）
+路由闭环：坏 XML → handleError 收 DOMError（severity 3）；返回 true → parse 仍抛 LSException(81)；返回 false → 同样 LSException(81)；良构输入 handler 静默。文档侧同一契约：normalizeDocument 对非 ns 元素树回调 type="NullLocalElementName"（severity ERROR）——非 NS createElement 建树必触发；createElementNS 建树零回调。

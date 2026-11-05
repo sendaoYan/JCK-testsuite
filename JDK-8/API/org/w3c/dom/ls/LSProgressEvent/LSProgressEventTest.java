@@ -37,6 +37,35 @@ public class LSProgressEventTest {
         check(declares(c, "getInput"), "declares getInput");
         check(declares(c, "getPosition"), "declares getPosition");
         check(declares(c, "getTotalSize"), "declares getTotalSize");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: LSProgressEvent contract (shape + producer absence) ----
+    static void deepContract() throws Exception {
+        check(org.w3c.dom.events.Event.class.isAssignableFrom(org.w3c.dom.ls.LSProgressEvent.class), "LSProgressEvent extends Event");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.ls.LSProgressEvent.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.contains("getPosition") && names.contains("getTotalSize") && names.contains("getInput"), "getPosition/getTotalSize/getInput declared");
+        check(names.size() == 3, "LSProgressEvent declares exactly three methods");
+        check(org.w3c.dom.ls.LSProgressEvent.class.getDeclaredFields().length == 0, "LSProgressEvent declares no constants");
+        org.w3c.dom.ls.LSProgressEvent ev = (org.w3c.dom.ls.LSProgressEvent) java.lang.reflect.Proxy.newProxyInstance(
+            org.w3c.dom.ls.LSProgressEvent.class.getClassLoader(),
+            new Class<?>[]{org.w3c.dom.ls.LSProgressEvent.class},
+            new java.lang.reflect.InvocationHandler() {
+                public Object invoke(Object proxy, java.lang.reflect.Method m, Object[] args) {
+                    if (m.getName().equals("getPosition")) return 7;
+                    if (m.getName().equals("getTotalSize")) return 100;
+                    return null;
+                }
+            });
+        check(ev.getPosition() == 7 && ev.getTotalSize() == 100, "proxy LSProgressEvent routes the progress counters");
+        check(ev.getInput() == null, "proxy LSProgressEvent default null for un-routed getters");
+        // synchronous parsing never produces progress events
+        org.w3c.dom.ls.DOMImplementationLS ls = (org.w3c.dom.ls.DOMImplementationLS) javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder().newDocument().getImplementation().getFeature("LS", "3.0");
+        org.w3c.dom.ls.LSParser p = ls.createLSParser(org.w3c.dom.ls.DOMImplementationLS.MODE_SYNCHRONOUS, null);
+        org.w3c.dom.ls.LSInput in = ls.createLSInput(); in.setStringData("<r/>");
+        check(p.parse(in) != null, "sync parse completes (progress notifications are async-only)");
     }
 }

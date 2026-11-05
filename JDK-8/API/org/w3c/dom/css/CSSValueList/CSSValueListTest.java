@@ -36,6 +36,23 @@ public class CSSValueListTest {
         check(ifaceNames(c).equals(set("org.w3c.dom.css.CSSValue")), "direct superinterfaces");
         check(declares(c, "getLength"), "declares getLength");
         check(declares(c, "item"), "declares item");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: CSSValueList contract (indexed access) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        org.w3c.dom.css.CSSValueList l = new org.w3c.dom.css.CSSValueList() {
+            public int getLength() { return 3; }
+            public org.w3c.dom.css.CSSValue item(int i) { return null; }
+            public String getCssText() { return "a b c"; }
+            public void setCssText(String t) { }
+            public short getCssValueType() { return org.w3c.dom.css.CSSValue.CSS_VALUE_LIST; }
+        };
+        check("a b c".equals(l.getCssText()), "inherits the CSSValue text channel");
+        check(l.getLength() == 3 && l.item(1) == null, "getLength/item wiring");
+        check(l.item(3) == null, "out-of-range item -> null");
     }
 }

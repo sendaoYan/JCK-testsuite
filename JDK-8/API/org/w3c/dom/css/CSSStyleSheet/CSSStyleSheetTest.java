@@ -38,6 +38,43 @@ public class CSSStyleSheetTest {
         check(declares(c, "getCssRules"), "declares getCssRules");
         check(declares(c, "insertRule"), "declares insertRule");
         check(declares(c, "deleteRule"), "declares deleteRule");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: CSSStyleSheet contract (owner rule + rule management) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        org.w3c.dom.stylesheets.StyleSheet parent = new org.w3c.dom.stylesheets.StyleSheet() {
+            public String getType() { return "text/css"; }
+            public boolean getDisabled() { return false; }
+            public void setDisabled(boolean b) { }
+            public org.w3c.dom.Node getOwnerNode() { return null; }
+            public org.w3c.dom.stylesheets.StyleSheet getParentStyleSheet() { return null; }
+            public String getHref() { return "p.css"; }
+            public String getTitle() { return "t"; }
+            public org.w3c.dom.stylesheets.MediaList getMedia() { return null; }
+        };
+        check("text/css".equals(parent.getType()) && "p.css".equals(parent.getHref()), "wired parent sheet metadata");
+        final int[] n = new int[]{1};
+        org.w3c.dom.css.CSSStyleSheet s = new org.w3c.dom.css.CSSStyleSheet() {
+            public org.w3c.dom.css.CSSRule getOwnerRule() { return null; }
+            public org.w3c.dom.css.CSSRuleList getCssRules() { return null; }
+            public int insertRule(String rule, int index) { n[0]++; return index; }
+            public void deleteRule(int index) { n[0]--; }
+            public String getType() { return "text/css"; }
+            public boolean getDisabled() { return false; }
+            public void setDisabled(boolean b) { }
+            public org.w3c.dom.Node getOwnerNode() { return null; }
+            public org.w3c.dom.stylesheets.StyleSheet getParentStyleSheet() { return parent; }
+            public String getHref() { return "s.css"; }
+            public String getTitle() { return null; }
+            public org.w3c.dom.stylesheets.MediaList getMedia() { return null; }
+        };
+        check(s.insertRule("p{}", 0) == 0 && n[0] == 2, "insertRule returns the index");
+        s.deleteRule(0);
+        check(n[0] == 1, "deleteRule balances insertRule");
+        check(s.getParentStyleSheet() == parent && s.getOwnerRule() == null, "parent sheet wired, no owner rule");
     }
 }

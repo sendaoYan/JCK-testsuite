@@ -11,3 +11,7 @@ JDK 源码自用（org.w3c.dom.ls.LSException）与 JDK `test/jdk` 内 JAXP/XML 
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`LSExceptionTest.testBlackBox()`）覆盖：常量 + code 字段 + 构造。
+
+## 深化第 2 轮（契约级，2026-11-05）
+- 常量：PARSE_ERR=81、SERIALIZE_ERR=82；code 为 public 字段（无 getCode），可变；RuntimeException 子类；null message 保留。
+- 真实触发：无 error-handler 的 LSParser 解析 `<r><1x/></r>` → `LSException PARSE_ERR(81)`。

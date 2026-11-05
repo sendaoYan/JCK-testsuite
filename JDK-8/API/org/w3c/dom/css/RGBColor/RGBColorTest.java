@@ -37,6 +37,19 @@ public class RGBColorTest {
         check(declares(c, "getRed"), "declares getRed");
         check(declares(c, "getGreen"), "declares getGreen");
         check(declares(c, "getBlue"), "declares getBlue");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: RGBColor contract (three channels) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        org.w3c.dom.css.RGBColor c = new org.w3c.dom.css.RGBColor() {
+            public org.w3c.dom.css.CSSPrimitiveValue getRed() { return null; }
+            public org.w3c.dom.css.CSSPrimitiveValue getGreen() { return null; }
+            public org.w3c.dom.css.CSSPrimitiveValue getBlue() { return null; }
+        };
+        check(c.getRed() == null && c.getGreen() == null && c.getBlue() == null, "three channel accessors routed");
     }
 }

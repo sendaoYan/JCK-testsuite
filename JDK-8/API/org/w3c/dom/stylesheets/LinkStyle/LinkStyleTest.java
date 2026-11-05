@@ -35,6 +35,27 @@ public class LinkStyleTest {
         check(c.isInterface(), "org.w3c.dom.stylesheets.LinkStyle is an interface");
         check(c.getInterfaces().length == 0, "no direct superinterfaces");
         check(declares(c, "getSheet"), "declares getSheet");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: LinkStyle contract ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("StyleSheets", "2.0") && impl.getFeature("StyleSheets", "2.0") == null, "StyleSheets module unimplemented");
+        org.w3c.dom.stylesheets.StyleSheet sheet = new org.w3c.dom.stylesheets.StyleSheet() {
+            public String getType() { return "text/css"; }
+            public boolean getDisabled() { return false; }
+            public void setDisabled(boolean b) { }
+            public org.w3c.dom.Node getOwnerNode() { return null; }
+            public org.w3c.dom.stylesheets.StyleSheet getParentStyleSheet() { return null; }
+            public String getHref() { return null; }
+            public String getTitle() { return "linked"; }
+            public org.w3c.dom.stylesheets.MediaList getMedia() { return null; }
+        };
+        org.w3c.dom.stylesheets.LinkStyle ls = new org.w3c.dom.stylesheets.LinkStyle() {
+            public org.w3c.dom.stylesheets.StyleSheet getSheet() { return sheet; }
+        };
+        check(ls.getSheet() == sheet && "linked".equals(ls.getSheet().getTitle()), "owning node exposes its sheet");
     }
 }

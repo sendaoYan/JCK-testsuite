@@ -38,6 +38,22 @@ public class HTMLOptGroupElementTest {
         check(declares(c, "setDisabled"), "declares setDisabled");
         check(declares(c, "getLabel"), "declares getLabel");
         check(declares(c, "setLabel"), "declares setLabel");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLOptGroupElement.class), "HTMLOptGroupElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLOptGroupElement.class.isInterface(), "HTMLOptGroupElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLOptGroupElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 4, "HTMLOptGroupElement declares exactly 4 methods");
+        check(names.contains("getDisabled"), "getDisabled declared");
+        check(names.contains("getLabel"), "getLabel declared");
+        check(names.contains("setDisabled"), "setDisabled declared");
+        check(names.contains("setLabel"), "setLabel declared");
     }
 }

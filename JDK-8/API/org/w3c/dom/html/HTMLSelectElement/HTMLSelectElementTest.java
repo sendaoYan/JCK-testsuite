@@ -40,6 +40,40 @@ public class HTMLSelectElementTest {
         check(declares(c, "getValue"), "declares getValue");
         check(declares(c, "setValue"), "declares setValue");
         check(declares(c, "getLength"), "declares getLength");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLSelectElement.class), "HTMLSelectElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLSelectElement.class.isInterface(), "HTMLSelectElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLSelectElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 22, "HTMLSelectElement declares exactly 22 methods");
+        check(names.contains("add"), "add declared");
+        check(names.contains("blur"), "blur declared");
+        check(names.contains("focus"), "focus declared");
+        check(names.contains("getDisabled"), "getDisabled declared");
+        check(names.contains("getForm"), "getForm declared");
+        check(names.contains("getLength"), "getLength declared");
+        check(names.contains("getMultiple"), "getMultiple declared");
+        check(names.contains("getName"), "getName declared");
+        check(names.contains("getOptions"), "getOptions declared");
+        check(names.contains("getSelectedIndex"), "getSelectedIndex declared");
+        check(names.contains("getSize"), "getSize declared");
+        check(names.contains("getTabIndex"), "getTabIndex declared");
+        check(names.contains("getType"), "getType declared");
+        check(names.contains("getValue"), "getValue declared");
+        check(names.contains("remove"), "remove declared");
+        check(names.contains("setDisabled"), "setDisabled declared");
+        check(names.contains("setMultiple"), "setMultiple declared");
+        check(names.contains("setName"), "setName declared");
+        check(names.contains("setSelectedIndex"), "setSelectedIndex declared");
+        check(names.contains("setSize"), "setSize declared");
+        check(names.contains("setTabIndex"), "setTabIndex declared");
+        check(names.contains("setValue"), "setValue declared");
     }
 }

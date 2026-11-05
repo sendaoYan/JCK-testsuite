@@ -40,6 +40,36 @@ public class HTMLLinkElementTest {
         check(declares(c, "setCharset"), "declares setCharset");
         check(declares(c, "getHref"), "declares getHref");
         check(declares(c, "setHref"), "declares setHref");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLLinkElement.class), "HTMLLinkElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLLinkElement.class.isInterface(), "HTMLLinkElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLLinkElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 18, "HTMLLinkElement declares exactly 18 methods");
+        check(names.contains("getCharset"), "getCharset declared");
+        check(names.contains("getDisabled"), "getDisabled declared");
+        check(names.contains("getHref"), "getHref declared");
+        check(names.contains("getHreflang"), "getHreflang declared");
+        check(names.contains("getMedia"), "getMedia declared");
+        check(names.contains("getRel"), "getRel declared");
+        check(names.contains("getRev"), "getRev declared");
+        check(names.contains("getTarget"), "getTarget declared");
+        check(names.contains("getType"), "getType declared");
+        check(names.contains("setCharset"), "setCharset declared");
+        check(names.contains("setDisabled"), "setDisabled declared");
+        check(names.contains("setHref"), "setHref declared");
+        check(names.contains("setHreflang"), "setHreflang declared");
+        check(names.contains("setMedia"), "setMedia declared");
+        check(names.contains("setRel"), "setRel declared");
+        check(names.contains("setRev"), "setRev declared");
+        check(names.contains("setTarget"), "setTarget declared");
+        check(names.contains("setType"), "setType declared");
     }
 }

@@ -11,3 +11,6 @@ JDK 源码自用（org.w3c.dom.xpath.XPathException）与 JDK `test/jdk` 内 JAX
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XPathExceptionTest.testBlackBox()`）覆盖：常量 + code 字段 + 构造。
+
+## 深化第 2 轮（契约级，2026-11-05）
+- 常量（JDK 归一化，规范原值 51/52）：INVALID_EXPRESSION_ERR=1、TYPE_ERR=2；code public 字段可变；RuntimeException 子类；null message 保留。

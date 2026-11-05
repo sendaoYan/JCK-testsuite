@@ -117,6 +117,22 @@ public class XPathNamespaceTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: XPathNamespace contract ----
+    static void deepContract() throws Exception {
+        check(org.w3c.dom.Node.class.isAssignableFrom(org.w3c.dom.xpath.XPathNamespace.class), "XPathNamespace extends Node");
+        check(org.w3c.dom.xpath.XPathNamespace.XPATH_NAMESPACE_NODE == 13, "XPATH_NAMESPACE_NODE = 13");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.xpath.XPathNamespace.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.contains("getOwnerElement"), "getOwnerElement declared");
+        check(org.w3c.dom.xpath.XPathNamespace.class.getDeclaredFields().length == 1, "exactly one constant declared");
+        // namespace nodes never appear in a regular DOM tree
+        org.w3c.dom.Document d = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+        org.w3c.dom.Element r = d.createElementNS("urn:x", "p:r"); d.appendChild(r);
+        for (org.w3c.dom.Node n = r.getFirstChild(); n != null; n = n.getNextSibling())
+            check(n.getNodeType() != org.w3c.dom.xpath.XPathNamespace.XPATH_NAMESPACE_NODE, "no XPathNamespace nodes in a plain DOM tree");
     }
 }

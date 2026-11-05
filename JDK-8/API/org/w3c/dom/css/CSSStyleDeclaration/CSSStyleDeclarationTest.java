@@ -40,6 +40,33 @@ public class CSSStyleDeclarationTest {
         check(declares(c, "getPropertyCSSValue"), "declares getPropertyCSSValue");
         check(declares(c, "removeProperty"), "declares removeProperty");
         check(declares(c, "getPropertyPriority"), "declares getPropertyPriority");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: CSSStyleDeclaration contract (property channels) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        org.w3c.dom.css.CSSStyleDeclaration d = new org.w3c.dom.css.CSSStyleDeclaration() {
+            String text = "color: red";
+            public String getCssText() { return text; }
+            public void setCssText(String t) { text = t; }
+            public String getPropertyValue(String p) { return "red"; }
+            public org.w3c.dom.css.CSSValue getPropertyCSSValue(String p) { return null; }
+            public String removeProperty(String p) { return "red"; }
+            public String getPropertyPriority(String p) { return "important"; }
+            public void setProperty(String p, String v, String pri) { }
+            public int getLength() { return 1; }
+            public String item(int i) { return "color"; }
+            public org.w3c.dom.css.CSSRule getParentRule() { return null; }
+        };
+        check("red".equals(d.getPropertyValue("color")), "getPropertyValue routed");
+        check("important".equals(d.getPropertyPriority("color")), "getPropertyPriority routed");
+        check("red".equals(d.removeProperty("color")), "removeProperty returns the old value");
+        check(d.getLength() == 1 && "color".equals(d.item(0)), "length/item enumeration");
+        d.setCssText("margin: 0");
+        check("margin: 0".equals(d.getCssText()), "setCssText/getCssText round-trip");
+        check(d.getParentRule() == null, "parent rule null when standalone");
     }
 }

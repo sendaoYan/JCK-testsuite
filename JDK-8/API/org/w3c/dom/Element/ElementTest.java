@@ -10,6 +10,8 @@ import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
+import org.w3c.dom.Node;
+import org.w3c.dom.TypeInfo;
 
 public class ElementTest {
     static int passed;
@@ -102,6 +104,105 @@ public class ElementTest {
         check(e.getElementsByTagNameNS("urn:meta", "name").getLength() == 1, "getElementsByTagNameNS count");
         check(e.getElementsByTagNameNS("*", "*").getLength() == 3, "getElementsByTagNameNS */* matches all descendant elements");
 
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- deepening round 2: element attribute asymmetry / ns family / scan / TypeInfo ----
+    static void deepContract() throws Exception {
+        Document d = newDoc();
+
+        // missing-attribute asymmetry: "" vs null
+        Element e = d.createElement("e");
+        check(e.getAttribute("missing").isEmpty(), "getAttribute(missing) empty string");
+        check(e.getAttributeNode("missing") == null, "getAttributeNode(missing) null");
+        check(!e.hasAttribute("missing"), "hasAttribute(missing) false");
+        check(e.getAttributeNS("urn:x", "missing").isEmpty(), "getAttributeNS(missing) empty string");
+        check(!e.hasAttributeNS("urn:x", "missing"), "hasAttributeNS(missing) false");
+        // removeAttribute(missing) silent vs removeAttributeNode(missing) throws
+        e.removeAttribute("missing");
+        check(true, "removeAttribute(missing) silent");
+        check(domCode(() -> e.removeAttributeNode(d.createAttribute("nope")), DOMException.NOT_FOUND_ERR), "removeAttributeNode(unmounted) -> NOT_FOUND_ERR");
+        // duplicate setAttribute overwrites, count stable
+        e.setAttribute("k", "v1");
+        e.setAttribute("k", "v2");
+        check("v2".equals(e.getAttribute("k")), "duplicate setAttribute overwrites");
+        check(e.getAttributes().getLength() == 1, "duplicate setAttribute keeps count");
+        // value stringification (setAttribute only accepts String; setAttributeNode numeric text)
+        e.setAttribute("num", String.valueOf(7));
+        check("7".equals(e.getAttribute("num")), "value stored as string");
+        // setAttributeNode replacement semantics
+        Attr a1 = d.createAttribute("dup");
+        a1.setValue("first");
+        e.setAttributeNode(a1);
+        Attr a2 = d.createAttribute("dup");
+        a2.setValue("second");
+        Attr old = e.setAttributeNode(a2);
+        check(old == a1, "setAttributeNode(same name) returns previous attr node");
+        check("second".equals(e.getAttribute("dup")), "setAttributeNode replacement visible");
+        check(old.getOwnerElement() == null, "replaced attr ownerElement cleared");
+        check(a2.getOwnerElement() == e, "new attr ownerElement set");
+        // illegal names
+        check(domCode(() -> e.setAttribute("a b", "v"), DOMException.INVALID_CHARACTER_ERR), "setAttribute('a b') -> INVALID_CHARACTER_ERR");
+        check(domCode(() -> e.setAttribute("", "v"), DOMException.INVALID_CHARACTER_ERR), "setAttribute('') -> INVALID_CHARACTER_ERR");
+        check(domCode(() -> d.createElement("bad name"), DOMException.INVALID_CHARACTER_ERR), "createElement('bad name') -> INVALID_CHARACTER_ERR");
+        // removeAttributeNode lifecycle
+        Attr victim = e.getAttributeNode("k");
+        Attr returned = e.removeAttributeNode(victim);
+        check(returned == victim && victim.getOwnerElement() == null, "removeAttributeNode returns detached attr");
+        check(domCode(() -> e.removeAttributeNode(victim), DOMException.NOT_FOUND_ERR), "removeAttributeNode twice -> NOT_FOUND_ERR");
+        // ns attribute family
+        Element ne = d.createElementNS("urn:x", "p:e");
+        ne.setAttributeNS("urn:y", "q:a", "1");
+        ne.setAttribute("plain", "2");
+        check("1".equals(ne.getAttributeNS("urn:y", "a")), "getAttributeNS round-trip");
+        check(ne.hasAttributeNS("urn:y", "a"), "hasAttributeNS true");
+        check(ne.getAttributeNodeNS("urn:y", "a") != null, "getAttributeNodeNS non-null");
+        check(ne.getAttributes().getLength() == 2, "ns + plain attr counted once each");
+        ne.removeAttributeNS("urn:y", "a");
+        check(!ne.hasAttributeNS("urn:y", "a"), "removeAttributeNS removes");
+        ne.removeAttributeNS("urn:none", "zz");
+        check(true, "removeAttributeNS(missing) silent");
+        Attr nsA = d.createAttributeNS("urn:z", "w:b");
+        ne.setAttributeNodeNS(nsA);
+        check(ne.getAttributes().getNamedItemNS("urn:z", "b") == nsA, "setAttributeNodeNS / getNamedItemNS round-trip");
+        // namespaced tag scan
+        ne.appendChild(d.createElementNS("urn:x", "p:child"));
+        ne.appendChild(d.createElement("child"));
+        check(ne.getElementsByTagNameNS("urn:x", "child").getLength() == 1, "ns scan exact");
+        check(ne.getElementsByTagNameNS("*", "child").getLength() == 1, "ns wildcard-local only matches ns nodes (Xerces)");
+        check(ne.getElementsByTagNameNS("*", "*").getLength() == 2, "ns full wildcard");
+        // schema type info reachable (null type name without grammar)
+        TypeInfo ti = ne.getSchemaTypeInfo();
+        check(ti != null, "getSchemaTypeInfo non-null");
+        check(ti.getTypeName() == null, "typeName null without schema");
+        check(ti.getTypeNamespace() == null, "typeNamespace null without schema");
+        check(!ti.isDerivedFrom("http://www.w3.org/2001/XMLSchema", "string", TypeInfo.DERIVATION_RESTRICTION), "isDerivedFrom false without schema");
+        // text content
+        ne.setTextContent("hello");
+        check(ne.getChildNodes().getLength() == 1 && ne.getFirstChild().getNodeType() == Node.TEXT_NODE, "setTextContent leaves single text child");
+        ne.appendChild(d.createElement("sub"));
+        ne.getFirstChild().setNodeValue("AB");
+        check("AB".equals(ne.getTextContent()), "getTextContent concatenates descendants");
+        // equals across same-shape elements
+        Element eq1 = d.createElement("eq");
+        eq1.setAttribute("x", "1");
+        Element eq2 = d.createElement("eq");
+        eq2.setAttribute("x", "1");
+        check(eq1.isEqualNode(eq2), "same-shape elements isEqualNode");
+        eq2.setAttribute("x", "2");
+        check(!eq1.isEqualNode(eq2), "attr value difference breaks equality");
+        // cloneNode deep keeps attributes and children
+        Element host = d.createElement("host");
+        host.setAttribute("h", "1");
+        host.appendChild(d.createElement("inner"));
+        Element hostClone = (Element) host.cloneNode(true);
+        check("1".equals(hostClone.getAttribute("h")), "clone keeps attributes");
+        check(hostClone.getElementsByTagName("inner").getLength() == 1, "deep clone keeps children");
+        // tagName / nodeName identity
+        check(ne.getTagName().equals(ne.getNodeName()), "getTagName == getNodeName");
+        Element qnamed = d.createElementNS("urn:x", "p:tag");
+        check("p:tag".equals(qnamed.getTagName()) && "tag".equals(qnamed.getLocalName()) && "p".equals(qnamed.getPrefix()), "qualified name decomposition");
+    }
+
 }

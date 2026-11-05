@@ -122,6 +122,98 @@ public class DocumentTest {
         check(pd.getImplementation() != null, "getImplementation non-null");
         check(pd.getImplementation().hasFeature("Core", "3.0"), "getImplementation hasFeature Core 3.0");
 
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: behavioral Document contract (renameNode/adoptNode/xml declarations) ----
+    static void deepContract() throws Exception {
+        javax.xml.parsers.DocumentBuilderFactory f = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        f.setNamespaceAware(true);
+        org.w3c.dom.Document d = f.newDocumentBuilder().newDocument();
+        // XML declaration state setters
+        d.setXmlVersion("1.1");
+        check("1.1".equals(d.getXmlVersion()), "setXmlVersion/getXmlVersion round-trip");
+        try { d.setXmlVersion("9.9"); check(false, "setXmlVersion(9.9) must throw"); }
+        catch (org.w3c.dom.DOMException ex) { check(ex.code == org.w3c.dom.DOMException.NOT_SUPPORTED_ERR, "setXmlVersion(9.9) -> NOT_SUPPORTED_ERR"); }
+        d.setXmlStandalone(true);
+        check(d.getXmlStandalone(), "setXmlStandalone round-trip");
+        d.setStrictErrorChecking(false);
+        check(!d.getStrictErrorChecking(), "setStrictErrorChecking round-trip");
+        d.setStrictErrorChecking(true);
+        d.setDocumentURI("urn:doc");
+        check("urn:doc".equals(d.getDocumentURI()), "setDocumentURI round-trip");
+        check(d.getDomConfig() != null, "getDomConfig non-null on new document");
+        // parsed document: declaration-derived getters
+        String xmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><r/>";
+        org.w3c.dom.Document pdd = f.newDocumentBuilder().parse(new java.io.ByteArrayInputStream(xmlDecl.getBytes("UTF-8")));
+        check("UTF-8".equals(pdd.getXmlEncoding()), "declared encoding visible via getXmlEncoding");
+        check("UTF-8".equals(pdd.getInputEncoding()), "parse input encoding recorded");
+        check("1.0".equals(pdd.getXmlVersion()) && !pdd.getXmlStandalone(), "declaration version/standalone defaults");
+        check(d.createElement("x") != null, "getDomConfig does not break the factory");
+        // cloneNode(true) of a document copies the root but not the doctype (Xerces)
+        org.w3c.dom.Document cdoc = (org.w3c.dom.Document) pdd.cloneNode(true);
+        check(cdoc.getDocumentElement() != null, "document clone keeps the root element");
+        check(cdoc.getDoctype() == null, "document clone drops the doctype (no DTD here)");
+        // renameNode matrix
+        org.w3c.dom.Document rd = f.newDocumentBuilder().newDocument();
+        org.w3c.dom.Element rroot = rd.createElement("r");
+        rd.appendChild(rroot);
+        org.w3c.dom.Element old = rd.createElementNS("urn:x", "p:old");
+        rroot.appendChild(old);
+        org.w3c.dom.Node renamed = rd.renameNode(old, "urn:y", "q:new");
+        check(renamed == old, "renameNode returns the same node");
+        check("q:new".equals(old.getNodeName()) && "urn:y".equals(old.getNamespaceURI()) && "new".equals(old.getLocalName()), "renameNode updates ns name triplet");
+        rd.renameNode(old, null, "plain");
+        check(old.getNamespaceURI() == null && "plain".equals(old.getNodeName()), "renameNode to null ns clears namespace");
+        org.w3c.dom.Attr ra = rd.createAttributeNS("urn:a", "p:at");
+        rroot.setAttributeNodeNS(ra);
+        org.w3c.dom.Node renamedAttr = rd.renameNode(ra, "urn:b", "q:bt");
+        check(renamedAttr == ra && "urn:b".equals(ra.getNamespaceURI()) && rroot.getAttributeNodeNS("urn:b", "bt") == ra, "renameNode on attr keeps it mounted under the new name");
+        try { rd.renameNode(rd.createTextNode("x"), null, "t"); check(false, "renameNode(text) must throw"); }
+        catch (org.w3c.dom.DOMException ex) { check(ex.code == org.w3c.dom.DOMException.NOT_SUPPORTED_ERR, "renameNode on non-Element/Attr -> NOT_SUPPORTED_ERR"); }
+        org.w3c.dom.Document foreign = f.newDocumentBuilder().newDocument();
+        try { rd.renameNode(foreign.createElement("f"), null, "g"); check(false, "renameNode(foreign) must throw"); }
+        catch (org.w3c.dom.DOMException ex) { check(ex.code == org.w3c.dom.DOMException.WRONG_DOCUMENT_ERR, "renameNode(foreign node) -> WRONG_DOCUMENT_ERR"); }
+        try { rd.renameNode(rd.createElement("z"), null, "bad name"); check(false, "renameNode(illegal) must throw"); }
+        catch (org.w3c.dom.DOMException ex) { check(ex.code == org.w3c.dom.DOMException.INVALID_CHARACTER_ERR, "renameNode(illegal name) -> INVALID_CHARACTER_ERR"); }
+        // adoptNode vs importNode contrast
+        org.w3c.dom.Document src = f.newDocumentBuilder().newDocument();
+        org.w3c.dom.Element se = src.createElement("src");
+        se.setAttribute("a", "1");
+        se.appendChild(src.createTextNode("c"));
+        src.appendChild(se);
+        org.w3c.dom.Node adopted = foreign.adoptNode(se);
+        check(adopted == se && se.getOwnerDocument() == foreign, "adoptNode moves ownership in place (same instance)");
+        check(src.getDocumentElement() == null, "adoptNode detaches from the original document");
+        check(foreign.getDocumentElement() == null, "adoptNode does NOT auto-install the node as target root");
+        check(foreign.adoptNode(se) == se, "adoptNode is idempotent");
+        org.w3c.dom.Document deep = f.newDocumentBuilder().newDocument();
+        org.w3c.dom.Element sd = src.createElement("sd");
+        sd.setAttribute("k", "v");
+        sd.appendChild(src.createElement("kid"));
+        src.appendChild(sd);
+        org.w3c.dom.Node shallow = deep.importNode(sd, false);
+        check(shallow.getOwnerDocument() == deep && shallow.getChildNodes().getLength() == 0, "importNode(false) copies node without children");
+        check(((org.w3c.dom.Element) shallow).getAttribute("k").equals("v"), "importNode(false) keeps attributes");
+        org.w3c.dom.Node full = deep.importNode(sd, true);
+        check(full.getChildNodes().getLength() == 1 && full != sd, "importNode(true) deep-copies as a new instance");
+        check(sd.getOwnerDocument() == src, "importNode never disturbs the source");
+        // adoptNode restrictions on readonly/doctype nodes
+        org.w3c.dom.Document cdoc2 = f.newDocumentBuilder().newDocument();
+        org.w3c.dom.DocumentType pdt = f.newDocumentBuilder().newDocument().getImplementation().createDocumentType("q", null, null);
+        try { cdoc2.adoptNode(pdt); check(false, "adoptNode(doctype) must throw"); }
+        catch (org.w3c.dom.DOMException ex) { check(ex.code == org.w3c.dom.DOMException.NOT_SUPPORTED_ERR, "adoptNode(doctype) -> NOT_SUPPORTED_ERR"); }
+        try { cdoc2.importNode(pdt, true); check(false, "importNode(doctype) must throw"); }
+        catch (org.w3c.dom.DOMException ex) { check(ex.code == org.w3c.dom.DOMException.NOT_SUPPORTED_ERR, "importNode(doctype) -> NOT_SUPPORTED_ERR"); }
+        // doctype placement before root
+        org.w3c.dom.Document wdt = f.newDocumentBuilder().newDocument();
+        org.w3c.dom.DocumentType head = wdt.getImplementation().createDocumentType("h", null, null);
+        wdt.appendChild(head);
+        wdt.appendChild(wdt.createElement("hr"));
+        check(wdt.getChildNodes().getLength() == 2 && org.w3c.dom.Node.DOCUMENT_TYPE_NODE == wdt.getFirstChild().getNodeType(), "doctype may precede the root element");
+        check(wdt.getDoctype() == head, "getDoctype returns the prepended doctype");
+        // getElementById without DTD
+        check(pdd.getElementById("x") == null, "getElementById null without DTD/schema");
     }
 }

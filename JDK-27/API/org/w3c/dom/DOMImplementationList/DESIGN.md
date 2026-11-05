@@ -11,3 +11,6 @@ JDK 源码自用（org.w3c.dom.DOMImplementationList）与 JDK `test/jdk` 内 JA
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`DOMImplementationListTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 深化第 2 轮（契约级，2026-11-05）
+实例经 registry.getDOMImplementationList("Core 3.0")（JDK 无公开工厂）：length>=1（实测 4）、item(0) 非 null、item(99)/item(-1) null、全 in-range item 均可解析、列表项均满足查询 feature、重复查询结果确定、"bogus 1.0" → length 0。

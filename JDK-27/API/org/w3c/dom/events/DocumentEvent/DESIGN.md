@@ -11,3 +11,9 @@ JDK 源码自用（org.w3c.dom.events.DocumentEvent）与 JDK `test/jdk` 内 JAX
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`DocumentEventTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 深化第 2 轮（契约级，2026-11-05）
+黑盒行为覆盖（经 `DocumentBuilder.newDocument()` 真实例验证）：
+- 获取通道：Xerces 的 Document 实现同时实现 DocumentEvent，`(DocumentEvent) doc` 直接转型可用；`getFeature("Events",...)` 返回 null。
+- createEvent 类型矩阵：`"Event"`/`"Events"`、`"MutationEvent"`/`"MutationEvents"`（别名两拼法都接受）；`"UIEvents"`、`"MouseEvents"` 与任意未知串 → `DOMException NOT_SUPPORTED_ERR(9)`；null → NullPointerException（仅断言类型，消息双侧不同）。
+- 新事件未 initEvent 前 `getType()` 为空串；每次 createEvent 返回新对象；`canDispatch` 方法不存在（Events 停在 Level 2，接口级缺席）。

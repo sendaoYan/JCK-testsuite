@@ -11,3 +11,8 @@ JDK 源码自用（org.w3c.dom.ls.LSLoadEvent）与 JDK `test/jdk` 内 JAXP/XML 
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`LSLoadEventTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 深化第 2 轮（契约级，2026-11-05）
+- 形状：extends Event；仅 getNewDocument/getInput 两方法；无数值常量。
+- 实例经 java.lang.reflect.Proxy 构造并验证 getter 路由（匿名实现需实现全部 Event 方法，Proxy 更干净）。
+- 生产者缺席：同步解析不产生 LSLoadEvent（async-only 通知）。

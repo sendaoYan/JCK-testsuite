@@ -46,6 +46,27 @@ public class XPathEvaluatorTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: XPathEvaluator contract (shape-lock; no JDK implementation) ----
+    static void deepContract() throws Exception {
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.xpath.XPathEvaluator.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.contains("createExpression") && names.contains("createNSResolver") && names.contains("evaluate"), "three evaluator methods declared");
+        check(org.w3c.dom.xpath.XPathEvaluator.class.isInterface(), "XPathEvaluator is an interface");
+        // no implementation is wired into the DOM: feature probe + cast probe
+        org.w3c.dom.Document d = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+        check(d.getImplementation().getFeature("XPath", "3.0") == null, "getFeature(XPath,3.0) -> null (module absent)");
+        check(!org.w3c.dom.xpath.XPathEvaluator.class.isInstance(d), "Document is not an XPathEvaluator");
+        // anonymous implementation honors the method contracts
+        org.w3c.dom.xpath.XPathEvaluator ev = new org.w3c.dom.xpath.XPathEvaluator() {
+            public org.w3c.dom.xpath.XPathExpression createExpression(String expr, org.w3c.dom.xpath.XPathNSResolver r) { return null; }
+            public org.w3c.dom.xpath.XPathNSResolver createNSResolver(org.w3c.dom.Node n) { return null; }
+            public Object evaluate(String expr, org.w3c.dom.Node ctx, org.w3c.dom.xpath.XPathNSResolver r, short type, Object res) { return null; }
+        };
+        check(ev.createExpression("/r", null) == null && ev.createNSResolver(d) == null, "anonymous evaluator methods callable");
+        check(ev.evaluate("/r", d, null, org.w3c.dom.xpath.XPathResult.ANY_TYPE, null) == null, "evaluate delegates with ANY_TYPE");
     }
 }

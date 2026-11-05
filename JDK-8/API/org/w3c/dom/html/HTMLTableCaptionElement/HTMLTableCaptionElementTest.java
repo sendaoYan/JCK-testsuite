@@ -36,6 +36,20 @@ public class HTMLTableCaptionElementTest {
         check(ifaceNames(c).equals(set("org.w3c.dom.html.HTMLElement")), "direct superinterfaces");
         check(declares(c, "getAlign"), "declares getAlign");
         check(declares(c, "setAlign"), "declares setAlign");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLTableCaptionElement.class), "HTMLTableCaptionElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLTableCaptionElement.class.isInterface(), "HTMLTableCaptionElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLTableCaptionElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 2, "HTMLTableCaptionElement declares exactly 2 methods");
+        check(names.contains("getAlign"), "getAlign declared");
+        check(names.contains("setAlign"), "setAlign declared");
     }
 }

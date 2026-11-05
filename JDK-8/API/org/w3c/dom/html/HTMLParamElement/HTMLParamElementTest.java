@@ -40,6 +40,26 @@ public class HTMLParamElementTest {
         check(declares(c, "setType"), "declares setType");
         check(declares(c, "getValue"), "declares getValue");
         check(declares(c, "setValue"), "declares setValue");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLParamElement.class), "HTMLParamElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLParamElement.class.isInterface(), "HTMLParamElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLParamElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 8, "HTMLParamElement declares exactly 8 methods");
+        check(names.contains("getName"), "getName declared");
+        check(names.contains("getType"), "getType declared");
+        check(names.contains("getValue"), "getValue declared");
+        check(names.contains("getValueType"), "getValueType declared");
+        check(names.contains("setName"), "setName declared");
+        check(names.contains("setType"), "setType declared");
+        check(names.contains("setValue"), "setValue declared");
+        check(names.contains("setValueType"), "setValueType declared");
     }
 }

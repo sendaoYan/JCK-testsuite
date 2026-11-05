@@ -11,3 +11,7 @@ JDK 源码自用（org.w3c.dom.views.AbstractView）与 JDK `test/jdk` 内 JAXP/
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`AbstractViewTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+- 生产者缺席（双侧实测一致）：`hasFeature("CSS"/"StyleSheets"/"Views","2.0")` 均为 false、`getFeature` 返回 null、Document/Element/DOMImplementation 不可 cast 到本模块接口——JDK 内置 Xerces 未实现 CSS/StyleSheets/Views 引擎。
+- 降级策略：常量精确锁定 + 接口形状（方法名/签名/继承）锁定 + 匿名实现（或 Proxy）行为路由断言。
+- getDocument() 返回 DocumentView（注意返回类型是 DocumentView 而非 Document，与 DocumentView.getDefaultView 互相递归）；匿名实现经 holder 数组互连断言。

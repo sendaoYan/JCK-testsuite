@@ -37,6 +37,27 @@ public class CSSImportRuleTest {
         check(declares(c, "getHref"), "declares getHref");
         check(declares(c, "getMedia"), "declares getMedia");
         check(declares(c, "getStyleSheet"), "declares getStyleSheet");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: CSSImportRule contract (href/media/sheet) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.css.CSSRule.class.isAssignableFrom(org.w3c.dom.css.CSSImportRule.class), "CSSImportRule extends CSSRule");
+        org.w3c.dom.css.CSSImportRule r = new org.w3c.dom.css.CSSImportRule() {
+            public String getHref() { return "imp.css"; }
+            public org.w3c.dom.stylesheets.MediaList getMedia() { return null; }
+            public org.w3c.dom.css.CSSStyleSheet getStyleSheet() { return null; }
+            public String getCssText() { return null; }
+            public void setCssText(String t) { }
+            public short getType() { return org.w3c.dom.css.CSSRule.IMPORT_RULE; }
+            public org.w3c.dom.css.CSSStyleSheet getParentStyleSheet() { return null; }
+            public org.w3c.dom.css.CSSRule getParentRule() { return null; }
+        };
+        check("imp.css".equals(r.getHref()), "href round-trip");
+        check(r.getType() == org.w3c.dom.css.CSSRule.IMPORT_RULE, "rule reports IMPORT_RULE(3)");
+        check(r.getMedia() == null && r.getStyleSheet() == null, "media/sheet nulls by wiring");
     }
 }

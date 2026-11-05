@@ -34,6 +34,22 @@ public class AbstractViewTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: AbstractView contract ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("Views", "2.0") && impl.getFeature("Views", "2.0") == null, "Views module unimplemented");
+        final org.w3c.dom.views.DocumentView[] holder = new org.w3c.dom.views.DocumentView[1];
+        org.w3c.dom.views.AbstractView v = new org.w3c.dom.views.AbstractView() {
+            public org.w3c.dom.views.DocumentView getDocument() { return holder[0]; }
+        };
+        holder[0] = new org.w3c.dom.views.DocumentView() {
+            public org.w3c.dom.views.AbstractView getDefaultView() { return v; }
+        };
+        check(v.getDocument() == holder[0], "getDocument returns the wired DocumentView");
+        check(v.getDocument().getDefaultView() == v, "view/document pair is mutually linked");
     }
 }

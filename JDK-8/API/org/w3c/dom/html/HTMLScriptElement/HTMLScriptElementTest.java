@@ -40,6 +40,32 @@ public class HTMLScriptElementTest {
         check(declares(c, "setHtmlFor"), "declares setHtmlFor");
         check(declares(c, "getEvent"), "declares getEvent");
         check(declares(c, "setEvent"), "declares setEvent");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLScriptElement.class), "HTMLScriptElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLScriptElement.class.isInterface(), "HTMLScriptElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLScriptElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 14, "HTMLScriptElement declares exactly 14 methods");
+        check(names.contains("getCharset"), "getCharset declared");
+        check(names.contains("getDefer"), "getDefer declared");
+        check(names.contains("getEvent"), "getEvent declared");
+        check(names.contains("getHtmlFor"), "getHtmlFor declared");
+        check(names.contains("getSrc"), "getSrc declared");
+        check(names.contains("getText"), "getText declared");
+        check(names.contains("getType"), "getType declared");
+        check(names.contains("setCharset"), "setCharset declared");
+        check(names.contains("setDefer"), "setDefer declared");
+        check(names.contains("setEvent"), "setEvent declared");
+        check(names.contains("setHtmlFor"), "setHtmlFor declared");
+        check(names.contains("setSrc"), "setSrc declared");
+        check(names.contains("setText"), "setText declared");
+        check(names.contains("setType"), "setType declared");
     }
 }

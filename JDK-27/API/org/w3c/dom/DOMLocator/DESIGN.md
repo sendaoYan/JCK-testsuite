@@ -11,3 +11,6 @@ JDK 源码自用（org.w3c.dom.DOMLocator）与 JDK `test/jdk` 内 JAXP/XML 用�
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`DOMLocatorTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 深化第 2 轮（契约级，2026-11-05）
+真实实例经 DOMError.getLocation() 取得：getLineNumber/getColumnNumber 1 基（"<r><1x/></r>" → line 1 col 5）、getUtf16Offset=4、getByteOffset=-1（字符输入未知）、getUri()=null（内存字符串输入）；多行文档行号指向出错行；五 getter 全回读。

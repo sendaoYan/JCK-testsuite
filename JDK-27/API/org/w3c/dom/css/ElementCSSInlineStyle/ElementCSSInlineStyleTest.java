@@ -40,6 +40,32 @@ public class ElementCSSInlineStyleTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: ElementCSSInlineStyle contract (inline style channel) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        org.w3c.dom.Document d = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+        check(!org.w3c.dom.css.ElementCSSInlineStyle.class.isInstance(d.createElement("e")), "Element is not an ElementCSSInlineStyle");
+        org.w3c.dom.css.CSSStyleDeclaration decl = new org.w3c.dom.css.CSSStyleDeclaration() {
+            String text = "color: red";
+            public String getCssText() { return text; }
+            public void setCssText(String t) { text = t; }
+            public String getPropertyValue(String p) { return "red"; }
+            public org.w3c.dom.css.CSSValue getPropertyCSSValue(String p) { return null; }
+            public String removeProperty(String p) { return "red"; }
+            public String getPropertyPriority(String p) { return "important"; }
+            public void setProperty(String p, String v, String pri) { }
+            public int getLength() { return 1; }
+            public String item(int i) { return "color"; }
+            public org.w3c.dom.css.CSSRule getParentRule() { return null; }
+        };
+        org.w3c.dom.css.ElementCSSInlineStyle e = new org.w3c.dom.css.ElementCSSInlineStyle() {
+            public org.w3c.dom.css.CSSStyleDeclaration getStyle() { return decl; }
+        };
+        check(e.getStyle() == decl && "red".equals(e.getStyle().getPropertyValue("color")), "inline style declaration wired");
     }
 }

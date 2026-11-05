@@ -40,6 +40,31 @@ public class LSResourceResolverTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: behavioral LSResourceResolver contract ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.ls.LSResourceResolver r = new org.w3c.dom.ls.LSResourceResolver() {
+            public org.w3c.dom.ls.LSInput resolveResource(String type, String ns, String publicId, String systemId, String baseURI) { return null; }
+        };
+        check(r.resolveResource("http://www.w3.org/2001/XMLSchema", null, null, "x.xsd", null) == null, "returning null means no resolution");
+        org.w3c.dom.ls.DOMImplementationLS ls = (org.w3c.dom.ls.DOMImplementationLS) javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder().newDocument().getImplementation().getFeature("LS", "3.0");
+        org.w3c.dom.ls.LSParser p = ls.createLSParser(org.w3c.dom.ls.DOMImplementationLS.MODE_SYNCHRONOUS, null);
+        org.w3c.dom.DOMConfiguration cfg = p.getDomConfig();
+        check(cfg.canSetParameter("resource-resolver", r), "DomConfig accepts resource-resolver");
+        cfg.setParameter("resource-resolver", r);
+        check(cfg.getParameter("resource-resolver") == r, "resource-resolver round-trips through DomConfig");
+        org.w3c.dom.ls.LSInput supplied = ls.createLSInput();
+        org.w3c.dom.ls.LSResourceResolver r2 = new org.w3c.dom.ls.LSResourceResolver() {
+            public org.w3c.dom.ls.LSInput resolveResource(String type, String ns, String publicId, String systemId, String baseURI) { return supplied; }
+        };
+        check(r2.resolveResource(null, null, null, null, null) == supplied, "resolver can hand back a prepared LSInput");
+        // resolver signature shape
+        java.lang.reflect.Method m = org.w3c.dom.ls.LSResourceResolver.class.getMethod("resolveResource",
+            String.class, String.class, String.class, String.class, String.class);
+        check(m != null, "resolveResource(String,String,String,String,String) declared");
     }
 }

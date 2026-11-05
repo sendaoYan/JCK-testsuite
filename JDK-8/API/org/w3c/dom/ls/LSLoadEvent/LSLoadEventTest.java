@@ -36,6 +36,39 @@ public class LSLoadEventTest {
         check(ifaceNames(c).equals(set("org.w3c.dom.events.Event")), "direct superinterfaces");
         check(declares(c, "getNewDocument"), "declares getNewDocument");
         check(declares(c, "getInput"), "declares getInput");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: LSLoadEvent contract (shape + producer absence) ----
+    static void deepContract() throws Exception {
+        check(org.w3c.dom.events.Event.class.isAssignableFrom(org.w3c.dom.ls.LSLoadEvent.class), "LSLoadEvent extends Event");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.ls.LSLoadEvent.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.contains("getNewDocument") && names.contains("getInput"), "getNewDocument/getInput declared");
+        check(names.size() == 2, "LSLoadEvent declares exactly two methods");
+        // no constants of its own
+        check(org.w3c.dom.ls.LSLoadEvent.class.getDeclaredFields().length == 0, "LSLoadEvent declares no constants");
+        // an anonymous implementation honors the getter contract
+        final org.w3c.dom.Document marker = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+        final org.w3c.dom.ls.LSInput markerIn = ((org.w3c.dom.ls.DOMImplementationLS) marker.getImplementation().getFeature("LS", "3.0")).createLSInput();
+        org.w3c.dom.ls.LSLoadEvent ev = (org.w3c.dom.ls.LSLoadEvent) java.lang.reflect.Proxy.newProxyInstance(
+            org.w3c.dom.ls.LSLoadEvent.class.getClassLoader(),
+            new Class<?>[]{org.w3c.dom.ls.LSLoadEvent.class},
+            new java.lang.reflect.InvocationHandler() {
+                public Object invoke(Object proxy, java.lang.reflect.Method m, Object[] args) {
+                    if (m.getName().equals("getNewDocument")) return marker;
+                    if (m.getName().equals("getInput")) return markerIn;
+                    return null;
+                }
+            });
+        check(ev.getNewDocument() == marker && ev.getInput() == markerIn, "proxy LSLoadEvent routes getNewDocument/getInput");
+        // synchronous parsing never produces LSLoadEvent (async-only notification)
+        final java.util.List<Object> events = new java.util.ArrayList<Object>();
+        org.w3c.dom.ls.DOMImplementationLS ls = (org.w3c.dom.ls.DOMImplementationLS) marker.getImplementation().getFeature("LS", "3.0");
+        org.w3c.dom.ls.LSParser p = ls.createLSParser(org.w3c.dom.ls.DOMImplementationLS.MODE_SYNCHRONOUS, null);
+        org.w3c.dom.ls.LSInput in = ls.createLSInput();
+        in.setStringData("<r/>");
+        check(p.parse(in) != null && events.isEmpty(), "synchronous parse yields no LSLoadEvent (async-only event)");
     }
 }

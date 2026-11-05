@@ -39,6 +39,23 @@ public class HTMLLabelElementTest {
         check(declares(c, "setAccessKey"), "declares setAccessKey");
         check(declares(c, "getHtmlFor"), "declares getHtmlFor");
         check(declares(c, "setHtmlFor"), "declares setHtmlFor");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLLabelElement.class), "HTMLLabelElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLLabelElement.class.isInterface(), "HTMLLabelElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLLabelElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 5, "HTMLLabelElement declares exactly 5 methods");
+        check(names.contains("getAccessKey"), "getAccessKey declared");
+        check(names.contains("getForm"), "getForm declared");
+        check(names.contains("getHtmlFor"), "getHtmlFor declared");
+        check(names.contains("setAccessKey"), "setAccessKey declared");
+        check(names.contains("setHtmlFor"), "setHtmlFor declared");
     }
 }

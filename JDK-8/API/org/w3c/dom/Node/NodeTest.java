@@ -5,6 +5,10 @@
  */
 
 import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Attr;
+import org.w3c.dom.Comment;
+import org.w3c.dom.DocumentFragment;
+import org.w3c.dom.UserDataHandler;
 import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -186,6 +190,210 @@ public class NodeTest {
         check("p".equals(item.lookupPrefix("urn:ns")), "lookupPrefix resolves declared namespace");
         check(!item.isDefaultNamespace("urn:ns"), "isDefaultNamespace false for prefixed element");
 
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- deepening round 2: full mutation / position / identity / userData contracts ----
+    static void deepContract() throws Exception {
+        DocumentBuilderFactory nf = DocumentBuilderFactory.newInstance();
+        nf.setNamespaceAware(true);
+        Document dd = nf.newDocumentBuilder().newDocument();
+        Element r = dd.createElement("root");
+        dd.appendChild(r);
+        Element a = dd.createElement("a");
+        Element b = dd.createElement("b");
+        Element c = dd.createElement("c");
+        r.appendChild(a);
+        r.appendChild(b);
+        r.appendChild(c);
+
+        // DOCUMENT_POSITION constants are exact DOM Level 3 values
+        check(Node.DOCUMENT_POSITION_DISCONNECTED == 1, "DOCUMENT_POSITION_DISCONNECTED == 1");
+        check(Node.DOCUMENT_POSITION_PRECEDING == 2, "DOCUMENT_POSITION_PRECEDING == 2");
+        check(Node.DOCUMENT_POSITION_FOLLOWING == 4, "DOCUMENT_POSITION_FOLLOWING == 4");
+        check(Node.DOCUMENT_POSITION_CONTAINS == 8, "DOCUMENT_POSITION_CONTAINS == 8");
+        check(Node.DOCUMENT_POSITION_CONTAINED_BY == 16, "DOCUMENT_POSITION_CONTAINED_BY == 16");
+        check(Node.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC == 32, "DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC == 32");
+
+        // precise masks (Xerces actual values, identical on JDK 8 / JDK 27)
+        Element leaf = dd.createElement("leaf");
+        a.appendChild(leaf);
+        check(r.compareDocumentPosition(a) == 20, "ancestor->descendant mask 20 (FOLLOWING|CONTAINED_BY)");
+        check(a.compareDocumentPosition(r) == 10, "descendant->ancestor mask 10 (PRECEDING|CONTAINS)");
+        check(a.compareDocumentPosition(b) == 4, "earlier vs later sibling == 4");
+        check(b.compareDocumentPosition(a) == 2, "later vs earlier sibling == 2");
+        check(a.compareDocumentPosition(a) == 0, "node vs itself == 0");
+        Element orphan = dd.createElement("orphan");
+        int dpos = a.compareDocumentPosition(orphan);
+        check(dpos == 37, "disconnected forward == 37 (DISCONNECTED|IMPL_SPECIFIC|FOLLOWING)");
+        check(orphan.compareDocumentPosition(a) == 35, "disconnected backward == 35 (DISCONNECTED|IMPL_SPECIFIC|PRECEDING)");
+        check((dpos & Node.DOCUMENT_POSITION_DISCONNECTED) != 0, "disconnected result has DISCONNECTED bit");
+
+        // appendChild MOVES an already-attached node (no duplication)
+        r.appendChild(a); // a was first child; moves to end
+        check(r.getChildNodes().getLength() == 3, "appendChild(existing) keeps count (move)");
+        check(r.getFirstChild() == b && r.getLastChild() == a, "appendChild(existing) relocates node to end");
+        // cycle / self insertion
+        check(domCode(() -> a.appendChild(r), DOMException.HIERARCHY_REQUEST_ERR), "appending own ancestor -> HIERARCHY_REQUEST_ERR");
+        check(domCode(() -> a.appendChild(a), DOMException.HIERARCHY_REQUEST_ERR), "appending node to itself -> HIERARCHY_REQUEST_ERR");
+        // insertBefore(x, x) is a permitted no-op; replaceChild(x, x) returns x
+        r.insertBefore(a, a);
+        check(r.getChildNodes().getLength() == 3, "insertBefore(x,x) no-op keeps count");
+        check(r.replaceChild(a, a) == a, "replaceChild(x,x) returns same node");
+        // replaceChild with an in-tree new node: old detached, new moved (not duplicated)
+        Element nw = dd.createElement("nw");
+        r.appendChild(nw);
+        Node oldReplaced = r.replaceChild(nw, c);
+        check(oldReplaced == c, "replaceChild returns old node");
+        check(c.getParentNode() == null, "replaced old node detached");
+        check(nw.getParentNode() == r, "in-tree new node moved into slot");
+        // removing the document element
+        Node removedRoot = dd.removeChild(r);
+        check(removedRoot == r && dd.getDocumentElement() == null, "removeChild(documentElement) -> getDocumentElement null");
+        dd.appendChild(r);
+        check(dd.getDocumentElement() == r, "re-appending root restores documentElement");
+        // insertBefore error contract
+        check(isNpe(() -> r.insertBefore(null, a)), "insertBefore(null, ref) -> NPE");
+        check(domCode(() -> r.insertBefore(a, dd.createElement("missing")), DOMException.NOT_FOUND_ERR), "insertBefore(x, missingRef) -> NOT_FOUND_ERR");
+        // hierarchy errors
+        check(domCode(() -> dd.createTextNode("t").appendChild(a), DOMException.HIERARCHY_REQUEST_ERR), "appendChild on Text -> HIERARCHY_REQUEST_ERR");
+        check(domCode(() -> dd.createTextNode("t").insertBefore(a, null), DOMException.HIERARCHY_REQUEST_ERR), "insertBefore on Text -> HIERARCHY_REQUEST_ERR");
+
+        // cross-document insertion
+        Document other = nf.newDocumentBuilder().newDocument();
+        check(domCode(() -> r.appendChild(other.createElement("foreign")), DOMException.WRONG_DOCUMENT_ERR), "appendChild(foreign doc node) -> WRONG_DOCUMENT_ERR");
+
+        // cloneNode details
+        Element attrHolder = dd.createElement("attrHolder");
+        attrHolder.setAttribute("k", "v");
+        Element shallow = (Element) attrHolder.cloneNode(false);
+        check("v".equals(shallow.getAttribute("k")), "shallow clone keeps attributes");
+        check(shallow.getParentNode() == null, "clone has null parent");
+        check(shallow.getOwnerDocument() == dd, "clone keeps ownerDocument");
+        a.appendChild(dd.createTextNode("one"));
+        Element deepHost = dd.createElement("deepHost");
+        deepHost.appendChild(a);
+        Element deepClone = (Element) deepHost.cloneNode(true);
+        check(deepClone.getFirstChild() != a, "deep clone children are distinct instances");
+        check(deepClone.isEqualNode(deepHost), "deep clone is isEqualNode-equal");
+        attrHolder.setUserData("u", "payload", null);
+        Node clonedUser = attrHolder.cloneNode(true);
+        check(clonedUser.getUserData("u") == null, "cloneNode does not copy userData (no handler)");
+        // equality contracts
+        check(isNpe(() -> attrHolder.isEqualNode(null)), "isEqualNode(null) -> NPE");
+        check(!attrHolder.isSameNode(null), "isSameNode(null) == false");
+        Element eqA = dd.createElement("eq");
+        eqA.appendChild(dd.createTextNode("x"));
+        Element eqB = dd.createElement("eq");
+        eqB.appendChild(dd.createTextNode("x"));
+        Element eqC = dd.createElement("eq");
+        eqC.appendChild(dd.createTextNode("y"));
+        check(eqA.isEqualNode(eqB), "same-shape trees isEqualNode");
+        check(!eqA.isEqualNode(eqC), "different text content breaks isEqualNode");
+        Element eqD = dd.createElement("eq");
+        eqD.setAttribute("extra", "1");
+        check(!eqA.isEqualNode(eqD), "attribute difference breaks isEqualNode");
+        Element foreignSame = other.createElement("eq");
+        foreignSame.appendChild(other.createTextNode("x"));
+        check(eqA.isEqualNode(foreignSame), "isEqualNode works across documents");
+
+        // normalize: idempotent, absorbs empty text nodes
+        Element nrm = dd.createElement("nrm");
+        nrm.appendChild(dd.createTextNode(""));
+        nrm.appendChild(dd.createTextNode("a"));
+        nrm.appendChild(dd.createTextNode("b"));
+        nrm.normalize();
+        check(nrm.getChildNodes().getLength() == 1, "normalize merges adjacent text incl. empty");
+        check("ab".equals(nrm.getFirstChild().getNodeValue()), "normalized content concatenates");
+        nrm.normalize();
+        check(nrm.getChildNodes().getLength() == 1, "normalize is idempotent");
+
+        // textContent contracts
+        check("cc".equals(dd.createComment("cc").getTextContent()), "comment textContent is its data");
+        check("dd".equals(dd.createProcessingInstruction("t", "dd").getTextContent()), "PI textContent is its data");
+        Attr tca = dd.createAttribute("ta");
+        tca.setValue("av");
+        check("av".equals(tca.getTextContent()), "attr textContent is its value");
+        Document emptyDoc = nf.newDocumentBuilder().newDocument();
+        check(emptyDoc.getTextContent() == null, "empty document textContent null");
+        Element nullTc = dd.createElement("nullTc");
+        nullTc.appendChild(dd.createTextNode("q"));
+        nullTc.setTextContent(null);
+        check(nullTc.getChildNodes().getLength() == 0, "setTextContent(null) removes children");
+        check(nullTc.getTextContent().isEmpty(), "setTextContent(null) yields empty content");
+        int docChildrenBefore = dd.getChildNodes().getLength();
+        dd.setTextContent("ignored");
+        check(dd.getChildNodes().getLength() == docChildrenBefore, "Document.setTextContent is a no-op");
+        Text syncT = dd.createTextNode("a");
+        syncT.setTextContent("b");
+        check("b".equals(syncT.getNodeValue()), "Text.setTextContent syncs nodeValue");
+
+        // hasAttributes
+        Element bare = dd.createElement("bare");
+        check(!bare.hasAttributes(), "bare element hasAttributes false");
+        bare.setAttribute("x", "1");
+        check(bare.hasAttributes(), "element with attr hasAttributes true");
+        check(!dd.createTextNode("t").hasAttributes(), "text hasAttributes false");
+
+        // userData: previous value, removal, handler callbacks with full parameters
+        Element ud = dd.createElement("ud");
+        ud.setAttribute("k0", "v0");
+        check(ud.setUserData("k", "v1", null) == null, "setUserData returns null when absent");
+        check("v1".equals(ud.getUserData("k")), "getUserData round-trip");
+        check(ud.getUserData("missing") == null, "getUserData(missing) null");
+        check(ud.getUserData(null) == null, "getUserData(null-key) null");
+        check("v1".equals(ud.setUserData("k", null, null)), "setUserData(k,null) returns previous value");
+        check(ud.getUserData("k") == null, "setUserData(k,null) clears entry");
+        final java.util.List<String> udLog = new java.util.ArrayList<String>();
+        ud.setUserData("h", "hv", new UserDataHandler() {
+            public void handle(short op, String key, Object data, Node src, Node dst) {
+                udLog.add(op + ":" + key + ":" + data + ":" + src.getNodeName() + ":" + (dst == null ? "null" : dst.getNodeName()));
+            }
+        });
+        Node udClone = ud.cloneNode(true);
+        check(udLog.get(0).equals("1:h:hv:ud:ud"), "clone fires NODE_CLONED with dst=clone");
+        check(udClone.getNodeName().equals("ud"), "clone dst node name");
+        dd.importNode(ud, true);
+        check(udLog.get(1).equals("2:h:hv:ud:ud"), "import fires NODE_IMPORTED");
+        dd.renameNode(ud, null, "udRenamed");
+        check(udLog.get(2).equals("4:h:hv:udRenamed:null"), "rename fires NODE_RENAMED with dst null");
+        other.adoptNode(ud);
+        check(udLog.get(3).equals("5:h:hv:udRenamed:null"), "adopt fires NODE_ADOPTED with dst null");
+        check("hv".equals(ud.getUserData("h")), "userData travels with adopted node");
+        check(UserDataHandler.NODE_CLONED == 1 && UserDataHandler.NODE_IMPORTED == 2 && UserDataHandler.NODE_DELETED == 3
+            && UserDataHandler.NODE_RENAMED == 4 && UserDataHandler.NODE_ADOPTED == 5, "UserDataHandler operation constants");
+
+        // namespace lookup on a parsed document (default + prefixed)
+        Document pd = nf.newDocumentBuilder().parse(new java.io.ByteArrayInputStream(
+            "<r xmlns='urn:def' xmlns:p='urn:p'><p:item/></r>".getBytes("UTF-8")));
+        Element pitem = (Element) pd.getDocumentElement().getFirstChild();
+        check("p".equals(pitem.lookupPrefix("urn:p")), "lookupPrefix resolves prefixed mapping");
+        check("urn:p".equals(pitem.lookupNamespaceURI("p")), "lookupNamespaceURI resolves prefix");
+        check("urn:def".equals(pitem.lookupNamespaceURI(null)), "null prefix resolves default namespace");
+        check(pitem.isDefaultNamespace("urn:def"), "isDefaultNamespace true for default");
+        check(!pitem.isDefaultNamespace("urn:p"), "isDefaultNamespace false for non-default");
+        check(pitem.lookupPrefix("urn:none") == null, "lookupPrefix(unknown) null");
+        check(pd.getDocumentElement().lookupNamespaceURI("xml") == null, "Xerces lookupNamespaceURI(xml) null without declaration");
+
+        // base URI / isSupported / setPrefix negatives
+        pd.setDocumentURI("http://ex.test/doc.xml");
+        check("http://ex.test/doc.xml".equals(pd.getDocumentElement().getBaseURI()), "getBaseURI inherits documentURI");
+        check(pd.getDocumentElement().isSupported("Core", "2.0"), "isSupported(Core,2.0) true");
+        check(!pd.getDocumentElement().isSupported("bogus", "1.0"), "isSupported(bogus) false");
+        Element pfx = pd.createElementNS("urn:x", "q:item");
+        check(domCode(() -> pfx.setPrefix("bad name"), DOMException.INVALID_CHARACTER_ERR), "setPrefix(illegal) -> INVALID_CHARACTER_ERR");
+        check(domCode(() -> pd.createElement("plain").setPrefix("p"), DOMException.NAMESPACE_ERR), "setPrefix on non-ns node -> NAMESPACE_ERR");
+
+        // importNode family
+        Attr impAttr = (Attr) other.importNode(dd.createAttribute("ia"), true);
+        check("ia".equals(impAttr.getName()) && impAttr.getOwnerDocument() == other, "importNode(Attr) rebinding");
+        Comment impComment = (Comment) other.importNode(dd.createComment("ic"), true);
+        check("ic".equals(impComment.getData()), "importNode(Comment)");
+        DocumentFragment frag = dd.createDocumentFragment();
+        frag.appendChild(dd.createElement("fe"));
+        DocumentFragment impFrag = (DocumentFragment) other.importNode(frag, true);
+        check(impFrag.getChildNodes().getLength() == 1, "importNode(DocumentFragment) deep");
+    }
+
 }

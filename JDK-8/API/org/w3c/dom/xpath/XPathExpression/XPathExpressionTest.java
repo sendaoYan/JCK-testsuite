@@ -35,6 +35,18 @@ public class XPathExpressionTest {
         check(c.isInterface(), "org.w3c.dom.xpath.XPathExpression is an interface");
         check(c.getInterfaces().length == 0, "no direct superinterfaces");
         check(declares(c, "evaluate"), "declares evaluate");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: XPathExpression shape-lock (JDK 8 reflection) ----
+    static void deepContract() throws Exception {
+        Class<?> c = Class.forName("org.w3c.dom.xpath.XPathExpression");
+        check(c.isInterface(), "XPathExpression is an interface");
+        java.lang.reflect.Method m = c.getMethod("evaluate", org.w3c.dom.Node.class, short.class, Object.class);
+        check(m != null, "evaluate(Node,short,Object) declared");
+        java.util.Set<String> exn = new java.util.HashSet<String>();
+        for (Class<?> x : m.getExceptionTypes()) exn.add(x.getName());
+        check(exn.contains("org.w3c.dom.xpath.XPathException") && exn.contains("org.w3c.dom.DOMException"), "evaluate declares XPathException + DOMException");
     }
 }

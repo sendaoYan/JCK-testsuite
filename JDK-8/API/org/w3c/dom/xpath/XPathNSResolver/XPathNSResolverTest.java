@@ -35,6 +35,16 @@ public class XPathNSResolverTest {
         check(c.isInterface(), "org.w3c.dom.xpath.XPathNSResolver is an interface");
         check(c.getInterfaces().length == 0, "no direct superinterfaces");
         check(declares(c, "lookupNamespaceURI"), "declares lookupNamespaceURI");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: XPathNSResolver shape (JDK 8 reflection) ----
+    static void deepContract() throws Exception {
+        Class<?> c = Class.forName("org.w3c.dom.xpath.XPathNSResolver");
+        check(c.isInterface(), "XPathNSResolver is an interface");
+        java.lang.reflect.Method m = c.getMethod("lookupNamespaceURI", String.class);
+        check(m != null, "single method lookupNamespaceURI(String)");
+        check(c.getDeclaredFields().length == 0, "no constants");
     }
 }

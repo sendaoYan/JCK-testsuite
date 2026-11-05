@@ -39,6 +39,20 @@ public class XPathExceptionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: XPathException contract ----
+    static void deepContract() throws Exception {
+        check(org.w3c.dom.xpath.XPathException.INVALID_EXPRESSION_ERR == 1, "INVALID_EXPRESSION_ERR = 1 (JDK-normalized, spec says 51)");
+        check(org.w3c.dom.xpath.XPathException.TYPE_ERR == 2, "TYPE_ERR = 2 (JDK-normalized, spec says 52)");
+        org.w3c.dom.xpath.XPathException e = new org.w3c.dom.xpath.XPathException(org.w3c.dom.xpath.XPathException.TYPE_ERR, "boom");
+        check(e.code == org.w3c.dom.xpath.XPathException.TYPE_ERR, "code is a public field");
+        check("boom".equals(e.getMessage()), "message preserved");
+        check(RuntimeException.class.isAssignableFrom(org.w3c.dom.xpath.XPathException.class), "RuntimeException subclass");
+        e.code = 1;
+        check(e.code == 1, "code field mutable");
+        check(new org.w3c.dom.xpath.XPathException((short) 1, null).getMessage() == null, "null message preserved");
     }
 }

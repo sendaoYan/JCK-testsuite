@@ -11,3 +11,7 @@ JDK 源码自用（org.w3c.dom.xpath.XPathResult）与 JDK `test/jdk` 内 JAXP/X
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XPathResultTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 深化第 2 轮（契约级，2026-11-05）
+- 常量表 0..9：ANY=0/NUMBER=1/STRING=2/BOOLEAN=3/UNORDERED_NODE_ITERATOR=4/ORDERED_NODE_ITERATOR=5/UNORDERED_NODE_SNAPSHOT=6/ORDERED_NODE_SNAPSHOT=7/ANY_UNORDERED_NODE=8/FIRST_ORDERED_NODE=9。
+- 9 个方法全形状锁定；匿名实现验证类型化 getter 契约。

@@ -40,6 +40,21 @@ public class XPathNSResolverTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: XPathNSResolver contract ----
+    static void deepContract() throws Exception {
+        check(org.w3c.dom.xpath.XPathNSResolver.class.isInterface(), "XPathNSResolver is an interface");
+        java.lang.reflect.Method m = org.w3c.dom.xpath.XPathNSResolver.class.getMethod("lookupNamespaceURI", String.class);
+        check(m != null, "single method lookupNamespaceURI(String)");
+        check(org.w3c.dom.xpath.XPathNSResolver.class.getDeclaredFields().length == 0, "no constants");
+        org.w3c.dom.xpath.XPathNSResolver r = new org.w3c.dom.xpath.XPathNSResolver() {
+            public String lookupNamespaceURI(String prefix) { return "p".equals(prefix) ? "urn:p" : null; }
+        };
+        check("urn:p".equals(r.lookupNamespaceURI("p")), "resolver maps the known prefix");
+        check(r.lookupNamespaceURI("unknown") == null, "unknown prefix -> null");
+        check(r.lookupNamespaceURI(null) == null, "null prefix -> null");
     }
 }

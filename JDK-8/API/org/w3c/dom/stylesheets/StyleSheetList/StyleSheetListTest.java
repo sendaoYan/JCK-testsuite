@@ -36,6 +36,19 @@ public class StyleSheetListTest {
         check(c.getInterfaces().length == 0, "no direct superinterfaces");
         check(declares(c, "getLength"), "declares getLength");
         check(declares(c, "item"), "declares item");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: StyleSheetList contract ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("StyleSheets", "2.0") && impl.getFeature("StyleSheets", "2.0") == null, "StyleSheets module unimplemented");
+        org.w3c.dom.stylesheets.StyleSheetList l = new org.w3c.dom.stylesheets.StyleSheetList() {
+            public int getLength() { return 2; }
+            public org.w3c.dom.stylesheets.StyleSheet item(int i) { return null; }
+        };
+        check(l.getLength() == 2 && l.item(0) == null && l.item(1) == null, "length/item wiring");
+        check(l.item(2) == null, "out-of-range item -> null");
     }
 }

@@ -49,6 +49,28 @@ public class DOMImplementationCSSTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: DOMImplementationCSS contract (factory channel) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        check(!org.w3c.dom.css.DOMImplementationCSS.class.isInstance(
+            javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation()), "DOMImplementation is not a DOMImplementationCSS");
+        org.w3c.dom.css.DOMImplementationCSS c = (org.w3c.dom.css.DOMImplementationCSS) java.lang.reflect.Proxy.newProxyInstance(
+            org.w3c.dom.css.DOMImplementationCSS.class.getClassLoader(),
+            new Class<?>[]{org.w3c.dom.css.DOMImplementationCSS.class},
+            new java.lang.reflect.InvocationHandler() {
+                public Object invoke(Object proxy, java.lang.reflect.Method m, Object[] args) {
+                    if (m.getName().equals("createCSSStyleSheet")) return null;
+                    if (m.getName().equals("hasFeature")) return Boolean.FALSE;
+                    return null;
+                }
+            });
+        check(c.createCSSStyleSheet("t", "screen") == null, "factory routed through the proxy");
+        check(!c.hasFeature("CSS", "2.0"), "proxy reports CSS unimplemented");
+        check(c.createCSSStyleSheet("t", "screen") == null, "factory routed (null wiring)");
     }
 }

@@ -37,6 +37,21 @@ public class HTMLIsIndexElementTest {
         check(declares(c, "getForm"), "declares getForm");
         check(declares(c, "getPrompt"), "declares getPrompt");
         check(declares(c, "setPrompt"), "declares setPrompt");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: HTML module shape-lock + producer absence ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("HTML", "2.0") && impl.getFeature("HTML", "2.0") == null, "HTML module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.html.HTMLElement.class.isAssignableFrom(org.w3c.dom.html.HTMLIsIndexElement.class), "HTMLIsIndexElement extends HTMLElement");
+        check(org.w3c.dom.html.HTMLIsIndexElement.class.isInterface(), "HTMLIsIndexElement is an interface");
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (java.lang.reflect.Method m : org.w3c.dom.html.HTMLIsIndexElement.class.getDeclaredMethods()) names.add(m.getName());
+        check(names.size() == 3, "HTMLIsIndexElement declares exactly 3 methods");
+        check(names.contains("getForm"), "getForm declared");
+        check(names.contains("getPrompt"), "getPrompt declared");
+        check(names.contains("setPrompt"), "setPrompt declared");
     }
 }

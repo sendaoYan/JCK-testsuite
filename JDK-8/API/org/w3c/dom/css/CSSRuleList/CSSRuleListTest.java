@@ -36,6 +36,19 @@ public class CSSRuleListTest {
         check(c.getInterfaces().length == 0, "no direct superinterfaces");
         check(declares(c, "getLength"), "declares getLength");
         check(declares(c, "item"), "declares item");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: CSSRuleList contract (indexed access) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        org.w3c.dom.css.CSSRuleList l = new org.w3c.dom.css.CSSRuleList() {
+            public int getLength() { return 2; }
+            public org.w3c.dom.css.CSSRule item(int i) { return null; }
+        };
+        check(l.getLength() == 2 && l.item(0) == null, "getLength/item wiring");
+        check(l.item(99) == null, "out-of-range item -> null (no exception)");
     }
 }

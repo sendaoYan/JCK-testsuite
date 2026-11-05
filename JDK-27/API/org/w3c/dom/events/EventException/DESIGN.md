@@ -11,3 +11,8 @@ JDK 源码自用（org.w3c.dom.events.EventException）与 JDK `test/jdk` 内 JA
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`EventExceptionTest.testBlackBox()`）覆盖：常量 + code 字段 + 构造。
+
+## 深化第 2 轮（契约级，2026-11-05）
+- 常量：UNSPECIFIED_EVENT_TYPE_ERR = 0；code 为 public 字段（可读可变）。
+- 构造链：code+message 保留、null message 保留、RuntimeException 子类。
+- 真实触发点：`EventTarget.dispatchEvent(createEvent 的未 initEvent 事件)` → code 0；初始化后派发不再抛。

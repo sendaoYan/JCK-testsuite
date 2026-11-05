@@ -11,3 +11,8 @@ JDK 源码自用（org.w3c.dom.events.MutationEvent）与 JDK `test/jdk` 内 JAX
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`MutationEventTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 深化第 2 轮（契约级，2026-11-05）
+- 常量表：MODIFICATION=1、ADDITION=2、REMOVAL=3。
+- initMutationEvent 全字段回读：type/bubbles/cancelable、relatedNode、prevValue/newValue、attrName/attrChange；重复以 null 初始化可清空字段。
+- 真实触发闭环（Xerces 默认派发 mutation 通知）：`setAttribute` → DOMAttrModified(MODIFICATION)、`removeAttribute` → DOMAttrModified(REMOVAL)、`appendChild` → DOMNodeInserted、文本 setData → DOMCharacterDataModified。

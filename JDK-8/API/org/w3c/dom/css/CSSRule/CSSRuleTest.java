@@ -39,6 +39,25 @@ public class CSSRuleTest {
         check(declares(c, "setCssText"), "declares setCssText");
         check(declares(c, "getParentStyleSheet"), "declares getParentStyleSheet");
         check(declares(c, "getParentRule"), "declares getParentRule");
+        deepContract();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepening round 2: CSSRule contract (7 rule-type constants + base shape) ----
+    static void deepContract() throws Exception {
+        org.w3c.dom.DOMImplementation impl = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument().getImplementation();
+        check(!impl.hasFeature("CSS", "2.0") && impl.getFeature("CSS", "2.0") == null, "CSS module unimplemented: hasFeature false, getFeature null");
+        check(org.w3c.dom.css.CSSRule.UNKNOWN_RULE == 0 && org.w3c.dom.css.CSSRule.STYLE_RULE == 1, "UNKNOWN_RULE=0 STYLE_RULE=1");
+        check(org.w3c.dom.css.CSSRule.CHARSET_RULE == 2 && org.w3c.dom.css.CSSRule.IMPORT_RULE == 3, "CHARSET_RULE=2 IMPORT_RULE=3");
+        check(org.w3c.dom.css.CSSRule.MEDIA_RULE == 4 && org.w3c.dom.css.CSSRule.FONT_FACE_RULE == 5, "MEDIA_RULE=4 FONT_FACE_RULE=5");
+        check(org.w3c.dom.css.CSSRule.PAGE_RULE == 6, "PAGE_RULE=6");
+        org.w3c.dom.css.CSSRule r = new org.w3c.dom.css.CSSRule() {
+            public String getCssText() { return "@rule"; }
+            public void setCssText(String t) { }
+            public short getType() { return org.w3c.dom.css.CSSRule.STYLE_RULE; }
+            public org.w3c.dom.css.CSSStyleSheet getParentStyleSheet() { return null; }
+            public org.w3c.dom.css.CSSRule getParentRule() { return null; }
+        };
+        check("@rule".equals(r.getCssText()) && r.getType() == org.w3c.dom.css.CSSRule.STYLE_RULE, "anonymous base rule returns the wired values");
     }
 }
