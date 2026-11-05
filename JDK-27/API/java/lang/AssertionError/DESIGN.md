@@ -27,3 +27,7 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11，lcO1 批）
+
+断言 26 → 129。9 个公共构造器逐构造器消息矩阵逐字锁定（双侧实测一致：boolean true/false、char 'a'..'e'/'x'/NUL、int 42/0/-1/-42/MIN/MAX、long 0/9/-9/MIN/MAX、float 1.5/0.1/-0.0/0.0/-1.5/NaN/±Infinity、double 同族、(Object) null→"null"/""/String/Integer/Boolean/Character/Double/Long、(String,Throwable) message+cause 同一）；(String,Throwable) 即使 cause 为 null 也锁定 cause 槽位（initCause → ISE，实测契约）；反射面：9 个公共构造器精确 + public (String)/(Throwable) 不存在（NSME）；catch 语义（Error/Throwable 捕获、Exception 不捕获）；assert 语句自适应双路径（-ea 真触发消息 "boom"、无 -ea 时 no-op 语义与副作用不求值，DESIGN 记录：jtreg 默认不开 -ea，真触发需 @run main/othervm -ea 或手动 -ea）；SUID -5013299493970297370L 双侧一致；序列化 round-trip（message+suppressed）。

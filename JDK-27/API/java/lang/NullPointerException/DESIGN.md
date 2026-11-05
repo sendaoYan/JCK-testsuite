@@ -28,3 +28,7 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；触发式断言 `null dereference`。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11，lcO1 批）
+
+断言 20 → 85。触发矩阵：((String)null).length() 27 侧 helpful 消息锁类型级特征（startsWith `Cannot invoke "String.length()"` + contains "is null"，不锁局部变量名）；null 字段读锁字段名 `NpeHolder.field`（稳定）；拆箱锁 contains "Integer.intValue()"；null 数组读/写、synchronized(null)；Objects.requireNonNull 三形态（(null) 消息 null、(null,"m1") 消息 "m1"、非 null 透传）；构造面：(String,Throwable) 双侧 ABSENT（javap + 反射 NSME）、declared ctor == 2；JVM 抛出实例详情；SUID 5162710183389028792L；序列化。

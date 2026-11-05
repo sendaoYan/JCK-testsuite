@@ -112,10 +112,62 @@ public class AnnotationTypeMismatchExceptionTest {
         check(back instanceof RuntimeException, "still RuntimeException after round-trip");
     }
 
+    // ---- Part 4: exact constructor signature (javap-verified on both JDKs) ----
+    static void testConstructorMatrix() throws Exception {
+        Class<?> c = AnnotationTypeMismatchException.class;
+        // JDK 8 and JDK 27 both declare exactly one constructor: public (Method, String).
+        // No (Method, Class) legacy overload survives in either build.
+        check(c.getDeclaredConstructors().length == 1,
+              "exactly one declared constructor: " + c.getDeclaredConstructors().length);
+        Class<?>[] pt = c.getDeclaredConstructor(Method.class, String.class).getParameterTypes();
+        check(pt.length == 2 && pt[0] == Method.class && pt[1] == String.class,
+              "(Method, String) exact parameter list");
+    }
+
+    // ---- Part 5: exact message composition ----
+    static void testMessageExact() throws Exception {
+        Method element = java.lang.annotation.Retention.class.getMethod("value");
+        String found = "Ljava/lang/Integer;";
+        AnnotationTypeMismatchException e = new AnnotationTypeMismatchException(element, found);
+        String expected = "Incorrectly typed data found for annotation element "
+                + element + " (Found data of type " + found + ")";
+        check(e.getMessage().equals(expected), "exact message: " + e.getMessage());
+        check(e.getMessage().contains(element.toString()), "message embeds Method.toString()");
+
+        // the same composition holds even with null arguments
+        AnnotationTypeMismatchException n = new AnnotationTypeMismatchException(null, null);
+        check(n.getMessage().equals(
+                "Incorrectly typed data found for annotation element null (Found data of type null)"),
+              "null-argument message exact: " + n.getMessage());
+    }
+
+    // ---- Part 6: element()/foundType() reflective views ----
+    static void testElementView() throws Exception {
+        Method element = Object.class.getMethod("hashCode");
+        AnnotationTypeMismatchException e =
+                new AnnotationTypeMismatchException(element, "found with spaces");
+        check(e.element().getName().equals("hashCode"), "element().getName");
+        check(e.element().getDeclaringClass() == Object.class, "element().getDeclaringClass");
+        check("found with spaces".equals(e.foundType()), "foundType with spaces round-trips");
+        check(java.lang.Exception.class.isAssignableFrom(e.getClass()),
+              "is an Exception (hence RuntimeException)");
+        check(!e.toString().isEmpty() && e.toString().startsWith(
+                "java.lang.annotation.AnnotationTypeMismatchException"), "toString prefix");
+        check(e.toString().contains("hashCode"), "toString carries the message");
+
+        // any Method reference is accepted, including a static method
+        Method staticM = System.class.getMethod("getProperty", String.class);
+        AnnotationTypeMismatchException e2 = new AnnotationTypeMismatchException(staticM, "X");
+        check(e2.element() == staticM, "static Method element identity");
+    }
+
     public static void main(String[] args) throws Exception {
         testStructural();
         testBehavior();
         testSerialization();
+        testConstructorMatrix();
+        testMessageExact();
+        testElementView();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -34,3 +34,21 @@ r.i(); r.s(); r.sa(); r.n(); r.annotationType(); r.toString();
 - **toString 与 JDK 27 不同**：JDK 8 用 `getName()`（二进制名，嵌套类为 `A$Rich`）、字符串不加引号（`s=x`）、Class 显示为 `class java.lang.String`、数组显示为 `[a, b]`；JDK 27 用 canonical 名（`A.Rich`）、字符串加引号、Class 用 `java.lang.String.class`、数组用 `{a, b}`。
 - 成员顺序实现相关，规范不保证；断言用 contains/前缀，不用整体精确顺序。
 - 数组成员由代理按需克隆返回，修改副本不影响注解数据。
+
+## 契约深化（2026-11）
+### API 功能
+- 接口白盒：`Annotation` 恰 4 个声明方法（equals/hashCode/toString/annotationType），全抽象、无默认方法、无字段（javap 双侧一致）。
+- 成员代理全家族扩展：`@Prim`（byte/short/char/long/float/double/boolean 七种基本类型成员全给值精确回读）、`@ArrAll`（String[]+8 种基本类型数组默认值回读 + 五类数组防御性拷贝逐个实证）、`@WithClass`（Class 成员身份语义）。
+- hashCode 规范公式扩展锁定：基本类型按包装器 hashCode、数组按 `Arrays.hashCode`、Class 成员按 Class 对象自身 hashCode（同 JVM 内确定）；marker 注解 hashCode==0。
+- 注解相等为纯值相等：两个不同元素携带同值 → equals true、hashCode 相等。
+
+### 使用方式
+`getXxx()` 精确值断言 + 改返回数组后再取原值 + 公式求和比对 hashCode。
+
+### 参考来源
+javap 双侧（java.lang.annotation.Annotation）；sun.reflect.annotation.AnnotationInvocationHandler 行为（仅思路）；Oracle javadoc Annotation.hashCode 公式。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testInterfaceWhiteBox`：getDeclaredMethods()==4 全抽象、equals 恰 1 参、无字段。
+- `testDeepenedMemberContract`：Prim/ArrAll/WithClass 全族；hashCode 公式 43 项逐项求和锁死。
+- 易错：Class 成员 hashCode 是**身份 hash**（同一次 JVM 运行内确定，跨运行不确定），不能与 getName().hashCode() 混淆；`==` 优先级高于 `^`，公式断言必须整体加括号。

@@ -37,3 +37,22 @@ boolean eq = (boolean) cs.dynamicInvoker().invokeExact(p, (Object) q);
 - null receiver：bootstrapped equals/hashCode/toString 句柄以 null 接收者调用均抛 NPE。
 - 每次 bootstrap 返回新 CallSite（无跨调用缓存）；hash 组合器 x*31+y（混合 int/String 组件验证）。
 - 工程坑（本批实证）：invokeExact 必须处于 cast 上下文——语句位置会被 javac 定型为 void 触发 WrongMethodTypeException，掩盖真正的 NPE。
+
+## 契约深化（2026-11，批次 lcL）
+
+### 1. API 功能（本轮新增维度）
+- 组件类型组合子全表（record 自动 hashCode/toString/equals 的 x*31+y 组合）：boolean→Boolean.hashCode(true)=1231、long→Long.hashCode、double→Double.hashCode、float→Float.hashCode；三组件 31*(31*(31*0+a)+b.h)+c.h 公式锁定。
+- 零组件 record：toString "EmptyRec[]"、hashCode==0、equals 同型 true、equals(null) false。
+- **数组组件身份比较 gotcha（JLS 8.10.3）**：ArrRec(new int[]{1,2,3}) 不 equals 同内容实例、equals 同一数组实例 true、hashCode 身份基稳定、toString 渲染数组身份（[I@hex）。
+- record 结构面：record 类 final、**extends java.lang.Record（非 Object——Record 再 extends Object）**、实例 instanceof java.lang.Record、getRecordComponents() 保声明序且类型精确、访问器返回构造实参、equals 对称、相等 record hashCode/toString 相等且各自稳定。
+
+### 2. 使用方式
+- 自造 7 个 fixture record（BoolRec/LongRec/DoubleRec/FloatRec/EmptyRec/Three/ArrRec）全部断组合子精确值。
+
+### 3. 参考来源
+- JLS 8.10.3（record 成员：hashCode 对每个组件按对应包装类 hashCode 以 31 组合；equals 对引用组件用该组件 equals——数组即身份比较）。
+- jdk-27.0.1 实测：数组组件 equals 实测为身份比较（著名坑，锁定）。
+
+### 4. 测试用例设计 + 易错规范细节
+- testDeepComponentTypeMatrix（18）、testDeepArrayComponentContract（4）、testDeepRecordStructure（16）。
+- 易错点：① record 的 superclass 是 java.lang.Record 而非 Object（首版即写错后实测纠正）；② 数组组件 equals 断言必须成对（同内容 false + 同实例 true）才构成完整契约；③ 混合类型组合子公式注意组件声明顺序。

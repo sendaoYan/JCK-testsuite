@@ -32,3 +32,25 @@ int idx = (int) cs.dynamicInvoker().invoke((Object) "hi", 0); // 0
 - typeSwitch 标签语义：int.class 标签匹配装箱 Integer（装箱匹配原始类标签）；无匹配 → 返回标签数（default 索引）；null selector → -1；Long 不匹配 int.class 标签。
 - enumSwitch resume 语义：第二参为起始索引，跳过之前的标签；resume 越过全部标签 → 标签数（default）；标签顺序由常量名数组定义而非 ordinal；未列出常量 → default；null → -1。
 - 两类 bootstrap 共享 null==-1 / default==labels.length 常量约定（契约级不变式）。
+
+## 契约深化（2026-11，批次 lcL）
+
+### 1. API 功能（本轮新增维度）
+- **黑盒语言闭环**：typeSwitch/enumSwitch 所驱动的语言构造本身——pattern switch（String/Integer/Character 绑定 + null case（JDK 21+）+ when 守卫真/假分支 + default）与 enum switch 三常量全分支命中，输出逐字断言。
+- **null 标签拒绝**：typeSwitch 标签数组含 null 元素 → bootstrap 时 IllegalArgumentException，精确消息 "null label found"（jdk-27.0.1 实测）。
+- 超类型标签次序：{CharSequence, String} 时 String 命中标签 0（子类型+首中即止）、StringBuilder 命中 CharSequence、非 CharSequence 落 default；{String, CharSequence} 反序时 StringBuilder 落 1——次序敏感锁定。
+- 重复类标签：首个获胜；无匹配 → 标签数（default 下标）。
+- **enumSwitch 非法标签类型**：Integer 标签 → IllegalArgumentException 精确消息 "label with illegal type found: class java.lang.Integer, expected label of type either String or Class"（实测逐字锁定）。
+- enum 未知名标签：所有常量落 default；重复名：首个获胜；按名匹配与 ordinal 无关（{"BLUE","GREEN","RED"} 中 RED 落 2）。
+- 常量标签族：Boolean.class 标签按类型命中；**非 Class 常量按 equals 比较**（标签 5/7 对选择器 Integer(5)/(7)/(9) → 0/1/2）；null 选择器对常量标签仍 -1。
+
+### 2. 使用方式
+- 语言级 switch 表达式 + 手工 bootstrap（LOOKUP + MethodType(int,Object,int) / (int,Color,int)）双轨。
+
+### 3. 参考来源
+- JLS 14.11.2 / 14.11.3（switch 模式匹配语义：null case、类型标签首中即止、default 下标）；JEP 440/441。
+- jdk-27.0.1 实测：null label 拒绝消息、非法标签类型消息、常量 equals 匹配、Boolean 标签。
+
+### 4. 测试用例设计 + 易错规范细节
+- testDeepLanguageSwitchClosure（11）、testDeepNullLabelRejected（1+守卫）、testDeepSupertypeLabelOrdering（5）、testDeepDuplicateClassLabels（2）、testDeepEnumIllegalLabelType（1+守卫）、testDeepEnumUnknownAndDuplicateNames（5）、testDeepConstantLabels（7）。
+- 易错点：① null 作为 vararg 元素必须显式 new Object[]{null, ...}（直接传 null 会把整个数组置 null，是另一个用例）；② 标签命中是"首个匹配"而非"最精确匹配"；③ enumSwitch 标签必须是 String（或 Class），其它类型 bootstrap 即拒。

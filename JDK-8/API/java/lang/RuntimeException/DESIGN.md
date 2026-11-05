@@ -39,3 +39,7 @@
 ## 注意事项
 
 - headless 安全，不加 `@key`；结果确定。
+
+## 契约深化（2026-11，lcO1 批）
+
+双侧 16/16 → 69/69。与 Exception 同款家族矩阵 + 层级特化：RuntimeException instanceof Exception 且 instanceof Throwable、is not Error（Class.isAssignableFrom 负例，避开 javac 不相容 instanceof 编译错）；直接父类精确 == Exception.class；SUID -7034897190745766939L（双侧一致锁定）；null 形态构造、initCause/addSuppressed 精确消息、顶帧精确、printStackTrace 全格式、序列化 round-trip。

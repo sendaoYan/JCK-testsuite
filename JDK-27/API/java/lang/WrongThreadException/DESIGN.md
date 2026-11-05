@@ -27,3 +27,18 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增维度）
+- 构造链/Throwable 通用契约全深化：toString 精确形态（含 (Throwable) 构造消息默认 = cause.toString() 的连带形态）、serialVersionUID 经 ObjectStreamClass.lookup 锁定、序列化往返（类型/消息/cause/toString 保持）、真实栈帧闭环（getStackTrace()[0] 类名/方法名精确 + Class.forName round-trip + fillInStackTrace 返回 this）、setStackTrace（值拷贝/null NPE/空数组）、getSuppressed（默认空 + 顺序 + 防御性拷贝）、printStackTrace 内容（头部 + Suppressed: 行 + \tat 帧）、initCause(self) → IllegalArgumentException "Self-causation not permitted"（双侧一致）、三层 cause 链遍历、instanceof 层级与 final 修饰符实测记录。
+
+### WrongThreadException 特有
+- final 类（javap 实测 public final）；serialVersionUID 锁 **4676498871006316905L**。
+- 无本套件可达的 JDK 真触发点（真实抛出方在 jdk.util.concurrent StructuredTaskScope / foreign MemorySession 等域外 API），按构造链 + Throwable 契约覆盖。
+
+### 参考来源
+Oracle Java SE 27 javadoc（WrongThreadException/Throwable 契约）；ObjectStreamClass.lookup 与 javap -p -constants 实测（27.0.1）。
+
+### 测试用例设计 + 易错规范细节
+新增方法：testToStringExact、testTypeHierarchy、testSerialVersionUid、testSerializationRoundTrip、testRealStackFrame、testSetStackTrace、testSuppressedContract、testPrintStackTraceContent、testCauseEdgeCases。易错点：`(Throwable)` 构造的 toString 形如 `java.lang.WrongThreadException: java.lang.Exception: why`（消息默认取 cause.toString()）；getSuppressed 返回拷贝（改元素不回写）。

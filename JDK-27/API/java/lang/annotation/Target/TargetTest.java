@@ -51,6 +51,51 @@ public class TargetTest {
     static class TypeUse {
     }
 
+    // an empty @Target: the annotation type is declarable but applicable nowhere
+    @Target({})
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface NothingAllowed {
+    }
+
+    // an annotation applicable to every JDK 27 target (12 element kinds)
+    @Target({ElementType.TYPE, ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER,
+             ElementType.CONSTRUCTOR, ElementType.LOCAL_VARIABLE, ElementType.ANNOTATION_TYPE,
+             ElementType.PACKAGE, ElementType.TYPE_PARAMETER, ElementType.TYPE_USE,
+             ElementType.MODULE, ElementType.RECORD_COMPONENT})
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface AllTargets {
+    }
+
+    @AllTargets
+    static class Everywhere {
+
+        @AllTargets
+        static int anyField;
+
+        @AllTargets
+        Everywhere(@AllTargets int p) {
+        }
+
+        @AllTargets
+        void anyMethod(@AllTargets int p) {
+        }
+    }
+
+    @AllTargets
+    @interface MetaUse {
+    }
+
+    // TYPE_USE-only annotation written in a type position (a type parameter)
+    @Target(ElementType.TYPE_USE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface TypeUseOnly {
+    }
+
+    static class GenericCarrier {
+        <@TypeUseOnly T> void generic(T t) {
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.annotation.Target");
@@ -99,9 +144,72 @@ public class TargetTest {
         check(f.getAnnotation(Anywhere.class) == null, "Anywhere not used on this field");
     }
 
+    // ---- Part 3: deepened target semantics ----
+    static void testDeepenedTargets() throws Exception {
+        // empty @Target array is a legal declaration: readable as length 0
+        Target empty = NothingAllowed.class.getAnnotation(Target.class);
+        check(empty != null && empty.value().length == 0,
+              "@Target({}) declares zero applicable targets");
+
+        // the all-targets declaration covers exactly the JDK 27 set of 12
+        Target all = AllTargets.class.getAnnotation(Target.class);
+        check(all.value().length == 12, "all-targets declaration has 12 entries");
+        boolean hasModule = false, hasRecord = false;
+        for (ElementType e : all.value()) {
+            if (e == ElementType.MODULE) hasModule = true;
+            if (e == ElementType.RECORD_COMPONENT) hasRecord = true;
+        }
+        check(hasModule && hasRecord, "MODULE and RECORD_COMPONENT included");
+
+        // an all-targets annotation is present on every kind of element
+        check(Everywhere.class.getAnnotation(AllTargets.class) != null, "on type");
+        Field anyField = Everywhere.class.getDeclaredField("anyField");
+        check(anyField.getAnnotation(AllTargets.class) != null, "on field");
+        java.lang.reflect.Constructor<?> ctor =
+                Everywhere.class.getDeclaredConstructor(int.class);
+        check(ctor.getAnnotation(AllTargets.class) != null, "on constructor");
+        check(ctor.getParameters()[0].getAnnotation(AllTargets.class) != null,
+              "on constructor parameter");
+        Method anyMethod = Everywhere.class.getDeclaredMethod("anyMethod", int.class);
+        check(anyMethod.getAnnotation(AllTargets.class) != null, "on method");
+        check(anyMethod.getParameters()[0].getAnnotation(AllTargets.class) != null,
+              "on method parameter");
+        check(MetaUse.class.getAnnotation(AllTargets.class) != null, "on annotation type");
+
+        // TYPE_USE-only annotation in a type position lands on the type parameter,
+        // not on the method -- the declaration and type views are distinct
+        Method generic = GenericCarrier.class.getDeclaredMethod("generic", Object.class);
+        check(generic.getAnnotation(TypeUseOnly.class) == null,
+              "type-position annotation not on the method declaration");
+        check(generic.getTypeParameters()[0].getAnnotation(TypeUseOnly.class) != null,
+              "type-position annotation visible on the type parameter");
+
+        // value() arrays are defensively copied on every read
+        Target tf = OnlyField.class.getAnnotation(Target.class);
+        ElementType[] tfv = tf.value();
+        tfv[0] = ElementType.METHOD;
+        check(tf.value()[0] == ElementType.FIELD, "Target value() defensively copied");
+        check(tf.value().length == 1, "Target value() length unchanged");
+
+        // Target instances are value-based
+        Target t1 = OnlyField.class.getAnnotation(Target.class);
+        Target t2 = OnlyField.class.getAnnotation(Target.class);
+        check(t1.equals(t2), "Target equal across fetches");
+        check(t1.hashCode() == t2.hashCode(), "Target hashCode stable");
+        check(!t1.equals(MethodOrParam.class.getAnnotation(Target.class)),
+              "different target sets not equal");
+
+        // the Target meta-annotation itself is not @Inherited and not repeatable
+        check(!Target.class.isAnnotationPresent(java.lang.annotation.Inherited.class),
+              "Target is not @Inherited");
+        check(!Target.class.isAnnotationPresent(java.lang.annotation.Repeatable.class),
+              "Target is not @Repeatable");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepenedTargets();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

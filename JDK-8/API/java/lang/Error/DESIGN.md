@@ -41,3 +41,7 @@
 ## 注意事项
 
 - headless 安全，不加 `@key`；结果确定。
+
+## 契约深化（2026-11，lcO1 批）
+
+双侧 16/16 → 70/70。与 Exception 同款家族矩阵 + 层级特化：Error instanceof Throwable、is not Exception 亦非 RuntimeException（isAssignableFrom 负例）；直接父类精确 == Throwable.class；SUID 4980196508277280342L（双侧一致锁定）；(Throwable) 构造消息 == cause.toString()、null 形态三件套、initCause/addSuppressed 精确异常消息、顶帧精确、printStackTrace 全格式、序列化 round-trip、protected 4 参构造器声明存在。

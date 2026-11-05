@@ -103,10 +103,63 @@ public class AnnotationFormatErrorTest {
         check(back instanceof Error, "still Error after round-trip");
     }
 
+    // ---- Part 4: exact constructor matrix (javap-verified on both JDKs) ----
+    static void testConstructorMatrix() throws Exception {
+        Class<?> c = AnnotationFormatError.class;
+        // exactly three declared constructors: (String), (String,Throwable), (Throwable);
+        // there is NO no-arg constructor on either JDK 8 or JDK 27
+        check(c.getDeclaredConstructors().length == 3,
+              "exactly three declared constructors: " + c.getDeclaredConstructors().length);
+        try {
+            c.getDeclaredConstructor();
+            check(false, "no-arg constructor should not exist");
+        } catch (NoSuchMethodException expected) {
+            check(true, "no no-arg constructor (javap-confirmed both sides)");
+        }
+        Class<?>[] p1 = c.getDeclaredConstructor(String.class).getParameterTypes();
+        check(p1.length == 1 && p1[0] == String.class, "(String) exact parameter list");
+        Class<?>[] p2 = c.getDeclaredConstructor(String.class, Throwable.class).getParameterTypes();
+        check(p2.length == 2 && p2[0] == String.class && p2[1] == Throwable.class,
+              "(String, Throwable) exact parameter list");
+        Class<?>[] p3 = c.getDeclaredConstructor(Throwable.class).getParameterTypes();
+        check(p3.length == 1 && p3[0] == Throwable.class, "(Throwable) exact parameter list");
+    }
+
+    // ---- Part 5: Error semantics ----
+    static void testErrorSemantics() {
+        AnnotationFormatError e = new AnnotationFormatError("x");
+        check(e.toString().equals("java.lang.annotation.AnnotationFormatError: x"),
+              "toString exact: " + e);
+        check(e.fillInStackTrace() == e, "fillInStackTrace returns this");
+        check(e.getSuppressed().length == 0, "no suppressed exceptions by default");
+        check(!java.lang.Exception.class.isAssignableFrom(e.getClass()), "an Error, never an Exception");
+        check(e instanceof Error, "instanceof Error");
+
+        // deep cause chain: cause of cause preserved by identity
+        Error root = new Error("root");
+        Exception mid = new Exception("mid", root);
+        AnnotationFormatError chained = new AnnotationFormatError("top", mid);
+        check(chained.getCause() == mid && mid.getCause() == root,
+              "cause chain preserved two levels deep");
+
+        // (Throwable) form with an Error cause keeps the Error flavor
+        AnnotationFormatError wrapped = new AnnotationFormatError((Throwable) root);
+        check(wrapped.getCause() == root, "(Throwable) wraps Error cause");
+        check(root.toString().equals(wrapped.getMessage()),
+              "(Throwable) message is cause.toString()");
+
+        // real-trigger note: AnnotationFormatError is thrown by the JVM/reflective
+        // machinery when a RuntimeVisibleAnnotations attribute is malformed; producing
+        // such a class file requires bytecode crafting, so only construction is asserted
+        // here (deterministic path), per the batch brief.
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
         testSerialization();
+        testConstructorMatrix();
+        testErrorSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

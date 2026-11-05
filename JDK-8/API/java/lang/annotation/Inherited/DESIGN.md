@@ -27,3 +27,20 @@ ServiceSub.class.getDeclaredAnnotation(Tx.class); // null
 ## 易错规范细节（JDK 8）
 - `@Inherited` 只影响类继承；对接口实现、方法/构造器/字段无继承效果。
 - 子类 `getAnnotation` 返回的是继承自超类的注解实例，成员值与超类一致。
+
+## 契约深化（2026-11）
+### API 功能
+- 接口两级不继承补全：**子接口不继承父接口**的 @Inherited 注解（ISub→IfaceBase 负例）。
+- 抽象父类标注 → 具体子类继承（@Tag("abs") on AbsBase → Conc 回读）。
+- getAnnotationsByType 与 getAnnotation 同样遵守 @Inherited（Child/Conc 实证）。
+- Inherited 元注解自身画像：非自标、@Documented、非 @Repeatable、恰 3 个元注解。
+
+### 使用方式
+新增 IfaceSub/AbsBase/Conc fixtures，正负对照。
+
+### 参考来源
+@Inherited javadoc（"applies only to class inheritance"）。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testExtendedSemantics`。
+- 易错：接口→接口与接口→实现类两个方向都不继承；声明视图（getDeclaredAnnotations）永远不受 @Inherited 影响。

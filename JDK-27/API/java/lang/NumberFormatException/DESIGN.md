@@ -28,3 +28,20 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；触发式断言 `malformed numeric string`。
 对应 `<Simple>Test.java` 黑盒部分。
 
+## 契约深化（2026-11）
+
+- **API 功能补充**：完整层次链（IllegalArgumentException/RuntimeException/Exception/Throwable/Serializable）
+  与 `getSuperclass()`；恰好 2 个声明构造器（无 `(String,Throwable)` 形态，javap 双侧实证）；
+  消息透传（unicode/长文本）；`toString` 逐字；`(String)` 构造后仍可 `initCause`；
+  `fillInStackTrace` 返回自身；栈顶帧类名断言。
+- **使用方式补充**：`checkNfeMsg` 辅助器做"抛出 + 消息逐字比对"；parse 家族跨 Integer/Long/Short/Byte
+  的 NFE 消息矩阵（27 特有：`Cannot parse null string`、`For input string: "z" under radix 16`、
+  `Error at index 0 in: "ab"`——CS 重载消息含被解析**子串**）。
+- **参考来源**：实测 jdk-27.0.1.0.2（全部期望消息运行时逐字探测）；javap 构造器计数；
+  JDK-8 对照面（null 消息为 `"null"`、无 `under radix` 后缀、无 CS 重载）。
+- **新增用例（断言 16→52）**：`testHierarchyFull`（7 条层次/结构）、`testThrowableContract`
+  （toString 逐字、unicode/长消息、initCause 补设、fillInStackTrace、栈顶帧）、`testThrownFamily`
+  （15 条精确消息 + 7 个 valueOf/decode 家族触发）。
+- **易错细节（跨版本）**：27 null 消息 `Cannot parse null string` vs 8 `"null"`；27 非 10 基后缀
+  ` under radix N`；CS 重载消息引用子串（`"abc"[0,2)` 报 `Error at index 0 in: "ab"` 而非整个 "abc"）。
+

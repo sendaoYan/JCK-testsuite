@@ -102,6 +102,72 @@ public class AnnotationTest {
     static class RichOtherHolder {
     }
 
+    // every primitive member kind, no defaults (all must be specified at use site)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Prim {
+        byte b();
+
+        short s();
+
+        char c();
+
+        long l();
+
+        float f();
+
+        double d();
+
+        boolean z();
+    }
+
+    @Prim(b = (byte) 1, s = (short) 2, c = 'x', l = 5L, f = 0.5f, d = 1.5, z = true)
+    static class PrimHolder {
+    }
+
+    // every array member kind with default values (String[] plus eight primitive arrays)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface ArrAll {
+        String[] sa() default {"a", "b"};
+
+        int[] ia() default {1, 2};
+
+        long[] la() default {3L};
+
+        double[] da() default {1.5, 2.5};
+
+        char[] ca() default {'x'};
+
+        boolean[] ba() default {true, false};
+
+        byte[] bta() default {(byte) 7};
+
+        short[] sha() default {(short) 9};
+
+        float[] fa() default {0.5f};
+    }
+
+    @ArrAll
+    static class ArrHolder {
+    }
+
+    // Class-valued member: identity semantics of the returned Class and of hashCode
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface WithClass {
+        Class<?> c();
+    }
+
+    @WithClass(c = String.class)
+    static class ClassHolder {
+    }
+
+    @WithClass(c = String.class)
+    static class ClassHolderTwin {
+    }
+
+    @WithClass(c = Integer.class)
+    static class ClassHolderOther {
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.lang.annotation.Annotation");
@@ -209,9 +275,126 @@ public class AnnotationTest {
               "nested annotation toString");
     }
 
+    // ---- Part 3: interface white box ----
+    static void testInterfaceWhiteBox() throws Exception {
+        // Annotation declares exactly the four contract methods, all abstract, and no
+        // default methods of any kind (verified on both JDK 8 and JDK 27 via javap)
+        Method[] ms = Annotation.class.getDeclaredMethods();
+        check(ms.length == 4, "exactly four declared methods: " + ms.length);
+        int abstractCount = 0;
+        for (Method m : ms) {
+            if (Modifier.isAbstract(m.getModifiers())) abstractCount++;
+        }
+        check(abstractCount == 4, "all four methods abstract");
+        check(Annotation.class.getMethod("equals", Object.class).getParameterTypes().length == 1,
+              "equals takes exactly one parameter");
+        check(Annotation.class.getMethod("hashCode").getParameterTypes().length == 0,
+              "hashCode takes no parameters");
+        check(Annotation.class.getMethod("annotationType").getParameterTypes().length == 0,
+              "annotationType takes no parameters");
+        check(Annotation.class.getDeclaredFields().length == 0, "no declared fields on the interface");
+    }
+
+    // ---- Part 4: member proxy full family (primitives, arrays, Class) ----
+    static void testDeepenedMemberContract() {
+        Prim p = PrimHolder.class.getAnnotation(Prim.class);
+        check(p != null, "Prim present");
+        check(p.b() == (byte) 1, "byte member");
+        check(p.s() == (short) 2, "short member");
+        check(p.c() == 'x', "char member");
+        check(p.l() == 5L, "long member");
+        check(p.f() == 0.5f, "float member");
+        check(p.d() == 1.5, "double member");
+        check(p.z(), "boolean member");
+        check(p.annotationType() == Prim.class, "Prim annotationType");
+        check(p.equals(PrimHolder.class.getAnnotation(Prim.class)), "Prim equal across two fetches");
+        int fp = 0;
+        fp += (127 * "b".hashCode()) ^ Byte.valueOf((byte) 1).hashCode();
+        fp += (127 * "s".hashCode()) ^ Short.valueOf((short) 2).hashCode();
+        fp += (127 * "c".hashCode()) ^ Character.valueOf('x').hashCode();
+        fp += (127 * "l".hashCode()) ^ Long.valueOf(5L).hashCode();
+        fp += (127 * "f".hashCode()) ^ Float.valueOf(0.5f).hashCode();
+        fp += (127 * "d".hashCode()) ^ Double.valueOf(1.5).hashCode();
+        fp += (127 * "z".hashCode()) ^ Boolean.valueOf(true).hashCode();
+        check(p.hashCode() == fp, "Prim hashCode equals spec formula over all primitives");
+        check(p.hashCode() == PrimHolder.class.getAnnotation(Prim.class).hashCode(),
+              "Prim hashCode stable across fetches");
+        // JDK 27 canonical toString: source-like literals (L suffix, quotes, casts)
+        String ps = p.toString();
+        check(ps.startsWith("@" + Prim.class.getCanonicalName() + "("), "Prim toString prefix: " + ps);
+        check(ps.endsWith(")"), "Prim toString suffix");
+        check(ps.contains("c='x'"), "char member quoted in toString");
+        check(ps.contains("l=5L"), "long member L suffix in toString");
+        check(ps.contains("f=0.5f"), "float member f suffix in toString");
+        check(ps.contains("d=1.5"), "double member plain in toString");
+        check(ps.contains("z=true"), "boolean member in toString");
+
+        ArrAll ar = ArrHolder.class.getAnnotation(ArrAll.class);
+        check(ar != null, "ArrAll present with all-default members");
+        check(Arrays.equals(ar.sa(), new String[] {"a", "b"}), "String[] default value");
+        check(ar.la()[0] == 3L, "long[] default value");
+        check(ar.da()[0] == 1.5 && ar.da()[1] == 2.5, "double[] default value");
+        check(ar.ca()[0] == 'x', "char[] default value");
+        check(ar.ba()[0] && !ar.ba()[1], "boolean[] default value");
+        check(ar.bta()[0] == (byte) 7, "byte[] default value");
+        check(ar.sha()[0] == (short) 9, "short[] default value");
+        check(ar.fa()[0] == 0.5f, "float[] default value");
+        check(Arrays.equals(ar.ia(), new int[] {1, 2}), "int[] default value");
+        // defensive copies on every array member kind returned by the proxy
+        long[] laCopy = ar.la();
+        laCopy[0] = 999L;
+        check(ar.la()[0] == 3L, "long[] defensive copy");
+        double[] daCopy = ar.da();
+        daCopy[0] = 999.0;
+        check(ar.da()[0] == 1.5, "double[] defensive copy");
+        boolean[] baCopy = ar.ba();
+        baCopy[0] = false;
+        check(ar.ba()[0], "boolean[] defensive copy");
+        char[] caCopy = ar.ca();
+        caCopy[0] = 'q';
+        check(ar.ca()[0] == 'x', "char[] defensive copy");
+        // array hashCode formula: Arrays.hashCode per member, XOR 127 * name hash
+        int fa = 0;
+        fa += (127 * "sa".hashCode()) ^ Arrays.hashCode(new String[] {"a", "b"});
+        fa += (127 * "ia".hashCode()) ^ Arrays.hashCode(new int[] {1, 2});
+        fa += (127 * "la".hashCode()) ^ Arrays.hashCode(new long[] {3L});
+        fa += (127 * "da".hashCode()) ^ Arrays.hashCode(new double[] {1.5, 2.5});
+        fa += (127 * "ca".hashCode()) ^ Arrays.hashCode(new char[] {'x'});
+        fa += (127 * "ba".hashCode()) ^ Arrays.hashCode(new boolean[] {true, false});
+        fa += (127 * "bta".hashCode()) ^ Arrays.hashCode(new byte[] {(byte) 7});
+        fa += (127 * "sha".hashCode()) ^ Arrays.hashCode(new short[] {(short) 9});
+        fa += (127 * "fa".hashCode()) ^ Arrays.hashCode(new float[] {0.5f});
+        check(ar.hashCode() == fa, "ArrAll hashCode uses Arrays.hashCode per member");
+        check(ar.annotationType() == ArrAll.class, "ArrAll annotationType");
+        check(ar.toString().contains("sa={\"a\", \"b\"}"), "String[] braces + quotes toString");
+
+        // Class-valued member: identity == class literal, and annotation equality is
+        // purely value-based -- two DIFFERENT elements carrying the same values are equal
+        WithClass w1 = ClassHolder.class.getAnnotation(WithClass.class);
+        WithClass w2 = ClassHolderTwin.class.getAnnotation(WithClass.class);
+        WithClass w3 = ClassHolderOther.class.getAnnotation(WithClass.class);
+        check(w1 != null && w2 != null && w3 != null, "WithClass instances present");
+        check(w1.c() == String.class, "Class member returns the class literal identity");
+        check(w1.equals(w2), "same member values on different elements are equal");
+        check(w1.hashCode() == w2.hashCode(), "hashCode equal for value-equal instances");
+        check(!w1.equals(w3), "different Class member values not equal");
+        // the hash of a Class member is the Class object's own hashCode (identity hash,
+        // deterministic within one JVM run because both sides use the same Class object)
+        check(w1.hashCode() == ((127 * "c".hashCode()) ^ String.class.hashCode()),
+              "Class member hashCode is (127 * name) ^ class.hashCode()");
+        check(w1.toString().contains("c=java.lang.String.class"),
+              "Class member .class literal form in toString");
+
+        // a marker annotation has no members: spec formula degenerates to zero
+        Marker m = Annotated.class.getAnnotation(Marker.class);
+        check(m.hashCode() == 0, "marker annotation hashCode is 0");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testInterfaceWhiteBox();
+        testDeepenedMemberContract();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

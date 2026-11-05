@@ -22,3 +22,17 @@
 ## 易错规范细节（JDK 27）
 - 未标 @Target 默认全部位置。
 - 反例文案 JDK 27 用“annotation interface”、JDK 8 用“annotation type”。
+
+## 契约深化（2026-11）
+### API 功能
+- @Target({}) 声明可读回 length 0；全目标注解为 **27 侧 12 种**（含 MODULE/RECORD_COMPONENT，逐一 contains 实测锁）；七种元素运行期可见；TYPE_USE 类型位置 vs 声明视图分离；value() 防御性拷贝；值语义 equals/hashCode；非 Inherited/Repeatable。
+
+### 使用方式
+@NothingAllowed/@AllTargets(12)/@TypeUseOnly + GenericCarrier fixtures。
+
+### 参考来源
+JLS 9.6.4.1；javap（jdk-27.0.1）。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testDeepenedTargets`；27 侧额外断言全目标声明恰 12 项且含 MODULE/RECORD_COMPONENT（与 8 侧 10 项为版本差异）。
+- 易错：MODULE 目标只能用于 module-info，类内无法自造用法，仅经 @AllTargets 声明回读覆盖。

@@ -28,3 +28,7 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；触发式断言 `invalid reference cast`。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11，lcO1 批）
+
+断言 20 → 82。触发矩阵 MODERN 分支逐字/前缀锁：Integer→String（27 "class java.lang.Integer cannot be cast to class java.lang.String (... module java.base of loader 'bootstrap')" 前缀+module 断言；8 侧同文件走 else 分支锁旧格式全等）；[I→String、Thread→Comparable、Double→String、Boolean→String、String→Integer、ArrayList→CharSequence 同法；正例：null cast 通过、正确 cast 同一引用（==）、向上转 CharSequence/Number、cast Object 恒成功；层级与通用契约；SUID -9223365651070458532L；序列化。

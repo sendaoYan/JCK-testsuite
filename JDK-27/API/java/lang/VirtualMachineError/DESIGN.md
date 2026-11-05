@@ -28,3 +28,23 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11）
+
+### 1. API 功能（本轮新增维度）
+- abstract 契约：`Modifier.isAbstract` 为真——直接 `new` 编译不过（测试文件可编译即编译期证据）；反射 4 个构造器逐一 `newInstance`（null 实参匹配形态）全部抛 `InstantiationException`（4/4）。
+- 构造器面锁定（javap/`getDeclaredConstructors` 双测）：`()`/`(String)`/`(String,Throwable)`/`(Throwable)` 恰 4 个且全 public；abstract 不妨碍构造器存在性与子类委托。
+- `serialVersionUID` 锁定：`ObjectStreamClass.lookup` = 4161983926571568670L（双侧实测一致）。
+- 子类通道：匿名子类 `new VirtualMachineError(...) {}` 与具名静态嵌套子类 `SubVme` 走全部 4 个构造器——`(Throwable)` 形态 message 默认取 `cause.toString()`、`(Throwable)null` 则 message/cause 均为 null。
+- 家族归属：InternalError/OutOfMemoryError/StackOverflowError/UnknownError 四个具体子类 instanceof 归属 + `getSuperclass()==VirtualMachineError` 直系断言 + 按家族句柄逐个抛/捕（同一对象）+ 家族数组多态 `getMessage` 分派。
+- Throwable 通用契约在子类上：initCause 一次写/二次 `IllegalStateException`/自反 `IllegalArgumentException("Self-causation not permitted")` 精确消息、suppressed 默认空、printStackTrace 首行带具体子类名、子类经抽象父序列化往返（message/cause/suppressed 保持）。
+
+### 2. 使用方式
+家族捕获：`catch (VirtualMachineError v)` 一句兜住四种 JVM 级故障；诊断时 `v.getClass().getSimpleName()` 区分具体子类，`v.getCause()/getSuppressed()` 还原因果链。
+
+### 3. 参考来源
+Oracle javadoc（java.lang.VirtualMachineError / Throwable 序列化规范）；JLS 11.5 Error 层级；JDK-8/JDK-27 双侧 javap 与运行实测。
+
+### 4. 测试用例设计 + 易错规范细节
+- 新增 testContractStructure/testCannotInstantiate/testConstructorSurfaceViaSubclass/testConcreteFamily/testThrowableContractOnSubclass。
+- 易错：abstract 类不能 `newInstance` 但 `getDeclaredConstructors` 照常返回 4 个（不能以"可反射枚举"推"可实例化"）；`(Throwable)` 构造器的 message 是 `cause.toString()` 而非 null；`initCause(this)` 抛精确消息 `Self-causation not permitted`（8/27 逐字一致）；printStackTrace 首行是**具体子类**名而非声明类型名。

@@ -27,3 +27,19 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11）
+
+### 1. API 功能（本轮新增维度）
+- Throwable 机制：序列化 round-trip（message/cause 保真）、精确 toString、防御拷贝、setStackTrace、printStackTrace "Suppressed:" 节、构造面四构造器逐一验证、cause-ctor 的 message==cause.toString()。
+- 真触发：同包双模块 + one-loader → "Package jck.shared in more than one module" 精确消息；同一 configuration 换 many-loaders 不再抛（每模块独立 loader 无冲突）。
+
+### 2. 使用方式
+- finderOf 自建配置，对比 one-loader 与 many-loaders 的成败差异。
+
+### 3. 参考来源
+- Oracle javadoc LayerInstantiationException；OpenJDK ModuleLayer 测试思路（自写）。
+
+### 4. 测试用例设计 + 易错规范细节
+- 断言数 17→39。
+- 易错点：split package 异常只在共享 loader 时发生——many-loaders 是合法逃生门（这本身就是层的契约）。

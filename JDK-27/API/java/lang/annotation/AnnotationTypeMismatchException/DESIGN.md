@@ -27,3 +27,19 @@ catch (AnnotationTypeMismatchException e) {
 ## 易错规范细节（JDK 27）
 - JDK 27 的 `element` 字段 transient：序列化 round-trip 成功且 `element()` 返回 null（javadoc：序列化后可能不可用）；JDK 8 非 transient，带真实 Method 序列化抛 NotSerializableException。
 - message 自动生成，不断言完整 message（含 Method.toString() 实现相关）。
+
+## 契约深化（2026-11）
+### API 功能
+- 构造器签名 javap 实测：恰 1 个声明构造器 public (Method, String)，与 JDK-8 相同（公开签名无版本差异）。
+- 精确消息组成锁定：`Incorrectly typed data found for annotation element <Method> (Found data of type <foundType>)`，null 形态逐字一致。
+- element()/foundType() 反射视图（名称/声明类/静态 Method/含空格串）。
+
+### 使用方式
+动态拼期望消息 + 反射视图断言。
+
+### 参考来源
+javap（jdk-27.0.1）；运行时行为观察。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testConstructorMatrix` / `testMessageExact` / `testElementView`。
+- 版本差异（既有已锁）：element 27 侧 transient → 序列化 round-trip 后 element()==null 而 foundType 存活。

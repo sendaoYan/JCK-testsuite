@@ -239,12 +239,97 @@ public class ObjectMethodsTest {
         check(x.hashCode() == 5 * 31 + "s".hashCode(), "mixed components hash combiner x*31+y");
     }
 
+    // ---- contract deepening (batch lcL, 2026-11): component-type combiners ----
+
+    public record BoolRec(boolean b) {}
+    public record LongRec(long v) {}
+    public record DoubleRec(double d) {}
+    public record FloatRec(float f) {}
+    public record EmptyRec() {}
+    public record Three(int a, String b, boolean c) {}
+    public record ArrRec(int[] xs) {}
+
+    static void testDeepComponentTypeMatrix() {
+        BoolRec bt = new BoolRec(true);
+        check(bt.hashCode() == Boolean.hashCode(true), "boolean component hashes via Boolean.hashCode");
+        check(bt.toString().equals("BoolRec[b=true]"), "boolean component toString");
+        check(bt.equals(new BoolRec(true)), "boolean component equals true case");
+        check(!bt.equals(new BoolRec(false)), "boolean component equals false case");
+
+        LongRec lr = new LongRec(123L);
+        check(lr.hashCode() == Long.hashCode(123L), "long component hashes via Long.hashCode");
+        check(lr.toString().equals("LongRec[v=123]"), "long component toString");
+        check(!lr.equals(new LongRec(124L)), "long component equals distinguishes values");
+
+        DoubleRec dr = new DoubleRec(2.5);
+        check(dr.hashCode() == Double.hashCode(2.5), "double component hashes via Double.hashCode");
+        check(dr.toString().equals("DoubleRec[d=2.5]"), "double component toString");
+        check(dr.equals(new DoubleRec(2.5)), "double component equals");
+
+        FloatRec fr = new FloatRec(1.5f);
+        check(fr.hashCode() == Float.hashCode(1.5f), "float component hashes via Float.hashCode");
+        check(fr.toString().equals("FloatRec[f=1.5]"), "float component toString");
+
+        EmptyRec e = new EmptyRec();
+        check(e.toString().equals("EmptyRec[]"), "zero-component record toString");
+        check(e.hashCode() == 0, "zero-component record hashCode is 0");
+        check(e.equals(new EmptyRec()), "zero-component record equals");
+        check(!e.equals(null), "zero-component record equals(null) false");
+
+        Three t = new Three(2, "x", true);
+        int expectedHash = 31 * (31 * (31 * 0 + 2) + "x".hashCode()) + Boolean.hashCode(true);
+        check(t.hashCode() == expectedHash, "three-component x*31+y combiner order preserved");
+        check(t.toString().equals("Three[a=2, b=x, c=true]"), "three-component toString order");
+        check(t.equals(new Three(2, "x", true)), "three-component equals all-match");
+        check(!t.equals(new Three(2, "x", false)), "three-component equals one-mismatch");
+    }
+
+    static void testDeepArrayComponentContract() {
+        // JLS 8.10.3: reference components use the component's own equals/hashCode;
+        // for arrays that is IDENTITY comparison - the classic record gotcha, locked here
+        ArrRec a = new ArrRec(new int[]{1, 2, 3});
+        ArrRec sameContent = new ArrRec(new int[]{1, 2, 3});
+        check(!a.equals(sameContent), "array component with equal content is NOT equal (identity)");
+        ArrRec sameArray = new ArrRec(a.xs());
+        check(a.equals(sameArray), "wrapping the same array instance IS equal");
+        check(a.hashCode() == a.hashCode(), "array component hashCode stable (identity based)");
+        check(a.toString().startsWith("ArrRec[xs=[I@"), "array component renders array identity");
+    }
+
+    static void testDeepRecordStructure() {
+        check(Modifier.isFinal(Point.class.getModifiers()), "record class is final");
+        check(Point.class.getSuperclass() == java.lang.Record.class, "record extends java.lang.Record");
+        check(java.lang.Record.class.getSuperclass() == Object.class, "Record extends Object");
+        check(new Point(1, 2) instanceof java.lang.Record, "record instance is a java.lang.Record");
+        check(Point.class.isRecord(), "isRecord true for a real record");
+        check(!Pair.class.isRecord(), "plain class is not a record");
+        java.lang.reflect.RecordComponent[] rcs = Point.class.getRecordComponents();
+        check(rcs != null && rcs.length == 2, "record components count");
+        check(rcs[0].getName().equals("x") && rcs[1].getName().equals("y"),
+                "record components keep declaration order");
+        check(rcs[0].getType() == int.class && rcs[1].getType() == int.class,
+                "record component types");
+        Point p = new Point(5, 6);
+        check(p.x() == 5 && p.y() == 6, "accessor methods return constructor arguments");
+        Labeled a = new Labeled(1, "s");
+        Labeled b = new Labeled(1, "s");
+        check(a.equals(b) && b.equals(a), "record equals is symmetric");
+        check(a.hashCode() == b.hashCode(), "equal records have equal hashCodes");
+        check(a.toString().equals(b.toString()), "equal records print identically");
+        check(a.toString().equals(a.toString()), "toString stable across calls");
+        check(a.hashCode() == a.hashCode(), "hashCode stable across calls");
+        check(a.equals(a), "record equals is reflexive");
+    }
+
     public static void main(String[] args) throws Throwable {
         testWhiteBox();
         testBlackBox();
         testDeepNullComponentRecord();
         testDeepZeroComponentBootstrap();
         testDeepNullReceiver();
+        testDeepComponentTypeMatrix();
+        testDeepArrayComponentContract();
+        testDeepRecordStructure();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

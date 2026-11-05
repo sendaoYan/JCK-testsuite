@@ -24,3 +24,19 @@
 ## 易错规范细节（JDK 8）
 - `@Documented` **不**要求被标注注解 retention=RUNTIME（已验证：`@Documented @Retention(CLASS)` 双侧 javac 均编译通过）。它只影响 javadoc 显示，不影响运行时可见性。
 - 运行时可见性由 `@Retention` 独立决定。
+
+## 契约深化（2026-11）
+### API 功能
+- @Documented 不改变保留期：`@Documented` 但无 @Retention（缺省 CLASS）的注解用法对反射不可见——Documented 与 Retention 正交。
+- @Documented 可标注在任意 @Target 的注解上（方法目标实证 + 成员值回读）。
+- Documented 自身：恰 3 个元注解（@Documented/@Retention(RUNTIME)/@Target(ANNOTATION_TYPE)）、非 @Inherited、非 @Repeatable、toString 全等 "@java.lang.annotation.Documented()"。
+
+### 使用方式
+自造 @DocMethod（METHOD 目标）与 @DocClassRet（无 @Retention）正负对照。
+
+### 参考来源
+Oracle javadoc java.lang.annotation.Documented。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testDeepenedSemantics`：方法目标回读、CLASS 缺省不可见三断言（getAnnotation/isAnnotationPresent/getAnnotations）、toString 全等、三个元注解计数、非 Inherited/Repeatable。
+- 易错：Documented 只影响 javadoc 工具输出，不授予运行期可见性；测试它"无效"一面必须用缺省保留期的对照注解。

@@ -45,6 +45,13 @@ public class RepeatableTest {
     static class Single {
     }
 
+    // three repetitions: any number of occurrences aggregates into one container
+    @Schedule(cron = "a", order = 1)
+    @Schedule(cron = "b", order = 2)
+    @Schedule(cron = "c", order = 3)
+    static class Triple {
+    }
+
     // ---- Part 1: structural contract ----
     static void testStructural() throws Exception {
         Class<?> c = Class.forName("java.lang.annotation.Repeatable");
@@ -117,9 +124,53 @@ public class RepeatableTest {
         check(!repeatedContainer, "container not itself repeatable");
     }
 
+    // ---- Part 3: deepened repetition semantics ----
+    static void testDeepenedRepetition() throws Exception {
+        // third and further repetitions: all flattened by getAnnotationsByType in order
+        Schedule[] triple = Triple.class.getAnnotationsByType(Schedule.class);
+        check(triple.length == 3, "three repeated instances");
+        check("a".equals(triple[0].cron()) && triple[0].order() == 1, "triple first values");
+        check("b".equals(triple[1].cron()) && triple[1].order() == 2, "triple second values");
+        check("c".equals(triple[2].cron()) && triple[2].order() == 3, "triple third values");
+
+        // the declared view holds ONLY the container, never the individual instances
+        Annotation[] declared = Triple.class.getDeclaredAnnotations();
+        check(declared.length == 1, "one declared annotation (the container): " + declared.length);
+        check(declared[0].annotationType() == Schedules.class, "declared annotation is container");
+        check(Triple.class.getDeclaredAnnotation(Schedule.class) == null,
+              "getDeclaredAnnotation does not synthesize repeated instances");
+        check(Triple.class.getDeclaredAnnotation(Schedules.class) != null,
+              "getDeclaredAnnotation exposes the container");
+        check(Triple.class.getAnnotationsByType(Schedules.class).length == 1,
+              "container type queried by-type returns the single container");
+
+        // the container's value() is also defensively copied on every call
+        Schedules container = Triple.class.getAnnotation(Schedules.class);
+        Schedule[] vals = container.value();
+        vals[0] = null;
+        check(container.value()[0] != null && "a".equals(container.value()[0].cron()),
+              "container value() defensively copied");
+
+        // the Repeatable meta-annotation itself is not repeatable and reads back exactly
+        check(Repeatable.class.getAnnotation(Repeatable.class) == null,
+              "Repeatable is not itself @Repeatable");
+        java.lang.reflect.Method v = Repeatable.class.getMethod("value");
+        check(v.toString().equals(
+                "public abstract java.lang.Class java.lang.annotation.Repeatable.value()"),
+              "Repeatable.value() exact signature: " + v);
+
+        // container equality/hashCode are value-based like any annotation
+        Schedules again = Triple.class.getAnnotation(Schedules.class);
+        check(container.equals(again), "container equal across fetches");
+        check(container.hashCode() == again.hashCode(), "container hashCode stable");
+        check(!container.equals(Job.class.getAnnotation(Schedules.class)),
+              "containers with different contents not equal");
+    }
+
     public static void main(String[] args) throws Exception {
         testStructural();
         testBehavior();
+        testDeepenedRepetition();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

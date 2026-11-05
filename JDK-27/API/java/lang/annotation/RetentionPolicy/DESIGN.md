@@ -21,3 +21,16 @@ switch (policy) { case SOURCE: ... case CLASS: ... case RUNTIME: ... }
 
 ## 易错规范细节（JDK 27）
 - 3 常量在 JDK 8 与 JDK 27 一致。
+
+## 契约深化（2026-11）
+### API 功能
+- 负例精确消息（与 JDK-8 逐字一致）；@Retention(RUNTIME) 自反可见消费闭环；单例共享/getDeclaringClass/compareTo 精确差值/三名串全等。
+
+### 使用方式
+同 JDK-8 侧。
+
+### 参考来源
+Enum.valueOf；javap（jdk-27.0.1）。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testNegativeExactAndIdentity`；双侧无版本差异（枚举集两侧均为 3 值）。

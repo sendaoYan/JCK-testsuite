@@ -27,3 +27,23 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11）
+
+### API 功能（新增覆盖维度）
+构造 (Class,String) 消息模板逐字、enumType/constantName 回读、null 实参负例、Throwable 管道（cause/suppressed/stackTrace/printStackTrace）、序列化往返、svuid 与结构白盒。
+
+### 使用方式
+消息模板为 `<enumType.getName()>.<constantName>`（**binary name，$ 分隔**——与 Enum.valueOf 的 canonical name 点分形式相反，易混淆）；null constantName 渲染字面 "null"。
+
+### 参考来源
+javap -public java.lang.EnumConstantNotPresentException（8/27 同构：(Class, String) 单构造器 + enumType() + constantName()）。
+
+### 测试用例设计 + 易错规范细节
+- 消息精确：`EnumConstantNotPresentExceptionTest$Color.PURPLE`、`java.lang.Thread$State.RUNNING`（嵌套 JDK 枚举）。
+- **null enumType → 构造器内 NPE**（getName() 调用点）：8 侧消息 null、27 侧 helpful `Cannot invoke "java.lang.Class.getName()" because "enumType" is null`——MODERN 分支。
+- **null constantName 允许**：constantName()==null 且消息 `...$Color.null`。
+- svuid = -6046998521960521108（两侧一致）。
+- 序列化往返 enumType()/constantName()/getMessage() 全保持。
+- 真触发场景（编译期枚举常量被删）无法运行时构造，以构造链为主记录（brief 允许）。
+- EnumConstantNotPresentExceptionTest.java 现有 PASS 断言：53。

@@ -107,9 +107,71 @@ public class ElementTypeTest {
         }
     }
 
+    // ---- Part 3: negative messages and identity mechanics ----
+    static void testNegativeAndIdentity() {
+        // valueOf with an unknown name: exact message, identical on JDK 8 and JDK 27
+        try {
+            ElementType.valueOf("BOGUS");
+            check(false, "valueOf(BOGUS) should throw");
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().equals(
+                    "No enum constant java.lang.annotation.ElementType.BOGUS"),
+                  "exact IAE message: " + expected.getMessage());
+        }
+        // empty string is just another unknown name
+        try {
+            ElementType.valueOf("");
+            check(false, "valueOf(\"\") should throw");
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().equals(
+                    "No enum constant java.lang.annotation.ElementType."),
+                  "empty-name IAE message: " + expected.getMessage());
+        }
+        // null name is a NullPointerException, not an IAE
+        try {
+            ElementType.valueOf(null);
+            check(false, "valueOf(null) should throw");
+        } catch (NullPointerException expected) {
+            check(true, "valueOf(null) throws NPE");
+        }
+
+        // enum singleton identity: getEnumConstants shares the same instances as values()
+        ElementType[] vals = ElementType.values();
+        ElementType[] consts = ElementType.class.getEnumConstants();
+        check(vals.length == consts.length, "values() and getEnumConstants() same length");
+        boolean allIdentical = true;
+        for (int i = 0; i < vals.length; i++) {
+            if (vals[i] != consts[i]) allIdentical = false;
+        }
+        check(allIdentical, "values() and getEnumConstants() share singleton instances");
+
+        // getDeclaringClass of every constant is the enum class itself
+        boolean allDeclaring = true;
+        for (ElementType v : vals) {
+            if (v.getDeclaringClass() != ElementType.class) allDeclaring = false;
+        }
+        check(allDeclaring, "getDeclaringClass is ElementType for every constant");
+
+        // JDK 27 additions: MODULE (JDK 9) and RECORD_COMPONENT (JDK 16) are the exact
+        // two constants beyond the JDK 8 set of 10
+        check(ElementType.MODULE.name().equals("MODULE"), "MODULE name");
+        check(ElementType.RECORD_COMPONENT.name().equals("RECORD_COMPONENT"), "RECORD_COMPONENT name");
+        check(ElementType.values().length == 12, "12 = 10 (JDK 8) + MODULE + RECORD_COMPONENT");
+
+        // compareTo is the ordinal difference
+        check(ElementType.MODULE.compareTo(ElementType.TYPE) == 10, "compareTo exact diff 10");
+        check(ElementType.RECORD_COMPONENT.compareTo(ElementType.TYPE_USE) == 2,
+              "compareTo exact diff 2");
+
+        // values are usable as @Target members (compile-time domain); runtime readback
+        check(ElementType.RECORD_COMPONENT.getDeclaringClass().isEnum(),
+              "RECORD_COMPONENT declaring enum");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNegativeAndIdentity();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

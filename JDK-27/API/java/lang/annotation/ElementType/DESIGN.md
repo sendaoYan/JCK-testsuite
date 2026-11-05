@@ -22,3 +22,19 @@ ElementType.valueOf("FIELD");
 
 ## 易错规范细节（JDK 27）
 - JDK 27 = 12 常量（含 MODULE、RECORD_COMPONENT）；JDK 8 = 10 常量（无二者）。双侧各自断言。
+
+## 契约深化（2026-11）
+### API 功能
+- 负例精确消息锁定（与 JDK-8 逐字一致）：valueOf("BOGUS")/空串 → "No enum constant java.lang.annotation.ElementType...."；valueOf(null) → NPE。
+- 枚举单例机制：values() 与 getEnumConstants() 共享实例；每常量 getDeclaringClass 正确。
+- 27 侧值集差异精确：12 值 = JDK-8 的 10 值 + MODULE（JDK 9）+ RECORD_COMPONENT（JDK 16）；MODULE/RECORD_COMPONENT 名与 ordinal（10/11）锁定；compareTo 精确差值。
+
+### 使用方式
+valueOf 负例 + 数组身份扫描 + 差值断言。
+
+### 参考来源
+javap（jdk-27.0.1）；JEP 257 与 record 引入历史。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testNegativeAndIdentity`：27 独有值按名/序数锁定，MODULE.compareTo(TYPE)==10。
+- 易错：值集差异只体现在常量集合与 ordinal，valueOf 消息格式双侧一致可共文字锁。

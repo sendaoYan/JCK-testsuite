@@ -28,3 +28,7 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；触发式断言 `array access out of range`。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11，lcO1 批）
+
+断言 21 → 101。(int) 构造器消息 "Array index out of range: N"（0/负/MIN/MAX）——**双侧逐字一致直锁**（一个源文件无需分支）；JVM 触发矩阵（int[3] a[3]/a[-1]/存 a[5]、new int[3][5] 外层[3]与内层[0][5]、String[2][7]、long[2][2]、char[1][-2]、boolean/double 数组）用 MODERN 分支各锁：27 侧 "Index N out of bounds for length L"、8 侧裸索引；层级（父类精确 IOOBE、IOOBE 实例非 AIOOBE 单向子类型）；JVM 抛出实例详情；SUID -5116101128118950844L；序列化 round-trip。

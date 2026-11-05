@@ -27,3 +27,15 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11）
+
+### API 功能（新增覆盖维度）
+与 JDK-8 侧同构：消息模板逐字、cause 锁定语义、svuid、序列化往返、printStackTrace 抑制行。
+
+### 参考来源
+javap -public（8/27 同构）。
+
+### 测试用例设计 + 易错规范细节
+- 同 8 侧全部条目；无版本差异（消息/svuid/语义双侧一致）。
+- TypeNotPresentExceptionTest.java 现有 PASS 断言：47。

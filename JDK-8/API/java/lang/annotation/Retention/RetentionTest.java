@@ -41,6 +41,14 @@ public class RetentionTest {
     @interface NoRetention {
     }
 
+    // same shape, but actually USED on an element: its usage must be invisible
+    @interface DefaultRetention {
+    }
+
+    @DefaultRetention
+    static class DefaultHeld {
+    }
+
     @SrcKept
     @ClassKept
     @RuntimeKept
@@ -98,10 +106,55 @@ public class RetentionTest {
         check(o instanceof Annotation, "hand-written instance still an Annotation");
     }
 
+    // ---- Part 4: default-is-CLASS contract and isAnnotationPresent sync ----
+    static void testDefaultAndSync() throws Exception {
+        // an annotation with no @Retention defaults to CLASS: its USAGE is invisible
+        // to reflection -- the core "default retention == CLASS" contract
+        check(DefaultHeld.class.getAnnotation(DefaultRetention.class) == null,
+              "default-retention usage invisible to getAnnotation");
+        check(!DefaultHeld.class.isAnnotationPresent(DefaultRetention.class),
+              "isAnnotationPresent in sync: invisible");
+        check(DefaultHeld.class.getAnnotations().length == 0,
+              "default-retention usage absent from getAnnotations");
+        check(DefaultHeld.class.getDeclaredAnnotations().length == 0,
+              "absent from getDeclaredAnnotations as well");
+
+        // isAnnotationPresent is in sync with getAnnotation for every policy
+        check(!Held.class.isAnnotationPresent(SrcKept.class), "SOURCE not present");
+        check(!Held.class.isAnnotationPresent(ClassKept.class), "CLASS not present");
+        check(Held.class.isAnnotationPresent(RuntimeKept.class), "RUNTIME present");
+
+        // Retention itself is @Documented (javadoc visibility of the meta-annotation)
+        check(Retention.class.isAnnotationPresent(java.lang.annotation.Documented.class),
+              "Retention is @Documented");
+
+        // Retention.value() reads back exactly this signature on both JDKs
+        java.lang.reflect.Method v = Retention.class.getMethod("value");
+        check(v.toString().equals(
+                "public abstract java.lang.annotation.RetentionPolicy "
+              + "java.lang.annotation.Retention.value()"),
+              "Retention.value() exact signature: " + v);
+
+        // Retention instances are value-based: same policy -> equal, stable hashCode
+        Retention r1 = RuntimeKept.class.getAnnotation(Retention.class);
+        Retention r2 = RuntimeKept.class.getAnnotation(Retention.class);
+        check(r1.equals(r2), "Retention equal across fetches");
+        check(r1.hashCode() == r2.hashCode(), "Retention hashCode stable");
+        check(!r1.equals(SrcKept.class.getAnnotation(Retention.class)),
+              "different policies not equal");
+
+        // Target[] of Retention is defensively copied
+        Target t = Retention.class.getAnnotation(Target.class);
+        ElementType[] tv = t.value();
+        tv[0] = null;
+        check(t.value()[0] == ElementType.ANNOTATION_TYPE, "Retention @Target value copied");
+    }
+
     public static void main(String[] args) throws Exception {
         testStructural();
         testMetaAnnotation();
         testVisibility();
+        testDefaultAndSync();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

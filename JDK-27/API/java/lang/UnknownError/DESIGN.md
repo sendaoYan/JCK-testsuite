@@ -27,3 +27,20 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11）
+
+### 1. API 功能（本轮新增维度）
+- 构造器面锁定：恰 2 个 public 构造器 `()`/`(String)`（无 cause 形态，反射断言不存在）。
+- `serialVersionUID` 锁定：2524784860676771849L（双侧一致）。
+- 家族模板全矩阵：构造链值语义（no-arg 双 null、toString `"java.lang.UnknownError"`/`"java.lang.UnknownError: m"` 逐字、空消息保留 `": "`）、cause 一次写/二次 ISE/自反精确 IAE/initCause(null) 消耗一次写、suppressed 保序+防御拷贝、栈迹顶帧精确+setStackTrace 回读+防御拷贝+空数组、printStackTrace 首行/Caused by/tab-Suppressed 逐字、序列化往返全保持、家族归属（instanceof VirtualMachineError/Error/Throwable/Serializable + 家族句柄同一对象捕获）。
+
+### 2. 使用方式
+JVM 抛出"未知但严重"故障时的最后兜底 Error；按 VirtualMachineError 家族统一捕获，UnknownError 具体名用于日志定位。
+
+### 3. 参考来源
+Oracle javadoc（UnknownError：thrown when an unknown but serious exception has occurred）；Java Object Serialization 规范；双侧 javap/实测。
+
+### 4. 测试用例设计 + 易错规范细节
+- 新增 testContractStructure/testConstructorChain/testFamilyPolymorphism/testCauseContract/testSuppressedContract/testStackTraceContract/testPrintStackTraceContract/testSerializationRoundTrip。
+- 易错：与 OOM/SOE 同为 2 构造器形态（勿照抄 InternalError 的 4 构造器假设）；printStackTrace 的 Suppressed 行带前导 tab；序列化后 cause/suppressed 是图拷贝，断言按类+消息。

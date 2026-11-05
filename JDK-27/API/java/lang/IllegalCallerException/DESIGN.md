@@ -27,3 +27,18 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11）
+
+### API 功能（本轮新增维度）
+- 构造链/Throwable 通用契约全深化：toString 精确形态（含 (Throwable) 构造消息默认 = cause.toString() 的连带形态）、serialVersionUID 经 ObjectStreamClass.lookup 锁定、序列化往返（类型/消息/cause/toString 保持）、真实栈帧闭环（getStackTrace()[0] 类名/方法名精确 + Class.forName round-trip + fillInStackTrace 返回 this）、setStackTrace（值拷贝/null NPE/空数组）、getSuppressed（默认空 + 顺序 + 防御性拷贝）、printStackTrace 内容（头部 + Suppressed: 行 + \tat 帧）、initCause(self) → IllegalArgumentException "Self-causation not permitted"（双侧一致）、三层 cause 链遍历、instanceof 层级与 final 修饰符实测记录。
+
+### IllegalCallerException 特有
+- **非 final**（javap 实测 `public class`，与 WrongThreadException/MatchException 的 final 不同，可被子类化）；serialVersionUID 锁 **-2349421918363102232L**。
+- 真触发调研记录：`StackWalker.getCallerClass()` 在「无调用者帧」时抛 IllegalCallerException——但本套件 jtreg harness 自身经反射调用 main（jtreg MainAction→TestRunner），main 恒有 Java 调用者，故从 main 直接调用 getCallerClass 得到的是 harness 类而非异常；裸 `java` 启动下实测会抛（消息 `no caller frame: ...`）。**结论：无确定性可达触发，构造链 + Throwable 契约覆盖，行为留档**。
+
+### 参考来源
+Oracle Java SE 27 javadoc（IllegalCallerException、StackWalker.getCallerClass 的 IllegalCallerException 条款）；jtreg MainAction/TestRunner 执行模型（jtreg.jar 反查）；本仓库 27.0.1 实测（裸 java 抛、jtreg 下不抛）。
+
+### 测试用例设计 + 易错规范细节
+新增方法：testToStringExact、testTypeHierarchy、testSerialVersionUid、testSerializationRoundTrip、testRealStackFrame、testSetStackTrace、testSuppressedContract、testPrintStackTraceContent、testCauseEdgeCases。易错点：`(Throwable)` 构造消息默认 cause.toString()；setStackTrace(null) 27 侧抛 helpful NPE（消息含 JVM 内部细节，只锁类型）。

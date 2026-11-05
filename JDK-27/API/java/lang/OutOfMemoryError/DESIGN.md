@@ -27,3 +27,22 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11）
+
+### 1. API 功能（本轮新增维度）
+- 构造器面锁定：恰 2 个 public 构造器 `()`/`(String)`——**无 cause 形态构造器**（反射断言不存在），cause 只能经 initCause 补挂。
+- `serialVersionUID` 锁定：8228564086184010517L（双侧一致）。
+- 值语义/cause/suppressed/栈迹/printStackTrace/序列化全矩阵：同家族模板（message 透传、`: ` 分隔、initCause(null) 也消耗一次写、防御拷贝、往返保持）。
+- 与 StackOverflowError 的分界（轻路径）：预设消息 `"Java heap space"` 透传 + toString 全等；兄弟类型互不 isInstance（兄弟类间 instanceof 是编译期不可转换错误，须用 `Class.isInstance` 表达）；共享 VirtualMachineError 父柄但具体类型保持区分，OOM 永不被 `catch (StackOverflowError)` 捕获。
+- **真耗尽堆触发明确放弃**：宿机 1.5TB 内存默认堆极大，受控触发时长不可控（速度红线"无长循环"），按轻路径锁定构造/消息/分界契约。
+
+### 2. 使用方式
+堆耗尽由 JVM 抛出；用户侧 catch 后只做最小诊断（getMessage 常见值 "Java heap space"）并尽快释放引用，不得在 handler 里再分配大对象。
+
+### 3. 参考来源
+Oracle javadoc（OutOfMemoryError 两构造器形态）；Java Object Serialization 规范；JLS 11.5；双侧 javap/实测。
+
+### 4. 测试用例设计 + 易错规范细节
+- 新增 testContractStructure/testConstructorChain/testFamilyPolymorphism/testCauseContract/testSuppressedContract/testStackTraceContract/testPrintStackTraceContract/testSerializationRoundTrip/testOomVsSoeBoundary。
+- 易错：本类**没有** `(String,Throwable)/(Throwable)` 构造器（与 InternalError 不同）；`initCause(null)` 是合法的一次写、之后仍抛 ISE；兄弟 Error 间 `x instanceof Sibling` 直接编译报错（inconvertible types），契约断言要用 `Class.isInstance`。

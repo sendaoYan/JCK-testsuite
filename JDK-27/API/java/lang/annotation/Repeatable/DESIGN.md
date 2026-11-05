@@ -25,3 +25,17 @@ Job.class.getAnnotation(Schedule.class);        // null
 ## 易错规范细节（JDK 27）
 - 容器 @Retention 不能短于被重复注解（声明期报错）；容器 @Target 必须覆盖被重复注解（使用期报错）。
 - 反例文案 JDK 27 用“annotation interface”、JDK 8 用“annotation type”。
+
+## 契约深化（2026-11）
+### API 功能
+- 三次重复展平/声明视图只含容器/getDeclaredAnnotation 双路径/容器 value() 防御性拷贝/Repeatable 非自标与精确签名/容器值语义 equals。
+
+### 使用方式
+同 JDK-8 侧 @Triple fixture。
+
+### 参考来源
+JLS 9.6.3；AnnotatedElement javadoc；javap（jdk-27.0.1）。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testDeepenedRepetition`，双侧一致（无版本差异）。
+- 易错：原始路径 vs 展平路径的分野；编译期约束由目录内既有 @compile/fail 辅件覆盖，运行期测试不重复。

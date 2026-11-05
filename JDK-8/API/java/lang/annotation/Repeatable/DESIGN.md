@@ -30,3 +30,20 @@ Job.class.getAnnotation(Schedule.class);        // null（容器形式存储）
 ## 易错规范细节（JDK 8）
 - 容器 `@Retention` 不能短于被重复注解（声明期报错）；容器 `@Target` 必须覆盖被重复注解（使用期报错）。
 - 反例错误文案 JDK 8 用“annotation type”、JDK 27 用“annotation interface”，双侧各自 @compile/fail。
+
+## 契约深化（2026-11）
+### API 功能
+- 三次重复：getAnnotationsByType 按源序展平 3 实例；**声明视图只含容器**（getDeclaredAnnotations 长度 1 且类型为容器）；getDeclaredAnnotation(单注解)==null / (容器)!=null；按容器类型 byType 查询返回单容器。
+- 容器 value() 防御性拷贝（改返回数组后原值不变）。
+- Repeatable 元注解自身：非自标（不可重复）、value() 签名全等 "public abstract java.lang.Class java.lang.annotation.Repeatable.value()"；容器 equals/hashCode 值语义。
+- 容器 value 必须数组类型/保留期不短于成员注解等编译期约束由既有 @compile/fail 辅件覆盖（ContainerRetentionShorter/ContainerTargetNotApplicable/NonRepeatableRepeated），不重做。
+
+### 使用方式
+@Triple fixture + getDeclaredAnnotation 区分声明视图与展平视图。
+
+### 参考来源
+JLS 9.6.3（repeatable annotations）；AnnotatedElement javadoc。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testDeepenedRepetition`。
+- 易错：getAnnotation/getDeclaredAnnotation 走"原始"路径（只见容器），getAnnotationsByType 走"展平"路径——同一元素两族 API 结果不同是核心契约不是缺陷。

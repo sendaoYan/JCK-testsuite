@@ -20,3 +20,17 @@ class Constants { @Native public static final int SIGSEGV = 11; }
 
 ## 易错规范细节（JDK 27）
 - @Native 的元注解 RUNTIME 保留可反射读取；@Native 使用处 SOURCE，运行期不可见。
+
+## 契约深化（2026-11）
+### API 功能
+- @Native 在 long/double 常量与接口常量上用法不可见；Native 自身恰 3 元注解、非 Inherited/Repeatable、类型可反射。
+
+### 使用方式
+同 JDK-8 侧 fixtures（LONG_MASK/E_OFFSET/NativeIface）。
+
+### 参考来源
+@Native javadoc；javap（jdk-27.0.1）。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testDeepenedSemantics`，双侧一致。
+- 易错：SOURCE 保留期不可见与"注解类型 Class 对象可反射"并存，二者不矛盾。

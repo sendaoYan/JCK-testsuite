@@ -27,3 +27,19 @@ catch (IncompleteAnnotationException e) {
 ## 易错规范细节（JDK 27）
 - 构造器对 null 参数抛 NPE。
 - message = `annotationType.getName() + " missing element " + elementName`。
+
+## 契约深化（2026-11）
+### API 功能
+- 构造器矩阵：恰 1 个声明构造器 public (Class, String)（与 JDK-8 一致）。
+- 精确消息锁定：`<getName()> missing element <elementName>`，toString 全等；嵌套注解用二进制名 `.`→`$`（getName() 形态）。
+- elementName 任意串回读；接受元注解 Class。
+
+### 使用方式
+同 JDK-8 侧。
+
+### 参考来源
+javap（jdk-27.0.1）；运行时观察。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testMessageExact` / `testConstructorMatrixAndViews`（含 @LocalMarker 嵌套 fixture）。
+- 真触发路径（演化注解缺成员）记跳过；消息双侧一致无版本差异。

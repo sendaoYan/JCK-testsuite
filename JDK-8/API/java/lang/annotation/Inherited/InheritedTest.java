@@ -81,6 +81,18 @@ public class InheritedTest {
         }
     }
 
+    // interfaces do not inherit @Inherited annotations from superinterfaces either
+    interface IfaceSub extends IfaceBase {
+    }
+
+    // an annotation on an abstract superclass is inherited by the concrete subclass
+    @Tag("abs")
+    static abstract class AbsBase {
+    }
+
+    static class Conc extends AbsBase {
+    }
+
     // ---- Part 1: structural contract ----
     static void testStructural() throws Exception {
         Class<?> c = Class.forName("java.lang.annotation.Inherited");
@@ -146,11 +158,49 @@ public class InheritedTest {
               "method annotation not inherited by overriding method");
     }
 
+    // ---- Part 5: extended inheritance semantics ----
+    static void testExtendedSemantics() {
+        // superinterface -> subinterface: also NOT inherited (interfaces never inherit)
+        check(IfaceSub.class.getAnnotation(IfaceTag.class) == null,
+              "sub-interface does not inherit from super-interface");
+        check(IfaceBase.class.getAnnotation(IfaceTag.class) != null,
+              "the annotated interface itself keeps the annotation");
+
+        // abstract superclass -> concrete subclass: still inherited
+        Tag concTag = Conc.class.getAnnotation(Tag.class);
+        check(concTag != null, "annotation on abstract superclass inherited");
+        check("abs".equals(concTag.value()), "inherited value from abstract superclass");
+
+        // getAnnotationsByType honors @Inherited just like getAnnotation
+        check(Child.class.getAnnotationsByType(Tag.class).length == 1,
+              "getAnnotationsByType sees the inherited annotation");
+
+        // the Inherited meta-annotation itself: marker, documented, NOT self-inherited
+        check(!Inherited.class.isAnnotationPresent(Inherited.class),
+              "Inherited is not itself @Inherited");
+        check(Inherited.class.isAnnotationPresent(Documented.class),
+              "Inherited is @Documented");
+        check(!Inherited.class.isAnnotationPresent(java.lang.annotation.Repeatable.class),
+              "Inherited is not @Repeatable");
+        check(Inherited.class.getDeclaredAnnotations().length == 3,
+              "three meta-annotations on Inherited: "
+              + Inherited.class.getDeclaredAnnotations().length);
+
+        // @Inherited has no effect on annotations with SOURCE/CLASS retention: nothing
+        // runtime-visible exists at all for the subclass to inherit; the concrete
+        // subclass carries nothing of its own in the declared view
+        check(Conc.class.getDeclaredAnnotations().length == 0,
+              "declared view on concrete subclass stays empty");
+        check(Conc.class.getAnnotationsByType(Tag.class).length == 1,
+              "getAnnotationsByType on concrete subclass sees inherited");
+    }
+
     public static void main(String[] args) throws Exception {
         testStructural();
         testClassInheritance();
         testInterfaceNonInheritance();
         testMethodNonInheritance();
+        testExtendedSemantics();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

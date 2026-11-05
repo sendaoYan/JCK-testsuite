@@ -25,3 +25,18 @@ class Constants {
 
 ## 易错规范细节（JDK 8）
 - `@Native` 自身元注解（@Retention/@Target/@Documented）是 RUNTIME 保留的，因此可在 `Native.class` 上反射读取；但 `@Native` 的使用处是 SOURCE，运行期不可见。
+
+## 契约深化（2026-11）
+### API 功能
+- @Native 字段种类扩展：long/double 常量、**接口常量**（隐式 public static final 字段）上标注均 SOURCE 不可见；常量值不受影响。
+- Native 自身画像：恰 3 个元注解（@Documented/@Retention(SOURCE)/@Target(FIELD)）、非 @Inherited、非 @Repeatable；类型本身始终可反射（保留期只约束用法不约束类型）。
+
+### 使用方式
+LONG_MASK/E_OFFSET/NativeIface.CONST 负例扫描。
+
+### 参考来源
+@Native javadoc（JDK 8 引入）。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testDeepenedSemantics`。
+- 易错：SOURCE 保留期的"不可见"指**用法**不可见，注解类型自身的元注解照常可读；Integer.MAX_VALUE 上的 JDK 自用例同样是运行期不可见的正控。

@@ -27,3 +27,7 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11，lcO1 批）
+
+断言 19 → 100。招牌闭环（详见 JDK-8 侧新建 DESIGN）：MarkerHolder/BadInitRt 首次访问 → EIIE 且 getCause()==MARKER 同一实例、getException()==getCause()、消息 null；二次访问 4 触发点（字段/静态方法/new/Class.forName）全部 NoClassDefFoundError "Could not initialize class <binary>"（双侧逐字一致）；static 表达式 1/0 → EIIE(ArithmeticException "/ by zero")；static 块抛 Error（OOM）直接传播不包装；三构造形态 initCause 全部 ISE（cause 槽位锁定，含无参）；构造矩阵/getException 细节/printStackTrace Caused by 段；SUID 1521711792217232256L；序列化 round-trip（wrapped exception 保持）。

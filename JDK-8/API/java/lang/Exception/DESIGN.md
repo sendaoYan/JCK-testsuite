@@ -40,3 +40,7 @@
 ## 注意事项
 
 - headless 安全，不加 `@key`；结果确定。
+
+## 契约深化（2026-11，lcO1 批）
+
+双侧 16/16 → 70/70。四构造矩阵补全（null 形态三件套：(String)null 消息 null 且 toString 无冒号、(Throwable)null 消息与 cause 均 null、(m,null) cause null）；(Throwable) 构造消息 == cause.toString() 逐字；initCause 二次 ISE 前缀 "Can't overwrite cause with" + self IAE "Self-causation not permitted" 逐字；addSuppressed null NPE / self IAE 精确消息；顶帧 className/methodName 精确；printStackTrace 首行/\tat/Suppressed/Caused by 全断言；protected 4 参构造器存在（getDeclaredConstructor）；Exception 非 RuntimeException 非 Error（checked 语义）；SUID -3387516993124229948L（ObjectStreamClass 锁定，双侧一致）；java.lang.Exception 实例本身序列化 round-trip（message/cause/suppressed/toString 保持）。

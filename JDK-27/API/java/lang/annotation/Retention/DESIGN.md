@@ -20,3 +20,17 @@
 
 ## 易错规范细节（JDK 27）
 - 无 @Retention 默认 CLASS；@Retention 自身必须 RUNTIME。
+
+## 契约深化（2026-11）
+### API 功能
+- 缺省==CLASS 用法级不可见（四通道）；isAnnotationPresent 同步；Retention.value() 签名全等与无默认值；值语义 equals/hashCode；@Target 数组防御性拷贝。
+
+### 使用方式
+@DefaultRetention/@DefaultHeld fixture。
+
+### 参考来源
+JLS 9.6.4.2；javap（jdk-27.0.1）。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testDefaultAndSync`，双侧一致。
+- 易错：27 侧toString 形态 "@RetentionPolicyTest.RuntimeValued(\"v\")" 等带引号（既有已锁），8 侧无引号。

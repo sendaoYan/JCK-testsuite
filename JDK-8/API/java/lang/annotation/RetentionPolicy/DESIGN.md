@@ -23,3 +23,19 @@ switch (policy) { case SOURCE: ... case CLASS: ... case RUNTIME: ... }
 
 ## 易错规范细节（JDK 8）
 - 3 个常量在 JDK 8 与 JDK 27 完全一致，可双侧镜像断言。
+
+## 契约深化（2026-11）
+### API 功能
+- 负例精确消息锁定（双侧逐字一致）：valueOf("BOGUS") → "No enum constant java.lang.annotation.RetentionPolicy.BOGUS"；空串同构；valueOf(null) → NPE。
+- 作为注解成员值的消费闭环：@Retention(RetentionPolicy.RUNTIME) 自反可见（只有 RUNTIME 可反射）。
+- 枚举单例：values() 与 getEnumConstants() 共享实例；getDeclaringClass；compareTo 精确差值（RUNTIME-CLASS==1、SOURCE-RUNTIME==-2）；三名字逗号串全等 "SOURCE,CLASS,RUNTIME"。
+
+### 使用方式
+负例 + 单例身份 + 差值断言。
+
+### 参考来源
+java.lang.Enum.valueOf；@Retention javadoc。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testNegativeExactAndIdentity`。
+- 易错：恰 3 值且声明序 SOURCE(0)/CLASS(1)/RUNTIME(2)；compareTo 是 ordinal 差不是符号。

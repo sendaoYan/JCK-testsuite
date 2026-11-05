@@ -25,3 +25,20 @@ ElementType.valueOf("FIELD");
 
 ## 易错规范细节（JDK 8）
 - **版本差异**：JDK 8 = 10 常量（无 MODULE、RECORD_COMPONENT）；JDK 27 = 12 常量（多 MODULE ordinal=10、RECORD_COMPONENT ordinal=11）。双侧各自断言自己的 `values().length`。
+
+## 契约深化（2026-11）
+### API 功能
+- 负例精确消息锁定（双侧逐字一致）：`valueOf("BOGUS")` → IllegalArgumentException "No enum constant java.lang.annotation.ElementType.BOGUS"；空串同构；`valueOf(null)` → NullPointerException。
+- 枚举单例机制：values() 与 getEnumConstants() 共享同一批实例（== 逐一验证）；每个常量 getDeclaringClass==ElementType.class。
+- JDK-8 值集再确认：**恰 10 值**（8 个先行值 + JSR 308 的 TYPE_PARAMETER/TYPE_USE，二者 Java 8 已有）；MODULE/RECORD_COMPONENT 明确缺席（按名扫描断言）。
+- compareTo 精确差值（PACKAGE-TYPE==7、TYPE-TYPE_USE==-9）。
+
+### 使用方式
+valueOf 负例 try/catch 精确消息 + 数组身份扫描。
+
+### 参考来源
+javap 双侧（10 值 vs 12 值）；java.lang.Enum.valueOf 通用行为。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testNegativeAndIdentity`：消息全等 3 例、单例共享、声明类、值集负断言、差值。
+- 易错：任务简报称"8 侧 8 值"与实测不符——TYPE_PARAMETER/TYPE_USE 自 Java 8（JSR 308）即存在，按实测锁 10 值。

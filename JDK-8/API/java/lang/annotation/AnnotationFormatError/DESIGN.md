@@ -27,3 +27,20 @@ catch (AnnotationFormatError e) { e.getCause(); }
 ## 易错规范细节（JDK 8）
 - `(Throwable) e` 的 message 为 `(e == null ? null : e.toString())`，null 时 message 为 null。
 - 无无参构造器（仅 3 个带参构造器）。
+
+## 契约深化（2026-11）
+### API 功能
+- 构造器矩阵 javap 锁定：恰 3 个声明构造器 (String)/(String,Throwable)/(Throwable)，**双侧均无无参构造**（NoSuchMethodException 实证）；参数类型列表逐一精确。
+- Error 语义：fillInStackTrace 返回 this、默认无 suppressed、绝不是 Exception、两级 cause 链身份保持、(Throwable) 形态 message==cause.toString()。
+
+### 使用方式
+反射 getDeclaredConstructor 精确签名断言 + 构造行为断言。
+
+### 参考来源
+javap 双侧 java.lang.annotation.AnnotationFormatError；Throwable 通用契约。
+
+### 测试用例设计 + 易错规范细节（本轮新增）
+- `testConstructorMatrix`：3 构造器 + 无 () 构造器负例。
+- `testErrorSemantics`：toString 全等 "java.lang.annotation.AnnotationFormatError: x"、Error↔Exception 家族方向、深 cause 链。
+- 易错：`e instanceof Exception` 对 Error 子类是**编译错误**（inconvertible types），须用 `Exception.class.isAssignableFrom`。
+- 真触发（畸形 RuntimeVisibleAnnotations 属性）需手工造字节码，按批次简报记为跳过，仅锁构造路径。

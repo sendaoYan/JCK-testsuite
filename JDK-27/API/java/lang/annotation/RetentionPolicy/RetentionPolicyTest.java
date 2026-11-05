@@ -73,9 +73,69 @@ public class RetentionPolicyTest {
         check(RetentionPolicy.valueOf("RUNTIME") == RetentionPolicy.RUNTIME, "identity");
     }
 
+    // ---- Part 3: exact negative messages and identity mechanics ----
+    static void testNegativeExactAndIdentity() {
+        // valueOf with an unknown name: exact message, identical on JDK 8 and JDK 27
+        try {
+            RetentionPolicy.valueOf("BOGUS");
+            check(false, "valueOf(BOGUS) should throw");
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().equals(
+                    "No enum constant java.lang.annotation.RetentionPolicy.BOGUS"),
+                  "exact IAE message: " + expected.getMessage());
+        }
+        try {
+            RetentionPolicy.valueOf("");
+            check(false, "valueOf(\"\") should throw");
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().equals(
+                    "No enum constant java.lang.annotation.RetentionPolicy."),
+                  "empty-name IAE message: " + expected.getMessage());
+        }
+        // null name is a NullPointerException
+        try {
+            RetentionPolicy.valueOf(null);
+            check(false, "valueOf(null) should throw");
+        } catch (NullPointerException expected) {
+            check(true, "valueOf(null) throws NPE");
+        }
+
+        // the canonical consumer: RetentionPolicy as an annotation member value
+        java.lang.annotation.Retention self =
+                java.lang.annotation.Retention.class.getAnnotation(java.lang.annotation.Retention.class);
+        check(self != null && self.value() == RetentionPolicy.RUNTIME,
+              "Retention itself is @Retention(RUNTIME) -- only RUNTIME is reflectable");
+        check(java.lang.annotation.Retention.class.isAnnotationPresent(
+                java.lang.annotation.Documented.class), "Retention is @Documented");
+
+        // singleton identity: values() and getEnumConstants() share instances
+        RetentionPolicy[] vals = RetentionPolicy.values();
+        RetentionPolicy[] consts = RetentionPolicy.class.getEnumConstants();
+        check(vals.length == consts.length && vals.length == 3, "same length 3");
+        boolean identical = true;
+        for (int i = 0; i < vals.length; i++) {
+            if (vals[i] != consts[i]) identical = false;
+        }
+        check(identical, "shared singleton instances");
+
+        // getDeclaringClass is the enum itself; compareTo is the ordinal difference
+        check(RetentionPolicy.SOURCE.getDeclaringClass() == RetentionPolicy.class,
+              "getDeclaringClass");
+        check(RetentionPolicy.RUNTIME.compareTo(RetentionPolicy.CLASS) == 1,
+              "compareTo exact diff +1");
+        check(RetentionPolicy.SOURCE.compareTo(RetentionPolicy.RUNTIME) == -2,
+              "compareTo exact diff -2");
+
+        // name() of every constant, exactly three, in declaration order
+        check((RetentionPolicy.SOURCE.name() + "," + RetentionPolicy.CLASS.name()
+              + "," + RetentionPolicy.RUNTIME.name()).equals("SOURCE,CLASS,RUNTIME"),
+              "names are SOURCE,CLASS,RUNTIME");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testNegativeExactAndIdentity();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

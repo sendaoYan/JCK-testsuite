@@ -28,3 +28,7 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；触发式断言 `integer division by zero`。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11，lcO1 批）
+
+断言 20 → 104。除零矩阵（int/long 的 / 与 %、byte/short 提升、复合赋值 /= 与 %=、floorDiv/floorMod 含负被除数）消息恒 "/ by zero" 逐字（双侧一致）；Math.*Exact 溢出矩阵（add/subtract/multiply/negate/increment/decrementExact int→"integer overflow"、long 版→"long overflow"、toIntExact→"integer overflow"）；27 专有 Math.absExact（JDK 15+）消息 "Overflow to represent absolute value of Integer.MIN_VALUE"/"...Long.MIN_VALUE" 实测锁定；负例（MIN_VALUE/-1 静默回绕等）；构造矩阵/cause/suppressed/trace/print 全契约；SUID 2256477558314496007L 双侧一致；序列化 round-trip。

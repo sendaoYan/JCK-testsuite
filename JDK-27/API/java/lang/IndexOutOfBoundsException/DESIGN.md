@@ -27,3 +27,7 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；覆盖全部构造器。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11，lcO1 批）
+
+断言 21 → 100。27 侧专测 JDK 9+ 的 (int)/(long) 构造器（消息 "Index out of range: N"，含 MIN/MAX、toString、cause/suppressed 默认态）；8 侧同文件以反射断言其 ABSENT（两文件各自独立，8 侧不写直接调用以免编译失败）；触发源矩阵：Arrays.asList.get(5)→AIOOBE（27 "Index 5 out of bounds for length 1"）、charAt(7)→SIOOBE（27 "Index 7 out of bounds for length 3"）、codePointAt/subSequence（27 "Index ..."/"Range [1, 9) out of bounds for length 2"）；集合族消息：ArrayList.add(5,x)→"Index: 5, Size: 0" 与 subList(0,5)→"toIndex = 5"（双侧一致直锁）、set(3,x) 27 "Index 3 out of bounds for length 1" vs 8 "Index: 3, Size: 1"（MODERN 分支）；(String,Throwable) 构造器双侧 ABSENT 反射锁定；SUID 234122996006267687L；序列化。

@@ -28,3 +28,7 @@ try {
 黑盒：逐构造器实例化断言 `getMessage/getCause`；`initCause` 仅一次 + 二次抛 `IllegalStateException`；`addSuppressed/getSuppressed` 往返；`printStackTrace(PrintStream)` 写入内存流；`getStackTrace` 非空；`toString` 前缀；触发式断言 `negative array size`。
 对应 `<Simple>Test.java` 黑盒部分。
 
+
+## 契约深化（2026-11，lcO1 批）
+
+断言 20 → 81。触发矩阵 MODERN 分支：new int[-1]/[-7]/[MIN_VALUE]、new Object[-1]、new byte[-2]、new String[1][-3]（第二维）、Array.newInstance(int.class,-1)/(String.class,-5)——27 侧消息为精确数字（"-1"/"-7"/"-2147483648"/"-5"），8 侧为 null；正例（new int[0]、newInstance(int.class,3)、零长不抛）；层级与通用契约；SUID -8960118058596991861L；序列化 round-trip。

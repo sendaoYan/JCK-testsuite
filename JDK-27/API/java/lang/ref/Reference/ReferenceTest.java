@@ -129,6 +129,146 @@ public class ReferenceTest {
         passed++;
     }
 
+    // ---- contract deepening (batch lcL, 2026-11) ----
+
+    static void testGetIdentityStability() {
+        Object[] samples = {
+            "jck-string", Integer.valueOf(42), Long.valueOf(9L),
+            new int[]{1, 2, 3}, new Object(), new StringBuilder("sb")
+        };
+        for (Object o : samples) {
+            Reference<Object> r = new WeakReference<>(o);
+            check(r.get() == o, "get returns the exact referent instance");
+            check(r.get() == o, "repeated get returns the same instance");
+            System.gc(); // referent is strongly reachable here, so survival is spec-guaranteed
+            check(r.get() == o, "strongly reachable referent survives System.gc()");
+            Reference<Object> r2 = new WeakReference<>(o);
+            check(r2.get() == o, "a second reference sees the same referent");
+            check(r != r2, "distinct Reference objects for the same referent");
+            r.clear();
+            check(r.get() == null, "clear affects only the cleared reference");
+            check(r2.get() == o, "the other reference is untouched by clear");
+        }
+    }
+
+    static void testEnqueueDequeueStateMachine() {
+        ReferenceQueue<Object> q = new ReferenceQueue<>();
+        Object o = new Object();
+        Reference<Object> cleared = new WeakReference<>(o, q);
+        cleared.clear();
+        check(cleared.enqueue(), "manual enqueue succeeds even after clear (registered ref)");
+        check(q.poll() == cleared, "cleared ref polled from its queue");
+        check(!cleared.enqueue(), "enqueue after dequeue returns false");
+        check(q.poll() == null, "queue empty after drain");
+
+        Reference<Object> nullRef = new WeakReference<Object>(null, q);
+        check(nullRef.enqueue(), "null-referent ref enqueues");
+        check(q.poll() == nullRef, "null-referent ref polled");
+        check(nullRef.get() == null, "null-referent get stays null");
+
+        Reference<Object> again = new WeakReference<>(o, q);
+        check(again.enqueue(), "queue reusable after being drained");
+        try {
+            check(q.remove(1) == again, "remove(1) returns the re-enqueued ref");
+        } catch (InterruptedException e) {
+            throw new AssertionError("unexpected interrupt", e);
+        }
+        check(q.poll() == null, "queue empty again");
+    }
+
+    static void testReferenceKindsOnSameObject() {
+        Object o = new Object();
+        ReferenceQueue<Object> q = new ReferenceQueue<>();
+        WeakReference<Object> w = new WeakReference<>(o);
+        SoftReference<Object> s = new SoftReference<>(o);
+        PhantomReference<Object> p = new PhantomReference<>(o, q);
+        check(w.get() == o, "weak reference sees the referent");
+        check(s.get() == o, "soft reference sees the referent");
+        check(p.get() == null, "phantom reference never exposes the referent");
+        w.clear();
+        check(s.get() == o, "clearing the weak ref leaves the soft ref");
+        check(p.get() == null, "phantom still null after weak clear");
+        s.clear();
+        check(w.get() == null && s.get() == null, "both cleared refs report null");
+        check(p.enqueue(), "phantom enqueue allowed on a live referent");
+        check(p.get() == null, "phantom get null after manual enqueue with live referent");
+        check(q.poll() == p, "phantom drained from its queue");
+    }
+
+    static void testReferenceObjectContract() {
+        Object o = new Object();
+        Reference<Object> a = new WeakReference<>(o);
+        Reference<Object> b = new WeakReference<>(o);
+        check(a.equals(a), "reference equals itself (identity equality)");
+        check(!a.equals(b), "two references to the same referent are not equal");
+        check(!b.equals(a), "identity equality symmetric across distinct refs");
+        check(!a.equals(null), "equals(null) is false");
+        check(a.hashCode() == a.hashCode(), "hashCode stable across calls");
+        String ts = a.toString();
+        check(ts.startsWith("java.lang.ref.WeakReference@"), "Object.toString form: prefix");
+        check(ts.endsWith(Integer.toHexString(a.hashCode())), "Object.toString form: identity hash");
+        check(!(a instanceof java.io.Serializable), "references are not serializable");
+        check(a instanceof Reference, "WeakReference is a Reference");
+        check(WeakReference.class.getSuperclass() == Reference.class, "WeakReference direct subclass");
+        check(SoftReference.class.getSuperclass() == Reference.class, "SoftReference direct subclass");
+        check(PhantomReference.class.getSuperclass() == Reference.class, "PhantomReference direct subclass");
+        check(java.lang.reflect.Modifier.isAbstract(Reference.class.getModifiers()),
+                "Reference is abstract and cannot be instantiated");
+        check(Reference.class.getName().equals("java.lang.ref.Reference"), "fully qualified name");
+        Reference<Object> qRef = new WeakReference<>(new ReferenceQueue<Object>());
+        check(qRef.get() instanceof ReferenceQueue, "referent of any type is retained intact");
+    }
+
+    static void testQueueIndependence() {
+        ReferenceQueue<Object> q1 = new ReferenceQueue<>();
+        ReferenceQueue<Object> q2 = new ReferenceQueue<>();
+        Reference<Object> r1 = new WeakReference<>(new Object(), q1);
+        Reference<Object> r2 = new WeakReference<>(new Object(), q2);
+        check(q1.poll() == null && q2.poll() == null, "both queues start empty");
+        check(r1.enqueue(), "enqueue r1 into q1");
+        check(q2.poll() == null, "q2 unaffected by r1's enqueue");
+        check(q1.poll() == r1, "q1 returns r1");
+        check(r2.enqueue(), "enqueue r2 into q2");
+        check(q1.poll() == null, "q1 unaffected by r2's enqueue");
+        check(q2.poll() == r2, "q2 returns r2");
+    }
+
+    static void testIsEnqueuedDeprecationSurface() throws Exception {
+        java.lang.reflect.Method m = Reference.class.getMethod("isEnqueued");
+        // probed on jdk-27.0.1: isEnqueued carries @Deprecated(since="16", forRemoval=false)
+        Deprecated d = m.getAnnotation(Deprecated.class);
+        check(d != null, "isEnqueued is deprecated on JDK-27");
+        check("16".equals(d.since()), "isEnqueued deprecated since 16");
+        check(!d.forRemoval(), "isEnqueued deprecated not-for-removal");
+        check(m.getReturnType() == boolean.class, "isEnqueued returns boolean");
+    }
+
+    static void testRefersToDeep() throws Exception {
+        Object o = new Object();
+        ReferenceQueue<Object> q = new ReferenceQueue<>();
+        PhantomReference<Object> p = new PhantomReference<>(o, q);
+        check(p.refersTo(o), "phantom refersTo live referent true even though get() is null");
+        check(!p.refersTo(new Object()), "phantom refersTo a different object false");
+        p.clear();
+        check(!p.refersTo(o), "phantom refersTo false after clear");
+        check(p.refersTo(null), "cleared reference refersTo(null) is true (referent is null)");
+        WeakReference<Object> w = new WeakReference<>(o);
+        check(w.refersTo(o), "weak refersTo live referent true");
+        check(!w.refersTo(null), "weak with a live referent: refersTo(null) false");
+        w.clear();
+        check(w.refersTo(null), "cleared weak refersTo(null) true");
+        java.lang.reflect.Method rt = Reference.class.getMethod("refersTo", Object.class);
+        check(rt.getReturnType() == boolean.class, "refersTo returns boolean");
+        check(java.lang.reflect.Modifier.isFinal(rt.getModifiers()), "refersTo is final");
+    }
+
+    static void testReachabilityFence() {
+        Object o = new Object();
+        Reference.reachabilityFence(o);
+        Reference.reachabilityFence(null);
+        check(true, "reachabilityFence accepts any argument and returns normally");
+    }
+
     public static void main(String[] args) throws Exception {
         testGetClearEnqueue();
         testReferenceQueueRemove();
@@ -136,6 +276,14 @@ public class ReferenceTest {
         testSoftReference();
         testPhantomReference();
         testRefersTo();
+        testGetIdentityStability();
+        testEnqueueDequeueStateMachine();
+        testReferenceKindsOnSameObject();
+        testReferenceObjectContract();
+        testQueueIndependence();
+        testIsEnqueuedDeprecationSurface();
+        testRefersToDeep();
+        testReachabilityFence();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
