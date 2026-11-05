@@ -23,3 +23,18 @@
 - `equals`（相同/不同 precision/不同 rounding/非 MathContext/null）与 `hashCode` 契约。
 - 异常：负精度、null 舍入模式、null 字符串、坏格式、负精度字符串、非数字 precision、未知 roundingMode。
 - 序列化：`serialVersionUID == 5579720004786848255L` 校验 + UNLIMITED/DECIMAL32/自定义 context 的 round-trip 保持 equals。
+
+## 契约深化（2026-11）
+
+### 1. API 功能（本轮新增维度）
+- 精确消息逐字表（实测，与 JDK-8 完全一致）：负精度 → "Digits < 0"；null → "null RoundingMode"/"null String"；坏串 → "bad string format"。
+- toString 全等矩阵与解析往返（4 常量 + 自定义）；equals/hashCode 语义；序列化三重保留；与 BigDecimal 联动（DECIMAL32/UNLIMITED/MC(4,DOWN) round 样例）。
+
+### 2. 使用方式
+新增 `checkMsg/testExactMessages/testToStringParseMatrix/testEqualsHashSemantics/testSerializationExtra` 并在 main 追加调用（只追加不删除）。
+
+### 3. 参考来源
+两侧探针实测；Oracle javadoc；JDK 源码 MathContext.java。
+
+### 4. 测试用例设计 + 易错规范细节
+- 断言数 59 → 119。易错点：①DECIMAL32.hashCode() 数值与 JDK-8 不同——不锁数值只锁一致性；②消息 "Digits < 0" 两侧一致可全等断言；③MC(0,UNNECESSARY) 合法。
