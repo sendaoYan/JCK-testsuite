@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.Sequencer conformance: interface hierarchy and methods.
  * @run main SequencerTest
  */

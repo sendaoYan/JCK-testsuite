@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.MidiSystem conformance: behavioral.
  * @run main MidiSystemTest
  */

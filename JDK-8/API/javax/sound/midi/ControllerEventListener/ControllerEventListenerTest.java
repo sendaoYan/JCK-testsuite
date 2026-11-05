@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.ControllerEventListener conformance: interface hierarchy and methods.
  * @run main ControllerEventListenerTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.sampled.DataLine conformance: interface hierarchy and methods.
  * @run main DataLineTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.Instrument conformance: white-box structure + black-box behavior.
  * @run main InstrumentTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.MidiDevice conformance: interface hierarchy and methods.
  * @run main MidiDeviceTest
  */

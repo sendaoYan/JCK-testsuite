@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.sampled.FloatControl conformance: abstract hierarchy and methods.
  * @run main FloatControlTest
  */

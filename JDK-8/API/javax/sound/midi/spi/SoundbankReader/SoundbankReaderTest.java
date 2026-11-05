@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.spi.SoundbankReader conformance: abstract hierarchy and methods.
  * @run main SoundbankReaderTest
  */

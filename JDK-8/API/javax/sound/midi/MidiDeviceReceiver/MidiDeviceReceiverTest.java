@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.MidiDeviceReceiver conformance: interface hierarchy and methods.
  * @run main MidiDeviceReceiverTest
  */

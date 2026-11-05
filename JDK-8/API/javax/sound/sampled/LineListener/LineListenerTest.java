@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.sampled.LineListener conformance: interface hierarchy and methods.
  * @run main LineListenerTest
  */

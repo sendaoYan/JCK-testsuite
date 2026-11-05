@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary javax.sound.sampled.DataLine conformance: white-box structure + black-box behavior.
  * @key sound
+ * @summary javax.sound.sampled.DataLine conformance: white-box structure + black-box behavior.
  * @run main DataLineTest
  */
 

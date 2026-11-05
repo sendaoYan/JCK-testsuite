@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.Soundbank conformance: interface hierarchy and methods.
  * @run main SoundbankTest
  */

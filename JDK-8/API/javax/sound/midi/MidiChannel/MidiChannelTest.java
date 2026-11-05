@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.MidiChannel conformance: interface hierarchy and methods.
  * @run main MidiChannelTest
  */

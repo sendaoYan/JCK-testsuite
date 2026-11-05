@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary javax.sound.SoundClip conformance: white-box structure + black-box behavior.
  * @key sound
+ * @summary javax.sound.SoundClip conformance: white-box structure + black-box behavior.
  * @run main SoundClipTest
  */
 

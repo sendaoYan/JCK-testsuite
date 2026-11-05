@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary javax.sound.midi.MidiDeviceTransmitter conformance: white-box structure + black-box behavior.
  * @key sound
+ * @summary javax.sound.midi.MidiDeviceTransmitter conformance: white-box structure + black-box behavior.
  * @run main MidiDeviceTransmitterTest
  */
 

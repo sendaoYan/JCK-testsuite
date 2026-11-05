@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.sampled.Clip conformance: interface hierarchy and methods.
  * @run main ClipTest
  */

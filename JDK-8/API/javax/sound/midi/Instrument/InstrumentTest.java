@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.Instrument conformance: abstract hierarchy and methods.
  * @run main InstrumentTest
  */

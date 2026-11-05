@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.SoundbankResource conformance: abstract hierarchy and methods.
  * @run main SoundbankResourceTest
  */

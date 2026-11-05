@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.sampled.Control conformance: white-box structure + black-box behavior.
  * @run main ControlTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.MetaEventListener conformance: white-box structure + black-box behavior.
  * @run main MetaEventListenerTest
  */

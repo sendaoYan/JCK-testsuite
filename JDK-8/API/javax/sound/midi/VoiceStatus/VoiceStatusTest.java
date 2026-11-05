@@ -1,5 +1,6 @@
 /*
  * @test
+ * @key sound
  * @summary javax.sound.midi.VoiceStatus conformance: behavioral.
  * @run main VoiceStatusTest
  */
