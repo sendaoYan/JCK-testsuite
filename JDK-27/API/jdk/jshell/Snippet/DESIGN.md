@@ -11,3 +11,8 @@
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。白盒 关键方法；黑盒 id/kind/subKind/source。
+
+## 5. 契约深化（2026-11-05）
+- 类层级白盒：PersistentSnippet/DeclarationSnippet/Var/Method/TypeDecl/Import/Statement/Expression/Erroneous 的 extends 关系逐一断言。
+- id 稳定且互异；source() 逐字符 round-trip（含空格保持）；drop 后 id/kind/source 仍可查。
+- subKind().kind() == kind() 对 15 种源码形态全成立；六种 Kind+ERRONEOUS 全部经 eval 可达。

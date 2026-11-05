@@ -11,3 +11,7 @@ js.eval("int = ;") 产生 ErroneousSnippet。
 
 ## 4. 测试用例设计 + 自动化实现
 白盒（结构断言）+ 黑盒（组合操作）。白盒 关键方法；黑盒 kind/probableKind/source。
+
+## 5. 契约深化（2026-11-05）
+- probableKind 矩阵：坏 var→VAR、坏 class→TYPE_DECL、坏方法→METHOD、坏 import→IMPORT、坏语句→STATEMENT、垃圾("###")→EXPRESSION。
+- 全部 REJECTED+有 diag+id/source 可查；不进任何声明流（variables()/methods() 无注册）。
