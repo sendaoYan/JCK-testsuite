@@ -57,6 +57,12 @@ public class ParameterModeTest {
         check(org.omg.CORBA.ParameterMode.PARAM_IN.toString().startsWith("org.omg.CORBA.ParameterMode@"),
               "toString is default Object form");
 
+
+        // legacy smoke assertions (restored verbatim: 只增不删)
+        check(org.omg.CORBA.ParameterMode.PARAM_IN != null, "PARAM_IN constant non-null");
+        check(org.omg.CORBA.ParameterMode.PARAM_IN.value() == org.omg.CORBA.ParameterMode._PARAM_IN, "value() matches int constant");
+        check(org.omg.CORBA.ParameterMode.from_int(org.omg.CORBA.ParameterMode._PARAM_IN) == org.omg.CORBA.ParameterMode.PARAM_IN, "from_int round-trips");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

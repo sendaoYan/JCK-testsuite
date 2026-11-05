@@ -70,6 +70,12 @@ public class CompletionStatusTest {
         org.omg.CORBA.MARSHAL m = new org.omg.CORBA.MARSHAL("x", 5, org.omg.CORBA.CompletionStatus.COMPLETED_YES);
         check(m.completed == org.omg.CORBA.CompletionStatus.COMPLETED_YES, "usable in SystemException.completed");
 
+
+        // legacy smoke assertions (restored verbatim: 只增不删)
+        check(org.omg.CORBA.CompletionStatus.COMPLETED_YES != null, "COMPLETED_YES constant non-null");
+        check(org.omg.CORBA.CompletionStatus.COMPLETED_YES.value() == org.omg.CORBA.CompletionStatus._COMPLETED_YES, "value() matches int constant");
+        check(org.omg.CORBA.CompletionStatus.from_int(org.omg.CORBA.CompletionStatus._COMPLETED_YES) == org.omg.CORBA.CompletionStatus.COMPLETED_YES, "from_int round-trips");
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
