@@ -1,0 +1,15 @@
+# org.omg.PortableInterceptor.Current 契约设计
+
+## API 功能
+PI conformance 接口（方法在对应 *Operations 接口）。
+
+## 参考来源
+- OMG PI 规范；jdk8u372-b07 反射实测。
+
+## 测试用例设计
+- 声明 0 方法；父接口列表精确（Operations + CORBA.Object/Interceptor/RequestInfo + IDLEntity 按实际）。
+- 传递继承断言（如 IS-A Interceptor / RequestInfoOperations）。
+
+## 易错规范细节
+PICurrent：get_slot/set_slot；三父接口含 org.omg.CORBA.Current（与 CORBA 包 Current 区分）。
+org.omg.CORBA.Current 自身继承的是 org.omg.CORBA.CurrentOperations（并非 portable 包的 CurrentOperations——后者不存在）。
