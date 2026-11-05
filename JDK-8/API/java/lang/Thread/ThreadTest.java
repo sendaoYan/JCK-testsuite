@@ -174,7 +174,12 @@ public class ThreadTest {
         // Precise: a thread parked in CountDownLatch.await() is WAITING.
         check(awaitState(t, Thread.State.WAITING) == Thread.State.WAITING,
               "thread blocked in latch.await() is WAITING");
-        check(t.getState() == Thread.State.WAITING, "WAITING stable while still parked");
+        // While still parked the thread must not leave the {WAITING,RUNNABLE}
+        // family: a spurious park wakeup may transiently show RUNNABLE before the
+        // worker re-parks, so a single instant read must accept both.
+        Thread.State parkedState = t.getState();
+        check(parkedState == Thread.State.WAITING || parkedState == Thread.State.RUNNABLE,
+              "parked thread stays WAITING (spurious wakeup may transiently show RUNNABLE)");
         release.countDown();
         t.join(10_000);
         check(!t.isAlive(), "worker dead after join");
@@ -549,9 +554,11 @@ public class ThreadTest {
             } catch (InterruptedException e) {
                 gotIE[0] = true;
                 flagClearedInCatch[0] = !Thread.currentThread().isInterrupted();
-                caught.countDown();
                 Thread.currentThread().interrupt(); // re-set the flag
                 reinterrupted[0] = Thread.currentThread().isInterrupted();
+                // Signal only AFTER recording the re-set flag, so the creator's
+                // caught.await() return happens-after this write.
+                caught.countDown();
             }
         }, "ie-worker");
         t.setDaemon(true);
@@ -588,17 +595,25 @@ public class ThreadTest {
 
     static void testInterruptRunningWorker() throws Exception {
         final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch observed = new CountDownLatch(1);
+        final boolean[] sawFlag = {false};
         Thread t = new Thread(() -> {
             entered.countDown();
             while (!Thread.currentThread().isInterrupted()) {
                 Thread.yield();
             }
+            // Record the flag inside the worker before it terminates, so the
+            // creator reads a value captured while the worker was alive (the
+            // interrupt flag's post-exit observability differs across JDKs).
+            sawFlag[0] = Thread.currentThread().isInterrupted();
+            observed.countDown();
         }, "spin-worker");
         t.setDaemon(true);
         t.start();
         check(entered.await(10, TimeUnit.SECONDS), "spin worker started");
         t.interrupt(); // no lock is held by the caller: must not throw
-        check(t.isInterrupted(), "running worker's flag set");
+        check(observed.await(10, TimeUnit.SECONDS), "worker observed the interrupt flag");
+        check(sawFlag[0], "running worker's flag set");
         t.join(10_000);
         check(!t.isAlive(), "spin worker exited on interrupt");
     }
