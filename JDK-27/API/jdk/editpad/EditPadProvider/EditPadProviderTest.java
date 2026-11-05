@@ -7,7 +7,26 @@
 public class EditPadProviderTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testDeepen() throws Exception {
+        Class<?> c = Class.forName("jdk.editpad.EditPadProvider");
+        java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor();
+        check(java.lang.reflect.Modifier.isPublic(ctor.getModifiers()), "public no-arg constructor");
+        Object provider = ctor.newInstance();
+        check(((Integer) c.getMethod("rank").invoke(provider)) == 5, "rank 5 above default editors");
+        java.lang.reflect.Method edit = c.getMethod("edit", String.class, String.class,
+                java.util.function.Consumer.class, java.util.function.Consumer.class);
+        check(edit.getReturnType() == void.class, "edit returns void");
+        check(java.lang.reflect.Modifier.isPublic(edit.getModifiers()), "edit public");
+        // BuildInEditorProvider contract: edit(windowLabel, initialText, saveHandler, errorHandler), rank()
+        Class<?> spi = Class.forName("jdk.internal.editor.spi.BuildInEditorProvider");
+        check(spi.isAssignableFrom(c), "assignable to BuildInEditorProvider");
+        check(spi.getMethod("rank").getReturnType() == int.class, "spi rank returns int");
+    }
+
     public static void main(String[] args) throws Exception {
+        testDeepen();
+
         Class<?> c = Class.forName("jdk.editpad.EditPadProvider", false, EditPadProviderTest.class.getClassLoader());
         check(c != null, "loads");
         check(c.getName().equals("jdk.editpad.EditPadProvider"), "name");

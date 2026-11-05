@@ -29,7 +29,32 @@ public class DispatcherWrapperTest {
 
     }
 
+
+    static void testDeepen() throws Exception {
+        Class<?> c = Class.forName("jdk.swing.interop.DispatcherWrapper");
+        java.util.Set<String> abs = new TreeSet<>();
+        for (Method m : c.getDeclaredMethods()) if (Modifier.isAbstract(m.getModifiers())) abs.add(m.getName());
+        check(abs.equals(new TreeSet<>(java.util.Arrays.asList("createSecondaryLoop", "isDispatchThread", "scheduleDispatch"))),
+                "three abstract methods exact");
+        check(Modifier.isPublic(c.getDeclaredConstructors()[0].getModifiers()), "public constructor for subclassing");
+        final boolean[] dispatched = new boolean[1];
+        DispatcherWrapper impl = new DispatcherWrapper() {
+            public boolean isDispatchThread() { return true; }
+            public void scheduleDispatch(Runnable r) { r.run(); dispatched[0] = true; }
+            public java.awt.SecondaryLoop createSecondaryLoop() { return null; }
+        };
+        check(impl.isDispatchThread(), "subclass overrides honored");
+        impl.scheduleDispatch(() -> { });
+        check(dispatched[0], "scheduleDispatch runs runnable via subclass");
+        check(java.lang.reflect.Modifier.isStatic(c.getDeclaredMethod("setFwDispatcher",
+                java.awt.EventQueue.class, DispatcherWrapper.class).getModifiers()), "setFwDispatcher static");
+        DispatcherWrapper.setFwDispatcher(new java.awt.EventQueue(), impl);
+        check(true, "setFwDispatcher installs on a fresh EventQueue headless-safely");
+    }
+
     public static void main(String[] args) throws Exception {
+        testDeepen();
+
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

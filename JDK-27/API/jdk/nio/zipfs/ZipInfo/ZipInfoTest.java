@@ -7,7 +7,41 @@
 public class ZipInfoTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+
+    static void testDeepen() throws Exception {
+        java.io.File zip = java.io.File.createTempFile("zipinfodeepen", ".zip");
+        zip.deleteOnExit();
+        try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(new java.io.FileOutputStream(zip))) {
+            zos.putNextEntry(new java.util.zip.ZipEntry("deep/entry.txt"));
+            zos.write("info body".getBytes("UTF-8"));
+            zos.closeEntry();
+        }
+        Class<?> c = Class.forName("jdk.nio.zipfs.ZipInfo");
+        java.io.PrintStream old = System.out;
+        java.io.ByteArrayOutputStream cap = new java.io.ByteArrayOutputStream();
+        System.setOut(new java.io.PrintStream(cap, true, "UTF-8"));
+        try {
+            c.getDeclaredMethod("main", String[].class).invoke(null, (Object) new String[] {zip.getAbsolutePath()});
+        } finally {
+            System.setOut(old);
+        }
+        String out = cap.toString("UTF-8");
+        check(out.contains("deep/entry.txt"), "main prints entry name");
+        check(out.length() > 100, "main prints substantial info");
+        cap.reset();
+        System.setOut(new java.io.PrintStream(cap, true, "UTF-8"));
+        try {
+            c.getDeclaredMethod("main", String[].class).invoke(null, (Object) new String[] {});
+        } finally {
+            System.setOut(old);
+        }
+        check(cap.toString("UTF-8").startsWith("Usage: java ZipInfo"), "no args prints usage");
+        check(java.lang.reflect.Modifier.isStatic(c.getDeclaredMethod("main", String[].class).getModifiers()), "main static");
+    }
+
     public static void main(String[] args) throws Exception {
+        testDeepen();
+
         Class<?> c = Class.forName("jdk.nio.zipfs.ZipInfo", false, ZipInfoTest.class.getClassLoader());
         check(c != null, "loads");
         check(c.getName().equals("jdk.nio.zipfs.ZipInfo"), "name");
