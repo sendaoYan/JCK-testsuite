@@ -43,6 +43,54 @@ public class BadAttributeValueExpExceptionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testBAVEEToString();
+        testBAVEEHierarchyAndRealTrigger();
+        testBAVEESerialization();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- deepened (batch e): precise toString forms, real trigger via
+    //      context-less AttributeValueExp.apply, serialization, serialVersionUID ----
+
+    static void testBAVEEToString() {
+        check("BadAttributeValueException: msg".equals(new BadAttributeValueExpException("msg").toString()),
+                "toString uses short name without Exp plus the value");
+        check("BadAttributeValueException: null".equals(new BadAttributeValueExpException(null).toString()),
+                "null value toString");
+        check("BadAttributeValueExpException".length() > 0, "class name sanity");
+        check("BadAttributeValueException: 42".equals(new BadAttributeValueExpException(Integer.valueOf(42)).toString()),
+                "numeric value converted to its string form");
+    }
+
+    static void testBAVEEHierarchyAndRealTrigger() throws Exception {
+        BadAttributeValueExpException x = new BadAttributeValueExpException("m");
+        check(x instanceof Exception, "extends Exception");
+        check(x.getMessage() == null, "value is not the detail message");
+        check(x.getCause() == null, "no cause");
+        check(x instanceof java.io.Serializable, "Serializable");
+        try {
+            new javax.management.AttributeValueExp("Nope").apply(new javax.management.ObjectName("d:k=v"));
+            check(false, "expected BadAttributeValueExpException from context-less apply");
+        } catch (BadAttributeValueExpException e) {
+            passed++;
+        }
+    }
+
+    static void testBAVEESerialization() throws Exception {
+        long uid = java.io.ObjectStreamClass.lookup(BadAttributeValueExpException.class).getSerialVersionUID();
+        check(uid == -3105272988410493376L, "serialVersionUID locked: " + uid);
+        BadAttributeValueExpException x = new BadAttributeValueExpException("rt");
+        BadAttributeValueExpException back = (BadAttributeValueExpException) roundTripB(x);
+        check("BadAttributeValueException: rt".equals(back.toString()), "round-trip keeps value-derived toString");
+        check(back.getMessage() == null, "round-trip message still null");
+    }
+
+    static Object roundTripB(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos);
+        oos.writeObject(o);
+        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bos.toByteArray()));
+        return ois.readObject();
     }
 }

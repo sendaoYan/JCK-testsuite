@@ -120,6 +120,132 @@ public class QueryTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testQueryFiltering();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String msg) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(msg + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
+    // ---- deepened (batch e): real query filtering against registered MBeans:
+    //      comparison boundaries, boolean logic, string matching, arithmetic,
+    //      isInstanceOf/classattr, class-qualified attr, silent negatives ----
+
+    public static interface QCounterMBean {
+        int getCount(); void setCount(int v); void reset(); int add(int x); boolean isReady();
+    }
+
+    public static class QCounter implements QCounterMBean {
+        private int count;
+        public int getCount() { return count; }
+        public void setCount(int v) { count = v; }
+        public void reset() { count = 0; }
+        public int add(int x) { return count + x; }
+        public boolean isReady() { return true; }
+    }
+
+    public static interface QNamedMBean { String getName(); void setName(String v); }
+
+    public static class QNamed implements QNamedMBean {
+        private String name = "alpha";
+        public String getName() { return name; }
+        public void setName(String v) { name = v; }
+    }
+
+    static Set<ObjectName> qnames(ObjectName... ns) {
+        return new HashSet<ObjectName>(Arrays.asList(ns));
+    }
+
+    static void testQueryFiltering() throws Exception {
+        MBeanServer server = MBeanServerFactory.newMBeanServer();
+        QCounter a5 = new QCounter(); a5.setCount(5);
+        QCounter b6 = new QCounter(); b6.setCount(6);
+        ObjectName na = new ObjectName("jck.q", "name", "a");
+        ObjectName nb = new ObjectName("jck.q", "name", "b");
+        ObjectName nn = new ObjectName("jck.q", "name", "n");
+        server.registerMBean(a5, na);
+        server.registerMBean(b6, nb);
+        server.registerMBean(new QNamed(), nn);
+        Set<ObjectName> ea = qnames(na);
+        Set<ObjectName> eb = qnames(nb);
+        Set<ObjectName> eab = qnames(na, nb);
+        Set<ObjectName> en = qnames(nn);
+        Set<ObjectName> empty = new HashSet<ObjectName>();
+
+        check(server.queryNames(null, Query.eq(Query.attr("Count"), Query.value(5))).equals(ea),
+                "q eq Count==5 hits only a");
+        check(server.queryNames(null, Query.eq(Query.attr("Count"), Query.value(6))).equals(eb),
+                "q eq Count==6 hits only b");
+        check(server.queryNames(null, Query.gt(Query.attr("Count"), Query.value(5))).equals(eb), "q gt 5 hits b");
+        check(server.queryNames(null, Query.geq(Query.attr("Count"), Query.value(5))).equals(eab), "q ge 5 hits a+b");
+        check(server.queryNames(null, Query.lt(Query.attr("Count"), Query.value(5))).equals(empty), "q lt 5 hits none");
+        check(server.queryNames(null, Query.leq(Query.attr("Count"), Query.value(5))).equals(ea), "q le 5 hits a");
+        check(server.queryNames(null, Query.eq(Query.attr("count"), Query.value(5))).equals(empty),
+                "q attribute names are case sensitive");
+        check(server.queryNames(null, Query.and(
+                Query.gt(Query.attr("Count"), Query.value(4)),
+                Query.lt(Query.attr("Count"), Query.value(6)))).equals(ea), "q and combination");
+        check(server.queryNames(null, Query.or(
+                Query.eq(Query.attr("Count"), Query.value(5)),
+                Query.eq(Query.attr("Count"), Query.value(6)))).equals(eab), "q or combination");
+        check(server.queryNames(null, Query.not(Query.eq(Query.attr("Count"), Query.value(5)))).equals(eb),
+                "q not: eq-false bean kept, others silently excluded");
+        check(server.queryNames(null, Query.between(Query.attr("Count"), Query.value(5), Query.value(6))).equals(eab),
+                "q between inclusive on both ends");
+        check(server.queryNames(null, Query.in(Query.attr("Count"),
+                new ValueExp[]{Query.value(5), Query.value(7)})).equals(ea), "q in membership");
+        check(server.queryNames(null, Query.eq(Query.attr(QCounter.class.getName(), "Count"), Query.value(5))).equals(ea),
+                "q class-qualified attr form");
+        check(server.queryNames(null, Query.eq(Query.attr("com.jck.NoSuchClass", "Count"), Query.value(5))).equals(empty),
+                "q class-qualified attr with wrong class hits nothing");
+        check(server.queryNames(null, Query.isInstanceOf(Query.value(QCounter.class.getName()))).equals(eab),
+                "q isInstanceOf Counter");
+        check(server.queryNames(null, Query.isInstanceOf(Query.value("java.lang.String"))).equals(empty),
+                "q isInstanceOf miss");
+        check(server.queryNames(null, Query.eq(Query.classattr(), Query.value(QCounter.class.getName()))).equals(eab),
+                "q classattr eq class name");
+        check(server.queryNames(null, Query.eq(Query.classattr(), Query.value("java.lang.String"))).equals(empty),
+                "q classattr miss");
+        check(server.queryNames(null, Query.initialSubString(Query.attr("Name"), Query.value("alp"))).equals(en),
+                "q initialSubString");
+        check(server.queryNames(null, Query.anySubString(Query.attr("Name"), Query.value("lph"))).equals(en),
+                "q anySubString");
+        check(server.queryNames(null, Query.finalSubString(Query.attr("Name"), Query.value("pha"))).equals(en),
+                "q finalSubString");
+        check(server.queryNames(null, Query.initialSubString(Query.attr("Name"), Query.value("zz"))).equals(empty),
+                "q initialSubString miss");
+        check(server.queryNames(null, Query.match(Query.attr("Name"), Query.value("al*h?"))).equals(en),
+                "q match wildcards * and ?");
+        check(server.queryNames(null, Query.eq(Query.plus(Query.attr("Count"), Query.value(1)), Query.value(6))).equals(ea),
+                "q plus arithmetic in filter");
+        check(server.queryNames(null, Query.eq(Query.minus(Query.attr("Count"), Query.value(1)), Query.value(4))).equals(ea),
+                "q minus arithmetic in filter");
+        check(server.queryNames(null, Query.eq(Query.times(Query.attr("Count"), Query.value(2)), Query.value(10))).equals(ea),
+                "q times arithmetic in filter");
+        check(server.queryNames(null, Query.eq(Query.div(Query.attr("Count"), Query.value(2)), Query.value(3))).equals(eb),
+                "q div arithmetic in filter");
+        check(server.queryNames(new ObjectName("jck.q:*"), Query.eq(Query.attr("Count"), Query.value(6))).equals(eb),
+                "q name-pattern scoped filtering");
+        Set<ObjectInstance> mb = server.queryMBeans(null, Query.eq(Query.attr("Count"), Query.value(5)));
+        check(mb.size() == 1, "q queryMBeans size");
+        ObjectInstance oie = mb.iterator().next();
+        check(oie.getObjectName().equals(na) && oie.getClassName().equals(QCounter.class.getName()),
+                "q queryMBeans returns ObjectInstance with class");
+        check(server.queryNames(null, Query.eq(Query.attr("Count"), Query.value("5"))).equals(empty),
+                "q numeric attribute vs string constant: no match, no exception");
+        check(server.queryNames(null, Query.eq(Query.attr("Missing"), Query.value(5))).equals(empty),
+                "q unknown attribute: no match, no exception");
     }
 }
