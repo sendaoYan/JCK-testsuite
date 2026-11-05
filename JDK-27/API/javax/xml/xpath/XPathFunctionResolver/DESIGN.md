@@ -11,3 +11,6 @@ JDK 源码自用（javax.xml.xpath.XPathFunctionResolver）与 JDK `test/jdk` �
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XPathFunctionResolverTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 5. 深化条目（本批新增，XPathFunctionResolverTest 7→12 断言）
+- 解析闭环：QName {urn:f}myfn + arity 1/3（arity 敏感）；内置 count() 不咨询 resolver；返回 null → XPathExpressionException。

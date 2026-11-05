@@ -77,6 +77,41 @@ public class FeatureTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEnumSurface();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: deepening (enum surface + per-feature defaults) ----
+    static void testEnumSurface() {
+        javax.xml.catalog.CatalogFeatures.Feature[] vals = javax.xml.catalog.CatalogFeatures.Feature.values();
+        check(vals.length == 4, "exactly four features");
+        // canonical order verified against javap: FILES, PREFER, DEFER, RESOLVE
+        check(vals[0] == javax.xml.catalog.CatalogFeatures.Feature.FILES
+              && vals[1] == javax.xml.catalog.CatalogFeatures.Feature.PREFER
+              && vals[2] == javax.xml.catalog.CatalogFeatures.Feature.DEFER
+              && vals[3] == javax.xml.catalog.CatalogFeatures.Feature.RESOLVE,
+              "declaration order FILES, PREFER, DEFER, RESOLVE");
+        // system property names (authoritative, javap-verified)
+        check("javax.xml.catalog.files".equals(vals[0].getPropertyName()), "FILES system property name");
+        check("javax.xml.catalog.prefer".equals(vals[1].getPropertyName()), "PREFER system property name");
+        check("javax.xml.catalog.defer".equals(vals[2].getPropertyName()), "DEFER system property name");
+        check("javax.xml.catalog.resolve".equals(vals[3].getPropertyName()), "RESOLVE system property name");
+        // default values: FILES unset (null); others fixed strings
+        check(vals[0].defaultValue() == null, "FILES defaultValue null");
+        check("public".equals(vals[1].defaultValue()), "PREFER defaultValue 'public'");
+        check("true".equals(vals[2].defaultValue()), "DEFER defaultValue 'true'");
+        check("strict".equals(vals[3].defaultValue()), "RESOLVE defaultValue 'strict'");
+        // valueOf round-trips every constant
+        for (javax.xml.catalog.CatalogFeatures.Feature f : vals)
+            check(javax.xml.catalog.CatalogFeatures.Feature.valueOf(f.name()) == f,
+                  "valueOf('" + f.name() + "') round-trip");
+        // unknown name -> IAE
+        boolean iae = false;
+        try { javax.xml.catalog.CatalogFeatures.Feature.valueOf("bogus"); }
+        catch (IllegalArgumentException e) { iae = true; }
+        check(iae, "valueOf('bogus') -> IllegalArgumentException");
+        // enum toString is the constant name
+        for (javax.xml.catalog.CatalogFeatures.Feature f : vals)
+            check(f.name().equals(f.toString()), f + " toString == name");
     }
 }

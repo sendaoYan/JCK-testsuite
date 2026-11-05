@@ -11,3 +11,8 @@ JDK 源码自用（javax.xml.stream.events.NotationDeclaration）与 JDK `test/j
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`NotationDeclarationTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 5. 契约深化条目（2026-11，testDeep()）
+- PUBLIC 形态：publicId 精确/systemId null；SYSTEM 形态：systemId 精确/publicId null；码 14。
+- 编码 `<!NOTATION gif PUBLIC "-//gif//gif">` 全等（输出双引号）。
+- 记法只经 DTD.getNotations() 可达（无独立码 14 事件）；有实体无记法文档 → notations=null/entities 非空。

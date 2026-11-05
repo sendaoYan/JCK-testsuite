@@ -60,9 +60,38 @@ public class ParserConfigurationExceptionTest {
 
     }
 
+    // ---- Part 3: contract deepening (appended) ----
+    static void testDeep() throws Exception {
+        // exactly () and (String) constructors; no cause-carrying constructor exists
+        check(javax.xml.parsers.ParserConfigurationException.class.getConstructors().length == 2,
+              "exactly two public constructors");
+        javax.xml.parsers.ParserConfigurationException eNull =
+                new javax.xml.parsers.ParserConfigurationException(null);
+        check(eNull.getMessage() == null, "null message allowed");
+        check(java.io.Serializable.class.isAssignableFrom(
+                javax.xml.parsers.ParserConfigurationException.class), "serializable via Exception");
+        // initCause still works through Throwable machinery (no dedicated ctor)
+        javax.xml.parsers.ParserConfigurationException e2 =
+                new javax.xml.parsers.ParserConfigurationException("m");
+        java.lang.IllegalStateException c = new java.lang.IllegalStateException("why");
+        e2.initCause(c);
+        check(e2.getCause() == c && "m".equals(e2.getMessage()), "initCause works without ctor support");
+        // thrown by factory when a requested configuration cannot be provided
+        boolean sawPce = false;
+        try {
+            javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            dbf.setValidating(true);
+            check(dbf.newDocumentBuilder() != null, "standard validating config supported");
+        } catch (javax.xml.parsers.ParserConfigurationException pce) {
+            sawPce = true;
+        }
+        check(!sawPce, "validating configuration supported");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -53,6 +53,81 @@ public class XPathFactoryTest {
         XPath xp2 = f.newXPath();
         check(xp2 != null && xp2 != xp, "newXPath returns fresh XPath");
 
+        testConstantsAndFeatures();
+        testVersionSurface();
+
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ===================== contract deepening (appended) =====================
+
+    static void testConstantsAndFeatures() throws Exception {
+        // constants (locked actual values)
+        check("javax.xml.xpath.XPathFactory".equals(XPathFactory.DEFAULT_PROPERTY_NAME),
+              "DEFAULT_PROPERTY_NAME exact value");
+        check("http://java.sun.com/jaxp/xpath/dom".equals(XPathFactory.DEFAULT_OBJECT_MODEL_URI),
+              "DEFAULT_OBJECT_MODEL_URI exact value");
+
+        // FEATURE_SECURE_PROCESSING round-trip
+        XPathFactory f = XPathFactory.newInstance();
+        String FSP = javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING;
+        f.setFeature(FSP, true);
+        check(f.getFeature(FSP), "setFeature(secure,true)/getFeature round-trip");
+        f.setFeature(FSP, false);
+        check(!f.getFeature(FSP), "setFeature(secure,false)/getFeature round-trip");
+        check(isFce(() -> f.setFeature("http://bogus/f", true)),
+              "setFeature(unknown) -> XPathFactoryConfigurationException");
+        check(isFce(() -> f.getFeature("http://bogus/f")),
+              "getFeature(unknown) -> XPathFactoryConfigurationException");
+        check(isNpe(() -> f.getFeature(null)), "getFeature(null) -> NPE");
+
+        // explicit default object model == implicit newInstance()
+        XPathFactory fA = XPathFactory.newInstance(XPathConstants.DOM_OBJECT_MODEL);
+        XPathFactory fB = XPathFactory.newInstance();
+        check(fA != null && fB != null
+              && fA.isObjectModelSupported(XPathConstants.DOM_OBJECT_MODEL)
+              && fB.isObjectModelSupported(XPathConstants.DOM_OBJECT_MODEL),
+              "newInstance(DOM) and newInstance() both support DOM object model");
+
+        // resolvers installed on the factory are inherited by every newXPath()
+        javax.xml.xpath.XPathVariableResolver vr = v -> Integer.valueOf(42);
+        f.setXPathVariableResolver(vr);
+        XPath xpv = f.newXPath();
+        check(xpv.getXPathVariableResolver() == vr, "factory variable resolver inherited");
+        javax.xml.xpath.XPathFunctionResolver fr = (qn, arity) -> null;
+        f.setXPathFunctionResolver(fr);
+        XPath xpf = f.newXPath();
+        check(xpf.getXPathFunctionResolver() == fr, "factory function resolver inherited");
+
+        // resolver-carrying factory produces a working closed loop
+        org.w3c.dom.Document d = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder().parse(new java.io.ByteArrayInputStream("<r/>".getBytes("UTF-8")));
+        Double res = (Double) xpv.evaluate("$x+1", d, XPathConstants.NUMBER);
+        check(res != null && res.doubleValue() == 43.0, "factory resolver closed loop: $x+1 == 43.0");
+
+        // newInstance(uri, className, loader)
+        XPathFactory fc = XPathFactory.newInstance(
+            XPathFactory.DEFAULT_OBJECT_MODEL_URI,
+            "com.sun.org.apache.xpath.internal.jaxp.XPathFactoryImpl",
+            Thread.currentThread().getContextClassLoader());
+        check(fc != null && fc.isObjectModelSupported(XPathConstants.DOM_OBJECT_MODEL),
+              "newInstance(uri, className, loader) works");
+    }
+
+    // ---- JDK-8 must NOT expose JDK-9+ factory surface ----
+    static void testVersionSurface() throws Exception {
+        check(!hasMethod(XPathFactory.class, "newDefaultInstance"),
+              "JDK-8: XPathFactory has no newDefaultInstance");
+        check(!hasMethod(XPathFactory.class, "setProperty"),
+              "JDK-8: XPathFactory has no setProperty");
+        check(!hasMethod(XPathFactory.class, "getProperty"),
+              "JDK-8: XPathFactory has no getProperty");
+    }
+
+    static boolean hasMethod(Class<?> c, String n) {
+        for (java.lang.reflect.Method m : c.getMethods()) {
+            if (m.getName().equals(n)) return true;
+        }
+        return false;
     }
 }

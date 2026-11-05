@@ -11,3 +11,9 @@ JDK 源码自用（javax.xml.transform.sax.SAXSource）与 JDK `test/jdk` 内 JA
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`SAXSourceTest.testBlackBox()`）覆盖：两种构造 + setters。
+
+## 5. 深化（本轮新增）
+- 构造矩阵 + FEATURE 精确值。
+- sourceToInputSource 三分支：SAXSource 同引用返回、StreamSource(reader) 转出 characterStream、systemId-only 仅带 systemId、其它 Source → null。
+- 真实闭环：显式 XMLReader + InputSource(Reader) 恒等转换精确。
+- JDK-27 版本面：isEmpty() 覆写（无 InputSource/XMLReader/systemId 时 true）。

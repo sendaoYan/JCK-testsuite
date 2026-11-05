@@ -11,3 +11,8 @@ JDK 源码自用（javax.xml.transform.TransformerException）与 JDK `test/jdk`
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`TransformerExceptionTest.testBlackBox()`）覆盖：三种构造 + locator/cause。
+
+## 5. 深化（本轮新增）
+- 全 6 构造器链 round-trip；initCause 单次、getException==getCause。
+- 位置串精确：`"; SystemID: http://base/x.xml; Line#: 3; Column#: 5"`；无 locator 时 getLocationAsString()==null、getMessageAndLocation()==裸消息。
+- 真实触发：未闭合标签编译失败消息含 "unclosed"（与 JDK-8 同词）。

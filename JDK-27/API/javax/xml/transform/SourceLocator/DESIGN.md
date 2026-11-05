@@ -11,3 +11,7 @@ JDK 源码自用（javax.xml.transform.SourceLocator）与 JDK `test/jdk` 内 JA
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`SourceLocatorTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 5. 深化（本轮新增）
+- 方法集恰 4 个（反射精确比对）。
+- TransformerException(String, locator) 携带：getLocator() 同引用、位置串 `"; SystemID: …; Line#: …; Column#: …"` 逐字符锁定。

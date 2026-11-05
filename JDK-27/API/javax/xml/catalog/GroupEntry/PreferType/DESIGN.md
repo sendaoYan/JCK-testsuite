@@ -11,3 +11,8 @@ JDK 源码自用（javax.xml.catalog.GroupEntry.PreferType）与 JDK `test/jdk` 
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`PreferTypeTest.testBlackBox()`）覆盖：valueOf、prefer 判定、values().length。
+
+## 5. 深化（本批新增）
+- 枚举面：**恰 2 常量、声明序 PUBLIC(0)/SYSTEM(1)**；toString==name；valueOf 往返 + "bogus" → IAE。
+- prefer(String) 矩阵（反射调用）：PUBLIC.prefer("public")==true / prefer("system")==false；SYSTEM 反之；**未知值 ("bogus") → false 不抛**；大小写敏感（"PUBLIC" → false）。
+- GroupEntry 本体 package-private（javap/反射断言）；PreferType 是其公开嵌套枚举。

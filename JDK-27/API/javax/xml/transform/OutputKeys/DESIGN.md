@@ -11,3 +11,6 @@ JDK 源码自用（javax.xml.transform.OutputKeys）与 JDK `test/jdk` 内 JAXP/
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`OutputKeysTest.testBlackBox()`）覆盖：10 个常用键。
+
+## 5. 深化（本轮新增）
+- 10 常量精确值 + 两两互异非空；类结构（public 非 final、私有构造器不可实例化）。

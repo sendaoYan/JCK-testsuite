@@ -11,3 +11,7 @@ JDK 源码自用（javax.xml.xpath.XPathFactoryConfigurationException）与 JDK 
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XPathFactoryConfigurationExceptionTest.testBlackBox()`）覆盖：构造 + 继承链。
+
+## 5. 深化条目（本批新增，XPathFactoryConfigurationExceptionTest 6→12 断言）
+- 构造链 (String)/(Throwable)；恰好 2 构造器；is-a XPathException。
+- 真实触发 newInstance(bogus 模型) 消息含模型 URI。

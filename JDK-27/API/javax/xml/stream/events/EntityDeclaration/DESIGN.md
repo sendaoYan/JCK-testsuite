@@ -11,3 +11,9 @@ JDK 源码自用（javax.xml.stream.events.EntityDeclaration）与 JDK `test/jdk
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`EntityDeclarationTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 5. 契约深化条目（2026-11，testDeep()）
+- 三形态矩阵（经 DTD.getEntities()）：内部（replacement="Hello"、id 全 null）；外部 PUBLIC+NDATA（pub/sys/not 精确）；
+  外部 SYSTEM（仅 systemId）。码 15、baseURI null。
+- 编码 `<!ENTITY e1 "Hello">` 全等；工厂 createDTD getEntities()=null。
+- getEntities() 顺序为 map 装载序（实测 b,a 回读 a,b）——断言集合不断言序。

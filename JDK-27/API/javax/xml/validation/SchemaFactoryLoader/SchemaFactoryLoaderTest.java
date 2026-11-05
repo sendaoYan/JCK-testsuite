@@ -63,6 +63,22 @@ public class SchemaFactoryLoaderTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testPlatformDiscovery();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ===================== contract deepening (appended) =====================
+
+    // Platform discovery: the JDK ships no discoverable SchemaFactoryLoader;
+    // SchemaFactory.newInstance() performs its own lookup instead.
+    static void testPlatformDiscovery() throws Exception {
+        check(Class.forName("javax.xml.validation.SchemaFactoryLoader").getConstructors().length == 0,
+              "no public constructors (protected ctor on abstract class)");
+        int found = 0;
+        for (javax.xml.validation.SchemaFactoryLoader l
+                : java.util.ServiceLoader.load(javax.xml.validation.SchemaFactoryLoader.class)) {
+            found++;
+        }
+        check(found == 0, "no platform SchemaFactoryLoader providers discovered (recorded actual)");
     }
 }

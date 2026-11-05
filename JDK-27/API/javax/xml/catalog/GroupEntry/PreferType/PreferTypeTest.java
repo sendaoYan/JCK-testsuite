@@ -71,6 +71,44 @@ public class PreferTypeTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEnumSurface();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: deepening (enum surface + prefer() matrix) ----
+    static void testEnumSurface() throws Exception {
+        Class<?> c = Class.forName("javax.xml.catalog.GroupEntry$PreferType");
+        Object[] vals = c.getEnumConstants();
+        // canonical order verified against javap: PUBLIC, SYSTEM
+        check(vals.length == 2, "exactly two PreferType constants");
+        check(((Enum<?>) vals[0]).name().equals("PUBLIC") && ((Enum<?>) vals[1]).name().equals("SYSTEM"),
+              "declaration order PUBLIC, SYSTEM");
+        check(((Enum<?>) vals[0]).ordinal() == 0 && ((Enum<?>) vals[1]).ordinal() == 1,
+              "ordinals 0 and 1");
+        // toString is the constant name
+        for (Object v : vals) check(v.toString().equals(((Enum<?>) v).name()), v + " toString == name");
+        // valueOf round-trip
+        java.lang.reflect.Method valueOf = c.getMethod("valueOf", String.class);
+        for (Object v : vals)
+            check(((Enum<?>) valueOf.invoke(null, ((Enum<?>) v).name())).name().equals(((Enum<?>) v).name()),
+                  "valueOf('" + ((Enum<?>) v).name() + "') round-trip");
+        boolean iae = false;
+        try { valueOf.invoke(null, "bogus"); } catch (java.lang.reflect.InvocationTargetException e) {
+            iae = e.getCause() instanceof IllegalArgumentException;
+        }
+        check(iae, "valueOf('bogus') -> IllegalArgumentException");
+
+        // prefer(String) answers membership: own literal true, other literal false, unknown false
+        java.lang.reflect.Method prefer = c.getMethod("prefer", String.class);
+        Object pub = vals[0], sys = vals[1];
+        check((Boolean) prefer.invoke(pub, "public"), "PUBLIC.prefer('public') true");
+        check(!(Boolean) prefer.invoke(pub, "system"), "PUBLIC.prefer('system') false");
+        check((Boolean) prefer.invoke(sys, "system"), "SYSTEM.prefer('system') true");
+        check(!(Boolean) prefer.invoke(sys, "public"), "SYSTEM.prefer('public') false");
+        check(!(Boolean) prefer.invoke(pub, "bogus"), "PUBLIC.prefer('bogus') false (no exception)");
+        check(!(Boolean) prefer.invoke(pub, "PUBLIC"), "prefer() is case sensitive");
+        // GroupEntry itself is package-private
+        Class<?> group = Class.forName("javax.xml.catalog.GroupEntry");
+        check(!java.lang.reflect.Modifier.isPublic(group.getModifiers()), "GroupEntry is package-private");
     }
 }

@@ -11,3 +11,7 @@ JDK test/jdk/javax/xml/jaxp 用匿名 NamespaceContext 解析前缀。
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒：固定映射 getNamespaceURI 前缀/未知→NULL_NS_URI/xml→XML_NS_URI；getPrefix 命中/null；getPrefixes 命中/空；null 参数→IAE。
+
+## 5. 深化（本批新增）
+- 与 JDK-8 侧相同条目（多前缀自定义实现 + StAX 内部上下文矩阵）。
+- 双侧实测无差异（含 getPrefixes 精确集合与 null→IAE）。

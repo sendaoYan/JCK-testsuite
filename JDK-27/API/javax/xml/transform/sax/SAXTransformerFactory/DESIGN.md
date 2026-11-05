@@ -11,3 +11,10 @@ JDK 源码自用（javax.xml.transform.sax.SAXTransformerFactory）与 JDK `test
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`SAXTransformerFactoryTest.testBlackBox()`）覆盖：feature 查询 + handler 创建（实现支持时）。
+
+## 5. 深化（本轮新增）
+- FEATURE/FEATURE_XMLFILTER 常量精确值；工厂可向下转型。
+- handler 三形态闭环：handler(Templates) 喂事件→尾部精确；handler(Source)+getTransformer().setParameter 注入生效；identity handler 输出==输入。
+- TemplatesHandler 闭环：newTemplatesHandler() 喂样式表事件 → getTemplates().newTransformer() 输出精确。
+- XMLFilter 闭环：setContentHandler+parse → 转换后事件序列精确。
+- 易错：XMLFilter 的 setContentHandler 必须在 setParent 之前（TrAXFilter 接线时机）。

@@ -11,3 +11,7 @@ JDK 源码自用（javax.xml.transform.dom.DOMLocator）与 JDK `test/jdk` 内 J
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`DOMLocatorTest.testBlackBox()`）覆盖：匿名实现实例化、常量精确值、每个抽象方法固定返回值断言。
+
+## 5. 深化（本轮新增）
+- 方法集 = SourceLocator 4 方法 + getOriginatingNode（反射精确）。
+- 匿名实现携带 origin 节点同引用；作为 SourceLocator 塞进 TransformerException 后 getLocator() 往返一致。

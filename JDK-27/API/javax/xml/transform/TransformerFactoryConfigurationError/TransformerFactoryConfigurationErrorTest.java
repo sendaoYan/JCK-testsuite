@@ -68,6 +68,26 @@ public class TransformerFactoryConfigurationErrorTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealTrigger();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // deepening: real discovery failure (constructors already covered above)
+    static void testRealTrigger() {
+        String key = "javax.xml.transform.TransformerFactory";
+        String old = System.getProperty(key);
+        System.setProperty(key, "no.such.TransformerFactory");
+        try {
+            boolean hit = false;
+            try { javax.xml.transform.TransformerFactory.newInstance(); }
+            catch (javax.xml.transform.TransformerFactoryConfigurationError err) {
+                hit = err.getMessage() != null && err.getMessage().contains("no.such");
+            }
+            check(hit, "bogus factory system property -> TFCE naming the provider");
+        } finally {
+            if (old == null) System.clearProperty(key); else System.setProperty(key, old);
+        }
+        check(javax.xml.transform.TransformerFactory.newInstance() != null,
+              "newInstance works again after property cleared");
     }
 }

@@ -11,3 +11,7 @@ JDK 源码自用（javax.xml.xpath.XPathFunctionException）与 JDK `test/jdk` �
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XPathFunctionExceptionTest.testBlackBox()`）覆盖：构造 + 继承链。
+
+## 5. 深化条目（本批新增，XPathFunctionExceptionTest 6→12 断言）
+- 构造链；恰好 2 构造器；is-a XPathExpressionException。
+- 真实触发：函数内 throw → **原样冒泡**（与 resolver null 的包装形态区分）。

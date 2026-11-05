@@ -76,6 +76,72 @@ public class DOMSourceTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testCtorMatrix();
+        testIdentityClosure();
+        testIsEmptyMatrix();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // deepening: constructor matrix + identity transform closure + isEmpty semantics
+    static final String DOC =
+        "<root><item id=\"3\" name=\"gamma\">third</item>"
+      + "<item id=\"1\" name=\"alpha\">first</item></root>";
+
+    static void testCtorMatrix() throws Exception {
+        javax.xml.parsers.DocumentBuilder db =
+            javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder();
+        org.w3c.dom.Document doc = db.parse(new java.io.ByteArrayInputStream(DOC.getBytes("UTF-8")));
+        javax.xml.transform.dom.DOMSource s1 = new javax.xml.transform.dom.DOMSource(doc);
+        check(s1.getNode() == doc, "(Document) ctor node round-trip");
+        check(s1.getSystemId() == null, "(Document) ctor systemId null");
+        org.w3c.dom.Element el = doc.getDocumentElement();
+        javax.xml.transform.dom.DOMSource s2 =
+            new javax.xml.transform.dom.DOMSource(el, "http://base/el");
+        check(s2.getNode() == el, "(Node,systemId) ctor node round-trip");
+        check("http://base/el".equals(s2.getSystemId()), "(Node,systemId) ctor systemId round-trip");
+        javax.xml.transform.dom.DOMSource s3 = new javax.xml.transform.dom.DOMSource();
+        check(s3.getNode() == null && s3.getSystemId() == null, "no-arg ctor empty");
+        s3.setNode(el);
+        check(s3.getNode() == el, "setNode/getNode round-trip");
+        s3.setSystemId("sid2");
+        check("sid2".equals(s3.getSystemId()), "setSystemId overrides");
+        check("http://javax.xml.transform.dom.DOMSource/feature"
+                  .equals(javax.xml.transform.dom.DOMSource.FEATURE),
+              "DOMSource.FEATURE constant value");
+    }
+
+    static void testIdentityClosure() throws Exception {
+        javax.xml.parsers.DocumentBuilder db =
+            javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder();
+        org.w3c.dom.Document doc = db.parse(new java.io.ByteArrayInputStream(DOC.getBytes("UTF-8")));
+        javax.xml.transform.Transformer id =
+            javax.xml.transform.TransformerFactory.newInstance().newTransformer();
+        id.setOutputProperty(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION, "yes");
+        java.io.StringWriter sw = new java.io.StringWriter();
+        id.transform(new javax.xml.transform.dom.DOMSource(doc),
+                     new javax.xml.transform.stream.StreamResult(sw));
+        check(sw.toString().replace("\r", "").equals(DOC),
+              "identity DOMSource->StreamResult reproduces the document exactly");
+        javax.xml.transform.dom.DOMSource sub =
+            new javax.xml.transform.dom.DOMSource(doc.getDocumentElement());
+        java.io.StringWriter sw2 = new java.io.StringWriter();
+        id.transform(sub, new javax.xml.transform.stream.StreamResult(sw2));
+        check(sw2.toString().replace("\r", "").contains("first"),
+              "DOMSource over element subtree transforms the subtree");
+    }
+
+    static void testIsEmptyMatrix() throws Exception {
+        // JDK-27: isEmpty() true iff nothing set or the node has no content
+        javax.xml.transform.dom.DOMSource empty = new javax.xml.transform.dom.DOMSource();
+        check(empty.isEmpty(), "empty DOMSource isEmpty=true");
+        javax.xml.parsers.DocumentBuilder db =
+            javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder();
+        javax.xml.transform.dom.DOMSource blank = new javax.xml.transform.dom.DOMSource(db.newDocument());
+        check(blank.isEmpty(), "DOMSource over content-less newDocument isEmpty=true");
+        org.w3c.dom.Document doc = db.parse(new java.io.ByteArrayInputStream(DOC.getBytes("UTF-8")));
+        javax.xml.transform.dom.DOMSource full = new javax.xml.transform.dom.DOMSource(doc);
+        check(!full.isEmpty(), "DOMSource over parsed document isEmpty=false");
+        full.setNode(null);
+        check(full.isEmpty(), "setNode(null) makes it empty again");
     }
 }

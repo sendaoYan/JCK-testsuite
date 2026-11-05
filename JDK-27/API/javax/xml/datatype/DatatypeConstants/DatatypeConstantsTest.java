@@ -15,7 +15,7 @@ public class DatatypeConstantsTest {
         passed++;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         // ---- months 1..12 ----
         check(DatatypeConstants.JANUARY == 1, "JANUARY == 1");
         check(DatatypeConstants.FEBRUARY == 2, "FEBRUARY == 2");
@@ -66,6 +66,38 @@ public class DatatypeConstantsTest {
         check(DatatypeConstants.YEARS != DatatypeConstants.MONTHS, "distinct Field objects");
         check("YEARS".equals(DatatypeConstants.YEARS.toString()), "Field toString");
 
+        testClassShape();
+        testFieldConstantFamily();
+
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ================= deepening: class shape + full Field constant family =================
+    static void testClassShape() throws Exception {
+        check(java.lang.reflect.Modifier.isFinal(DatatypeConstants.class.getModifiers()), "DatatypeConstants is final");
+        check(java.lang.reflect.Modifier.isPublic(DatatypeConstants.class.getModifiers()), "is public");
+        java.lang.reflect.Constructor<?>[] ctors = DatatypeConstants.class.getDeclaredConstructors();
+        check(ctors.length == 1 && java.lang.reflect.Modifier.isPrivate(ctors[0].getModifiers()),
+              "sole constructor is private (constant-only class)");
+    }
+
+    static void testFieldConstantFamily() {
+        DatatypeConstants.Field[] fields = {
+            DatatypeConstants.YEARS, DatatypeConstants.MONTHS, DatatypeConstants.DAYS,
+            DatatypeConstants.HOURS, DatatypeConstants.MINUTES, DatatypeConstants.SECONDS,
+        };
+        String[] names = {"YEARS", "MONTHS", "DAYS", "HOURS", "MINUTES", "SECONDS"};
+        for (int i = 0; i < fields.length; i++) {
+            check(fields[i] != null, names[i] + " constant non-null");
+            check(fields[i].getId() == i, names[i] + " getId()==" + i);
+            check(names[i].equals(fields[i].toString()), names[i] + " toString exact");
+        }
+        // all six are mutually distinct singletons
+        for (int i = 0; i < fields.length; i++)
+            for (int j = i + 1; j < fields.length; j++)
+                check(fields[i] != fields[j], names[i] + " distinct from " + names[j]);
+        // Field class itself is final
+        check(java.lang.reflect.Modifier.isFinal(DatatypeConstants.Field.class.getModifiers()),
+              "DatatypeConstants.Field is final");
     }
 }

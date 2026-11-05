@@ -11,3 +11,8 @@ JDK 源码自用（javax.xml.catalog.CatalogFeatures.Feature）与 JDK `test/jdk
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`FeatureTest.testBlackBox()`）覆盖：4 属性名、valueOf、values().length。
+
+## 5. 深化（本批新增）
+- 枚举面（javap 核对）：**恰 4 常量、声明序 FILES(0)/PREFER(1)/DEFER(2)/RESOLVE(3)**；系统属性名精确 javax.xml.catalog.{files,prefer,defer,resolve}（无 usize——本 JDK 已移除，任务简报中的 "javax.xml.catalog.usize" 不存在，以 javap 为准）。
+- defaultValue()：FILES→null、PREFER→"public"、DEFER→"true"、RESOLVE→"strict"。
+- valueOf 往返 + valueOf("bogus") → IAE；toString==name。

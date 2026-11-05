@@ -11,3 +11,6 @@ JDK 源码自用（javax.xml.validation.SchemaFactoryLoader）与 JDK `test/jdk`
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`SchemaFactoryLoaderTest.testBlackBox()`）覆盖：命中返回、未知返回 null。
+
+## 5. 深化条目（本批新增，SchemaFactoryLoaderTest 7→8 断言）
+- 平台发现实测：ServiceLoader.load(SchemaFactoryLoader.class) 发现 0 个 provider（JDK 不内置 loader）；无公共构造器。

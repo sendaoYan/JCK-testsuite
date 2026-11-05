@@ -64,6 +64,30 @@ public class ResultTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testHierarchy();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // deepening: implementor hierarchy + systemId on custom impl
+    static void testHierarchy() throws Exception {
+        check(new javax.xml.transform.stream.StreamResult() instanceof javax.xml.transform.Result,
+              "StreamResult implements Result");
+        check(new javax.xml.transform.dom.DOMResult() instanceof javax.xml.transform.Result,
+              "DOMResult implements Result");
+        check(new javax.xml.transform.sax.SAXResult() instanceof javax.xml.transform.Result,
+              "SAXResult implements Result");
+        check(new javax.xml.transform.stax.StAXResult(
+                   javax.xml.stream.XMLOutputFactory.newFactory()
+                       .createXMLStreamWriter(new java.io.StringWriter()))
+                   instanceof javax.xml.transform.Result,
+              "StAXResult implements Result");
+        javax.xml.transform.Result r = new javax.xml.transform.Result() {
+            String sid;
+            public void setSystemId(String id) { sid = id; }
+            public String getSystemId() { return sid; }
+        };
+        r.setSystemId("http://base/out.xml");
+        check("http://base/out.xml".equals(r.getSystemId()),
+              "setSystemId/getSystemId round-trip on custom impl");
     }
 }

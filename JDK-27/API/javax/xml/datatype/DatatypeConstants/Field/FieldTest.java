@@ -69,6 +69,37 @@ public class FieldTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testFieldFamily();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: deepening (full constant family) ----
+    static void testFieldFamily() {
+        javax.xml.datatype.DatatypeConstants.Field[] fields = {
+            javax.xml.datatype.DatatypeConstants.YEARS,
+            javax.xml.datatype.DatatypeConstants.MONTHS,
+            javax.xml.datatype.DatatypeConstants.DAYS,
+            javax.xml.datatype.DatatypeConstants.HOURS,
+            javax.xml.datatype.DatatypeConstants.MINUTES,
+            javax.xml.datatype.DatatypeConstants.SECONDS,
+        };
+        String[] names = {"YEARS", "MONTHS", "DAYS", "HOURS", "MINUTES", "SECONDS"};
+        for (int i = 0; i < fields.length; i++) {
+            check(fields[i] != null, names[i] + " non-null");
+            check(fields[i].getId() == i, names[i] + " getId " + i);
+            check(names[i].equals(fields[i].toString()), names[i] + " toString exact");
+        }
+        for (int i = 0; i < fields.length; i++)
+            for (int j = i + 1; j < fields.length; j++)
+                check(fields[i] != fields[j], names[i] + " identity distinct from " + names[j]);
+        // public surface restricted to getId/toString
+        java.lang.reflect.Method[] ms = javax.xml.datatype.DatatypeConstants.Field.class.getMethods();
+        boolean ownOthers = true;
+        for (java.lang.reflect.Method m : ms) {
+            if (m.getDeclaringClass() == javax.xml.datatype.DatatypeConstants.Field.class
+                && !m.getName().equals("getId") && !m.getName().equals("toString"))
+                ownOthers = false;
+        }
+        check(ownOthers, "no own public methods besides getId/toString");
     }
 }

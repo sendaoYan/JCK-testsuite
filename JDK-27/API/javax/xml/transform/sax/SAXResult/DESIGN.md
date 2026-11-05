@@ -11,3 +11,7 @@ JDK 源码自用（javax.xml.transform.sax.SAXResult）与 JDK `test/jdk` 内 JA
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`SAXResultTest.testBlackBox()`）覆盖：no-arg + setters。
+
+## 5. 深化（本轮新增）
+- 构造矩阵 + FEATURE 精确值。
+- 事件序列精确闭环：`[SD, SE:root[null], SE:item[3], CH:third, EE:item, SE:item[1], CH:first, EE:item, SE:item[2], CH:second, EE:item, EE:root, ED]`——startDocument 最前、字符聚块、endDocument 收尾。

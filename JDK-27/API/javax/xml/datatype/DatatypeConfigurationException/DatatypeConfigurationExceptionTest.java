@@ -63,6 +63,36 @@ public class DatatypeConfigurationExceptionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeepChains();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: deepening (constructor chain matrix) ----
+    static void testDeepChains() throws Exception {
+        RuntimeException root = new RuntimeException("root");
+        javax.xml.datatype.DatatypeConfigurationException e2 =
+            new javax.xml.datatype.DatatypeConfigurationException("boom", root);
+        check(e2.getCause() == root, "(String,Throwable) cause identity");
+        javax.xml.datatype.DatatypeConfigurationException e3 =
+            new javax.xml.datatype.DatatypeConfigurationException(root);
+        check(e3.getCause() == root, "(Throwable) cause identity");
+        check(e3.getMessage() != null && e3.getMessage().contains("root"),
+              "(Throwable) message derived from cause toString");
+        check(e3 instanceof java.io.Serializable, "Serializable via Exception");
+        java.lang.reflect.Constructor<?>[] ctors =
+            Class.forName("javax.xml.datatype.DatatypeConfigurationException").getDeclaredConstructors();
+        check(ctors.length == 4, "four constructors");
+        int stringOnly = 0, stringThrowable = 0, throwableOnly = 0, noArg = 0;
+        for (java.lang.reflect.Constructor<?> ct : ctors) {
+            Class<?>[] ps = ct.getParameterTypes();
+            if (ps.length == 1 && ps[0] == String.class) stringOnly++;
+            else if (ps.length == 2 && ps[0] == String.class && Throwable.class.isAssignableFrom(ps[1])) stringThrowable++;
+            else if (ps.length == 1 && Throwable.class.isAssignableFrom(ps[0])) throwableOnly++;
+            else if (ps.length == 0) noArg++;
+        }
+        check(stringOnly == 1, "one (String) ctor");
+        check(stringThrowable == 1, "one (String,Throwable) ctor");
+        check(throwableOnly == 1, "one (Throwable) ctor");
+        check(noArg == 1, "one () ctor");
     }
 }

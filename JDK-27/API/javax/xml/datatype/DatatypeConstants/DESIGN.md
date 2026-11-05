@@ -11,3 +11,7 @@ JDK test/jdk/javax/xml/datatype 引用这些常量校验值。
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒：12 个月份值；比较常量 -1/0/1/2；FIELD_UNDEFINED==Integer.MIN_VALUE；schema QName 精确值（DATETIME/…/DURATION_DAYTIME=dayTimeDuration 等）；时区上下限 ±840；Field 单例身份与 toString。
+
+## 5. 深化（本批新增）
+- 与 JDK-8 侧相同（FIELD_UNDEFINED==Integer.MIN_VALUE、MAX==-840/MIN==+840、final+私有构造、Field 六常量族 getId/toString/identity）。
+- 双侧无差异。

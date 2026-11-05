@@ -11,3 +11,7 @@ JDK test/jdk/javax/xml 广泛引用这些 URI/属性常量。
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒：全部公开常量精确值断言（14 个字符串常量）。
+
+## 5. 深化（本批新增）
+- 与 JDK-8 侧相同的 15 常量矩阵 + final/私有构造。
+- **JDK-27 独有 USE_CATALOG=="http://javax.xml.XMLConstants/feature/useCatalog"**（javap 核对；测试用反射读，同一文件在 JDK-8 上走缺失分支）。

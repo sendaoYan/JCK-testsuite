@@ -11,3 +11,8 @@ JDK 源码自用（javax.xml.xpath.XPathEvaluationResult.XPathResultType）与 J
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XPathResultTypeTest.testBlackBox()`）覆盖：6 常量、toString、valueOf、values().length。
+
+## 5. 深化条目（本批新增，XPathResultTypeTest 29→47 断言）
+- **getQNameType(Class) 映射**：String→STRING、Boolean→BOOLEAN、Double→NUMBER、Node→NODE、XPathNodes→NODESET（localPart 精确、ns 非空）；List.class/null → null；ordinal 0 是 ANY。
+- valueOf 六名 round-trip；BOGUS → IllegalArgumentException。
+- **与 XPathConstants 关联**：NUMBER/STRING 枚举名 == XPathConstants 对应 localPart。

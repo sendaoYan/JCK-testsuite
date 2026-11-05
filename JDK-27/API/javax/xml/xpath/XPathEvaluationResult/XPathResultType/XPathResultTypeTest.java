@@ -79,6 +79,63 @@ public class XPathResultTypeTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testMapping();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ===================== contract deepening (appended) =====================
+
+    static void testMapping() {
+        javax.xml.xpath.XPathEvaluationResult.XPathResultType[] vals =
+            javax.xml.xpath.XPathEvaluationResult.XPathResultType.values();
+        // enum order: ANY, BOOLEAN, NUMBER, STRING, NODESET, NODE (javadoc order)
+        check(vals.length == 6, "six constants");
+        check(vals[0] == javax.xml.xpath.XPathEvaluationResult.XPathResultType.ANY, "ordinal 0 is ANY");
+
+        // getQNameType: QName mapping for supported class types; null otherwise (locked actual)
+        javax.xml.namespace.QName qnStr =
+            javax.xml.xpath.XPathEvaluationResult.XPathResultType.getQNameType(String.class);
+        check(qnStr != null && "STRING".equals(qnStr.getLocalPart()),
+              "getQNameType(String.class) local STRING");
+        check(qnStr.getNamespaceURI() != null && !qnStr.getNamespaceURI().isEmpty(),
+              "getQNameType(String.class) namespace non-empty");
+        javax.xml.namespace.QName qnBool =
+            javax.xml.xpath.XPathEvaluationResult.XPathResultType.getQNameType(Boolean.class);
+        check(qnBool != null && "BOOLEAN".equals(qnBool.getLocalPart()),
+              "getQNameType(Boolean.class) local BOOLEAN");
+        javax.xml.namespace.QName qnNum =
+            javax.xml.xpath.XPathEvaluationResult.XPathResultType.getQNameType(Double.class);
+        check(qnNum != null && "NUMBER".equals(qnNum.getLocalPart()),
+              "getQNameType(Double.class) local NUMBER");
+        javax.xml.namespace.QName qnNode =
+            javax.xml.xpath.XPathEvaluationResult.XPathResultType.getQNameType(org.w3c.dom.Node.class);
+        check(qnNode != null && "NODE".equals(qnNode.getLocalPart()),
+              "getQNameType(Node.class) local NODE");
+        javax.xml.namespace.QName qnNodes =
+            javax.xml.xpath.XPathEvaluationResult.XPathResultType.getQNameType(javax.xml.xpath.XPathNodes.class);
+        check(qnNodes != null && "NODESET".equals(qnNodes.getLocalPart()),
+              "getQNameType(XPathNodes.class) local NODESET");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.getQNameType(java.util.List.class) == null,
+              "getQNameType(unsupported class) null");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.getQNameType(null) == null,
+              "getQNameType(null) null");
+
+        // valueOf round-trip for each name; bogus -> IllegalArgumentException
+        for (javax.xml.xpath.XPathEvaluationResult.XPathResultType rt : vals) {
+            check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.valueOf(rt.name()) == rt,
+                  "valueOf round-trip " + rt.name());
+        }
+        boolean bogus = false;
+        try { javax.xml.xpath.XPathEvaluationResult.XPathResultType.valueOf("BOGUS"); }
+        catch (IllegalArgumentException e) { bogus = true; }
+        check(bogus, "valueOf(BOGUS) -> IllegalArgumentException");
+
+        // correlation with generic evaluateExpression types
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.NUMBER.name()
+                  .equals(javax.xml.xpath.XPathConstants.NUMBER.getLocalPart()),
+              "NUMBER enum name matches XPathConstants.NUMBER localPart");
+        check(javax.xml.xpath.XPathEvaluationResult.XPathResultType.STRING.name()
+                  .equals(javax.xml.xpath.XPathConstants.STRING.getLocalPart()),
+              "STRING enum name matches XPathConstants.STRING localPart");
     }
 }

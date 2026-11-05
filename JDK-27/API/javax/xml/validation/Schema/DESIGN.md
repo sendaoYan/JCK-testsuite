@@ -11,3 +11,8 @@ JDK 源码自用（javax.xml.validation.Schema）与 JDK `test/jdk` 内 JAXP/XML
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`SchemaTest.testBlackBox()`）覆盖：两个 handler 创建。
+
+## 5. 深化条目（本批新增，SchemaTest 11→20 断言）
+- **newValidator 多实例独立（核心）**：v1 设记录型 handler → 非法文档不抛、error 恰 1 次；v2 无 handler → 同文档抛 SAXParseException；v2 handler 不受 v1 影响。
+- newValidatorHandler 多实例独立（vh1 设 contentHandler 不影响 vh2）。
+- 每次调用返回新实例。

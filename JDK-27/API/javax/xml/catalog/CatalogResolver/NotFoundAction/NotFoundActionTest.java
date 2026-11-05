@@ -72,6 +72,64 @@ public class NotFoundActionTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testEnumSurface();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ---- Part 3: deepening (enum surface + getType matrix) ----
+    static void testEnumSurface() {
+        javax.xml.catalog.CatalogResolver.NotFoundAction[] vals =
+            javax.xml.catalog.CatalogResolver.NotFoundAction.values();
+        // canonical order verified against javap: CONTINUE, IGNORE, STRICT
+        check(vals.length == 3, "exactly three actions");
+        check(vals[0] == javax.xml.catalog.CatalogResolver.NotFoundAction.CONTINUE
+              && vals[1] == javax.xml.catalog.CatalogResolver.NotFoundAction.IGNORE
+              && vals[2] == javax.xml.catalog.CatalogResolver.NotFoundAction.STRICT,
+              "declaration order CONTINUE, IGNORE, STRICT");
+        // ordinals 0..2
+        for (int i = 0; i < vals.length; i++)
+            check(vals[i].ordinal() == i, vals[i].name() + " ordinal " + i);
+        // toString is overridden to the lowercase literal (locked; differs from name())
+        check("continue".equals(javax.xml.catalog.CatalogResolver.NotFoundAction.CONTINUE.toString()),
+              "CONTINUE toString == 'continue' (overridden)");
+        check("ignore".equals(javax.xml.catalog.CatalogResolver.NotFoundAction.IGNORE.toString()),
+              "IGNORE toString == 'ignore'");
+        check("strict".equals(javax.xml.catalog.CatalogResolver.NotFoundAction.STRICT.toString()),
+              "STRICT toString == 'strict'");
+        // toString value feeds getType (bidirectional mapping)
+        for (javax.xml.catalog.CatalogResolver.NotFoundAction v : vals)
+            check(javax.xml.catalog.CatalogResolver.NotFoundAction.getType(v.toString()) == v,
+                  "getType(toString(" + v.name() + ")) round-trip");
+        // valueOf round-trips
+        for (javax.xml.catalog.CatalogResolver.NotFoundAction v : vals)
+            check(javax.xml.catalog.CatalogResolver.NotFoundAction.valueOf(v.name()) == v,
+                  "valueOf('" + v.name() + "') round-trip");
+        // getType: case-sensitive lowercase mapping
+        check(javax.xml.catalog.CatalogResolver.NotFoundAction.getType("continue")
+              == javax.xml.catalog.CatalogResolver.NotFoundAction.CONTINUE, "getType('continue')");
+        check(javax.xml.catalog.CatalogResolver.NotFoundAction.getType("ignore")
+              == javax.xml.catalog.CatalogResolver.NotFoundAction.IGNORE, "getType('ignore')");
+        check(javax.xml.catalog.CatalogResolver.NotFoundAction.getType("strict")
+              == javax.xml.catalog.CatalogResolver.NotFoundAction.STRICT, "getType('strict')");
+        // getType rejections: uppercase, unknown, null
+        String[] bad = {"CONTINUE", "Ignore", "bogus", ""};
+        for (String s : bad) {
+            boolean iae = false;
+            String msg = null;
+            try { javax.xml.catalog.CatalogResolver.NotFoundAction.getType(s); }
+            catch (IllegalArgumentException e) { iae = true; msg = e.getMessage(); }
+            check(iae, "getType('" + s + "') -> IllegalArgumentException");
+            check(msg != null && msg.contains("JAXP09020005"),
+                  "getType('" + s + "') message carries JAXP09020005");
+        }
+        boolean iaeNull = false;
+        try { javax.xml.catalog.CatalogResolver.NotFoundAction.getType(null); }
+        catch (IllegalArgumentException e) { iaeNull = true; }
+        check(iaeNull, "getType(null) -> IllegalArgumentException");
+        // valueOf unknown -> IAE (plain Enum behavior)
+        boolean iaeValueOf = false;
+        try { javax.xml.catalog.CatalogResolver.NotFoundAction.valueOf("bogus"); }
+        catch (IllegalArgumentException e) { iaeValueOf = true; }
+        check(iaeValueOf, "valueOf('bogus') -> IllegalArgumentException");
     }
 }

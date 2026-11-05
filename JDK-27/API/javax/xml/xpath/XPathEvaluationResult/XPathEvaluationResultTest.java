@@ -60,6 +60,48 @@ public class XPathEvaluationResultTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealResults();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ===================== contract deepening (appended) =====================
+
+    // Real XPathEvaluationResult objects produced by the runtime.
+    static void testRealResults() throws Exception {
+        javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        dbf.setNamespaceAware(true);
+        org.w3c.dom.Document d = dbf.newDocumentBuilder().parse(
+            new java.io.ByteArrayInputStream("<root><a>1</a><a>2</a></root>".getBytes("UTF-8")));
+        javax.xml.xpath.XPath xp = javax.xml.xpath.XPathFactory.newInstance().newXPath();
+
+        javax.xml.xpath.XPathEvaluationResult<?> num = xp.evaluateExpression("count(//a)", d);
+        check(num.type() == javax.xml.xpath.XPathEvaluationResult.XPathResultType.NUMBER,
+              "NUMBER type for count()");
+        check(num.value() instanceof Double && ((Double) num.value()).doubleValue() == 2.0,
+              "NUMBER value Double 2.0");
+
+        javax.xml.xpath.XPathEvaluationResult<?> bool = xp.evaluateExpression("count(//a) = 2", d);
+        check(bool.type() == javax.xml.xpath.XPathEvaluationResult.XPathResultType.BOOLEAN
+              && Boolean.TRUE.equals(bool.value()), "BOOLEAN type+value");
+
+        javax.xml.xpath.XPathEvaluationResult<?> str = xp.evaluateExpression("string(/root/a[1])", d);
+        check(str.type() == javax.xml.xpath.XPathEvaluationResult.XPathResultType.STRING
+              && "1".equals(str.value()), "STRING type+value");
+
+        javax.xml.xpath.XPathEvaluationResult<?> sel = xp.evaluateExpression("//a", d);
+        check(sel.type() == javax.xml.xpath.XPathEvaluationResult.XPathResultType.NODESET,
+              "NODESET type for XPath 1.0 node selection (locked actual)");
+        check(sel.value() instanceof javax.xml.xpath.XPathNodes, "NODESET value is XPathNodes");
+
+        // constant expressions without a document context
+        javax.xml.xpath.XPathEvaluationResult<?> konst = xp.evaluateExpression("1+1", (Object) null);
+        check(konst.type() == javax.xml.xpath.XPathEvaluationResult.XPathResultType.NUMBER
+              && ((Double) konst.value()).doubleValue() == 2.0,
+              "constant expression generic result");
+
+        // typed class form consistency with generic form
+        String typed = xp.evaluateExpression("string(/root/a[1])", d, String.class);
+        check("1".equals(typed) && "1".equals(str.value()),
+              "typed String.class equals generic STRING value");
     }
 }

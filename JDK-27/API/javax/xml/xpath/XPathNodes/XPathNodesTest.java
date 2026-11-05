@@ -64,6 +64,56 @@ public class XPathNodesTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRealNodes();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ===================== contract deepening (appended) =====================
+
+    // Real XPathNodes obtained through the runtime (evaluateExpression).
+    static void testRealNodes() throws Exception {
+        javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        dbf.setNamespaceAware(true);
+        org.w3c.dom.Document d = dbf.newDocumentBuilder().parse(
+            new java.io.ByteArrayInputStream("<root><a>1</a><a>2</a><a>3</a></root>".getBytes("UTF-8")));
+        javax.xml.xpath.XPath xp = javax.xml.xpath.XPathFactory.newInstance().newXPath();
+        javax.xml.xpath.XPathNodes nodes = xp.evaluateExpression("//a", d, javax.xml.xpath.XPathNodes.class);
+
+        check(nodes.size() == 3, "size() == 3");
+        check(nodes.get(0).getTextContent().equals("1"), "get(0) first in document order");
+        check(nodes.get(2).getTextContent().equals("3"), "get(2) last in document order");
+        check(nodes.get(1) != nodes.get(0), "get(i) distinct positions");
+
+        // Iterable: for-each visits all nodes in document order
+        java.util.List<String> texts = new java.util.ArrayList<String>();
+        for (org.w3c.dom.Node n : nodes) texts.add(n.getTextContent());
+        check(texts.equals(java.util.Arrays.asList("1", "2", "3")), "iteration in document order");
+
+        // iterator() consistent with get()
+        java.util.Iterator<org.w3c.dom.Node> it = nodes.iterator();
+        check(it.hasNext() && it.next().getTextContent().equals("1"), "iterator() first element");
+        check(it.hasNext() && it.next().getTextContent().equals("2"), "iterator() second element");
+        check(it.hasNext() && it.next().getTextContent().equals("3"), "iterator() third element");
+        check(!it.hasNext(), "iterator() exhausted");
+
+        // out-of-range get -> IndexOutOfBoundsException (locked actual, not XPathException)
+        boolean oob = false;
+        try { nodes.get(99); }
+        catch (java.lang.IndexOutOfBoundsException e) { oob = true; }
+        catch (javax.xml.xpath.XPathException e) { oob = true; }
+        check(oob, "get(out of range) throws IndexOutOfBounds/XPathException");
+
+        // empty node set
+        javax.xml.xpath.XPathNodes empty = xp.evaluateExpression("//zz", d, javax.xml.xpath.XPathNodes.class);
+        check(empty.size() == 0, "empty selection size 0");
+        boolean got = false;
+        for (org.w3c.dom.Node n : empty) got = true;
+        check(!got, "empty selection iterates zero times");
+
+        // XPathNodes also surfaced by the generic evaluateExpression
+        javax.xml.xpath.XPathEvaluationResult<?> res = xp.evaluateExpression("//a", d);
+        check(res.value() instanceof javax.xml.xpath.XPathNodes
+              && ((javax.xml.xpath.XPathNodes) res.value()).size() == 3,
+              "generic result value is an XPathNodes of size 3");
     }
 }

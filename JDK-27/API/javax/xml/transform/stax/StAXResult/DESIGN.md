@@ -11,3 +11,7 @@ JDK 源码自用（javax.xml.transform.stax.StAXResult）与 JDK `test/jdk` 内 
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`StAXResultTest.testBlackBox()`）覆盖：两种 writer 构造 + setSystemId。
+
+## 5. 深化（本轮新增）
+- 两种构造 round-trip（getXMLStreamWriter/getXMLEventWriter 按构造形态互斥非空）；setSystemId → UOE。
+- 真实闭环：Stream→StAXResult(XMLStreamWriter) 恒等 endsWith(DOC)，须先 flush；XMLEventWriter 路径事件顺序差异用 contains 断言。

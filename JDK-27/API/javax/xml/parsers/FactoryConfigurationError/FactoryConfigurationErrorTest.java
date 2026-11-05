@@ -67,9 +67,33 @@ public class FactoryConfigurationErrorTest {
 
     }
 
+    // ---- Part 3: contract deepening (appended) ----
+    static void testDeep() {
+        // message derived from cause keeps cause's toString form
+        java.lang.IllegalStateException cause = new java.lang.IllegalStateException("boom");
+        javax.xml.parsers.FactoryConfigurationError e =
+                new javax.xml.parsers.FactoryConfigurationError(cause);
+        check(e.getMessage().equals("java.lang.IllegalStateException: boom"),
+              "(Exception) message equals cause.toString()");
+        check(e.getMessage().contains("boom"), "message carries cause detail");
+        // discovery failure names the offending class
+        boolean sawError = false;
+        try {
+            javax.xml.parsers.DocumentBuilderFactory.newInstance("no.such.Factory", null);
+        } catch (javax.xml.parsers.FactoryConfigurationError err) {
+            sawError = err.getMessage() != null && err.getMessage().contains("no.such.Factory")
+                    && err.getCause() != null;
+        }
+        check(sawError, "bogus factory class -> FactoryConfigurationError with cause naming class");
+        // exactly four public constructors
+        check(javax.xml.parsers.FactoryConfigurationError.class.getConstructors().length == 4,
+              "four public constructors (),(String),(Exception),(Exception,String)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

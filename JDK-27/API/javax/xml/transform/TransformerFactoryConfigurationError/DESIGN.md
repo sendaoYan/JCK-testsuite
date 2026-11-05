@@ -11,3 +11,7 @@ JDK 源码自用（javax.xml.transform.TransformerFactoryConfigurationError）�
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`TransformerFactoryConfigurationErrorTest.testBlackBox()`）覆盖：四种构造 + cause 传播。
+
+## 5. 深化（本轮新增）
+- 4 构造器 round-trip（消息/exception 组合）。
+- 真实触发：系统属性指向 no.such 工厂后 newInstance() → 本 Error（finally 清属性）；消息关键词 "no.such" 双版通吃。

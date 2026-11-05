@@ -11,3 +11,9 @@ JDK 源码自用（javax.xml.catalog.CatalogManager）与 JDK `test/jdk` 内 JAX
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`CatalogManagerTest.testBlackBox()`）覆盖：两种 catalogResolver。
+
+## 5. 深化（本批新增）
+- **核心闭环（catalog 重写）**：临时 catalog 文件（system/systemSuffix/public/uri/rewriteSystem）→ CatalogManager.catalog(features, file URI) → matchSystem/matchURI/matchPublic 替换结果精确断言（绝对 URI = 临时目录 File URI + 相对条目路径）；finally 删文件断言。
+- **系统属性路线**：System.setProperty("javax.xml.catalog.files", 文件 URI) → catalog(defaults) → matchSystem 重写生效；finally clearProperty + 删文件。
+- catalogResolver(Catalog, NotFoundAction.CONTINUE/STRICT)：CONTINUE 下 resolveEntity 重写生效；STRICT 下未匹配 → CatalogException。
+- 负例：catalog(features, (URI[])null) → NPE；**catalogResolver((Catalog)null) → NPE（消息 JAXP09020006）**；catalog(features, 空 URI[]) → 空 catalog（匹配恒 null）；**缺失 catalog 文件 → 惰性加载不抛、matchSystem 返回 null**。

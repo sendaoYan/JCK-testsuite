@@ -61,6 +61,61 @@ public class SourceTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testHierarchy();
+        testSystemIdContract();
+        testIsEmptyDefault();
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // deepening: implementor hierarchy + systemId contract + isEmpty default
+    static void testHierarchy() throws Exception {
+        check(new javax.xml.transform.stream.StreamSource() instanceof javax.xml.transform.Source,
+              "StreamSource implements Source");
+        check(new javax.xml.transform.dom.DOMSource() instanceof javax.xml.transform.Source,
+              "DOMSource implements Source");
+        check(new javax.xml.transform.sax.SAXSource() instanceof javax.xml.transform.Source,
+              "SAXSource implements Source");
+        check(new javax.xml.transform.stax.StAXSource(
+                   javax.xml.stream.XMLInputFactory.newFactory()
+                       .createXMLStreamReader(new java.io.StringReader("<a/>")))
+                   instanceof javax.xml.transform.Source,
+              "StAXSource implements Source");
+    }
+
+    static void testSystemIdContract() {
+        javax.xml.transform.Source s = new javax.xml.transform.Source() {
+            String sid;
+            public void setSystemId(String id) { sid = id; }
+            public String getSystemId() { return sid; }
+        };
+        check(s.getSystemId() == null, "fresh anonymous Source: systemId null");
+        s.setSystemId("http://base/doc.xml");
+        check("http://base/doc.xml".equals(s.getSystemId()),
+              "setSystemId/getSystemId round-trip on custom impl");
+        s.setSystemId(null);
+        check(s.getSystemId() == null, "setSystemId(null) stored as null");
+    }
+
+    static void testIsEmptyDefault() {
+        // JDK-27: Source.isEmpty() is a default method whose contract is to throw
+        // UnsupportedOperationException for implementations that do not override it
+        javax.xml.transform.Source s = new javax.xml.transform.Source() {
+            public void setSystemId(String id) { }
+            public String getSystemId() { return null; }
+        };
+        boolean uoe = false;
+        try {
+            s.isEmpty();
+        } catch (UnsupportedOperationException ex) {
+            uoe = ex.getMessage() != null && ex.getMessage().contains("not supported");
+        }
+        check(uoe, "JDK-27: Source.isEmpty() default throws UOE for non-overriding impl");
+        // every bundled Source implementation does override it
+        boolean streamOk = false;
+        try {
+            streamOk = !new javax.xml.transform.stream.StreamSource(
+                new java.io.StringReader("<a/>")).isEmpty();
+        } catch (UnsupportedOperationException ex) { streamOk = false; }
+        check(streamOk, "JDK-27: StreamSource overrides isEmpty() (no UOE)");
     }
 }

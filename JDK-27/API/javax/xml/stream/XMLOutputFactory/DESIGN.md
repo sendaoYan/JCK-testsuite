@@ -11,3 +11,7 @@ JDK 源码自用（javax.xml.stream.XMLOutputFactory）与 JDK `test/jdk` 内 JA
 
 ## 4. 测试用例设计 + 自动化实现
 黑盒（`XMLOutputFactoryTest.testBlackBox()`）覆盖：流式写往返、事件写、property 支持、未知 property。
+## 5. 契约深化（本轮追加：修复命名空间/通道全等）
+- IS_REPAIRING_NAMESPACES：默认 false、往返、未知名双抛 IAE；true 后未声明前缀自动补 xmlns（输出全等锁定）+ 重复声明抑制 + 修复输出回读闭环。
+- Writer 与 OutputStream+UTF-8 输出逐字符全等；createXMLEventWriter(OutputStream,enc) 输出 `<?xml version="1.0" encoding="UTF-8"?><e></e>` 全等。
+- newDefaultFactory() 行为断言（JDK-8 无此方法）。

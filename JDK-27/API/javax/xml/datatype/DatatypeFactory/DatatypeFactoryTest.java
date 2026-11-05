@@ -103,6 +103,118 @@ public class DatatypeFactoryTest {
         // ---- JDK-19+ factory methods ----
         check(DatatypeFactory.newDefaultInstance() != null, "newDefaultInstance non-null");
 
+        testFactoryConstantsAndDiscovery();
+        testDurationOverloads(f);
+        testExceptionChains();
+
         System.out.println("PASS (" + passed + " assertions)");
+    }
+
+    // ================= deepening: lookup mechanism + full overload family =================
+    static void testFactoryConstantsAndDiscovery() throws Exception {
+        check("javax.xml.datatype.DatatypeFactory".equals(DatatypeFactory.DATATYPEFACTORY_PROPERTY),
+              "DATATYPEFACTORY_PROPERTY value");
+        check("com.sun.org.apache.xerces.internal.jaxp.datatype.DatatypeFactoryImpl"
+              .equals(DatatypeFactory.DATATYPEFACTORY_IMPLEMENTATION_CLASS),
+              "DATATYPEFACTORY_IMPLEMENTATION_CLASS value");
+
+        // discovery negative: system property names a non-existent implementation class
+        System.setProperty(DatatypeFactory.DATATYPEFACTORY_PROPERTY, "com.example.NoSuchDatatypeFactoryImpl");
+        try {
+            boolean dce = false;
+            String msg = null;
+            try { DatatypeFactory.newInstance(); }
+            catch (DatatypeConfigurationException e) { dce = true; msg = e.getMessage(); }
+            check(dce, "bogus system property -> DatatypeConfigurationException");
+            check(msg != null && msg.contains("Provider") && msg.contains("not found"),
+                  "DCE message mentions provider not found");
+        } finally {
+            System.clearProperty(DatatypeFactory.DATATYPEFACTORY_PROPERTY);
+        }
+        check(System.getProperty(DatatypeFactory.DATATYPEFACTORY_PROPERTY) == null, "system property cleared");
+        check(DatatypeFactory.newInstance() != null, "newInstance recovers after property cleared");
+
+        // named-class newInstance with unknown class
+        boolean dce2 = false;
+        Throwable cause2 = null;
+        try { DatatypeFactory.newInstance("com.example.NoClass", DatatypeFactoryTest.class.getClassLoader()); }
+        catch (DatatypeConfigurationException e) { dce2 = true; cause2 = e.getCause(); }
+        check(dce2, "newInstance(unknown class, loader) -> DatatypeConfigurationException");
+        check(cause2 instanceof ClassNotFoundException, "DCE cause is ClassNotFoundException");
+
+        // subclass instance validates the abstract factory contract surface via reflection
+        check(java.lang.reflect.Modifier.isPublic(DatatypeFactory.class.getModifiers()), "DatatypeFactory is public");
+        check(java.lang.reflect.Modifier.isAbstract(DatatypeFactory.class.getModifiers()), "is abstract");
+        check(java.lang.reflect.Modifier.isProtected(DatatypeFactory.class.getDeclaredConstructors()[0].getModifiers()),
+              "sole constructor is protected");
+    }
+
+    static void testDurationOverloads(DatatypeFactory f) {
+        // six-int newDuration(boolean,int,int,int,int,int,int)
+        Duration d6 = f.newDuration(true, 1, 2, 3, 4, 5, 6);
+        check("P1Y2M3DT4H5M6S".equals(d6.toString()) && d6.getSign() == 1, "newDuration(boolean,int x6)");
+
+        // long overload field decomposition (deterministic split)
+        check("P0Y0M1DT0H0M0.000S".equals(f.newDuration(86400000L).toString()), "newDuration(long 1 day) lexical");
+        Duration threeMin = f.newDuration(180000L);
+        check(threeMin.getDays() == 0 && threeMin.getHours() == 0 && threeMin.getMinutes() == 3 && threeMin.getSeconds() == 0,
+              "newDuration(180000) -> 3 minutes");
+        Duration negHour = f.newDuration(-3600000L);
+        check(negHour.getSign() == -1 && negHour.getHours() == 1, "newDuration(-3600000) negative");
+
+        // dayTime / yearMonth int + BigInteger + long + lexical overloads
+        Duration dtNeg = f.newDurationDayTime(false, 1, 2, 3, 4);
+        check(dtNeg.getSign() == -1 && "-P1DT2H3M4S".equals(dtNeg.toString()), "newDurationDayTime(false,1,2,3,4)");
+        check(!dtNeg.isSet(javax.xml.datatype.DatatypeConstants.YEARS), "dayTime leaves years unset");
+        Duration ym = f.newDurationYearMonth(true, 2, 3);
+        check("P2Y3M".equals(ym.toString()) && !ym.isSet(javax.xml.datatype.DatatypeConstants.DAYS), "newDurationYearMonth(true,2,3)");
+        java.math.BigInteger two = java.math.BigInteger.valueOf(2);
+        check("P2DT2H2M2S".equals(f.newDurationDayTime(true, two, two, two, two).toString()), "newDurationDayTime(BigInteger x4)");
+        check("P2Y2M".equals(f.newDurationYearMonth(true, two, two).toString()), "newDurationYearMonth(BigInteger x2)");
+        check("P1DT1H1M1.000S".equals(f.newDurationDayTime(90061000L).toString()), "newDurationDayTime(long)");
+        check("P1Y1M".equals(f.newDurationYearMonth(14L * 30 * 24 * 3600000L + 12345L).toString()), "newDurationYearMonth(long)");
+        check("PT1H".equals(f.newDurationDayTime("PT1H").toString()), "newDurationDayTime(lexical)");
+        check(isIae(() -> f.newDurationDayTime("P1Y")), "newDurationDayTime('P1Y') -> IAE");
+        check(isIae(() -> f.newDurationYearMonth("P1D")), "newDurationYearMonth('P1D') -> IAE");
+        check(isIae(() -> f.newDuration("P1W")), "newDuration('P1W') -> IAE (weeks unsupported)");
+
+        // XMLGregorianCalendar overload family
+        XMLGregorianCalendar c8 = f.newXMLGregorianCalendar(2024, 6, 15, 10, 30, 0, 0, javax.xml.datatype.DatatypeConstants.FIELD_UNDEFINED);
+        check("2024-06-15T10:30:00.000".equals(c8.toXMLFormat()), "newXMLGregorianCalendar(int x8) ms=0 prints .000");
+        XMLGregorianCalendar bi = f.newXMLGregorianCalendar(java.math.BigInteger.valueOf(2024), 6, 15, 10, 30, 0,
+                new java.math.BigDecimal("0.500"), 480);
+        check("2024-06-15T10:30:00.500+08:00".equals(bi.toXMLFormat()), "newXMLGregorianCalendar(BigInteger,BigDecimal,int)");
+        GregorianCalendar gc = new GregorianCalendar(java.util.TimeZone.getTimeZone("GMT+08:00"), java.util.Locale.US);
+        gc.clear();
+        gc.set(2024, java.util.Calendar.JUNE, 15, 10, 30, 0);
+        gc.set(java.util.Calendar.MILLISECOND, 500);
+        check("2024-06-15T10:30:00.500+08:00".equals(f.newXMLGregorianCalendar(gc).toXMLFormat()),
+              "newXMLGregorianCalendar(GregorianCalendar GMT+08:00) exact mapping");
+        check("2024-06-15".equals(f.newXMLGregorianCalendarDate(2024, 6, 15, javax.xml.datatype.DatatypeConstants.FIELD_UNDEFINED).toXMLFormat()),
+              "newXMLGregorianCalendarDate undefined tz");
+        check("10:30:00Z".equals(f.newXMLGregorianCalendarTime(10, 30, 0, 0).toXMLFormat()),
+              "newXMLGregorianCalendarTime int-tz");
+        check("10:30:00.5Z".equals(f.newXMLGregorianCalendarTime(10, 30, 0, new java.math.BigDecimal("0.5"), 0).toXMLFormat()),
+              "newXMLGregorianCalendarTime BigDecimal-tz");
+        check("10:30:00.005Z".equals(f.newXMLGregorianCalendarTime(10, 30, 0, 5, 0).toXMLFormat()),
+              "newXMLGregorianCalendarTime 5-int (milliseconds)");
+        boolean iaeTz = false;
+        String tzMsg = null;
+        try { f.newXMLGregorianCalendar(2024, 6, 15, 10, 30, 0, 500, 100000); }
+        catch (IllegalArgumentException e) { iaeTz = true; tzMsg = e.getMessage(); }
+        check(iaeTz && tzMsg != null && tzMsg.contains("100,000"), "8-arg tz out of range -> IAE '100,000'");
+    }
+
+    static void testExceptionChains() {
+        DatatypeConfigurationException e1 = new DatatypeConfigurationException("boom");
+        check("boom".equals(e1.getMessage()) && e1.getCause() == null, "DCE(String)");
+        RuntimeException root = new RuntimeException("root");
+        DatatypeConfigurationException e2 = new DatatypeConfigurationException("boom", root);
+        check("boom".equals(e2.getMessage()) && e2.getCause() == root, "DCE(String,Throwable)");
+        DatatypeConfigurationException e3 = new DatatypeConfigurationException(root);
+        check(e3.getCause() == root && e3.getMessage() != null, "DCE(Throwable) propagates cause, message from toString");
+        DatatypeConfigurationException e4 = new DatatypeConfigurationException();
+        check(e4.getMessage() == null && e4.getCause() == null, "DCE() no-arg");
+        check(e1 instanceof Exception && e2 instanceof Exception, "DCE is an Exception");
     }
 }
