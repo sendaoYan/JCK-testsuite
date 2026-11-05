@@ -21,3 +21,10 @@
 - 黑盒: 全流程文本编辑组合断言
 
 自动化实现位于同目录 `AccessibleEditableTextTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 接口继承 AccessibleText（isAssignableFrom）；完整方法面含 getCharacterAttribute/getCharacterBounds/getIndexAtPoint
+- `setTextContents` 返回 void（非 boolean）；其余编辑方法均 void
+- 真组件编辑闭环（headless）：JTextArea 的 editable text setTextContents("new") → getText()="new"；insertTextAtIndex(0,"re") → "renew"；delete(0,2) → "new"；replaceText(0,1,"N") → "New"
+- JLabel 无 editable text（null 契约）

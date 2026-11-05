@@ -20,3 +20,10 @@ AccessibleContext.getAccessibleRelationSet 返回它；添加同 key 关系时�
 - 黑盒: 空集行为；同 key 合并目标；构造数组/addAll/remove/clear/toArray
 
 自动化实现位于同目录 `AccessibleRelationSetTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 空集：size 0、toString ""（注意与 StateSet 的 null 不同）、contains/get 均否定、toArray 空
+- 重复 add 语义（关键发现）：同键 add 返回 true 且按目标并集合并——[x]+[z] → [x,z]；再 add 多目标 [m1,m2] → [x,z,m1,m2]（保持插入序，不替换）
+- contains(String)/get(String) 按键检索；get 缺键 null；remove(AccessibleRelation) 按键移除、二次 false；addAll/clear
+- toString 顺序 "label for,controlledBy"（显示串逗号连接）

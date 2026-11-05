@@ -22,3 +22,9 @@
 - 黑盒: set/get 颜色/字体/光标回读；enabled/visible 开关；location/bounds/size 回读；contains 内外点；requestFocus
 
 自动化实现位于同目录 `AccessibleComponentTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 记录型子类 RecComp 全表面：颜色/光标/几何（getLocation x=1、getSize 10x10）/isShowing false/contains(Point)/焦点遍历
+- `contains` 签名为 `contains(java.awt.Point)`（非 int,int）
+- 真组件对照：JLabel 暴露 AccessibleComponent；裸 AccessibleContext 默认 `getAccessibleComponent() == null`

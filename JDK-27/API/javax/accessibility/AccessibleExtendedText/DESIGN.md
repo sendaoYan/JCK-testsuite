@@ -19,3 +19,10 @@
 - 黑盒: LINE/ATTRIBUTE_RUN 常量；序列与边界返回
 
 自动化实现位于同目录 `AccessibleExtendedTextTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 关键结构事实：AccessibleExtendedText 是独立接口，不是 AccessibleText 的子接口（isAssignableFrom 为 false）
+- 自有常量恰两个：LINE=4、ATTRIBUTE_RUN=5（扩展型分段种类，AccessibleText 的 1/2/3 之外）
+- JTextArea（headless）文本实现本接口：getTextSequenceAt(WORD,6) → 6-11 "world"；getTextSequenceAt(CHARACTER,0) → 0-1 "H"；getTextSequenceAfter(WORD,0) → 5-6 " "（词后分隔符）
+- 越界 getTextSequenceAt(WORD,100) → null；getTextBounds(0,5) → null（无布局的无头契约）

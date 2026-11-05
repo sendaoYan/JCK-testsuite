@@ -21,3 +21,9 @@
 - 黑盒: 三种构造；set/get target；防御性拷贝；常量值；LABEL_FOR 本地化
 
 自动化实现位于同目录 `AccessibleRelationTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 常量为 String 类型（非 AccessibleRelation 实例）：12 键全表 childNodeOf/controlledBy/controllerFor/embeddedBy/embeds/flowsFrom/flowsTo/labeledBy/labelFor/memberOf/parentWindowOf/subwindowOf（反射逐字段验证）
+- 三构造形态：varargs Object[]、单对象、无目标（空数组）；setTarget(Object) 整体替换为单元素
+- `toString()` 返回本地化显示串（"child node of"），非 key

@@ -67,6 +67,57 @@ public class AccessibleStateSetTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testContractDeep();
         System.out.println("PASS (" + passed + " assertions)");
     }
+
+    // ---- contract deepening: add/remove/contains/addAll/clear/toArray full matrix + null toString ----
+    static void testContractDeep() throws Exception {
+        javax.accessibility.AccessibleStateSet ss = new javax.accessibility.AccessibleStateSet();
+        check(ss.toArray().length == 0, "empty set 0 states");
+        check(!ss.contains(javax.accessibility.AccessibleState.ENABLED), "empty contains false");
+        check(ss.toString() == null, "empty set toString is null (locked quirk)");
+        ss.add(javax.accessibility.AccessibleState.ENABLED);
+        ss.add(javax.accessibility.AccessibleState.FOCUSABLE);
+        check(ss.toArray().length == 2, "2 after adds");
+        check(ss.contains(javax.accessibility.AccessibleState.ENABLED), "contains");
+        check("enabled,focusable".equals(ss.toString()), "toString comma-joined display strings [" + ss.toString() + "]");
+        check(!ss.add(javax.accessibility.AccessibleState.ENABLED), "duplicate add returns false");
+        check(ss.toArray().length == 2, "size unchanged by dup");
+        check(ss.remove(javax.accessibility.AccessibleState.ENABLED), "remove true");
+        check(!ss.contains(javax.accessibility.AccessibleState.ENABLED), "gone");
+        check(!ss.remove(javax.accessibility.AccessibleState.ENABLED), "double remove false");
+        check(ss.toArray().length == 1, "1 remains");
+        ss.addAll(new javax.accessibility.AccessibleState[] { javax.accessibility.AccessibleState.VISIBLE, javax.accessibility.AccessibleState.SHOWING });
+        check(ss.toArray().length == 3, "addAll to 3");
+        javax.accessibility.AccessibleState[] view = ss.toArray();
+        view[0] = null;
+        check(ss.toArray()[0] != null, "toArray defensively copied");
+        ss.clear();
+        check(ss.toArray().length == 0 && ss.toString() == null, "clear back to empty");
+        // real Swing stateset
+        javax.swing.JButton b = new javax.swing.JButton("x");
+        javax.accessibility.AccessibleStateSet bs = b.getAccessibleContext().getAccessibleStateSet();
+        check(bs.contains(javax.accessibility.AccessibleState.ENABLED), "JButton ENABLED");
+        check(bs.contains(javax.accessibility.AccessibleState.FOCUSABLE), "JButton FOCUSABLE");
+        check(!bs.contains(javax.accessibility.AccessibleState.SELECTED), "JButton not SELECTED");
+    }
+
+    static Object serRoundTrip(Object o) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        new java.io.ObjectOutputStream(bos).writeObject(o);
+        return new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
+    }
+    // concrete AccessibleContext recording subclass
+    static class RecCtx extends javax.accessibility.AccessibleContext {
+        public String getAccessibleName() { return accessibleName; }
+        public String getAccessibleDescription() { return accessibleDescription; }
+        public javax.accessibility.AccessibleRole getAccessibleRole() { return javax.accessibility.AccessibleRole.UNKNOWN; }
+        public javax.accessibility.AccessibleStateSet getAccessibleStateSet() { return new javax.accessibility.AccessibleStateSet(); }
+        public int getAccessibleIndexInParent() { return -1; }
+        public int getAccessibleChildrenCount() { return 0; }
+        public javax.accessibility.Accessible getAccessibleChild(int i) { return null; }
+        public java.util.Locale getLocale() throws java.awt.IllegalComponentStateException { return java.util.Locale.ENGLISH; }
+    }
+
 }

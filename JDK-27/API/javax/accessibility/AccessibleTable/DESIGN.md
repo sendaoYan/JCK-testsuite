@@ -23,3 +23,9 @@
 - 黑盒: 维度/标题摘要表头描述 set-get/选择断言
 
 自动化实现位于同目录 `AccessibleTableTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- caption/summary 为 Accessible 类型（非 String）——签名级契约；记录型子类 RecTable 全 20 方法面
+- ModelChange 常量：INSERT=1、UPDATE=0、DELETE=-1
+- 真组件闭环：JTable(2x1) 暴露 table，rows=2/cols=1；ExtendedTable 子接口关系

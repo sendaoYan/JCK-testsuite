@@ -19,3 +19,9 @@
 - 黑盒: 描述 set/get 回读；宽高只读
 
 自动化实现位于同目录 `AccessibleIconTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 记录型子类三属性透传（description/width/height）
+- 默认契约：裸 AccessibleContext.getAccessibleIcon() 返回 null（非空数组）
+- 真组件对照：纯文本 JLabel 无图标（null 或空）

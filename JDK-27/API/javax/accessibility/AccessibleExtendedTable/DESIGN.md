@@ -19,3 +19,8 @@
 - 黑盒: getAccessibleIndex(row,col)、getAccessibleRow/Column 往返一致
 
 自动化实现位于同目录 `AccessibleExtendedTableTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 继承 AccessibleTable；记录型子类线性索引换算：index=r*3+c（getAccessibleRow(5)=1、getAccessibleColumn(5)=2、getAccessibleIndex(1,2)=5）
+- 真组件闭环：JTable 2x2 的 table 实为 ExtendedTable；getAccessibleIndex(1,1)=3、getAccessibleRow(2)=1、getAccessibleColumn(2)=0（行优先线性序）

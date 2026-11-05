@@ -19,3 +19,11 @@
 - 黑盒: 已知 key(active) 本地化=active；未知 key 回退；toString==toDisplayString；受保护重载回退
 
 自动化实现位于同目录 `AccessibleBundleTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 直接父类 Object；key 字段 protected（反射验证）
+- 默认 Locale 下 `toString() == toDisplayString(ENGLISH)`
+- 未知 key 回退机制：自定义 key "deep-x" 在 ENGLISH/CHINESE 下均原样返回 key（无 bundle 条目）
+- `equals(null)`/`equals("label")` 均 false；bundle 不可序列化
+- 版本差异：JDK-8 反射可 `setAccessible` 读 protected key；JDK-9+ 模块 java.desktop 未 opens javax.accessibility，抛 InaccessibleObjectException（以类名后缀断言）

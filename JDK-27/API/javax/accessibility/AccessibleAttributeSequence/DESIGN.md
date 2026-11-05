@@ -19,3 +19,8 @@
 - 黑盒: 构造读回、字段可变、空/负值保留
 
 自动化实现位于同目录 `AccessibleAttributeSequenceTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 三字段公开可写：startIndex/endIndex/attributes，`getDeclaredFields().length == 3` 且全 public
+- null AttributeSet 合法；attrs 引用透传（同一性）；JTextArea context 实现AccessibleText

@@ -19,3 +19,8 @@
 - 黑盒: 当前/最小/最大值；setCurrent 回读
 
 自动化实现位于同目录 `AccessibleValueTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 记录型子类四方法（Number 语义，含 BigInteger/Integer 混用）；setCurrentAccessibleValue(null) false
+- 真组件对照：JButton 暴露 value 且三元组 0/0/1；JLabel 无 value（null）

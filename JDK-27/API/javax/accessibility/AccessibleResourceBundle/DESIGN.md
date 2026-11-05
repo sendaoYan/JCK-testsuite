@@ -19,3 +19,9 @@
 - 黑盒: getContents 行结构；getString 已知/未知 key；handleGetObject；getKeys 数量
 
 自动化实现位于同目录 `AccessibleResourceBundleTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- @Deprecated（1.3 起保留兼容）；继承 ListResourceBundle；getContents() 返回 Object[][]
+- 内容表：恰 80 个键值对；"pushbutton" → "push button"、"enabled" 存在（role/state 键空间）
+- getKeys() 仍可枚举（bundle 功能性未随弃用移除）

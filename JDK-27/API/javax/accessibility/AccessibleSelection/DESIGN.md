@@ -19,3 +19,8 @@
 - 黑盒: 初始 0；add/remove 选择计数与状态；selectAll；clear
 
 自动化实现位于同目录 `AccessibleSelectionTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 完整方法面 6 方法（含 selectAllAccessibleSelection）；记录型子类 isAccessibleChildSelected 分支
+- 真组件对照：JLabel 无选择（null）；JList 暴露选择且初始 0；setSelectedIndex(1) 后 count=1、child1=true、child0=false

@@ -20,3 +20,10 @@
 - 黑盒: 常量非空互异；ACTIVE/ENABLED 本地化；自定义 key 回退；toString==toDisplayString
 
 自动化实现位于同目录 `AccessibleStateTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 29 常量全表（ACTIVE..TRUNCATED）逐一非空且 ENGLISH 显示串非空
+- 本地化精确串：focused/enabled（EN）；activé（FR）；`toString() == toDisplayString(ENGLISH)`
+- equals 自反/互斥；构造器 protected；匿名子类 key "deep-state" 原样回退
+- 版本差异：JDK-8 可反射读 protected key（= "enabled"）；JDK-9+ 模块封装抛 InaccessibleObjectException

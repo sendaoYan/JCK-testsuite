@@ -19,3 +19,8 @@
 - 黑盒: INSERT/UPDATE/DELETE 常量；匿名实现 getter 组合
 
 自动化实现位于同目录 `AccessibleTableModelChangeTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 三常量全等：INSERT=1、UPDATE=0、DELETE=-1（int，非枚举）
+- 接口面；记录型子类 getType/getFirstRow/getLastRow/getFirstColumn/getLastColumn 透传

@@ -20,3 +20,9 @@ Swing 按钮通过 doAccessibleAction(0) 触发点击；辅助技术先 getAcces
 - 黑盒: 五个常量精确值；匿名实现 count/description/doAccessibleAction 组合断言
 
 自动化实现位于同目录 `AccessibleActionTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 动作描述常量表全等：CLICK="click"、TOGGLE_EXPAND="toggleexpand"（无空格）、INCREMENT="increment"、DECREMENT="decrement"、TOGGLE_POPUP="toggle popup"（有空格）
+- `toString()` 即常量串；匿名实现三方法面（count/description/doAction）
+- 真组件对照：JButton("Press") 恰 1 个动作且描述为 "click"；JLabel 动作为 null（无动作契约）

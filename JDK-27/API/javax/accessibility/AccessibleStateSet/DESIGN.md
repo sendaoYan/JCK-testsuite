@@ -20,3 +20,9 @@ AccessibleContext.getAccessibleStateSet 返回它。测试覆盖去重、添加/
 - 黑盒: 空集 null/去重/添加删除返回值/toString 逗号/clear
 
 自动化实现位于同目录 `AccessibleStateSetTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 空集特例：`toString()` 返回 null（锁定 quirk，与 RelationSet 的 "" 不同）、toArray 长 0、contains false
+- 全操作矩阵：add×2 → "enabled,focusable"；重复 add false 且不变；remove true/再 false；addAll 到 3；toArray 防御性拷贝（改视图不影响内部）；clear 归零
+- 真组件对照：JButton 状态集含 ENABLED+FOCUSABLE、不含 SELECTED

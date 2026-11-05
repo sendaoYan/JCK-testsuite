@@ -18,3 +18,9 @@
 - 黑盒: mimeTypes 长度/身份；getStream 返回流；空实现
 
 自动化实现位于同目录 `AccessibleStreamableTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 方法面两方法：`getMimeTypes()` → DataFlavor[]、`getStream(DataFlavor)` → InputStream（非 String mime 参数）
+- 记录型闭环：匹配 flavor 返回同一流实例、他 flavor null、空实现 mimeTypes 长 0
+- DataFlavor 以 equals 匹配（非同一性）

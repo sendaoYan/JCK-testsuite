@@ -18,3 +18,9 @@
 - 黑盒: 绑定数量/元素；空绑定
 
 自动化实现位于同目录 `AccessibleKeyBindingTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 绑定两种形态：Integer（助记码）与 javax.swing.KeyStroke；KeyStroke 须经工厂 getKeyStroke 获得（构造器不可用）
+- 键绑定不经 AccessibleContext（无该方法），经 AccessibleExtendedComponent 暴露
+- 真组件闭环：JButton 无助记码时 getAccessibleKeyBinding()=null；setMnemonic(VK_P) 后恰 1 个绑定且为 KeyStroke "pressed P"

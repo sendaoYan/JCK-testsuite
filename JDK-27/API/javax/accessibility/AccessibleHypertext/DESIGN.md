@@ -19,3 +19,8 @@
 - 黑盒: link 数量/身份/getLinkIndex 内外部；链接起止下标
 
 自动化实现位于同目录 `AccessibleHypertextTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 继承 AccessibleText；记录型子类 getLinkCount/getLink(0) 同一性/getLinkIndex 命中 0 与未命中 -1
+- 实现类需补全 AccessibleText 的 8+3 方法面（getCharacterAttribute/getCharacterBounds/getIndexAtPoint/getTextRange 等）

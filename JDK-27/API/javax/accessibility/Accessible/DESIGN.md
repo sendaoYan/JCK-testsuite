@@ -18,3 +18,10 @@
 - 黑盒: 返回同一上下文实例；上下文中 setName 后经 Accessible 可达；返回 null 上下文
 
 自动化实现位于同目录 `AccessibleTest.java`，白盒结构断言放在 `testWhiteBox()`，黑盒组合操作断言放在 `testBlackBox()`，由 `main` 依次调用并打印 `PASS (N assertions)`。
+
+## 5. 契约深化（黑盒行为）
+`testContractDeep()`（2026-11 契约深化）追加断言：
+- 单方法接口：`getDeclaredMethods().length == 1`，返回类型恰为 `AccessibleContext`
+- 采纳表：JLabel/JButton 均 `instanceof Accessible`；匿名实现允许返回 null context
+- 真组件闭环：JButton context 非空、独立按钮 `getAccessibleParent() == null`（未设置前）、`setAccessibleParent(null)` 保持 null
+- 按钮文本即默认无障碍名（"x"），角色恰为 `AccessibleRole.PUSH_BUTTON`
