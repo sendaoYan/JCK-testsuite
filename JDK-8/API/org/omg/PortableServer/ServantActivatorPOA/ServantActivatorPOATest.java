@@ -19,6 +19,43 @@ public class ServantActivatorPOATest {
         check(org.omg.PortableServer.Servant.class.isAssignableFrom(c), "extends org.omg.PortableServer.Servant");
         check(org.omg.PortableServer.ServantActivatorOperations.class.isAssignableFrom(c), "implements org.omg.PortableServer.ServantActivatorOperations");
         check(org.omg.CORBA.portable.InvokeHandler.class.isAssignableFrom(c), "implements org.omg.CORBA.portable.InvokeHandler");
+        // ---- deepened (jdk8u372-b07 probed): _all_interfaces exact / _this states / _invoke dispatch ----
+        org.omg.PortableServer.ServantActivatorPOA tie = new org.omg.PortableServer.ServantActivatorPOA() {
+            public org.omg.PortableServer.Servant incarnate(byte[] oid, org.omg.PortableServer.POA poa) { return null; }
+            public void etherealize(byte[] oid, org.omg.PortableServer.POA poa, org.omg.PortableServer.Servant s,
+                                    boolean b1, boolean b2) { }
+        };
+        check(java.util.Arrays.equals(tie._all_interfaces(null, null),
+                  new String[]{"IDL:omg.org/PortableServer/ServantActivator:2.3", "IDL:omg.org/PortableServer/ServantManager:1.0"}),
+              "_all_interfaces exact repository-id table");
+        try {
+            tie._this();
+            check(false, "unassociated _this() must throw");
+        } catch (org.omg.CORBA.BAD_INV_ORDER expected) {
+            check(expected.minor == 0
+               && expected.getMessage().equals("The Servant has not been associated with an ORB instance"),
+                  "tie inherits Servant unset-delegate BAD_INV_ORDER contract");
+        }
+        final org.omg.CORBA.ORB orb = org.omg.CORBA.ORB.init(new String[0], null);
+        org.omg.CORBA.Object activated = tie._this(orb);
+        check(activated != null && activated.toString().startsWith("IOR:"),
+              "_this(orb) mints an IOR-backed reference offline");
+        check(tie._orb() == orb, "tie._orb() == associated ORB");
+        org.omg.CORBA.portable.InputStream empty =
+            orb.create_output_stream().create_input_stream();
+        try {
+            tie._invoke("bogusop", empty, null);
+            check(false, "unknown operation must throw BAD_OPERATION");
+        } catch (org.omg.CORBA.BAD_OPERATION expected) {
+            check(expected.minor == 0, "_invoke(unknown op) -> BAD_OPERATION minor==0");
+        }
+        try {
+            tie._invoke("incarnate", orb.create_output_stream().create_input_stream(), null);
+            check(false, "known op with empty arguments must throw BAD_OPERATION");
+        } catch (org.omg.CORBA.BAD_OPERATION expected) {
+            check(expected.minor == 0, "_invoke(incarnate, empty args) -> BAD_OPERATION minor==0");
+        }
+
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
