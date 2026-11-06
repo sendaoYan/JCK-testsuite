@@ -199,11 +199,10 @@ public class FutureTaskTest {
     // cancel(true) on a RUNNING task interrupts the thread running the callable.
     static void testCancelTrueWhileRunning() throws Exception {
         java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
         final int[] interruptCount = {0};
         FutureTask<Integer> ft = new FutureTask<>(() -> {
             started.countDown();
-            try { release.await(); } catch (InterruptedException e) { interruptCount[0]++; }
+            try { new java.util.concurrent.CountDownLatch(1).await(); } catch (InterruptedException e) { interruptCount[0]++; }
             return 8;
         });
         Thread t = new Thread(ft::run);
@@ -211,7 +210,6 @@ public class FutureTaskTest {
         t.start();
         check(started.await(5, TimeUnit.SECONDS), "task running (cancel(true) scenario)");
         check(ft.cancel(true), "cancel(true) on running task returns true");
-        release.countDown(); // release anyway; interrupt must already have arrived
         t.join(5000);
         check(!t.isAlive(), "interrupted runner finished");
         check(interruptCount[0] >= 1, "cancel(true) delivered InterruptedException to computation");

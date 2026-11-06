@@ -154,8 +154,9 @@ public class SubscriptionTest {
             final CountDownLatch threeDelivered = new CountDownLatch(3);
             final CountDownLatch terminal = new CountDownLatch(1);
             final Flow.Subscription[] held = new Flow.Subscription[1];
+            final CountDownLatch subscribed = new CountDownLatch(1);
             pub.subscribe(new Flow.Subscriber<Integer>() {
-                public void onSubscribe(Flow.Subscription s) { held[0] = s; }
+                public void onSubscribe(Flow.Subscription s) { held[0] = s; subscribed.countDown(); }
                 public void onNext(Integer i) { received.add(i); twoDelivered.countDown(); threeDelivered.countDown(); }
                 public void onError(Throwable t) { terminal.countDown(); }
                 public void onComplete() { terminal.countDown(); }
@@ -163,6 +164,10 @@ public class SubscriptionTest {
             pub.submit(1);
             pub.submit(2);
             pub.submit(3);
+            // onSubscribe is dispatched asynchronously on the publisher's executor;
+            // wait for it before touching the subscription — under -Xcomp / a loaded
+            // machine held[0] can still be null right after submit().
+            check(subscribed.await(5, TimeUnit.SECONDS), "onSubscribe dispatched");
             // demand gating is causal, not timing-based: nothing can be delivered
             // until this subscriber calls request(), and it never did
             check(received.isEmpty(), "no delivery before request (demand gating)");

@@ -206,7 +206,15 @@ public class CyclicBarrierTest {
         waiter.start();
         check(entered.await(5, TimeUnit.SECONDS), "waiter started");
         check(barrier.getParties() == 2, "getParties is constant");
-        check(barrier.getNumberWaiting() == 1, "one party currently waiting");
+        // entered is latched before the waiter calls await(), so it does not prove
+        // the waiter is parked; poll getNumberWaiting() until the waiter blocks
+        // (once parked on a 2-party barrier it stays 1 until reset()).
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        int waiting;
+        while ((waiting = barrier.getNumberWaiting()) != 1 && System.nanoTime() < deadline) {
+            Thread.yield();
+        }
+        check(waiting == 1, "one party currently waiting: " + waiting);
         barrier.reset();
         if (!done.await(2, TimeUnit.SECONDS)) {
             // the waiter had not parked on the broken generation yet; break the new one

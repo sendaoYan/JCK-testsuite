@@ -179,13 +179,14 @@ public class FutureTaskTest {
     }
 
     // cancel(true) on a RUNNING task interrupts the thread running the callable.
+    // The callable parks on a latch that is never released, so the interrupt is
+    // the only way it unblocks — no test-side release races the interrupt.
     static void testCancelTrueWhileRunning() throws Exception {
         CountDownLatch started = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
         final int[] interruptCount = {0};
         FutureTask<Integer> ft = new FutureTask<>(() -> {
             started.countDown();
-            try { release.await(); } catch (InterruptedException e) { interruptCount[0]++; }
+            try { new CountDownLatch(1).await(); } catch (InterruptedException e) { interruptCount[0]++; }
             return 8;
         });
         Thread t = new Thread(ft::run);
@@ -193,7 +194,6 @@ public class FutureTaskTest {
         t.start();
         check(started.await(5, TimeUnit.SECONDS), "task running (cancel(true) scenario)");
         check(ft.cancel(true), "cancel(true) on running task returns true");
-        release.countDown(); // release anyway; interrupt must already have arrived
         t.join(5000);
         check(!t.isAlive(), "interrupted runner finished");
         check(interruptCount[0] >= 1, "cancel(true) delivered InterruptedException to computation");

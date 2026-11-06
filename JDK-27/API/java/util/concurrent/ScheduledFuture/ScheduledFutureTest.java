@@ -41,7 +41,11 @@ public class ScheduledFutureTest {
             ScheduledFuture<?> f = exec.schedule(() -> { value[0] = 7; }, 100, TimeUnit.MILLISECONDS);
             check(f instanceof Delayed, "instanceof Delayed");
             long remaining = f.getDelay(TimeUnit.MILLISECONDS);
-            check(remaining > 0 && remaining <= 100, "getDelay in (0, 100] before run");
+            // The remaining delay is (triggerTime - now); it never exceeds the
+            // requested 100ms, but under -Xcomp / a loaded machine the schedule
+            // + this read can take >100ms, so `remaining > 0` is not observable
+            // here (the task may already be due). Only the upper bound is hard.
+            check(remaining <= 100, "getDelay never exceeds the requested delay before run: " + remaining);
             check(f.get() == null, "get() waits for completion");
             check(value[0] == 7, "task executed");
             check(f.isDone() && !f.isCancelled(), "isDone after completion");

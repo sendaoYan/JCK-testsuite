@@ -100,10 +100,12 @@ public class SubmissionPublisherTest {
     }
 
     static final class PassiveSub implements Flow.Subscriber<Integer> {
+        volatile Throwable error;
+        final CountDownLatch terminal = new CountDownLatch(1);
         public void onSubscribe(Flow.Subscription s) { } // never requests
         public void onNext(Integer i) { }
-        public void onError(Throwable t) { }
-        public void onComplete() { }
+        public void onError(Throwable t) { error = t; terminal.countDown(); }
+        public void onComplete() { terminal.countDown(); }
     }
 
     static void testConstructorsAndDefaults() {
@@ -204,9 +206,24 @@ public class SubmissionPublisherTest {
             pub.subscribe(b);
             check(pub.getNumberOfSubscribers() == 2 && pub.hasSubscribers(), "two subscribers");
             check(pub.isSubscribed(a) && pub.isSubscribed(b), "both registered");
-            // re-subscribing the same subscriber is a no-op (stays at 2, no exception)
+            // re-subscribing the same subscriber: JDK-27 (unlike JDK 9-17) delivers
+            // onError(IllegalStateException) to the existing subscription (documented
+            // in the SubmissionPublisher javadoc) and then closes/removes it — it is
+            // NOT a silent no-op. Verify the signal, not a frozen count.
             pub.subscribe(a);
-            check(pub.getNumberOfSubscribers() == 2, "re-subscribe does not duplicate: " + pub.getNumberOfSubscribers());
+            check(a.terminal.await(5, TimeUnit.SECONDS),
+                    "re-subscribe delivers a terminal signal to the existing subscription");
+            check(a.error instanceof IllegalStateException,
+                    "re-subscribe onError is IllegalStateException: " + a.error);
+            check(pub.isSubscribed(b), "the other subscriber remains subscribed");
+            // the duplicate subscription is closed asynchronously; poll until the
+            // count settles back to only `b`, proving no third entry was added.
+            int n;
+            int spins = 0;
+            while ((n = pub.getNumberOfSubscribers()) > 1 && spins++ < 500) {
+                Thread.sleep(10);
+            }
+            check(n == 1, "re-subscribe removed the duplicate subscription (settled to 1, not " + n + ")");
             // subscribe(null) -> NPE
             try {
                 pub.subscribe(null);
