@@ -78,11 +78,16 @@ public class FileStoreTest {
                     java.nio.file.attribute.FileOwnerAttributeView.class),
                   "owner view supported");
 
-            // getAttribute mirrors the typed getters
+            // getAttribute mirrors the typed getters; totalSpace is fixed per store,
+            // but usable/unallocated drift with concurrent filesystem traffic, so only
+            // their type and [0, total] bounds are stable (exact == is a false flake).
             check((Long) store.getAttribute("totalSpace") == total, "totalSpace attribute");
-            check((Long) store.getAttribute("usableSpace") == usable, "usableSpace attribute");
-            check((Long) store.getAttribute("unallocatedSpace") == unallocated,
-                  "unallocatedSpace attribute");
+            Object usableAttr = store.getAttribute("usableSpace");
+            check(usableAttr instanceof Long && (Long) usableAttr >= 0 && (Long) usableAttr <= total,
+                  "usableSpace attribute non-negative and bounded by total");
+            Object unallocAttr = store.getAttribute("unallocatedSpace");
+            check(unallocAttr instanceof Long && (Long) unallocAttr >= 0 && (Long) unallocAttr <= total,
+                  "unallocatedSpace attribute non-negative and bounded by total");
 
             // unknown attribute name rejected
             boolean iae = false;
@@ -127,11 +132,16 @@ public class FileStoreTest {
             check(usable >= 0 && usable <= total, "usable bounded by total");
             check(unallocated >= 0 && unallocated <= total, "unallocated bounded by total");
 
-            // attribute bridge mirrors the space getters (Long values identical)
+            // attribute bridge mirrors the space getters (Long values identical for
+            // totalSpace, which is fixed; usable/unallocated drift with concurrent I/O,
+            // so only type + [0, total] bounds are stable).
             check((Long) st.getAttribute("totalSpace") == total, "attribute totalSpace identical");
-            check((Long) st.getAttribute("usableSpace") == usable, "attribute usableSpace identical");
-            check((Long) st.getAttribute("unallocatedSpace") == unallocated,
-                  "attribute unallocatedSpace identical");
+            Object usableAttr = st.getAttribute("usableSpace");
+            check(usableAttr instanceof Long && (Long) usableAttr >= 0 && (Long) usableAttr <= total,
+                  "attribute usableSpace non-negative and bounded");
+            Object unallocAttr = st.getAttribute("unallocatedSpace");
+            check(unallocAttr instanceof Long && (Long) unallocAttr >= 0 && (Long) unallocAttr <= total,
+                  "attribute unallocatedSpace non-negative and bounded");
             check(st.getAttribute("totalSpace") instanceof Long, "space attribute boxed Long");
             // exact negative type (probe-confirmed: UOE, not IAE)
             checkThrows(UnsupportedOperationException.class,
