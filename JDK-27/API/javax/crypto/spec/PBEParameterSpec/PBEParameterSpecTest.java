@@ -103,13 +103,17 @@ public class PBEParameterSpecTest {
         dec.init(Cipher.DECRYPT_MODE, pbeKey,
                 new PBEParameterSpec(saltFixed, 2048, new IvParameterSpec(iv)));
         check(Arrays.equals(pt, dec.doFinal(ct)), "PBE round trip via 3-arg PBEParameterSpec");
-        // wrong iteration count derives a different key -> padding check fails
+        // wrong iteration count derives a different key -> decryption must not
+        // recover the plaintext. The padding check usually throws
+        // BadPaddingException, but it can (~1/256) validate by chance and return
+        // garbage instead; accept either outcome rather than gambling on the
+        // exception (a ~0.4% flake over a 10x -Xcomp run).
         Cipher decWrong = Cipher.getInstance("PBEWithHmacSHA256AndAES_128");
         decWrong.init(Cipher.DECRYPT_MODE, pbeKey,
                 new PBEParameterSpec(saltFixed, 2049, new IvParameterSpec(iv)));
         try {
-            decWrong.doFinal(ct);
-            check(false, "wrong iteration count should fail");
+            byte[] wrong = decWrong.doFinal(ct);
+            check(!Arrays.equals(pt, wrong), "wrong iteration count does not recover plaintext");
         } catch (javax.crypto.BadPaddingException e) { passed++; }
         keySpec.clearPassword();
     }

@@ -86,6 +86,9 @@ public class ScheduledExecutorServiceTest {
             CountDownLatch ran = new CountDownLatch(1);
             ScheduledFuture<?> f = ses.schedule(ran::countDown, 200, TimeUnit.MILLISECONDS);
             check(ran.await(5, TimeUnit.SECONDS), "延迟任务到期执行");
+            // The latch fires inside the task's runnable, before the FutureTask
+            // marks itself done; block on get() so isDone() is no longer racy.
+            f.get(5, TimeUnit.SECONDS);
             check(f.isDone(), "执行后 isDone");
         } finally {
             ses.shutdownNow();

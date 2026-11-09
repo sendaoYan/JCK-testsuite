@@ -259,7 +259,7 @@ public class CountedCompleterTest {
         final boolean propagate;
         Throwable seenEx;
         CountedCompleter<?> seenCaller;
-        int onExcCalls;
+        volatile int onExcCalls;
         FailingCC(CountedCompleter<?> p, RuntimeException b, boolean propagate) {
             super(p, 0); this.boom = b; this.propagate = propagate;
         }
@@ -312,6 +312,13 @@ public class CountedCompleterTest {
             check(false, "failing child join must throw");
         } catch (IllegalStateException e) {
             check(true, "failing child join rethrows ISE");
+        }
+        // onExceptionalCompletion is invoked on a worker thread as part of the
+        // child's abnormal completion; join() throwing does not order the write.
+        // Poll briefly for the volatile counter under -Xcomp load.
+        long dead = System.currentTimeMillis() + 5000;
+        while (noPropChild.onExcCalls < 1 && System.currentTimeMillis() < dead) {
+            Thread.sleep(10);
         }
         check(noPropChild.onExcCalls == 1, "onExceptionalCompletion ran although relay suppressed");
         check(!noPropRoot.isDone(), "completer NOT completed when onExceptionalCompletion returned false");

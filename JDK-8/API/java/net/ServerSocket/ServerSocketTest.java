@@ -235,7 +235,7 @@ public class ServerSocketTest {
         Socket client = new Socket();
         Socket accepted = null;
         try {
-            client.connect(new InetSocketAddress("127.0.0.1", ss.getLocalPort()), 200);
+            client.connect(new InetSocketAddress("127.0.0.1", ss.getLocalPort()), 5000);
             accepted = q.poll(2, TimeUnit.SECONDS);
             acceptor.join(2000);
             check(accepted != null, "accept returned a socket");
@@ -371,7 +371,7 @@ public class ServerSocketTest {
         try {
             for (int i = 0; i < 3; i++) {
                 clients[i] = new Socket();
-                clients[i].connect(new InetSocketAddress("127.0.0.1", ss.getLocalPort()), 200);
+                clients[i].connect(new InetSocketAddress("127.0.0.1", ss.getLocalPort()), 5000);
             }
             for (int i = 0; i < 3; i++) accepted[i] = q.poll(2, TimeUnit.SECONDS);
             acceptor.join(2000);
@@ -414,7 +414,7 @@ public class ServerSocketTest {
         Socket client = new Socket();
         Socket accepted = null;
         try {
-            client.connect(new InetSocketAddress("127.0.0.1", ss.getLocalPort()), 200);
+            client.connect(new InetSocketAddress("127.0.0.1", ss.getLocalPort()), 5000);
             accepted = q.poll(2, TimeUnit.SECONDS);
             acceptor.join(2000);
             check(accepted != null, "accept for half-close test");
@@ -489,7 +489,7 @@ public class ServerSocketTest {
         try {
             for (int i = 0; i < 3; i++) {
                 clients[i] = new Socket();
-                clients[i].connect(new InetSocketAddress("127.0.0.1", ss.getLocalPort()), 200);
+                clients[i].connect(new InetSocketAddress("127.0.0.1", ss.getLocalPort()), 5000);
                 check(clients[i].isConnected(), "client " + i + " connected before accept");
             }
             for (int i = 0; i < 3; i++) {

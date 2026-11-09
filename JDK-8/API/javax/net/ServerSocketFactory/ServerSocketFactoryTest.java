@@ -75,6 +75,9 @@ public class ServerSocketFactoryTest {
             long dt = System.currentTimeMillis() - t0;
             check(res.equals("SocketTimeoutException"), "accept with SO_TIMEOUT -> SocketTimeoutException, got " + res);
             check(dt >= 200 && dt < 5000, "timeout honored within bounds (" + dt + "ms)");
+            // Reset to blocking before the echo pair: the 300ms SO_TIMEOUT above
+            // would otherwise make accept() below time out under -Xcomp load.
+            ss.setSoTimeout(0);
             // factory server + factory client echo pair (full round trip)
             final int port = ss.getLocalPort();
             Thread t = new Thread(() -> {
