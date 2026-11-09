@@ -103,7 +103,11 @@ public class JMXAuthenticatorTest {
             JMXConnector conn = JMXConnectorFactory.connect(cs.getAddress(), good);
             try {
                 String id = conn.getConnectionId();
-                check(id.startsWith("rmi://127.0.0.1 alice "), "d-authenticated id carries principal: " + id);
+                // The authenticated principal appears in the connection id; the
+                // host is the server's real address, so assert the rmi:// prefix
+                // plus the principal token rather than a hardcoded loopback host.
+                check(id.startsWith("rmi://") && id.contains("alice"),
+                        "d-authenticated id carries principal: " + id);
                 check(((Integer) conn.getMBeanServerConnection().getAttribute(on, "Count")).intValue() == 0,
                         "d-authenticated remote read");
             } finally {

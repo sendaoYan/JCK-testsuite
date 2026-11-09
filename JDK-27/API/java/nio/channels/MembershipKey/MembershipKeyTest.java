@@ -43,7 +43,11 @@ public class MembershipKeyTest {
 
             NetworkInterface nif = null;
             for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (ni.isUp() && ni.supportsMulticast() && ni.inetAddresses().findAny().isPresent()) {
+                // Require a real IPv4 address: an IPv6-only interface (e.g. a
+                // docker veth link) satisfies findAny() but join(IPv4 group) on it
+                // throws "Network interface not configured for IPv4".
+                if (ni.isUp() && ni.supportsMulticast()
+                        && ni.inetAddresses().anyMatch(a -> a instanceof java.net.Inet4Address)) {
                     nif = ni;
                     break;
                 }

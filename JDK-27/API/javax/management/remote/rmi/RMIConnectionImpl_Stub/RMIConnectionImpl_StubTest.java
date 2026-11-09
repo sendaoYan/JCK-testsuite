@@ -173,7 +173,7 @@ public class RMIConnectionImpl_StubTest {
             check(((Integer) rc.invoke(on, "add",
                     new java.rmi.MarshalledObject<Object>(new Object[] { Integer.valueOf(6) }),
                     new String[] { "int" }, null)) == 6, "wire invoke");
-            check(rc.getConnectionId().startsWith("rmi://127.0.0.1 "), "wire connection id");
+            check(rc.getConnectionId().startsWith("rmi://"), "wire connection id");
             rc.close();
             checkThrows(IOException.class,
                     new ThrowingRunnable() { public void run() throws Exception { holder[0].getConnectionId(); } },
