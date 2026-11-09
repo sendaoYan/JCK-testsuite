@@ -143,12 +143,15 @@ public class JColorChooserTest {
         cc.setPreviewPanel(null);
         check(cc.getPreviewPanel() == null, "setPreviewPanel(null) -> null");
 
-        // headless: dialog creation throws
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { JColorChooser.showDialog(null, "t", Color.RED); }});
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() {
-                new JColorChooser().createDialog(null, "t", true, new JColorChooser(), null, null); }});
+        // headless: dialog creation throws. Under a display showDialog is modal
+        // and would block (the -Xcomp run timed out here), so gate on isHeadless().
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { JColorChooser.showDialog(null, "t", Color.RED); }});
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() {
+                    new JColorChooser().createDialog(null, "t", true, new JColorChooser(), null, null); }});
+        }
 
         // UI plumbing
         check(cc.getUIClassID().equals("ColorChooserUI"), "getUIClassID");

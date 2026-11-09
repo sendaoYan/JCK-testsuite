@@ -158,11 +158,14 @@ public class JRootPaneTest {
 
         // Headless reverse cases: valid styles are stored and then throw while applying
         // (FRAME -> HeadlessException; dialog styles -> NPE); the invalid 99 is
-        // rejected up front and leaves the previous value in place.
-        checkThrows(HeadlessException.class,
-                new Runnable() { public void run() { root.setWindowDecorationStyle(JRootPane.FRAME); } },
-                "setWindowDecorationStyle(FRAME) headless");
-        check(root.getWindowDecorationStyle() == JRootPane.FRAME, "FRAME stored despite headless throw");
+        // rejected up front and leaves the previous value in place. The FRAME
+        // HeadlessException is environment-dependent, so gate it on isHeadless().
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            checkThrows(HeadlessException.class,
+                    new Runnable() { public void run() { root.setWindowDecorationStyle(JRootPane.FRAME); } },
+                    "setWindowDecorationStyle(FRAME) headless");
+            check(root.getWindowDecorationStyle() == JRootPane.FRAME, "FRAME stored despite headless throw");
+        }
         checkThrows(NullPointerException.class,
                 new Runnable() { public void run() { root.setWindowDecorationStyle(JRootPane.PLAIN_DIALOG); } },
                 "setWindowDecorationStyle(PLAIN_DIALOG) NPE");

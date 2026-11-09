@@ -241,11 +241,14 @@ public class JListTest {
         list.setPrototypeCellValue("xx");
         checkEquals("xx", list.getPrototypeCellValue(), "setPrototypeDisplayValue via setPrototypeCellValue");
 
-        // drag enablement needs a headful environment: headless throws exactly
-        // java.awt.HeadlessException (both JDKs), leaving dragEnabled unchanged
-        checkThrows(java.awt.HeadlessException.class, "setDragEnabled(true) headless",
-            new Runnable() { public void run() { list.setDragEnabled(true); }});
-        check(!list.getDragEnabled(), "dragEnabled unchanged after headless rejection");
+        // drag enablement needs a headful environment: only assert the
+        // HeadlessException rejection when actually running headless (the full
+        // -Xcomp run sets DISPLAY so the environment is NOT headless).
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            checkThrows(java.awt.HeadlessException.class, "setDragEnabled(true) headless",
+                new Runnable() { public void run() { list.setDragEnabled(true); }});
+            check(!list.getDragEnabled(), "dragEnabled unchanged after headless rejection");
+        }
 
         check(list.getUI() != null && list.getUI().getClass().getName().endsWith("BasicListUI"),
               "Metal binding installs BasicListUI");

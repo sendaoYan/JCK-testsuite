@@ -173,18 +173,23 @@ public class JOptionPaneTest {
         check(six.getOptions().length == 2, "6-arg ctor options");
         check("x".equals(six.getInitialValue()), "6-arg ctor initialValue");
 
-        // headless: dialog creation and frame lookup throw HeadlessException
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { new JOptionPane().createDialog(null, "t"); }});
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { new JOptionPane().createDialog("t"); }});
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { JOptionPane.getFrameForComponent(null); }});
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { JOptionPane.getFrameForComponent(new JPanel()); }});
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() {
-                JOptionPane.showInputDialog(null, "q"); }});
+        // headless: dialog creation, frame lookup, and the modal showInputDialog
+        // throw HeadlessException. Under a display (the full -Xcomp run sets
+        // DISPLAY) showInputDialog would block on a modal dialog, so gate the
+        // whole headless contract on isHeadless().
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { new JOptionPane().createDialog(null, "t"); }});
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { new JOptionPane().createDialog("t"); }});
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { JOptionPane.getFrameForComponent(null); }});
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { JOptionPane.getFrameForComponent(new JPanel()); }});
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() {
+                    JOptionPane.showInputDialog(null, "q"); }});
+        }
 
         // UI plumbing
         check(p.getUIClassID().equals("OptionPaneUI"), "getUIClassID");

@@ -174,10 +174,13 @@ public class JFileChooserTest {
         check(d2.getApproveButtonMnemonic() == 'G', "setApproveButtonMnemonic roundtrip");
         d2.setFileHidingEnabled(false);
         check(!d2.isFileHidingEnabled(), "setFileHidingEnabled(false)");
-        // headless contract: enabling DnD needs a toolkit -> HeadlessException
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { d2.setDragEnabled(true); }});
-        check(!d2.getDragEnabled(), "dragEnabled unchanged after HeadlessException");
+        // headless contract: enabling DnD needs a toolkit -> HeadlessException.
+        // Gate on isHeadless(): under a display setDragEnabled succeeds.
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { d2.setDragEnabled(true); }});
+            check(!d2.getDragEnabled(), "dragEnabled unchanged after HeadlessException");
+        }
         d2.setMultiSelectionEnabled(true);
         check(d2.isMultiSelectionEnabled(), "setMultiSelectionEnabled(true)");
         d2.setControlButtonsAreShown(false);
@@ -187,13 +190,16 @@ public class JFileChooserTest {
         d2.setFileView(fv);
         check(d2.getFileView() == fv, "setFileView roundtrip");
 
-        // headless: dialog creation throws
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { new JFileChooser().showOpenDialog(null); }});
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { new JFileChooser().showSaveDialog(null); }});
-        checkThrows(HeadlessException.class, new Runnable() {
-            public void run() { new JFileChooser().showDialog(null, "Go"); }});
+        // headless: dialog creation throws. Under a display the show*Dialog calls
+        // are modal and would block, so gate on isHeadless().
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { new JFileChooser().showOpenDialog(null); }});
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { new JFileChooser().showSaveDialog(null); }});
+            checkThrows(HeadlessException.class, new Runnable() {
+                public void run() { new JFileChooser().showDialog(null, "Go"); }});
+        }
 
         // UI plumbing
         check(fc.getUIClassID().equals("FileChooserUI"), "getUIClassID");
