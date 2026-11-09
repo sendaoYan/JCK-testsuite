@@ -95,6 +95,12 @@ public class InvalidPreferencesFormatExceptionTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // Isolate the file-backed prefs root to a per-JVM temp dir so that
+        // concurrent test JVMs (conc>1) don't contend on the shared
+        // ~/.java/.userPrefs lock file (BackingStoreException: Couldn't get file lock).
+        String pfr = System.getProperty("java.io.tmpdir") + "/jck-prefs-" + java.util.UUID.randomUUID();
+        System.setProperty("java.util.prefs.userRoot", pfr);
+        System.setProperty("java.util.prefs.systemRoot", pfr + "-sys");
         try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();

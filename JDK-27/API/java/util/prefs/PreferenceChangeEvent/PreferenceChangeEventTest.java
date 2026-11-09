@@ -85,6 +85,7 @@ public class PreferenceChangeEventTest {
             n.addPreferenceChangeListener(events::add);
             n.put("k1", "v1");
             n.sync();
+            awaitEvents(events, 1, 5000);
             check(events.size() == 1, "put fires exactly one event (after sync dispatch)");
             if (!events.isEmpty()) {
                 java.util.prefs.PreferenceChangeEvent ev = events.get(0);
@@ -96,6 +97,7 @@ public class PreferenceChangeEventTest {
             events.clear();
             n.remove("k1");
             n.sync();
+            awaitEvents(events, 1, 5000);
             check(events.size() == 1, "remove fires one event");
             check(events.isEmpty() || events.get(0).getNewValue() == null, "remove event newValue null");
             // 覆盖触发新值
@@ -103,6 +105,7 @@ public class PreferenceChangeEventTest {
             n.put("k2", "a");
             n.put("k2", "b");
             n.sync();
+            awaitEvents(events, 2, 5000);
             check(events.size() == 2, "two puts fire two events");
             check("b".equals(events.get(1).getNewValue()), "second event carries new value");
         } finally {
@@ -110,7 +113,21 @@ public class PreferenceChangeEventTest {
         }
     }
 
+    // Poll until at least `target` events arrive (JDK-9+ delivers them asynchronously).
+    static void awaitEvents(java.util.List<?> events, int target, long timeoutMs) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline && events.size() < target) {
+            Thread.sleep(10);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        // Isolate the file-backed prefs root to a per-JVM temp dir so that
+        // concurrent test JVMs (conc>1) don't contend on the shared
+        // ~/.java/.userPrefs lock file (BackingStoreException: Couldn't get file lock).
+        String pfr = System.getProperty("java.io.tmpdir") + "/jck-prefs-" + java.util.UUID.randomUUID();
+        System.setProperty("java.util.prefs.userRoot", pfr);
+        System.setProperty("java.util.prefs.systemRoot", pfr + "-sys");
         try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();

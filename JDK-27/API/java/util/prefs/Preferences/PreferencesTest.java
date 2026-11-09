@@ -254,6 +254,12 @@ public class PreferencesTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // Isolate the file-backed prefs root to a per-JVM temp dir so that
+        // concurrent test JVMs (conc>1) don't contend on the shared
+        // ~/.java/.userPrefs lock file (BackingStoreException: Couldn't get file lock).
+        String pfr = System.getProperty("java.io.tmpdir") + "/jck-prefs-" + java.util.UUID.randomUUID();
+        System.setProperty("java.util.prefs.userRoot", pfr);
+        System.setProperty("java.util.prefs.systemRoot", pfr + "-sys");
         try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         String old = System.getProperty("java.util.prefs.PreferencesFactory");
         System.setProperty("java.util.prefs.PreferencesFactory", "PreferencesTest$MemFactory");

@@ -88,10 +88,14 @@ public class PreferenceChangeListenerTest {
             n.addPreferenceChangeListener(l);
             n.put("a", "1");
             n.sync();
+            // JDK-9+ dispatches preference-change events asynchronously on a
+            // background thread, so wait for delivery instead of asserting inline.
+            awaitHits(hits, 1, 5000);
             check(hits[0] >= 1, "listener notified on put (after sync dispatch)");
             n.removePreferenceChangeListener(l);
             n.put("b", "2");
             n.sync();
+            Thread.sleep(300); // give any spurious delivery time to arrive
             check(hits[0] == 1, "removed listener no longer notified");
             // 未注册的监听器移除 -> IAE
             try {
@@ -104,13 +108,28 @@ public class PreferenceChangeListenerTest {
             int before = hits[0];
             n.put("c", "3");
             n.sync();
+            awaitHits(hits, before + 2, 5000);
             check(hits[0] == before + 2, "double registration notifies twice (once per registration)");
         } finally {
             try { n.removeNode(); } catch (Exception ignore) { }
         }
     }
 
+    // Poll until hits[0] reaches target (JDK-9+ delivers events asynchronously).
+    static void awaitHits(int[] hits, int target, long timeoutMs) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline && hits[0] < target) {
+            Thread.sleep(10);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        // Isolate the file-backed prefs root to a per-JVM temp dir so that
+        // concurrent test JVMs (conc>1) don't contend on the shared
+        // ~/.java/.userPrefs lock file (BackingStoreException: Couldn't get file lock).
+        String pfr = System.getProperty("java.io.tmpdir") + "/jck-prefs-" + java.util.UUID.randomUUID();
+        System.setProperty("java.util.prefs.userRoot", pfr);
+        System.setProperty("java.util.prefs.systemRoot", pfr + "-sys");
         try { testContracts(); } catch (Exception e) { throw new RuntimeException(e); }
         testWhiteBox();
         testBlackBox();
