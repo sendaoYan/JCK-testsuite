@@ -47,7 +47,10 @@ public class VirtualMachineTest {
             check(d.displayName() != null, "displayName non-null");
             check(d.provider() != null, "provider non-null");
         }
-        check(com.sun.tools.attach.VirtualMachine.list().size() == ds.size(), "list deterministic");
+        // list() is a live snapshot of running JVMs; under concurrent test
+        // execution other VMs attach/detach between calls, so its size is not
+        // required to be stable. Re-fetching must still be non-null.
+        check(com.sun.tools.attach.VirtualMachine.list() != null, "list non-null on re-fetch");
     }
 
     public static void main(String[] args) throws Exception {
