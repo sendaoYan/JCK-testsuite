@@ -2,6 +2,7 @@
  * @test
  * @summary jdk.incubator.vector.CPUFeatures.X64 conformance: X64 feature flags reflection.
  * @modules jdk.incubator.vector
+ * @requires (os.arch == "amd64")
  * @run main X64Test
  */
 

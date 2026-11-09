@@ -47,7 +47,10 @@ public class VectorSpeciesTest {
         check(VectorSpecies.of(double.class, VectorShape.S_128_BIT) == DoubleVector.SPECIES_128, "of(double,128)");
         check(VectorSpecies.of(byte.class, VectorShape.S_64_BIT) == ByteVector.SPECIES_64, "of(byte,64)");
         check(VectorSpecies.ofPreferred(int.class) == IntVector.SPECIES_PREFERRED, "ofPreferred");
-        check(VectorSpecies.ofLargestShape(int.class).vectorShape().vectorBitSize() == 512, "ofLargestShape 512-bit class");
+        // ofLargestShape tracks the platform's max vector width (512 on AVX-512
+        // x64, 128 on aarch64), so compare against S_Max_BIT rather than 512.
+        check(VectorSpecies.ofLargestShape(int.class).vectorShape().vectorBitSize()
+                == VectorShape.S_Max_BIT.vectorBitSize(), "ofLargestShape matches S_Max_BIT bit size");
         check(IntVector.SPECIES_256.withLanes(int.class) == IntVector.SPECIES_256, "withLanes same type identity");
         check(IntVector.SPECIES_256.withLanes(byte.class).length() == 32, "withLanes byte widens lanes");
         check(IntVector.SPECIES_256.loopBound(10) == 8, "loopBound(10)==8");

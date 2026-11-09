@@ -27,7 +27,10 @@ public class LinkerNativeCallTest {
             #include <stdint.h>
             #include <errno.h>
 
-            double jck_carrier_sum(char a, signed char b, short c, int d, long e, float f,
+            // Note: `char` is unsigned by default on aarch64 (signed on x86-64),
+            // so the byte carrier is declared `signed char` to make the sum
+            // platform-independent (an unsigned char would read -1 as 255).
+            double jck_carrier_sum(signed char a, signed char b, short c, int d, long e, float f,
                                    double g, int8_t h, int16_t i, int32_t j, int64_t k,
                                    _Bool l, uint16_t m) {
                 double s = 0.0;

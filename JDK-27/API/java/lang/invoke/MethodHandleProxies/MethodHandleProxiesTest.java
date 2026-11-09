@@ -262,9 +262,12 @@ public class MethodHandleProxiesTest {
         checkThrowsMsg(IllegalArgumentException.class,
                 () -> MethodHandleProxies.asInterfaceInstance(String.class, greeter),
                 "not a public interface", "non-interface IAE message");
-        checkThrowsMsg(NullPointerException.class,
+        // The null-interface NPE message is a JEP 358 "helpful" message, which is
+        // a best-effort diagnostic and can be null (e.g. under -Xcomp on some
+        // platforms), so assert the exception type only, not its text.
+        checkThrows(NullPointerException.class,
                 () -> MethodHandleProxies.asInterfaceInstance(null, greeter),
-                "\"intfc\" is null", "null interface NPE message");
+                "null interface NPE");
         checkThrows(NullPointerException.class,
                 () -> MethodHandleProxies.asInterfaceInstance(ObjFn.class, null),
                 "null handle NPE");

@@ -49,8 +49,11 @@ public class VectorShapeTest {
                 && VectorShape.forBitSize(128) == VectorShape.S_128_BIT
                 && VectorShape.forBitSize(256) == VectorShape.S_256_BIT
                 && VectorShape.forBitSize(512) == VectorShape.S_512_BIT, "forBitSize exact table");
-        check(VectorShape.forBitSize(maxBits) == VectorShape.S_512_BIT
-                || VectorShape.forBitSize(maxBits) == VectorShape.S_Max_BIT, "forBitSize max maps to 512-class shape");
+        // The max bit size is platform-dependent (512 on AVX-512 x64, 128 on
+        // aarch64), so assert it maps back to a shape of that same bit size
+        // rather than hardcoding the 512-bit shape.
+        check(VectorShape.forBitSize(maxBits).vectorBitSize() == maxBits,
+                "forBitSize max maps to the max-bit-size shape");
         int[] bad = {0, 32, 65, 511, 8192};
         for (int b : bad) {
             boolean iae = false;
