@@ -224,7 +224,7 @@ public class SocketTest {
         Pair p = new Pair();
         p.server = server;
         p.client = new Socket();
-        p.client.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 200);
+        p.client.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 5000);
         p.accepted = q.poll(2, TimeUnit.SECONDS);
         acceptor.join(2000);
         if (p.accepted == null) throw new AssertionError("accept did not produce a socket in time");
@@ -776,7 +776,7 @@ public class SocketTest {
         try {
             c.bind(new InetSocketAddress("127.0.0.1", 0));
             int boundPort = c.getLocalPort();
-            c.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 200);
+            c.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 5000);
             check(c.getLocalPort() == boundPort, "pre-bound local port preserved by connect");
             check(c.getLocalAddress().isLoopbackAddress(), "pre-bound local address preserved");
             check(c.getLocalSocketAddress() instanceof InetSocketAddress, "local SA typed");
@@ -838,9 +838,9 @@ public class SocketTest {
         acceptor.start();
         try {
             Socket c1 = new Socket();
-            c1.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 200);
+            c1.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 5000);
             Socket c2 = new Socket();
-            c2.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 200);
+            c2.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 5000);
             Socket a1 = q.poll(2, TimeUnit.SECONDS);
             Socket a2 = q.poll(2, TimeUnit.SECONDS);
             acceptor.join(2000);

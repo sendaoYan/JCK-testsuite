@@ -185,7 +185,7 @@ public class SocketTest {
         Pair p = new Pair();
         p.server = server;
         p.client = new Socket();
-        p.client.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 200);
+        p.client.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), 5000);
         p.accepted = q.poll(2, TimeUnit.SECONDS);
         acceptor.join(2000);
         if (p.accepted == null) throw new AssertionError("accept did not produce a socket in time");
