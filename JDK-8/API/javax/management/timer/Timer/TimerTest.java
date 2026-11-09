@@ -192,8 +192,12 @@ public class TimerTest {
         server.registerMBean(t, timerName);
         Collector col = new Collector();
         server.addNotificationListener(timerName, col, null, null);
+        // Use a clearly-future first date: under -Xcomp the addNotification/start
+        // gap can exceed the old 50ms offset, making the first occurrence "past"
+        // and silently dropped by sendPastNotifications=false (default), so only
+        // one of the two finite deliveries would arrive.
         t.addNotification("jck.finite", "m", null,
-                new java.util.Date(System.currentTimeMillis() + 50L), 60L, 2L);
+                new java.util.Date(System.currentTimeMillis() + 1000L), 60L, 2L);
         t.start();
         try {
             long deadline = System.currentTimeMillis() + 5000;
