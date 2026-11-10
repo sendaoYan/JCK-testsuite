@@ -7,12 +7,17 @@ import java.net.URL;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.Random;
+import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -58,7 +63,19 @@ public class DiffFuzz {
         "\\z", "(?i)", "(?u)", "(?s)", "(?m)", "[a-z&&[^b]]", "\\p{L}", "\\p{Lu}",
         "\\p{javaLowerCase}", "\\p{IsLatin}", "\\R", "\\h", "\\v", "\\X", "\\cA",
         "\\u0041", "\\x41", "\\Qabc\\E", "a{2,1}", "[z-a]", "(", "[", "\\", "*a",
-        "a++", "a*+", "a?+", "(?<1>a)"
+        "a++", "a*+", "a?+", "(?<1>a)",
+        // deeper constructions: named backrefs, scripts, flags toggling,
+        // class ops, code points, octal, inline flags, conditionals
+        "(?<name>a)\\k<name>", "\\k<name>", "(?<name>a)\\k<nope>", "(?<a>a)(?<b>b)\\k<a>",
+        "\\p{InGreek}", "\\p{sc=Latin}", "\\p{Script=Greek}", "\\p{script=Greek}",
+        "\\p{gc=Lu}", "\\p{IsLu}", "\\p{InBasic_Latin}", "\\p{IsBasicLatin}",
+        "(?i)a(?-i)b", "(?i:a)", "(?-i:a)", "[a-z&&[^m-p]]", "[[a-z]&&[^aeiou]]",
+        "[[a][b]]", "[a[b]]", "[a&&b]", "\\N{LATIN SMALL LETTER A}", "a{0}", "a{0,0}",
+        "a{2147483647}", "a{2147483648}", "(?(1)a|b)", "(?<n1>a)(?<n1>b)",
+        "(?<1>a)\\1", "(?<1>a)\\k<1>", "[\\d]", "[.]", "[\\s\\S]", "[\\w\\W]", "[^\\D]",
+        "[\\p{L}\\p{N}]", "\\0", "\\07", "\\012", "\\0x", "\\c@", "\\c_", "\\x{41}",
+        "\\x{1F600}", "\\x{110000}", "\\x{}", "\\u{41}", "(?x)a b", "(?x)a#c\n",
+        "\\Q[a-z]\\E", "\\Qabc\\E+", "(?U)\\w", "(?d)\\w", "\\P{Lu}", "\\p{javaUpperCase}"
     };
 
     static final String[] DEC_PARSE_SEEDS = {
@@ -75,6 +92,7 @@ public class DiffFuzz {
         fuzzRegex();
         fuzzNumberFormat();
         fuzzDecimalFormat();
+        fuzzSimpleDateFormat();
         fuzzURI();
         fuzzURL();
         fuzzProperties();
@@ -296,7 +314,31 @@ public class DiffFuzz {
             "[a-z&&[def]]", "(?#comment)a", "\\Q...\\E", "\\c", "\\", "[", "(", "(a", "a)",
             "*a", "a**", "{1,2}", "a{2,1}", "[z-a]", "\\p{NoSuch}", "(?<1>a)", "(?<a-b>c)",
             "a++", "a*+", "a?+", "(?i)İ", "(?iu)İ", "(?i)ı", "(?iu)ı",
-            "(?i)ﬁ", "(?iu)ﬁ", "(?u)\\w", "(?U)\\w"
+            "(?i)ﬁ", "(?iu)ﬁ", "(?u)\\w", "(?U)\\w",
+            // named-group backrefs and duplicate names
+            "(?<name>a)\\k<name>", "(?<name>a)(?<name>b)", "\\k<name>",
+            "(?<a>a)(?<b>b)\\k<a>", "(?<n>a)\\k<n>", "(?<n>a)\\1",
+            // lookaround nesting / combinations
+            "(?=(?=a))a", "(?<=a)b|c", "(?<!a)b", "(?<=a)(?=b)", "(?!a)(?<!a)a",
+            // quantifier edge cases
+            "a{0}", "a{0,0}", "a{1}", "a{1,}", "a{,2}", "a{1,2}", "a{2,2}", "a{2,3}?",
+            "a{2,2147483647}", "a{2147483648}", "(?:a{2}){3}", "a{2}?", "(a*)+", "(a|a)*",
+            // character classes
+            "[[a-z]&&[^aeiou]]+", "[a-z&&[^m-p]]", "[[a][b]]", "[a[b]]", "[a&&b]", "[a&&a]",
+            "[]a]", "[^]", "[-]", "[--a]", "[a--b]", "[\\d\\s]", "[\\w-]+", "[\\p{L}\\p{N}]+",
+            "\\p{Lu}+", "\\p{Ll}", "\\p{Lt}", "\\p{Nd}", "\\p{P}", "\\p{S}", "\\p{IsGreek}",
+            "\\p{InGreek}", "\\p{sc=Latin}+", "\\p{Script=Greek}", "\\p{gc=Lu}", "\\p{IsLu}",
+            "\\p{IsBasicLatin}", "\\p{javaLowerCase}+", "\\p{javaUpperCase}+",
+            // code points / octal / hex
+            "\\x{1F600}", "\\x{41}", "\\x{110000}", "\\x{}", "\\x41", "\\u0041", "\\u{41}",
+            "\\0", "\\07", "\\012", "\\0x", "\\cA", "\\c@", "\\c_", "\\c",
+            // flags / inline flags / quoting
+            "(?i)a(?-i)b", "(?i:a)", "(?-i:a)", "(?i)(?-i)a", "(?d)\\w", "(?id)ab",
+            "(?u)a(?-u)b", "\\Q[a-z]+\\E", "\\Qabc\\E+", "(?x)a b c", "(?x)a # c\nb",
+            // conditionals (not supported -> stable PSE) and unsupported \N
+            "(?(1)a|b)", "\\N{LATIN SMALL LETTER A}", "\\N{a}",
+            // possessive / atomic
+            "a++a", "a*+a", "a?+a", "(?>a|ab)b", "(?>a+)a", "(a|ab)c", "\\b\\w++\\b"
         };
 
         int idx = 0;
@@ -448,6 +490,256 @@ public class DiffFuzz {
     static String dfFormat(DecimalFormat df, double v) {
         try { return "ok=" + df.format(v); }
         catch (Exception e) { return "EXC=" + e.getClass().getSimpleName(); }
+    }
+
+    // ------------------------------------------------------ SimpleDateFormat
+
+    static final TimeZone SDF_TZ_GMT = TimeZone.getTimeZone("GMT");
+    static final TimeZone SDF_TZ_NY  = TimeZone.getTimeZone("America/New_York");
+    static final TimeZone SDF_TZ_SH  = TimeZone.getTimeZone("Asia/Shanghai");
+
+    // Calendar-built dates are computed in UTC (no DST, no wall clock) so the
+    // millis are identical on both JDKs; only display (pattern/zone) can differ.
+    static long sdfCalMillis(int y, int mo, int d, int h, int mi, int s, int ms) {
+        GregorianCalendar c = new GregorianCalendar(SDF_TZ_GMT, Locale.US);
+        c.setGregorianChange(new Date(Long.MIN_VALUE)); // pure proleptic Gregorian
+        c.clear();
+        c.set(Calendar.YEAR, y);
+        c.set(Calendar.MONTH, mo);
+        c.set(Calendar.DAY_OF_MONTH, d);
+        c.set(Calendar.HOUR_OF_DAY, h);
+        c.set(Calendar.MINUTE, mi);
+        c.set(Calendar.SECOND, s);
+        c.set(Calendar.MILLISECOND, ms);
+        return c.getTimeInMillis();
+    }
+
+    static final String[] SDF_PATTERNS = {
+        "yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSS",
+        "yyyy-MM-dd HH:mm:ss Z", "yyyy-MM-dd HH:mm:ss XXX", "yyyy-MM-dd HH:mm:ss z",
+        "EEE, dd MMM yyyy HH:mm:ss zzz", "yyyyMMddHHmmss", "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+        "dd/MM/yyyy", "MM/dd/yyyy", "yyyy G", "yyyy-MM-dd HH:mm:ss.SSS Z",
+        "yyyyy-MM-dd", "yy-MM-dd", "Y-MM-dd", "YYYY-MM-dd", "u-MM-dd",
+        "w W D F E", "a h:mm K", "k:mm", "S", "X", "XX", "XXX", "Z", "zzz", "z",
+        "yyyy-MM-dd HH:mm:ss.SSSS", "yyyy-MM-dd HH:mm:ss.SSSSSS"
+    };
+
+    static final String[] SDF_PARSE_PATTERNS = {
+        "yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSS",
+        "yyyyMMdd", "yyyyMMddHHmmss", "dd/MM/yyyy", "MM/dd/yyyy", "yyyy", "yyyy-MM",
+        "MM-dd", "yyyy-MM-dd HH", "yyyy-MM-dd HH:mm", "yyyyMMdd HHmmss",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd HH:mm:ss Z",
+        "yyyy G", "yyyy-MM-dd G", "yyMMdd", "yy-MM-dd", "Y-MM-dd", "YYYY", "u-MM-dd",
+        "yyyy-MM-dd hh:mm:ss a", "yyyy-MM-dd HH:mm:ss z", "yyyyMMddHHmmssSSS",
+        "'year' yyyy 'month' MM", "yyyy-MM-dd''", "yyyy-MM-dd [literal]",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd HH:mm:ss.SSSSSS",
+        "", " ", "'", "''", "'yyyy", "yyyy'", "yyyy-MM-dd HH:mm:ss.SSSSSSS",
+        "yyyyy-MM-dd", "yyyyy", "yyyy-MM-dd X", "yyyy-MM-dd XX", "yyyy-MM-dd XXX",
+        "yyyy/MM/dd", "dd.MM.yyyy"
+    };
+
+    static final String[] SDF_PARSE_INPUTS = {
+        "2024-01-15", "2024-1-1", "2024-01-15 10:20:30", "2024-01-15 10:20:30.123",
+        "2024-13-40", "2024-00-00", "0000-00-00", "2024-02-30", "2024-02-29",
+        "2023-02-29", "2024-04-31", "9999-12-31", "10000-01-01", "0001-01-01",
+        "2024", "2024-01", "01-15", "15/01/2024", "01/15/2024", "2024/01/15",
+        "", " ", "abc", "2024-01-15 ", " 2024-01-15", "2024-01-15x",
+        "2024-01-15 10:20", "2024-01-15 10", "2024-01-15 10:20:30.123456",
+        "2024-01-15 10:20:30.123456789", "2024-01-15T10:20:30.123+05:30",
+        "2024-01-15 10:20:30 +0530", "2024-01-15 10:20:30 GMT",
+        "24-01-15", "240115", "20240115", "20240115102030", "2024-01-15 10:20:30 AM",
+        "2024-01-15 10:20:30 PM", "12:00:00", "10:20", "-2024-01-15", "+2024-01-15",
+        "2024-01-15 25:00:00", "2024-01-15 23:60:00", "2024-01-15 23:59:60",
+        "2024-01-15 10:20:30.123 AM", "AD 2024-01-15", "BC 0001-01-01",
+        "31/12/2024", "12/31/2024", "01.01.2024", "2024-01-15 10:20:30 +00:00",
+        "29/02/2024", "29/02/2023", "2024-01-15 10:20:30 GMT+05:30"
+    };
+
+    // Locale-data (CLDR vs COMPAT) and textual-symbol patterns: these expose the
+    // JDK-9 default-locale-provider switch and unrelated timezone-name data.
+    static final Locale[] SDF_LOCALES = {
+        Locale.US, Locale.GERMANY, Locale.FRANCE, Locale.ITALY, Locale.JAPAN,
+        Locale.CHINA, Locale.KOREA, new Locale("ru"), Locale.UK
+    };
+    static final String[] SDF_LOCALE_NAMES = {
+        "US", "GERMANY", "FRANCE", "ITALY", "JAPAN", "CHINA", "KOREA", "ru", "UK"
+    };
+    static final TimeZone[] SDF_TEXT_ZONES = {
+        SDF_TZ_NY, TimeZone.getTimeZone("Europe/London"), SDF_TZ_GMT,
+        TimeZone.getTimeZone("Europe/Berlin")
+    };
+    static final String[] SDF_TEXT_ZONE_NAMES = { "NY", "London", "GMT", "Berlin" };
+    static final String[] SDF_TEXT_PATTERNS = {
+        "MMMM", "MMMMM", "MMM", "EEE", "EEEE", "a", "G", "zzzz", "zzz",
+        "d MMMM yyyy", "EEEE, MMMM d, yyyy"
+    };
+    static final String[] SDF_LOC_PARSE_PATTERNS = {
+        "MMM d yyyy", "d MMM yyyy", "MMMM d yyyy", "d MMMM yyyy", "EEE, MMM d, yyyy"
+    };
+    static final String[] SDF_LOC_PARSE_INPUTS = {
+        "Jan 15 2024", "15 Jan 2024", "January 15 2024", "15 January 2024",
+        "Mon, Jan 15, 2024", "Jan. 15 2024", "15 Jan. 2024", "janv. 15 2024",
+        "15 janv. 2024", "15 janvier 2024", "gen 15 2024", "15 gen 2024",
+        "15 gennaio 2024", "15. Januar 2024", "15. März 2024", "15 mars 2024"
+    };
+
+    static void fuzzSimpleDateFormat() {
+        // ---- formatting: boundary millis x pattern x timezone
+        String[] dates = {
+            "epoch", "0",
+            "epoch-1ms", "-1",
+            "epoch+1ms", "1",
+            "epoch-1s", "-1000",
+            "epoch+1s", "1000",
+            "epoch-1h", "-3600000",
+            "epoch+1h", "3600000",
+            "epoch-1d", "-86400000",
+            "epoch+1d", "86400000",
+            "y2038", "2147483647000",
+            "y1901", "-2147483648000",
+            "y0001", "-62135596800000",
+            "y9999", "253402300799999",
+            "y10000", "253402300800000",
+            "leap-2000-02-29", Long.toString(sdfCalMillis(2000, 1, 29, 12, 0, 0, 0)),
+            "leap-2004-02-29", Long.toString(sdfCalMillis(2004, 1, 29, 12, 0, 0, 0)),
+            "nonleap-1900-02-28", Long.toString(sdfCalMillis(1900, 1, 28, 12, 0, 0, 0)),
+            "nonleap-2100-02-28", Long.toString(sdfCalMillis(2100, 1, 28, 12, 0, 0, 0)),
+            "y1582-10-04", Long.toString(sdfCalMillis(1582, 9, 4, 12, 0, 0, 0)),
+            "y1582-10-15", Long.toString(sdfCalMillis(1582, 9, 15, 12, 0, 0, 0)),
+            "ny-dst-spring", Long.toString(sdfCalMillis(2024, 2, 10, 7, 0, 0, 0)),
+            "ny-dst-fall",   Long.toString(sdfCalMillis(2024, 10, 3, 6, 0, 0, 0)),
+            "ny-pre-dst",    Long.toString(sdfCalMillis(2024, 2, 10, 6, 30, 0, 0)),
+            "ny-post-dst",   Long.toString(sdfCalMillis(2024, 2, 10, 7, 30, 0, 0))
+        };
+        int idx = 0;
+        for (int p = 0; p < SDF_PATTERNS.length; p++) {
+            for (int d = 0; d < dates.length; d += 2) {
+                for (int z = 0; z < 3; z++) {
+                    String zoneName = z == 0 ? "GMT" : (z == 1 ? "NY" : "SH");
+                    String input = "pat=" + SDF_PATTERNS[p] + "|date=" + dates[d]
+                            + "|millis=" + dates[d + 1] + "|tz=" + zoneName;
+                    emit("SDF.format", idx, input,
+                         sdfFormat(SDF_PATTERNS[p], Long.parseLong(dates[d + 1]),
+                                   z == 0 ? SDF_TZ_GMT : (z == 1 ? SDF_TZ_NY : SDF_TZ_SH)));
+                    idx++;
+                }
+            }
+        }
+
+        // ---- parsing: pattern x input x {lenient, strict} x {parse, parsePosition}
+        for (int p = 0; p < SDF_PARSE_PATTERNS.length; p++) {
+            for (int i = 0; i < SDF_PARSE_INPUTS.length; i++) {
+                for (int strict = 0; strict < 2; strict++) {
+                    String mode = strict == 0 ? "lenient" : "strict";
+                    String input = "pat=" + SDF_PARSE_PATTERNS[p] + "|in="
+                            + SDF_PARSE_INPUTS[i] + "|" + mode;
+                    emit("SDF.parse", idx, input,
+                         sdfParse(SDF_PARSE_PATTERNS[p], SDF_PARSE_INPUTS[i], strict == 1));
+                    idx++;
+                }
+            }
+        }
+
+        // ---- textual symbols across locales (CLDR vs COMPAT data)
+        for (int p = 0; p < SDF_TEXT_PATTERNS.length; p++) {
+            for (int l = 0; l < SDF_LOCALES.length; l++) {
+                for (int d = 0; d < 3; d++) {
+                    long m = (d == 0) ? 0L : (d == 1) ? 253402300799999L : -62135596800000L;
+                    for (int z = 0; z < SDF_TEXT_ZONES.length; z++) {
+                        String input = "pat=" + SDF_TEXT_PATTERNS[p] + "|loc="
+                                + SDF_LOCALE_NAMES[l] + "|millis=" + m + "|tz="
+                                + SDF_TEXT_ZONE_NAMES[z];
+                        emit("SDF.format-text", idx, input,
+                             sdfFormatLoc(SDF_TEXT_PATTERNS[p], SDF_LOCALES[l], m,
+                                          SDF_TEXT_ZONES[z]));
+                        idx++;
+                    }
+                }
+            }
+        }
+
+        // ---- locale-sensitive parsing (CLDR abbreviated month names differ)
+        for (int p = 0; p < SDF_LOC_PARSE_PATTERNS.length; p++) {
+            for (int l = 0; l < SDF_LOCALES.length; l++) {
+                for (int i = 0; i < SDF_LOC_PARSE_INPUTS.length; i++) {
+                    for (int strict = 0; strict < 2; strict++) {
+                        String mode = strict == 0 ? "lenient" : "strict";
+                        String input = "pat=" + SDF_LOC_PARSE_PATTERNS[p] + "|loc="
+                                + SDF_LOCALE_NAMES[l] + "|in=" + SDF_LOC_PARSE_INPUTS[i]
+                                + "|" + mode;
+                        emit("SDF.parse-loc", idx, input,
+                             sdfParseLoc(SDF_LOC_PARSE_PATTERNS[p], SDF_LOCALES[l],
+                                         SDF_LOC_PARSE_INPUTS[i], strict == 1));
+                        idx++;
+                    }
+                }
+            }
+        }
+    }
+
+    static String sdfFormatLoc(String pattern, Locale loc, long millis, TimeZone tz) {
+        try {
+            SimpleDateFormat df = new SimpleDateFormat(pattern, loc);
+            df.setTimeZone(tz);
+            return "ok=" + df.format(new Date(millis));
+        } catch (Exception e) {
+            return "EXC=" + e.getClass().getSimpleName();
+        }
+    }
+
+    static String sdfParseLoc(String pattern, Locale loc, String s, boolean strict) {
+        SimpleDateFormat df;
+        try {
+            df = new SimpleDateFormat(pattern, loc);
+        } catch (Exception e) {
+            return "CONSTRUCT=EXC=" + e.getClass().getSimpleName();
+        }
+        df.setTimeZone(SDF_TZ_GMT);
+        df.setLenient(!strict);
+        String plain;
+        try {
+            Date d = df.parse(s);
+            plain = "ok=" + (d == null ? "null" : d.getTime());
+        } catch (Exception e) {
+            plain = "EXC=" + e.getClass().getSimpleName();
+        }
+        ParsePosition pp = new ParsePosition(0);
+        Date d2 = df.parse(s, pp);
+        String ppv = (d2 == null) ? "null" : Long.toString(d2.getTime());
+        return plain + "|pp=" + ppv + "@" + pp.getIndex() + "|errIdx=" + pp.getErrorIndex();
+    }
+
+    static String sdfFormat(String pattern, long millis, TimeZone tz) {
+        try {
+            SimpleDateFormat df = new SimpleDateFormat(pattern, Locale.US);
+            df.setTimeZone(tz);
+            Date d = new Date(millis);
+            return "ok=" + df.format(d);
+        } catch (Exception e) {
+            return "EXC=" + e.getClass().getSimpleName();
+        }
+    }
+
+    static String sdfParse(String pattern, String s, boolean strict) {
+        SimpleDateFormat df;
+        try {
+            df = new SimpleDateFormat(pattern, Locale.US);
+        } catch (Exception e) {
+            return "CONSTRUCT=EXC=" + e.getClass().getSimpleName();
+        }
+        df.setTimeZone(SDF_TZ_GMT);
+        df.setLenient(!strict);
+        String plain;
+        try {
+            Date d = df.parse(s);
+            plain = "ok=" + (d == null ? "null" : d.getTime());
+        } catch (Exception e) {
+            plain = "EXC=" + e.getClass().getSimpleName();
+        }
+        ParsePosition pp = new ParsePosition(0);
+        Date d2 = df.parse(s, pp);
+        String ppv = (d2 == null) ? "null" : Long.toString(d2.getTime());
+        return plain + "|pp=" + ppv + "@" + pp.getIndex() + "|errIdx=" + pp.getErrorIndex();
     }
 
     // ---------------------------------------------------------------- URI

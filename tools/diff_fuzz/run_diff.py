@@ -106,8 +106,15 @@ def main():
             cat_div[cat] = cat_div.get(cat, 0) + 1
             divergences.append({
                 "line": i, "cat": cat, "idx": a[1], "input": a[2],
-                "jdk8": a[3], "jdk27": b[3], "kind": classify(a[3], b[3]),
+                "jdk8": a[3], "jdk27": b[3],
+                "kind": classify(a[3], b[3]),
+                "bucket": bucket(cat, a[2], a[3], b[3]),
             })
+
+    bucket_counts = {}
+    for d in divergences:
+        b = d.get("bucket", "unknown")
+        bucket_counts[b] = bucket_counts.get(b, 0) + 1
 
     report = {
         "jdk8_meta": meta8,
@@ -116,6 +123,7 @@ def main():
         "divergence_count": len(divergences),
         "per_category_total": dict(sorted(cat_total.items())),
         "per_category_divergences": dict(sorted(cat_div.items())),
+        "bucket_counts": dict(sorted(bucket_counts.items())),
         "divergences": divergences,
     }
 
@@ -129,9 +137,13 @@ def main():
         f.write("per-category divergence counts:\n")
         for c, d in sorted(cat_div.items()):
             f.write("  %-28s %d / %d\n" % (c, d, cat_total.get(c, 0)))
+        f.write("\nbucket counts (expected/candidate/env):\n")
+        for b, d in sorted(bucket_counts.items()):
+            f.write("  %-12s %d\n" % (b, d))
         f.write("\n")
         for d in divergences:
-            f.write("---- line %s  [%s/%s]  kind=%s\n" % (d["line"], d.get("cat"), d.get("idx"), d.get("kind")))
+            f.write("---- line %s  [%s/%s]  kind=%s  bucket=%s\n"
+                    % (d["line"], d.get("cat"), d.get("idx"), d.get("kind"), d.get("bucket")))
             f.write("  input : %s\n" % d.get("input", ""))
             f.write("  jdk8  : %s\n" % d["jdk8"])
             f.write("  jdk27 : %s\n" % d["jdk27"])
@@ -142,7 +154,50 @@ def main():
     print("per-category divergence counts:")
     for c, d in sorted(cat_div.items()):
         print("  %-28s %d / %d" % (c, d, cat_total.get(c, 0)))
+    print("bucket counts (expected/candidate/env):")
+    for b, d in sorted(bucket_counts.items()):
+        print("  %-12s %d" % (b, d))
     print("\nartifacts under", OUT)
+
+
+def bucket(cat, inp, jdk8, jdk27):
+    """Three-way classification of a divergence.
+
+    expected  -- spec allows evolution (e.g. JDK-8 lacks a regex construct, or a
+                 diagnostic / validation behaviour was deliberately tightened).
+    candidate -- suspected regression or an untriaged branch that needs review.
+    env       -- not code behaviour: locale/CLDR-vs-COMPAT or tzdata differences.
+    """
+    # Locale data: SimpleDateFormat textual symbols and locale-sensitive parsing
+    # (JDK-9 switched the default locale provider from COMPAT/JRE to CLDR).
+    if cat.startswith("SDF."):
+        return "env"
+    # NaN symbol ("�" in COMPAT -> "NaN" in CLDR) and NaN parsing.
+    if cat in ("DecimalFormat.format", "DecimalFormat.parse"):
+        return "env"
+    if cat == "NumberFormat.format":
+        # NaN symbol plus the CLDR currency negative pattern ($..) vs -$..
+        return "env"
+    if cat == "NumberFormat.format-rand":
+        # currency subcases are the CLDR negative pattern; the plain "number"
+        # subcase is a double->decimal rounding change (review candidate).
+        if inp.startswith("currency|"):
+            return "env"
+        return "candidate"
+    # URI/URL: JDK-8 vs 27 diagnostic-index / stricter hostname validation.
+    if cat == "URI":
+        return "expected"
+    if cat == "URL":
+        return "expected"
+    # Regex: a throw-vs-value split means JDK-8 lacks the construct
+    # (\X, \N{...}, \p{Script=}/\p{sc=}, ...) -> expected; a value-vs-value
+    # split is a genuine behaviour change (e.g. \b/\B non-ASCII word boundary)
+    # -> review candidate.
+    if cat.startswith("Pattern.compile") or cat.startswith("Regex.match"):
+        if jdk8.startswith("EXC=") or jdk27.startswith("EXC="):
+            return "expected"
+        return "candidate"
+    return "candidate"
 
 
 def classify(a, b):
