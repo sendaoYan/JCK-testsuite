@@ -61,10 +61,26 @@ public class NewFolderActionTest {
         javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
         javax.swing.plaf.basic.BasicFileChooserUI ui = new javax.swing.plaf.basic.BasicFileChooserUI(fc);
         ui.installUI(fc);
-        javax.swing.Action a = ui.getNewFolderAction();
-        check(a != null, "new folder action non-null");
-        a.actionPerformed(new java.awt.event.ActionEvent(fc, java.awt.event.ActionEvent.ACTION_PERFORMED, "newFolder"));
-        check(true, "actionPerformed ok");
-        ui.uninstallUI(fc);
+        // The action creates "NewFolder" (then "NewFolder.1", ...) in the
+        // chooser's current directory, which defaults to $HOME. Point it at a
+        // scratch dir under /tmp so repeated runs don't leak folders into the
+        // user's home directory.
+        java.io.File scratch = java.nio.file.Files.createTempDirectory("jck-newfolder-").toFile();
+        try {
+            fc.setCurrentDirectory(scratch);
+            javax.swing.Action a = ui.getNewFolderAction();
+            check(a != null, "new folder action non-null");
+            a.actionPerformed(new java.awt.event.ActionEvent(fc, java.awt.event.ActionEvent.ACTION_PERFORMED, "newFolder"));
+            check(true, "actionPerformed ok");
+        } finally {
+            ui.uninstallUI(fc);
+            deleteRecursively(scratch);
+        }
+    }
+
+    static void deleteRecursively(java.io.File f) {
+        java.io.File[] kids = f.listFiles();
+        if (kids != null) for (java.io.File k : kids) deleteRecursively(k);
+        f.delete();
     }
 }
