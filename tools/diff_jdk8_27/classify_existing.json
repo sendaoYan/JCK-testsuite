@@ -1,0 +1,718 @@
+{
+  "java/text/DateFormat/DateFormatTest.java": {
+    "class": "expected",
+    "note": "日语 FULL 日期格式 JDK-9+ 改走 CLDR，无星期字段（JRE 格式数据进化）"
+  },
+  "java/text/DateFormatSymbols/DateFormatSymbolsTest.java": {
+    "class": "expected",
+    "note": "德语 shortMonths 去掉句点（CLDR 数据进化）"
+  },
+  "java/text/DecimalFormat/DecimalFormatTest.java": {
+    "class": "expected",
+    "note": "货币实例 toPattern 随 CLDR 数据进化"
+  },
+  "java/text/DecimalFormatSymbols/DecimalFormatSymbolsTest.java": {
+    "class": "expected",
+    "note": "美元 NaN 符号由 U+FFFD 改为 U+FFFD 之外的 CLDR 值（数据进化）"
+  },
+  "java/text/NumberFormat/NumberFormatTest.java": {
+    "class": "expected",
+    "note": "de_DE 货币符号/格式随 CLDR 数据进化"
+  },
+  "java/text/SimpleDateFormat/SimpleDateFormatTest.java": {
+    "class": "expected",
+    "note": "默认模式 locale 数据进化"
+  },
+  "java/time/Month/MonthTest.java": {
+    "class": "expected",
+    "note": "SHORT_STANDALONE 文本 CLDR 由数字改为缩写（数据进化）"
+  },
+  "java/time/format/TextStyle/TextStyleTest.java": {
+    "class": "expected",
+    "note": "SHORT_STANDALONE 文本 CLDR 数据进化"
+  },
+  "java/time/chrono/Era/EraTest.java": {
+    "class": "expected",
+    "note": "昭和短名 Shōwa vs Showa（CLDR 日文标音进化）"
+  },
+  "java/time/chrono/HijrahChronology/HijrahChronologyTest.java": {
+    "class": "expected",
+    "note": "回历全名 CLDR 文本进化"
+  },
+  "java/time/chrono/HijrahEra/HijrahEraTest.java": {
+    "class": "expected",
+    "note": "回历纪年全名 CLDR 文本进化"
+  },
+  "java/time/chrono/JapaneseEra/JapaneseEraTest.java": {
+    "class": "expected",
+    "note": "昭和短名 CLDR 文本进化"
+  },
+  "java/time/chrono/MinguoDate/MinguoDateTest.java": {
+    "class": "expected",
+    "note": "民国纪年格式 CLDR 文本进化"
+  },
+  "java/time/chrono/MinguoEra/MinguoEraTest.java": {
+    "class": "expected",
+    "note": "民国纪年全名 CLDR 文本进化"
+  },
+  "java/time/chrono/ThaiBuddhistDate/ThaiBuddhistDateTest.java": {
+    "class": "expected",
+    "note": "佛历纪年格式 CLDR 文本进化"
+  },
+  "java/time/chrono/ThaiBuddhistEra/ThaiBuddhistEraTest.java": {
+    "class": "expected",
+    "note": "佛历纪年全名 CLDR 文本进化"
+  },
+  "java/time/format/DateTimeFormatter/DateTimeFormatterTest.java": {
+    "class": "expected",
+    "note": "MEDIUM 时间格式窄不换行空格 U+202F vs 普通空格（CLDR 数据进化）"
+  },
+  "java/time/ZoneId/ZoneIdTest.java": {
+    "class": "expected",
+    "note": "SHORT_IDS 中 EST 映射由 -05:00 改为 America/Panama（tzdata 进化）"
+  },
+  "java/text/Format/Field/FieldTest.java": {
+    "class": "candidate",
+    "note": "JDK-9+ 新增 NumberFormat.Field.PREFIX/SUFFIX 常量，反射枚举未锁定常量集合（N=74→78）"
+  },
+  "java/time/Instant/InstantTest.java": {
+    "class": "candidate",
+    "note": "ChronoField.INSTANT_SECONDS.range() 由全 long 域改为有界 Instant 域（行为进化）"
+  },
+  "java/time/LocalDate/LocalDateTest.java": {
+    "class": "candidate",
+    "note": "MIN.minusDays 越界异常字段由 Year 改为 EpochDay（异常消息字段进化）"
+  },
+  "java/time/Year/YearTest.java": {
+    "class": "candidate",
+    "note": "Year.parse 前导 '+' 号 JDK-8 拒绝、JDK-27 接受（符号宽松化）"
+  },
+  "java/time/format/DateTimeFormatterBuilder/DateTimeFormatterBuilderTest.java": {
+    "class": "candidate",
+    "note": "分数段无小数点解析异常消息文本变化"
+  },
+  "java/time/temporal/ChronoField/ChronoFieldTest.java": {
+    "class": "candidate",
+    "note": "EPOCH_DAY.range() 由对称域改为真实 LocalDate 边界（行为进化）"
+  },
+  "java/time/temporal/ValueRange/ValueRangeTest.java": {
+    "class": "candidate",
+    "note": "ValueRange.of(3,1,2) IAE 消息 'maximum' → 'smallest maximum'（消息进化）"
+  },
+  "java/time/zone/ZoneOffsetTransitionRule/ZoneOffsetTransitionRuleTest.java": {
+    "class": "candidate",
+    "note": "null timeDefinition NPE 消息拼写 timeDefnition → timeDefinition（消息修正）"
+  },
+  "java/math/BigDecimal/BigDecimalTest.java": {
+    "class": "candidate",
+    "note": "BigDecimal.valueOf(NaN/±Inf) NFE 消息由 null 改为 'Infinite or NaN'（消息进化）"
+  },
+  "java/lang/ArithmeticException/ArithmeticExceptionTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/Byte/ByteTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/Class/ClassTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/ClassLoader/ClassLoaderTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/CloneNotSupportedException/CloneNotSupportedExceptionTest.java": {
+    "class": "expected",
+    "note": "JDK-9+ 新增（JDK-8 源未引用，编译期捕获）"
+  },
+  "java/lang/Compiler/CompilerTest.java": {
+    "class": "expected",
+    "note": "JDK-8 专属 API 在 JDK-27 移除（规范允许）"
+  },
+  "java/lang/Deprecated/DeprecatedTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/IllegalThreadStateException/IllegalThreadStateExceptionTest.java": {
+    "class": "candidate",
+    "note": "空 ThreadGroup.destroy JDK-8 抛 ITSE、JDK-27 成功（行为进化）"
+  },
+  "java/lang/IndexOutOfBoundsException/IndexOutOfBoundsExceptionTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/NullPointerException/NullPointerExceptionTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/Object/ObjectTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/Package/PackageTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/Process/ProcessTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/ProcessBuilder/ProcessBuilderTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/Runtime/RuntimeTest.java": {
+    "class": "expected",
+    "note": "JDK-8 专属 API 在 JDK-27 移除（规范允许）"
+  },
+  "java/lang/SecurityManager/SecurityManagerTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/Short/ShortTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/StackTraceElement/StackTraceElementTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/SuppressWarnings/SuppressWarningsTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/System/SystemTest.java": {
+    "class": "candidate",
+    "note": "System.arraycopy 负长度异常消息 JDK-8 null、JDK-27 非 null（消息进化）"
+  },
+  "java/lang/Thread/ThreadTest.java": {
+    "class": "candidate",
+    "note": "Thread((String)null) 等 NPE 消息变化"
+  },
+  "java/lang/ThreadDeath/ThreadDeathTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/ThreadGroup/ThreadGroupTest.java": {
+    "class": "expected",
+    "note": "JDK-8 专属 API 在 JDK-27 移除（规范允许）"
+  },
+  "java/lang/Throwable/ThrowableTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/annotation/Annotation/AnnotationTest.java": {
+    "class": "candidate",
+    "note": "标记注解 toString 格式变化"
+  },
+  "java/lang/annotation/AnnotationTypeMismatchException/AnnotationTypeMismatchExceptionTest.java": {
+    "class": "candidate",
+    "note": "非 transient Method 序列化异常类型变化"
+  },
+  "java/lang/annotation/ElementType/ElementTypeTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/instrument/ClassFileTransformer/ClassFileTransformerTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/instrument/Instrumentation/InstrumentationTest.java": {
+    "class": "env",
+    "note": "需 javaagent 环境，无法直接 java 运行"
+  },
+  "java/lang/invoke/LambdaMetafactory/LambdaMetafactoryTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/invoke/MethodHandleProxies/MethodHandleProxiesTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/invoke/MethodHandles/Lookup/LookupTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/invoke/MethodHandles/MethodHandlesTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/invoke/MethodType/MethodTypeTest.java": {
+    "class": "candidate",
+    "note": "MethodType.fromDescriptor 解析失败消息/行为变化"
+  },
+  "java/lang/management/BufferPoolMXBean/BufferPoolMXBeanTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/management/GarbageCollectorMXBean/GarbageCollectorMXBeanTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/management/ManagementFactory/ManagementFactoryTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/management/MemoryManagerMXBean/MemoryManagerMXBeanTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/management/MemoryPoolMXBean/MemoryPoolMXBeanTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/management/PlatformManagedObject/PlatformManagedObjectTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/management/RuntimeMXBean/RuntimeMXBeanTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/management/ThreadInfo/ThreadInfoTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/management/ThreadMXBean/ThreadMXBeanTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/lang/ref/Reference/ReferenceTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/reflect/AccessibleObject/AccessibleObjectTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/reflect/AnnotatedType/AnnotatedTypeTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/reflect/AnnotatedTypeVariable/AnnotatedTypeVariableTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/reflect/AnnotatedWildcardType/AnnotatedWildcardTypeTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/reflect/Constructor/ConstructorTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/reflect/Executable/ExecutableTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/reflect/Field/FieldTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/reflect/GenericDeclaration/GenericDeclarationTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/reflect/InvocationHandler/InvocationHandlerTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/reflect/MalformedParameterizedTypeException/MalformedParameterizedTypeExceptionTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/reflect/Member/MemberTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/reflect/Method/MethodTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/lang/reflect/Modifier/ModifierTest.java": {
+    "class": "expected",
+    "note": "JDK-8 专属 API 在 JDK-27 移除（规范允许）"
+  },
+  "java/lang/reflect/Parameter/ParameterTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/lang/reflect/TypeVariable/TypeVariableTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/util/ArrayDeque/ArrayDequeTest.java": {
+    "class": "candidate",
+    "note": "fail-fast 迭代器：JDK-8 尾部 remove 后仍抛 CME，JDK-27 不再抛（ArrayDeque 迭代器行为进化）"
+  },
+  "java/util/Arrays/ArraysTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/util/Currency/CurrencyTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/Deque/DequeTest.java": {
+    "class": "candidate",
+    "note": "fail-fast 迭代器：descending 头 remove 后 CME 行为变化（与 ArrayDeque 同源）"
+  },
+  "java/util/DoubleSummaryStatistics/DoubleSummaryStatisticsTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/util/EnumSet/EnumSetTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/IdentityHashMap/IdentityHashMapTest.java": {
+    "class": "candidate",
+    "note": "remove(k,等值非同一实例 v)：JDK-8 误用 equals 语义，JDK-19+ 修正为 identity 语义（bug 修复）"
+  },
+  "java/util/Locale/LocaleTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/MissingResourceException/MissingResourceExceptionTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/util/NoSuchElementException/NoSuchElementExceptionTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/util/Optional/OptionalTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/OptionalDouble/OptionalDoubleTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/OptionalInt/OptionalIntTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/OptionalLong/OptionalLongTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/PriorityQueue/PriorityQueueTest.java": {
+    "class": "candidate",
+    "note": "不可比较元素 ClassCastException 消息/类型变化"
+  },
+  "java/util/Properties/PropertiesTest.java": {
+    "class": "candidate",
+    "note": "propertyNames 视图 remove 抛 UnsupportedOperationException 行为变化"
+  },
+  "java/util/PropertyResourceBundle/PropertyResourceBundleTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/SplittableRandom/SplittableRandomTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/AbstractExecutorService/AbstractExecutorServiceTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/CompletableFuture/CompletableFutureTest.java": {
+    "class": "candidate",
+    "note": "CancellationException 消息 JDK-8 为 null、JDK-27 非 null（消息进化）"
+  },
+  "java/util/concurrent/CompletionService/CompletionServiceTest.java": {
+    "class": "env",
+    "note": "双 JDK 30s 超时（非差分，测试自身慢）"
+  },
+  "java/util/concurrent/ExecutorCompletionService/ExecutorCompletionServiceTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/ExecutorService/ExecutorServiceTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/Executors/ExecutorsTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/ForkJoinPool/ForkJoinPoolTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/ForkJoinWorkerThread/ForkJoinWorkerThreadTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/Future/FutureTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/util/concurrent/FutureTask/FutureTaskTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/ScheduledThreadPoolExecutor/ScheduledThreadPoolExecutorTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/ThreadLocalRandom/ThreadLocalRandomTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/ThreadPoolExecutor/ThreadPoolExecutorTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/TimeUnit/TimeUnitTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/atomic/AtomicBoolean/AtomicBooleanTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/atomic/AtomicInteger/AtomicIntegerTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/atomic/AtomicIntegerArray/AtomicIntegerArrayTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/atomic/AtomicIntegerFieldUpdater/AtomicIntegerFieldUpdaterTest.java": {
+    "class": "candidate",
+    "note": "private 字段 newUpdater 拒绝行为变化（三组 FieldUpdater 同源）"
+  },
+  "java/util/concurrent/atomic/AtomicLong/AtomicLongTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/atomic/AtomicLongArray/AtomicLongArrayTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/atomic/AtomicLongFieldUpdater/AtomicLongFieldUpdaterTest.java": {
+    "class": "candidate",
+    "note": "private 字段 newUpdater 拒绝行为变化"
+  },
+  "java/util/concurrent/atomic/AtomicReference/AtomicReferenceTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/atomic/AtomicReferenceArray/AtomicReferenceArrayTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/concurrent/atomic/AtomicReferenceFieldUpdater/AtomicReferenceFieldUpdaterTest.java": {
+    "class": "candidate",
+    "note": "private 字段 newUpdater 拒绝行为变化"
+  },
+  "java/util/concurrent/locks/AbstractQueuedLongSynchronizer/AbstractQueuedLongSynchronizerTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/util/function/Predicate/PredicateTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/jar/JarFile/JarFileTest.java": {
+    "class": "candidate",
+    "note": "缺失 jar 异常族：JDK-8 IOException、JDK-27 NoSuchFileException（异常类型细化）"
+  },
+  "java/util/jar/Pack200/Pack200Test.java": {
+    "class": "expected",
+    "note": "JDK-8 专属 API 在 JDK-27 移除（规范允许）"
+  },
+  "java/util/jar/Pack200/Packer/PackerTest.java": {
+    "class": "expected",
+    "note": "JDK-8 专属 API 在 JDK-27 移除（规范允许）"
+  },
+  "java/util/jar/Pack200/Unpacker/UnpackerTest.java": {
+    "class": "expected",
+    "note": "JDK-8 专属 API 在 JDK-27 移除（规范允许）"
+  },
+  "java/util/logging/Handler/HandlerTest.java": {
+    "class": "candidate",
+    "note": "Handler.isLoggable(null) JDK-8 抛 NPE、JDK-27 不抛（行为进化）"
+  },
+  "java/util/logging/LoggingMXBean/LoggingMXBeanTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/util/logging/XMLFormatter/XMLFormatterTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/stream/Collectors/CollectorsTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/util/stream/StreamSupport/StreamSupportTest.java": {
+    "class": "env",
+    "note": "JDK-8 侧 30s 超时"
+  },
+  "java/util/zip/Deflater/DeflaterTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/util/zip/Inflater/InflaterTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/util/zip/ZipFile/ZipFileTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/nio/Buffer/BufferTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/nio/ByteBuffer/ByteBufferTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/ByteOrder/ByteOrderTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/nio/DoubleBuffer/DoubleBufferTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/FloatBuffer/FloatBufferTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/IntBuffer/IntBufferTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/LongBuffer/LongBufferTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/MappedByteBuffer/MappedByteBufferTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/ShortBuffer/ShortBufferTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/channels/Channels/ChannelsTest.java": {
+    "class": "candidate",
+    "note": "通道适配器已关闭后读写 ClosedChannelException 行为变化"
+  },
+  "java/nio/channels/DatagramChannel/DatagramChannelTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/channels/FileChannel/FileChannelTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/channels/FileLock/FileLockTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/nio/channels/OverlappingFileLockException/OverlappingFileLockExceptionTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/nio/channels/Pipe/SinkChannel/SinkChannelTest.java": {
+    "class": "env",
+    "note": "双 JDK 30s 超时"
+  },
+  "java/nio/channels/SelectionKey/SelectionKeyTest.java": {
+    "class": "candidate",
+    "note": "readyOps 就绪谓词行为变化"
+  },
+  "java/nio/channels/SocketChannel/SocketChannelTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/channels/spi/AbstractInterruptibleChannel/AbstractInterruptibleChannelTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/channels/spi/AsynchronousChannelProvider/AsynchronousChannelProviderTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/channels/spi/SelectorProvider/SelectorProviderTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/charset/CoderMalfunctionError/CoderMalfunctionErrorTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/charset/CoderResult/CoderResultTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/charset/StandardCharsets/StandardCharsetsTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/charset/spi/CharsetProvider/CharsetProviderTest.java": {
+    "class": "expected",
+    "note": "表面锁定/规范进化（反射可访问性、结构面、版本、弃用等，JDK-27 树已处理）"
+  },
+  "java/nio/file/FileSystem/FileSystemTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/file/FileSystemLoopException/FileSystemLoopExceptionTest.java": {
+    "class": "candidate",
+    "note": "Files.copy 循环符号链接异常行为变化"
+  },
+  "java/nio/file/FileSystems/FileSystemsTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/file/Files/FilesTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/file/Path/PathTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/file/Paths/PathsTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  },
+  "java/nio/file/WatchEvent/WatchEventTest.java": {
+    "class": "expected",
+    "note": "JDK-27 常量/字段/MBean 增多（N 计数变化）"
+  },
+  "java/nio/file/attribute/DosFileAttributeView/DosFileAttributeViewTest.java": {
+    "class": "env",
+    "note": "依赖文件系统 DOS 属性支持（平台/环境相关）"
+  },
+  "java/nio/file/attribute/DosFileAttributes/DosFileAttributesTest.java": {
+    "class": "env",
+    "note": "依赖文件系统 DOS 属性支持"
+  },
+  "java/nio/file/attribute/GroupPrincipal/GroupPrincipalTest.java": {
+    "class": "env",
+    "note": "依赖 OS 用户/组解析（环境相关）"
+  },
+  "java/nio/file/attribute/UserPrincipalLookupService/UserPrincipalLookupServiceTest.java": {
+    "class": "env",
+    "note": "依赖 OS 用户解析（环境相关）"
+  },
+  "java/nio/file/attribute/UserPrincipalNotFoundException/UserPrincipalNotFoundExceptionTest.java": {
+    "class": "env",
+    "note": "依赖 OS 用户解析（环境相关）"
+  },
+  "java/nio/file/spi/FileSystemProvider/FileSystemProviderTest.java": {
+    "class": "expected",
+    "note": "表面锁定：JDK-8 断言 JDK-9+ 方法缺失（spec_added 运行时形态）"
+  }
+}
