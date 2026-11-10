@@ -3,10 +3,10 @@
   JCK-testsuite Windows full runner: run jdk-8 / jdk-27 each RUNS times (API+JLS+JVMS).
 
 .DESCRIPTION
-  Self-contained: expects this script to sit at the suite root, next to
-    JDK-8\  JDK-27\  jtreg\  (as produced by extracting the jck-win tarball
-    copied from hanqinhu). The two JDKs are referenced by absolute path under
-    D:\yansendao\JDK.
+  Assumes this script sits at the root of a git clone of
+  git@github.com:sendaoYan/JCK-testsuite.git (next to JDK-8\ and JDK-27\).
+  jtreg is expected under D:\yansendao\JDK\jtreg (jtreg.jar found recursively).
+  The two JDKs are expected under D:\yansendao\JDK.
 
   Usage (PowerShell):
     powershell -ExecutionPolicy Bypass -File run-windows-full.ps1
@@ -21,9 +21,21 @@ $JDK8    = Join-Path $JDKROOT "jdk-8.0.512.9-hotspot"   # JDK under test (8)
 $JDK27   = Join-Path $JDKROOT "jdk-27.0.1.0.2+1"        # JDK under test (27) + jtreg runner
 $RUNS    = 5                                            # passes per JDK
 
-# suite root = this script's directory (contains JDK-8\, JDK-27\, jtreg\)
-$SUITE     = $PSScriptRoot
-$JTREG_JAR = Join-Path $SUITE "jtreg\lib\jtreg.jar"
+$SUITE      = $PSScriptRoot                             # git clone root (has JDK-8\, JDK-27\)
+$JTREG_HOME = Join-Path $JDKROOT "jtreg"
+
+# ---- locate jtreg.jar (recursive under jtreg) ----
+$JTREG_JAR = $null
+if (Test-Path $JTREG_HOME) {
+    $JTREG_JAR = Get-ChildItem -Path $JTREG_HOME -Filter "jtreg.jar" -Recurse -ErrorAction SilentlyContinue |
+                 Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $JTREG_JAR) {
+    Write-Host "[error] jtreg.jar not found under $JTREG_HOME"
+    Write-Host "        copy /data/yansendao/JDK/tools/jtreg/jtreg-8.3 (hanqinhu) to D:\yansendao\JDK\jtreg"
+    exit 1
+}
+
 $JTREG_JAVA = Join-Path $JDK27 "bin\java.exe"           # jtreg itself needs JDK 11+
 
 # ---- validate ----
