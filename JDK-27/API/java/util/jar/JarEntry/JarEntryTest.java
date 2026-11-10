@@ -180,8 +180,73 @@ public class JarEntryTest {
         }
     }
 
+    // ===================== 契约深化（第二层）：setCrc/setExtra/clone 独立/负值边界/NIO 时间属性 =====================
+    static void testMoreContracts() throws Exception {
+        // setCrc/getCrc round-trip
+        JarEntry c = new JarEntry("crc.txt");
+        c.setCrc(12345L);
+        check(c.getCrc() == 12345L, "setCrc/getCrc round-trip");
+
+        // setExtra/getExtra round-trip
+        JarEntry x = new JarEntry("extra.txt");
+        x.setExtra(new byte[]{1, 2, 3, 4});
+        check(java.util.Arrays.equals(new byte[]{1, 2, 3, 4}, x.getExtra()), "setExtra/getExtra round-trip");
+
+        // clone 独立：修改 clone 的 comment / extra 不影响原对象
+        JarEntry orig = new JarEntry("orig.txt");
+        orig.setComment("orig-comment");
+        orig.setExtra(new byte[]{9, 8, 7});
+        JarEntry cl = (JarEntry) orig.clone();
+        check(cl != orig, "clone distinct object");
+        check("orig.txt".equals(cl.getName()) && "orig-comment".equals(cl.getComment()),
+              "clone copies name/comment");
+        cl.setComment("changed");
+        check("orig-comment".equals(orig.getComment()), "clone comment independent");
+        byte[] clExtra = cl.getExtra();
+        clExtra[0] = 1;
+        check(orig.getExtra()[0] == 9, "clone extra independent");
+
+        // 负值边界：size/crc/method 负值 -> IAE；compressedSize/time 负值表示未知，合法
+        expectThrows(IllegalArgumentException.class, new Runnable() {
+            public void run() { new JarEntry("n1").setSize(-1); }
+        });
+        expectThrows(IllegalArgumentException.class, new Runnable() {
+            public void run() { new JarEntry("n2").setCrc(-1); }
+        });
+        expectThrows(IllegalArgumentException.class, new Runnable() {
+            public void run() { new JarEntry("n3").setMethod(-1); }
+        });
+        JarEntry neg = new JarEntry("neg.txt");
+        neg.setCompressedSize(-1);
+        check(neg.getCompressedSize() == -1, "setCompressedSize(-1) means unknown");
+        neg.setTime(-1);
+        check(neg.getTime() == -1, "setTime(-1) means unknown");
+
+        // 合法 method 值 0/8
+        JarEntry m = new JarEntry("m.txt");
+        m.setMethod(ZipEntry.DEFLATED);
+        check(m.getMethod() == ZipEntry.DEFLATED, "setMethod(DEFLATED)");
+        m.setMethod(ZipEntry.STORED);
+        check(m.getMethod() == ZipEntry.STORED, "setMethod(STORED)");
+
+        // setTime 偶数秒 epoch round-trip
+        JarEntry t = new JarEntry("t.txt");
+        t.setTime(1234567890000L);
+        check(t.getTime() == 1234567890000L, "setTime/getTime round-trip");
+
+        // NIO 时间属性默认 null（未设置）
+        JarEntry f = new JarEntry("f.txt");
+        check(f.getLastModifiedTime() == null && f.getLastAccessTime() == null && f.getCreationTime() == null,
+              "fresh NIO time attrs null");
+
+        // 默认 comment/extra null
+        check(new JarEntry("d.txt").getComment() == null, "default comment null");
+        check(new JarEntry("d.txt").getExtra() == null, "default extra null");
+    }
+
     public static void main(String[] args) throws Exception {
         testContracts();
+        testMoreContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

@@ -254,8 +254,56 @@ public class ManifestTest {
         check(!orig.equals(new Object()), "equals non-Manifest false");
     }
 
+    // ===================== 契约深化（第二层）：Attributes.Name 常量 / 大小写不敏感 / Attributes 集合视图与 clone =====================
+    static void testAttributesContracts() {
+        // Name 常量 toString 权威值
+        check("Manifest-Version".equals(Attributes.Name.MANIFEST_VERSION.toString()), "MANIFEST_VERSION name");
+        check("Main-Class".equals(Attributes.Name.MAIN_CLASS.toString()), "MAIN_CLASS name");
+        check("Sealed".equals(Attributes.Name.SEALED.toString()), "SEALED name");
+        check("Content-Type".equals(Attributes.Name.CONTENT_TYPE.toString()), "CONTENT_TYPE name");
+        check("Class-Path".equals(Attributes.Name.CLASS_PATH.toString()), "CLASS_PATH name");
+        check("Implementation-Title".equals(Attributes.Name.IMPLEMENTATION_TITLE.toString()), "IMPLEMENTATION_TITLE name");
+        check("Specification-Version".equals(Attributes.Name.SPECIFICATION_VERSION.toString()), "SPECIFICATION_VERSION name");
+
+        // 大小写不敏感查找：getValue(String) / get(Name) / containsKey / remove
+        Attributes a = new Attributes();
+        a.putValue("Manifest-Version", "1.0");
+        a.putValue("Sealed", "true");
+        check("1.0".equals(a.getValue("manifest-version")), "getValue case-insensitive");
+        check("true".equals(a.getValue("SEALED")), "getValue upper case-insensitive");
+        check("1.0".equals(a.get(new Attributes.Name("manifest-version"))), "get(Name) case-insensitive");
+        check(a.containsKey(new Attributes.Name("sealed")), "containsKey case-insensitive");
+        check("true".equals(a.remove(new Attributes.Name("sealed"))), "remove case-insensitive returns value");
+        check(a.size() == 1, "size after case-insensitive remove");
+
+        // 大小写不敏感 equals/hashCode（条数不同则不相等）
+        Attributes b = new Attributes();
+        b.putValue("manifest-VERSION", "1.0");
+        b.putValue("sealed", "true");
+        check(!a.equals(b), "size mismatch not equal");
+
+        Attributes a2 = new Attributes();
+        a2.putValue("manifest-VERSION", "1.0");
+        check(a.equals(a2) && a.hashCode() == a2.hashCode(), "equals/hashCode case-insensitive");
+
+        // Attributes.clone 独立但相等
+        Attributes c = (Attributes) a.clone();
+        check(c != a && c.equals(a) && c.hashCode() == a.hashCode(), "Attributes clone distinct/equal");
+
+        // putValue/getValue round-trip、集合视图与 clear
+        Attributes v = new Attributes();
+        v.putValue("X-Key", "v1");
+        check("v1".equals(v.getValue("x-key")), "putValue/getValue round-trip");
+        check(v.size() == 1 && v.containsValue("v1"), "size/containsValue");
+        check(v.entrySet().size() == 1 && v.values().size() == 1 && v.keySet().size() == 1,
+              "entrySet/values/keySet sizes");
+        v.clear();
+        check(v.isEmpty(), "Attributes clear empties");
+    }
+
     public static void main(String[] args) throws Exception {
         testContracts();
+        testAttributesContracts();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

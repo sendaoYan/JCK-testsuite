@@ -96,9 +96,69 @@ public class DecoderTest {
         }
     }
 
+    // ---- 契约深化（第二层）：decode(byte[],byte[]) 边界 / wrap(null) / 无 padding 与非法长度 / URL-MIME 字母表 ----
+    static void testDecoderMoreContracts() throws Exception {
+        Base64.Decoder d = Base64.getDecoder();
+        // decode(byte[], byte[]) 返回写入字节数，恰好尺寸写满
+        check(d.decode("Zm9v".getBytes("US-ASCII"), new byte[8]) == 3, "decode(src,dst) returns 3");
+        byte[] ddst = new byte[3];
+        check(d.decode("Zm9v".getBytes("US-ASCII"), ddst) == 3 && "foo".equals(new String(ddst, "US-ASCII")),
+              "decode(src,dst) exact bytes");
+        // dst 空间不足 -> IAE；null 参数 -> NPE
+        try {
+            d.decode("Zm9v".getBytes("US-ASCII"), new byte[2]);
+            check(false, "decode dst too small IAE");
+        } catch (IllegalArgumentException iae) {
+            check(true, "decode dst too small IAE");
+        }
+        try {
+            d.decode("Zm9v".getBytes("US-ASCII"), (byte[]) null);
+            check(false, "decode(src,null) NPE");
+        } catch (NullPointerException npe) {
+            check(true, "decode(src,null) NPE");
+        }
+        try {
+            d.decode((byte[]) null, new byte[8]);
+            check(false, "decode(null,dst) NPE");
+        } catch (NullPointerException npe) {
+            check(true, "decode(null,dst) NPE");
+        }
+        try {
+            d.wrap(null);
+            check(false, "wrap(null) NPE");
+        } catch (NullPointerException npe) {
+            check(true, "wrap(null) NPE");
+        }
+        // 无 padding 解码：长度 mod 4 == 2 或 3 合法；mod 4 == 1 非法
+        check("fo".equals(new String(d.decode("Zm8"), "US-ASCII")), "no-pad 3 chars -> fo");
+        check("foo".equals(new String(d.decode("Zm9v"), "US-ASCII")), "no-pad 4 chars -> foo");
+        check("f".equals(new String(d.decode("Zm"), "US-ASCII")), "no-pad 2 chars -> f");
+        check("".equals(new String(d.decode(""), "US-ASCII")), "empty decode");
+        try {
+            d.decode("Z");
+            check(false, "single-char base64 IAE");
+        } catch (IllegalArgumentException iae) {
+            check(true, "single-char base64 IAE");
+        }
+        // 非法字符 -> IAE
+        try {
+            d.decode("Z!m8");
+            check(false, "invalid char IAE");
+        } catch (IllegalArgumentException iae) {
+            check(true, "invalid char IAE");
+        }
+        // URL 解码器：- _ 对应 + /
+        byte[] raw = new byte[]{(byte) 0xfb, (byte) 0xff, (byte) 0xef};
+        check(java.util.Arrays.equals(raw, Base64.getUrlDecoder().decode("-__v")), "url decode - and _");
+        // MIME 解码器忽略 CR/LF
+        check("foobar".equals(new String(Base64.getMimeDecoder().decode("Zm9v\r\nYmFy"), "US-ASCII")),
+              "MIME ignores CRLF");
+    }
+
     public static void main(String[] args) throws Exception {
         testDecoder();
         testDecoderContracts();
+        testDecoderMoreContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

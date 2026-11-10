@@ -114,6 +114,10 @@ public class LevelTest {
         MyLevel(String name, int value) { super(name, value); }
     }
 
+    static final class MyNamedLevel extends Level {
+        MyNamedLevel(String name, int value, String bundleName) { super(name, value, bundleName); }
+    }
+
 
     // ===================== 契约深化：parse 矩阵/整型值映射/比较序/null 契约 =====================
     static void testContracts() {
@@ -158,6 +162,32 @@ public class LevelTest {
               "ordering by intValue (Level is not Comparable)");
         // toString 返回名字
         check("INFO".equals(java.util.logging.Level.INFO.toString()), "toString is name");
+
+        // 数字串解析：整型极值映射到 ALL/OFF；非标准值生成新 Level（非缓存、按值相等）
+        check(java.util.logging.Level.parse("-2147483648") == Level.ALL, "parse(MIN_VALUE) = ALL");
+        check(java.util.logging.Level.parse("2147483647") == Level.OFF, "parse(MAX_VALUE) = OFF");
+        Level custom350 = Level.parse("350");
+        check("350".equals(custom350.getName()) && custom350.intValue() == 350
+              && custom350.getResourceBundleName() == null, "parse(350) makes custom level");
+        check("350".equals(custom350.toString()), "parse(350) toString is name");
+        check(custom350.equals(Level.parse("350")), "parse(350) equal by value on repeated call");
+        check(custom350.equals(new MyLevel("350", 350)), "custom level equals independently-built same value");
+        // 越界数字串 -> IAE
+        try {
+            Level.parse("2147483648");
+            check(false, "parse overflow IAE");
+        } catch (IllegalArgumentException e) { check(true, "parse overflow IAE"); }
+        // 构造契约：null name NPE；空 name 允许；3-arg 保存 bundle 名；无 bundle 的 localized 名=名字
+        try {
+            new MyLevel(null, 5);
+            check(false, "Level(null name) NPE");
+        } catch (NullPointerException e) { check(true, "Level(null name) NPE"); }
+        check("my.bundle".equals(new MyNamedLevel("NAMED", 123, "my.bundle").getResourceBundleName()),
+              "3-arg ctor stores bundle name");
+        check(new MyNamedLevel("NAMED", 123, null).getResourceBundleName() == null,
+              "3-arg ctor null bundle name");
+        check("CUSTOM".equals(new MyLevel("CUSTOM", 350).getLocalizedName()),
+              "custom (no bundle) localized name = name");
     }
 
     public static void main(String[] args) throws Exception {

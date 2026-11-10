@@ -275,11 +275,51 @@ public class AttributedStringTest {
         check("fr".equals(it.getAttribute(LANG)) && it.getRunStart() == 4,
               "adjacent same-attribute ranges split runs exactly at 4");
     }
+
+    // ===================== 契约深化：addAttributes null/范围 null 值移除/run 边界/null 迭代器 =====================
+    static void testNullAndRunBoundaryContract() {
+        AttributedString base = new AttributedString("hello");
+        expectX(NullPointerException.class, () -> base.addAttributes(null, 0, 1),
+                "addAttributes(null Map, ...) -> NPE");
+        // 范围 addAttribute 传 null 值：仅移除该范围内的属性值。
+        AttributedString as = new AttributedString("abcdef");
+        as.addAttribute(LANG, "en", 0, 6);
+        as.addAttribute(LANG, null, 1, 3);
+        AttributedCharacterIterator it = as.getIterator();
+        it.setIndex(0);
+        check("en".equals(it.getAttribute(LANG)), "range null removal leaves value outside");
+        it.setIndex(1);
+        check(it.getAttribute(LANG) == null, "range null value removes attribute in [1,3)");
+        it.setIndex(3);
+        check("en".equals(it.getAttribute(LANG)), "value restored after removed range");
+        // null 属性数组迭代器 = 全文本全属性
+        AttributedString whole = new AttributedString("01234");
+        whole.addAttribute(LANG, "en");
+        AttributedCharacterIterator nf = whole.getIterator((AttributedCharacterIterator.Attribute[]) null);
+        check(nf.getBeginIndex() == 0 && nf.getEndIndex() == 5, "getIterator(null attrs) spans whole text");
+        check("en".equals(nf.getAttribute(LANG)), "getIterator(null attrs) keeps attributes");
+        // getAttribute(null) 不抛异常、返回 null
+        check(whole.getIterator().getAttribute(null) == null, "getAttribute(null) returns null");
+        // 重叠 run 的边界
+        AttributedString ov = new AttributedString("0123456789");
+        ov.addAttribute(LANG, "en", 0, 4);
+        ov.addAttribute(LANG, "fr", 4, 10);
+        ov.addAttribute(READ, "r", 2, 8);
+        AttributedCharacterIterator oi = ov.getIterator();
+        oi.setIndex(0);
+        check(oi.getRunStart() == 0 && oi.getRunLimit() == 2, "run boundary at 0..2");
+        oi.setIndex(2);
+        check(oi.getRunStart() == 2 && oi.getRunLimit() == 4, "run boundary at 2..4");
+        oi.setIndex(4);
+        check(oi.getRunStart() == 4 && oi.getRunLimit() == 8, "run boundary at 4..8");
+    }
+
     public static void main(String[] args) throws Exception {
         testConstructorMatrixContract();
         testAddAttributeRangeMatrixContract();
         testGetIteratorMatrixContract();
         testTextReconstructionContract();
+        testNullAndRunBoundaryContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

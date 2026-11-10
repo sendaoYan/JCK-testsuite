@@ -93,6 +93,23 @@ public class FormatterTest {
         // 无参数时原样返回
         check("plain".equals(f.formatMessage(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "plain"))),
               "formatMessage without params unchanged");
+        // 无参数但含 {0} 占位符：不替换，原样返回（不抛异常）
+        check("a={0}".equals(f.formatMessage(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "a={0}"))),
+              "formatMessage null params leaves braces literal");
+        // bundle 缺 key：回退到原始 message
+        java.util.logging.LogRecord miss = new java.util.logging.LogRecord(java.util.logging.Level.INFO, "nokey");
+        miss.setResourceBundle(new ListResourceBundle() {
+            protected Object[][] getContents() { return new Object[][] {{"k", "v"}}; }
+        });
+        check("nokey".equals(f.formatMessage(miss)), "formatMessage falls back when bundle key missing");
+        // getHead/getTail 对非 null handler 亦为空串
+        Handler dummy = new Handler() {
+            public void publish(java.util.logging.LogRecord r) {}
+            public void flush() {}
+            public void close() {}
+        };
+        check("".equals(f.getHead(dummy)) && "".equals(f.getTail(dummy)),
+              "getHead/getTail empty for non-null handler");
     }
 
     public static void main(String[] args) throws Exception {

@@ -37,6 +37,17 @@ public class SecurityTest {
                 + " but nothing was thrown");
     }
 
+    // ===================== 契约深化：getAlgorithmProperty（弃用常量表，默认配置下返回 null） =====================
+    @SuppressWarnings("deprecation")
+    static void testGetAlgorithmPropertyContract() {
+        check(Security.getAlgorithmProperty("NoSuchAlgXYZ", "NoSuchPropXYZ") == null,
+                "getAlgorithmProperty unknown algorithm+property null");
+        check(Security.getAlgorithmProperty(null, "x") == null,
+                "getAlgorithmProperty(null algName) returns null (no throw)");
+        check(Security.getAlgorithmProperty("x", null) == null,
+                "getAlgorithmProperty(null propName) returns null (no throw)");
+    }
+
     public static void main(String[] args) throws Exception {
         // ---- getProviders ----
         check(Security.getProviders().length > 0, "getProviders non-empty");
@@ -172,6 +183,8 @@ public class SecurityTest {
                 "getProviders(null String filter)");
         checkThrows(NullPointerException.class, () -> Security.insertProviderAt(null, 1),
                 "insertProviderAt(null provider)");
+
+        testGetAlgorithmPropertyContract();
 
         System.out.println("PASS (" + passed + " assertions)");
     }

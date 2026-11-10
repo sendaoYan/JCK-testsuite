@@ -198,11 +198,46 @@ public class CollationKeyTest {
         check(rbc.getCollationKey("Apple").compareTo(rbc.getCollationKey("apple")) == 0,
               "PRIMARY keys fold case");
     }
+
+    static int cmpBytes(byte[] a, byte[] b) {
+        int n = Math.min(a.length, b.length);
+        for (int i = 0; i < n; i++) {
+            int d = (a[i] & 0xff) - (b[i] & 0xff);
+            if (d != 0) return d < 0 ? -1 : 1;
+        }
+        return a.length == b.length ? 0 : (a.length < b.length ? -1 : 1);
+    }
+
+    // ===================== 契约深化：toByteArray 字节序与 compareTo 一致/重音与大小写键 =====================
+    static void testByteOrderAccentContract() {
+        RuleBasedCollator en = (RuleBasedCollator) Collator.getInstance(Locale.ENGLISH);
+        CollationKey a = en.getCollationKey("a");
+        CollationKey b = en.getCollationKey("b");
+        check(cmpBytes(a.toByteArray(), b.toByteArray()) < 0 && a.compareTo(b) < 0,
+              "byte order matches compareTo for a < b");
+        CollationKey ab = en.getCollationKey("ab");
+        CollationKey ac = en.getCollationKey("ac");
+        check(cmpBytes(ab.toByteArray(), ac.toByteArray()) < 0 && ab.compareTo(ac) < 0,
+              "byte order matches compareTo for ab < ac");
+        // 重音（secondary）与大小写（tertiary）不同键
+        check(en.getCollationKey("e").compareTo(en.getCollationKey("\u00e9")) < 0,
+              "unaccented e before accented e-acute");
+        check(en.getCollationKey("Apple").compareTo(en.getCollationKey("apple")) > 0,
+              "uppercase Apple after lowercase apple at TERTIARY");
+        // PRIMARY 强度下大小写键字节完全一致
+        en.setStrength(Collator.PRIMARY);
+        check(Arrays.equals(en.getCollationKey("Apple").toByteArray(),
+                en.getCollationKey("apple").toByteArray()), "PRIMARY folds case to identical bytes");
+        // 受保护构造器拒绝 null 源串
+        expectX(NullPointerException.class, () -> new MyKey(null), "protected ctor rejects null source");
+    }
+
     public static void main(String[] args) throws Exception {
         testStructureContract();
         testCompareMatrixContract();
         testByteRepresentationContract();
         testSortConsistencyContract();
+        testByteOrderAccentContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

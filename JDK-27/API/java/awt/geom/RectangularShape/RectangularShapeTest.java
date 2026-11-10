@@ -91,9 +91,53 @@ public class RectangularShapeTest {
         check(cl != r && cl.getFrame().equals(r.getFrame()), "clone independent equal");
     }
 
+    // ===================== 契约深化：getBounds 取整、负宽不归一化、Point2D 设框重载、getFrame 独立 =====================
+    static void testRectangularShapeContracts() {
+        // getBounds 用 floor/ceil 取整并向外扩到覆盖分数边界（RectangularShape 基础实现）。
+        java.awt.Rectangle b1 = new Rectangle2D.Double(0.5, 0.5, 1.5, 1.5).getBounds();
+        check(b1.x == 0 && b1.y == 0 && b1.width == 2 && b1.height == 2, "getBounds rounds fractional extents outward");
+        java.awt.Rectangle b2 = new Rectangle2D.Double(0.5, 0.5, 1.0, 1.0).getBounds();
+        check(b2.x == 0 && b2.y == 0 && b2.width == 2 && b2.height == 2, "getBounds inflates fractional width");
+        java.awt.Rectangle b3 = new Rectangle2D.Double(-0.5, -0.5, 1.5, 1.5).getBounds();
+        check(b3.x == -1 && b3.y == -1 && b3.width == 2 && b3.height == 2, "getBounds floors negative origin");
+
+        // 负宽/负高：getBounds 返回空矩形 (0,0,0,0)。
+        java.awt.Rectangle b4 = new Rectangle2D.Double(1, 2, -3, 4).getBounds();
+        check(b4.x == 0 && b4.y == 0 && b4.width == 0 && b4.height == 0 && b4.isEmpty(),
+              "getBounds of negative width returns empty rectangle");
+
+        // min/max/center 不归一化负宽（getMinX > getMaxX）。
+        Rectangle2D.Double neg = new Rectangle2D.Double(0, 0, -10, 20);
+        check(neg.getMinX() == 0.0 && neg.getMaxX() == -10.0, "negative width: getMinX/getMaxX not normalized");
+        check(neg.getCenterX() == -5.0 && neg.getCenterY() == 10.0, "negative width: getCenterX reflects raw values");
+
+        // setFrameFromDiagonal(Point2D, Point2D) 归一化角点。
+        Rectangle2D.Double d = new Rectangle2D.Double();
+        d.setFrameFromDiagonal(new Point2D.Double(50, 60), new Point2D.Double(10, 20));
+        check(close(d.getX(), 10) && close(d.getY(), 20) && close(d.getWidth(), 40) && close(d.getHeight(), 40),
+              "setFrameFromDiagonal(Point2D,Point2D) normalizes corners");
+
+        // setFrameFromCenter(Point2D, Point2D) 与负角点（abs 半宽半高恒正）。
+        Rectangle2D.Double c = new Rectangle2D.Double();
+        c.setFrameFromCenter(new Point2D.Double(25, 40), new Point2D.Double(10, 20));
+        check(close(c.getX(), 10) && close(c.getY(), 20) && close(c.getWidth(), 30) && close(c.getHeight(), 40),
+              "setFrameFromCenter(Point2D,Point2D)");
+        Rectangle2D.Double cn = new Rectangle2D.Double();
+        cn.setFrameFromCenter(10, 20, -5, -5); // corner opposite side -> positive frame
+        check(close(cn.getX(), -5) && close(cn.getY(), -5) && close(cn.getWidth(), 30) && close(cn.getHeight(), 50),
+              "setFrameFromCenter uses absolute half-extents");
+
+        // getFrame 返回独立新对象。
+        Rectangle2D.Double h = new Rectangle2D.Double(0, 0, 10, 20);
+        Rectangle2D frame = h.getFrame();
+        frame.setRect(0, 0, 1, 1);
+        check(close(h.getWidth(), 10) && close(h.getHeight(), 20), "getFrame returns independent rectangle");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRectangularShapeContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

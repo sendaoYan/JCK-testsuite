@@ -111,6 +111,13 @@ public class MemoryHandlerTest {
         public void close() { closed = true; }
     }
 
+    static final class FlushFlagHandler extends Handler {
+        boolean flushed;
+        public void publish(LogRecord record) { }
+        public void flush() { flushed = true; }
+        public void close() { }
+    }
+
 
     // ===================== 契约深化：缓冲 FIFO/pushLevel 触发整体下发/手动 push/级别过滤/驱逐（丢最旧） =====================
     static void testContracts() throws Exception {
@@ -167,6 +174,41 @@ public class MemoryHandlerTest {
             check(false, "size 0 IAE");
         } catch (IllegalArgumentException e) { check(true, "size 0 IAE"); }
         l.removeHandler(mh);
+
+        // 容量 1 边界：缓冲记录被逐出，仅触发记录下发
+        CapturingHandler cap1 = new CapturingHandler();
+        java.util.logging.MemoryHandler m1 = new java.util.logging.MemoryHandler(cap1, 1, java.util.logging.Level.SEVERE);
+        m1.publish(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "e1"));
+        m1.publish(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "e2"));
+        m1.publish(new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "e-trig"));
+        check(cap1.records.size() == 1 && "e-trig".equals(cap1.records.get(0).getMessage()),
+              "size 1 evicts buffered records, keeps trigger");
+        // 空缓冲 push() 无副作用
+        CapturingHandler cap2 = new CapturingHandler();
+        java.util.logging.MemoryHandler m2 = new java.util.logging.MemoryHandler(cap2, 3, java.util.logging.Level.SEVERE);
+        m2.push();
+        check(cap2.records.size() == 0, "push on empty buffer no-op");
+        // close 后 publish 静默丢弃、level=OFF
+        CapturingHandler cap3 = new CapturingHandler();
+        java.util.logging.MemoryHandler m3 = new java.util.logging.MemoryHandler(cap3, 2, java.util.logging.Level.SEVERE);
+        m3.publish(new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "pre"));
+        m3.close();
+        int before3 = cap3.records.size();
+        m3.publish(new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "post-close"));
+        check(cap3.records.size() == before3 && m3.getLevel() == java.util.logging.Level.OFF,
+              "publish after close silently dropped and level OFF");
+        // setLevel(null) NPE
+        CapturingHandler cap4 = new CapturingHandler();
+        java.util.logging.MemoryHandler m4 = new java.util.logging.MemoryHandler(cap4, 2, java.util.logging.Level.SEVERE);
+        try {
+            m4.setLevel(null);
+            check(false, "setLevel(null) NPE");
+        } catch (NullPointerException e) { check(true, "setLevel(null) NPE"); }
+        // flush() 转发到 target.flush()
+        FlushFlagHandler fh = new FlushFlagHandler();
+        java.util.logging.MemoryHandler mf = new java.util.logging.MemoryHandler(fh, 3, java.util.logging.Level.SEVERE);
+        mf.flush();
+        check(fh.flushed, "flush forwards to target flush");
     }
 
     public static void main(String[] args) throws Exception {

@@ -122,6 +122,51 @@ public class GZIPInputStreamTest {
         checkThrows(IOException.class, () -> in.read(new byte[8]), "read after close IOException");
     }
 
+    // ---- 契约深化（第二层）：空/大块 round-trip、read(byte[]) 单参、合法 size 构造、read() 关流后 IOException ----
+    static void testEmptyAndLarge() throws Exception {
+        // 空数据：写出为空 gzip，读回 read()/read(byte[]) 均 -1
+        byte[] empty = gzip(new byte[0]);
+        GZIPInputStream ein = new GZIPInputStream(new ByteArrayInputStream(empty));
+        check(ein.read() == -1, "empty gzip read() -1");
+        check(ein.read(new byte[8]) == -1, "empty gzip read(byte[]) -1");
+        ein.close();
+
+        // 大块数据：固定字节序列 (i & 0xff)，round-trip 等值
+        byte[] big = new byte[100000];
+        for (int i = 0; i < big.length; i++) big[i] = (byte) (i & 0xff);
+        GZIPInputStream bin = new GZIPInputStream(new ByteArrayInputStream(gzip(big)));
+        ByteArrayOutputStream bout = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        int n;
+        while ((n = bin.read(buf)) != -1) bout.write(buf, 0, n);
+        check(Arrays.equals(big, bout.toByteArray()), "large block round-trip");
+        bin.close();
+    }
+
+    static void testReadAndCtor() throws Exception {
+        byte[] data = "abc".getBytes(StandardCharsets.UTF_8);
+        // read(byte[]) 单参
+        GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(gzip(data)));
+        byte[] r = new byte[10];
+        int n = in.read(r);
+        check(n == 3 && Arrays.equals(data, Arrays.copyOf(r, 3)), "read(byte[]) single-arg");
+        in.close();
+
+        // 合法 size 构造 -> 可正常读回
+        GZIPInputStream sized = new GZIPInputStream(new ByteArrayInputStream(gzip(data)), 512);
+        ByteArrayOutputStream so = new ByteArrayOutputStream();
+        byte[] sb = new byte[4];
+        int m;
+        while ((m = sized.read(sb)) != -1) so.write(sb, 0, m);
+        check(Arrays.equals(data, so.toByteArray()), "valid size ctor round-trip");
+        sized.close();
+
+        // 关流后 read() 抛 IOException（read(byte[]) 已在 testClose 覆盖）
+        GZIPInputStream closed = new GZIPInputStream(new ByteArrayInputStream(gzip(data)));
+        closed.close();
+        checkThrows(IOException.class, () -> closed.read(), "read() after close IOException");
+    }
+
     public static void main(String[] args) throws Exception {
         testRoundTrip();
         testSingleByteRead();
@@ -130,6 +175,8 @@ public class GZIPInputStreamTest {
         testCtorValidation();
         testNullAndBounds();
         testClose();
+        testEmptyAndLarge();
+        testReadAndCtor();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -85,6 +85,24 @@ public class SimpleFormatterTest {
         String withStack = sf.format(thr);
         check(withStack.contains("stack-boom")
               && withStack.contains("java.lang.RuntimeException"), "thrown rendered with class and message");
+        // 源类/方法渲染（记录带 sourceClassName/sourceMethodName 时出现在输出）
+        java.util.logging.LogRecord src = new java.util.logging.LogRecord(java.util.logging.Level.INFO, "src-msg");
+        src.setSourceClassName("com.example.Foo");
+        src.setSourceMethodName("bar");
+        String srcOut = sf.format(src);
+        check(srcOut.contains("com.example.Foo") && srcOut.contains("bar") && srcOut.contains("src-msg"),
+              "format renders source class and method");
+        // null message 不抛异常，级别仍被渲染
+        String nullMsg = sf.format(new java.util.logging.LogRecord(java.util.logging.Level.INFO, null));
+        check(nullMsg.contains("INFO"), "format with null message still renders level");
+        // getHead/getTail 对非 null handler 亦为空串（Formatter 默认实现）
+        java.util.logging.Handler dummy = new java.util.logging.Handler() {
+            public void publish(java.util.logging.LogRecord r) {}
+            public void flush() {}
+            public void close() {}
+        };
+        check("".equals(sf.getHead(dummy)) && "".equals(sf.getTail(dummy)),
+              "getHead/getTail empty for non-null handler");
     }
 
     public static void main(String[] args) throws Exception {

@@ -23,6 +23,15 @@ public class Arc2DTest {
         try { c.getMethod(name, params); return true; } catch (NoSuchMethodException e) { return false; }
     }
 
+    static void expectThrows(Class<? extends RuntimeException> ex, Runnable r, String msg) {
+        try {
+            r.run();
+            check(false, msg + " (no exception)");
+        } catch (RuntimeException e) {
+            check(ex.isAssignableFrom(e.getClass()), msg + " (got " + e.getClass().getSimpleName() + ")");
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.awt.geom.Arc2D");
@@ -127,9 +136,102 @@ public class Arc2DTest {
         check(!pie.equals(open), "different arc type not equal");
     }
 
+    // ===================== 契约深化：setArcByTangent/setArcByCenter 退化、类型非法、containsAngle 边界 =====================
+    static void testArcContracts() {
+        // setArcByCenter 负半径：不抛异常，得到负宽高（isEmpty）。
+        Arc2D.Double nc = new Arc2D.Double();
+        nc.setArcByCenter(0, 0, -10, 0, 90, Arc2D.OPEN);
+        check(nc.isEmpty(), "setArcByCenter negative radius -> empty");
+        check(nc.getX() == 10.0 && nc.getWidth() == -20.0, "setArcByCenter negative radius frame (x+10, width -20)");
+
+        // setArcByTangent 直角相切：起始角 -270、extent -90，起/终点恰为 p1/p3。
+        Arc2D.Double tan = new Arc2D.Double();
+        tan.setArcByTangent(new Point2D.Double(0, 0), new Point2D.Double(10, 0), new Point2D.Double(10, 10), 10);
+        check(tan.getArcType() == Arc2D.OPEN, "setArcByTangent keeps arc type");
+        check(close(tan.getAngleStart(), -270) && close(tan.getAngleExtent(), -90), "setArcByTangent angles (-270, -90)");
+        check(close(tan.getX(), -10) && close(tan.getY(), 0) && close(tan.getWidth(), 20) && close(tan.getHeight(), 20),
+              "setArcByTangent frame centered at (10,10)");
+        check(close(tan.getStartPoint().getX(), 0) && close(tan.getStartPoint().getY(), 0),
+              "setArcByTangent start point == p1");
+        check(close(tan.getEndPoint().getX(), 10) && close(tan.getEndPoint().getY(), 10),
+              "setArcByTangent end point == p3");
+
+        // setArcByTangent 共线三点（平行直线）：不抛异常，保持非空。
+        Arc2D.Double par = new Arc2D.Double();
+        par.setArcByTangent(new Point2D.Double(0, 0), new Point2D.Double(10, 0), new Point2D.Double(20, 0), 10);
+        check(!par.isEmpty(), "setArcByTangent collinear points do not throw");
+
+        // setArcByTangent 负半径：不抛异常，退化为空。
+        Arc2D.Double nr = new Arc2D.Double();
+        nr.setArcByTangent(new Point2D.Double(0, 0), new Point2D.Double(10, 0), new Point2D.Double(10, 10), -10);
+        check(nr.isEmpty(), "setArcByTangent negative radius -> empty (no exception)");
+
+        // setArcType / 构造器非法类型抛 IllegalArgumentException。
+        expectThrows(IllegalArgumentException.class, new Runnable() { public void run() { new Arc2D.Double().setArcType(3); } },
+                     "setArcType(3) throws IllegalArgumentException");
+        expectThrows(IllegalArgumentException.class, new Runnable() { public void run() { new Arc2D.Double().setArcType(-1); } },
+                     "setArcType(-1) throws IllegalArgumentException");
+        expectThrows(IllegalArgumentException.class, new Runnable() { public void run() { new Arc2D.Double(0, 0, 10, 10, 0, 90, 5); } },
+                     "Arc2D ctor invalid type throws IllegalArgumentException");
+
+        // containsAngle：起始角含、终止角不含；360/-270 归一化；NaN false。
+        Arc2D.Double ca = new Arc2D.Double(0, 0, 20, 20, 0, 90, Arc2D.OPEN);
+        check(ca.containsAngle(0), "containsAngle(start) inclusive");
+        check(!ca.containsAngle(90), "containsAngle(end) exclusive");
+        check(ca.containsAngle(360), "containsAngle(360) wraps to 0");
+        check(!ca.containsAngle(-270), "containsAngle(-270) wraps to 90 -> false");
+        check(!ca.containsAngle(Double.NaN), "containsAngle(NaN) false");
+
+        // 负 extent 反向：起点含、终点不含、对侧不含。
+        Arc2D.Double cn = new Arc2D.Double(0, 0, 20, 20, 0, -90, Arc2D.OPEN);
+        check(cn.containsAngle(0), "negative extent containsAngle(start)");
+        check(cn.containsAngle(-45), "negative extent containsAngle(mid)");
+        check(!cn.containsAngle(-90), "negative extent containsAngle(end) exclusive");
+        check(!cn.containsAngle(45), "negative extent containsAngle(opposite) false");
+
+        // 整圆 extent >= 360：任何角（含 NaN）都含。
+        Arc2D.Double cf = new Arc2D.Double(0, 0, 20, 20, 0, 360, Arc2D.OPEN);
+        check(cf.containsAngle(123.456), "full circle contains any angle");
+        check(cf.containsAngle(Double.NaN), "full circle contains NaN angle");
+
+        // setAngleStart 不归一化。
+        Arc2D.Double sn = new Arc2D.Double(0, 0, 20, 20, 0, 90, Arc2D.OPEN);
+        sn.setAngleStart(370);
+        check(sn.getAngleStart() == 370.0, "setAngleStart does not normalize");
+
+        // 起/终点恒返回 Point2D.Double。
+        Arc2D.Double sp = new Arc2D.Double(0, 0, 20, 20, 0, 90, Arc2D.OPEN);
+        check(sp.getStartPoint() instanceof Point2D.Double, "getStartPoint returns Point2D.Double");
+        check(sp.getEndPoint() instanceof Point2D.Double, "getEndPoint returns Point2D.Double");
+
+        // 负宽弧：isEmpty，getBounds2D 保留负宽（Arc2D 不归一化）。
+        Arc2D.Double neg = new Arc2D.Double(0, 0, -10, 20, 0, 90, Arc2D.OPEN);
+        check(neg.isEmpty(), "negative width arc isEmpty");
+        check(neg.getBounds2D().getWidth() == -10.0 && neg.getBounds2D().getHeight() == 20.0,
+              "negative width arc getBounds2D preserves negative width");
+
+        // PIE/CHORD/OPEN 包含区域：PIE 含起始半径内侧点，CHORD 排除该侧但含弦外区域。
+        Arc2D.Double pie2 = new Arc2D.Double(0, 0, 20, 20, 0, 90, Arc2D.PIE);
+        Arc2D.Double chord2 = new Arc2D.Double(0, 0, 20, 20, 0, 90, Arc2D.CHORD);
+        Arc2D.Double open2 = new Arc2D.Double(0, 0, 20, 20, 0, 90, Arc2D.OPEN);
+        check(pie2.contains(18, 10), "PIE contains start-radius interior point");
+        check(!pie2.contains(20, 10), "PIE excludes boundary point");
+        check(!chord2.contains(18, 10), "CHORD excludes pie-triangle side");
+        check(chord2.contains(18, 6), "CHORD contains cap region beyond chord");
+        check(open2.contains(18, 6), "OPEN contains cap region (same as CHORD)");
+
+        // setFrame 保留角度与类型。
+        Arc2D.Double sf = new Arc2D.Double(0, 0, 20, 20, 30, 60, Arc2D.CHORD);
+        sf.setFrame(5, 6, 7, 8);
+        check(sf.getX() == 5 && sf.getY() == 6 && sf.getWidth() == 7 && sf.getHeight() == 8, "setFrame updates frame");
+        check(sf.getAngleStart() == 30 && sf.getAngleExtent() == 60 && sf.getArcType() == Arc2D.CHORD,
+              "setFrame preserves angles and type");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testArcContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

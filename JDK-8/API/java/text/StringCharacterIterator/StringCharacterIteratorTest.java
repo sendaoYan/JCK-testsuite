@@ -223,11 +223,26 @@ public class StringCharacterIteratorTest {
         check(retarget.getEndIndex() == 5, "setText re-derives end index");
         check(!retarget.equals(new StringCharacterIterator("abc")), "setText changes equals");
     }
+
+    // ===================== \u5951\u7EA6\u6DF1\u5316\uFF1AsetIndex \u8FD4\u56DE\u503C/\u8D1F end/pos==end \u6784\u9020 =====================
+    static void testSetIndexReturnAndEdgeContract() {
+        StringCharacterIterator it = new StringCharacterIterator("abc");
+        check(it.setIndex(1) == 'b', "setIndex(1) returns char 'b'");
+        check(it.setIndex(3) == CharacterIterator.DONE, "setIndex(endIndex) returns DONE");
+        expectX(IllegalArgumentException.class, () -> new StringCharacterIterator("abc", 0, -1, 0),
+                "negative end -> IAE");
+        StringCharacterIterator posEnd = new StringCharacterIterator("abc", 2, 3, 3);
+        check(posEnd.getBeginIndex() == 2 && posEnd.getEndIndex() == 3,
+              "(begin,end,pos==end) legal");
+        check(posEnd.current() == CharacterIterator.DONE, "pos==end current DONE");
+    }
+
     public static void main(String[] args) throws Exception {
         testStateMachineTableContract();
         testBoundedRangeContract();
         testConstructorValidationMatrixContract();
         testEqualsHashCodeSetTextContract();
+        testSetIndexReturnAndEdgeContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

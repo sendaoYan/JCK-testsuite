@@ -100,11 +100,47 @@ public class StreamSupportTest {
         check(s1.count() == 8 && s2.count() == 8, "supplier form supports independent streams");
     }
 
+    // ===================== 契约深化：空源 count==0 / 原语 supplier 形式 / parallel 标志透传 =====================
+    static void testEmptyAndSupplierContracts() {
+        // 空集合/空数组流 count == 0。
+        java.util.List<Integer> empty = new java.util.ArrayList<Integer>();
+        check(StreamSupport.stream(empty.spliterator(), false).count() == 0, "empty reference stream count 0");
+        check(StreamSupport.intStream(java.util.Spliterators.spliterator(new int[0], 0), false).count() == 0, "empty intStream count 0");
+        check(StreamSupport.longStream(java.util.Spliterators.spliterator(new long[0], 0), false).count() == 0, "empty longStream count 0");
+        check(StreamSupport.doubleStream(java.util.Spliterators.spliterator(new double[0], 0), false).count() == 0, "empty doubleStream count 0");
+
+        // 原语 supplier 形式（OfInt/OfLong/OfDouble supplier + characteristics + parallel）。
+        java.util.function.Supplier<java.util.Spliterator.OfInt> isup =
+                () -> Arrays.spliterator(new int[] {1, 2, 3});
+        check(StreamSupport.intStream(isup, java.util.Spliterator.SIZED | java.util.Spliterator.ORDERED, false).sum() == 6,
+              "intStream supplier form sum");
+        check(StreamSupport.intStream(isup, java.util.Spliterator.SIZED, true).isParallel(),
+              "intStream supplier form parallel flag");
+        java.util.function.Supplier<java.util.Spliterator.OfLong> lsup =
+                () -> Arrays.spliterator(new long[] {4L, 5L});
+        check(StreamSupport.longStream(lsup, java.util.Spliterator.SIZED, false).sum() == 9L,
+              "longStream supplier form sum");
+        check(!StreamSupport.longStream(lsup, java.util.Spliterator.SIZED, false).isParallel(),
+              "longStream supplier form sequential flag");
+        java.util.function.Supplier<java.util.Spliterator.OfDouble> dsup =
+                () -> Arrays.spliterator(new double[] {1.5, 2.5});
+        check(StreamSupport.doubleStream(dsup, java.util.Spliterator.SIZED, false).sum() == 4.0,
+              "doubleStream supplier form sum");
+        check(StreamSupport.doubleStream(dsup, java.util.Spliterator.SIZED, true).isParallel(),
+              "doubleStream supplier form parallel flag");
+
+        // 引用 supplier 形式 parallel=false 时 isParallel()==false。
+        java.util.function.Supplier<java.util.Spliterator<Integer>> rsup = () -> Arrays.asList(1, 2, 3).spliterator();
+        check(!StreamSupport.stream(rsup, java.util.Spliterator.SIZED, false).isParallel(),
+              "reference supplier form sequential flag");
+    }
+
     public static void main(String[] args) {
         testContracts();
         testStream();
         testStreamSupplier();
         testPrimitiveStreams();
+        testEmptyAndSupplierContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

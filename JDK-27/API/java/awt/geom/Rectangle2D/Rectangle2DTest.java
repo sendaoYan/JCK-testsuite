@@ -171,9 +171,47 @@ public class Rectangle2DTest {
         return (T) new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bos.toByteArray())).readObject();
     }
 
+    // ===================== 契约深化：outcode 边界、NaN/零尺寸判定、退化线、分离并集 =====================
+    static void testRectangle2DContracts() {
+        // outcode 右/下边（严格大于才算 out）：边界点返回 0，只有严格越界才置位。
+        Rectangle2D.Double r = new Rectangle2D.Double(0, 0, 10, 20);
+        check(r.outcode(10, 5) == 0, "outcode right edge x=10 is 0 (strictly greater to be out)");
+        check(r.outcode(5, 20) == 0, "outcode bottom edge y=20 is 0 (strictly greater to be out)");
+        check(r.outcode(10, 20) == 0, "outcode bottom-right corner is 0");
+        check(r.outcode(11, 5) == Rectangle2D.OUT_RIGHT, "outcode x=11 is OUT_RIGHT");
+        check(r.outcode(5, 21) == Rectangle2D.OUT_BOTTOM, "outcode y=21 is OUT_BOTTOM");
+        check(r.outcode(Double.NaN, 5) == 0, "outcode(NaN) is 0 (NaN never out)");
+
+        // NaN 参数在 contains/intersects 恒 false。
+        check(!r.contains(Double.NaN, 5), "contains(NaN,5) false");
+        check(!r.intersects(Double.NaN, 5, 1, 1), "intersects(NaN rect) false");
+
+        // 零尺寸输入矩形：intersects 恒 false，contains 恒 false。
+        check(!r.intersects(0, 0, 0, 0), "intersects zero-size rect false");
+        check(!r.contains(0, 0, 0, 0), "contains zero-size rect false");
+
+        // intersectsLine 退化线段（点）：点在内则 true，在外则 false。
+        check(r.intersectsLine(5, 5, 5, 5), "intersectsLine degenerate point inside true");
+        check(!r.intersectsLine(50, 50, 50, 50), "intersectsLine degenerate point outside false");
+
+        // 分离矩形的静态 union / 实例 createUnion 得到最小外接框。
+        Rectangle2D.Double dstU = new Rectangle2D.Double();
+        Rectangle2D.union(new Rectangle2D.Double(0, 0, 10, 10), new Rectangle2D.Double(20, 20, 5, 5), dstU);
+        check(close(dstU.getX(), 0) && close(dstU.getY(), 0) && close(dstU.getWidth(), 25) && close(dstU.getHeight(), 25),
+              "static union of disjoint rects is bounding box");
+        Rectangle2D cu = new Rectangle2D.Double(0, 0, 10, 10).createUnion(new Rectangle2D.Double(20, 20, 5, 5));
+        check(close(cu.getWidth(), 25) && close(cu.getHeight(), 25), "createUnion of disjoint rects is bounding box");
+
+        // createIntersection 自身返回等值矩形。
+        Rectangle2D self = new Rectangle2D.Double(3, 4, 5, 6).createIntersection(new Rectangle2D.Double(3, 4, 5, 6));
+        check(close(self.getX(), 3) && close(self.getY(), 4) && close(self.getWidth(), 5) && close(self.getHeight(), 6),
+              "createIntersection with itself returns equal rectangle");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testRectangle2DContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

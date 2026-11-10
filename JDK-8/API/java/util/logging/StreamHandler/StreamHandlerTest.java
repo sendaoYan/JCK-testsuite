@@ -141,6 +141,48 @@ public class StreamHandlerTest {
             new java.util.logging.StreamHandler(bos, null);
             check(false, "null formatter NPE");
         } catch (NullPointerException e) { check(true, "null formatter NPE"); }
+
+        // setEncoding 非法字符集 -> UnsupportedEncodingException
+        java.util.logging.StreamHandler enc = new java.util.logging.StreamHandler(
+                new java.io.ByteArrayOutputStream(), new java.util.logging.SimpleFormatter());
+        try {
+            enc.setEncoding("NO_SUCH_CHARSET");
+            check(false, "setEncoding invalid charset");
+        } catch (java.io.UnsupportedEncodingException e) { check(true, "setEncoding invalid charset"); }
+        // setFormatter(null) / setLevel(null) NPE
+        try {
+            enc.setFormatter(null);
+            check(false, "setFormatter(null) NPE");
+        } catch (NullPointerException e) { check(true, "setFormatter(null) NPE"); }
+        try {
+            enc.setLevel(null);
+            check(false, "setLevel(null) NPE");
+        } catch (NullPointerException e) { check(true, "setLevel(null) NPE"); }
+        // close 幂等
+        enc.close();
+        enc.close();
+        check(true, "close idempotent");
+        // head 只写一次（doneHeader 标记）
+        java.util.logging.Formatter hd = new java.util.logging.Formatter() {
+            public String format(java.util.logging.LogRecord r) { return "M:" + r.getMessage() + "\n"; }
+            public String getHead(java.util.logging.Handler h) { return "H\n"; }
+            public String getTail(java.util.logging.Handler h) { return "T\n"; }
+        };
+        final java.io.ByteArrayOutputStream hb = new java.io.ByteArrayOutputStream();
+        java.util.logging.StreamHandler hsh = new java.util.logging.StreamHandler(hb, hd);
+        hsh.setLevel(java.util.logging.Level.ALL);
+        hsh.publish(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "one"));
+        hsh.publish(new java.util.logging.LogRecord(java.util.logging.Level.INFO, "two"));
+        hsh.flush();
+        String hout = hb.toString("UTF-8");
+        int headCount = hout.split("H\n", -1).length - 1;
+        check(headCount == 1 && hout.contains("M:one") && hout.contains("M:two"), "head written exactly once");
+        // setOutputStream(null) NPE
+        Exposed nullStream = new Exposed(b2, new java.util.logging.SimpleFormatter());
+        try {
+            nullStream.redirect(null);
+            check(false, "setOutputStream(null) NPE");
+        } catch (NullPointerException e) { check(true, "setOutputStream(null) NPE"); }
     }
 
     public static void main(String[] args) throws Exception {

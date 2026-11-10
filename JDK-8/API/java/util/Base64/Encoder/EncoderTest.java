@@ -90,9 +90,70 @@ public class EncoderTest {
         check(Base64.getMimeEncoder() instanceof Base64.Encoder, "mime encoder type");
     }
 
+    // ---- 契约深化（第二层）：encode(byte[],byte[]) 边界 / wrap(null) / URL-MIME 字母表与折行 / 空输入 ----
+    static void testEncoderMoreContracts() throws Exception {
+        Base64.Encoder e = Base64.getEncoder();
+        // encode(byte[], byte[])：dst 空间不足 -> IllegalArgumentException
+        try {
+            e.encode(new byte[]{1, 2, 3}, new byte[3]);
+            check(false, "encode(src,dst) dst too small IAE");
+        } catch (IllegalArgumentException iae) {
+            check(true, "encode(src,dst) dst too small IAE");
+        }
+        // dst/src 为 null -> NPE
+        try {
+            e.encode(new byte[]{1, 2, 3}, (byte[]) null);
+            check(false, "encode(src,null) NPE");
+        } catch (NullPointerException npe) {
+            check(true, "encode(src,null) NPE");
+        }
+        try {
+            e.encode((byte[]) null, new byte[8]);
+            check(false, "encode(null,dst) NPE");
+        } catch (NullPointerException npe) {
+            check(true, "encode(null,dst) NPE");
+        }
+        // 恰好尺寸：返回 4 且写满 "AQID"
+        byte[] dst = new byte[4];
+        check(e.encode(new byte[]{1, 2, 3}, dst) == 4, "encode(src,dst) exact returns 4");
+        check("AQID".equals(new String(dst, "US-ASCII")), "encode(src,dst) exact bytes");
+        // 空输入 -> 0；encodeToString 空 -> ""
+        check(e.encode(new byte[0], new byte[8]) == 0, "encode(empty,dst) returns 0");
+        check("".equals(e.encodeToString(new byte[0])), "encodeToString empty");
+        // wrap(null) -> NPE
+        try {
+            e.wrap(null);
+            check(false, "wrap(null) NPE");
+        } catch (NullPointerException npe) {
+            check(true, "wrap(null) NPE");
+        }
+        // encode(ByteBuffer) 消费源缓冲（position 推进到 limit），输出 position 0
+        java.nio.ByteBuffer in = java.nio.ByteBuffer.wrap("Hello".getBytes("US-ASCII"));
+        java.nio.ByteBuffer out = e.encode(in);
+        check(in.position() == in.limit(), "encode(ByteBuffer) consumes source");
+        check(out.position() == 0, "encode(ByteBuffer) output position 0");
+        // URL 编码器字母表：+ -> -，/ -> _，与 basic 区分
+        byte[] raw = new byte[]{(byte) 0xfb, (byte) 0xff, (byte) 0xef};
+        check("+//v".equals(e.encodeToString(raw)), "basic + and / alphabet");
+        check("-__v".equals(Base64.getUrlEncoder().encodeToString(raw)), "url - and _ alphabet");
+        check("-__v".equals(Base64.getUrlEncoder().withoutPadding().encodeToString(raw)), "url withoutPadding");
+        // MIME 编码器 76 字符折行，行间 CRLF
+        byte[] big = new byte[200];
+        for (int i = 0; i < big.length; i++) big[i] = (byte) 'A';
+        ByteArrayOutputStream mbos = new ByteArrayOutputStream();
+        OutputStream mos = Base64.getMimeEncoder().wrap(mbos);
+        mos.write(big);
+        mos.close();
+        String mstr = new String(mbos.toByteArray(), "US-ASCII");
+        int firstCrlf = mstr.indexOf("\r\n");
+        check(firstCrlf == 76, "MIME first line length 76 (got " + firstCrlf + ")");
+        check(mstr.indexOf("\r\n") >= 0, "MIME emits CRLF separators");
+    }
+
     public static void main(String[] args) throws Exception {
         testEncoder();
         testEncoderContracts();
+        testEncoderMoreContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

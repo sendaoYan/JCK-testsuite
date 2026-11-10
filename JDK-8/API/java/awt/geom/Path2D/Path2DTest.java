@@ -28,6 +28,17 @@ public class Path2DTest {
         return n;
     }
 
+    static boolean close(double a, double b) { return Math.abs(a - b) < 1e-9; }
+
+    static void expectThrows(Class<? extends RuntimeException> ex, Runnable r, String msg) {
+        try {
+            r.run();
+            check(false, msg + " (no exception)");
+        } catch (RuntimeException e) {
+            check(ex.isAssignableFrom(e.getClass()), msg + " (got " + e.getClass().getSimpleName() + ")");
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.awt.geom.Path2D");
@@ -162,9 +173,88 @@ public class Path2DTest {
         check(fnz.contains(5, 5), "Path2D.Float NON_ZERO square contains center");
     }
 
+    // ===================== 契约深化：未 moveTo 异常、负 flatness、反向绕组、退化路径、变换独立性 =====================
+    static void testPathContracts() {
+        // 未 moveTo 直接画图：IllegalPathStateException。
+        final Path2D.Double fresh = new Path2D.Double();
+        expectThrows(IllegalPathStateException.class, new Runnable() { public void run() { fresh.lineTo(1, 1); } },
+                     "lineTo before moveTo throws IllegalPathStateException");
+        expectThrows(IllegalPathStateException.class, new Runnable() { public void run() { fresh.quadTo(1, 1, 2, 2); } },
+                     "quadTo before moveTo throws IllegalPathStateException");
+        expectThrows(IllegalPathStateException.class, new Runnable() { public void run() { fresh.curveTo(1, 1, 2, 2, 3, 3); } },
+                     "curveTo before moveTo throws IllegalPathStateException");
+
+        // getPathIterator(at, 负 flatness) 抛 IllegalArgumentException。
+        Path2D.Double flat = new Path2D.Double();
+        flat.moveTo(0, 0); flat.lineTo(10, 0);
+        expectThrows(IllegalArgumentException.class, new Runnable() { public void run() { flat.getPathIterator(null, -1.0); } },
+                     "getPathIterator negative flatness throws IllegalArgumentException");
+
+        // 反向绕组的内方形：NON_ZERO 与 EVEN_ODD 都成洞（中心不含，环带含）。
+        Path2D.Double rev = new Path2D.Double(Path2D.WIND_NON_ZERO);
+        rev.moveTo(0, 0); rev.lineTo(10, 0); rev.lineTo(10, 10); rev.lineTo(0, 10); rev.closePath();
+        rev.moveTo(2, 2); rev.lineTo(2, 8); rev.lineTo(8, 8); rev.lineTo(8, 2); rev.closePath();
+        check(!rev.contains(5, 5), "NON_ZERO reverse-wound inner square is a hole");
+        check(rev.contains(1, 1), "NON_ZERO ring between squares still filled");
+        Path2D.Double eoRev = new Path2D.Double(Path2D.WIND_EVEN_ODD);
+        eoRev.moveTo(0, 0); eoRev.lineTo(10, 0); eoRev.lineTo(10, 10); eoRev.lineTo(0, 10); eoRev.closePath();
+        eoRev.moveTo(2, 2); eoRev.lineTo(2, 8); eoRev.lineTo(8, 8); eoRev.lineTo(8, 2); eoRev.closePath();
+        check(!eoRev.contains(5, 5), "EVEN_ODD reverse-wound inner square is a hole");
+        check(eoRev.contains(1, 1), "EVEN_ODD ring between squares still filled");
+
+        // 单 moveTo 退化路径：无面积，getBounds2D 为空，不含自身点。
+        Path2D.Double single = new Path2D.Double();
+        single.moveTo(3, 4);
+        check(single.getBounds2D().isEmpty(), "single moveTo path has empty bounds");
+        check(!single.contains(3, 4), "single moveTo path contains nothing");
+
+        // transform(AffineTransform) 原地平移。
+        Path2D.Double tr = new Path2D.Double();
+        tr.moveTo(0, 0); tr.lineTo(10, 0);
+        tr.transform(AffineTransform.getTranslateInstance(5, 0));
+        check(close(tr.getBounds2D().getX(), 5) && close(tr.getBounds2D().getWidth(), 10), "transform translates in place");
+
+        // createTransformedShape 返回同类新对象，且与原对象独立。
+        Path2D.Double orig = new Path2D.Double();
+        orig.moveTo(0, 0); orig.lineTo(10, 0);
+        Shape shifted = orig.createTransformedShape(AffineTransform.getTranslateInstance(0, 5));
+        orig.lineTo(100, 100);
+        check(shifted instanceof Path2D.Double, "createTransformedShape returns Path2D.Double");
+        check(close(shifted.getBounds2D().getX(), 0) && close(shifted.getBounds2D().getY(), 5)
+              && close(shifted.getBounds2D().getWidth(), 10), "createTransformedShape independent of original");
+
+        // NaN 点永远 false（contains / 静态 contains）。
+        Path2D.Double sq = new Path2D.Double();
+        sq.moveTo(0, 0); sq.lineTo(10, 0); sq.lineTo(10, 10); sq.lineTo(0, 10); sq.closePath();
+        check(!sq.contains(Double.NaN, 5), "contains(NaN,5) false");
+        check(!Path2D.contains(sq.getPathIterator(null), Double.NaN, 5), "static contains(pi, NaN,5) false");
+
+        // 静态 contains/intersects 各种重载。
+        check(Path2D.contains(sq.getPathIterator(null), new Point2D.Double(5, 5)), "static contains(pi, Point2D)");
+        check(Path2D.contains(sq.getPathIterator(null), new Rectangle2D.Double(1, 1, 2, 2)), "static contains(pi, Rectangle2D)");
+        check(Path2D.contains(sq.getPathIterator(null), 1, 1, 2, 2), "static contains(pi, x,y,w,h)");
+        check(Path2D.intersects(sq.getPathIterator(null), 9, 9, 5, 5), "static intersects(pi, x,y,w,h)");
+        check(!Path2D.intersects(sq.getPathIterator(null), new Rectangle2D.Double(20, 20, 5, 5)),
+              "static intersects(pi, Rectangle2D) disjoint");
+
+        // quadTo/curveTo 更新 currentPoint 到终点。
+        Path2D.Double cur = new Path2D.Double();
+        cur.moveTo(0, 0);
+        cur.quadTo(5, 5, 10, 0);
+        check(cur.getCurrentPoint().equals(new Point2D.Double(10, 0)), "quadTo updates current point to end");
+        cur.curveTo(10, 10, 20, 10, 20, 0);
+        check(cur.getCurrentPoint().equals(new Point2D.Double(20, 0)), "curveTo updates current point to end");
+
+        // flatness=0 的直线原样通过（2 段）。
+        Path2D.Double line = new Path2D.Double();
+        line.moveTo(0, 0); line.lineTo(10, 0);
+        check(segCount(line.getPathIterator(null, 0.0)) == 2, "flatness 0 line iterator keeps 2 segments");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testPathContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

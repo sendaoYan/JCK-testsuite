@@ -172,11 +172,34 @@ public class RuleBasedCollatorTest {
         expectX(NullPointerException.class, () -> en.getCollationElementIterator((String) null),
                 "getCollationElementIterator(null) -> NPE");
     }
+
+    // ===================== 契约深化：compare null 边界/强度与分解默认值/getCollationKey 往返 =====================
+    static void testCompareKeyAndDecompositionContract() throws Exception {
+        RuleBasedCollator r = new RuleBasedCollator("< a < b < c");
+        expectX(NullPointerException.class, () -> r.compare(null, "a"), "compare(null, s) -> NPE");
+        expectX(NullPointerException.class, () -> r.compare("a", null), "compare(s, null) -> NPE");
+        check(r.compare("", "") == 0, "empty vs empty compare 0");
+        check(r.getStrength() == java.text.Collator.TERTIARY, "default strength TERTIARY");
+        check(r.getDecomposition() == java.text.Collator.CANONICAL_DECOMPOSITION,
+              "rules ctor default decomposition CANONICAL");
+        r.setDecomposition(java.text.Collator.NO_DECOMPOSITION);
+        check(r.getDecomposition() == java.text.Collator.NO_DECOMPOSITION,
+              "setDecomposition(NO_DECOMPOSITION) round-trip");
+        java.text.CollationKey ka = r.getCollationKey("a");
+        java.text.CollationKey kb = r.getCollationKey("b");
+        check(ka != null && kb != null, "getCollationKey non-null");
+        check("a".equals(ka.getSourceString()) && "b".equals(kb.getSourceString()),
+              "getCollationKey source round-trip");
+        check(ka.compareTo(kb) < 0 && r.compare("a", "b") < 0, "getCollationKey order mirrors compare");
+        check("".equals(r.getCollationKey("").getSourceString()), "empty source key round-trip");
+    }
+
 public static void main(String[] args) throws Exception {
         testCustomRuleOrderingContract();
         testIllegalRulesContract();
         testEqualityAndCloneContract();
         testElementIteratorAccessContract();
+        testCompareKeyAndDecompositionContract();
         testWhiteBox();
         testBlackBox();
         System.out.println("PASS (" + passed + " assertions)");

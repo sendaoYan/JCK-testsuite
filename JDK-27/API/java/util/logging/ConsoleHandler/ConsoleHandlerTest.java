@@ -82,6 +82,29 @@ public class ConsoleHandlerTest {
         } finally {
             System.setErr(oldErr);
         }
+
+        // 默认 encoding 为 null；setLevel(null)/setFormatter(null) NPE（不写任何输出）
+        java.util.logging.ConsoleHandler enc = new java.util.logging.ConsoleHandler();
+        check(enc.getEncoding() == null, "default encoding null");
+        try {
+            enc.setLevel(null);
+            check(false, "setLevel(null) NPE");
+        } catch (NullPointerException e) { check(true, "setLevel(null) NPE"); }
+        try {
+            enc.setFormatter(null);
+            check(false, "setFormatter(null) NPE");
+        } catch (NullPointerException e) { check(true, "setFormatter(null) NPE"); }
+        // close 幂等（重定向 err，避免关闭真实 System.err）
+        java.io.PrintStream oldErr2 = System.err;
+        System.setErr(new java.io.PrintStream(new java.io.ByteArrayOutputStream(), true));
+        try {
+            java.util.logging.ConsoleHandler idem = new java.util.logging.ConsoleHandler();
+            idem.close();
+            idem.close();
+            check(true, "close idempotent");
+        } finally {
+            System.setErr(oldErr2);
+        }
     }
 
     public static void main(String[] args) throws Exception {

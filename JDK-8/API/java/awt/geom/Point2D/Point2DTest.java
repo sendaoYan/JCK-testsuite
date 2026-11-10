@@ -106,9 +106,48 @@ public class Point2DTest {
         check(close(a, b), m + " (got " + a + ", want ~" + b + ")");
     }
 
+    // ===================== 契约深化：NaN/Infinity 距离、-0.0、NaN 不自等、跨实现 hashCode =====================
+    static void testPoint2DContracts() {
+        // distance/distanceSq 的 IEEE 浮点语义。
+        check(Double.isNaN(Point2D.distance(Double.NaN, 0, 0, 0)), "static distance with NaN is NaN");
+        check(Double.isNaN(Point2D.distanceSq(Double.NaN, 0, 0, 0)), "static distanceSq with NaN is NaN");
+        check(Point2D.distance(Double.POSITIVE_INFINITY, 0, 0, 0) == Double.POSITIVE_INFINITY,
+              "static distance with +Infinity is +Infinity");
+        check(Double.isNaN(Point2D.distance(Double.POSITIVE_INFINITY, 0, Double.POSITIVE_INFINITY, 0)),
+              "static distance (Inf..Inf) is NaN (Inf - Inf)");
+
+        // 负坐标 3-4-5 距离。
+        checkClose(Point2D.distanceSq(-1, -1, -4, -5), 25.0, "distanceSq negative coords == 25");
+        checkClose(Point2D.distance(-1, -1, -4, -5), 5.0, "distance negative coords == 5");
+
+        // 实例 distanceSq(Point2D) 跨 Float/Double 一致。
+        checkClose(new Point2D.Double(3, 4).distanceSq(new Point2D.Float(0, 0)), 25.0, "instance distanceSq(Point2D)");
+
+        // -0.0 与 0.0 按 == 相等。
+        check(new Point2D.Double(-0.0, 0).equals(new Point2D.Double(0.0, 0)), "-0.0 equals 0.0");
+
+        // NaN 点不自等（equals 用 == 比较 double，NaN != NaN）。
+        check(!new Point2D.Double(Double.NaN, 1).equals(new Point2D.Double(Double.NaN, 1)),
+              "NaN point is not equal to itself via equals");
+
+        // 跨实现 hashCode：Double 与 Float 同值一致。
+        check(new Point2D.Double(3, 4).hashCode() == new Point2D.Float(3, 4).hashCode(),
+              "Double and Float same-value points share hashCode");
+
+        // setLocation 接受并存储 NaN。
+        Point2D.Double sn = new Point2D.Double();
+        sn.setLocation(Double.NaN, 2);
+        check(Double.isNaN(sn.getX()) && sn.getY() == 2.0, "setLocation stores NaN");
+
+        // 到等值点距离恒 0（跨实现 Point2D.Float）。
+        checkClose(new Point2D.Double(3, 4).distance(new Point2D.Float(3, 4)), 0.0,
+                   "distance to equal-value point == 0");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testPoint2DContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

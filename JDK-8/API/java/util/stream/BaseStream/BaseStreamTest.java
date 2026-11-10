@@ -113,6 +113,35 @@ public class BaseStreamTest {
         check(true, "close does not invalidate spliterator reference");
     }
 
+    // ===================== 契约深化：onClose/unordered 返回 this/spliterator 单次消费/close 异常传播/并行迭代 =====================
+    static void testMoreContracts() {
+        // onClose 返回 this（可链式调用）。
+        Stream<Integer> s = Stream.of(1, 2, 3);
+        check(s.onClose(() -> {}) == s, "onClose returns this");
+        // unordered()：已无序的流返回 this；无序化保持 parallel 标志。
+        Stream<Integer> u = Stream.of(1, 2, 3).unordered();
+        check(u.unordered() == u, "unordered on already-unordered returns this");
+        check(Stream.of(1, 2, 3).parallel().unordered().isParallel(), "unordered preserves parallel flag");
+
+        // spliterator() 消费流后再次调用抛 ISE（单次消费）。
+        Stream<Integer> s2 = Stream.of(1, 2, 3);
+        s2.spliterator();
+        checkThrows(IllegalStateException.class, () -> s2.spliterator(), "spliterator twice ISE");
+
+        // close 传播 onClose handler 抛出的 RuntimeException（只断言类型）。
+        Stream<Integer> s3 = Stream.of(1).onClose(() -> { throw new RuntimeException("boom"); });
+        checkThrows(RuntimeException.class, () -> s3.close(), "close propagates handler RuntimeException");
+
+        // 并行流 iterator() 仍能排空全部元素（内容多重集不变）。
+        Iterator<Integer> pit = Stream.of(1, 2, 3).parallel().iterator();
+        int sum = 0;
+        while (pit.hasNext()) sum += pit.next();
+        check(sum == 6, "parallel iterator drains all elements");
+
+        // 新建流默认顺序。
+        check(!Stream.of(1).isParallel(), "new stream sequential by default");
+    }
+
     public static void main(String[] args) {
         testContracts();
         testSequentialParallel();
@@ -120,6 +149,7 @@ public class BaseStreamTest {
         testOnClose();
         testCloseIdempotent();
         testSingleUse();
+        testMoreContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

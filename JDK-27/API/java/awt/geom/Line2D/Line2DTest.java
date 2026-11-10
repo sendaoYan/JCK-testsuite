@@ -94,9 +94,74 @@ public class Line2DTest {
         check(cl != seg && cl.getX1() == 0 && cl.getX2() == 10, "clone independent and equal");
     }
 
+    // ===================== 契约深化：端点 getter/setLine 三形态/intersectsLine/退化与反向边界 =====================
+    static void testLineContracts() {
+        // 端点 getter（Double 返回 Point2D.Double 且坐标保真）。
+        Line2D.Double d = new Line2D.Double(1.5, 2.5, 3.5, 4.5);
+        Point2D p1 = d.getP1();
+        Point2D p2 = d.getP2();
+        check(p1 instanceof Point2D.Double && p1.getX() == 1.5 && p1.getY() == 2.5,
+              "getP1 returns Point2D.Double with coords");
+        check(p2 instanceof Point2D.Double && p2.getX() == 3.5 && p2.getY() == 4.5,
+              "getP2 returns Point2D.Double with coords");
+
+        // setLine 三形态。
+        Line2D.Double s = new Line2D.Double();
+        s.setLine(1, 2, 3, 4);
+        check(s.getX1() == 1 && s.getY1() == 2 && s.getX2() == 3 && s.getY2() == 4,
+              "setLine(4 doubles)");
+        s.setLine(new Point2D.Double(5, 6), new Point2D.Double(7, 8));
+        check(s.getX1() == 5 && s.getY1() == 6 && s.getX2() == 7 && s.getY2() == 8,
+              "setLine(Point2D, Point2D)");
+        Line2D.Double other = new Line2D.Double(-1, -2, -3, -4);
+        s.setLine(other);
+        check(s.getX1() == -1 && s.getY1() == -2 && s.getX2() == -3 && s.getY2() == -4,
+              "setLine(Line2D) copies coords");
+        check(s.getX1() == other.getX1() && s.getX2() == other.getX2(), "setLine copies, not aliases");
+
+        // intersectsLine（含端点相触、平行不相交、真穿越、对象形态）。
+        Line2D.Double h = new Line2D.Double(0, 0, 10, 0);
+        check(h.intersectsLine(5, -5, 5, 5), "intersectsLine(4 doubles) crossing");
+        check(!h.intersectsLine(0, 1, 10, 1), "intersectsLine parallel disjoint");
+        check(h.intersectsLine(10, 0, 20, 0), "intersectsLine sharing endpoint counts as intersect");
+        check(h.intersectsLine(new Line2D.Double(5, -5, 5, 5)), "intersectsLine(Line2D) crossing");
+        check(!h.intersectsLine(new Line2D.Double(0, 1, 10, 1)), "intersectsLine(Line2D) parallel");
+
+        // relativeCCW：共线在 P1 之前 == -1；退化线段恒 0；竖直线左右两侧。
+        check(Line2D.relativeCCW(0, 0, 1, 0, -1, 0) == -1, "relativeCCW collinear before P1 == -1");
+        check(Line2D.relativeCCW(0, 0, 0, 0, 1, 1) == 0, "relativeCCW degenerate line == 0");
+        check(Line2D.relativeCCW(0, 0, 0, 1, 1, 0) == 1, "relativeCCW vertical: +x side == 1");
+        check(Line2D.relativeCCW(0, 0, 0, 1, -1, 0) == -1, "relativeCCW vertical: -x side == -1");
+
+        // 退化线段 ptSegDist 退化为点距；ptLineDist 因无限直线无定义返回 NaN。
+        Line2D.Double deg = new Line2D.Double(0, 0, 0, 0);
+        checkClose(deg.ptSegDist(3, 4), 5.0, "degenerate ptSegDist == distance to point");
+        check(Double.isNaN(deg.ptLineDist(3, 4)), "degenerate ptLineDist == NaN");
+
+        // 反向线段 bounds 归一为正宽/高；getBounds2D 对称。
+        Line2D.Double rev = new Line2D.Double(10, 0, 0, 0);
+        Rectangle rb = rev.getBounds();
+        check(rb.x == 0 && rb.y == 0 && rb.width == 10 && rb.height == 0, "reversed getBounds normalized");
+        check(rev.getBounds2D().equals(new Rectangle2D.Double(0, 0, 10, 0)), "reversed getBounds2D normalized");
+
+        // contains(Point2D) 与 contains(Rectangle2D) 恒 false（线无面积）。
+        check(!h.contains(new Point2D.Double(5, 0)), "contains(Point2D) false on the line");
+        check(!h.contains(new Rectangle2D.Double(0, -1, 10, 2)), "contains(Rectangle2D) false");
+
+        // getPathIterator(AffineTransform) 施加平移变换。
+        PathIterator ti = h.getPathIterator(AffineTransform.getTranslateInstance(1, 1));
+        double[] cc = new double[6];
+        check(ti.currentSegment(cc) == PathIterator.SEG_MOVETO && close(cc[0], 1) && close(cc[1], 1),
+              "translated iterator MOVETO at (1,1)");
+        ti.next();
+        check(ti.currentSegment(cc) == PathIterator.SEG_LINETO && close(cc[0], 11) && close(cc[1], 1),
+              "translated iterator LINETO at (11,1)");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testLineContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

@@ -132,11 +132,58 @@ public class CollectorTest {
         check(java.util.stream.Collector.Characteristics.values().length == 3, "exactly 3 characteristics");
     }
 
+    // ===================== 契约深化：of() 各重载的 characteristics 位掩码/恒等 finisher/不可变集合/null 变参 =====================
+    static void testOfContractDetails() {
+        // 3 参 of()（无 characteristics）：只含 IDENTITY_FINISH。
+        Collector<String, List<String>, List<String>> a = Collector.of(supplier(), accumulator(), combiner());
+        check(a.characteristics().size() == 1 && a.characteristics().contains(Collector.Characteristics.IDENTITY_FINISH),
+              "3-arg of() implies IDENTITY_FINISH only");
+        // 3 参 of()（带 CONCURRENT）：自动追加 IDENTITY_FINISH。
+        Collector<String, List<String>, List<String>> b = Collector.of(supplier(), accumulator(), combiner(),
+                Collector.Characteristics.CONCURRENT);
+        check(b.characteristics().size() == 2
+              && b.characteristics().contains(Collector.Characteristics.CONCURRENT)
+              && b.characteristics().contains(Collector.Characteristics.IDENTITY_FINISH),
+              "3-arg of() with chars still adds IDENTITY_FINISH");
+        // 4 参 of()（有 finisher，无 characteristics）：空集合，不自动加 IDENTITY_FINISH。
+        Collector<String, List<String>, Integer> c = Collector.of(supplier(), accumulator(), combiner(),
+                l -> l.size());
+        check(c.characteristics().size() == 0, "4-arg of() without chars has empty characteristics");
+        check(!c.characteristics().contains(Collector.Characteristics.IDENTITY_FINISH),
+              "non-identity finisher -> no IDENTITY_FINISH");
+        // 4 参 of()（带 UNORDERED）：只含显式给出的位，不自动加 IDENTITY_FINISH。
+        Collector<String, List<String>, Integer> d = Collector.of(supplier(), accumulator(), combiner(),
+                l -> l.size(), Collector.Characteristics.UNORDERED);
+        check(d.characteristics().size() == 1 && d.characteristics().contains(Collector.Characteristics.UNORDERED),
+              "4-arg of() with UNORDERED only");
+        check(!d.characteristics().contains(Collector.Characteristics.IDENTITY_FINISH),
+              "4-arg of() does not auto-add IDENTITY_FINISH");
+
+        // 3 参 of() 的 finisher 是恒等函数：apply 返回入参本身。
+        List<String> box = new ArrayList<String>();
+        check(a.finisher().apply(box) == box, "identity finisher returns its argument");
+
+        // characteristics() 返回不可变集合。
+        checkThrows(UnsupportedOperationException.class,
+                () -> a.characteristics().add(Collector.Characteristics.CONCURRENT),
+                "characteristics() immutable");
+
+        // of() 的 characteristics 变参传 null 抛 NPE（两重载）。
+        checkThrows(NullPointerException.class,
+                () -> Collector.of(supplier(), accumulator(), combiner(), (Collector.Characteristics[]) null),
+                "3-arg of() null characteristics NPE");
+        checkThrows(NullPointerException.class,
+                () -> Collector.of(supplier(), accumulator(), combiner(),
+                        (Function<List<String>, Integer>) (l -> l.size()), (Collector.Characteristics[]) null),
+                "4-arg of() null characteristics NPE");
+    }
+
     public static void main(String[] args) {
         testContracts();
         testCollectorOf();
         testNullArguments();
         testCharacteristicsEnum();
+        testOfContractDetails();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

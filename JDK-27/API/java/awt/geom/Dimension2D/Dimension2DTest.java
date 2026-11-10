@@ -11,6 +11,21 @@ public class Dimension2DTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    interface ThrowingRunnable { void run() throws Throwable; }
+
+    static void checkThrows(Class<? extends Throwable> expected, ThrowingRunnable r, String m) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (expected.isInstance(t)) { passed++; return; }
+            if (t instanceof AssertionError) throw (AssertionError) t;
+            throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                    + " but got " + t.getClass().getName(), t);
+        }
+        throw new AssertionError(m + ": expected " + expected.getSimpleName()
+                + " but nothing was thrown");
+    }
+
     static boolean hasMethod(Class<?> c, String n, Class<?>... p) {
         try { c.getMethod(n, p); return true; } catch (NoSuchMethodException e) { return false; }
     }
@@ -71,9 +86,47 @@ public class Dimension2DTest {
         check(frac.width == 3 && frac.height == 4, "java.awt.Dimension.setSize(double) ceils to int");
     }
 
+    // ===================== 契约深化：setSize(null)/自赋值/零值/NaN/±Infinity/clone 独立性 =====================
+    static void testDimensionContracts() {
+        // setSize(Dimension2D) 传 null：内部调用 d.getWidth() 触发 NPE（只断言类型）。
+        checkThrows(NullPointerException.class, () -> new Dim(1, 1).setSize((Dimension2D) null), "setSize(null) NPE");
+
+        // 自赋值：源与目标同对象时值不变。
+        Dim self = new Dim(9, 8);
+        self.setSize(self);
+        check(self.getWidth() == 9.0 && self.getHeight() == 8.0, "setSize(self) no-op");
+
+        // 零宽高：Dimension2D 抽象层不归一化，原样保留。
+        Dim zero = new Dim(0, 0);
+        check(zero.getWidth() == 0.0 && zero.getHeight() == 0.0, "zero size preserved");
+
+        // NaN / ±Infinity 宽高：用位模式/数值范围断言（不 toString）。
+        Dim nan = new Dim(0, 0);
+        nan.setSize(Double.NaN, Double.POSITIVE_INFINITY);
+        check(Double.isNaN(nan.getWidth()), "NaN width preserved");
+        check(nan.getHeight() == Double.POSITIVE_INFINITY, "+Infinity height preserved");
+        nan.setSize(Double.NEGATIVE_INFINITY, -1.0);
+        check(nan.getWidth() == Double.NEGATIVE_INFINITY, "-Infinity width preserved");
+        check(nan.getHeight() == -1.0, "negative height preserved");
+
+        // clone 独立性：改 clone 不影响原对象；clone 与原对象值相等但非同一对象。
+        Dim src = new Dim(5, 6);
+        Dimension2D cl = (Dimension2D) src.clone();
+        check(cl != src, "clone is a distinct object");
+        check(cl.getWidth() == 5.0 && cl.getHeight() == 6.0, "clone copies values");
+        cl.setSize(100, 200);
+        check(src.getWidth() == 5.0 && src.getHeight() == 6.0, "mutating clone leaves original");
+
+        // setSize(Dimension2D) 跨实现：java.awt.Dimension 也是 Dimension2D。
+        Dim cross = new Dim(0, 0);
+        cross.setSize(new java.awt.Dimension(7, 8));
+        check(cross.getWidth() == 7.0 && cross.getHeight() == 8.0, "setSize(java.awt.Dimension) cross-impl");
+    }
+
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
+        testDimensionContracts();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }
