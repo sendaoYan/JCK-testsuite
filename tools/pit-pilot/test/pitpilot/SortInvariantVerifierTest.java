@@ -35,6 +35,9 @@ public class SortInvariantVerifierTest {
         List<Integer> a = Arrays.asList(3, 1, 2);
         List<Integer> b = Arrays.asList(1, 2, 3);
         assertTrue(SortInvariantVerifier.isPermutation(a, b));
+        // 两个参数都未排序：覆盖「移除某个 Collections.sort 调用」的变异体
+        assertTrue(SortInvariantVerifier.isPermutation(Arrays.asList(1, 2, 3), Arrays.asList(3, 2, 1)));
+        assertTrue(SortInvariantVerifier.isPermutation(Arrays.asList(3, 2, 1), Arrays.asList(1, 3, 2)));
         assertTrue(SortInvariantVerifier.isPermutation(new ArrayList<Integer>(), new ArrayList<Integer>()));
         assertFalse(SortInvariantVerifier.isPermutation(a, Arrays.asList(1, 2)));
         assertFalse(SortInvariantVerifier.isPermutation(a, Arrays.asList(1, 2, 4)));

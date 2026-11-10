@@ -24,7 +24,11 @@ echo "== baseline green check (JUnit 4.13.2) =="
   pitpilot.BigIntegerArithmeticVerifierTest \
   pitpilot.PatternMatcherVerifierTest \
   pitpilot.DecimalFormatHelperTest \
-  pitpilot.SortInvariantVerifierTest
+  pitpilot.SortInvariantVerifierTest \
+  pitpilot.StringFormatHelperTest \
+  pitpilot.CollectionInvariantHelperTest \
+  pitpilot.DateTimeHelperTest \
+  pitpilot.BitOpsHelperTest
 
 echo "== PIT mutation analysis =="
 "$JAVA" -cp "$PIT_CP" org.pitest.mutationtest.commandline.MutationCoverageReport \

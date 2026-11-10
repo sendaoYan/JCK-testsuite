@@ -35,6 +35,8 @@ public class DecimalFormatHelperTest {
     public void roundToScaleHalfUp() {
         assertEquals(1.24, DecimalFormatHelper.roundToScale(1.235, 2, RoundingMode.HALF_UP), 0.0);
         assertEquals(2.0, DecimalFormatHelper.roundToScale(2.0, 1, RoundingMode.DOWN), 0.0);
+        // scale == 0：区分「scale < 0」与「scale <= 0」的边界变异体
+        assertEquals(1.0, DecimalFormatHelper.roundToScale(1.235, 0, RoundingMode.HALF_UP), 0.0);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -43,11 +45,14 @@ public class DecimalFormatHelperTest {
     }
 
     /**
-     * 弱断言演示位：只断言「非 null」，不断言内容。
-     * 对 formatPercent 内部的乘法、正负分支、前缀字符串等变异体都无法杀死。
+     * 强断言：断言 formatPercent 的精确输出内容，覆盖乘法、正负分支、前缀字符串。
+     * 原先只断言「非 null」，对乘法/分支/前缀等变异体全部空转（假绿）。
      */
     @Test
-    public void formatPercentWeakAssertionOnlyChecksNonNull() {
-        assertNotNull(DecimalFormatHelper.formatPercent(12.5));
+    public void formatPercentExactContent() {
+        assertEquals("+50.0", DecimalFormatHelper.formatPercent(0.5));
+        assertEquals("-50", DecimalFormatHelper.formatPercent(-0.5));
+        assertEquals("+12.5", DecimalFormatHelper.formatPercent(0.125));
+        assertEquals("+0.0", DecimalFormatHelper.formatPercent(0.0));
     }
 }
