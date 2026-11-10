@@ -36,6 +36,30 @@ public class CollectionsPropertyTest {
         return l;
     }
 
+    // Element values are in [-1000, 1000], so a 2001-slot histogram compares
+    // multisets exactly and deterministically.
+    static final int OFFSET = 1000;
+    static final int BUCKETS = 2001;
+
+    static int[] counts(List<Integer> l) {
+        int[] c = new int[BUCKETS];
+        for (int x : l) {
+            c[x + OFFSET]++;
+        }
+        return c;
+    }
+
+    static boolean sameMultiset(List<Integer> a, List<Integer> b) {
+        int[] ca = counts(a);
+        int[] cb = counts(b);
+        for (int i = 0; i < BUCKETS; i++) {
+            if (ca[i] != cb[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static void main(String[] args) {
         RandomGenerator<Integer> sizeGen = Arbitraries.integers().between(0, MAX_SIZE).generator(1000);
         RandomGenerator<Integer> elemGen = Arbitraries.integers().between(-1000, 1000).generator(1000);
@@ -79,6 +103,49 @@ public class CollectionsPropertyTest {
                     check(l.size() == before + 1, "List.add must increment size by exactly 1");
                 }
                 check(l.size() == adds, "List final size must equal number of adds");
+            }
+            props++;
+        }
+
+        // 4. Collections.sort preserves the multiset of elements
+        {
+            Random r = new Random(SEED);
+            for (int i = 0; i < SAMPLES; i++) {
+                List<Integer> l = randomList(r, sizeGen, elemGen);
+                List<Integer> orig = new ArrayList<>(l);
+                Collections.sort(l);
+                check(sameMultiset(l, orig),
+                      "Collections.sort must preserve multiset at sample " + i
+                      + ": orig=" + orig + ", sorted=" + l);
+            }
+            props++;
+        }
+
+        // 5. Collections.shuffle preserves the multiset of elements
+        {
+            Random r = new Random(SEED);
+            for (int i = 0; i < SAMPLES; i++) {
+                List<Integer> l = randomList(r, sizeGen, elemGen);
+                List<Integer> orig = new ArrayList<>(l);
+                Collections.shuffle(l, r);
+                check(sameMultiset(l, orig),
+                      "Collections.shuffle must preserve multiset at sample " + i
+                      + ": orig=" + orig + ", shuffled=" + l);
+            }
+            props++;
+        }
+
+        // 6. Collections.reverse is an involution (reverse twice == original)
+        {
+            Random r = new Random(SEED);
+            for (int i = 0; i < SAMPLES; i++) {
+                List<Integer> l = randomList(r, sizeGen, elemGen);
+                List<Integer> orig = new ArrayList<>(l);
+                Collections.reverse(l);
+                Collections.reverse(l);
+                check(l.equals(orig),
+                      "Collections.reverse must be an involution at sample " + i
+                      + ": orig=" + orig + ", doubleReversed=" + l);
             }
             props++;
         }
