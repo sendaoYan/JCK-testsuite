@@ -30,23 +30,27 @@ public class VoiceStatusTest {
         check(vs.program == 0 && vs.note == 0 && vs.volume == 0, "default numeric fields");
         vs.active = true; vs.channel = 3; vs.bank = 1; vs.program = 40; vs.note = 60; vs.volume = 100;
         check(vs.active && vs.channel == 3 && vs.bank == 1 && vs.program == 40 && vs.note == 60 && vs.volume == 100, "all six public fields writable");
-        javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
-        syn.open();
         try {
-            javax.sound.midi.VoiceStatus[] all = syn.getVoiceStatus();
-            check(all.length == 64, "64 voices on Gervill");
-            for (javax.sound.midi.VoiceStatus v : all) check(!v.active, "all inactive before notes");
-            javax.sound.midi.MidiChannel ch = syn.getChannels()[0];
-            ch.noteOn(60, 100);
-            all = syn.getVoiceStatus(); // array is a fresh snapshot each call
-            int activeCount = 0;
-            for (javax.sound.midi.VoiceStatus v : all) if (v.active) activeCount++;
-            check(activeCount == 2, "two voices active for one noteOn (main+release) [" + activeCount + "]");
-            javax.sound.midi.VoiceStatus av = null;
-            for (javax.sound.midi.VoiceStatus v : all) if (v.active) av = v;
-            check(av.note == 60 && av.channel == 0, "active voice reports note+channel");
-            ch.noteOff(60);
-        } finally { syn.close(); }
+            javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
+            syn.open();
+            try {
+                javax.sound.midi.VoiceStatus[] all = syn.getVoiceStatus();
+                check(all.length == 64, "64 voices on Gervill");
+                for (javax.sound.midi.VoiceStatus v : all) check(!v.active, "all inactive before notes");
+                javax.sound.midi.MidiChannel ch = syn.getChannels()[0];
+                ch.noteOn(60, 100);
+                all = syn.getVoiceStatus(); // array is a fresh snapshot each call
+                int activeCount = 0;
+                for (javax.sound.midi.VoiceStatus v : all) if (v.active) activeCount++;
+                check(activeCount == 2, "two voices active for one noteOn (main+release) [" + activeCount + "]");
+                javax.sound.midi.VoiceStatus av = null;
+                for (javax.sound.midi.VoiceStatus v : all) if (v.active) av = v;
+                check(av.note == 60 && av.channel == 0, "active voice reports note+channel");
+                ch.noteOff(60);
+            } finally { syn.close(); }
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

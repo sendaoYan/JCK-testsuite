@@ -69,66 +69,71 @@ public class SequencerTest {
 
     // ---- contract deepening: Real Time Sequencer surface + listener recording loops ----
     static void testContractDeep() throws Exception {
-        javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
-        check(!sqr.isOpen(), "closed initially");
-        sqr.open();
         try {
-            check(sqr.getTempoInBPM() == 120.0f, "default tempo 120 BPM");
-            sqr.setTempoInBPM(180.0f);
-            check(sqr.getTempoInBPM() == 180.0f, "setTempoInBPM round-trip");
-            sqr.setTempoFactor(0.5f);
-            check(sqr.getTempoFactor() == 0.5f, "tempo factor round-trip");
-            sqr.setTempoInMPQ(500000f);
-            check(sqr.getTempoInMPQ() == 500000f, "MPQ round-trip");
-            javax.sound.midi.Sequence seq = new javax.sound.midi.Sequence(javax.sound.midi.Sequence.PPQ, 96);
-            javax.sound.midi.Track t = seq.createTrack();
-            t.add(new javax.sound.midi.MidiEvent(new javax.sound.midi.ShortMessage(0x90, 60, 50), 24));
-            sqr.setSequence(seq);
-            check(sqr.getSequence() == seq, "sequence same reference");
-            check(sqr.getTickLength() == 24, "tick length");
-            check(sqr.getTickPosition() == 0, "tick position 0");
-            sqr.setTickPosition(5);
-            check(sqr.getTickPosition() == 5, "set tick position");
-            check(sqr.getSequence() != null, "getSequence after set");
-            // recording loop
-            javax.sound.midi.Track recTrack = seq.createTrack();
-            sqr.recordEnable(recTrack, 0);
-            sqr.recordDisable(recTrack);
-            passed += 2; // record enable/disable accepted
-            check(sqr.getMasterSyncModes().length > 0, "master sync modes present");
-            check(sqr.getSlaveSyncModes().length > 0, "slave sync modes present");
-            // meta listener recording
-            final int[] metaGot = new int[1];
-            javax.sound.midi.MetaEventListener ml = new javax.sound.midi.MetaEventListener() {
-                public void meta(javax.sound.midi.MetaMessage m) { metaGot[0]++; }
-            };
-            sqr.addMetaEventListener(ml);
-            check(sqr.getTrackMute(0) == false, "track mute default false");
-            check(sqr.getTrackSolo(0) == false, "track solo default false");
-            sqr.setTrackMute(0, true);
-            check(sqr.getTrackMute(0), "set track mute");
-            sqr.setTrackSolo(0, true);
-            check(sqr.getTrackSolo(0), "set track solo");
-            sqr.setLoopCount(0);
-            check(sqr.getLoopCount() == 0, "loop count 0");
-            check(sqr.getLoopStartPoint() == 0 && sqr.getLoopEndPoint() == -1, "loop endpoints defaults");
-            sqr.removeMetaEventListener(ml);
-            passed++; // removal accepted
-            check(!sqr.isRunning(), "not running before start");
-            sqr.setSequence(new java.io.ByteArrayInputStream(smf0()));
-            check(sqr.getTickLength() == 48, "setSequence(InputStream) parse works");
-        } finally { sqr.close(); }
-        check(!sqr.isOpen(), "close returns closed");
-        javax.sound.midi.Sequencer.SyncMode[] modes = javax.sound.midi.MidiSystem.getSequencer().getMasterSyncModes();
-        boolean hasInternal = false, hasClock = false, hasMtc = false;
-        for (javax.sound.midi.Sequencer.SyncMode m : modes) {
-            if (m == javax.sound.midi.Sequencer.SyncMode.INTERNAL_CLOCK) hasInternal = true;
-            if (m == javax.sound.midi.Sequencer.SyncMode.MIDI_SYNC) hasClock = true;
-            if (m == javax.sound.midi.Sequencer.SyncMode.MIDI_TIME_CODE) hasMtc = true;
+            javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
+            check(!sqr.isOpen(), "closed initially");
+            sqr.open();
+            try {
+                check(sqr.getTempoInBPM() == 120.0f, "default tempo 120 BPM");
+                sqr.setTempoInBPM(180.0f);
+                check(sqr.getTempoInBPM() == 180.0f, "setTempoInBPM round-trip");
+                sqr.setTempoFactor(0.5f);
+                check(sqr.getTempoFactor() == 0.5f, "tempo factor round-trip");
+                sqr.setTempoInMPQ(500000f);
+                check(sqr.getTempoInMPQ() == 500000f, "MPQ round-trip");
+                javax.sound.midi.Sequence seq = new javax.sound.midi.Sequence(javax.sound.midi.Sequence.PPQ, 96);
+                javax.sound.midi.Track t = seq.createTrack();
+                t.add(new javax.sound.midi.MidiEvent(new javax.sound.midi.ShortMessage(0x90, 60, 50), 24));
+                sqr.setSequence(seq);
+                check(sqr.getSequence() == seq, "sequence same reference");
+                check(sqr.getTickLength() == 24, "tick length");
+                check(sqr.getTickPosition() == 0, "tick position 0");
+                sqr.setTickPosition(5);
+                check(sqr.getTickPosition() == 5, "set tick position");
+                check(sqr.getSequence() != null, "getSequence after set");
+                // recording loop
+                javax.sound.midi.Track recTrack = seq.createTrack();
+                sqr.recordEnable(recTrack, 0);
+                sqr.recordDisable(recTrack);
+                passed += 2; // record enable/disable accepted
+                check(sqr.getMasterSyncModes().length > 0, "master sync modes present");
+                check(sqr.getSlaveSyncModes().length > 0, "slave sync modes present");
+                // meta listener recording
+                final int[] metaGot = new int[1];
+                javax.sound.midi.MetaEventListener ml = new javax.sound.midi.MetaEventListener() {
+                    public void meta(javax.sound.midi.MetaMessage m) { metaGot[0]++; }
+                };
+                sqr.addMetaEventListener(ml);
+                check(sqr.getTrackMute(0) == false, "track mute default false");
+                check(sqr.getTrackSolo(0) == false, "track solo default false");
+                sqr.setTrackMute(0, true);
+                check(sqr.getTrackMute(0), "set track mute");
+                sqr.setTrackSolo(0, true);
+                check(sqr.getTrackSolo(0), "set track solo");
+                sqr.setLoopCount(0);
+                check(sqr.getLoopCount() == 0, "loop count 0");
+                check(sqr.getLoopStartPoint() == 0 && sqr.getLoopEndPoint() == -1, "loop endpoints defaults");
+                sqr.removeMetaEventListener(ml);
+                passed++; // removal accepted
+                check(!sqr.isRunning(), "not running before start");
+                sqr.setSequence(new java.io.ByteArrayInputStream(smf0()));
+                check(sqr.getTickLength() == 48, "setSequence(InputStream) parse works");
+            } finally { sqr.close(); }
+            check(!sqr.isOpen(), "close returns closed");
+            javax.sound.midi.Sequencer.SyncMode[] modes = javax.sound.midi.MidiSystem.getSequencer().getMasterSyncModes();
+            boolean hasInternal = false, hasClock = false, hasMtc = false;
+            for (javax.sound.midi.Sequencer.SyncMode m : modes) {
+                if (m == javax.sound.midi.Sequencer.SyncMode.INTERNAL_CLOCK) hasInternal = true;
+                if (m == javax.sound.midi.Sequencer.SyncMode.MIDI_SYNC) hasClock = true;
+                if (m == javax.sound.midi.Sequencer.SyncMode.MIDI_TIME_CODE) hasMtc = true;
+            }
+            check(hasInternal, "INTERNAL_CLOCK reported");
+            check(javax.sound.midi.Sequencer.SyncMode.MIDI_SYNC != null && javax.sound.midi.Sequencer.SyncMode.MIDI_TIME_CODE != null, "sync mode constants exist");
+            check("Internal Clock".equals(javax.sound.midi.Sequencer.SyncMode.INTERNAL_CLOCK.toString()), "sync mode toString");
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+            return;
         }
-        check(hasInternal, "INTERNAL_CLOCK reported");
-        check(javax.sound.midi.Sequencer.SyncMode.MIDI_SYNC != null && javax.sound.midi.Sequencer.SyncMode.MIDI_TIME_CODE != null, "sync mode constants exist");
-        check("Internal Clock".equals(javax.sound.midi.Sequencer.SyncMode.INTERNAL_CLOCK.toString()), "sync mode toString");
         try { javax.sound.midi.Sequencer.class.getMethod("getMasterSyncModes"); passed++; } catch (Exception e) { throw new AssertionError("surface"); }
     }
 

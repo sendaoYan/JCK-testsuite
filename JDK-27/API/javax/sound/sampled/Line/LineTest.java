@@ -91,15 +91,25 @@ public class LineTest {
         check(info.matches(new javax.sound.sampled.Line.Info(javax.sound.sampled.Clip.class)), "self-class matches");
         check(!info.matches(new javax.sound.sampled.Line.Info(javax.sound.sampled.SourceDataLine.class)), "other class no match");
         check(info.toString().contains("Clip"), "toString contains class");
-        javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
-        check(!clip.isOpen(), "closed initially");
-        clip.open(new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(new byte[] { 16, -16 }), new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false), 2));
-        check(clip.isOpen(), "open");
-        check(clip.getLineInfo() != null, "line info present");
-        clip.addLineListener(null); // null listener tolerated
-        check(true, "null addLineListener tolerated");
-        clip.close();
-        check(!clip.isOpen(), "close");
+        try {
+            javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
+            check(!clip.isOpen(), "closed initially");
+            clip.open(new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(new byte[] { 16, -16 }), new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false), 2));
+            check(clip.isOpen(), "open");
+            check(clip.getLineInfo() != null, "line info present");
+            clip.addLineListener(null); // null listener tolerated
+            check(true, "null addLineListener tolerated");
+            clip.close();
+            check(!clip.isOpen(), "close");
+        } catch (javax.sound.sampled.LineUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
+                System.out.println("SKIP: no audio device/line available");
+            } else {
+                throw e;
+            }
+        }
         try { javax.sound.sampled.AudioSystem.getLine(null); check(false, "null info must fail"); }
         catch (Exception e) { passed++; }
     }

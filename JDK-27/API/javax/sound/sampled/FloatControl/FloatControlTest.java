@@ -103,23 +103,34 @@ public class FloatControlTest {
 
     // ---- contract deepening: real MASTER_GAIN clamping matrix + exact IAE messages ----
     static void testContractDeep() throws Exception {
-        javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
-        clip.open(new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(new byte[] { 16, -16 }), new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false), 2));
-        javax.sound.sampled.FloatControl gain = (javax.sound.sampled.FloatControl) clip.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN);
-        check(gain.getMinimum() == -80.0f, "min -80.0 dB");
-        check(gain.getMaximum() == 6.0206f, "max 6.0206 dB");
-        check(gain.getPrecision() == 0.625f, "precision 0.625");
-        check("dB".equals(gain.getUnits()), "unit dB");
-        check(gain.getValue() == 0.0f, "default 0.0");
-        try { gain.setValue(gain.getMaximum() + 100f); check(false, "over max must fail"); }
-        catch (IllegalArgumentException e) { check("Requested value 106.0206 exceeds allowable maximum value 6.0206.".equals(e.getMessage()), "over-max message [" + e.getMessage() + "]"); }
-        try { gain.setValue(gain.getMinimum() - 100f); check(false, "under min must fail"); }
-        catch (IllegalArgumentException e) { check("Requested value -180.0 smaller than allowable minimum value -80.0.".equals(e.getMessage()), "under-min message [" + e.getMessage() + "]"); }
-        gain.setValue(-6.0f);
-        check(gain.getValue() == -6.0000005f, "quantized to precision [-6.0000005]");
-        check(gain.toString().startsWith("Master Gain"), "toString label");
-        check(javax.sound.sampled.FloatControl.Type.MASTER_GAIN.toString().equals("Master Gain"), "type name");
-        // Type constants table
+        try {
+            javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
+            clip.open(new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(new byte[] { 16, -16 }), new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false), 2));
+            javax.sound.sampled.FloatControl gain = (javax.sound.sampled.FloatControl) clip.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN);
+            check(gain.getMinimum() == -80.0f, "min -80.0 dB");
+            check(gain.getMaximum() == 6.0206f, "max 6.0206 dB");
+            check(gain.getPrecision() == 0.625f, "precision 0.625");
+            check("dB".equals(gain.getUnits()), "unit dB");
+            check(gain.getValue() == 0.0f, "default 0.0");
+            try { gain.setValue(gain.getMaximum() + 100f); check(false, "over max must fail"); }
+            catch (IllegalArgumentException e) { check("Requested value 106.0206 exceeds allowable maximum value 6.0206.".equals(e.getMessage()), "over-max message [" + e.getMessage() + "]"); }
+            try { gain.setValue(gain.getMinimum() - 100f); check(false, "under min must fail"); }
+            catch (IllegalArgumentException e) { check("Requested value -180.0 smaller than allowable minimum value -80.0.".equals(e.getMessage()), "under-min message [" + e.getMessage() + "]"); }
+            gain.setValue(-6.0f);
+            check(gain.getValue() == -6.0000005f, "quantized to precision [-6.0000005]");
+            check(gain.toString().startsWith("Master Gain"), "toString label");
+            check(javax.sound.sampled.FloatControl.Type.MASTER_GAIN.toString().equals("Master Gain"), "type name");
+            clip.close();
+        } catch (javax.sound.sampled.LineUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
+                System.out.println("SKIP: no audio device/line available");
+            } else {
+                throw e;
+            }
+        }
+        // Type constants table (deterministic, no device required)
         check("Master Gain".equals(javax.sound.sampled.FloatControl.Type.MASTER_GAIN.toString()), "MASTER_GAIN");
         check("AUX Send".equals(javax.sound.sampled.FloatControl.Type.AUX_SEND.toString()), "AUX Send");
         check("AUX Return".equals(javax.sound.sampled.FloatControl.Type.AUX_RETURN.toString()), "AUX Return");
@@ -129,7 +140,6 @@ public class FloatControlTest {
         check("Pan".equals(javax.sound.sampled.FloatControl.Type.PAN.toString()), "PAN");
         check("Balance".equals(javax.sound.sampled.FloatControl.Type.BALANCE.toString()), "BALANCE");
         check("Sample Rate".equals(javax.sound.sampled.FloatControl.Type.SAMPLE_RATE.toString()), "SAMPLE_RATE");
-        clip.close();
     }
 
     static Object serRoundTrip(Object o) throws Exception {

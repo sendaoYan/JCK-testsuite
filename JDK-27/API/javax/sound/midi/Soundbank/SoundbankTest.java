@@ -60,19 +60,23 @@ public class SoundbankTest {
         check("RSB".equals(rec.getName()) && "1.0".equals(rec.getVersion()) && "deep".equals(rec.getVendor()), "metadata");
         check(rec.getResources().length == 0 && rec.getInstruments().length == 0, "empty arrays");
         check(rec.getInstrument(new javax.sound.midi.Patch(0, 0)) == null, "lookup null");
-        javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
-        syn.open();
         try {
-            javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
-            check("Emergency GM sound set".equals(sbk.getName()), "name");
-            check(sbk.getVersion() != null && sbk.getVendor() != null && sbk.getDescription() != null, "metadata non-null");
-            javax.sound.midi.Instrument[] instrs = sbk.getInstruments();
-            check(instrs.length == 129, "129 instruments");
-            check(sbk.getInstrument(instrs[0].getPatch()) == instrs[0], "getInstrument by patch returns same instance");
-            check(sbk.getInstrument(new javax.sound.midi.Patch(16383, 16383)) == null, "unknown patch null");
-            check(sbk.equals(sbk) && !sbk.equals(rec), "identity equals");
-            check(sbk.getResources().length == 76, "76 resources");
-        } finally { syn.close(); }
+            javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
+            syn.open();
+            try {
+                javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
+                check("Emergency GM sound set".equals(sbk.getName()), "name");
+                check(sbk.getVersion() != null && sbk.getVendor() != null && sbk.getDescription() != null, "metadata non-null");
+                javax.sound.midi.Instrument[] instrs = sbk.getInstruments();
+                check(instrs.length == 129, "129 instruments");
+                check(sbk.getInstrument(instrs[0].getPatch()) == instrs[0], "getInstrument by patch returns same instance");
+                check(sbk.getInstrument(new javax.sound.midi.Patch(16383, 16383)) == null, "unknown patch null");
+                check(sbk.equals(sbk) && !sbk.equals(rec), "identity equals");
+                check(sbk.getResources().length == 76, "76 resources");
+            } finally { syn.close(); }
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

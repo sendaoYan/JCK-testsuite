@@ -38,13 +38,17 @@ public class MetaEventListenerTest {
         check(count[0] == 1 && last[0] == probe, "callback captures reference");
         l.meta(probe);
         check(count[0] == 2, "repeat callback");
-        javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
-        sqr.open();
         try {
-            sqr.addMetaEventListener(l);
-            sqr.removeMetaEventListener(l);
-            passed += 2; // registration lifecycle accepted
-        } finally { sqr.close(); }
+            javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
+            sqr.open();
+            try {
+                sqr.addMetaEventListener(l);
+                sqr.removeMetaEventListener(l);
+                passed += 2; // registration lifecycle accepted
+            } finally { sqr.close(); }
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

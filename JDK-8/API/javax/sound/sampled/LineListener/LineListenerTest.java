@@ -32,37 +32,47 @@ public class LineListenerTest {
         javax.sound.sampled.LineListener l = new javax.sound.sampled.LineListener() {
             public void update(javax.sound.sampled.LineEvent e) { got[0] = e; count[0]++; }
         };
-        javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
-        javax.sound.sampled.AudioInputStream ais = new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(new byte[] { 16, -16 }), new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false), 2);
-        clip.open(ais);
-        clip.addLineListener(l);
-        clip.setFramePosition(0);
-        clip.start();
-        clip.stop();
-        clip.close();
-        check(count[0] >= 1, "listener invoked [" + count[0] + "]");
-        if (count[0] >= 1) {
-            check(got[0].getLine() == clip, "event carries the clip");
-            boolean sawStart = false, sawStop = false, sawClose = false, sawOpen = false;
-            // re-run to capture full sequence
-            final java.util.List<String> seq = new java.util.ArrayList<String>();
-            javax.sound.sampled.LineListener seqL = new javax.sound.sampled.LineListener() {
-                public void update(javax.sound.sampled.LineEvent e) { seq.add(e.getType().toString()); }
-            };
-            javax.sound.sampled.Clip c2 = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
-            c2.open(new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(new byte[] { 16, -16 }), new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false), 2));
-            c2.addLineListener(seqL);
-            c2.start();
-            Thread.sleep(300);
-            c2.stop();
-            c2.close();
-            Thread.sleep(100);
-            for (String s : seq) { if (s.equals("Start")) sawStart = true; if (s.equals("Stop")) sawStop = true; if (s.equals("Close")) sawClose = true; if (s.equals("Open")) sawOpen = true; }
-            check(sawStart && sawStop, "Start and Stop events delivered [" + seq + "]");
-            check(sawClose, "Close event delivered");
+        try {
+            javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
+            javax.sound.sampled.AudioInputStream ais = new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(new byte[] { 16, -16 }), new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false), 2);
+            clip.open(ais);
+            clip.addLineListener(l);
+            clip.setFramePosition(0);
+            clip.start();
+            clip.stop();
+            clip.close();
+            check(count[0] >= 1, "listener invoked [" + count[0] + "]");
+            if (count[0] >= 1) {
+                check(got[0].getLine() == clip, "event carries the clip");
+                boolean sawStart = false, sawStop = false, sawClose = false, sawOpen = false;
+                // re-run to capture full sequence
+                final java.util.List<String> seq = new java.util.ArrayList<String>();
+                javax.sound.sampled.LineListener seqL = new javax.sound.sampled.LineListener() {
+                    public void update(javax.sound.sampled.LineEvent e) { seq.add(e.getType().toString()); }
+                };
+                javax.sound.sampled.Clip c2 = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
+                c2.open(new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(new byte[] { 16, -16 }), new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false), 2));
+                c2.addLineListener(seqL);
+                c2.start();
+                Thread.sleep(300);
+                c2.stop();
+                c2.close();
+                Thread.sleep(100);
+                for (String s : seq) { if (s.equals("Start")) sawStart = true; if (s.equals("Stop")) sawStop = true; if (s.equals("Close")) sawClose = true; if (s.equals("Open")) sawOpen = true; }
+                check(sawStart && sawStop, "Start and Stop events delivered [" + seq + "]");
+                check(sawClose, "Close event delivered");
+            }
+            clip.removeLineListener(l);
+            check(true, "removal accepted");
+        } catch (javax.sound.sampled.LineUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
+                System.out.println("SKIP: no audio device/line available");
+            } else {
+                throw e;
+            }
         }
-        clip.removeLineListener(l);
-        check(true, "removal accepted");
     }
 
     static Object serRoundTrip(Object o) throws Exception {

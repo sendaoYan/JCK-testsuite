@@ -34,15 +34,19 @@ public class InstrumentTest {
         check(rec.getPatch().getBank() == 1 && rec.getPatch().getProgram() == 2, "patch passthrough");
         check(rec.getSoundbank() == null, "null soundbank allowed");
         check("payload".equals(rec.getData()), "custom data");
-        javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
-        syn.open();
         try {
-            javax.sound.midi.Instrument piano = syn.getDefaultSoundbank().getInstruments()[0];
-            check("Acoustic Grand Piano".equals(piano.getName()), "GM 0 name");
-            check(piano.getSoundbank() == syn.getDefaultSoundbank(), "instrument knows soundbank");
-            check(piano.toString().startsWith("Instrument: Acoustic Grand Piano"), "toString format [bank #0 preset #0]: " + piano.toString());
-            check(piano.getDataClass() == null, "Gervill instrument dataClass null");
-        } finally { syn.close(); }
+            javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
+            syn.open();
+            try {
+                javax.sound.midi.Instrument piano = syn.getDefaultSoundbank().getInstruments()[0];
+                check("Acoustic Grand Piano".equals(piano.getName()), "GM 0 name");
+                check(piano.getSoundbank() == syn.getDefaultSoundbank(), "instrument knows soundbank");
+                check(piano.toString().startsWith("Instrument: Acoustic Grand Piano"), "toString format [bank #0 preset #0]: " + piano.toString());
+                check(piano.getDataClass() == null, "Gervill instrument dataClass null");
+            } finally { syn.close(); }
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

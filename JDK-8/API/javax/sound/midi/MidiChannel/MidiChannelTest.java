@@ -50,41 +50,45 @@ public class MidiChannelTest {
 
     // ---- contract deepening: real channel from Gervill full matrix ----
     static void testContractDeep() throws Exception {
-        javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
-        syn.open();
         try {
-            javax.sound.midi.MidiChannel ch = syn.getChannels()[0];
-            ch.programChange(5);
-            check(ch.getProgram() == 5, "program");
-            ch.programChange(0, 9);
-            check(ch.getProgram() == 9, "bank+program overload applies program");
-            ch.controlChange(7, 100);
-            check(ch.getController(7) == 100, "cc get");
-            check(ch.getController(91) == 40, "GM default cc91 (reverb) 40");
-            check(ch.getController(10) == 64, "GM default cc10 (pan) 64");
-            ch.noteOn(60, 127);
-            ch.noteOff(60, 0);
-            ch.noteOff(61);
-            passed += 3; // note lifecycle silent
-            ch.setPolyPressure(62, 99);
-            check(ch.getPolyPressure(62) == 99, "poly pressure");
-            check(ch.getPolyPressure(61) == 0, "other note pressure 0");
-            ch.setChannelPressure(45);
-            check(ch.getChannelPressure() == 45, "channel pressure");
-            ch.setPitchBend(1);
-            check(ch.getPitchBend() == 1, "min bend");
-            ch.setPitchBend(0);
-            check(ch.getPitchBend() == 0, "bend 0");
-            ch.setPitchBend(16383);
-            check(ch.getPitchBend() == 16256, "bend 16383 quantized to 16256 (128-step)");
-            check(!ch.getSolo() && !ch.getMute() && !ch.getMono(), "boolean states default false");
-            ch.setMono(false); ch.setMute(false); ch.setSolo(false); ch.setOmni(false);
-            check(!ch.getOmni(), "omni false stays false on Gervill");
-            ch.resetAllControllers();
-            check(ch.getController(7) == 100, "resetAllControllers restores GM default cc7=100");
-            ch.allSoundOff(); ch.allNotesOff();
-            passed += 2;
-        } finally { syn.close(); }
+            javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
+            syn.open();
+            try {
+                javax.sound.midi.MidiChannel ch = syn.getChannels()[0];
+                ch.programChange(5);
+                check(ch.getProgram() == 5, "program");
+                ch.programChange(0, 9);
+                check(ch.getProgram() == 9, "bank+program overload applies program");
+                ch.controlChange(7, 100);
+                check(ch.getController(7) == 100, "cc get");
+                check(ch.getController(91) == 40, "GM default cc91 (reverb) 40");
+                check(ch.getController(10) == 64, "GM default cc10 (pan) 64");
+                ch.noteOn(60, 127);
+                ch.noteOff(60, 0);
+                ch.noteOff(61);
+                passed += 3; // note lifecycle silent
+                ch.setPolyPressure(62, 99);
+                check(ch.getPolyPressure(62) == 99, "poly pressure");
+                check(ch.getPolyPressure(61) == 0, "other note pressure 0");
+                ch.setChannelPressure(45);
+                check(ch.getChannelPressure() == 45, "channel pressure");
+                ch.setPitchBend(1);
+                check(ch.getPitchBend() == 1, "min bend");
+                ch.setPitchBend(0);
+                check(ch.getPitchBend() == 0, "bend 0");
+                ch.setPitchBend(16383);
+                check(ch.getPitchBend() == 16256, "bend 16383 quantized to 16256 (128-step)");
+                check(!ch.getSolo() && !ch.getMute() && !ch.getMono(), "boolean states default false");
+                ch.setMono(false); ch.setMute(false); ch.setSolo(false); ch.setOmni(false);
+                check(!ch.getOmni(), "omni false stays false on Gervill");
+                ch.resetAllControllers();
+                check(ch.getController(7) == 100, "resetAllControllers restores GM default cc7=100");
+                ch.allSoundOff(); ch.allNotesOff();
+                passed += 2;
+            } finally { syn.close(); }
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

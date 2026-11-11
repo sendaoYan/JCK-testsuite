@@ -58,10 +58,20 @@ public class DataLineTest {
         check(javax.sound.sampled.DataLine.class.isInterface(), "interface");
         check(javax.sound.sampled.Line.class.isAssignableFrom(javax.sound.sampled.DataLine.class), "extends Line");
         // real data line read/write surface
-        javax.sound.sampled.SourceDataLine sdl = (javax.sound.sampled.SourceDataLine) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, fmt));
-        sdl.open(fmt);
-        check(sdl.available() >= 0, "available");
-        sdl.close();
+        try {
+            javax.sound.sampled.SourceDataLine sdl = (javax.sound.sampled.SourceDataLine) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, fmt));
+            sdl.open(fmt);
+            check(sdl.available() >= 0, "available");
+            sdl.close();
+        } catch (javax.sound.sampled.LineUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
+                System.out.println("SKIP: no audio device/line available");
+            } else {
+                throw e;
+            }
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

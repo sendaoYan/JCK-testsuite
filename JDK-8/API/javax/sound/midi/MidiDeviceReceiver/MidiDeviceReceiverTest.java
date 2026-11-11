@@ -29,16 +29,20 @@ public class MidiDeviceReceiverTest {
     static void testContractDeep() throws Exception {
         check(javax.sound.midi.Receiver.class.isAssignableFrom(javax.sound.midi.MidiDeviceReceiver.class), "MidiDeviceReceiver extends Receiver");
         check(javax.sound.midi.Transmitter.class.isAssignableFrom(javax.sound.midi.MidiDeviceTransmitter.class), "MidiDeviceTransmitter extends Transmitter");
-        javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
-        sqr.open();
         try {
-            javax.sound.midi.Transmitter tx = sqr.getTransmitter();
-            javax.sound.midi.MidiDeviceTransmitter mdt = (javax.sound.midi.MidiDeviceTransmitter) tx;
-            check(mdt.getMidiDevice() == sqr, "transmitter reports owning device");
-            javax.sound.midi.Receiver rx = sqr.getReceiver();
-            javax.sound.midi.MidiDeviceReceiver mdr = (javax.sound.midi.MidiDeviceReceiver) rx;
-            check(mdr.getMidiDevice() == sqr, "receiver reports owning device");
-        } finally { sqr.close(); }
+            javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
+            sqr.open();
+            try {
+                javax.sound.midi.Transmitter tx = sqr.getTransmitter();
+                javax.sound.midi.MidiDeviceTransmitter mdt = (javax.sound.midi.MidiDeviceTransmitter) tx;
+                check(mdt.getMidiDevice() == sqr, "transmitter reports owning device");
+                javax.sound.midi.Receiver rx = sqr.getReceiver();
+                javax.sound.midi.MidiDeviceReceiver mdr = (javax.sound.midi.MidiDeviceReceiver) rx;
+                check(mdr.getMidiDevice() == sqr, "receiver reports owning device");
+            } finally { sqr.close(); }
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

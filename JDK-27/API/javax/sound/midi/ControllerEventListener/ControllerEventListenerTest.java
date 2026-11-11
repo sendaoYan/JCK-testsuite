@@ -77,16 +77,20 @@ public class ControllerEventListenerTest {
         javax.sound.midi.ShortMessage msg = new javax.sound.midi.ShortMessage(0xB0, 7, 120);
         l.controlChange(msg);
         check(count[0] == 1, "callback");
-        javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
-        sqr.open();
         try {
-            int[] empty = sqr.addControllerEventListener(l, new int[0]);
-            check(empty != null, "empty controllers returns array");
-            int[] all = sqr.addControllerEventListener(l, new int[] { 7, 10 });
-            check(all != null, "subscribe returns previous controllers");
-            int[] none = sqr.removeControllerEventListener(l, new int[] { 7 });
-            check(none != null, "unsubscribe returns remaining");
-        } finally { sqr.close(); }
+            javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
+            sqr.open();
+            try {
+                int[] empty = sqr.addControllerEventListener(l, new int[0]);
+                check(empty != null, "empty controllers returns array");
+                int[] all = sqr.addControllerEventListener(l, new int[] { 7, 10 });
+                check(all != null, "subscribe returns previous controllers");
+                int[] none = sqr.removeControllerEventListener(l, new int[] { 7 });
+                check(none != null, "unsubscribe returns remaining");
+            } finally { sqr.close(); }
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

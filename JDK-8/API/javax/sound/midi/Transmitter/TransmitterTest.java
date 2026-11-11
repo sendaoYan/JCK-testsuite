@@ -54,17 +54,21 @@ public class TransmitterTest {
         tx.close();
         check(tx.getReceiver() == null, "close clears receiver (recording impl)");
         // real sequencer endpoints
-        javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
-        sqr.open();
-        javax.sound.midi.Transmitter real = sqr.getTransmitter();
-        real.setReceiver(rec);
-        check(real.getReceiver() == rec, "real transmitter accepts external receiver");
-        javax.sound.midi.Receiver realRx = sqr.getReceiver();
-        realRx.send(msg, -1);
-        real.close();
-        realRx.close();
-        sqr.close();
-        passed += 3;
+        try {
+            javax.sound.midi.Sequencer sqr = javax.sound.midi.MidiSystem.getSequencer();
+            sqr.open();
+            javax.sound.midi.Transmitter real = sqr.getTransmitter();
+            real.setReceiver(rec);
+            check(real.getReceiver() == rec, "real transmitter accepts external receiver");
+            javax.sound.midi.Receiver realRx = sqr.getReceiver();
+            realRx.send(msg, -1);
+            real.close();
+            realRx.close();
+            sqr.close();
+            passed += 3;
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

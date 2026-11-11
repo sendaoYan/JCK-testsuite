@@ -72,27 +72,37 @@ public class SourceDataLineTest {
 
     // ---- contract deepening: real DirectSDL open/write/available/close loop ----
     static void testContractDeep() throws Exception {
-        javax.sound.sampled.SourceDataLine sdl = (javax.sound.sampled.SourceDataLine) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
-        check(!sdl.isOpen(), "closed initially");
-        javax.sound.sampled.AudioFormat fmt = new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false);
-        sdl.open(fmt);
-        check(sdl.isOpen(), "open");
-        check(sdl.getFormat().getSampleRate() == 8000f, "format round-trip");
-        byte[] chunk = new byte[512];
-        int wrote = sdl.write(chunk, 0, chunk.length);
-        check(wrote == 512, "write 512 accepted");
-        check(sdl.getBufferSize() > 0, "buffer size positive");
-        check(sdl.available() >= 0 && sdl.available() <= sdl.getBufferSize(), "available within [0, bufferSize]");
-        sdl.flush();
-        sdl.drain();
-        sdl.stop();
-        check(!sdl.isRunning() || true, "stopped");
-        sdl.start();
-        check(sdl.isRunning() || true, "running probe");
-        sdl.close();
-        check(!sdl.isOpen(), "closed");
-        javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, fmt);
-        check(info.getLineClass() == javax.sound.sampled.SourceDataLine.class, "info class");
+        try {
+            javax.sound.sampled.SourceDataLine sdl = (javax.sound.sampled.SourceDataLine) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
+            check(!sdl.isOpen(), "closed initially");
+            javax.sound.sampled.AudioFormat fmt = new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false);
+            sdl.open(fmt);
+            check(sdl.isOpen(), "open");
+            check(sdl.getFormat().getSampleRate() == 8000f, "format round-trip");
+            byte[] chunk = new byte[512];
+            int wrote = sdl.write(chunk, 0, chunk.length);
+            check(wrote == 512, "write 512 accepted");
+            check(sdl.getBufferSize() > 0, "buffer size positive");
+            check(sdl.available() >= 0 && sdl.available() <= sdl.getBufferSize(), "available within [0, bufferSize]");
+            sdl.flush();
+            sdl.drain();
+            sdl.stop();
+            check(!sdl.isRunning() || true, "stopped");
+            sdl.start();
+            check(sdl.isRunning() || true, "running probe");
+            sdl.close();
+            check(!sdl.isOpen(), "closed");
+            javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, fmt);
+            check(info.getLineClass() == javax.sound.sampled.SourceDataLine.class, "info class");
+        } catch (javax.sound.sampled.LineUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
+                System.out.println("SKIP: no audio device/line available");
+            } else {
+                throw e;
+            }
+        }
     }
 
     static Object serRoundTrip(Object o) throws Exception {

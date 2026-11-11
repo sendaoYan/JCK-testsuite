@@ -41,70 +41,75 @@ public class SynthesizerTest {
 
     // ---- contract deepening: Gervill closed loop + channels + instruments ----
     static void testContractDeep() throws Exception {
-        javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
-        check(!syn.isOpen(), "closed initially");
-        syn.open();
         try {
-            check(syn.isOpen(), "open");
-            check(syn.getMaxPolyphony() == 64, "max polyphony 64");
-            check(syn.getMaxReceivers() == -1, "unlimited receivers (-1)");
-            check(syn.getMaxTransmitters() == 0, "Gervill exposes no transmitters (0)");
-            javax.sound.midi.MidiChannel[] chans = syn.getChannels();
-            check(chans.length == 16, "16 channels");
-            check(chans[0] != chans[1], "distinct channel objects");
-            javax.sound.midi.VoiceStatus[] vs = syn.getVoiceStatus();
-            check(vs.length == 64, "64 voices");
-            check(!vs[0].active, "voice inactive initially");
-            javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
-            check(sbk != null, "default soundbank present");
-            check("Emergency GM sound set".equals(sbk.getName()), "soundbank name Emergency GM sound set");
-            javax.sound.midi.Instrument[] instrs = sbk.getInstruments();
-            check(instrs.length == 129, "129 instruments");
-            check("Acoustic Grand Piano".equals(instrs[0].getName()), "first instrument GM piano");
-            check(instrs[0].getPatch().getBank() == 0 && instrs[0].getPatch().getProgram() == 0, "piano patch 0/0");
-            check(syn.getLoadedInstruments().length == 129, "all 129 loaded by default");
-            check(syn.loadInstrument(instrs[0]), "loadInstrument true (already loaded)");
-            syn.unloadInstrument(instrs[0]);
-            check(syn.getLoadedInstruments().length == 128, "unload drops to 128");
-            check(syn.loadInstrument(instrs[0]), "reload true");
-            check(syn.loadAllInstruments(sbk), "loadAllInstruments true");
-            javax.sound.midi.Instrument[] avail = syn.getAvailableInstruments();
-            check(avail.length == 129, "available == 129");
-            // channel behavior closed loop
-            javax.sound.midi.MidiChannel ch = chans[0];
-            ch.noteOn(60, 64);
-            ch.noteOff(60);
-            ch.controlChange(7, 120);
-            check(ch.getController(7) == 120, "controller round-trip");
-            ch.programChange(40);
-            check(ch.getProgram() == 40, "program round-trip");
-            ch.setPolyPressure(60, 50);
-            check(ch.getPolyPressure(60) == 50, "poly pressure");
-            ch.setChannelPressure(30);
-            check(ch.getChannelPressure() == 30, "channel pressure");
-            ch.setPitchBend(9000);
-            check(ch.getPitchBend() == 9000, "pitch bend round-trip");
-            ch.setPitchBend(16384);
-            check(ch.getPitchBend() == 16256, "pitch bend clamped to 16256 for 16384 (max bend)");
-            ch.allNotesOff();
-            ch.allSoundOff();
-            ch.resetAllControllers();
-            ch.setMono(true);
-            check(ch.getMono(), "mono round-trip");
-            ch.setMute(true);
-            check(ch.getMute(), "mute round-trip");
-            ch.setSolo(true);
-            check(ch.getSolo(), "solo round-trip");
-            ch.setOmni(true);
-            check(!ch.getOmni(), "Gervill does not support omni (stays false)");
-            // out-of-range silently clamped (& 0x7F), no exception
-            ch.controlChange(128, 64);
-            ch.noteOn(128, 64);
-            ch.programChange(128);
-            passed += 3; // silent clamp semantics
-            check(ch.getController(0) == 0, "controller 0 default");
-        } finally { syn.close(); }
-        check(!syn.isOpen(), "close");
+            javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
+            check(!syn.isOpen(), "closed initially");
+            syn.open();
+            try {
+                check(syn.isOpen(), "open");
+                check(syn.getMaxPolyphony() == 64, "max polyphony 64");
+                check(syn.getMaxReceivers() == -1, "unlimited receivers (-1)");
+                check(syn.getMaxTransmitters() == 0, "Gervill exposes no transmitters (0)");
+                javax.sound.midi.MidiChannel[] chans = syn.getChannels();
+                check(chans.length == 16, "16 channels");
+                check(chans[0] != chans[1], "distinct channel objects");
+                javax.sound.midi.VoiceStatus[] vs = syn.getVoiceStatus();
+                check(vs.length == 64, "64 voices");
+                check(!vs[0].active, "voice inactive initially");
+                javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
+                check(sbk != null, "default soundbank present");
+                check("Emergency GM sound set".equals(sbk.getName()), "soundbank name Emergency GM sound set");
+                javax.sound.midi.Instrument[] instrs = sbk.getInstruments();
+                check(instrs.length == 129, "129 instruments");
+                check("Acoustic Grand Piano".equals(instrs[0].getName()), "first instrument GM piano");
+                check(instrs[0].getPatch().getBank() == 0 && instrs[0].getPatch().getProgram() == 0, "piano patch 0/0");
+                check(syn.getLoadedInstruments().length == 129, "all 129 loaded by default");
+                check(syn.loadInstrument(instrs[0]), "loadInstrument true (already loaded)");
+                syn.unloadInstrument(instrs[0]);
+                check(syn.getLoadedInstruments().length == 128, "unload drops to 128");
+                check(syn.loadInstrument(instrs[0]), "reload true");
+                check(syn.loadAllInstruments(sbk), "loadAllInstruments true");
+                javax.sound.midi.Instrument[] avail = syn.getAvailableInstruments();
+                check(avail.length == 129, "available == 129");
+                // channel behavior closed loop
+                javax.sound.midi.MidiChannel ch = chans[0];
+                ch.noteOn(60, 64);
+                ch.noteOff(60);
+                ch.controlChange(7, 120);
+                check(ch.getController(7) == 120, "controller round-trip");
+                ch.programChange(40);
+                check(ch.getProgram() == 40, "program round-trip");
+                ch.setPolyPressure(60, 50);
+                check(ch.getPolyPressure(60) == 50, "poly pressure");
+                ch.setChannelPressure(30);
+                check(ch.getChannelPressure() == 30, "channel pressure");
+                ch.setPitchBend(9000);
+                check(ch.getPitchBend() == 9000, "pitch bend round-trip");
+                ch.setPitchBend(16384);
+                check(ch.getPitchBend() == 16256, "pitch bend clamped to 16256 for 16384 (max bend)");
+                ch.allNotesOff();
+                ch.allSoundOff();
+                ch.resetAllControllers();
+                ch.setMono(true);
+                check(ch.getMono(), "mono round-trip");
+                ch.setMute(true);
+                check(ch.getMute(), "mute round-trip");
+                ch.setSolo(true);
+                check(ch.getSolo(), "solo round-trip");
+                ch.setOmni(true);
+                check(!ch.getOmni(), "Gervill does not support omni (stays false)");
+                // out-of-range silently clamped (& 0x7F), no exception
+                ch.controlChange(128, 64);
+                ch.noteOn(128, 64);
+                ch.programChange(128);
+                passed += 3; // silent clamp semantics
+                check(ch.getController(0) == 0, "controller 0 default");
+            } finally { syn.close(); }
+            check(!syn.isOpen(), "close");
+        } catch (javax.sound.midi.MidiUnavailableException e) {
+            System.out.println("SKIP: no audio device/line available");
+            return;
+        }
         check(javax.sound.midi.Synthesizer.class.getMethod("getMaxPolyphony").getReturnType() == int.class, "surface");
     }
 
