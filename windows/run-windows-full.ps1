@@ -46,6 +46,29 @@ foreach ($p in @($SUITE, $JDK8, $JDK27, $JTREG_JAR, $JTREG_JAVA)) {
 $STAMP = Get-Date -Format "yyyyMMdd-HHmmss"
 $LOG   = Join-Path $PSScriptRoot "windows-$STAMP.summary.log"
 
+# Write one line to both the console and the summary log.
+function Log([string]$text) {
+    Write-Host $text
+    Add-Content -Path $LOG -Value $text
+}
+
+# Run a command, teeing each output line to console + log.
+function Run-Log([string]$label, [string]$exe, [string[]]$argv) {
+    Log ("--- " + $label + " ---")
+    & $exe @argv 2>&1 | ForEach-Object { Log ("  " + $_) }
+}
+
+# Remove jck-* work/report dirs under a root; returns how many were removed.
+function Remove-JckDir([string]$path) {
+    $c = 0
+    foreach ($d in (Get-ChildItem -Path $path -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -like "jck-*" })) {
+        Remove-Item -Path $d.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path $d.FullName)) { $c++ }
+    }
+    return $c
+}
+
 function Invoke-Tree([string]$tree, [string]$jdk, [string]$tag) {
     $dirs = @((Join-Path $SUITE "$tree\API"),
               (Join-Path $SUITE "$tree\JLS"),
@@ -65,18 +88,61 @@ function Invoke-Tree([string]$tree, [string]$jdk, [string]$tag) {
     }
 }
 
-Write-Host "=== JCK-testsuite Windows full run (RUNS=$RUNS each) ==="
-Write-Host "suite : $SUITE"
-Write-Host "JDK-8 : $JDK8"
-Write-Host "JDK-27: $JDK27"
-Write-Host "log   : $LOG"
-Add-Content -Path $LOG -Value "=== JCK-testsuite Windows full run ==="
-Add-Content -Path $LOG -Value "suite : $SUITE"
-Add-Content -Path $LOG -Value "JDK-8 : $JDK8"
-Add-Content -Path $LOG -Value "JDK-27: $JDK27"
+Log "=== JCK-testsuite Windows full run (RUNS=$RUNS each) ==="
+Log "suite : $SUITE"
+Log "JDK-8 : $JDK8"
+Log "JDK-27: $JDK27"
+Log "log   : $LOG"
+Log ""
+
+Log "=== versions (recorded for failure analysis) ==="
+Run-Log "jtreg version (jar: $JTREG_JAR)" $JTREG_JAVA @("-jar", $JTREG_JAR, "-version")
+Run-Log "java -version (JDK-8 under test)" (Join-Path $JDK8 "bin\java.exe") @("-version")
+Run-Log "java -version (JDK-27 under test)" (Join-Path $JDK27 "bin\java.exe") @("-version")
+
+# Windows OS + CPU identity (国产 x86 vs Intel/AMD attribution).
+Log "--- Windows OS ---"
+try {
+    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+    Log ("  " + $os.Caption + "  version " + $os.Version + "  build " + $os.BuildNumber)
+} catch {
+    Log ("  (Win32_OperatingSystem unavailable: " + $_.Exception.Message + ")")
+    Log ("  OSVersion: " + [System.Environment]::OSVersion.VersionString)
+}
+try {
+    $cpu = Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1
+    Log ("  CPU: " + $cpu.Name)
+} catch {
+    Log "  CPU: (unavailable)"
+}
+Log ("  PROCESSOR_ARCHITECTURE = " + $env:PROCESSOR_ARCHITECTURE)
+Log ("  COMPUTERNAME           = " + $env:COMPUTERNAME)
+Log ""
+
+Log "=== cleanup: removing leftovers from the previous run ==="
+$removed = Remove-JckDir $env:TEMP
+# Defensive: also scan one level deeper (session-dir layout, matching
+# collect-windows-failures.ps1's two-level scan).
+foreach ($top in (Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue)) {
+    $removed += Remove-JckDir $top.FullName
+}
+Log ("[cleanup] removed " + $removed + " leftover jck-* temp dir(s)")
+foreach ($f in (Get-ChildItem -Path $PSScriptRoot -Filter "windows-*.summary.log" -ErrorAction SilentlyContinue)) {
+    if ($f.FullName -eq $LOG) { continue }
+    Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue
+    Log ("[cleanup] removed old summary log: " + $f.Name)
+}
+foreach ($a in @("windows-jtr-summary.txt", "windows-jtr-detail.txt", "windows-jtr.zip")) {
+    Remove-Item (Join-Path $PSScriptRoot $a) -ErrorAction SilentlyContinue
+}
+if (Test-Path (Join-Path $PSScriptRoot "windows-jtr")) {
+    Remove-Item (Join-Path $PSScriptRoot "windows-jtr") -Recurse -Force -ErrorAction SilentlyContinue
+    Log "[cleanup] removed old collect output dir windows-jtr\"
+}
+Log ""
 
 # ---- run sequentially (shared machine: safer) ----
 Invoke-Tree "JDK-8"  $JDK8  "jdk8"
 Invoke-Tree "JDK-27" $JDK27 "jdk27"
 
-Write-Host "Done. Summary log: $LOG"
+Log "Done. Summary log: $LOG"
