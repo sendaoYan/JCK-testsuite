@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.fs.LinuxFileSystemProvider conformance: class and members.
  * @run main LinuxFileSystemProviderTest
  */

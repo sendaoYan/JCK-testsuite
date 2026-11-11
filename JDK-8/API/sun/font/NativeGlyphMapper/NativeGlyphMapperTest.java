@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.font.NativeGlyphMapper conformance: reflection (no init, native/display-heavy).
  * @run main NativeGlyphMapperTest
  */

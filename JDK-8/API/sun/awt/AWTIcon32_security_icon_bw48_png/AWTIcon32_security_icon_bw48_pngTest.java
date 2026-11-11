@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.AWTIcon32_security_icon_bw48_png conformance: reflection (no init, native/display-heavy).
  * @run main AWTIcon32_security_icon_bw48_pngTest
  */

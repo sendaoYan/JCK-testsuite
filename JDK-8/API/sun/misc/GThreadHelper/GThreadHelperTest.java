@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.misc.GThreadHelper conformance: class and members.
  * @run main GThreadHelperTest
  */

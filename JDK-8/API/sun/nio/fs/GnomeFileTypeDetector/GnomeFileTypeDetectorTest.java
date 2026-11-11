@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.fs.GnomeFileTypeDetector conformance: class and members.
  * @run main GnomeFileTypeDetectorTest
  */

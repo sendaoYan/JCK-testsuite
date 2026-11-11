@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.font.XRGlyphCacheEntry conformance: reflection (no init, native/display-heavy).
  * @run main XRGlyphCacheEntryTest
  */

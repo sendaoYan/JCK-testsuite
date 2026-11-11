@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.AWTIcon64_java_icon24_png conformance: reflection (no init, native/display-heavy).
  * @run main AWTIcon64_java_icon24_pngTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.internal.platform.CgroupV1Metrics conformance: type shape via reflection (headless-safe).
  * @run main CgroupV1MetricsTest
  */

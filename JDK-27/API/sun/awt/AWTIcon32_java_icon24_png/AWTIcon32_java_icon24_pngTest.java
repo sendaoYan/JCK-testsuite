@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.AWTIcon32_java_icon24_png conformance: internal package reflection (no init, AWT/2D/font/print/swing native-heavy).
  * @modules java.desktop/sun.awt:+open
  * @run main AWTIcon32_java_icon24_pngTest

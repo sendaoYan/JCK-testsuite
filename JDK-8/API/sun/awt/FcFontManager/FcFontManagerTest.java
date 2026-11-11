@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.FcFontManager conformance: reflection (no init, native/display-heavy).
  * @run main FcFontManagerTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.tools.jlink.internal.plugins.StripNativeDebugSymbolsPlugin conformance: internal package reflection.
  * @modules jdk.jlink/jdk.tools.jlink.internal.plugins:+open
  * @run main StripNativeDebugSymbolsPluginTest

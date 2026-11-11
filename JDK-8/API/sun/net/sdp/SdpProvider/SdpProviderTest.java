@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.net.sdp.SdpProvider conformance: class and members.
  * @run main SdpProviderTest
  */

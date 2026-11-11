@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.font.FcFontConfiguration conformance: reflection (no init, native/display-heavy).
  * @run main FcFontConfigurationTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.font.XRTextRenderer conformance: reflection (no init, native/display-heavy).
  * @run main XRTextRendererTest
  */

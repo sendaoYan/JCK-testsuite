@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.ch.PollSelectorProvider conformance: class and members.
  * @run main PollSelectorProviderTest
  */

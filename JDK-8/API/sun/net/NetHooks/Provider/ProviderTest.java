@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.net.NetHooks.Provider conformance: abstract class and members.
  * @run main ProviderTest
  */

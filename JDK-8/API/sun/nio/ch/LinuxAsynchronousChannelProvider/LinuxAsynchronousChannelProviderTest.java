@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.ch.LinuxAsynchronousChannelProvider conformance: class and members.
  * @run main LinuxAsynchronousChannelProviderTest
  */

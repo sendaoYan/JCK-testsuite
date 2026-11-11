@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.jpackage.internal.model.LinuxPackage conformance: internal interface reflection.
  * @modules jdk.jpackage/jdk.jpackage.internal.model:+open
  * @run main LinuxPackageTest

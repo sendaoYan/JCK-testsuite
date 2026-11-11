@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.jpackage.internal.model.LinuxDebPackageMixin.Stub conformance: internal final class reflection.
  * @modules jdk.jpackage/jdk.jpackage.internal.model:+open
  * @run main StubTest
