@@ -58,17 +58,6 @@ function Run-Log([string]$label, [string]$exe, [string[]]$argv) {
     & $exe @argv 2>&1 | ForEach-Object { Log ("  " + $_) }
 }
 
-# Remove jck-* work/report dirs under a root; returns how many were removed.
-function Remove-JckDir([string]$path) {
-    $c = 0
-    foreach ($d in (Get-ChildItem -Path $path -Directory -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -like "jck-*" })) {
-        Remove-Item -Path $d.FullName -Recurse -Force -ErrorAction SilentlyContinue
-        if (-not (Test-Path $d.FullName)) { $c++ }
-    }
-    return $c
-}
-
 function Invoke-Tree([string]$tree, [string]$jdk, [string]$tag) {
     $dirs = @((Join-Path $SUITE "$tree\API"),
               (Join-Path $SUITE "$tree\JLS"),
@@ -119,14 +108,36 @@ Log ("  PROCESSOR_ARCHITECTURE = " + $env:PROCESSOR_ARCHITECTURE)
 Log ("  COMPUTERNAME           = " + $env:COMPUTERNAME)
 Log ""
 
-Log "=== cleanup: removing leftovers from the previous run ==="
-$removed = Remove-JckDir $env:TEMP
+Log "=== cleanup: move leftovers aside (fast) + delete in background ==="
+# Remove-Item -Recurse over jck-* work dirs (hundreds of thousands of .jtr
+# files) takes minutes on Windows. A rename into a trash dir is O(1), and a
+# background job then deletes the trash while jtreg starts immediately.
+$trash = Join-Path $env:TEMP ("_jck-trash-" + $STAMP)
+# Collect candidates BEFORE creating $trash, so the new trash dir is not among them.
+$jckDirs = @()
+$jckDirs += @(Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -like "jck-*" -or $_.Name -like "_jck-trash-*" })
 # Defensive: also scan one level deeper (session-dir layout, matching
 # collect-windows-failures.ps1's two-level scan).
 foreach ($top in (Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue)) {
-    $removed += Remove-JckDir $top.FullName
+    $jckDirs += @(Get-ChildItem -Path $top.FullName -Directory -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -like "jck-*" })
 }
-Log ("[cleanup] removed " + $removed + " leftover jck-* temp dir(s)")
+New-Item -ItemType Directory -Force -Path $trash | Out-Null
+$moved = 0
+foreach ($d in ($jckDirs | Sort-Object FullName -Unique)) {
+    $moved++
+    Move-Item -LiteralPath $d.FullName -Destination (Join-Path $trash ("jck-" + $moved)) -Force -ErrorAction SilentlyContinue
+}
+Log ("[cleanup] moved " + $moved + " leftover dir(s) into " + $trash)
+if ($moved -gt 0) {
+    Start-Job -ScriptBlock { param($p) Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue } -ArgumentList $trash | Out-Null
+    Log "[cleanup] background delete started (jtreg starts now)"
+} else {
+    Remove-Item -LiteralPath $trash -Force -ErrorAction SilentlyContinue
+}
+# Small files next to this script (old summary logs + collect text/zip) delete
+# fast synchronously.
 foreach ($f in (Get-ChildItem -Path $PSScriptRoot -Filter "windows-*.summary.log" -ErrorAction SilentlyContinue)) {
     if ($f.FullName -eq $LOG) { continue }
     Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue
