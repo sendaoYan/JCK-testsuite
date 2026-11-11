@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthToggleButtonUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthToggleButtonUITest
+ * @run main/othervm SynthToggleButtonUITest
  */
 
 import java.awt.Color;

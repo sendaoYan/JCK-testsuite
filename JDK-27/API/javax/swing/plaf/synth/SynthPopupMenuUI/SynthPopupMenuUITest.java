@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthPopupMenuUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthPopupMenuUITest
+ * @run main/othervm SynthPopupMenuUITest
  */
 
 import java.awt.Color;

@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthRootPaneUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthRootPaneUITest
+ * @run main/othervm SynthRootPaneUITest
  */
 
 import java.awt.Color;

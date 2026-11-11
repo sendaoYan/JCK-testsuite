@@ -1,7 +1,7 @@
 /*
  * @test
  * @summary javax.swing.MenuSelectionManager conformance: type shape + selection path lifecycle (headless-safe).
- * @run main MenuSelectionManagerTest
+ * @run main/othervm MenuSelectionManagerTest
  */
 
 import java.awt.Component;

@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.text.DefaultEditorKit.CutAction conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main CutActionTest
+ * @run main/othervm CutActionTest
  */
 
 import java.awt.EventQueue;

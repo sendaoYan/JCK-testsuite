@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthToolBarUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthToolBarUITest
+ * @run main/othervm SynthToolBarUITest
  */
 
 import java.awt.Color;

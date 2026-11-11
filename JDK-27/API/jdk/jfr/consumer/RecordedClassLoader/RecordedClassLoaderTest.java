@@ -1,7 +1,7 @@
 /*
  * @test
  * @summary jdk.jfr.consumer.RecordedClassLoader conformance: white-box structure + black-box from recorded class.
- * @run main RecordedClassLoaderTest
+ * @run main/othervm RecordedClassLoaderTest
  */
 
 import java.lang.reflect.*;

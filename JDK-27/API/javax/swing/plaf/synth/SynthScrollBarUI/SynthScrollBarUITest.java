@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthScrollBarUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthScrollBarUITest
+ * @run main/othervm SynthScrollBarUITest
  */
 
 import java.awt.Color;

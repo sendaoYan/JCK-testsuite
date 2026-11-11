@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthProgressBarUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthProgressBarUITest
+ * @run main/othervm SynthProgressBarUITest
  */
 
 import java.awt.Color;

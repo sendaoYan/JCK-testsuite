@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthSpinnerUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthSpinnerUITest
+ * @run main/othervm SynthSpinnerUITest
  */
 
 import java.awt.Color;

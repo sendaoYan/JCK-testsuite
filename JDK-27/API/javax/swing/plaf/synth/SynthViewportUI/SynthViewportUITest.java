@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthViewportUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthViewportUITest
+ * @run main/othervm SynthViewportUITest
  */
 
 import java.awt.Color;

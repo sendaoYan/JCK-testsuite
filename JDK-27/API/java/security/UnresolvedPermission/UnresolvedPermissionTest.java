@@ -5,7 +5,7 @@
  *          getUnresolvedName/getUnresolvedActions/getActions(always "")/getName(== type),
  *          defensive copy of certificates, implies(any) == false, equals/hashCode,
  *          toString, and newPermissionCollection.
- * @run main UnresolvedPermissionTest
+ * @run main/othervm UnresolvedPermissionTest
  */
 
 import java.security.Permission;

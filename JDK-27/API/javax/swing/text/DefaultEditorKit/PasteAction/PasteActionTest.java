@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.text.DefaultEditorKit.PasteAction conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main PasteActionTest
+ * @run main/othervm PasteActionTest
  */
 
 import java.awt.EventQueue;

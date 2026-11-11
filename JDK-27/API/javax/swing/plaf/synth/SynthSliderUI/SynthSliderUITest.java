@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthSliderUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthSliderUITest
+ * @run main/othervm SynthSliderUITest
  */
 
 import java.awt.Color;

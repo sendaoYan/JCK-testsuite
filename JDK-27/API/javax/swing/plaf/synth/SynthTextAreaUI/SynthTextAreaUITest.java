@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthTextAreaUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthTextAreaUITest
+ * @run main/othervm SynthTextAreaUITest
  */
 
 import java.awt.Color;

@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthTreeUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthTreeUITest
+ * @run main/othervm SynthTreeUITest
  */
 
 import java.awt.Color;

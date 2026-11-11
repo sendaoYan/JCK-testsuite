@@ -1,7 +1,7 @@
 /*
  * @test
  * @summary javax.naming.spi.NamingManager conformance: white-box structure + black-box behavior.
- * @run main NamingManagerTest
+ * @run main/othervm NamingManagerTest
  */
 
 import java.lang.reflect.Method;

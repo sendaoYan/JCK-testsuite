@@ -2,7 +2,7 @@
  * @test
  * @summary javax.swing.plaf.synth.SynthTableHeaderUI conformance: white-box structure + black-box behavior.
  * @key headful
- * @run main SynthTableHeaderUITest
+ * @run main/othervm SynthTableHeaderUITest
  */
 
 import java.awt.Color;
