@@ -32,6 +32,18 @@ public class RuntimeLoadNativeTest {
         passed++;
     }
 
+    static boolean gccAvailable() {
+        try {
+            Process p = new ProcessBuilder("gcc", "--version").start();
+            try { p.getInputStream().close(); } catch (Exception ignore) { }
+            try { p.getOutputStream().close(); } catch (Exception ignore) { }
+            try { p.getErrorStream().close(); } catch (Exception ignore) { }
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     static final String C_SRC =
         "#include <jni.h>\n" +
         "JNIEXPORT jint JNICALL Java_RuntimeLoadNativeTest_jckMul(JNIEnv* e, jclass c, jint a, jint b) {\n" +
@@ -93,6 +105,10 @@ public class RuntimeLoadNativeTest {
     }
 
     public static void main(String[] args) throws Exception {
+        if (System.getProperty("test.nativepath") == null && !gccAvailable()) {
+            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
+            return;
+        }
         Runtime rt = Runtime.getRuntime();
         // "bare": second action without -Djava.library.path and, on newer JDKs,
         // without --enable-native-access: Runtime.load must still work.

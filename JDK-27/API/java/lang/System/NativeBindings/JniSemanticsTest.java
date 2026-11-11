@@ -34,6 +34,18 @@ public class JniSemanticsTest {
         passed++;
     }
 
+    static boolean gccAvailable() {
+        try {
+            Process p = new ProcessBuilder("gcc", "--version").start();
+            try { p.getInputStream().close(); } catch (Exception ignore) { }
+            try { p.getOutputStream().close(); } catch (Exception ignore) { }
+            try { p.getErrorStream().close(); } catch (Exception ignore) { }
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Native library source (C89/C99-portable, jni.h from the JDK under test)
     // ------------------------------------------------------------------
@@ -442,6 +454,10 @@ public class JniSemanticsTest {
 
     // ------------------------------------------------------------------
     public static void main(String[] args) throws Exception {
+        if (System.getProperty("test.nativepath") == null && !gccAvailable()) {
+            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
+            return;
+        }
         compileAndLoad();
 
         testPrimitives();

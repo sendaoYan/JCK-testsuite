@@ -26,6 +26,18 @@ public class BindingNativeMethodTest {
         passed++;
     }
 
+    static boolean gccAvailable() {
+        try {
+            Process p = new ProcessBuilder("gcc", "--version").start();
+            try { p.getInputStream().close(); } catch (Exception ignore) { }
+            try { p.getOutputStream().close(); } catch (Exception ignore) { }
+            try { p.getErrorStream().close(); } catch (Exception ignore) { }
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     static final String C_SRC =
         "#include <jni.h>\n" +
         "JNIEXPORT jint JNICALL Java_NativeBindingTarget_add(JNIEnv* e, jclass c, jint a, jint b) {\n" +
@@ -76,6 +88,10 @@ public class BindingNativeMethodTest {
     }
 
     public static void main(String[] args) throws Exception {
+        if (!gccAvailable()) {
+            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
+            return;
+        }
         Class<?> target = Class.forName("NativeBindingTarget");
         Method add = target.getMethod("add", int.class, int.class);
         Method greet = target.getMethod("greet");

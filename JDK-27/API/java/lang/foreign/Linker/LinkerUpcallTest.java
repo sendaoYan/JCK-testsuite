@@ -20,6 +20,18 @@ public class LinkerUpcallTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    static boolean gccAvailable() {
+        try {
+            Process p = new ProcessBuilder("gcc", "--version").start();
+            try { p.getInputStream().close(); } catch (Exception ignore) { }
+            try { p.getOutputStream().close(); } catch (Exception ignore) { }
+            try { p.getErrorStream().close(); } catch (Exception ignore) { }
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     // Callback-driven C function (self-written): calls f(acc, i) for i in 1..n,
     // accumulates the results and reports the number of invocations through *calls.
     static final String C_SRC = """
@@ -261,6 +273,10 @@ public class LinkerUpcallTest {
     static void sink(int x) { }
 
     public static void main(String[] args) throws Throwable {
+        if (!gccAvailable()) {
+            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
+            return;
+        }
         LINKER = Linker.nativeLinker();
         System.load(compileLib().toString());
         OWN = SymbolLookup.loaderLookup();

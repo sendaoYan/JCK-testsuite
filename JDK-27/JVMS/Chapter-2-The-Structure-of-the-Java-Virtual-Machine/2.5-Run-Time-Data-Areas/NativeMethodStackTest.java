@@ -23,6 +23,18 @@ public class NativeMethodStackTest {
         passed++;
     }
 
+    static boolean gccAvailable() {
+        try {
+            Process p = new ProcessBuilder("gcc", "--version").start();
+            try { p.getInputStream().close(); } catch (Exception ignore) { }
+            try { p.getOutputStream().close(); } catch (Exception ignore) { }
+            try { p.getErrorStream().close(); } catch (Exception ignore) { }
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     static final String C_SRC =
         "#include <jni.h>\n" +
         "static jint upcall(JNIEnv* e, jclass c, const char* name, jint d) {\n" +
@@ -87,6 +99,10 @@ public class NativeMethodStackTest {
     }
 
     public static void main(String[] args) throws Exception {
+        if (!gccAvailable()) {
+            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
+            return;
+        }
         compileAndLoad();
 
         // 100 native frames and 100 Java frames interleave on the same thread;

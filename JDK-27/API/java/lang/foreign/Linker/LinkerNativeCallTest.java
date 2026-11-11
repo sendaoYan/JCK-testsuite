@@ -20,6 +20,18 @@ public class LinkerNativeCallTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    static boolean gccAvailable() {
+        try {
+            Process p = new ProcessBuilder("gcc", "--version").start();
+            try { p.getInputStream().close(); } catch (Exception ignore) { }
+            try { p.getOutputStream().close(); } catch (Exception ignore) { }
+            try { p.getErrorStream().close(); } catch (Exception ignore) { }
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     // Minimal self-written C library (no JNI headers needed): one function per
     // carrier plus helpers used by the Linker behavior tests. Written to the
     // jtreg scratch dir and compiled at runtime; the .c/.so never enter the repo.
@@ -349,6 +361,10 @@ public class LinkerNativeCallTest {
     }
 
     public static void main(String[] args) throws Throwable {
+        if (!gccAvailable()) {
+            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
+            return;
+        }
         LINKER = Linker.nativeLinker();
         System.load(compileLib().toString());
         OWN = SymbolLookup.loaderLookup();

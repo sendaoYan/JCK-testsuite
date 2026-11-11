@@ -17,6 +17,18 @@ public class MemorySegmentNativeTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    static boolean gccAvailable() {
+        try {
+            Process p = new ProcessBuilder("gcc", "--version").start();
+            try { p.getInputStream().close(); } catch (Exception ignore) { }
+            try { p.getOutputStream().close(); } catch (Exception ignore) { }
+            try { p.getErrorStream().close(); } catch (Exception ignore) { }
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     static final String C_SRC = """
             long jck_read_long(const long *p) { return *p; }
             void jck_write_long(long *p, long v) { *p = v; }
@@ -176,6 +188,10 @@ public class MemorySegmentNativeTest {
     }
 
     public static void main(String[] args) throws Throwable {
+        if (!gccAvailable()) {
+            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
+            return;
+        }
         LINKER = Linker.nativeLinker();
         System.load(compileLib().toString());
         OWN = SymbolLookup.loaderLookup();
