@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.net.dns.ResolverConfigurationImpl conformance: internal package reflection.
  * @modules java.base/sun.net.dns:+open
  * @run main ResolverConfigurationImplTest

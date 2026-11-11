@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.net.dns.ResolverConfigurationImpl conformance: class and members.
  * @run main ResolverConfigurationImplTest
  */
