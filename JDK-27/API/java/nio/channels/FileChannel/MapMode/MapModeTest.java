@@ -23,11 +23,16 @@ public class MapModeTest {
         passed++;
     }
 
-    static void deleteRecursively(Path p) throws Exception {
-        if (Files.isDirectory(p)) {
-            try (var s = Files.list(p)) { for (Path c : s.toList()) deleteRecursively(c); }
+    static void deleteRecursively(Path p) {
+        try {
+            if (Files.isDirectory(p)) {
+                try (var s = Files.list(p)) { for (Path c : s.toList()) deleteRecursively(c); }
+            }
+            Files.deleteIfExists(p);
+        } catch (Exception ignored) {
+            // Windows cannot delete a file while it is still memory-mapped; temp
+            // cleanup is best-effort, so a lingering temp file is not a failure.
         }
-        Files.deleteIfExists(p);
     }
 
     // ---- Part 1: white-box (structural) ----

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.AccessMode conformance: enum constants.
  * @run main AccessModeTest
  */

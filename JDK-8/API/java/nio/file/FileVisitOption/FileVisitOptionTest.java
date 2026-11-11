@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.FileVisitOption conformance: white-box structure + black-box behavior
  *          (enum contract, FOLLOW_LINKS semantics incl. dir-symlink following, loop detection).
  * @run main FileVisitOptionTest

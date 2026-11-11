@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.attribute.PosixFilePermissions conformance: parse/format.
  * @run main PosixFilePermissionsTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.attribute.GroupPrincipal conformance: white-box structure + black-box behavior.
  * @run main GroupPrincipalTest
  */

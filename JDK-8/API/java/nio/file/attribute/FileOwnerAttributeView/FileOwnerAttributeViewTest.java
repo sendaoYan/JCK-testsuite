@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.attribute.FileOwnerAttributeView conformance: hierarchy and methods.
  * @run main FileOwnerAttributeViewTest
  */

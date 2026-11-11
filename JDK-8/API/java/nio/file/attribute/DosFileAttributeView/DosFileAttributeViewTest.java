@@ -120,10 +120,20 @@ public class DosFileAttributeViewTest {
             java.nio.file.Files.setAttribute(f, "dos:archive", Boolean.FALSE);
             check(java.nio.file.Files.getAttribute(f, "dos:archive").equals(Boolean.FALSE),
                   "dos:archive cleared");
-            // Linux emulation: readonly not enforced for writes (flag stored in DOSATTRIB xattr)
+            // DOS read-only enforcement differs by OS: Linux stores the flag as a
+            // DOSATTRIB xattr and still permits writes; Windows enforces it at the
+            // OS level and rejects writes with AccessDeniedException.
             v.setReadOnly(true);
-            java.nio.file.Files.write(f, "yy".getBytes("UTF-8"));
-            check(v.readAttributes().size() == 2L, "write under dos-readonly succeeds on Linux ext4");
+            boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
+            if (windows) {
+                boolean denied = false;
+                try { java.nio.file.Files.write(f, "yy".getBytes("UTF-8")); }
+                catch (java.nio.file.AccessDeniedException e) { denied = true; }
+                check(denied, "write under dos-readonly denied on Windows");
+            } else {
+                java.nio.file.Files.write(f, "yy".getBytes("UTF-8"));
+                check(v.readAttributes().size() == 2L, "write under dos-readonly succeeds on Linux ext4");
+            }
             v.setReadOnly(false);
             // operations on missing file
             DosFileAttributeView miss = java.nio.file.Files.getFileAttributeView(dir.resolve("nope"),

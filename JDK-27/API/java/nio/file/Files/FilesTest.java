@@ -80,6 +80,28 @@ public class FilesTest {
         }
     }
 
+    // Windows cannot create symlinks without elevated privilege, so symlink
+    // coverage is skipped there rather than failing on AccessDeniedException.
+    static boolean symlinksWork() {
+        Path dir = null;
+        try {
+            dir = Files.createTempDirectory("jck-symlink-probe");
+            Path target = dir.resolve("t");
+            Files.write(target, new byte[] {1});
+            Path link = dir.resolve("l");
+            try {
+                Files.createSymbolicLink(link, target);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (dir != null) { try { deleteRecursively(dir); } catch (Exception ignore) { } }
+        }
+    }
+
     // ---- white-box: structure via reflection ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.nio.file.Files");
@@ -321,8 +343,10 @@ public class FilesTest {
             Path f = dir.resolve("l.txt");
             List<String> lines = Arrays.asList("x", "y");
             Files.write(f, lines, StandardCharsets.UTF_8);
-            check(Arrays.equals(Files.readAllBytes(f), new byte[] {'x', '\n', 'y', '\n'}),
-                  "write(Iterable) uses platform \\n separator (Linux)");
+            String lineSep = System.lineSeparator();
+            byte[] expectedLineBytes = ("x" + lineSep + "y" + lineSep).getBytes(StandardCharsets.UTF_8);
+            check(Arrays.equals(Files.readAllBytes(f), expectedLineBytes),
+                  "write(Iterable) terminates each line with the platform separator");
             List<String> got = Files.readAllLines(f, StandardCharsets.UTF_8);
             check(got.size() == 2 && got.get(0).equals("x") && got.get(1).equals("y"),
                   "readAllLines round-trip");
@@ -1009,9 +1033,10 @@ public class FilesTest {
     }
 
     public static void main(String[] args) throws Exception {
+        boolean links = symlinksWork();
         testWhiteBox();
         testBlackBox();
-        testExistsChecks();
+        if (links) testExistsChecks();
         testCreateMatrix();
         testTempMatrix();
         testReadWriteBytes();
@@ -1019,7 +1044,7 @@ public class FilesTest {
         testStreamCopy();
         testMoveMatrix();
         testDeleteMatrix();
-        testLinks();
+        if (links) testLinks();
         testDirectoryStreams();
         testWalkList();
         testWalkFileTree();

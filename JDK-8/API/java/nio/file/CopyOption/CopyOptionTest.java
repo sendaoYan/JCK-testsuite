@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.CopyOption conformance: hierarchy and methods.
  * @run main CopyOptionTest
  */

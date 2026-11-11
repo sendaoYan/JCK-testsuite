@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.ReadOnlyFileSystemException conformance: hierarchy and constructor.
  * @run main ReadOnlyFileSystemExceptionTest
  */

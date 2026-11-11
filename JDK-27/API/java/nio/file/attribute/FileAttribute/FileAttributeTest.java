@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.attribute.FileAttribute conformance: white-box structure + black-box behavior.
  * @run main FileAttributeTest
  */

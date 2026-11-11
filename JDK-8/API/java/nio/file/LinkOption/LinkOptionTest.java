@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.LinkOption conformance: white-box structure + black-box behavior (JDK-8).
  * @run main LinkOptionTest
  */

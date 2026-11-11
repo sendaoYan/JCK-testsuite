@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary java.nio.file.spi.FileSystemProvider conformance: hierarchy and methods.
  * @run main FileSystemProviderTest
  */
