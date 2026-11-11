@@ -27,6 +27,12 @@ public class VolatileLongDoubleAtomic {
     static final int ITERS = 1_000_000;
 
     public static void main(String[] args) throws Exception {
+        // Seed valid values before starting the reader: the reader flags any
+        // value other than LONG_A/LONG_B (or DOUBLE_A/DOUBLE_B) as "torn", and
+        // the field's initial value 0 is neither, so a reader that happens to
+        // run before the writer's first store would falsely report a tear.
+        lv = LONG_A;
+        dv = DOUBLE_A;
         Thread writer = new Thread(() -> {
             for (int i = 0; i < ITERS && !failed; i++) {
                 if ((i & 1) == 0) {

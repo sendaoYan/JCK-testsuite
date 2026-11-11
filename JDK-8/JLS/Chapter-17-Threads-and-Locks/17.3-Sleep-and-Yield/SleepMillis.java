@@ -16,7 +16,9 @@ public class SleepMillis {
         long start = System.nanoTime();
         Thread.sleep(300);
         long elapsedMillis = (System.nanoTime() - start) / 1_000_000;
-        check(elapsedMillis >= 300, "slept at least the requested 300ms (slept " + elapsedMillis + "ms)");
+        // Allow clock-granularity + truncation slack: Windows can read 299ms
+        // for a 300ms sleep.
+        check(elapsedMillis >= 290, "slept at least the requested 300ms (slept " + elapsedMillis + "ms)");
 
         System.out.println("PASS (" + passed + " assertions)");
     }
