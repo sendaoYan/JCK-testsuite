@@ -72,7 +72,7 @@ function Invoke-Tree([string]$tree, [string]$jdk, [string]$tag) {
         Add-Content -Path $LOG -Value $msg
         $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
                     "-conc:8", "-timeoutFactor:5", "-verbose:summary",
-                    "-javacoption:-encoding UTF-8") + $dirs
+                    "-javacoption:-encoding", "-javacoption:UTF-8") + $dirs
         & $JTREG_JAVA @jtArgs 2>&1 | Tee-Object -FilePath $LOG -Append
     }
 }
