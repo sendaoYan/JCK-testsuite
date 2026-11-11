@@ -71,13 +71,12 @@ function Invoke-Tree([string]$tree, [string]$jdk, [string]$tag) {
         Write-Host $msg
         Add-Content -Path $LOG -Value $msg
         $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
-                    "-conc:8", "-timeoutFactor:5", "-verbose:summary",
+                    "-conc:8", "-timeoutFactor:5", "-verbose:fail,error,time",
                     "-javacoption:-encoding", "-javacoption:UTF-8") + $dirs
         & $JTREG_JAVA @jtArgs 2>&1 | Tee-Object -FilePath $LOG -Append
-        # Drop .jtr for passing tests (keep fail/error/notRun) — cuts cleanup time.
-        Get-ChildItem -Path $w -Filter '*.jtr' -Recurse -ErrorAction SilentlyContinue |
-            Select-String -Pattern 'execStatus=Passed' -List |
-            ForEach-Object { Remove-Item -LiteralPath $_.Path -Force -ErrorAction SilentlyContinue }
+        # Failure details already went to $LOG (-verbose:fail,error,time); drop the
+        # whole work dir so per-test .jtr/.class small files don't accumulate.
+        Remove-Item -LiteralPath $w -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
