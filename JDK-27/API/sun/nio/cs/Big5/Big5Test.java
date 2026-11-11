@@ -1,7 +1,7 @@
 /*
  * @test
- * @summary sun.nio.cs.Big5 conformance: internal package reflection.
- * @modules java.base/sun.nio.cs:+open
+ * @summary sun.nio.cs.Big5 / sun.nio.cs.ext.Big5 conformance: internal charset class; package is build-dependent (probed in both).
+ * @modules java.base/sun.nio.cs:+open jdk.charsets/sun.nio.cs.ext:+open
  * @run main Big5Test
  */
 public class Big5Test {
@@ -11,8 +11,17 @@ public class Big5Test {
     static boolean hasField(Class<?> c, String n) { for (java.lang.reflect.Field f : c.getDeclaredFields()) if (f.getName().equals(n)) return true; return false; }
     static boolean hasInterface(Class<?> c, String n) { for (Class<?> i : c.getInterfaces()) if (i.getName().equals(n)) return true; return false; }
     static boolean hasEnumConstant(Class<?> c, String n) { for (java.lang.reflect.Field f : c.getDeclaredFields()) if (f.isEnumConstant() && f.getName().equals(n)) return true; return false; }
+    
+    static Class<?> load(String base) throws Exception {
+        for (String pkg : new String[]{"sun.nio.cs.", "sun.nio.cs.ext."}) {
+            try { return Class.forName(pkg + base, false, Big5Test.class.getClassLoader()); }
+            catch (ClassNotFoundException ignored) { }
+        }
+        throw new ClassNotFoundException("sun.nio.cs." + base + " / sun.nio.cs.ext." + base);
+    }
+
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("sun.nio.cs.Big5", false, Big5Test.class.getClassLoader());
+        Class<?> c = load("Big5");
         check(c != null, "loads");
         check(c.isInterface() == false, "isInterface");
         check(c.isEnum() == false, "isEnum");

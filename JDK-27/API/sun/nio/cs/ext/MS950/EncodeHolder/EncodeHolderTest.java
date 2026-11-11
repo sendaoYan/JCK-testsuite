@@ -1,14 +1,23 @@
 /*
  * @test
- * @summary sun.nio.cs.ext.MS950.EncodeHolder conformance: internal class reflection.
- * @modules jdk.charsets/sun.nio.cs.ext:+open
+ * @summary sun.nio.cs.ext.MS950.EncodeHolder / sun.nio.cs.MS950.EncodeHolder conformance: internal charset class; package is build-dependent (probed in both).
+ * @modules java.base/sun.nio.cs:+open jdk.charsets/sun.nio.cs.ext:+open
  * @run main EncodeHolderTest
  */
 public class EncodeHolderTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
+    
+    static Class<?> load(String base) throws Exception {
+        for (String pkg : new String[]{"sun.nio.cs.", "sun.nio.cs.ext."}) {
+            try { return Class.forName(pkg + base, false, EncodeHolderTest.class.getClassLoader()); }
+            catch (ClassNotFoundException ignored) { }
+        }
+        throw new ClassNotFoundException("sun.nio.cs." + base + " / sun.nio.cs.ext." + base);
+    }
+
     public static void main(String[] args) throws Exception {
-        Class<?> c = Class.forName("sun.nio.cs.ext.MS950$EncodeHolder", false, EncodeHolderTest.class.getClassLoader());
+        Class<?> c = load("MS950$EncodeHolder");
         check(c != null, "loads");
         check(c.isInterface() == false, "isInterface");
         check(c.isAnnotation() == false, "isAnnotation");
