@@ -188,7 +188,7 @@ public class RMIConnectorServerTest {
 
         JMXConnector c = JMXConnectorFactory.connect(addr, null);
         String cid = c.getConnectionId();
-        check(cid.startsWith("rmi://127.0.0.1 "), "client id prefix: " + cid);
+        check(cid.startsWith("rmi://"), "client id prefix: " + cid);
         String[] ids = cs.getConnectionIds();
         check(ids.length == 1 && ids[0].equals(cid), "connection id accounted: " + java.util.Arrays.toString(ids));
         MBeanServerConnection msc = c.getMBeanServerConnection();

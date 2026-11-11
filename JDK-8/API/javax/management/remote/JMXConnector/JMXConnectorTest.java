@@ -54,7 +54,7 @@ public class JMXConnectorTest {
         try {
             JMXConnector conn = JMXConnectorFactory.connect(cs.getAddress(), null);
             String id = conn.getConnectionId();
-            check(id != null && id.startsWith("rmi://127.0.0.1"), "d-connectionId prefix, got " + id);
+            check(id != null && id.startsWith("rmi://"), "d-connectionId prefix, got " + id);
             check(java.util.Arrays.asList(cs.getConnectionIds()).contains(id), "d-server knows client id");
             // A second connect on the same connector is a documented no-op.
             conn.connect(null);

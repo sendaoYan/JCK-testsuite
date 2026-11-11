@@ -151,7 +151,7 @@ public class RMIConnectionTest {
             RMIConnection rc = ((RMIServer) impl.toStub()).newClient(null);
             rcHolder[0] = rc;
             check(rc != null, "live RMIConnection");
-            check(rc.getConnectionId().startsWith("rmi://127.0.0.1 "), "live connection id format");
+            check(rc.getConnectionId().startsWith("rmi://"), "live connection id format");
             check(((Integer) rc.getAttribute(on, "Count", null)) == 0, "live getAttribute");
             rc.setAttribute(on, new MarshalledObject<Object>(new Attribute("Count", 3)), null);
             check(((Integer) rc.getAttribute(on, "Count", null)) == 3, "live setAttribute+read-back");

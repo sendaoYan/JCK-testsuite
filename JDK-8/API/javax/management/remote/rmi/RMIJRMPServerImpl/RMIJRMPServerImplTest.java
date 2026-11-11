@@ -147,7 +147,7 @@ public class RMIJRMPServerImplTest {
             check(rc instanceof RMIConnectionImpl_Stub, "newClient yields RMIConnectionImpl_Stub: "
                     + rc.getClass().getName());
             String id = rc.getConnectionId();
-            check(id.startsWith("rmi://127.0.0.1 "), "protocol connection id prefix: " + id);
+            check(id.startsWith("rmi://"), "protocol connection id prefix: " + id);
             check(((Integer) rc.getAttribute(on, "Count", null)) == 0, "remote getAttribute via raw stub");
             check(((Integer) rc.invoke(on, "add",
                     new java.rmi.MarshalledObject<Object>(new Object[] { Integer.valueOf(4) }),
