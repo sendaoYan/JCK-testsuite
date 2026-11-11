@@ -1,0 +1,5 @@
+# asmtools (jasm/jcod) is CRLF-sensitive: a CRLF checkout makes the JVMS
+# .jasm/.jcod tests fail with `"<}>" token is expected`.  Force LF on checkout
+# so they assemble identically on Windows (git core.autocrlf=true) and Linux.
+*.jasm text eol=lf
+*.jcod text eol=lf
