@@ -120,8 +120,7 @@ $trash = Join-Path $env:TEMP ("_jck-trash-" + $STAMP)
 $jckDirs = @()
 $jckDirs += @(Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue |
               Where-Object { $_.Name -like "jck-*" -or $_.Name -like "_jck-trash-*" })
-# Defensive: also scan one level deeper (session-dir layout, matching
-# collect-windows-failures.ps1's two-level scan).
+# Defensive: also scan one level deeper (session-dir layout).
 foreach ($top in (Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue)) {
     $jckDirs += @(Get-ChildItem -Path $top.FullName -Directory -ErrorAction SilentlyContinue |
                   Where-Object { $_.Name -like "jck-*" })
@@ -139,19 +138,11 @@ if ($moved -gt 0) {
 } else {
     Remove-Item -LiteralPath $trash -Force -ErrorAction SilentlyContinue
 }
-# Small files next to this script (old summary logs + collect text/zip) delete
-# fast synchronously.
+# Old summary logs next to this script delete fast synchronously.
 foreach ($f in (Get-ChildItem -Path $PSScriptRoot -Filter "windows-*.summary.log" -ErrorAction SilentlyContinue)) {
     if ($f.FullName -eq $LOG) { continue }
     Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue
     Log ("[cleanup] removed old summary log: " + $f.Name)
-}
-foreach ($a in @("windows-jtr-summary.txt", "windows-jtr-detail.txt", "windows-jtr.zip")) {
-    Remove-Item (Join-Path $PSScriptRoot $a) -ErrorAction SilentlyContinue
-}
-if (Test-Path (Join-Path $PSScriptRoot "windows-jtr")) {
-    Remove-Item (Join-Path $PSScriptRoot "windows-jtr") -Recurse -Force -ErrorAction SilentlyContinue
-    Log "[cleanup] removed old collect output dir windows-jtr\"
 }
 Log ""
 
