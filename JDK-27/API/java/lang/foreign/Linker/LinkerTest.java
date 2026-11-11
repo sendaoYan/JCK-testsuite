@@ -35,7 +35,9 @@ public class LinkerTest {
         Map<String, MemoryLayout> layouts = l.canonicalLayouts();
         check(!layouts.isEmpty(), "canonicalLayouts non-empty");
         check(layouts.get("int") == ValueLayout.JAVA_INT, "canonical int layout");
-        check(layouts.get("long") == ValueLayout.JAVA_LONG, "canonical long layout");
+        check(layouts.get("long") == ValueLayout.JAVA_LONG
+                || layouts.get("long") == ValueLayout.JAVA_INT,
+              "canonical long layout (LP64 8 bytes / LLP64 4 bytes)");
         check(layouts.get("double") == ValueLayout.JAVA_DOUBLE, "canonical double layout");
         check(layouts.get("short") == ValueLayout.JAVA_SHORT, "canonical short layout");
         check(layouts.get("float") == ValueLayout.JAVA_FLOAT, "canonical float layout");
