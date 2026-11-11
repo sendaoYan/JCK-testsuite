@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.java2d.x11.X11PMBlitBgLoops conformance: reflection (no init, native/display-heavy).
  * @run main X11PMBlitBgLoopsTest
  */

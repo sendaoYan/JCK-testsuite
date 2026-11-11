@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.ch.sctp.AssociationImpl conformance: class and members.
  * @run main AssociationImplTest
  */

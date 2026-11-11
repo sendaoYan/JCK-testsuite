@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.motif.X11CNS11643P1 conformance: reflection (no init, native/display-heavy).
  * @run main X11CNS11643P1Test
  */

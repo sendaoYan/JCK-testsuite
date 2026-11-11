@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.internal.platform.cgroupv2.CgroupV2Subsystem conformance: internal package reflection.
  * @modules java.base/jdk.internal.platform.cgroupv2:+open
  * @run main CgroupV2SubsystemTest

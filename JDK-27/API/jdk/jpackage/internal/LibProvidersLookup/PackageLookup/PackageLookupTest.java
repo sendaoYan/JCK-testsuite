@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.jpackage.internal.LibProvidersLookup.PackageLookup conformance: internal interface reflection.
  * @modules jdk.jpackage/jdk.jpackage.internal:+open
  * @run main PackageLookupTest

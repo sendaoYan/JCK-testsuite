@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.ch.InheritedChannel.InheritedServerSocketChannelImpl conformance: internal package reflection.
  * @modules java.base/sun.nio.ch:+open
  * @run main InheritedServerSocketChannelImplTest

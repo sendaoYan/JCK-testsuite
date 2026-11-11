@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.motif.X11SunUnicode_0 conformance: reflection (no init, native/display-heavy).
  * @run main X11SunUnicode_0Test
  */

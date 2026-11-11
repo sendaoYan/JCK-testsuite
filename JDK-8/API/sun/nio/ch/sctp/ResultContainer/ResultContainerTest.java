@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.ch.sctp.ResultContainer conformance: class and members.
  * @run main ResultContainerTest
  */

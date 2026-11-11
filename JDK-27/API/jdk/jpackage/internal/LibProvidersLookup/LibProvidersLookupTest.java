@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.jpackage.internal.LibProvidersLookup conformance: internal final class reflection.
  * @modules jdk.jpackage/jdk.jpackage.internal:+open
  * @run main LibProvidersLookupTest

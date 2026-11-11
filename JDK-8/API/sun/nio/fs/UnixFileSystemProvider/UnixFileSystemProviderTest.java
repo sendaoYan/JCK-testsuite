@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.fs.UnixFileSystemProvider conformance: abstract class and members.
  * @run main UnixFileSystemProviderTest
  */

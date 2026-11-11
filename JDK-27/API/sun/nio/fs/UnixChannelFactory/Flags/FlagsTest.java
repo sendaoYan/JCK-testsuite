@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.fs.UnixChannelFactory.Flags conformance: internal package reflection.
  * @modules java.base/sun.nio.fs:+open
  * @run main FlagsTest

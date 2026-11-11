@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.motif.X11JIS0201 conformance: reflection (no init, native/display-heavy).
  * @run main X11JIS0201Test
  */

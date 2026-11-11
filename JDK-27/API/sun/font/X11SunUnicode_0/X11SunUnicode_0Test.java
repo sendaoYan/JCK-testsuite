@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.font.X11SunUnicode_0 conformance: internal package reflection (no init, AWT/2D/font/print/swing native-heavy).
  * @modules java.desktop/sun.font:+open
  * @run main X11SunUnicode_0Test

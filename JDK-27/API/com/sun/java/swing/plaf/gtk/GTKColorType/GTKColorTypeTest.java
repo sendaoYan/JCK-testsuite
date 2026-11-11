@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary com.sun.java.swing.plaf.gtk.GTKColorType conformance: internal class reflection (no init, headless-safe).
  * @modules java.desktop/com.sun.java.swing.plaf.gtk:+open
  * @run main GTKColorTypeTest

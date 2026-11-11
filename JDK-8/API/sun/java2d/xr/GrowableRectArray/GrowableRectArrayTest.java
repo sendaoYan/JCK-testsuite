@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.java2d.xr.GrowableRectArray conformance: reflection (no init, native/display-heavy).
  * @run main GrowableRectArrayTest
  */

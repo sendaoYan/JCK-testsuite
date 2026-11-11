@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.ch.sctp.SendFailed conformance: internal class reflection.
  * @modules jdk.sctp/sun.nio.ch.sctp:+open
  * @run main SendFailedTest

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.java2d.xr.XRCompositeManager conformance: reflection (no init, native/display-heavy).
  * @run main XRCompositeManagerTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.X11.XResizeRequestEvent conformance: reflection (no init, native/display-heavy).
  * @run main XResizeRequestEventTest
  */

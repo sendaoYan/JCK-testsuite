@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.ch.InheritedChannel.InheritedDatagramChannelImpl conformance: class and members.
  * @run main InheritedDatagramChannelImplTest
  */

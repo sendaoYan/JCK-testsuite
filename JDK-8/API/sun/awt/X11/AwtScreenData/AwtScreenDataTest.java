@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.X11.AwtScreenData conformance: reflection (no init, native/display-heavy).
  * @run main AwtScreenDataTest
  */

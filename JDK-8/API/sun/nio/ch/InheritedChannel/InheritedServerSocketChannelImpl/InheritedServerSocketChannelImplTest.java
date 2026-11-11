@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.ch.InheritedChannel.InheritedServerSocketChannelImpl conformance: class and members.
  * @run main InheritedServerSocketChannelImplTest
  */

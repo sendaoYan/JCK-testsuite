@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary com.sun.security.auth.module.UnixSystem conformance: hierarchy and declared members via reflection.
  * @run main UnixSystemTest
  */

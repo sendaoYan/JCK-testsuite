@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.java2d.xr.MaskTileManager conformance: internal package reflection (no init, AWT/2D/font/print/swing native-heavy).
  * @modules java.desktop/sun.java2d.xr:+open
  * @run main MaskTileManagerTest

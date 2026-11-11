@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.jpackage.internal.LinuxApplicationLayoutMixin conformance: internal interface reflection.
  * @modules jdk.jpackage/jdk.jpackage.internal:+open
  * @run main LinuxApplicationLayoutMixinTest

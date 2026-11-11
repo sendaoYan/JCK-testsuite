@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.nio.fs.UnixChannelFactory.Flags conformance: class and members.
  * @run main FlagsTest
  */

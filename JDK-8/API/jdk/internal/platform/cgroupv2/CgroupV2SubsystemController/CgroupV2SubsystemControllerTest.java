@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.internal.platform.cgroupv2.CgroupV2SubsystemController conformance: type shape via reflection (headless-safe).
  * @run main CgroupV2SubsystemControllerTest
  */

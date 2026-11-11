@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary jdk.jpackage.internal.LinuxLaunchersAsServices conformance: internal final class reflection.
  * @modules jdk.jpackage/jdk.jpackage.internal:+open
  * @run main LinuxLaunchersAsServicesTest

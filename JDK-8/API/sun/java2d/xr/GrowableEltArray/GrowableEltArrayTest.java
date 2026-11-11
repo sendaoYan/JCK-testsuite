@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.java2d.xr.GrowableEltArray conformance: reflection (no init, native/display-heavy).
  * @run main GrowableEltArrayTest
  */

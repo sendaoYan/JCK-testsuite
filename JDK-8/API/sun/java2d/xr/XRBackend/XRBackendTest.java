@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.java2d.xr.XRBackend conformance: reflection (no init, native/display-heavy).
  * @run main XRBackendTest
  */

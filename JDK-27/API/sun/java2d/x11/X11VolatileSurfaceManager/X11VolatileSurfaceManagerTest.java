@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.java2d.x11.X11VolatileSurfaceManager conformance: internal package reflection (no init, AWT/2D/font/print/swing native-heavy).
  * @modules java.desktop/sun.java2d.x11:+open
  * @run main X11VolatileSurfaceManagerTest

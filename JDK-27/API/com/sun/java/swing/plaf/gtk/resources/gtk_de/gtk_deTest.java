@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary com.sun.java.swing.plaf.gtk.resources.gtk_de conformance: internal class reflection (no init, headless-safe).
  * @modules java.desktop/com.sun.java.swing.plaf.gtk.resources:+open
  * @run main gtk_deTest

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary com.sun.security.auth.module.UnixSystem conformance: white-box structure + black-box behavior.
  * @run main UnixSystemTest
  */

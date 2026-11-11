@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.X11.XTrayIconPeer.IconCanvas conformance: reflection (no init, native/display-heavy).
  * @run main IconCanvasTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.X11.XExposeEvent conformance: internal package reflection (no init, AWT/2D/font/print/swing native-heavy).
  * @modules java.desktop/sun.awt.X11:+open
  * @run main XExposeEventTest

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary com.sun.java.swing.plaf.gtk.GTKColorType conformance: type shape via reflection (headless-safe).
  * @run main GTKColorTypeTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.X11.XIconWindow conformance: reflection (no init, native/display-heavy).
  * @run main XIconWindowTest
  */

@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary sun.awt.X11.awtImageData conformance: reflection (no init, native/display-heavy).
  * @run main awtImageDataTest
  */

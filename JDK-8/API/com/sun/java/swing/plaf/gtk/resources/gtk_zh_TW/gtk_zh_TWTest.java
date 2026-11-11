@@ -1,5 +1,6 @@
 /*
  * @test
+ * @requires os.family == "linux"
  * @summary com.sun.java.swing.plaf.gtk.resources.gtk_zh_TW conformance: type shape via reflection (headless-safe).
  * @run main gtk_zh_TWTest
  */
