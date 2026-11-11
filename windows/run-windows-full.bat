@@ -1,7 +1,8 @@
 @echo off
 rem Full GC/JIT sweep: run the baseline and each JVM-flag config by invoking
-rem run-windows-full.ps1 once per config. The ps1 runs JDK-8 (and JDK-27 for
-rem non-JDK-8-only flags) and drops results in windows-results\<label>\.
+rem run-windows-full.ps1 once per config. The ps1 probes each JDK with
+rem `java -version <flags>` and skips any JDK that rejects the flags (e.g.
+rem CMS/ParNew on JDK-27), then drops results in windows-results\<label>\.
 rem
 rem Label (derived inside the ps1 from the flags) per config:
 rem   baseline (no flags)  -> windows-results\baseline\

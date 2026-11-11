@@ -9,9 +9,11 @@
   -javaoption:<flag>. Multiple flags = one combined config, e.g.:
       powershell -ExecutionPolicy Bypass -File run-windows-full.ps1 -Xcomp -XX:-TieredCompilation
 
-  With no arguments it runs the baseline (no JVM flags). JDK-27 is skipped when
-  the flags are JDK-8-only (-XX:+UseConcMarkSweepGC / -XX:+UseParNewGC, removed
-  in JDK 14 and a hard "Unrecognized VM option" error on JDK-27).
+  With no arguments it runs the baseline (no JVM flags). Before running, each
+  JDK is probed with `java -version <flags>`; if that errors (e.g. the flag was
+  removed in that JDK), the JDK is skipped and the error is recorded — so
+  CMS/ParNew on JDK-27 (removed in JDK 14, "Unrecognized VM option") is handled
+  generically rather than by a hardcoded flag list.
 
   Failure details go to console.log via -verbose:fail,error,time; the work +
   report dirs are deleted after each tree (no .jtr sprawl).  Results land in
@@ -58,16 +60,14 @@ foreach ($p in @($SUITE, $JDK8, $JDK27, $JTREG_JAR, $JTREG_JAVA)) {
     if (-not (Test-Path $p)) { Write-Host "[error] missing: $p"; exit 1 }
 }
 
-# ---- derive label + JDK set from flags ----
+# ---- derive label from flags ----
 $label = if ($JvmArgs.Count -eq 0) { "baseline" }
          else { (($JvmArgs -join '+') -replace '[^A-Za-z0-9.+-]', '_') }
 
-$isJdk8Only = ($JvmArgs -contains "-XX:+UseConcMarkSweepGC") -or ($JvmArgs -contains "-XX:+UseParNewGC")
-
-$trees = @(@{ tag = "jdk8";  jdk = $JDK8;  dir = "JDK-8" })
-if (-not $isJdk8Only) {
-    $trees += @{ tag = "jdk27"; jdk = $JDK27; dir = "JDK-27" }
-}
+$trees = @(
+    @{ tag = "jdk8";  jdk = $JDK8;  dir = "JDK-8" },
+    @{ tag = "jdk27"; jdk = $JDK27; dir = "JDK-27" }
+)
 
 $flagTokens = @($JvmArgs | ForEach-Object { "-javaoption:$_" })
 
@@ -171,13 +171,29 @@ foreach ($d in $jckDirs) {
 Log ("[cleanup] removed " + $jckDirs.Count + " leftover TEMP dir(s)")
 Log ""
 
-# ---- run the trees ----
+# ---- probe each JDK: skip it if `java -version <flags>` errors (flag removed) ----
+$run = @()
 foreach ($t in $trees) {
+    $java = Join-Path $t.jdk "bin\java.exe"
+    $probeArgs = @($JvmArgs) + @("-version")
+    $probeOut = & $java @probeArgs 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Log ("[skip] " + $t.tag + ": java -version " + ($JvmArgs -join ' ') + " -> exit code " + $LASTEXITCODE)
+        $probeOut | ForEach-Object { Log ("  " + $_) }
+        Write-Lines (Join-Path $resDir ($t.tag + ".skipped.txt")) @($probeOut)
+    } else {
+        $run += $t
+    }
+}
+
+# ---- run the (non-skipped) trees ----
+foreach ($t in $run) {
     Invoke-Tree $t.tag $t.jdk $t.dir
 }
 
 # ---- delta vs baseline ----
 foreach ($t in $trees) {
+    if (Test-Path (Join-Path $resDir "$($t.tag).skipped.txt")) { continue }
     $baseFailed = Join-Path $resRoot "baseline\$($t.tag).failed.txt"
     $failedPath = Join-Path $resDir "$($t.tag).failed.txt"
     $newPath    = Join-Path $resDir "$($t.tag).new.txt"
@@ -192,14 +208,18 @@ foreach ($t in $trees) {
 }
 
 # ---- append one-line record to summary.txt ----
-function Count-File([string]$path) {
-    if (Test-Path $path) { return @(Get-Content $path -ErrorAction SilentlyContinue).Count }
-    return 0
+# Column value for summary.txt: "skip" if that JDK was skipped by the probe,
+# otherwise the line count of <tag>.<kind>.txt.
+function Col([string]$tag, [string]$kind) {
+    if (Test-Path (Join-Path $resDir "$tag.skipped.txt")) { return "skip" }
+    $p = Join-Path $resDir "$tag.$kind.txt"
+    if (Test-Path $p) { return ("" + @(Get-Content $p -ErrorAction SilentlyContinue).Count) }
+    return "0"
 }
-$jdk8F = Count-File (Join-Path $resDir "jdk8.failed.txt")
-$jdk8N = Count-File (Join-Path $resDir "jdk8.new.txt")
-$jdk27F = Count-File (Join-Path $resDir "jdk27.failed.txt")
-$jdk27N = Count-File (Join-Path $resDir "jdk27.new.txt")
+$jdk8F = Col "jdk8" "failed"
+$jdk8N = Col "jdk8" "new"
+$jdk27F = Col "jdk27" "failed"
+$jdk27N = Col "jdk27" "new"
 
 $sumFile = Join-Path $resRoot "summary.txt"
 if (-not (Test-Path $sumFile)) {
