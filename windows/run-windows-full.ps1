@@ -74,6 +74,10 @@ function Invoke-Tree([string]$tree, [string]$jdk, [string]$tag) {
                     "-conc:8", "-timeoutFactor:5", "-verbose:summary",
                     "-javacoption:-encoding", "-javacoption:UTF-8") + $dirs
         & $JTREG_JAVA @jtArgs 2>&1 | Tee-Object -FilePath $LOG -Append
+        # Drop .jtr for passing tests (keep fail/error/notRun) — cuts cleanup time.
+        Get-ChildItem -Path $w -Filter '*.jtr' -Recurse -ErrorAction SilentlyContinue |
+            Select-String -Pattern 'execStatus=Passed' -List |
+            ForEach-Object { Remove-Item -LiteralPath $_.Path -Force -ErrorAction SilentlyContinue }
     }
 }
 
