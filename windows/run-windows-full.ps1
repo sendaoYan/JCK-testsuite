@@ -3,10 +3,10 @@
   JCK-testsuite Windows full runner: run jdk-8 / jdk-27 each RUNS times (API+JLS+JVMS).
 
 .DESCRIPTION
-  Assumes this script sits at the root of a git clone of
-  git@github.com:sendaoYan/JCK-testsuite.git (next to JDK-8\ and JDK-27\).
-  jtreg is expected under D:\yansendao\JDK\jtreg (jtreg.jar found recursively).
-  The two JDKs are expected under D:\yansendao\JDK.
+  Assumes this script sits at <repo root>\windows\ inside a git clone of
+  git@github.com:sendaoYan/JCK-testsuite.git (the repo root holds JDK-8\ and
+  JDK-27\).  jtreg is expected under D:\yansendao\JDK\jtreg (jtreg.jar found
+  recursively).  The two JDKs are expected under D:\yansendao\JDK.
 
   Usage (PowerShell):
     powershell -ExecutionPolicy Bypass -File run-windows-full.ps1
@@ -21,7 +21,7 @@ $JDK8    = Join-Path $JDKROOT "jdk-8.0.512.9-hotspot"   # JDK under test (8)
 $JDK27   = Join-Path $JDKROOT "jdk-27.0.1.0.2+1"        # JDK under test (27) + jtreg runner
 $RUNS    = 5                                            # passes per JDK
 
-$SUITE      = $PSScriptRoot                             # git clone root (has JDK-8\, JDK-27\)
+$SUITE      = (Split-Path -Parent $PSScriptRoot)          # git clone root (has JDK-8\, JDK-27\)
 $JTREG_HOME = Join-Path $JDKROOT "jtreg"
 
 # ---- locate jtreg.jar (recursive under jtreg) ----
@@ -44,7 +44,7 @@ foreach ($p in @($SUITE, $JDK8, $JDK27, $JTREG_JAR, $JTREG_JAVA)) {
 }
 
 $STAMP = Get-Date -Format "yyyyMMdd-HHmmss"
-$LOG   = Join-Path $SUITE "windows-$STAMP.summary.log"
+$LOG   = Join-Path $PSScriptRoot "windows-$STAMP.summary.log"
 
 function Invoke-Tree([string]$tree, [string]$jdk, [string]$tag) {
     $dirs = @((Join-Path $SUITE "$tree\API"),

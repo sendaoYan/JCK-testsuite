@@ -9,7 +9,7 @@
   keeps only the ones whose execStatus is Failed or Error, and concatenates the
   relevant sections into one file, then zips the raw .jtr files.
 
-  Output (written next to this script, i.e. at the git clone root):
+  Output (written next to this script, i.e. under <repo root>\windows\):
     windows-jtr-summary.txt   - one line per failed test: path + execStatus
     windows-jtr-detail.txt    - full .jtr content for every failed test
     windows-jtr.zip           - raw .jtr files, tree preserved
@@ -20,11 +20,11 @@
 
 $ErrorActionPreference = "Continue"
 
-$SUITE = $PSScriptRoot
-$detail = Join-Path $SUITE "windows-jtr-detail.txt"
-$summ   = Join-Path $SUITE "windows-jtr-summary.txt"
-$zip    = Join-Path $SUITE "windows-jtr.zip"
-$stage  = Join-Path $SUITE "windows-jtr"
+$OUT   = $PSScriptRoot                                  # <repo root>\windows
+$detail = Join-Path $OUT "windows-jtr-detail.txt"
+$summ   = Join-Path $OUT "windows-jtr-summary.txt"
+$zip    = Join-Path $OUT "windows-jtr.zip"
+$stage  = Join-Path $OUT "windows-jtr"
 
 Remove-Item $detail, $summ, $zip -ErrorAction SilentlyContinue
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
