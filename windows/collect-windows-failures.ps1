@@ -37,11 +37,21 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
 # Work dirs are created by run-windows-full.ps1 directly under $env:TEMP as
-# jck-<jdk8|jdk27>-<run>\w.  Only enumerate top-level jck-* dirs (no -Recurse).
+# jck-<jdk8|jdk27>-<run>\w.  The run script writes them directly under TEMP
+# (TEMP\jck-*\w), but on some machines they end up one level deeper under a
+# session dir (TEMP\<session>\jck-*\w, e.g. TEMP\253\jck-jdk8-3\w).  Scan at most
+# TWO levels deep -- never -Recurse the whole TEMP (that is what made the old
+# script take 3 hours).
 Write-Host ("TEMP = " + $env:TEMP)
-$topDirs = @(Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue |
-             Where-Object { $_.Name -like "jck-*" })
-Write-Host ("[info] top-level jck-* dirs under TEMP: " + $topDirs.Count)
+$candidates = @()
+$candidates += Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue |
+               Where-Object { $_.Name -like "jck-*" }
+foreach ($top in (Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue)) {
+    $candidates += Get-ChildItem -Path $top.FullName -Directory -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Name -like "jck-*" }
+}
+$topDirs = @($candidates | Sort-Object FullName -Unique)
+Write-Host ("[info] jck-* dirs found (level 1 or 2): " + $topDirs.Count)
 
 $workDirs = @()
 foreach ($d in $topDirs) {
