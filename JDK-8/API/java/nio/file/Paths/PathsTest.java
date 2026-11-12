@@ -39,6 +39,14 @@ public class PathsTest {
         passed++;
     }
 
+    static final String SEP = java.io.File.separator;
+
+    static Path abs(String... names) {
+        Path p = java.nio.file.FileSystems.getDefault().getRootDirectories().iterator().next();
+        for (String n : names) p = p.resolve(n);
+        return p;
+    }
+
     // ---- white-box: structure via reflection ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.nio.file.Paths");
@@ -57,12 +65,12 @@ public class PathsTest {
 
         check(Paths.get("a", "b", "c").equals(Paths.get("a/b/c")), "multi-arg equals joined");
         check(Paths.get("a", "b").equals(Paths.get("a", "b")), "repeat get equals");
-        check("a/b".equals(Paths.get("a", "b").toString()), "joined toString");
+        check(Paths.get("a", "b").toString().equals("a" + SEP + "b"), "joined toString");
         check("".equals(Paths.get("").toString()), "empty path toString empty");
 
-        Path abs = Paths.get(URI.create("file:///tmp/x"));
-        check(abs.isAbsolute(), "get(URI) absolute");
-        check("/tmp/x".equals(abs.toString()), "get(URI) path");
+        Path uriAbs = Paths.get(abs("tmp", "x").toUri());
+        check(uriAbs.isAbsolute(), "get(URI) absolute");
+        check(uriAbs.equals(abs("tmp", "x")), "get(URI) round-trip");
 
         boolean npe = false;
         try { Paths.get((String) null); } catch (NullPointerException e) { npe = true; }
@@ -81,11 +89,11 @@ public class PathsTest {
         check(Paths.get("/a", "b").equals(Paths.get("/a/b")), "root segment joined");
         check(Paths.get("a", "").equals(Paths.get("a")), "empty trailing segment tolerated");
         check(Paths.get("a/b", "c").equals(Paths.get("a/b/c")), "embedded separator in segment");
-        check(Paths.get("a", "b").toString().equals("a/b"), "joined toString a/b");
+        check(Paths.get("a", "b").toString().equals("a" + SEP + "b"), "joined toString a/b");
         check(Paths.get("a", "b", "c").isAbsolute() == false, "relative join stays relative");
-        check(Paths.get("/tmp", "x").isAbsolute(), "absolute first segment absolute");
+        check(abs("tmp", "x").isAbsolute(), "absolute first segment absolute");
         check(Paths.get("a/b/c").equals(Paths.get("a", "b", "c")), "single equals multi");
-        check(Paths.get("/").getNameCount() == 0, "root only");
+        check(abs().getNameCount() == 0, "root only");
         // NUL byte is rejected with a precise exception (pre-verified fact)
         try {
             Paths.get("a\0b");
@@ -103,20 +111,17 @@ public class PathsTest {
               "result bound to default FileSystem");
     }
 
-    // URI conversion matrix (probe-confirmed exact types)
+    // URI conversion matrix (platform-neutral via Path.toUri round-trip)
     static void testUriMatrix() {
-        Path abs = Paths.get(URI.create("file:///tmp/x"));
-        check(abs.isAbsolute(), "file:///tmp/x absolute");
-        check("/tmp/x".equals(abs.toString()), "file:///tmp/x decodes to /tmp/x");
-        check(Paths.get(URI.create("file:///a%20b")).equals(Paths.get("/a b")),
-              "file URI decodes %20");
-        check(Paths.get(URI.create("file:///a%20b")).toUri().equals(URI.create("file:///a%20b")),
-              "escape round-trip a b");
-        check(Paths.get(URI.create("file:///")).equals(Paths.get("/")), "file:/// -> root");
-        check(Paths.get(URI.create("file:///a/b")).equals(
-                java.nio.file.FileSystems.getDefault().getPath("/a/b")),
-              "get(URI) equals default fs getPath");
-        check(Paths.get(URI.create("file:///tmp/x")).getFileSystem()
+        Path absPath = abs("tmp", "x");
+        URI absUri = absPath.toUri();
+        check(Paths.get(absUri).isAbsolute(), "get(URI) absolute");
+        check(Paths.get(absUri).equals(absPath), "get(URI) round-trip");
+        Path spaced = abs("a b");
+        check(Paths.get(spaced.toUri()).equals(spaced), "file URI decodes %20 round-trip");
+        check(Paths.get(spaced.toUri()).toUri().equals(spaced.toUri()),
+              "escape round-trip");
+        check(Paths.get(absUri).getFileSystem()
               == java.nio.file.FileSystems.getDefault(), "get(URI) default provider");
         // negatives with exact types (probe-confirmed on both JDKs)
         checkThrows(IllegalArgumentException.class, () -> Paths.get(URI.create("file:a/b")),

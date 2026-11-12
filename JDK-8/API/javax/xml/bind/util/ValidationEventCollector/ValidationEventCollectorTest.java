@@ -4,6 +4,8 @@
  * @run main ValidationEventCollectorTest
  */
 
+import java.util.Locale;
+
 public class ValidationEventCollectorTest {
     static int passed;
 
@@ -25,6 +27,7 @@ public class ValidationEventCollectorTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         javax.xml.bind.util.ValidationEventCollector c = new javax.xml.bind.util.ValidationEventCollector();
         check(!c.hasEvents(), "no events");
         check(c.getEvents().length == 0, "empty events");

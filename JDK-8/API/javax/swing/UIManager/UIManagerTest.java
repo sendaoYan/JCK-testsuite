@@ -10,6 +10,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import javax.swing.JLabel;
 import javax.swing.UIDefaults;
@@ -138,6 +139,7 @@ public class UIManagerTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         testShape();
         testLookAndFeelSwitching();
         testInstalledLookAndFeels();

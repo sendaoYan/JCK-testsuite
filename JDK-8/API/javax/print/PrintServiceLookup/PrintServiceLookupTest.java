@@ -37,23 +37,26 @@ public class PrintServiceLookupTest {
 
     // ---- contract deepening: no-service contract + registerServiceProvider/registerService closed loops ----
     static void testContractDeep() throws Exception {
+        boolean isOld = System.getProperty("java.specification.version").startsWith("1.8");
         // no-service contract on this headless host (CUPS-less)
         javax.print.PrintService[] all = javax.print.PrintServiceLookup.lookupPrintServices(null, null);
         check(all != null, "lookupPrintServices returns non-null array");
         int real = 0, nullLeak = 0;
         for (javax.print.PrintService p : all) { if (p == null) nullLeak++; else real++; }
-        check(real == 0, "no real printers installed: zero non-null services (skip reason: headless CUPS-less host)");
-        boolean isOld = System.getProperty("java.specification.version").startsWith("1.8");
-        check(nullLeak > 0 == isOld, "registerService(null) leak: JDK-8 true (null entry), JDK-27 false (clean)");
-        javax.print.MultiDocPrintService[] md = javax.print.PrintServiceLookup.lookupMultiDocPrintServices(null, null);
-        check(md != null && md.length == 0, "lookupMultiDocPrintServices non-null empty");
-        check(javax.print.PrintServiceLookup.lookupDefaultPrintService() == null, "defaultPrintService null without printers");
-        try {
-            javax.print.PrintService[] byFlavor = javax.print.PrintServiceLookup.lookupPrintServices(javax.print.DocFlavor.SERVICE_FORMATTED.PRINTABLE, null);
-            check(byFlavor != null && byFlavor.length == 0, "flavor-filtered lookup still empty non-null");
-            check(!isOld, "flavor lookup clean on JDK-27");
-        } catch (NullPointerException npe) {
-            check(isOld, "flavor-filtered lookup NPEs on JDK-8 from leaked null entry");
+        if (real == 0) {
+            check(nullLeak > 0 == isOld, "registerService(null) leak: JDK-8 true (null entry), JDK-27 false (clean)");
+            javax.print.MultiDocPrintService[] md = javax.print.PrintServiceLookup.lookupMultiDocPrintServices(null, null);
+            check(md != null && md.length == 0, "lookupMultiDocPrintServices non-null empty");
+            check(javax.print.PrintServiceLookup.lookupDefaultPrintService() == null, "defaultPrintService null without printers");
+            try {
+                javax.print.PrintService[] byFlavor = javax.print.PrintServiceLookup.lookupPrintServices(javax.print.DocFlavor.SERVICE_FORMATTED.PRINTABLE, null);
+                check(byFlavor != null && byFlavor.length == 0, "flavor-filtered lookup still empty non-null");
+                check(!isOld, "flavor lookup clean on JDK-27");
+            } catch (NullPointerException npe) {
+                check(isOld, "flavor-filtered lookup NPEs on JDK-8 from leaked null entry");
+            }
+        } else {
+            System.out.println("SKIP: " + real + " real printers installed; no-service contract not applicable");
         }
         // registerService closed loop
         boolean regDirect = javax.print.PrintServiceLookup.registerService(new BaseSvc());

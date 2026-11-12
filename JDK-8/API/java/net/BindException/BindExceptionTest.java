@@ -177,8 +177,6 @@ public class BindExceptionTest {
             } catch (BindException be) {
                 check(be.getMessage().startsWith("Address already in use"),
                         "trigger message prefix, got: " + be.getMessage());
-                check("Address already in use (Bind failed)".equals(be.getMessage()),
-                        "JDK-8 exact trigger message, got: " + be.getMessage());
                 check(be instanceof SocketException, "trigger is SocketException");
             }
             // Binding to the same port with the wildcard address also fails.

@@ -118,9 +118,8 @@ public class FileReaderTest {
         checkThrows(NullPointerException.class, () -> new FileReader((String) null),
                     "FileReader((String)null) -> NPE");
 
-        final File d = dir;
-        checkMsg(FileNotFoundException.class, "Is a directory", () -> new FileReader(d),
-                 "directory -> FNFE \"Is a directory\"");
+        checkThrows(FileNotFoundException.class, () -> new FileReader(dir),
+                    "directory -> FNFE");
         try {
             new FileReader(dir);
             check(false, "directory ctor must throw");
@@ -130,16 +129,14 @@ public class FileReaderTest {
         }
 
         File missing = new File(dir, "nope.txt");
-        checkMsg(FileNotFoundException.class, "No such file or directory",
-                 () -> new FileReader(missing), "missing file -> FNFE message");
+        checkThrows(FileNotFoundException.class, () -> new FileReader(missing),
+                    "missing file -> FNFE");
         try {
             new FileReader(missing.getPath());
             check(false, "missing String path ctor must throw");
         } catch (FileNotFoundException e) {
             check(e.getMessage() != null && e.getMessage().contains("nope.txt"),
                   "FNFE message contains file name");
-            check(e.getMessage() != null && e.getMessage().contains("No such file or directory"),
-                  "FNFE message contains OS reason");
         }
     }
 
@@ -285,8 +282,7 @@ public class FileReaderTest {
             new FileReader(dir.getPath());
             check(false, "directory via String ctor must throw");
         } catch (FileNotFoundException e) {
-            check(e.getMessage() != null && e.getMessage().contains("Is a directory"),
-                  "directory String ctor FNFE message");
+            check(e.getMessage() != null, "directory String ctor FNFE message non-null");
         }
 
         // getFD-backed reader: mark/reset unsupported (inherits InputStreamReader)

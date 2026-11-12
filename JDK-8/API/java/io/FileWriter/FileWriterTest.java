@@ -145,8 +145,8 @@ public class FileWriterTest {
                     "FileWriter((String)null,false) -> NPE");
 
         File missingParent = new File(new File(dir, "nodir"), "x.txt");
-        checkMsg(java.io.FileNotFoundException.class, "No such file or directory",
-                 () -> new FileWriter(missingParent), "missing parent dir -> FNFE");
+        checkThrows(java.io.FileNotFoundException.class, () -> new FileWriter(missingParent),
+                    "missing parent dir -> FNFE");
         try {
             new FileWriter(missingParent.getPath());
             check(false, "missing parent String ctor must throw");
@@ -155,11 +155,10 @@ public class FileWriterTest {
                   "FNFE message contains the missing parent path");
         }
 
-        final File d = dir;
-        checkMsg(java.io.FileNotFoundException.class, "Is a directory",
-                 () -> new FileWriter(d), "directory -> FNFE \"Is a directory\"");
-        checkMsg(java.io.FileNotFoundException.class, "Is a directory",
-                 () -> new FileWriter(d, true), "directory append=true -> FNFE");
+        checkThrows(java.io.FileNotFoundException.class, () -> new FileWriter(dir),
+                    "directory -> FNFE");
+        checkThrows(java.io.FileNotFoundException.class, () -> new FileWriter(dir, true),
+                    "directory append=true -> FNFE");
     }
 
     // ---- FileDescriptor constructor ----

@@ -95,16 +95,23 @@ public class DirectoryStreamTest {
                     if (!p.getParent().equals(dir)) allParented = false;
                 check(allParented, "each entry's parent is the streamed dir");
             }
-            // glob narrowing is exact and case-sensitive
+            // glob narrowing; case sensitivity is platform-dependent (Linux
+            // sensitive, Windows insensitive), so accept both outcomes.
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.txt")) {
                 List<String> names = new ArrayList<>();
                 for (Path p : ds) names.add(p.getFileName().toString());
-                check(names.size() == 1 && names.get(0).equals("a.txt"), "glob *.txt exact");
+                check(names.contains("a.txt"), "glob *.txt matches a.txt");
+                check(!names.contains("b.bin") && !names.contains("sub"), "glob *.txt excludes non-txt");
+                check(names.size() == 1 || names.size() == 2,
+                      "glob *.txt count is platform case-dependent");
             }
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.{txt,bin}")) {
-                int c = 0;
-                for (Path p : ds) c++;
-                check(c == 2, "glob brace alternation");
+                List<String> names = new ArrayList<>();
+                for (Path p : ds) names.add(p.getFileName().toString());
+                check(names.contains("a.txt") && names.contains("b.bin"),
+                      "glob brace alternation matches txt and bin");
+                check(names.size() == 2 || names.size() == 3,
+                      "brace count is platform case-dependent");
             }
             // explicit Filter narrowing
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir,

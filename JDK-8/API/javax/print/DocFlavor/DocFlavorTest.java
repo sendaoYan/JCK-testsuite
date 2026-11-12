@@ -73,8 +73,11 @@ public class DocFlavorTest {
         check("java.lang.String".equals(javax.print.DocFlavor.STRING.TEXT_PLAIN.getRepresentationClassName()), "STRING rep");
         check("[C".equals(javax.print.DocFlavor.CHAR_ARRAY.TEXT_PLAIN.getRepresentationClassName()), "char[] rep");
         check("java.io.Reader".equals(javax.print.DocFlavor.READER.TEXT_HTML.getRepresentationClassName()), "Reader rep");
-        check(javax.print.DocFlavor.BYTE_ARRAY.TEXT_PLAIN_HOST.getMimeType().equals("text/plain; charset=\"utf-8\""), "HOST flavor mirrors file.encoding utf-8 on this host");
-        check(javax.print.DocFlavor.BYTE_ARRAY.TEXT_PLAIN_HOST.equals(javax.print.DocFlavor.BYTE_ARRAY.TEXT_PLAIN_UTF_8), "on utf-8 host HOST == UTF_8");
+        String fe = System.getProperty("file.encoding");
+        String hostEnc = (fe == null || fe.length() == 0) ? "UTF-8" : fe;
+        check(javax.print.DocFlavor.BYTE_ARRAY.TEXT_PLAIN_HOST.getParameter("charset").equalsIgnoreCase(hostEnc), "HOST flavor charset mirrors file.encoding [" + hostEnc + "]");
+        boolean hostIsUtf8 = "UTF-8".equalsIgnoreCase(hostEnc);
+        check(javax.print.DocFlavor.BYTE_ARRAY.TEXT_PLAIN_HOST.equals(javax.print.DocFlavor.BYTE_ARRAY.TEXT_PLAIN_UTF_8) == hostIsUtf8, "HOST == UTF_8 iff file.encoding is UTF-8");
         javax.print.DocFlavor uni = new javax.print.DocFlavor("text/plain; charset=unicode", "java.lang.String");
         check(uni.getMimeType().equals("text/plain; charset=\"unicode\""), "unicode alias not normalized");
         check(!uni.equals(new javax.print.DocFlavor("text/plain; charset=utf-16", "java.lang.String")), "unicode != utf-16 flavor");

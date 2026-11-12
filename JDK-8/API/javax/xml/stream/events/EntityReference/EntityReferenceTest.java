@@ -6,6 +6,7 @@
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Locale;
 
 
 public class EntityReferenceTest {
@@ -21,6 +22,7 @@ public class EntityReferenceTest {
         return false;
     }
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.xml.stream.events.EntityReference");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");

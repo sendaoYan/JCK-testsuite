@@ -4,6 +4,8 @@
  * @run main AccessibleRoleTest
  */
 
+import java.util.Locale;
+
 public class AccessibleRoleTest {
     static int passed;
 
@@ -19,6 +21,7 @@ public class AccessibleRoleTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.accessibility.AccessibleRole");
         check(!c.isInterface() && !c.isEnum(), "is class");
         check(c.getSuperclass().getName().equals("javax.accessibility.AccessibleBundle"), "superclass javax.accessibility.AccessibleBundle");

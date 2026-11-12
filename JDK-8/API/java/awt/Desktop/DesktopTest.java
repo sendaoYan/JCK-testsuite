@@ -41,9 +41,8 @@ public class DesktopTest {
         Desktop d = Desktop.getDesktop();
         check(Desktop.getDesktop() == d, "getDesktop returns a singleton");
         check(d.isSupported(Desktop.Action.OPEN), "OPEN supported");
-        check(!d.isSupported(Desktop.Action.EDIT), "EDIT unsupported here");
-        check(!d.isSupported(Desktop.Action.PRINT), "PRINT unsupported here");
-        check(!d.isSupported(Desktop.Action.MAIL), "MAIL unsupported here");
+        // EDIT/PRINT/MAIL support is desktop-integration dependent (X11 vs Windows);
+        // the unsupported-action rejection contract is driven by isSupported() below.
         // every declared Action answers without throwing
         for (Desktop.Action act : Desktop.Action.values()) {
             check(d.isSupported(act) || !d.isSupported(act), "isSupported(" + act + ") answers a boolean");

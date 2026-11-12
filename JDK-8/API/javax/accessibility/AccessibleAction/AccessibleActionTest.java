@@ -4,6 +4,8 @@
  * @run main AccessibleActionTest
  */
 
+import java.util.Locale;
+
 public class AccessibleActionTest {
     static int passed;
 
@@ -19,6 +21,7 @@ public class AccessibleActionTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.accessibility.AccessibleAction");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");

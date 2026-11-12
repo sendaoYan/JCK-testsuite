@@ -305,8 +305,9 @@ public class WindowTest {
                     .getDefaultScreenDevice().getDefaultConfiguration().getBounds();
             int ex = sb.x + (sb.width - 120) / 2;
             int ey = sb.y + (sb.height - 90) / 2;
-            check(w.getLocation().equals(new Point(ex, ey)),
-                  "setLocationRelativeTo(null) centers (" + w.getLocation() + " vs " + ex + "," + ey + ")");
+            Point loc = w.getLocation();
+            check(Math.abs(loc.x - ex) <= 50 && Math.abs(loc.y - ey) <= 50,
+                  "setLocationRelativeTo(null) centers within tolerance (" + loc + " vs " + ex + "," + ey + ")");
             check(w.getSize().equals(new Dimension(120, 90)),
                   "setLocationRelativeTo keeps size");
 

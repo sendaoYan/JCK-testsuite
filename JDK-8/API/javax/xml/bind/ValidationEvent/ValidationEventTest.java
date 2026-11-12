@@ -6,6 +6,7 @@
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Locale;
 
 
 public class ValidationEventTest {
@@ -29,6 +30,7 @@ public class ValidationEventTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.xml.bind.ValidationEvent");
         check(c.isInterface(), "is interface");
         check(c.getSuperclass() == null, "no superclass");

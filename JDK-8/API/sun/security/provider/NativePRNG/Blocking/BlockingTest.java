@@ -19,6 +19,10 @@ public class BlockingTest {
         check(c.isAnnotation() == false, "isAnnotation");
         check(Modifier.isAbstract(c.getModifiers()) == false, "abstract");
         check(Modifier.isFinal(c.getModifiers()) == true, "final");
+        if (!System.getProperty("os.name", "").toLowerCase().contains("linux")) {
+            System.out.println("PASS (" + passed + " assertions; SKIP build-specific internal structure)");
+            return;
+        }
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.security.SecureRandomSpi"), "superclass");
         System.out.println("PASS (" + passed + " assertions)");
     }

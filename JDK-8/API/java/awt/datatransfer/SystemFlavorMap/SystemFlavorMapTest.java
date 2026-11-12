@@ -61,7 +61,7 @@ public class SystemFlavorMapTest {
         List<String> natives = ft.getNativesForFlavor(java.awt.datatransfer.DataFlavor.stringFlavor);
         check(natives != null && !natives.isEmpty(), "natives for stringFlavor non-empty");
         java.util.List<java.awt.datatransfer.DataFlavor> flavors = ft.getFlavorsForNative("STRING");
-        check(flavors != null && !flavors.isEmpty(), "flavors for STRING non-empty");
+        check(flavors != null, "flavors for STRING query returns non-null (content is platform-specific)");
         // unknown arbitrary native maps to an empty (never null) list
         List<java.awt.datatransfer.DataFlavor> unknown = ft.getFlavorsForNative("MY_TEST_NATIVE_ZZ");
         check(unknown != null && unknown.isEmpty(), "unknown native -> empty non-null list");
@@ -92,7 +92,9 @@ public class SystemFlavorMapTest {
         check(fullN.containsKey(java.awt.datatransfer.DataFlavor.stringFlavor), "full map contains stringFlavor");
         Map<String, java.awt.datatransfer.DataFlavor> fullF = sfm.getFlavorsForNatives(null);
         check(fullF != null && !fullF.isEmpty(), "null native array -> full map");
-        check(fullF.containsKey("STRING"), "full map contains STRING");
+        // "STRING" is an X11 native absent on Windows; asserting membership of a
+        // specific native in the full map is platform-dependent, so only the
+        // non-empty invariant above is kept.
 
         // ---- FlavorMap map API ----
         java.util.Map<java.awt.datatransfer.DataFlavor, String> nf = fm.getNativesForFlavors(new java.awt.datatransfer.DataFlavor[]{ java.awt.datatransfer.DataFlavor.stringFlavor });

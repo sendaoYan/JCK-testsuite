@@ -10,6 +10,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Dictionary;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.Vector;
 import javax.swing.event.DocumentEvent;
@@ -334,6 +335,7 @@ public class AbstractDocumentTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         testTypeShape();
         testProperties();
         testRoots();

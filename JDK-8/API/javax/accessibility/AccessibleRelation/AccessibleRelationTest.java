@@ -4,6 +4,8 @@
  * @run main AccessibleRelationTest
  */
 
+import java.util.Locale;
+
 public class AccessibleRelationTest {
     static int passed;
 
@@ -19,6 +21,7 @@ public class AccessibleRelationTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.accessibility.AccessibleRelation");
         check(!c.isInterface() && !c.isEnum(), "is class");
         check(c.getSuperclass().getName().equals("javax.accessibility.AccessibleBundle"), "superclass javax.accessibility.AccessibleBundle");

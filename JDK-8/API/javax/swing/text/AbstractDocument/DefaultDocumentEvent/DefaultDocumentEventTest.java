@@ -7,6 +7,7 @@
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -37,6 +38,7 @@ public class DefaultDocumentEventTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.swing.text.AbstractDocument$DefaultDocumentEvent", false, DefaultDocumentEventTest.class.getClassLoader());
         check(c != null, "forName");
         check(!c.isInterface(), "is class");

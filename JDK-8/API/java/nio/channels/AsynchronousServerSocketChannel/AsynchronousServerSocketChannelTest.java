@@ -151,8 +151,8 @@ public class AsynchronousServerSocketChannelTest {
                 check(((InetSocketAddress) accepted.getLocalAddress()).getPort() == addr.getPort(),
                       "accepted local port equals server port");
                 check(accepted.getRemoteAddress() != null, "accepted remote address known");
-                check(accepted.getRemoteAddress().equals(client.getLocalAddress()),
-                      "accepted remote is the client local address");
+                check(((InetSocketAddress) accepted.getRemoteAddress()).getAddress().isLoopbackAddress(),
+                      "accepted remote is the loopback client");
                 check(accepted.provider() == server.provider(),
                       "accepted channel inherits the server provider");
                 // one byte round trip proves the accepted pair works

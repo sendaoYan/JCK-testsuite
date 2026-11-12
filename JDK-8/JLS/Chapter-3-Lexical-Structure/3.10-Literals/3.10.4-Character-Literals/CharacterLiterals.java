@@ -19,7 +19,7 @@ public class CharacterLiterals {
         check('\\' == 92, "'\\\\'");
         check('\'' == 39, "'\\''");
         check('"' == 34, "'\"'");
-        check('Ω' == 0x03A9, "'\\u03a9'");
+        check('\u03A9' == 0x03A9, "'\\u03a9'");
         check('\177' == 0x7F, "'\\177' (octal escape)");
 
         check(((Object) 'x').getClass() == Character.class,

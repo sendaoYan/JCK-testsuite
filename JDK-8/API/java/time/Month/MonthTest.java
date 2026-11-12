@@ -94,7 +94,7 @@ public class MonthTest {
         check(Month.JANUARY.minus(1) == Month.DECEMBER, "minus 1 wraps");
         check(Month.DECEMBER.minus(12) == Month.DECEMBER, "minus 12 wraps");
         check(Month.MARCH.minus(3) == Month.DECEMBER, "minus 3 wraps");
-        check(Month.of(2).getDisplayName(TextStyle.FULL, java.util.Locale.FRENCH).equals("février"), "FR full");
+        check(Month.of(2).getDisplayName(TextStyle.FULL, java.util.Locale.FRENCH).equals("f\u00E9vrier"), "FR full");
         check(Month.of(2).getDisplayName(TextStyle.NARROW, java.util.Locale.ENGLISH).equals("F"), "narrow EN F");
         check(Month.JULY.getDisplayName(TextStyle.SHORT, java.util.Locale.ENGLISH).equals("Jul"), "short EN");
          check(Month.FEBRUARY.getDisplayName(TextStyle.SHORT_STANDALONE, java.util.Locale.ENGLISH).equals("2"), "SHORT_STANDALONE JDK8 numeric");

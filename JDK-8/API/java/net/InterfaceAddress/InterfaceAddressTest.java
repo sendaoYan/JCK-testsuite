@@ -67,8 +67,13 @@ public class InterfaceAddressTest {
                 check(plen <= 128, "IPv6 prefix <= 128");
                 v6++;
             }
-            // a loopback interface has no broadcast address (probed both JDKs)
-            check(null == ia.getBroadcast(), "no broadcast on loopback: " + a.getHostAddress());
+            // a loopback interface has no broadcast on Linux but other platforms
+            // may report one; when present it is always IPv4.
+            InetAddress bc = ia.getBroadcast();
+            if (bc != null) {
+                check(bc instanceof Inet4Address,
+                        "loopback broadcast (when present) is IPv4: " + a.getHostAddress());
+            }
             // toString contains the textual address
             check(ia.toString().contains(a.getHostAddress()), "toString contains address text");
             check(ia.toString().contains("/"), "toString slash-separated");

@@ -4,6 +4,8 @@
  * @run main AccessibleBundleTest
  */
 
+import java.util.Locale;
+
 public class AccessibleBundleTest {
     static int passed;
 
@@ -19,6 +21,7 @@ public class AccessibleBundleTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.accessibility.AccessibleBundle");
         check(!c.isInterface() && !c.isEnum(), "not interface/enum");
         check(java.lang.reflect.Modifier.isAbstract(c.getModifiers()), "is abstract");

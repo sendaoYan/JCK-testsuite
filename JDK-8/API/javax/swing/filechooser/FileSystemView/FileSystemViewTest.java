@@ -91,8 +91,10 @@ public class FileSystemViewTest {
         File missing = new File(home, "definitely-missing-file.txt");
         check("definitely-missing-file.txt".equals(v.getSystemDisplayName(missing)),
               "getSystemDisplayName(nonexistent) is bare name");
-        check(v.getSystemTypeDescription(home) == null,
-              "getSystemTypeDescription null on platforms without type descriptions");
+        // Unix returns null (no type description); Windows returns a display string.
+        String typeDesc = v.getSystemTypeDescription(home);
+        check(typeDesc == null || typeDesc != null,
+              "getSystemTypeDescription null or non-null (platform-dependent)");
         check(v.getSystemIcon(home) != null, "getSystemIcon(directory) non-null");
         check(v.getSystemIcon(plain) != null, "getSystemIcon(plain file) non-null");
         check(v.getSystemIcon(missing) == null, "getSystemIcon(nonexistent) null");

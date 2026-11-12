@@ -4,6 +4,7 @@
  * @run main XMLSecurityManagerTest
  */
 
+import java.util.Locale;
 
 public class XMLSecurityManagerTest {
     static int passed;
@@ -29,6 +30,7 @@ public class XMLSecurityManagerTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         jdk.xml.internal.XMLSecurityManager m = new jdk.xml.internal.XMLSecurityManager();
         check(m != null, "constructed");
         m.setSecureProcessing(true);

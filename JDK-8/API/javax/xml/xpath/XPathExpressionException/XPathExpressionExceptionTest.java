@@ -4,6 +4,7 @@
  * @run main XPathExpressionExceptionTest
  */
 
+import java.util.Locale;
 
 public class XPathExpressionExceptionTest {
     static int passed;
@@ -18,6 +19,7 @@ public class XPathExpressionExceptionTest {
         return false;
     }
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         check(javax.xml.xpath.XPathExpressionException.class.getSuperclass().getName().equals("javax.xml.xpath.XPathException"), "extends javax.xml.xpath.XPathException");
         testConstructors();
         testRealTrigger();

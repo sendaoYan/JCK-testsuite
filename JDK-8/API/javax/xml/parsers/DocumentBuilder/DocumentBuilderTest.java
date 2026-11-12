@@ -26,6 +26,8 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.StringReader;
 
+import java.util.Locale;
+
 public class DocumentBuilderTest {
     static int passed;
 
@@ -53,6 +55,7 @@ public class DocumentBuilderTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
         f.setNamespaceAware(true);
         DocumentBuilder db = f.newDocumentBuilder();

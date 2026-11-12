@@ -76,8 +76,8 @@ public class StandardCharsetsTest {
         check((bom[0] == (byte) 0xFE && bom[1] == (byte) 0xFF)
                 || (bom[0] == (byte) 0xFF && bom[1] == (byte) 0xFE), "UTF_16 emits BOM");
 
-        String emoji = "😀🚀";
-        String cjk = "中文测试";
+        String emoji = "\uD83D\uDE00\uD83D\uDE80";
+        String cjk = "\u4E2D\u6587\u6D4B\u8BD5";
         check(emoji.equals(StandardCharsets.UTF_8.decode(
                     StandardCharsets.UTF_8.encode(emoji)).toString()), "UTF-8 emoji roundtrip");
         check(cjk.equals(StandardCharsets.UTF_8.decode(
@@ -85,8 +85,8 @@ public class StandardCharsetsTest {
         check(cjk.equals(StandardCharsets.UTF_16.decode(
                     StandardCharsets.UTF_16.encode(cjk)).toString()), "UTF-16 CJK roundtrip");
 
-        check(StandardCharsets.ISO_8859_1.newEncoder().canEncode('é'), "ISO-8859-1 encodes é");
-        check(!StandardCharsets.US_ASCII.newEncoder().canEncode('é'), "US-ASCII cannot encode é");
+        check(StandardCharsets.ISO_8859_1.newEncoder().canEncode('\u00E9'), "ISO-8859-1 encodes \u00E9");
+        check(!StandardCharsets.US_ASCII.newEncoder().canEncode('\u00E9'), "US-ASCII cannot encode \u00E9");
         ByteBuffer asciiCjk = StandardCharsets.US_ASCII.encode(cjk);
         check(asciiCjk.remaining() == 4, "US-ASCII replaces 4 CJK chars with 4 '?'");
         while (asciiCjk.hasRemaining()) check(asciiCjk.get() == (byte) '?', "replacement byte is '?'");

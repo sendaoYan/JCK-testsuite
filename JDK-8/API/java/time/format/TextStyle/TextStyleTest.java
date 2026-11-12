@@ -80,7 +80,7 @@ public class TextStyleTest {
         xeq(ZoneId.of("Europe/Berlin").getDisplayName(TextStyle.NARROW, en), "Europe/Berlin", "zone NARROW id");
         xeq(IsoChronology.INSTANCE.getDisplayName(TextStyle.FULL, en), "ISO", "chrono FULL iso");
         java.util.Locale fr = java.util.Locale.FRENCH;
-        xeq(Month.FEBRUARY.getDisplayName(TextStyle.FULL, fr), "février", "FR FULL");
+        xeq(Month.FEBRUARY.getDisplayName(TextStyle.FULL, fr), "f\u00E9vrier", "FR FULL");
         xeq(DayOfWeek.THURSDAY.getDisplayName(TextStyle.FULL, fr), "jeudi", "FR dow FULL");
         xeq(Month.FEBRUARY.getDisplayName(TextStyle.NARROW, fr), "F", "FR NARROW F");
          xeq(Month.FEBRUARY.getDisplayName(TextStyle.SHORT_STANDALONE, en), "2", "SHORT_STANDALONE JDK8 numeric");

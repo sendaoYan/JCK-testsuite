@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.Vector;
 import javax.swing.event.DocumentEvent;
@@ -238,6 +239,7 @@ public class DefaultStyledDocumentTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         testTypeShape();
         testElementTree();
         testCharacterAttributes();

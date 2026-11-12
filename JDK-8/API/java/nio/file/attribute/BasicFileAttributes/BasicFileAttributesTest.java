@@ -95,27 +95,42 @@ public class BasicFileAttributesTest {
             java.nio.file.Files.write(f, "hello world".getBytes("UTF-8"));
             check(java.nio.file.Files.readAttributes(f, BasicFileAttributes.class).size() == 11L,
                   "size tracks content growth");
-            // fileKey: Linux implementation keys on device+inode; stable across reads
+            // fileKey is filesystem-defined: Linux keys on device+inode, Windows has
+            // no inode so it may be null. When non-null it must be stable across reads.
             Object k1 = a.fileKey();
-            check(k1 != null, "fileKey non-null on Linux (dev+inode)");
-            Object k2 = java.nio.file.Files.readAttributes(f, BasicFileAttributes.class).fileKey();
-            check(k1.equals(k2), "fileKey stable across reads");
-            check(k1.hashCode() == k2.hashCode(), "fileKey hashCode stable");
-            check(k1 != k2, "fileKey is a fresh object per read");
+            if (k1 != null) {
+                Object k2 = java.nio.file.Files.readAttributes(f, BasicFileAttributes.class).fileKey();
+                check(k1.equals(k2), "fileKey stable across reads");
+                check(k1.hashCode() == k2.hashCode(), "fileKey hashCode stable");
+                check(k1 != k2, "fileKey is a fresh object per read");
+            } else {
+                check(java.nio.file.Files.readAttributes(f, BasicFileAttributes.class).fileKey() == null,
+                      "fileKey consistently null on this fs");
+            }
             // directory shape
             BasicFileAttributes da = java.nio.file.Files.readAttributes(dir, BasicFileAttributes.class);
             check(da.isDirectory(), "dir isDirectory");
             check(!da.isRegularFile(), "dir not regular file");
-            // symlink shape (NOFOLLOW vs follow)
+            // symlink shape (NOFOLLOW vs follow). Windows without elevated or
+            // developer mode rejects createSymbolicLink (AccessDeniedException),
+            // so the symlink block is skipped there rather than failing.
             java.nio.file.Path link = dir.resolve("lnk");
-            java.nio.file.Files.createSymbolicLink(link, f);
-            BasicFileAttributes la = java.nio.file.Files.readAttributes(link, BasicFileAttributes.class,
-                    java.nio.file.LinkOption.NOFOLLOW_LINKS);
-            check(la.isSymbolicLink(), "symlink NOFOLLOW isSymbolicLink");
-            check(!la.isRegularFile(), "symlink NOFOLLOW not regular file");
-            check(!la.isDirectory(), "symlink NOFOLLOW not directory");
-            check(java.nio.file.Files.readAttributes(link, BasicFileAttributes.class).isRegularFile(),
-                  "symlink follow reads target type");
+            boolean symlinkMade = false;
+            try {
+                java.nio.file.Files.createSymbolicLink(link, f);
+                symlinkMade = true;
+            } catch (java.io.IOException | java.lang.UnsupportedOperationException | java.lang.SecurityException e) {
+                // symlink not creatable on this host/filesystem (e.g. no privilege)
+            }
+            if (symlinkMade) {
+                BasicFileAttributes la = java.nio.file.Files.readAttributes(link, BasicFileAttributes.class,
+                        java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                check(la.isSymbolicLink(), "symlink NOFOLLOW isSymbolicLink");
+                check(!la.isRegularFile(), "symlink NOFOLLOW not regular file");
+                check(!la.isDirectory(), "symlink NOFOLLOW not directory");
+                check(java.nio.file.Files.readAttributes(link, BasicFileAttributes.class).isRegularFile(),
+                      "symlink follow reads target type");
+            }
             // NOFOLLOW on a plain file behaves like a normal read
             BasicFileAttributes nf = java.nio.file.Files.readAttributes(f, BasicFileAttributes.class,
                     java.nio.file.LinkOption.NOFOLLOW_LINKS);

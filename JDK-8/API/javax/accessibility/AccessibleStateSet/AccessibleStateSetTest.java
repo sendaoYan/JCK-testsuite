@@ -4,6 +4,8 @@
  * @run main AccessibleStateSetTest
  */
 
+import java.util.Locale;
+
 public class AccessibleStateSetTest {
     static int passed;
 
@@ -19,6 +21,7 @@ public class AccessibleStateSetTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.accessibility.AccessibleStateSet");
         check(!c.isInterface() && !c.isEnum(), "is class");
         check(c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");

@@ -4,6 +4,8 @@
  * @run main AccessibleStateTest
  */
 
+import java.util.Locale;
+
 public class AccessibleStateTest {
     static int passed;
 
@@ -19,6 +21,7 @@ public class AccessibleStateTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         Class<?> c = Class.forName("javax.accessibility.AccessibleState");
         check(!c.isInterface() && !c.isEnum(), "is class");
         check(c.getSuperclass().getName().equals("javax.accessibility.AccessibleBundle"), "superclass javax.accessibility.AccessibleBundle");
@@ -45,7 +48,7 @@ public class AccessibleStateTest {
         check("focused".equals(javax.accessibility.AccessibleState.FOCUSED.toDisplayString(java.util.Locale.ENGLISH)), "focused");
         check("enabled".equals(javax.accessibility.AccessibleState.ENABLED.toDisplayString(java.util.Locale.ENGLISH)), "enabled");
         check("enabled".equals(javax.accessibility.AccessibleState.ENABLED.toString()), "toString = English display string");
-        check("activé".equals(javax.accessibility.AccessibleState.ENABLED.toDisplayString(java.util.Locale.FRENCH)), "French activé");
+        check("activ\u00E9".equals(javax.accessibility.AccessibleState.ENABLED.toDisplayString(java.util.Locale.FRENCH)), "French activ\u00E9");
         check(javax.accessibility.AccessibleState.ENABLED.equals(javax.accessibility.AccessibleState.ENABLED), "self equals");
         check(!javax.accessibility.AccessibleState.ENABLED.equals(javax.accessibility.AccessibleState.FOCUSED), "distinct unequal");
         check(javax.accessibility.AccessibleState.class.getSuperclass() == javax.accessibility.AccessibleBundle.class, "extends AccessibleBundle");

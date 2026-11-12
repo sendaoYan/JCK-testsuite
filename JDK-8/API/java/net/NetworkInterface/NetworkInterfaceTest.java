@@ -88,8 +88,10 @@ public class NetworkInterfaceTest {
         check(NetworkInterface.getByName(lo.getName()).equals(lo), "getByName self-consistent");
         check(NetworkInterface.getByName(lo.getName()).getIndex() == lo.getIndex(),
                 "name/index lookup agree");
-        // MTU is a positive quantity (Linux lo reports 65536 here; value is env specific)
-        check(lo.getMTU() > 0, "loopback MTU positive");
+        // MTU is environment specific: Linux lo reports 65536 here, Windows may
+        // report 0 or -1 (0xFFFFFFFF placeholder). Assert only a sane value.
+        int mtu = lo.getMTU();
+        check(mtu >= -1, "loopback MTU non-negative or -1 placeholder (got " + mtu + ")");
         // hardware address of a loopback: null, empty or all-zero (probed: null here)
         byte[] hw = lo.getHardwareAddress();
         if (hw == null) {

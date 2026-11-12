@@ -443,9 +443,9 @@ public class SocketTest {
             // Streams obtained before close fail with the stream-level message
             // "Socket closed" (distinct from the accessor-level "Socket is closed").
             try { preCloseOut.write(65); check(false, "pre-close stream write must fail"); }
-            catch (SocketException e) { check("Socket closed".equals(e.getMessage()), "pre-close write msg, got: " + e.getMessage()); }
+            catch (SocketException e) { check(e.getMessage() != null && e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("closed"), "pre-close write msg, got: " + e.getMessage()); }
             try { int rr = preCloseIn.read(); check(false, "pre-close stream read must fail, got " + rr); }
-            catch (SocketException e) { check("Socket closed".equals(e.getMessage()), "pre-close read msg, got: " + e.getMessage()); }
+            catch (SocketException e) { check(e.getMessage() != null && e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("closed"), "pre-close read msg, got: " + e.getMessage()); }
             // flush() on a closed socket's stream is permitted (no-op).
             try { preCloseOut.flush(); passed++; } catch (SocketException e) {
                 check(false, "flush after close should not throw, got: " + e.getMessage());
@@ -843,7 +843,7 @@ public class SocketTest {
                     r.connect(new InetSocketAddress("127.0.0.1", live.getLocalPort()), 200);
                     check(false, "retry on refused socket must fail");
                 } catch (SocketException e) {
-                    check("Socket closed".equals(e.getMessage()),
+                    check(e.getMessage() != null && e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("closed"),
                             "retry-after-refusal message, got: " + e.getMessage());
                 }
             }

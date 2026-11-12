@@ -185,6 +185,7 @@ public class DateTimeFormatterTest {
     }
 
     public static void main(String[] args) {
+        Locale.setDefault(Locale.ENGLISH);
         testIsoConstants();
         testOfPattern();
         testWithMethods();

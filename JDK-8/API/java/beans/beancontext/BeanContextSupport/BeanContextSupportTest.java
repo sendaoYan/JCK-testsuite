@@ -313,6 +313,7 @@ public class BeanContextSupportTest {
         });
         bc.setLocale(Locale.US);
         check(Locale.US.equals(bc.getLocale()), "setLocale takes effect");
+        locEvs.clear(); // drop the event from the first setLocale (fires when default != US)
         bc.setLocale(Locale.US);
         check(locEvs.isEmpty(), "setLocale same value fires nothing");
         bc.setLocale(null);

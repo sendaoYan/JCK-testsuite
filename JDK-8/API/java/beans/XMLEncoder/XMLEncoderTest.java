@@ -231,7 +231,7 @@ public class XMLEncoderTest {
         check(cxml.contains("&#13;"), "carriage return escaped as &#13;");
         check(ctl.equals(decode(cxml)), "newline/tab/cr string round-trip");
 
-        String nonBmp = "music 𝄞 note";
+        String nonBmp = "music \uD834\uDD1E note";
         check(nonBmp.equals(decode(encode(nonBmp))), "non-BMP surrogate pair round-trip");
     }
 
@@ -381,12 +381,12 @@ public class XMLEncoderTest {
     static void testCharsetVariants() throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         XMLEncoder enc = new XMLEncoder(baos, "US-ASCII", true, 0);
-        enc.writeObject("café");
+        enc.writeObject("caf\u00E9");
         enc.close();
         String axml = baos.toString("UTF-8");
         check(axml.contains("encoding=\"US-ASCII\""), "declaration reflects requested charset");
         check(axml.contains("<char code=\"#e9\"/>"), "non-ASCII char emitted as numeric code");
-        check("café".equals(decode(axml)), "US-ASCII archive round-trips non-ASCII text");
+        check("caf\u00E9".equals(decode(axml)), "US-ASCII archive round-trips non-ASCII text");
 
         ByteArrayOutputStream baos16 = new ByteArrayOutputStream();
         XMLEncoder enc16 = new XMLEncoder(baos16, "UTF-16", true, 0);

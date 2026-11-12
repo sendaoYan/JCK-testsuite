@@ -118,14 +118,22 @@ public class JFileChooserTest {
         JFileChooser d = new JFileChooser();
         File initial = d.getCurrentDirectory();
         d.setCurrentDirectory(tmp);
-        check(d.getCurrentDirectory().equals(tmp), "setCurrentDirectory roundtrip");
+        check(d.getCurrentDirectory() != null
+              && d.getCurrentDirectory().getAbsoluteFile().equals(tmp.getAbsoluteFile()),
+              "setCurrentDirectory roundtrip");
         d.setCurrentDirectory(null);
-        check(d.getCurrentDirectory().equals(initial), "setCurrentDirectory(null) falls back to home");
+        check(d.getCurrentDirectory() != null
+              && d.getCurrentDirectory().getAbsoluteFile().equals(initial.getAbsoluteFile()),
+              "setCurrentDirectory(null) falls back to home");
         JFileChooser d2 = new JFileChooser(tmp);
-        check(d2.getCurrentDirectory().equals(tmp), "ctor(File) preserves directory");
+        check(d2.getCurrentDirectory() != null
+              && d2.getCurrentDirectory().getAbsoluteFile().equals(tmp.getAbsoluteFile()),
+              "ctor(File) preserves directory");
         FileSystemView fsv = FileSystemView.getFileSystemView();
         JFileChooser d3 = new JFileChooser(tmp, fsv);
-        check(d3.getCurrentDirectory().equals(tmp), "ctor(File,FSV) preserves directory");
+        check(d3.getCurrentDirectory() != null
+              && d3.getCurrentDirectory().getAbsoluteFile().equals(tmp.getAbsoluteFile()),
+              "ctor(File,FSV) preserves directory");
         check(d3.getFileSystemView() == fsv, "ctor(File,FSV) preserves FSV");
 
         // selection

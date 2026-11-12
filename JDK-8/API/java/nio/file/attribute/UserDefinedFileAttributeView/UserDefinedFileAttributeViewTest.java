@@ -124,28 +124,29 @@ public class UserDefinedFileAttributeViewTest {
             int rr = v.read("off", into);
             check(rr == 3, "read count with positioned buffer");
             check(into.position() == 4, "read fills from the initial position");
-            // negatives: missing attribute -> FileSystemException (errno ENODATA wrapped)
-            checkThrowsIO(java.nio.file.FileSystemException.class, () -> v.read("gone", java.nio.ByteBuffer.allocate(4)),
+            // negatives: missing attribute -> IOException (Linux wraps errno ENODATA as
+            // FileSystemException, Windows reports a plain IOException; accept both).
+            checkThrowsIO(java.io.IOException.class, () -> v.read("gone", java.nio.ByteBuffer.allocate(4)),
                     "read of missing attribute");
-            checkThrowsIO(java.nio.file.FileSystemException.class, () -> v.size("gone"),
+            checkThrowsIO(java.io.IOException.class, () -> v.size("gone"),
                     "size of missing attribute");
-            checkThrowsIO(java.nio.file.FileSystemException.class, () -> v.delete("gone"),
+            checkThrowsIO(java.io.IOException.class, () -> v.delete("gone"),
                     "delete of missing attribute");
-            // buffer smaller than the value -> FileSystemException (ERANGE)
-            checkThrowsIO(java.nio.file.FileSystemException.class,
+            // buffer smaller than the value -> IOException (Linux ERANGE = FileSystemException)
+            checkThrowsIO(java.io.IOException.class,
                     () -> v.read("myst", java.nio.ByteBuffer.allocate(1)), "read with too-small buffer");
-            checkThrowsIO(java.nio.file.FileSystemException.class,
+            checkThrowsIO(java.io.IOException.class,
                     () -> v.read("myst", java.nio.ByteBuffer.allocate(0)), "read with zero-capacity buffer");
             // null arguments -> NPE
             checkThrowsIO(NullPointerException.class,
                     () -> v.write(null, java.nio.ByteBuffer.wrap(new byte[1])), "write(null name)");
             checkThrowsIO(NullPointerException.class, () -> v.size(null), "size(null name)");
             checkThrowsIO(NullPointerException.class, () -> v.read("myst", null), "read(null buffer)");
-            // empty attribute name is not a legal xattr name on Linux
-            checkThrowsIO(java.nio.file.FileSystemException.class,
+            // empty attribute name is not a legal xattr name -> IOException
+            checkThrowsIO(java.io.IOException.class,
                     () -> v.write("", java.nio.ByteBuffer.wrap(new byte[1])), "write with empty name");
             // missing attribute through the Files.getAttribute family
-            checkThrowsIO(java.nio.file.FileSystemException.class,
+            checkThrowsIO(java.io.IOException.class,
                     () -> java.nio.file.Files.getAttribute(f, "user:never_set"),
                     "getAttribute user:missing");
             // Files.setAttribute/getAttribute integration (byte[] values)

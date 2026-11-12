@@ -10,6 +10,7 @@ import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 
 import java.util.GregorianCalendar;
+import java.util.Locale;
 import java.util.TimeZone;
 
 public class XMLGregorianCalendarTest {
@@ -29,6 +30,7 @@ public class XMLGregorianCalendarTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         DatatypeFactory f = DatatypeFactory.newInstance();
 
         // ---- parse with timezone offset ----

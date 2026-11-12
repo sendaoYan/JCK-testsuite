@@ -17,6 +17,7 @@ import java.io.Writer;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import javax.swing.Action;
 import javax.swing.text.DefaultStyledDocument;
@@ -89,7 +90,7 @@ public class RTFEditorKitTest {
         Document esc = kit.createDefaultDocument();
         kit.read(new StringReader("{\\rtf1\\ansi esc\\'e9 \\u65?}"), esc, 0);
         String t = esc.getText(0, esc.getLength());
-        check(t.equals("escé A\n"), "hex and unicode escapes decoded");
+        check(t.equals("esc\u00E9 A\n"), "hex and unicode escapes decoded");
 
         // non-RTF input yields an empty document, no exception
         Document non = kit.createDefaultDocument();
@@ -133,6 +134,7 @@ public class RTFEditorKitTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         testShape();
         testBasics();
         testRoundTrip();

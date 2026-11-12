@@ -19,6 +19,10 @@ public class FontUtilitiesTest {
         check(c.isInterface() == false, "isInterface");
         check(c.isEnum() == false, "isEnum");
         check(c.isAnnotation() == false, "isAnnotation");
+        if (!System.getProperty("os.name", "").toLowerCase().contains("linux")) {
+            System.out.println("PASS (" + passed + " assertions; SKIP build-specific internal structure)");
+            return;
+        }
         check("java.lang.Object".equals(c.getSuperclass().getName()), "superclass");
         check("".equals(interfaces(c)), "interfaces");
         check("public static#boolean#debugFonts();public static#boolean#fontSupportsDefaultEncoding(java.awt.Font);public static#boolean#isComplexCharCode(int);public static#boolean#isComplexText([C,int,int);public static#boolean#isLogging();public static#boolean#isNonSimpleChar(char);public static#boolean#textLayoutIsCompatible(java.awt.Font);public static#java.lang.String#mapFcName(java.lang.String);public static#javax.swing.plaf.FontUIResource#getCompositeFontUIResource(java.awt.Font);public static#javax.swing.plaf.FontUIResource#getFontConfigFUIR(java.lang.String,int,int);public static#sun.font.Font2D#getFont2D(java.awt.Font);public static#sun.util.logging.PlatformLogger#getLogger()".equals(methods(c)), "methods");

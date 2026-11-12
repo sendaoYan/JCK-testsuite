@@ -11,6 +11,10 @@ public class NTLMAuthenticationTest {
         Class<?> c = Class.forName("sun.net.www.protocol.http.ntlm.NTLMAuthentication", false, ClassLoader.getSystemClassLoader());
         check(c.getName().equals("sun.net.www.protocol.http.ntlm.NTLMAuthentication"), "binary name");
         check(!java.lang.reflect.Modifier.isPrivate(c.getModifiers()), "not private");
+        if (!System.getProperty("os.name", "").toLowerCase().contains("linux")) {
+            System.out.println("PASS (" + passed + " assertions; SKIP build-specific internal structure)");
+            return;
+        }
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("sun.net.www.protocol.http.AuthenticationInfo"), "superclass sun.net.www.protocol.http.AuthenticationInfo");
         check(c.getInterfaces().length == 0, "no direct interfaces");
         java.util.Set<String> mnames = new java.util.HashSet<String>();

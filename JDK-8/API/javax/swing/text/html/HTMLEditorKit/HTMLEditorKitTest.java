@@ -17,6 +17,7 @@ import java.io.Writer;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import javax.swing.Action;
 import javax.swing.JEditorPane;
@@ -231,6 +232,7 @@ public class HTMLEditorKitTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         testShape();
         testConstants();
         testActions();

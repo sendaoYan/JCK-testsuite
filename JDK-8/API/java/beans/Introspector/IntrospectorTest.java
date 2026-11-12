@@ -191,20 +191,20 @@ public class IntrospectorTest {
         check("A".equals(Introspector.decapitalize("A")) == false, "A is lowered");
         check("a".equals(Introspector.decapitalize("a")), "single lowercase unchanged");
         // non-ASCII uppercase participates in the rule
-        check("AÜ".equals(Introspector.decapitalize("AÜ")), "A+U-umlaut unchanged");
-        check("ÜA".equals(Introspector.decapitalize("ÜA")), "U-umlaut+A unchanged");
-        check("ÜU".equals(Introspector.decapitalize("ÜU")), "U-umlaut pair unchanged");
-        check("ünicode".equals(Introspector.decapitalize("Ünicode")), "U-umlaut head lowered");
-        check("üü".equals(Introspector.decapitalize("Üü")), "U-umlaut+u-umlaut lowered head");
+        check("A\u00DC".equals(Introspector.decapitalize("A\u00DC")), "A+U-umlaut unchanged");
+        check("\u00DCA".equals(Introspector.decapitalize("\u00DCA")), "U-umlaut+A unchanged");
+        check("\u00DCU".equals(Introspector.decapitalize("\u00DCU")), "U-umlaut pair unchanged");
+        check("\u00FCnicode".equals(Introspector.decapitalize("\u00DCnicode")), "U-umlaut head lowered");
+        check("\u00FC\u00FC".equals(Introspector.decapitalize("\u00DC\u00FC")), "U-umlaut+u-umlaut lowered head");
         // titlecase chars (Lt) are NOT uppercase: rule not triggered, first char lowered
-        check("ǆungla".equals(Introspector.decapitalize("ǅungla")), "titlecase D-z lowered");
-        check("ǆǅ".equals(Introspector.decapitalize("ǅǅ")), "titlecase pair head lowered");
+        check("\u01C6ungla".equals(Introspector.decapitalize("\u01C5ungla")), "titlecase D-z lowered");
+        check("\u01C6\u01C5".equals(Introspector.decapitalize("\u01C5\u01C5")), "titlecase pair head lowered");
         // non-letters
         check(" x".equals(Introspector.decapitalize(" x")), "leading space unchanged");
         check("xy".equals(Introspector.decapitalize("Xy")), "Xy -> xy");
         // determinism
-        String once = Introspector.decapitalize("Ünicode");
-        check(once.equals(Introspector.decapitalize("Ünicode")), "decapitalize deterministic");
+        String once = Introspector.decapitalize("\u00DCnicode");
+        check(once.equals(Introspector.decapitalize("\u00DCnicode")), "decapitalize deterministic");
     }
 
     // ---------- deepening: bean hierarchy / stopClass semantics ----------

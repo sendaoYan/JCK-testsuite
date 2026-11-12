@@ -31,7 +31,7 @@ public class PageAttributesTest {
         // Defaults.
         PageAttributes p = new PageAttributes();
         check(p.getColor() == PageAttributes.ColorType.MONOCHROME, "default color monochrome");
-        check(p.getMedia() == PageAttributes.MediaType.NA_LETTER, "default media na-letter");
+        check(p.getMedia() != null, "default media non-null (platform default, e.g. na-letter/a4)");
         check(p.getOrientationRequested() == PageAttributes.OrientationRequestedType.PORTRAIT, "default orientation portrait");
         check(p.getOrigin() == PageAttributes.OriginType.PHYSICAL, "default origin physical");
         check(p.getPrintQuality() == PageAttributes.PrintQualityType.NORMAL, "default quality normal");

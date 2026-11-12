@@ -533,6 +533,7 @@ public class SimpleDateFormatTest {
                 "standard chars rejected in de localized pattern (JRE)");
     }
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         testPatternLetterMatrixContract();
         testZoneDisplayNameContract();
         testLenientSemanticsContract();

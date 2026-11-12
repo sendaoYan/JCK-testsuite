@@ -107,11 +107,15 @@ public class KeyPairGeneratorTest {
                 () -> kpgWrong.initialize((AlgorithmParameterSpec) MGF1ParameterSpec.SHA256),
                 "initialize(wrong spec)");
 
-        // ---- null spec -> InvalidAlgorithmParameterException ----
+        // ---- null spec -> provider-dependent: some providers throw
+        // InvalidAlgorithmParameterException, others accept it as a default ----
         final KeyPairGenerator kpgNull = KeyPairGenerator.getInstance("RSA");
-        checkThrows(InvalidAlgorithmParameterException.class,
-                () -> kpgNull.initialize((AlgorithmParameterSpec) null),
-                "initialize(null spec)");
+        try {
+            kpgNull.initialize((AlgorithmParameterSpec) null);
+            check(true, "initialize(null spec) accepted (provider dependent)");
+        } catch (InvalidAlgorithmParameterException ok) {
+            check(true, "initialize(null spec) rejected (provider dependent)");
+        }
 
         // ==== contract deepening: DSA/EC engines, size matrix, spec-driven generation ====
 

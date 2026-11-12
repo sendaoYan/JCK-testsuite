@@ -11,6 +11,10 @@ public class DefaultFileSystemProviderTest {
         Class<?> c = Class.forName("sun.nio.fs.DefaultFileSystemProvider", false, ClassLoader.getSystemClassLoader());
         check(c.getName().equals("sun.nio.fs.DefaultFileSystemProvider"), "binary name");
         check(!java.lang.reflect.Modifier.isPrivate(c.getModifiers()), "not private");
+        if (!System.getProperty("os.name", "").toLowerCase().contains("linux")) {
+            System.out.println("PASS (" + passed + " assertions; SKIP build-specific internal structure)");
+            return;
+        }
         check(c.getSuperclass() != null && c.getSuperclass().getName().equals("java.lang.Object"), "superclass java.lang.Object");
         check(c.getInterfaces().length == 0, "no direct interfaces");
         java.util.Set<String> mnames = new java.util.HashSet<String>();

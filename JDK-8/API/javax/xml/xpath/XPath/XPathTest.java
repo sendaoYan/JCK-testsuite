@@ -24,6 +24,7 @@ import org.xml.sax.InputSource;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.util.Iterator;
+import java.util.Locale;
 
 public class XPathTest {
     static int passed;
@@ -55,6 +56,7 @@ public class XPathTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale.setDefault(Locale.ENGLISH);
         XPath xp = XPathFactory.newInstance().newXPath();
         Document d = doc();
 
