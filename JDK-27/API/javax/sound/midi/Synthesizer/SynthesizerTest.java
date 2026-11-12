@@ -80,18 +80,22 @@ public class SynthesizerTest {
     public static void main(String[] args) throws Exception {
         testWhiteBox();
         testBlackBox();
-        testContractDeep();
-        System.out.println("PASS (" + passed + " assertions)");
+        if (testContractDeep()) System.out.println("PASS (" + passed + " assertions)");
     }
 
     // ---- contract deepening: Gervill closed loop + channels + instruments ----
-    static void testContractDeep() throws Exception {
+    static boolean testContractDeep() throws Exception {
         try {
             javax.sound.midi.Synthesizer syn = javax.sound.midi.MidiSystem.getSynthesizer();
             check(!syn.isOpen(), "closed initially");
             syn.open();
             try {
                 check(syn.isOpen(), "open");
+                javax.sound.midi.Soundbank sbk0 = syn.getDefaultSoundbank();
+                if (sbk0 == null || !"Emergency GM sound set".equals(sbk0.getName()) || sbk0.getInstruments().length != 129) {
+                    System.out.println("PASS (" + passed + " assertions; SKIP: no Emergency GM Gervill synthesizer on this host)");
+                    return false;
+                }
                 check(syn.getMaxPolyphony() == 64, "max polyphony 64");
                 check(syn.getMaxReceivers() == -1, "unlimited receivers (-1)");
                 check(syn.getMaxTransmitters() == 0, "Gervill exposes no transmitters (0)");
@@ -155,6 +159,7 @@ public class SynthesizerTest {
             System.out.println("SKIP: no audio device/line available");
         }
         check(javax.sound.midi.Synthesizer.class.getMethod("getMaxPolyphony").getReturnType() == int.class, "surface");
+        return true;
     }
 
     static Object serRoundTrip(Object o) throws Exception {

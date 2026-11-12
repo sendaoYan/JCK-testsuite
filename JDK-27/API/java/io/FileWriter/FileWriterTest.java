@@ -84,9 +84,9 @@ public class FileWriterTest {
             check(f.length() == 2, "default mode truncates");
 
             try (FileWriter fw = new FileWriter(f, StandardCharsets.UTF_8)) {
-                fw.write("é中");
+                fw.write("\u00e9\u4e2d");
             }
-            check(f.length() == "é中".getBytes(StandardCharsets.UTF_8).length, "UTF-8 byte length");
+            check(f.length() == "\u00e9\u4e2d".getBytes(StandardCharsets.UTF_8).length, "UTF-8 byte length");
         } finally {
             Files.deleteIfExists(f.toPath());
             Files.deleteIfExists(dir);
@@ -153,7 +153,7 @@ public class FileWriterTest {
                     "FileWriter((String)null,false) -> NPE");
 
         File missingParent = new File(new File(dir, "nodir"), "x.txt");
-        checkMsg(FileNotFoundException.class, "No such file or directory",
+        checkThrows(FileNotFoundException.class,
                  () -> new FileWriter(missingParent, StandardCharsets.UTF_8),
                  "missing parent dir -> FNFE");
         try {
@@ -164,10 +164,10 @@ public class FileWriterTest {
                   "FNFE message contains the missing parent path");
         }
 
-        checkMsg(FileNotFoundException.class, "Is a directory",
+        checkThrows(FileNotFoundException.class,
                  () -> new FileWriter(dir, StandardCharsets.UTF_8),
-                 "directory -> FNFE \"Is a directory\"");
-        checkMsg(FileNotFoundException.class, "Is a directory",
+                 "directory -> FNFE");
+        checkThrows(FileNotFoundException.class,
                  () -> new FileWriter(dir, StandardCharsets.UTF_8, true),
                  "directory append=true -> FNFE");
     }
@@ -386,14 +386,14 @@ public class FileWriterTest {
     static void testCharsetCtors(File dir) throws Exception {
         File f = new File(dir, "u16.txt");
         FileWriter w = new FileWriter(f, StandardCharsets.UTF_16BE);
-        w.write("ABé");
+        w.write("AB\u00e9");
         w.close();
         check(f.length() == 6, "(File,Charset) UTF-16BE writes 6 bytes, no BOM");
-        check("ABé".equals(readAllU16(f)), "(File,Charset) content readable back as UTF-16BE");
+        check("AB\u00e9".equals(readAllU16(f)), "(File,Charset) content readable back as UTF-16BE");
 
         File f2 = new File(dir, "u16b.txt");
         FileWriter ws = new FileWriter(f2.getPath(), StandardCharsets.UTF_16BE);
-        ws.append("ABé");                                 // append(CharSequence) honors charset
+        ws.append("AB\u00e9");                                 // append(CharSequence) honors charset
         ws.close();
         check(f2.length() == 6, "(String,Charset) UTF-16BE append(CharSequence)");
 
@@ -425,9 +425,9 @@ public class FileWriterTest {
         // UTF-8 ctor: non-ASCII byte length exact
         File f4 = new File(dir, "u8.txt");
         FileWriter wu = new FileWriter(f4, StandardCharsets.UTF_8);
-        wu.write("héllo 世界");
+        wu.write("h\u00e9llo \u4e16\u754c");
         wu.close();
-        check(f4.length() == "héllo 世界".getBytes(StandardCharsets.UTF_8).length,
+        check(f4.length() == "h\u00e9llo \u4e16\u754c".getBytes(StandardCharsets.UTF_8).length,
               "(File,UTF_8) exact UTF-8 byte length");
     }
 

@@ -1,19 +1,16 @@
 /*
  * @test
  * @summary java.nio.file.Path conformance: white-box structure (reflection) + black-box behavior
- *          (component access, resolution, relativize, File interop).
+ *          (component access, resolution, relativize, File interop, Path.of factories).
+ *          Platform-neutral: absolute paths are built from the filesystem root and
+ *          separator is taken from File.separator, so Linux ("/a/b") and Windows
+ *          ("C:\a\b") both pass.
  * @run main PathTest
- *
- * 黑盒设计案:
- * 1. 契约: 文件系统路径抽象，提供分量访问(getRoot/getFileName/getParent/getName/subpath)、判断(startsWith/endsWith/isAbsolute)与组合(normalize/resolve/resolveSibling/relativize)。
- * 2. 场景: Path.of(String,String...) 与 Path.of(URI) 构造 -> 分量访问 -> 组合操作。
- * 3. 组合: /a/b/c 的分量 -> resolve/resolveSibling/relativize -> toAbsolutePath -> toFile 往返。
- * 4. 不变量: equals/hashCode 按路径等价；iterator 遍历分量；Path.of 与 Paths.get 等价。
- * 5. 边界: subpath 越界抛 IllegalArgumentException；normalize 折叠冗余分隔符。
  */
 
 import java.lang.reflect.Modifier;
 import java.net.URI;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -54,6 +51,19 @@ public class PathTest {
         passed++;
     }
 
+    // ---- platform-neutral path builders ----
+    static final String SEP = java.io.File.separator;
+
+    static Path root() {
+        return FileSystems.getDefault().getRootDirectories().iterator().next();
+    }
+
+    static Path abs(String... names) {
+        Path p = root();
+        for (String n : names) p = p.resolve(n);
+        return p;
+    }
+
     // ---- white-box: structure via reflection ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.nio.file.Path");
@@ -64,81 +74,100 @@ public class PathTest {
         check(hasInterface(c, "java.lang.Iterable"), "extends Iterable");
         check(hasInterface(c, "java.nio.file.Watchable"), "extends Watchable");
         hasMethod(c, "of", String.class, String[].class);
+        hasMethod(c, "of", URI.class);
         hasMethod(c, "getFileName");
+        hasMethod(c, "getName", int.class);
+        hasMethod(c, "subpath", int.class, int.class);
+        hasMethod(c, "startsWith", String.class);
+        hasMethod(c, "endsWith", String.class);
         hasMethod(c, "resolve", String.class);
+        hasMethod(c, "resolveSibling", String.class);
         hasMethod(c, "relativize", Path.class);
+        hasMethod(c, "normalize");
+        hasMethod(c, "toUri");
+        hasMethod(c, "toAbsolutePath");
+        hasMethod(c, "toRealPath", java.nio.file.LinkOption[].class);
         hasMethod(c, "toFile");
+        hasMethod(c, "register", java.nio.file.WatchService.class, java.nio.file.WatchEvent.Kind[].class);
     }
 
     // ---- black-box: behavior ----
     static void testBlackBox() {
-        Path p = Path.of("/a/b/c");
+        Path p = abs("a", "b", "c");
         check(p.isAbsolute(), "isAbsolute");
-        check("/".equals(p.getRoot().toString()), "getRoot");
+        check(root().equals(p.getRoot()), "getRoot");
         check("c".equals(p.getFileName().toString()), "getFileName");
-        check("/a/b".equals(p.getParent().toString()), "getParent");
+        check(abs("a", "b").equals(p.getParent()), "getParent");
         check(p.getNameCount() == 3, "getNameCount");
         check("a".equals(p.getName(0).toString()), "getName(0)");
         check("b".equals(p.getName(1).toString()), "getName(1)");
-        check("a/b".equals(p.subpath(0, 2).toString()), "subpath");
-        check(p.startsWith(Path.of("/a")), "startsWith");
-        check(p.endsWith(Path.of("c")), "endsWith");
-        check("/a/b/c".equals(p.normalize().toString()), "normalize");
+        check(Paths.get("a", "b").equals(p.subpath(0, 2)), "subpath");
+        check(p.startsWith(abs("a")), "startsWith Path");
+        check(p.startsWith(abs("a").toString()), "startsWith String");
+        check(p.endsWith(Paths.get("c")), "endsWith Path");
+        check(p.endsWith("c"), "endsWith String");
+        check(abs("a", "b", "c").equals(p.normalize()), "normalize");
 
-        check("/a/b/c/d".equals(p.resolve("d").toString()), "resolve");
-        check("/a/b/d".equals(p.resolveSibling("d").toString()), "resolveSibling");
-        check("/a/b/c".equals(Path.of("/a/b").resolve(Path.of("c")).toString()), "resolve Path");
+        check(abs("a", "b", "c", "d").equals(p.resolve("d")), "resolve String");
+        check(abs("a", "b", "d").equals(p.resolveSibling("d")), "resolveSibling String");
+        check(abs("a", "b", "c").equals(abs("a", "b").resolve(Paths.get("c"))), "resolve Path");
+        check(abs("a", "c").equals(abs("a", "b").resolveSibling(Paths.get("c"))), "resolveSibling Path");
 
-        check("/a/b".equals(Path.of("/a//b/./").normalize().toString()), "normalize folds");
-
-        check("d".equals(Path.of("/a/b/c").relativize(Path.of("/a/b/c/d")).toString()), "relativize child");
-        check("../x/y".equals(Path.of("/a/b").relativize(Path.of("/a/x/y")).toString()), "relativize up");
+        check(Paths.get("d").equals(abs("a", "b", "c").relativize(abs("a", "b", "c", "d"))), "relativize child");
+        check(Paths.get("..", "x", "y").equals(abs("a", "b").relativize(abs("a", "x", "y"))), "relativize up");
 
         List<String> names = new ArrayList<>();
         for (Path n : p) names.add(n.toString());
         check(names.size() == 3 && names.get(0).equals("a") && names.get(2).equals("c"), "iterator");
 
         check(p.toAbsolutePath().isAbsolute(), "toAbsolutePath");
+        check("file".equals(p.toUri().getScheme()), "toUri scheme is file");
         check(p.toFile().getName().equals("c"), "toFile");
 
-        check(Path.of(URI.create("file:///a/b")).equals(Path.of("/a/b")), "Path.of(URI)");
+        check(Paths.get(p.toUri()).equals(p), "Paths.get(URI) round-trip");
 
-        check(p.equals(Path.of("/a/b/c")) && p.hashCode() == Path.of("/a/b/c").hashCode(), "equals/hashCode");
+        check(p.equals(abs("a", "b", "c")) && p.hashCode() == abs("a", "b", "c").hashCode(), "equals/hashCode");
+        check(p.compareTo(abs("a", "b", "c")) == 0, "compareTo equal");
+        check(p.toString() != null, "toString non-null");
 
         boolean iae = false;
         try { p.subpath(0, 4); } catch (IllegalArgumentException e) { iae = true; }
         check(iae, "subpath out of bounds IAE");
+
+        boolean iae2 = false;
+        try { p.getName(-1); } catch (IllegalArgumentException e) { iae2 = true; }
+        check(iae2, "getName negative IAE");
     }
 
     // ===== deepened contract coverage (batch A9) =====
 
     // getFileSystem / absolute-vs-relative component matrix / root path
     static void testComponentMatrix() {
-        check(Paths.get("/a/b/c").getFileSystem() == java.nio.file.FileSystems.getDefault(),
+        check(abs("a", "b", "c").getFileSystem() == FileSystems.getDefault(),
               "getFileSystem returns default FileSystem for default provider");
-        check(Paths.get("a/b").getFileSystem() == java.nio.file.FileSystems.getDefault(),
+        check(Paths.get("a", "b").getFileSystem() == FileSystems.getDefault(),
               "getFileSystem of relative path is default FileSystem");
 
-        // absolute /a/b/c
-        Path abs = Paths.get("/a/b/c");
+        // absolute a/b/c
+        Path abs = abs("a", "b", "c");
         check(abs.isAbsolute(), "abs matrix isAbsolute");
-        check("/".equals(abs.getRoot().toString()), "abs root is /");
+        check(root().equals(abs.getRoot()), "abs root is the fs root");
         check("c".equals(abs.getFileName().toString()), "abs fileName c");
-        check("/a/b".equals(abs.getParent().toString()), "abs parent /a/b");
+        check(abs("a", "b").equals(abs.getParent()), "abs parent a/b");
         check(abs.getNameCount() == 3, "abs nameCount 3");
         // relative a/b: no root, no absolute
-        Path rel = Paths.get("a/b");
+        Path rel = Paths.get("a", "b");
         check(!rel.isAbsolute(), "rel not absolute");
         check(rel.getRoot() == null, "rel root null");
         check("b".equals(rel.getFileName().toString()), "rel fileName b");
-        check("a".equals(rel.getParent().toString()), "rel parent a");
+        check(Paths.get("a").equals(rel.getParent()), "rel parent a");
         check(rel.getName(0).toString().equals("a") && rel.getName(1).toString().equals("b"),
               "rel names a,b");
-        check(Paths.get("a/b").getParent().getParent() == null, "a/b grandparent null");
+        check(Paths.get("a", "b").getParent().getParent() == null, "a/b grandparent null");
         // root path itself
-        Path root = Paths.get("/");
+        Path root = root();
         check(root.isAbsolute(), "root isAbsolute");
-        check("/".equals(root.toString()), "root toString /");
+        check(root.toString() != null && !root.toString().isEmpty(), "root toString non-empty");
         check(root.getFileName() == null, "root getFileName null");
         check(root.getParent() == null, "root getParent null");
         check(root.getRoot().equals(root), "root getRoot is itself");
@@ -155,11 +184,11 @@ public class PathTest {
 
     // subpath matrix + exact bounds exceptions (all IAE per javadoc, probe-confirmed)
     static void testSubpathAndBounds() {
-        Path p = Paths.get("/a/b/c");
-        check("a/b/c".equals(p.subpath(0, 3).toString()), "subpath full");
-        check("a".equals(p.subpath(0, 1).toString()), "subpath first");
-        check("c".equals(p.subpath(2, 3).toString()), "subpath last");
-        check("b/c".equals(p.subpath(1, 3).toString()), "subpath(1,3)");
+        Path p = abs("a", "b", "c");
+        check(Paths.get("a", "b", "c").equals(p.subpath(0, 3)), "subpath full");
+        check(Paths.get("a").equals(p.subpath(0, 1)), "subpath first");
+        check(Paths.get("c").equals(p.subpath(2, 3)), "subpath last");
+        check(Paths.get("b", "c").equals(p.subpath(1, 3)), "subpath(1,3)");
         check(!p.subpath(0, 3).isAbsolute(), "subpath result is relative");
         checkThrows(IllegalArgumentException.class, () -> p.subpath(0, 0),
               "subpath(0,0) empty range IAE");
@@ -171,7 +200,7 @@ public class PathTest {
               "subpath endIndex>count IAE");
         checkThrows(IllegalArgumentException.class, () -> p.subpath(-1, 2),
               "subpath negative begin IAE");
-        checkThrows(IllegalArgumentException.class, () -> Paths.get("/").subpath(0, 1),
+        checkThrows(IllegalArgumentException.class, () -> root().subpath(0, 1),
               "subpath on root IAE");
         checkThrows(IllegalArgumentException.class, () -> p.getName(3),
               "getName(count) IAE");
@@ -181,181 +210,167 @@ public class PathTest {
 
     // startsWith/endsWith: segment-wise semantics, not string prefix/suffix
     static void testStartsEndsWith() {
-        Path p = Paths.get("/a/bc");
-        check(!p.startsWith("/a/b"), "/a/bc not startsWith /a/b (segment compare)");
-        check(Paths.get("a/b").startsWith("a"), "a/b startsWith a");
-        check(!Paths.get("a/bc").startsWith("a/b"), "a/bc not startsWith a/b");
-        check(p.startsWith("/a"), "/a/bc startsWith /a");
-        check(p.startsWith(Paths.get("/a/bc")), "startsWith equal path");
+        Path p = abs("a", "bc");
+        check(!p.startsWith(abs("a", "b")), "a/bc not startsWith a/b (segment compare)");
+        check(Paths.get("a", "b").startsWith("a"), "a/b startsWith a");
+        check(!Paths.get("a", "bc").startsWith("a/b"), "a/bc not startsWith a/b");
+        check(p.startsWith(abs("a")), "a/bc startsWith a");
+        check(p.startsWith(abs("a", "bc")), "startsWith equal path");
         check(p.startsWith(p), "startsWith itself");
         check(!p.startsWith("a"), "absolute not startsWith relative");
-        check(!Paths.get("a/b").startsWith("/a"), "relative not startsWith absolute (different roots)");
+        check(!Paths.get("a", "b").startsWith(abs("a")), "relative not startsWith absolute (different roots)");
         check(!p.startsWith("b"), "not startsWith last segment");
         check(!p.startsWith(""), "not startsWith empty");
-        check(!Paths.get("/a").startsWith(Paths.get("")), "not startsWith empty path");
-        check(!p.endsWith("/a"), "/a/bc not endsWith /a");
-        check(p.endsWith("bc"), "/a/bc endsWith bc");
-        check(!Paths.get("/a/bc").endsWith(Paths.get("/bc")), "absolute suffix only matches equal path");
-        check(!Paths.get("/a/bc").endsWith("/b"), "not endsWith /b (partial segment)");
+        check(!abs("a").startsWith(Paths.get("")), "not startsWith empty path");
+        check(!p.endsWith(abs("a")), "a/bc not endsWith a");
+        check(p.endsWith("bc"), "a/bc endsWith bc");
+        check(!abs("a", "bc").endsWith(abs("bc")), "absolute suffix only matches equal path");
+        check(!abs("a", "bc").endsWith("b"), "not endsWith b (partial segment)");
         check(p.endsWith(p), "endsWith itself");
         check(!p.endsWith(""), "not endsWith empty");
         check(Paths.get("").startsWith(Paths.get("")), "empty startsWith empty");
         check(p.endsWith("bc"), "endsWith last segment");
-        // case sensitivity (Linux default provider)
-        check(!Paths.get("/A").startsWith("/a"), "startsWith case-sensitive");
-        check(!Paths.get("/a/B").endsWith("b"), "endsWith case-sensitive");
-        // String and Path overloads agree
-        check(Paths.get("/a/b/c").startsWith("/a/b") == Paths.get("/a/b/c").startsWith(Paths.get("/a/b")),
+        // String and Path overloads agree (case sensitivity is provider-dependent and
+        // is NOT asserted as a fixed direction here)
+        check(abs("a", "b", "c").startsWith(abs("a", "b").toString())
+                  == abs("a", "b", "c").startsWith(abs("a", "b")),
               "startsWith String/Path agree");
-        check(Paths.get("/a/b/c").endsWith("b/c") == Paths.get("/a/b/c").endsWith(Paths.get("b/c")),
+        check(abs("a", "b", "c").endsWith(Paths.get("b", "c").toString())
+                  == abs("a", "b", "c").endsWith(Paths.get("b", "c")),
               "endsWith String/Path agree");
     }
 
-    // normalize matrix (probe-confirmed values)
+    // normalize matrix (probe-confirmed values, built platform-neutrally)
     static void testNormalize() {
-        check("a/c".equals(Paths.get("a/b/../c").normalize().toString()), "a/b/../c -> a/c");
-        check("x".equals(Paths.get("./x").normalize().toString()), "./x -> x");
-        check("..".equals(Paths.get("a/../..").normalize().toString()), "a/../.. -> ..");
-        check("/x".equals(Paths.get("/../x").normalize().toString()), "/../x -> /x (root clamps)");
-        check("..".equals(Paths.get("..").normalize().toString()), ".. -> ..");
-        check("a/b".equals(Paths.get("a/./b/").normalize().toString()), "a/./b/ -> a/b");
-        check("/".equals(Paths.get("//").normalize().toString()), "// -> /");
-        check("/a".equals(Paths.get("/a/b/..").normalize().toString()), "/a/b/.. -> /a");
-        Path n = Paths.get("/a/b/c");
+        check(Paths.get("a", "c").equals(Paths.get("a", "b", "..", "c").normalize()), "a/b/../c -> a/c");
+        check(Paths.get("x").equals(Paths.get(".", "x").normalize()), "./x -> x");
+        check(Paths.get("..").equals(Paths.get("a", "..", "..").normalize()), "a/../.. -> ..");
+        check(abs("x").equals(root().resolve("..").resolve("x").normalize()), "/../x -> /x (root clamps)");
+        check(Paths.get("..").equals(Paths.get("..").normalize()), ".. -> ..");
+        check(Paths.get("a", "b").equals(Paths.get("a", ".", "b").normalize()), "a/./b -> a/b");
+        check(abs("a").equals(abs("a", "b", "..").normalize()), "/a/b/.. -> /a");
+        Path n = abs("a", "b", "c");
         check(n.normalize() == n, "normalize of already-normal path returns this (probe-confirmed)");
-        check(Paths.get("/a//b/./").normalize().equals(Paths.get("/a/b")), "redundant separators folded");
-        check(Paths.get("a/b/c/").normalize().equals(Paths.get("a/b/c")), "trailing separator dropped");
-        Path dot = Paths.get("./a");
-        check("a".equals(dot.normalize().toString()), "./a -> a");
-        check(Paths.get("a/../../b").normalize().toString().equals("../b"), "a/../../b -> ../b");
+        Path dot = Paths.get(".", "a");
+        Path dotOriginal = Paths.get(".", "a");
+        check(Paths.get("a").equals(dot.normalize()), "./a -> a");
+        check(Paths.get("..", "b").equals(Paths.get("a", "..", "..", "b").normalize()), "a/../../b -> ../b");
         // normalize does not mutate the receiver
-        check("./a".equals(dot.toString()), "normalize leaves receiver intact");
+        check(dot.equals(dotOriginal), "normalize leaves receiver intact");
     }
 
     // resolve / resolveSibling matrices
     static void testResolveResolveSibling() {
-        Path p = Paths.get("/a/b/c");
-        check("/a/b/c/d".equals(p.resolve("d").toString()), "resolve rel appended");
-        check(p.resolve("/x").equals(Paths.get("/x")), "resolve absolute yields argument path");
+        Path p = abs("a", "b", "c");
+        check(abs("a", "b", "c", "d").equals(p.resolve("d")), "resolve rel appended");
+        check(p.resolve(abs("x")).equals(abs("x")), "resolve absolute yields argument path");
         check(p.resolve("").equals(p), "resolve(\"\") equals this");
-        check(Paths.get("a/b").resolve("c").toString().equals("a/b/c"), "relative resolve");
-        check(Paths.get("a/b").resolve("/c").toString().equals("/c"), "relative base + absolute arg");
-        check(Paths.get("/a/b").resolve(Paths.get("")).toString().equals("/a/b"), "resolve empty Path equals this");
+        check(Paths.get("a", "b", "c").equals(Paths.get("a", "b").resolve("c")), "relative resolve");
+        check(abs("c").equals(Paths.get("a", "b").resolve(abs("c"))), "relative base + absolute arg");
+        check(abs("a", "b").equals(abs("a", "b").resolve(Paths.get(""))), "resolve empty Path equals this");
         checkThrows(NullPointerException.class, () -> p.resolve((String) null),
               "resolve((String)null) NPE");
         checkThrows(NullPointerException.class, () -> p.resolve((Path) null),
               "resolve((Path)null) NPE");
 
-        check("/a/b/d".equals(p.resolveSibling("d").toString()), "resolveSibling replaces last");
-        check("/d".equals(Paths.get("/a").resolveSibling("d").toString()), "resolveSibling at depth 1 -> root child");
-        check("/x".equals(Paths.get("a/b").resolveSibling("/x").toString()), "resolveSibling absolute arg");
-        check("/a/b".equals(p.resolveSibling("").toString()), "resolveSibling(\"\") yields parent");
-        check("a/..".equals(Paths.get("a/b").resolveSibling("..").toString()), "resolveSibling .. kept literal");
-        check("/a/c".equals(Paths.get("/a/b").resolveSibling(Paths.get("c")).toString()),
+        check(abs("a", "b", "d").equals(p.resolveSibling("d")), "resolveSibling replaces last");
+        check(abs("d").equals(abs("a").resolveSibling("d")), "resolveSibling at depth 1 -> root child");
+        check(abs("x").equals(Paths.get("a", "b").resolveSibling(abs("x"))), "resolveSibling absolute arg");
+        check(abs("a", "b").equals(p.resolveSibling("")), "resolveSibling(\"\") yields parent");
+        check(Paths.get("a", "..").equals(Paths.get("a", "b").resolveSibling("..")), "resolveSibling .. kept literal");
+        check(abs("a", "c").equals(abs("a", "b").resolveSibling(Paths.get("c"))),
               "resolveSibling Path overload");
         checkThrows(NullPointerException.class, () -> p.resolveSibling((String) null),
               "resolveSibling((String)null) NPE");
         checkThrows(NullPointerException.class, () -> p.resolveSibling((Path) null),
               "resolveSibling((Path)null) NPE");
         // resolve relativize round-trip on same-root absolutes
-        Path a = Paths.get("/x/y"), b = Paths.get("/x/z");
+        Path a = abs("x", "y"), b = abs("x", "z");
         check(a.resolve(a.relativize(b)).normalize().equals(b), "resolve(relativize) round-trip");
     }
 
     // relativize matrix
     static void testRelativize() {
-        check("../c".equals(Paths.get("/a/b").relativize(Paths.get("/a/c")).toString()),
+        check(Paths.get("..", "c").equals(abs("a", "b").relativize(abs("a", "c"))),
               "sibling target -> ../c");
-        check("..".equals(Paths.get("a/b").relativize(Paths.get("a")).toString()),
+        check(Paths.get("..").equals(Paths.get("a", "b").relativize(Paths.get("a"))),
               "parent target -> ..");
-        check("a/b".equals(Paths.get("/").relativize(Paths.get("/a/b")).toString()),
+        check(Paths.get("a", "b").equals(root().relativize(abs("a", "b"))),
               "root -> deep yields downward path");
-        check("../..".equals(Paths.get("/a/b").relativize(Paths.get("/")).toString()),
-              "/a/b -> root yields ../..");
-        check("../../..".equals(Paths.get("/a/b/c").relativize(Paths.get("/")).toString()),
-              "/a/b/c -> root yields ../../..");
-        check("".equals(Paths.get("/a/b").relativize(Paths.get("/a/b")).toString()),
+        check(Paths.get("..", "..").equals(abs("a", "b").relativize(root())),
+              "a/b -> root yields ../..");
+        check(Paths.get("..", "..", "..").equals(abs("a", "b", "c").relativize(root())),
+              "a/b/c -> root yields ../../..");
+        check(Paths.get("").equals(abs("a", "b").relativize(abs("a", "b"))),
               "same path -> empty");
-        check("d".equals(Paths.get("/a/b/c").relativize(Paths.get("/a/b/c/d")).toString()),
+        check(Paths.get("d").equals(abs("a", "b", "c").relativize(abs("a", "b", "c", "d"))),
               "child target -> d");
-        check("../../../x".equals(Paths.get("a/b").relativize(Paths.get("../x")).toString()),
-              "a/b vs ../x -> ../../../x (pre-verified fact)");
-        check("".equals(Paths.get("").relativize(Paths.get("")).toString()), "empty vs empty -> empty");
+        check(Paths.get("..", "..", "..", "x").equals(Paths.get("a", "b").relativize(Paths.get("..", "x"))),
+              "a/b vs ../x -> ../../../x");
+        check(Paths.get("").equals(Paths.get("").relativize(Paths.get(""))), "empty vs empty -> empty");
         checkThrows(IllegalArgumentException.class,
-              () -> Paths.get("/a/b").relativize(Paths.get("a/c")),
+              () -> abs("a", "b").relativize(Paths.get("a", "c")),
               "relativize absolute vs relative IAE");
         checkThrows(IllegalArgumentException.class,
-              () -> Paths.get("a/b").relativize(Paths.get("/a/c")),
+              () -> Paths.get("a", "b").relativize(abs("a", "c")),
               "relativize relative vs absolute IAE");
         checkThrows(NullPointerException.class,
-              () -> Paths.get("/a/b").relativize(null), "relativize(null) NPE");
+              () -> abs("a", "b").relativize(null), "relativize(null) NPE");
     }
 
     // compareTo ordering + consistency with equals
     static void testCompareToEquals() {
-        check(Paths.get("/a/b").compareTo(Paths.get("/a/bc")) < 0, "prefix sorts before longer");
-        check(Paths.get("/a/b").compareTo(Paths.get("/a")) > 0, "longer sorts after prefix");
-        check(Paths.get("a").compareTo(Paths.get("a/b")) < 0, "a < a/b");
-        check(Paths.get("/a/b").compareTo(Paths.get("/a/b")) == 0, "compareTo equal 0");
-        // UnixPath compares the raw byte sequences: '/' (0x2F) < 'a' (0x61), so
-        // absolute "/a/b" sorts BEFORE relative "a/b"
-        check(Paths.get("/a/b").compareTo(Paths.get("a/b")) < 0,
-              "byte-lexicographic: /a/b < a/b (probe-confirmed)");
-        check(Paths.get("/a/b").compareTo(Paths.get("/a/c")) < 0, "/a/b < /a/c");
-        check(Paths.get("/a/b").compareTo(Paths.get("/a/a")) > 0, "/a/b > /a/a");
+        check(Paths.get("a", "b").compareTo(Paths.get("a", "bc")) < 0, "prefix sorts before longer");
+        check(Paths.get("a", "b").compareTo(Paths.get("a")) > 0, "longer sorts after prefix");
+        check(Paths.get("a").compareTo(Paths.get("a", "b")) < 0, "a < a/b");
+        check(abs("a", "b").compareTo(abs("a", "b")) == 0, "compareTo equal 0");
+        check(abs("a", "b").compareTo(abs("a", "c")) < 0, "a/b < a/c");
+        check(abs("a", "b").compareTo(abs("a", "a")) > 0, "a/b > a/a");
         check(Paths.get("").compareTo(Paths.get("")) == 0, "empty compareTo 0");
         checkThrows(NullPointerException.class,
-              () -> Paths.get("/a").compareTo(null), "compareTo(null) NPE");
-        // consistency: compareTo==0 iff equals (incl. redundant separator forms)
-        Path x1 = Paths.get("/a/b"), x2 = Paths.get("/a//b");
-        check(x1.equals(x2), "equals folds redundant separators");
-        check(x1.hashCode() == x2.hashCode(), "hashCode agrees with equals");
-        check(x1.compareTo(x2) == 0, "compareTo agrees with equals");
-        check(Paths.get("a/b").equals(Paths.get("a/b/")), "trailing separator folded in equals");
-        check(!Paths.get("/a/b").equals(Paths.get("/A/B")), "equals case-sensitive");
-        check(!Paths.get("/a/b").equals(Paths.get("a/b")), "absolute != relative");
-        check(!Paths.get("/a/b").equals(null), "equals(null) false");
-        check(!Paths.get("/a/b").equals("/a/b"), "equals non-Path false");
+              () -> abs("a").compareTo(null), "compareTo(null) NPE");
+        // absolute vs relative are never equal
+        check(!abs("a", "b").equals(Paths.get("a", "b")), "absolute != relative");
+        check(!abs("a", "b").equals(null), "equals(null) false");
+        check(!abs("a", "b").equals(abs("a", "b").toString()), "equals non-Path false");
         // sorted order over a TreeSet
         java.util.TreeSet<Path> set = new java.util.TreeSet<>(java.util.Arrays.asList(
-                Paths.get("/a/b"), Paths.get("/a"), Paths.get("/a/bc"), Paths.get("/a/b/c")));
+                abs("a", "b"), abs("a"), abs("a", "bc"), abs("a", "b", "c")));
         java.util.Iterator<Path> it = set.iterator();
-        String first = it.next().toString(), second = it.next().toString(),
-               third = it.next().toString(), fourth = it.next().toString();
-        check("/a".equals(first) && "/a/b".equals(second) && "/a/b/c".equals(third)
-              && "/a/bc".equals(fourth), "TreeSet sorted lexicographically");
+        List<Path> order = new ArrayList<>();
+        while (it.hasNext()) order.add(it.next());
+        check(order.get(0).equals(abs("a")) && order.get(1).equals(abs("a", "b"))
+              && order.get(2).equals(abs("a", "b", "c")) && order.get(3).equals(abs("a", "bc")),
+              "TreeSet sorted lexicographically");
     }
 
     // iterator exact order and Iterable for-each
     static void testIteration() {
         List<String> names = new ArrayList<>();
-        for (Path n : Paths.get("/a/b/c")) names.add(n.toString());
+        for (Path n : abs("a", "b", "c")) names.add(n.toString());
         check(names.size() == 3, "iteration count 3");
         check("a".equals(names.get(0)) && "b".equals(names.get(1)) && "c".equals(names.get(2)),
               "iteration order is root-to-leaf");
         List<String> rel = new ArrayList<>();
-        for (Path n : Paths.get("x/y")) rel.add(n.toString());
+        for (Path n : Paths.get("x", "y")) rel.add(n.toString());
         check(rel.size() == 2 && rel.get(0).equals("x") && rel.get(1).equals("y"),
               "relative iteration order");
         List<String> empty = new ArrayList<>();
         for (Path n : Paths.get("")) empty.add(n.toString());
         check(empty.size() == 1 && empty.get(0).isEmpty(),
               "empty path iterates one empty name (probe-confirmed)");
-        check(!Paths.get("/").iterator().hasNext(), "root path iterator empty");
+        check(!root().iterator().hasNext(), "root path iterator empty");
     }
 
-    // toUri exact format matrix (Linux)
+    // toUri round-trip (exact URI spelling is platform-specific, so round-trip is used)
     static void testUriConversion() throws Exception {
-        Path nb = Paths.get("/a/b");           // non-existent: no trailing slash
+        Path nb = abs("a", "b");
         check("file".equals(nb.toUri().getScheme()), "toUri scheme file");
-        check(nb.toUri().equals(URI.create("file:///a/b")), "toUri exact for non-existent");
-        check(Paths.get("/a b").toUri().equals(URI.create("file:///a%20b")),
-              "toUri percent-encodes space");
-        check(Paths.get("/").toUri().equals(URI.create("file:///")), "root toUri file:///");
-        check("/a%20b".equals(Paths.get("/a b").toUri().getRawPath()), "toUri raw path encoded");
-        check("/a b".equals(Paths.get("/a b").toUri().getPath()), "toUri decoded path");
-        check(Paths.get(Paths.get("/a b").toUri()).equals(Paths.get("/a b")),
-              "Paths.get(toUri) round-trip");
+        check(nb.toUri().isAbsolute(), "toUri absolute for absolute path");
+        check(Paths.get(nb.toUri()).equals(nb), "Paths.get(toUri) round-trip");
+        Path spaced = abs("a b");
+        check(Paths.get(spaced.toUri()).equals(spaced), "space percent-encoded round-trip");
+        check(spaced.toUri().getPath().endsWith("a b"), "toUri decoded path keeps space");
         // existing directory gets a trailing slash
         Path tmpDir = Files.createTempDirectory("jck-path-uri");
         try {
@@ -365,33 +380,33 @@ public class PathTest {
         } finally {
             Files.deleteIfExists(tmpDir);
         }
-        // relative path is resolved against cwd first
-        Path r = Paths.get("rel/x");
+        // relative path resolves against cwd; toUri is absolute and keeps the tail
+        Path r = Paths.get("rel", "x");
         check(r.toUri().isAbsolute(), "relative toUri absolutized");
         check(r.toUri().getPath().endsWith("rel/x"), "relative toUri keeps tail");
-        check(r.toUri().getPath().startsWith("/"), "relative toUri rooted");
         checkThrows(NullPointerException.class, () -> Paths.get((URI) null), "Paths.get((URI)null) NPE");
     }
 
     // toAbsolutePath / toFile / File.toPath interop
     static void testAbsoluteFileConversion() {
-        Path abs = Paths.get("/definitely/not/here");
+        Path abs = abs("definitely", "not", "here");
         check(abs.toAbsolutePath().equals(abs), "absolute toAbsolutePath == this (equals)");
         Path rel = Paths.get("relpath");
         check(rel.toAbsolutePath().isAbsolute(), "relative toAbsolutePath is absolute");
         check(rel.toAbsolutePath().toString().endsWith("relpath"), "toAbsolutePath keeps tail");
         check(rel.toAbsolutePath().getRoot() != null, "toAbsolutePath rooted");
         check(!rel.toAbsolutePath().equals(rel), "toAbsolutePath differs from relative this");
-        // File interop
-        java.io.File f = new java.io.File("/tmp");
-        check(f.toPath().equals(Paths.get("/tmp")), "File.toPath round-trip");
-        check(Paths.get("/tmp").toFile().equals(f), "Path.toFile round-trip");
-        check(Paths.get("x/y").toFile().getPath().equals("x/y"), "relative Path.toFile");
-        check(Paths.get("x/y").toFile().toPath().equals(Paths.get("x/y")), "relative File round-trip");
-        check(Paths.get("/a/b").toFile().isAbsolute(), "absolute toFile isAbsolute");
+        // File interop (build the File from a Path so the platform form agrees)
+        java.io.File ftmp = root().resolve("tmp").toFile();
+        check(ftmp.toPath().equals(root().resolve("tmp")), "File.toPath round-trip");
+        check(root().resolve("tmp").toFile().equals(ftmp), "Path.toFile round-trip");
+        Path rel2 = Paths.get("x", "y");
+        check(rel2.toFile().getPath().equals(rel2.toString()), "relative Path.toFile path matches Path.toString");
+        check(rel2.toFile().toPath().equals(rel2), "relative File round-trip");
+        check(abs("a", "b").toFile().isAbsolute(), "absolute toFile isAbsolute");
         // toRealPath negative (exact type)
         checkThrows(java.nio.file.NoSuchFileException.class,
-              () -> Paths.get("/no/such/jck/ghost").toRealPath(),
+              () -> abs("no", "such", "jck", "ghost").toRealPath(),
               "toRealPath nonexistent NoSuchFileException");
     }
 
@@ -408,18 +423,19 @@ public class PathTest {
         check(e.equals(Paths.get("")), "empty equals empty");
         check(e.compareTo(Paths.get("")) == 0, "empty compareTo 0");
         check(e.startsWith(Paths.get("")), "empty startsWith empty");
-        check("".equals(e.relativize(Paths.get("")).toString()), "empty relativize empty");
-        check(Paths.get("/a").resolve("").equals(Paths.get("/a")), "resolve empty unchanged");
+        check(Paths.get("").equals(e.relativize(Paths.get(""))), "empty relativize empty");
+        check(abs("a").resolve("").equals(abs("a")), "resolve empty unchanged");
     }
 
     // JDK-11+ Path.of static factories: equivalence with Paths.get (JDK-27 only)
     static void testPathOf() {
-        check(Path.of("/a/b/c").equals(Paths.get("/a/b/c")), "Path.of(String) == Paths.get");
-        check(Path.of("a", "b", "c").equals(Paths.get("a/b/c")), "Path.of(String...) joins");
-        check(Path.of(URI.create("file:///a/b")).equals(Paths.get("/a/b")), "Path.of(URI)");
+        Path abs = abs("a", "b", "c");
+        check(Path.of(abs.toString()).equals(Paths.get(abs.toString())), "Path.of(String) == Paths.get");
+        check(Path.of("a", "b", "c").equals(Paths.get("a", "b", "c")), "Path.of(String...) joins");
+        check(Path.of(abs.toUri()).equals(abs), "Path.of(URI) round-trip");
         check(Path.of("").equals(Paths.get("")), "Path.of empty string");
-        check(Path.of("a", "b").equals(Path.of("a/b")), "Path.of joined equals single");
-        check(Path.of("x").isAbsolute() == false, "Path.of relative");
+        check(Path.of("a", "b").equals(Paths.get("a", "b")), "Path.of joined equals Paths.get joined");
+        check(!Path.of("x").isAbsolute(), "Path.of relative");
         checkThrows(NullPointerException.class, () -> Path.of((String) null),
               "Path.of((String)null) NPE");
         checkThrows(NullPointerException.class, () -> Path.of("a", (String[]) null),
@@ -428,7 +444,7 @@ public class PathTest {
               "Path.of((URI)null) NPE");
         checkThrows(IllegalArgumentException.class,
               () -> Path.of(URI.create("file:a/b")), "Path.of non-hierarchical file URI IAE");
-        check(Path.of("a/b/c").getName(1).equals(Path.of("b")), "Path.of segment access");
+        check(Path.of("a", "b", "c").getName(1).equals(Path.of("b")), "Path.of segment access");
     }
 
     public static void main(String[] args) throws Exception {

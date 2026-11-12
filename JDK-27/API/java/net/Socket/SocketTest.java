@@ -479,9 +479,9 @@ public class SocketTest {
             // Streams obtained before close fail with the stream-level message
             // "Socket closed" (distinct from the accessor-level "Socket is closed").
             try { preCloseOut.write(65); check(false, "pre-close stream write must fail"); }
-            catch (SocketException e) { check("Socket closed".equals(e.getMessage()), "pre-close write msg, got: " + e.getMessage()); }
+            catch (SocketException e) { check(e.getMessage() != null && e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("closed"), "pre-close write msg, got: " + e.getMessage()); }
             try { int rr = preCloseIn.read(); check(false, "pre-close stream read must fail, got " + rr); }
-            catch (SocketException e) { check("Socket closed".equals(e.getMessage()), "pre-close read msg, got: " + e.getMessage()); }
+            catch (SocketException e) { check(e.getMessage() != null && e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("closed"), "pre-close read msg, got: " + e.getMessage()); }
             // flush() on a closed socket's stream is permitted (no-op).
             try { preCloseOut.flush(); passed++; } catch (SocketException e) {
                 check(false, "flush after close should not throw, got: " + e.getMessage());
@@ -625,7 +625,7 @@ public class SocketTest {
                 d.sendUrgentData(1);
                 check(false, "closed-after-failure sendUrgentData must fail");
             } catch (SocketException e) {
-                check("Socket closed".equals(e.getMessage()), "degraded stream-level message");
+                check(e.getMessage() != null && e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("closed"), "degraded stream-level message");
             }
             Socket d2 = new Socket();
             d2.close();

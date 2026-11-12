@@ -122,10 +122,19 @@ public class SecureRandomTest {
     // ---- contract deepening: metadata, determinism closed loops, primitive streams,
     //      edge-length seeds, and subclass fallback ("unknown") ----
     static void testContractDeep() throws Exception {
-        // default instance: NativePRNG from SUN on this platform, seeded from entropy
+        // default instance: platform-specific algorithm (NativePRNG on Linux,
+        // Windows-PRNG on Windows), seeded from entropy
         SecureRandom def = new SecureRandom();
-        check("NativePRNG".equals(def.getAlgorithm()), "default algorithm NativePRNG");
-        check("SUN".equals(def.getProvider().getName()), "default provider SUN");
+        String defAlg = def.getAlgorithm();
+        check(defAlg != null && !defAlg.isEmpty(), "default algorithm non-empty");
+        check(SecureRandom.getInstance(defAlg) != null,
+                "default algorithm resolvable via getInstance: " + defAlg);
+        // default provider is platform-specific too (SUN on Linux, SunMSCAPI on
+        // Windows); assert it is named and consistent with a fresh getInstance.
+        check(def.getProvider() != null && def.getProvider().getName() != null
+                && !def.getProvider().getName().isEmpty(), "default provider named");
+        check(def.getProvider().getName().equals(SecureRandom.getInstance(defAlg).getProvider().getName()),
+                "default provider matches getInstance(defAlg)");
 
         // all three factory spellings agree on algorithm and provider
         check("SUN".equals(SecureRandom.getInstance("SHA1PRNG").getProvider().getName()),
@@ -229,7 +238,7 @@ public class SecureRandomTest {
 
         // JDK-27 fork: toString is the algorithm/SPI name, generateSeed(-1) is IAE
         String ts = new SecureRandom().toString();
-        check("NativePRNG".equals(ts), "default toString is algorithm name NativePRNG (JDK-27)");
+        check(defAlg.equals(ts), "default toString is the default algorithm name");
         check("SecureRandom".equals(SecureRandom.getInstance("SHA1PRNG").toString()),
                 "SHA1PRNG toString is SPI name SecureRandom (JDK-27)");
         check(SecureRandom.getInstance("DRBG").toString().contains("DRBG"),
