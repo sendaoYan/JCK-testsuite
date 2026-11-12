@@ -39,9 +39,8 @@ public class SoundbankReaderTest {
             javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
             javax.sound.midi.Instrument[] ins = sbk == null ? null : sbk.getInstruments();
             if (sbk == null || ins == null || ins.length != 129) {
-                System.out.println("PASS (" + passed + " assertions; SKIP: no Emergency GM 129-instrument soundbank on this host)");
                 syn.close();
-                return false;
+                throw new jtreg.SkippedException("no Emergency GM 129-instrument soundbank on this host");
             }
             check(ins.length == 129, "real soundbank reachable headless");
             syn.close();

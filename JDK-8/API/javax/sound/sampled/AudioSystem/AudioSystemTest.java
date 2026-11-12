@@ -164,8 +164,7 @@ public class AudioSystemTest {
         // mixer info available headless
         javax.sound.sampled.Mixer.Info[] mi = javax.sound.sampled.AudioSystem.getMixerInfo();
         if (mi.length != 1 || !"default [default]".equals(mi[0].getName())) {
-            System.out.println("PASS (" + passed + " assertions; SKIP: no ALSA null software mixer on this host)");
-            return false;
+            throw new jtreg.SkippedException("no ALSA null software mixer on this host");
         }
         check(mi.length >= 1, "at least default mixer");
         check("default [default]".equals(mi[0].getName()), "default mixer name");

@@ -50,8 +50,7 @@ public class SoundbankTest {
                 javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
                 javax.sound.midi.Instrument[] instrs = sbk == null ? new javax.sound.midi.Instrument[0] : sbk.getInstruments();
                 if (sbk == null || !"Emergency GM sound set".equals(sbk.getName()) || instrs.length != 129) {
-                    System.out.println("PASS (" + passed + " assertions; SKIP: no Emergency GM 129-instrument soundbank on this host)");
-                    return false;
+                    throw new jtreg.SkippedException("no Emergency GM 129-instrument soundbank on this host");
                 }
                 check("Emergency GM sound set".equals(sbk.getName()), "name");
                 check(sbk.getVersion() != null && sbk.getVendor() != null && sbk.getDescription() != null, "metadata non-null");

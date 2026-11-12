@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary javax.sound.midi.spi.MidiDeviceProvider conformance: abstract hierarchy and methods.
+ * @library /lib
  * @run main MidiDeviceProviderTest
  */
 
@@ -39,8 +40,7 @@ public class MidiDeviceProviderTest {
         check(dev.getDeviceInfo() == infos[0], "device bound to info");
         // real providers surface indirectly through MidiSystem (2 devices on this host)
         if (javax.sound.midi.MidiSystem.getMidiDeviceInfo().length != 2) {
-            System.out.println("PASS (" + passed + " assertions; SKIP: not the Linux 2-software-MIDI-device set on this host)");
-            return false;
+            throw new jtreg.SkippedException("not the Linux 2-software-MIDI-device set on this host");
         }
         check(javax.sound.midi.MidiSystem.getMidiDeviceInfo().length == 2, "JDK providers registered");
         return true;

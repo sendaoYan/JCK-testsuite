@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary javax.sound.sampled.Mixer conformance: interface hierarchy and methods.
+ * @library /lib
  * @run main MixerTest
  */
 
@@ -39,8 +40,7 @@ public class MixerTest {
     static boolean testContractDeep() throws Exception {
         javax.sound.sampled.Mixer.Info[] mi = javax.sound.sampled.AudioSystem.getMixerInfo();
         if (mi.length != 1 || !"default [default]".equals(mi[0].getName())) {
-            System.out.println("PASS (" + passed + " assertions; SKIP: no ALSA null software mixer on this host)");
-            return false;
+            throw new jtreg.SkippedException("no ALSA null software mixer on this host");
         }
         check(mi.length == 1, "one software mixer (skip reason: headless host)");
         javax.sound.sampled.Mixer.Info i0 = mi[0];

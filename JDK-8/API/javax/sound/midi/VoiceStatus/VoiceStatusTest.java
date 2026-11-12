@@ -37,8 +37,7 @@ public class VoiceStatusTest {
                 javax.sound.midi.VoiceStatus[] all = syn.getVoiceStatus();
                 javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
                 if (sbk == null || !"Emergency GM sound set".equals(sbk.getName()) || all.length != 64) {
-                    System.out.println("PASS (" + passed + " assertions; SKIP: no 64-voice Emergency GM synthesizer on this host)");
-                    return false;
+                    throw new jtreg.SkippedException("no 64-voice Emergency GM synthesizer on this host");
                 }
                 check(all.length == 64, "64 voices on Gervill");
                 for (javax.sound.midi.VoiceStatus v : all) check(!v.active, "all inactive before notes");

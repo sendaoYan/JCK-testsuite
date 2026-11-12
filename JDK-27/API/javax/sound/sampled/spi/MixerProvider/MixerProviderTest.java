@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary javax.sound.sampled.spi.MixerProvider conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main MixerProviderTest
  */
 
@@ -67,8 +68,7 @@ public class MixerProviderTest {
         check(p.getMixer(null) == null, "null info null mixer (recording impl)");
         javax.sound.sampled.Mixer.Info[] real = javax.sound.sampled.AudioSystem.getMixerInfo();
         if (real.length != 1 || !"default [default]".equals(real[0].getName())) {
-            System.out.println("PASS (" + passed + " assertions; SKIP: no ALSA null software mixer on this host)");
-            return false;
+            throw new jtreg.SkippedException("no ALSA null software mixer on this host");
         }
         check(real.length == 1, "real JDK providers registered (default [default])");
         return true;

@@ -49,8 +49,7 @@ public class SynthesizerTest {
                 check(syn.isOpen(), "open");
                 javax.sound.midi.Soundbank sbk0 = syn.getDefaultSoundbank();
                 if (sbk0 == null || !"Emergency GM sound set".equals(sbk0.getName()) || sbk0.getInstruments().length != 129) {
-                    System.out.println("PASS (" + passed + " assertions; SKIP: no Emergency GM Gervill synthesizer on this host)");
-                    return false;
+                    throw new jtreg.SkippedException("no Emergency GM Gervill synthesizer on this host");
                 }
                 check(syn.getMaxPolyphony() == 64, "max polyphony 64");
                 check(syn.getMaxReceivers() == -1, "unlimited receivers (-1)");

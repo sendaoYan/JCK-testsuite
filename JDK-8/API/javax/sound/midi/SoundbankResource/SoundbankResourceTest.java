@@ -43,8 +43,7 @@ public class SoundbankResourceTest {
                 javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
                 javax.sound.midi.SoundbankResource[] res = sbk == null ? null : sbk.getResources();
                 if (sbk == null || res == null || res.length != 76) {
-                    System.out.println("PASS (" + passed + " assertions; SKIP: no Emergency GM 76-resource soundbank on this host)");
-                    return false;
+                    throw new jtreg.SkippedException("no Emergency GM 76-resource soundbank on this host");
                 }
                 check(res.length == 76, "76 resources in Emergency set");
                 check(res[0].getSoundbank() == sbk, "resource bound to soundbank");

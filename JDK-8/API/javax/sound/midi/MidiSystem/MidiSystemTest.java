@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.MidiSystem conformance: behavioral.
+ * @library /lib
  * @run main MidiSystemTest
  */
 
@@ -81,8 +82,7 @@ public class MidiSystemTest {
             if ("Real Time Sequencer".equals(i.getName())) rts = true;
         }
         if (infos.length != 2 || !gervill || !rts) {
-            System.out.println("PASS (" + passed + " assertions; SKIP: not the Linux 2-software-MIDI-device set on this host)");
-            return false;
+            throw new jtreg.SkippedException("not the Linux 2-software-MIDI-device set on this host");
         }
         check(gervill && rts, "Gervill + Real Time Sequencer present");
         check(infos[0].equals(infos[0]) && infos[0].hashCode() == infos[0].hashCode(), "info equals/hashCode identity");

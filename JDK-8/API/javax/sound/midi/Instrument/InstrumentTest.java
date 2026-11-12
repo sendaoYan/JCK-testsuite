@@ -41,8 +41,7 @@ public class InstrumentTest {
                 javax.sound.midi.Soundbank sbk = syn.getDefaultSoundbank();
                 javax.sound.midi.Instrument[] ins = sbk == null ? null : sbk.getInstruments();
                 if (sbk == null || ins == null || ins.length == 0 || !"Acoustic Grand Piano".equals(ins[0].getName())) {
-                    System.out.println("PASS (" + passed + " assertions; SKIP: no Emergency GM Acoustic Grand Piano on this host)");
-                    return false;
+                    throw new jtreg.SkippedException("no Emergency GM Acoustic Grand Piano on this host");
                 }
                 javax.sound.midi.Instrument piano = ins[0];
                 check("Acoustic Grand Piano".equals(piano.getName()), "GM 0 name");

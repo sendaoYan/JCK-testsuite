@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.MidiDevice conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main MidiDeviceTest
  */
 
@@ -76,8 +77,7 @@ public class MidiDeviceTest {
     static boolean testContractDeep() throws Exception {
         javax.sound.midi.MidiDevice.Info[] infos = javax.sound.midi.MidiSystem.getMidiDeviceInfo();
         if (infos.length != 2) {
-            System.out.println("PASS (" + passed + " assertions; SKIP: not the Linux 2-software-MIDI-device set on this host)");
-            return false;
+            throw new jtreg.SkippedException("not the Linux 2-software-MIDI-device set on this host");
         }
         check(infos.length == 2, "2 software devices");
         javax.sound.midi.MidiDevice d = javax.sound.midi.MidiSystem.getMidiDevice(infos[0]);
