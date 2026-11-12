@@ -1,0 +1,355 @@
+// JVMS 6.5 / 4.10: the verifier must reject instructions whose operand-stack
+// types, depth, or exit stack do not match the instruction's contract.  Each
+// class below has exactly one bad method; OperandStackVerifyTest loads each
+// and asserts a VerifyError.  This complements the single-case
+// TypeMismatchVerify by covering type mismatch, stack underflow and stack
+// overflow across the arithmetic / compare / conversion / branch / array /
+// return / stack families.
+
+super public class IaddLongOperand
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // iadd expects two ints; the top of stack is a long.
+    public static Method bad:"(J)I"
+        stack 2 locals 2
+    {
+        lload_0;
+        iadd;
+        ireturn;
+    }
+}
+
+super public class LaddIntOperand
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // ladd expects two longs; the top of stack is an int.
+    public static Method bad:"(I)J"
+        stack 1 locals 1
+    {
+        iload_0;
+        ladd;
+        lreturn;
+    }
+}
+
+super public class FaddDoubleOperand
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // fadd expects two floats; the top of stack is a double.
+    public static Method bad:"(D)F"
+        stack 2 locals 2
+    {
+        dload_0;
+        fadd;
+        freturn;
+    }
+}
+
+super public class LcmpIntOperand
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // lcmp expects two longs; the stack holds two ints.
+    public static Method bad:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        lcmp;
+        ireturn;
+    }
+}
+
+super public class I2lLongOperand
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // i2l expects an int; the top of stack is a long.
+    public static Method bad:"(J)J"
+        stack 2 locals 2
+    {
+        lload_0;
+        i2l;
+        lreturn;
+    }
+}
+
+super public class IshllongOperand
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // ishl expects two ints; the shift count on top is a long.
+    public static Method bad:"(IJ)I"
+        stack 3 locals 3
+    {
+        iload_0;
+        lload_1;
+        ishl;
+        ireturn;
+    }
+}
+
+super public class IfeqLongOperand
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // ifeq expects an int; the top of stack is a long.
+    public static Method bad:"(J)V"
+        stack 2 locals 2
+    {
+        lload_0;
+        ifeq L1;
+        return;
+    L1: stack_frame_type same;
+        return;
+    }
+}
+
+super public class IfnullIntOperand
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // ifnull expects a reference; the top of stack is an int.
+    public static Method bad:"()V"
+        stack 1 locals 0
+    {
+        iconst_0;
+        ifnull L1;
+        return;
+    L1: stack_frame_type same;
+        return;
+    }
+}
+
+super public class IfIcmpeqUnderflow
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // if_icmpeq expects two ints; only one is present.
+    public static Method bad:"()V"
+        stack 1 locals 0
+    {
+        iconst_0;
+        if_icmpeq L1;
+        return;
+    L1: stack_frame_type same;
+        return;
+    }
+}
+
+super public class IaloadOnLongArray
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // iaload expects an int[] (or boolean/byte/char/short[]); this is a long[].
+    public static Method bad:"([J)I"
+        stack 2 locals 1
+    {
+        aload_0;
+        iconst_0;
+        iaload;
+        ireturn;
+    }
+}
+
+super public class AaloadOnIntArray
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // aaload expects a reference array; this is an int[].
+    public static Method bad:"([I)Ljava/lang/Object;"
+        stack 2 locals 1
+    {
+        aload_0;
+        iconst_0;
+        aaload;
+        areturn;
+    }
+}
+
+super public class IreturnLong
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // ireturn expects an int; the top of stack is a long.
+    public static Method bad:"(J)I"
+        stack 2 locals 2
+    {
+        lload_0;
+        ireturn;
+    }
+}
+
+super public class IaddUnderflow
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // iadd expects two ints; only one is pushed.
+    public static Method bad:"()I"
+        stack 1 locals 0
+    {
+        iconst_1;
+        iadd;
+        ireturn;
+    }
+}
+
+super public class LaddUnderflow
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // ladd expects two longs; only one is pushed.
+    public static Method bad:"()J"
+        stack 2 locals 0
+    {
+        lconst_0;
+        ladd;
+        lreturn;
+    }
+}
+
+super public class IreturnUnderflow
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // ireturn expects an int on the stack; the stack is empty.
+    public static Method bad:"()I"
+        stack 0 locals 0
+    {
+        ireturn;
+    }
+}
+
+super public class DupUnderflow
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // dup needs at least one value on the stack; the stack is empty.
+    public static Method bad:"()V"
+        stack 0 locals 0
+    {
+        dup;
+        return;
+    }
+}
+
+super public class MaxStackLongOverflow
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // max_stack is 2, but the two longs before ladd reach operand-stack depth 4:
+    // the operand stack overflows max_stack and the verifier must reject it.
+    public static Method bad:"()J"
+        stack 2 locals 0
+    {
+        lconst_0;
+        lconst_1;
+        ladd;
+        lreturn;
+    }
+}
