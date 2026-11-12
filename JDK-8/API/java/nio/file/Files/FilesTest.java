@@ -976,7 +976,7 @@ public class FilesTest {
     }
 
     // file store / probeContentType / isSameFile
-    static void testStoreProbeSameFile() throws Exception {
+    static void testStoreProbeSameFile(boolean links) throws Exception {
         Path dir = Files.createTempDirectory("jck-store");
         try {
             Path f = dir.resolve("f.txt");
@@ -1005,9 +1005,11 @@ public class FilesTest {
             Path g = dir.resolve("g");
             Files.write(g, new byte[] {9});
             check(!Files.isSameFile(f, g), "different files false");
-            Path lk = dir.resolve("lk");
-            Files.createSymbolicLink(lk, f);
-            check(Files.isSameFile(f, lk), "file and its symlink same");
+            if (links) {
+                Path lk = dir.resolve("lk");
+                Files.createSymbolicLink(lk, f);
+                check(Files.isSameFile(f, lk), "file and its symlink same");
+            }
             check(Files.isSameFile(dir.resolve("ghost"), dir.resolve("ghost")),
                   "identical nonexistent paths report same (no existence check)");
             // version difference: distinct nonexistent paths throw on JDK-8
@@ -1051,7 +1053,7 @@ public class FilesTest {
         testWalkList();
         testWalkFileTree();
         testAttributes();
-        testStoreProbeSameFile();
+        testStoreProbeSameFile(links);
         testJdk8NoStringMethods();
         System.out.println("PASS (" + passed + " assertions)");
     }

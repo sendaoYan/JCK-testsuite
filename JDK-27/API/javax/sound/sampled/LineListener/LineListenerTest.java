@@ -94,6 +94,12 @@ public class LineListenerTest {
             clip.start();
             clip.stop();
             clip.close();
+            // Line events (START/STOP/CLOSE) are delivered asynchronously by the
+            // clip's event thread; wait (bounded) for delivery before asserting.
+            long deadline = System.currentTimeMillis() + 2000L;
+            while (count[0] == 0 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10);
+            }
             check(count[0] >= 1, "listener invoked [" + count[0] + "]");
             if (count[0] >= 1) {
                 check(got[0].getLine() == clip, "event carries the clip");
