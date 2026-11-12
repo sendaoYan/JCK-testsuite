@@ -6,6 +6,8 @@
 
 | 目录 | 用例 | 平台/JIT | 判定 |
 |---|---|---|---|
-| [jls-17.7-volatile-long-double-atomic/](jls-17.7-volatile-long-double-atomic/) | JLS 17.7 `VolatileLongDoubleAtomic` | aarch64 C2（`-Xcomp` / `xcomp_tiered4`），JDK-8 与 JDK-27 | **测试误报**（reader 读默认 0），已修复：种子（`8af14bc84`）+ double 常数修正。非真实 C2 缺陷 |
 
-> 注：本表仅收“真实 JDK 发散”。上条经 2026-11-12 复查推翻为测试误报，保留作历史记录，不再按平台发散处置。
+> 当前无已知真实 JDK 发散条目。曾收录的 JLS 17.7 `VolatileLongDoubleAtomic`（aarch64
+> C2 下报"撕裂"）经 2026-11-12 复查定性为**测试误报**（reader 抢在 writer 首次 store 前
+> 读到字段默认值 0），已通过种子 + 常数去混淆修复并删除归档，不再按平台发散处置。
+> 相关复现材料见 `repro/jls-17.7-volatile-atomicity/`。
