@@ -65,6 +65,7 @@ documents that native loading still works when the warning is *not* silenced.
 | file | covers |
 |---|---|
 | `JniSemanticsTest.java` (this dir) | JNIEnv mainline semantics, ~45 JNIEnv functions, 97 assertions |
+| `JniMonitorAndBufferTest.java` (this dir) | JNI monitor ops + NIO direct buffers + object arrays, 41 assertions |
 | `../SystemLoadNativeTest.java` | System.load/loadLibrary lifecycle: success, idempotency, non-ELF rejection, missing-symbol ULE with signature, name mapping, null/empty/relative arguments |
 | `../../Runtime/RuntimeLoadNativeTest.java` | Runtime.load/loadLibrary same semantics + shared registry with System.load |
 
@@ -118,6 +119,29 @@ self-written, no external test code was copied.
   `UnregisterNatives` invalidating it (subsequent call →
   `UnsatisfiedLinkError`, while `Java_`-named natives re-bind lazily);
   `GetVersion`; `GetJavaVM` returning 0 with a non-null `JavaVM*`.
+
+### JniMonitorAndBufferTest — monitor / NIO direct-buffer / object-array functions
+
+* monitors: `MonitorEnter`/`MonitorExit` act on the **same monitor as Java
+  `synchronized`** — re-entrant inside a `synchronized` block, and `MonitorExit`
+  only decrements the recursion count (Java's hold survives a native enter/exit);
+  enter-twice/exit-once leaves `Thread.holdsLock` true, a final exit releases; a
+  native thread holding the monitor excludes a second thread until it exits;
+  `MonitorEnter(NULL)` throws NPE (rc=-1, pending exception).
+* direct buffers: `GetDirectBufferCapacity` returns the buffer `capacity()` in
+  **elements** for typed view buffers — a 32-byte direct buffer viewed as shorts
+  reports 16, not 32 (verified identical on JDK 8 and 27), so the JNI spec's
+  "capacity in bytes" is only literally true for `ByteBuffer`; heap and
+  non-buffer objects report -1 with a NULL address; `GetDirectBufferCapacity(NULL)`
+  returns -1 with **no** exception (contrast `MonitorEnter(NULL)`);
+  `GetDirectBufferAddress(NULL)` is **not** probed because it dereferences the
+  handle and crashes the VM.  `NewDirectByteBuffer` wraps malloc'd memory into a
+  direct buffer with a known byte pattern and round-trips through
+  `GetDirectBufferCapacity`/`GetDirectBufferAddress`.
+* object arrays: `GetArrayLength`, `GetObjectArrayElement`/`SetObjectArrayElement`
+  (read/write, plus out-of-bounds `GetObjectArrayElement(-1)` leaving a pending
+  `ArrayIndexOutOfBoundsException`), `NewObjectArray` (length + fill identity),
+  `IsSameObject` (reference identity, not `equals`).
 
 ### Load lifecycle (verified behaviours)
 
