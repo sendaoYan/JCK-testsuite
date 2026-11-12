@@ -27,11 +27,15 @@
   jtreg concurrency (-conc:N) defaults to 16; set JCK_CONC=<n> to override.
 #>
 
-param(
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$JvmArgs = @()
-)
-if ($null -eq $JvmArgs) { $JvmArgs = @() }
+# Raw JVM flags from the command line, read via $args (NOT a param() block).
+# PowerShell's parameter binder splits tokens like -XX:+UseG1GC at the ':' into
+# "-XX" and "+UseG1GC", which makes `java -XX:+UseG1GC` fail with "Unrecognized
+# option: -XX" (the exact reason every GC config skipped with "Unrecognized
+# option: -XX"). $args receives the arguments verbatim, so the flag stays whole.
+# (Guard: when no args are passed, $args is $null — keep $JvmArgs empty so the
+# baseline label is still derived as "baseline".)
+$JvmArgs = @()
+if ($args) { $JvmArgs = @($args) }
 
 $ErrorActionPreference = "Continue"
 
@@ -82,9 +86,15 @@ New-Item -ItemType Directory -Force -Path $resDir | Out-Null
 
 $LOG = Join-Path $resDir "console.log"
 
+# console.log is written UTF-8 (no BOM) throughout. Windows PowerShell 5.1's
+# Tee-Object / Out-File / Add-Content default to UTF-16LE (or the ANSI code
+# page), which interleaves NUL bytes into the log and shows up as "invisible
+# characters". One explicit encoding object is reused by every write below.
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
 function Log([string]$text) {
     Write-Host $text
-    Add-Content -Path $LOG -Value $text
+    [System.IO.File]::AppendAllText($LOG, $text + "`r`n", $Utf8NoBom)
 }
 
 # Write an array of lines to a file (empty array -> empty file).
@@ -107,12 +117,15 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
     $flagStr = if ($JvmArgs.Count -gt 0) { ($JvmArgs -join ' ') } else { "(no JVM flags)" }
     $msg = "=== [$tag/$label] jtreg -jdk:$jdk $flagStr ==="
     Write-Host $msg
-    Add-Content -Path $LOG -Value $msg
+    [System.IO.File]::AppendAllText($LOG, $msg + "`r`n", $Utf8NoBom)
 
     $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
                 "-conc:$Concurrency", "-timeoutFactor:5", "-verbose:fail,error,time",
                 "-javacoption:-encoding", "-javacoption:UTF-8") + $flagTokens + $dirs
-    $out = & $JTREG_JAVA @jtArgs 2>&1 | Tee-Object -FilePath $LOG -Append
+    $out = @(& $JTREG_JAVA @jtArgs 2>&1)
+    if ($out.Count -gt 0) {
+        [System.IO.File]::AppendAllLines($LOG, [string[]]$out, $Utf8NoBom)
+    }
 
     # Failed/error list straight from the report summary (no .jtr needed).
     $summary = Join-Path $rep "text\summary.txt"
@@ -185,7 +198,10 @@ foreach ($t in $trees) {
     if ($LASTEXITCODE -ne 0) {
         Log ("[skip] " + $t.tag + ": java -version " + ($JvmArgs -join ' ') + " -> exit code " + $LASTEXITCODE)
         $probeOut | ForEach-Object { Log ("  " + $_) }
-        Write-Lines (Join-Path $resDir ($t.tag + ".skipped.txt")) @($probeOut)
+        # Record the exact flags that were rejected, so the .skipped.txt shows
+        # which option triggered the skip (not just the JVM's generic error).
+        $skipLines = @("flags: " + ($JvmArgs -join ' ')) + @($probeOut)
+        Write-Lines (Join-Path $resDir ($t.tag + ".skipped.txt")) $skipLines
     } else {
         $run += $t
     }
@@ -228,9 +244,9 @@ $jdk27N = Col "jdk27" "new"
 
 $sumFile = Join-Path $resRoot "summary.txt"
 if (-not (Test-Path $sumFile)) {
-    Set-Content -Path $sumFile -Value ("{0,-40}`t{1,7}`t{2,7}`t{3,7}`t{4,7}" -f "label", "jdk8fail", "jdk8new", "jdk27fail", "jdk27new") -Encoding UTF8
+    [System.IO.File]::WriteAllText($sumFile, ("{0,-40}`t{1,7}`t{2,7}`t{3,7}`t{4,7}" -f "label", "jdk8fail", "jdk8new", "jdk27fail", "jdk27new") + "`r`n", $Utf8NoBom)
 }
-Add-Content -Path $sumFile -Value ("{0,-40}`t{1,7}`t{2,7}`t{3,7}`t{4,7}" -f $label, $jdk8F, $jdk8N, $jdk27F, $jdk27N) -Encoding UTF8
+[System.IO.File]::AppendAllText($sumFile, ("{0,-40}`t{1,7}`t{2,7}`t{3,7}`t{4,7}" -f $label, $jdk8F, $jdk8N, $jdk27F, $jdk27N) + "`r`n", $Utf8NoBom)
 
 Log ""
 Log ("=== DONE label=$label  jdk8.failed=$jdk8F jdk8.new=$jdk8N jdk27.failed=$jdk27F jdk27.new=$jdk27N ===")
