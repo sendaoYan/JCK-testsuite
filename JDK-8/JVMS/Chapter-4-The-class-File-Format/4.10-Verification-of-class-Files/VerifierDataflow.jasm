@@ -1,0 +1,72 @@
+// JVMS 4.10: the verifier tracks "uninitialized" values — an uninitialized
+// `this` in a constructor, an object created by `new` before its <init> has
+// run, and a local variable that has not been assigned.  Using any of these as
+// a fully-usable value must be rejected with VerifyError.  Each class below has
+// exactly one bad method; VerifierDataflowTest loads each and asserts the
+// VerifyError.  This complements the operand-stack type/underflow/overflow
+// matrix by covering the dataflow half of the verifier's contract.
+
+super public class UninitThisGetfield
+    version 52:0
+{
+    public Field f:"I";
+
+    // The constructor reads this.f before calling super.<init>: using an
+    // uninitialized `this` must be rejected.
+    public Method "<init>":"()V"
+        stack 2 locals 1
+    {
+        aload_0;
+        getfield Field UninitThisGetfield.f:"I";
+        pop;
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+}
+
+super public class UninitObjectGetfield
+    version 52:0
+{
+    public Field f:"I";
+
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // Reads f on an object that has been `new`-allocated but whose <init> has
+    // not run: the verifier tracks it as uninitialized and must reject the use.
+    public static Method bad:"()V"
+        stack 1 locals 1
+    {
+        new UninitObjectGetfield;
+        getfield Field UninitObjectGetfield.f:"I";
+        pop;
+        return;
+    }
+}
+
+super public class UninitLocalRead
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // Local 0 is never assigned; iload_0 reads an uninitialized local, which the
+    // verifier must reject (the register has the "top"/undefined type).
+    public static Method bad:"()I"
+        stack 1 locals 1
+    {
+        iload_0;
+        ireturn;
+    }
+}
