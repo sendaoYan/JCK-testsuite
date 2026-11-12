@@ -87,12 +87,17 @@ public class LinkerNativeAccessWarningTest {
         pb.directory(scratch.toFile());
         Process p = pb.start();
         StringBuilder out = new StringBuilder(), err = new StringBuilder();
-        new Thread(() -> { try { out.append(new String(p.getInputStream().readAllBytes())); } catch (IOException ignored) { } }).start();
-        new Thread(() -> { try { err.append(new String(p.getErrorStream().readAllBytes())); } catch (IOException ignored) { } }).start();
+        Thread outReader = new Thread(() -> { try { out.append(new String(p.getInputStream().readAllBytes())); } catch (IOException ignored) { } });
+        Thread errReader = new Thread(() -> { try { err.append(new String(p.getErrorStream().readAllBytes())); } catch (IOException ignored) { } });
+        outReader.start();
+        errReader.start();
         if (!p.waitFor(60, TimeUnit.SECONDS)) {
             p.destroyForcibly();
             throw new IllegalStateException("child JVM did not finish within 60s");
         }
+        // 子进程退出后其管道已 EOF，但读线程可能仍在排空缓冲；join 后再取结果，避免读到截断输出。
+        outReader.join(10000);
+        errReader.join(10000);
         return new ChildResult(p.exitValue(), out.toString(), err.toString());
     }
 

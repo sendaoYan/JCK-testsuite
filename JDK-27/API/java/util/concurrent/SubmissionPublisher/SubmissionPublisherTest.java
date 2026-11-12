@@ -65,7 +65,9 @@ public class SubmissionPublisherTest {
         check(pub.isClosed(), "isClosed after close");
 
         SubmissionPublisher<Integer> pub2 = new SubmissionPublisher<>();
-        List<Integer> collected = new ArrayList<>();
+        // consume() 的订阅者回调在发布者 executor 线程上异步执行，多个订阅者并发写入同一集合；
+        // ArrayList 非线程安全，改用 CopyOnWriteArrayList 消除丢失更新竞态。
+        List<Integer> collected = new java.util.concurrent.CopyOnWriteArrayList<>();
         pub2.consume(collected::add);
         pub2.submit(1);
         pub2.submit(2);

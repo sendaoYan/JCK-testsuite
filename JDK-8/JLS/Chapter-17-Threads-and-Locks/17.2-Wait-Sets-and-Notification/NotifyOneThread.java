@@ -47,9 +47,11 @@ public class NotifyOneThread {
         check(firstDone.await(5, TimeUnit.SECONDS), "one waiter was notified and finished");
         check(woken.get() == 1, "notify() woke exactly one of " + N + " waiters");
 
-        int alive = 0;
-        for (Thread t : ts) if (t.isAlive()) alive++;
-        check(alive == N - 1, "remaining waiters still blocked");
+        // 被唤醒线程可能尚未退出 run()（仍 alive），isAlive 计数会把"刚被唤醒者"误算成"仍阻塞者"。
+        // 改为统计仍处于 WAITING（wait() 未返回）的线程数：notify() 后应恰好 N-1 个仍在等待。
+        int waiting = 0;
+        for (Thread t : ts) if (t.getState() == Thread.State.WAITING) waiting++;
+        check(waiting == N - 1, "remaining waiters still blocked in wait()");
 
         synchronized (lock) { lock.notifyAll(); }
         for (Thread t : ts) t.join(5000);
