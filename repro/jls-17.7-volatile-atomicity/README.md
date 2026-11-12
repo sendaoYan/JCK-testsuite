@@ -22,6 +22,31 @@ LONG_B = 0xFFFFFFFF00000000   (high=0xFFFFFFFF, low=0x00000000)
 
 ---
 
+## 精简版：`MinimalFalsePositive.java`（约 100 行，推荐第一次就用手跑）
+
+`TornVolatileProbe.java` 是取证工具（多模式、详细报告）。如果只想**眼见为实**地看到
+“历史失败其实就是读默认 0”，用这个精简版，两个模式直接对照：
+
+```bash
+cd repro/jls-17.7-volatile-atomicity
+javac -d out MinimalFalsePositive.java          # 用 javac 8 及以上均可
+
+# A. 旧逻辑（归档测试的常数 + 不起线程前种子）：可能报 UNEXPECTED，值恒为 0x0
+taskset -c 0 java -Xcomp -cp out MinimalFalsePositive legacy 5000
+
+# B. 修正后（四种半字组合两两不同 + 种子）：永不报 UNEXPECTED
+taskset -c 0 java -Xcomp -cp out MinimalFalsePositive fixed 5000
+```
+
+`taskset -c 0`（把两个线程挤到一个核上）不是必须的，但能显著提高复现率——它放大的是
+“reader 抢在 writer 第一次 store 之前运行”的时间窗。退出码：0 = 什么都没观察到，
+2 = 观察到既非 A 也非 B 的值。
+
+> `legacy` 的复现率依机器/核数/JDK 而变：xuzhu(aarch64) 上 JDK-27 约 11/40、JDK-8 约 0/40；
+> x86 上很少见。**复现不出来也不影响结论**——`fixed` 模式在同样条件下永不报错，才是要证明的事。
+
+---
+
 ## 复现步骤
 
 ### 1. 编译
@@ -97,14 +122,25 @@ done
 | `-Xcomp` | 50 次 | 50 次 | 100/100 OK |
 | `-Xcomp -XX:TieredStopAtLevel=4` | 30 次 | 30 次 | 60/60 OK |
 | 默认分层编译 | 10 次 | 10 次 | 20/20 OK |
-| `-Xcomp` + `taskset -c 0` | — | 6 次 | 6/6 OK |
+| `-Xcomp` + `taskset -c 0` | 40 次 | 40 次 | 80/80 OK |
 
-每轮约 1.1–1.5 亿次 volatile long + double 读对，合计约 **180 亿次读**，`TORN=0`。
+每轮约 1 亿次 volatile long + double 读对；加上 80 轮单核争用，累计约 **250 亿次读**，`TORN=0`。
 
 ### 负向自检：检测器有效
 
 `selftest` 在 x86 / aarch64、JDK-8 / JDK-27 上均准确报出注入的混合值
 （long `0x1111111144444444`、double `0x3FF0000077778888`）。
+
+### 精简版 `MinimalFalsePositive` 实测（xuzhu aarch64 / JDK-27，`taskset -c 1 -Xcomp`，各 10 轮）
+
+| 模式 | 结果 |
+|---|---|
+| `legacy` | **4/10 报 UNEXPECTED**，值全部 `0x0000000000000000`，且 4 例全部 `beforeFirstStore=true`；异常读次数 `count` 为 1.4M–2.8M |
+| `fixed` | **0/10 报 UNEXPECTED** |
+
+`count` 高达数百万是关键：`-Xcomp` 下 writer 线程的 `run()` 必须先编译完才能执行第一条指令，
+这个窗口有毫秒级，reader 在这期间**反复读到默认 0 上百万次**——这正是“仅在 C2 配置复现”的
+真正原因，与 64 位 load 的代码生成无关。
 
 ### 旧版本（`legacy`）复现历史失败
 
@@ -112,11 +148,28 @@ done
 |---|---|---|
 | `-Xcomp`，机器空闲 | 0/20 | — |
 | `-Xcomp` + `taskset -c 0`（单核争用） | 3/10（JDK-27）、3/6（JDK-27 另一次）、0/8（JDK-8） | **全部 `0x0000000000000000`** |
+| `-Xcomp` + `taskset -c 0`，每 JDK 40 轮（最终定量） | **JDK-27 11/40**、JDK-8 0/40 | **全部 `0x0000000000000000`**，其中多条 `beforeFirstStore=true` |
 | 默认分层 / `-Xint` + 单核争用 | 0/10 | — |
 
 其中带 `beforeFirstStore=true` 的记录说明观察值出现在 writer 首次 store **之前**——那时字段
 只可能是默认 0，撕裂在物理上不可能。`no-seed` 在同一争用条件下同时出现 `PRE_STORE>0` 且
 `TORN=0`，与上述结论一致。
+
+### 修复后 jtreg 回归（xuzhu aarch64，新常数 + 种子，每格 3 次）
+
+| 配置 | JDK-8 | JDK-27 |
+|---|---|---|
+| `-Xcomp` | 3/3 PASS | 3/3 PASS |
+| `-Xcomp -XX:TieredStopAtLevel=4` | 3/3 PASS | 3/3 PASS |
+| `-Xcomp` + `taskset -c 0` | 3/3 PASS | 3/3 PASS |
+| `-Xcomp -XX:TieredStopAtLevel=4` + `taskset -c 0` | 3/3 PASS | 3/3 PASS |
+
+共 24 次 jtreg 运行全部通过；x86（hanqinhu）上 `-Xcomp` 单跑亦通过。
+
+> 跑这些命令时注意：**jtreg 的所有选项必须排在测试文件之前**。写成
+> `jtreg ... test.java -javaoption:-XX:...` 会退出码 5 并报
+> `Error: Cannot find file: -javaoption:-XX:...`（该参数被当成测试路径），
+> 这**不是用例失败**，别误判。
 
 ---
 
