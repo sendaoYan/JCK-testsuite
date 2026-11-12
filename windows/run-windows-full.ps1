@@ -23,6 +23,8 @@
 
   run-windows-full.bat drives the full 9-config sweep by invoking this script
   once per config (baseline first).
+
+  jtreg concurrency (-conc:N) defaults to 16; set JCK_CONC=<n> to override.
 #>
 
 param(
@@ -34,6 +36,9 @@ if ($null -eq $JvmArgs) { $JvmArgs = @() }
 $ErrorActionPreference = "Continue"
 
 # ---- configurable ----
+# jtreg -conc:N concurrency per config; override with JCK_CONC=<n> in the env.
+$Concurrency = if ($env:JCK_CONC) { [int]$env:JCK_CONC } else { 16 }
+
 $JDKROOT = "D:\yansendao\JDK"
 $JDK8    = Join-Path $JDKROOT "jdk-8.0.512.9-hotspot"   # JDK under test (8)
 $JDK27   = Join-Path $JDKROOT "jdk-27.0.1.0.2+1"        # JDK under test (27) + jtreg runner
@@ -105,7 +110,7 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
     Add-Content -Path $LOG -Value $msg
 
     $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
-                "-conc:8", "-timeoutFactor:5", "-verbose:fail,error,time",
+                "-conc:$Concurrency", "-timeoutFactor:5", "-verbose:fail,error,time",
                 "-javacoption:-encoding", "-javacoption:UTF-8") + $flagTokens + $dirs
     $out = & $JTREG_JAVA @jtArgs 2>&1 | Tee-Object -FilePath $LOG -Append
 
