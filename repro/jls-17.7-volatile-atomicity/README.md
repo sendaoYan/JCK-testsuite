@@ -1,7 +1,14 @@
 # JLS 17.7 volatile long/double 原子性 —— 最小可复现例子
 
-本目录只有一个文件 `TornVolatileProbe.java`（无外部依赖），用于**独立复现**并**区分**
-下面两种现象：
+本目录有三个 Java 文件（都无外部依赖）：
+
+| 文件 | 用途 |
+|---|---|
+| `MinimalFalsePositive.java` | **约 100 行的精简复现例**，`legacy` / `fixed` 两种模式直接对照。想快速眼见为实就看这个 |
+| `TornVolatileProbe.java` | 取证工具：`strict` / `no-seed` / `legacy` / `selftest` 四模式，带详细统计与负向自检 |
+| `UPSTREAM-REPORT.md` | 给 hotspot-dev 的上游确认邮件草稿（**未发送**） |
+
+两个程序都用于**独立复现**并**区分**下面两种现象：
 
 | 现象 | 含义 |
 |---|---|
@@ -42,8 +49,9 @@ taskset -c 0 java -Xcomp -cp out MinimalFalsePositive fixed 5000
 “reader 抢在 writer 第一次 store 之前运行”的时间窗。退出码：0 = 什么都没观察到，
 2 = 观察到既非 A 也非 B 的值。
 
-> `legacy` 的复现率依机器/核数/JDK 而变：xuzhu(aarch64) 上 JDK-27 约 11/40、JDK-8 约 0/40；
-> x86 上很少见。**复现不出来也不影响结论**——`fixed` 模式在同样条件下永不报错，才是要证明的事。
+> `legacy` 的复现率依机器/核数/JDK 而变：xuzhu(aarch64) 上 `TornVolatileProbe legacy` 为
+> JDK-27 11/40、JDK-8 0/40，本精简版 `legacy` 为 JDK-27 4/10；x86 上很少见。
+> **复现不出来也不影响结论**——`fixed` 模式在同样条件下永不报错，才是要证明的事。
 
 ---
 
