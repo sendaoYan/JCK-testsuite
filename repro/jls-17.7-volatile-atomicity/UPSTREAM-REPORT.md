@@ -48,28 +48,36 @@ public class Probe {
     static final long A = 0x00000000FFFFFFFFL;
     static final long B = 0xFFFFFFFF00000000L;
 
-    public static void main(String[] a) throws Exception {
+    public static void main(String[] x) throws Exception {
         Thread w = new Thread(() -> {          // deliberately unseeded, as in the report
             lv = A; firstStoreDone = true;
             for (;;) { lv = A; lv = B; }
         });
+        long[] n = new long[1], first = new long[1];
+        boolean[] pre = new boolean[1];
         Thread r = new Thread(() -> {
             for (;;) {
                 long v = lv;
-                if (v != A && v != B)
-                    System.out.println("value=0x" + Long.toHexString(v)
-                        + " beforeFirstStore=" + !firstStoreDone);
+                if (v != A && v != B && n[0]++ == 0) {
+                    first[0] = v; pre[0] = !firstStoreDone;
+                }
             }
         });
         w.setDaemon(true); r.setDaemon(true); w.start(); r.start();
-        Thread.sleep(3000); System.exit(0);
+        Thread.sleep(3000);
+        System.out.printf("unexpected=%d first=0x%016X beforeFirstStore=%b%n",
+                          n[0], first[0], pre[0]);
+        System.exit(0);
     }
 }
 ```
 
 Run it as `taskset -c 0 java -Xcomp Probe`. On AArch64 (Temurin 8u502-b07 and
-27.0.1.0.2) every reported value is `0x0000000000000000`, frequently with
-`beforeFirstStore=true` — at that instant the field can only hold its default.
+27.0.1.0.2) it reports roughly 4 runs in 10, every value is
+`0x0000000000000000`, all of them with `beforeFirstStore=true`, and the counter
+is in the millions — the field can only hold its default at that instant, so the
+reader simply got in before the writer thread's `run()` finished compiling (which
+is exactly why `-Xcomp` makes this frequent).
 
 **The real test now.** Two changes, neither of which weakens the assertion
 (any value other than A or B is still a failure):
