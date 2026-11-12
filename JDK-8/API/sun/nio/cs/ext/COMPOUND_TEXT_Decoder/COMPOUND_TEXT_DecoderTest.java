@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary sun.nio.cs.ext.COMPOUND_TEXT_Decoder / sun.nio.cs.COMPOUND_TEXT_Decoder conformance: internal charset class; package is build-dependent (probed in both).
+ * @library /lib
  * @run main COMPOUND_TEXT_DecoderTest
  */
 
@@ -19,8 +20,7 @@ public class COMPOUND_TEXT_DecoderTest {
     public static void main(String[] args) throws Exception {
         Class<?> c = load("COMPOUND_TEXT_Decoder");
         if (c == null) {
-            System.out.println("PASS (SKIP: COMPOUND_TEXT charset absent on this platform)");
-            return;
+            throw new jtreg.SkippedException("COMPOUND_TEXT charset absent on this platform");
         }
         check((c.getName().equals("sun.nio.cs.ext.COMPOUND_TEXT_Decoder") || c.getName().equals("sun.nio.cs.COMPOUND_TEXT_Decoder")), "binary name");
         check(!java.lang.reflect.Modifier.isPrivate(c.getModifiers()), "not private");
