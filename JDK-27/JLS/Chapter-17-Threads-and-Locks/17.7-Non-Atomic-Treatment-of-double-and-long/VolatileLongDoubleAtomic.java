@@ -14,11 +14,12 @@ public class VolatileLongDoubleAtomic {
 
     static final long LONG_A = 0x00000000FFFFFFFFL;
     static final long LONG_B = 0xFFFFFFFF00000000L;
-    // Two non-NaN doubles whose bit patterns differ in their high 32 bits.
-    static final double DOUBLE_A = Double.longBitsToDouble(0x00000000FFFFFFFFL);
-    static final double DOUBLE_B = Double.longBitsToDouble(0x80000000FFFFFFFFL);
-    static final long DOUBLE_A_BITS = 0x00000000FFFFFFFFL;
-    static final long DOUBLE_B_BITS = 0x80000000FFFFFFFFL;
+    // Two non-NaN doubles whose bit patterns differ in BOTH their high and low
+    // 32 bits, so every mixed-halves read is distinguishable from A and B.
+    static final double DOUBLE_A = Double.longBitsToDouble(0x3FF00000FFFFFFFFL);
+    static final double DOUBLE_B = Double.longBitsToDouble(0x4000000000000000L);
+    static final long DOUBLE_A_BITS = 0x3FF00000FFFFFFFFL;
+    static final long DOUBLE_B_BITS = 0x4000000000000000L;
     static final int ITERS = 1_000_000;
 
     public static void main(String[] args) throws Exception {
