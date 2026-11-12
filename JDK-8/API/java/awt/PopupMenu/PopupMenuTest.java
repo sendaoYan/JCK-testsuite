@@ -34,6 +34,25 @@ public class PopupMenuTest {
         }
     }
 
+    // PopupMenu.show() is modal on Windows (native TrackPopupMenu blocks until
+    // the menu is dismissed) but non-blocking on X11. Run it off-thread so a
+    // modal show can't hang the test; the origin frame is disposed right after,
+    // cancelling any popup still up (the daemon thread dies at JVM exit).
+    static Throwable showOffThread(PopupMenu menu, Component origin, int x, int y) {
+        final Throwable[] err = new Throwable[1];
+        Thread t = new Thread(() -> {
+            try { menu.show(origin, x, y); } catch (Throwable e) { err[0] = e; }
+        }, "popup-show");
+        t.setDaemon(true);
+        t.start();
+        try {
+            t.join(2000); // enough to surface a synchronous show() failure
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+        return err[0];
+    }
+
     // ---- Part 3: contract deepening ----
     static void testContractPopupMenu() throws Exception {
         PopupMenu p = new PopupMenu("p");
@@ -51,9 +70,8 @@ public class PopupMenuTest {
         expectExact(RuntimeException.class, "show() with non-showing origin", () -> p.show(host, 5, 5));
         f.setVisible(true);
         try {
-            p.show(host, 5, 5); // real show on a showing origin must not throw
+            check(showOffThread(p, host, 5, 5) == null, "show on a showing origin must not throw");
             check(p.getItemCount() == 2, "items intact after show");
-            java.awt.EventQueue.invokeAndWait(() -> { });
         } finally {
             f.dispose();
         }
