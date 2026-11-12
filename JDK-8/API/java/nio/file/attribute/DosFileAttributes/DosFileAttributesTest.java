@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary java.nio.file.attribute.DosFileAttributes conformance: hierarchy and methods.
+ * @library /lib
  * @run main DosFileAttributesTest
  */
 
@@ -73,6 +74,18 @@ public class DosFileAttributesTest {
             }
             java.nio.file.Files.deleteIfExists(p);
         } catch (Exception ignore) { }
+    }
+
+    // Throw jtreg.SkippedException when the host cannot create symbolic links:
+    // non-elevated Windows (AccessDeniedException), a filesystem without symlink
+    // support (UnsupportedOperationException), or missing security permission
+    // (SecurityException). Genuine I/O errors propagate as test failures.
+    static void createSymlinkOrSkip(java.nio.file.Path link, java.nio.file.Path target, String what) {
+        try {
+            java.nio.file.Files.createSymbolicLink(link, target);
+        } catch (java.io.IOException | java.lang.UnsupportedOperationException | java.lang.SecurityException e) {
+            throw new jtreg.SkippedException("symbolic links unavailable for " + what + ": " + e);
+        }
     }
 
     static void testContract() throws Exception {
@@ -156,22 +169,14 @@ public class DosFileAttributesTest {
             v.setReadOnly(false);
             check(!v.readAttributes().isReadOnly(), "readonly restored for cleanup");
             // symlink via NOFOLLOW: dos attributes cannot be read through the link itself.
-            // Windows without elevated or developer mode rejects createSymbolicLink
-            // (AccessDeniedException), so the symlink block is skipped there.
+            // Without symlink capability the whole test reports Skipped instead of
+            // silently passing with partial coverage.
             java.nio.file.Path link = dir.resolve("lnk");
-            boolean symlinkMade = false;
-            try {
-                java.nio.file.Files.createSymbolicLink(link, f);
-                symlinkMade = true;
-            } catch (java.io.IOException | java.lang.UnsupportedOperationException | java.lang.SecurityException e) {
-                // symlink not creatable on this host/filesystem (e.g. no privilege)
-            }
-            if (symlinkMade) {
-                checkThrowsIO(java.nio.file.FileSystemException.class,
-                        () -> java.nio.file.Files.readAttributes(link, DosFileAttributes.class,
-                                java.nio.file.LinkOption.NOFOLLOW_LINKS),
-                        "dos read through symlink NOFOLLOW: JDK-8 throws plain FileSystemException");
-            }
+            createSymlinkOrSkip(link, f, "dos-attributes symlink");
+            checkThrowsIO(java.nio.file.FileSystemException.class,
+                    () -> java.nio.file.Files.readAttributes(link, DosFileAttributes.class,
+                            java.nio.file.LinkOption.NOFOLLOW_LINKS),
+                    "dos read through symlink NOFOLLOW: JDK-8 throws plain FileSystemException");
             // FileStore view support (probed: dos read through symlink NOFOLLOW: JDK-8 throws plain FileSystemException)
             java.nio.file.FileStore st = java.nio.file.Files.getFileStore(f);
             // dos store support is platform-dependent (Linux ext4 emulates, NTFS native).

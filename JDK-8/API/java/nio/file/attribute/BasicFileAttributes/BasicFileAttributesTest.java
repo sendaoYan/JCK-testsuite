@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary java.nio.file.attribute.BasicFileAttributes conformance: via readAttributes.
+ * @library /lib
  * @run main BasicFileAttributesTest
  */
 
@@ -76,6 +77,18 @@ public class BasicFileAttributesTest {
         } catch (Exception ignore) { }
     }
 
+    // Throw jtreg.SkippedException when the host cannot create symbolic links:
+    // non-elevated Windows (AccessDeniedException), a filesystem without symlink
+    // support (UnsupportedOperationException), or missing security permission
+    // (SecurityException). Genuine I/O errors propagate as test failures.
+    static void createSymlinkOrSkip(java.nio.file.Path link, java.nio.file.Path target, String what) {
+        try {
+            java.nio.file.Files.createSymbolicLink(link, target);
+        } catch (java.io.IOException | java.lang.UnsupportedOperationException | java.lang.SecurityException e) {
+            throw new jtreg.SkippedException("symbolic links unavailable for " + what + ": " + e);
+        }
+    }
+
     static void testContract() throws Exception {
         java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("a12-bfa");
         try {
@@ -111,26 +124,19 @@ public class BasicFileAttributesTest {
             BasicFileAttributes da = java.nio.file.Files.readAttributes(dir, BasicFileAttributes.class);
             check(da.isDirectory(), "dir isDirectory");
             check(!da.isRegularFile(), "dir not regular file");
-            // symlink shape (NOFOLLOW vs follow). Windows without elevated or
-            // developer mode rejects createSymbolicLink (AccessDeniedException),
-            // so the symlink block is skipped there rather than failing.
+            // symlink shape (NOFOLLOW vs follow). Without symlink capability
+            // (Windows non-elevated -> AccessDeniedException, or a filesystem
+            // without symlink support) the whole test reports Skipped instead
+            // of silently passing with partial coverage.
             java.nio.file.Path link = dir.resolve("lnk");
-            boolean symlinkMade = false;
-            try {
-                java.nio.file.Files.createSymbolicLink(link, f);
-                symlinkMade = true;
-            } catch (java.io.IOException | java.lang.UnsupportedOperationException | java.lang.SecurityException e) {
-                // symlink not creatable on this host/filesystem (e.g. no privilege)
-            }
-            if (symlinkMade) {
-                BasicFileAttributes la = java.nio.file.Files.readAttributes(link, BasicFileAttributes.class,
-                        java.nio.file.LinkOption.NOFOLLOW_LINKS);
-                check(la.isSymbolicLink(), "symlink NOFOLLOW isSymbolicLink");
-                check(!la.isRegularFile(), "symlink NOFOLLOW not regular file");
-                check(!la.isDirectory(), "symlink NOFOLLOW not directory");
-                check(java.nio.file.Files.readAttributes(link, BasicFileAttributes.class).isRegularFile(),
-                      "symlink follow reads target type");
-            }
+            createSymlinkOrSkip(link, f, "basic-attributes symlink");
+            BasicFileAttributes la = java.nio.file.Files.readAttributes(link, BasicFileAttributes.class,
+                    java.nio.file.LinkOption.NOFOLLOW_LINKS);
+            check(la.isSymbolicLink(), "symlink NOFOLLOW isSymbolicLink");
+            check(!la.isRegularFile(), "symlink NOFOLLOW not regular file");
+            check(!la.isDirectory(), "symlink NOFOLLOW not directory");
+            check(java.nio.file.Files.readAttributes(link, BasicFileAttributes.class).isRegularFile(),
+                  "symlink follow reads target type");
             // NOFOLLOW on a plain file behaves like a normal read
             BasicFileAttributes nf = java.nio.file.Files.readAttributes(f, BasicFileAttributes.class,
                     java.nio.file.LinkOption.NOFOLLOW_LINKS);

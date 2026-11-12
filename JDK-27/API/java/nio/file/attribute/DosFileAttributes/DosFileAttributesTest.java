@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary java.nio.file.attribute.DosFileAttributes conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main DosFileAttributesTest
  */
 
@@ -129,6 +130,18 @@ public class DosFileAttributesTest {
         } catch (Exception ignore) { }
     }
 
+    // Throw jtreg.SkippedException when the host cannot create symbolic links:
+    // non-elevated Windows (AccessDeniedException), a filesystem without symlink
+    // support (UnsupportedOperationException), or missing security permission
+    // (SecurityException). Genuine I/O errors propagate as test failures.
+    static void createSymlinkOrSkip(java.nio.file.Path link, java.nio.file.Path target, String what) {
+        try {
+            java.nio.file.Files.createSymbolicLink(link, target);
+        } catch (java.io.IOException | java.lang.UnsupportedOperationException | java.lang.SecurityException e) {
+            throw new jtreg.SkippedException("symbolic links unavailable for " + what + ": " + e);
+        }
+    }
+
     static void testContract() throws Exception {
         java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("a12-dos");
         try {
@@ -199,7 +212,7 @@ public class DosFileAttributesTest {
             check(!v.readAttributes().isReadOnly(), "readonly restored for cleanup");
             // symlink via NOFOLLOW: dos attributes cannot be read through the link itself
             java.nio.file.Path link = dir.resolve("lnk");
-            java.nio.file.Files.createSymbolicLink(link, f);
+            createSymlinkOrSkip(link, f, "dos-attributes symlink");
             checkThrowsIO(java.nio.file.FileSystemLoopException.class,
                     () -> java.nio.file.Files.readAttributes(link, DosFileAttributes.class,
                             java.nio.file.LinkOption.NOFOLLOW_LINKS),
