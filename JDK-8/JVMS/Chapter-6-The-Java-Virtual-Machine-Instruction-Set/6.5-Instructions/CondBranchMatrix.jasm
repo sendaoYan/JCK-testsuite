@@ -1,0 +1,185 @@
+super public class CondBranchMatrix
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // ---- single-operand integer branches (6) ----
+    public static Method ifEq:"(I)I" stack 1 locals 1
+    {
+        iload_0;
+        ifeq L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifNe:"(I)I" stack 1 locals 1
+    {
+        iload_0;
+        ifne L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifLt:"(I)I" stack 1 locals 1
+    {
+        iload_0;
+        iflt L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifGe:"(I)I" stack 1 locals 1
+    {
+        iload_0;
+        ifge L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifGt:"(I)I" stack 1 locals 1
+    {
+        iload_0;
+        ifgt L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifLe:"(I)I" stack 1 locals 1
+    {
+        iload_0;
+        ifle L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    // ---- two-operand int branches (6) ----
+    public static Method ifIcmpEq:"(II)I" stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmpeq L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifIcmpNe:"(II)I" stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmpne L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifIcmpLt:"(II)I" stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmplt L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifIcmpGe:"(II)I" stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmpge L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifIcmpGt:"(II)I" stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmpgt L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifIcmpLe:"(II)I" stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmple L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
+    // ---- reference branches (4) ----
+    public static Method ifAcmpEq:"(Ljava/lang/Object;Ljava/lang/Object;)I" stack 2 locals 2
+    {
+        aload_0;
+        aload_1;
+        if_acmpeq L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifAcmpNe:"(Ljava/lang/Object;Ljava/lang/Object;)I" stack 2 locals 2
+    {
+        aload_0;
+        aload_1;
+        if_acmpne L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifNull:"(Ljava/lang/Object;)I" stack 1 locals 1
+    {
+        aload_0;
+        ifnull L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+    public static Method ifNonNull:"(Ljava/lang/Object;)I" stack 1 locals 1
+    {
+        aload_0;
+        ifnonnull L;
+        iconst_0;
+        ireturn;
+    L: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+}
