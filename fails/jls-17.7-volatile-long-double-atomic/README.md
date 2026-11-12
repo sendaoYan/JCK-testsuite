@@ -13,9 +13,27 @@ reader 在 writer 首次 store 之前读到了字段默认值 `0`。而 `LONG_A 
 `LONG_B = 0xFFFFFFFF00000000` 的“混合高低 32 位”取值之一恰是 `0x0000000000000000`（= 默认 0），
 于是“读默认 0”与“真实撕裂读到 0”无法区分，reader 把默认 0 当成 tear 而失败。
 
-为什么只在 C2 配置（`-Xcomp` / `xcomp_tiered4`）复现：`-Xcomp` 下 writer 启动即被编译、首次
-store 相对更晚，reader 更早抢到默认 0；解释器 / C1 / `nobgcomp` 时序不同故不触发。这是**时序巧合**，
-不是代码生成缺陷——原“只有 C2 复现 ⇒ C2 拆 64 位 load”的因果推断不成立。
+为什么历史上只在 C2 配置（`-Xcomp` / `xcomp_tiered4`）出现：这是 sweep 当时的线程调度时序结果，
+不是 C2 的代码生成特性。`-Xcomp` 下 JVM 启动更慢、编译线程争用更多，reader 先于 writer 首次 store
+运行的时间窗更容易被命中。实验（2026-11-12）显示：在单核争用（`taskset -c 0`）+ `-Xcomp` 下，
+旧版可复现；同样的 `-Xcomp` 在机器空闲时 20/20 不复现。**关键是：复现时观察值恒为 `0x0`（默认值）**，
+见下节。
+
+### 2026-11-12 独立复现与验证（`repro/jls-17.7-volatile-atomicity/`）
+
+为回答“这到底是不是 JVM bug”，构造了独立探针 `TornVolatileProbe`，把“读到默认值”与“真实撕裂”
+在**数据上分开**：
+
+| 实验 | 结果 |
+|---|---|
+| `legacy` 模式（旧测试逻辑）+ 单核争用 + `-Xcomp` | 3/10、3/6 复现历史失败，**观察值全部 `0x0000000000000000`**；其中 `beforeFirstStore=true` 的记录证明该值出现在 writer 首次 store 之前——那时字段只可能是默认 0，撕裂物理上不可能 |
+| `no-seed` 模式（同样的时序，但不把 0 判成撕裂） | 同一争用条件下出现 `PRE_STORE>0` 且 `TORN=0`，即那些被旧测试判成“撕裂”的读就是默认值 0 |
+| `strict` 模式（常量两两不同 + 启线程前种子） | aarch64 上 `-Xcomp` 100 次、`xcomp_tiered4` 60 次、默认 20 次、单核争用 6 次，共约 **180 亿次 volatile 读，`TORN=0`** |
+| `selftest` 负向对照（writer 故意写入混合值） | x86/aarch64、JDK-8/JDK-27 均准确报出 TEAR，证明检测器不是“永远通过”的空壳 |
+| 上游 issue 检索 | aarch64 C2 volatile 相关（JDK-8394913 / JDK-8397181）均为“未被使用”的 volatile/acquire 读丢失内存序，不涉及 64 位读撕裂 |
+
+结论：**历史失败 = reader 在 writer 首次 store 前读到默认值 0**，与 JVM 代码生成无关；
+`strict` 模式在约 180 亿次读中未观察到任何撕裂。
 
 ### 两处修复
 
