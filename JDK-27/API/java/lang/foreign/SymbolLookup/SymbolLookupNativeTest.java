@@ -4,6 +4,7 @@
  *          resolution: defaultLookup vs libraryLookup for libc symbols,
  *          loaderLookup of a self-compiled library, symbol stability,
  *          composition via or(), and the miss/close negative paths.
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED SymbolLookupNativeTest
  */
 import java.lang.foreign.*;
@@ -219,8 +220,7 @@ public class SymbolLookupNativeTest {
 
     public static void main(String[] args) throws Throwable {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         LINKER = Linker.nativeLinker();
         SO = compileLib();

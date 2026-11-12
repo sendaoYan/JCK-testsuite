@@ -4,6 +4,7 @@
  *          flowing into real C functions, cross-language data exchange, death
  *          semantics after close, cross-thread access rules and the
  *          libraryLookup arena lifetime.
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED ArenaNativeTest
  */
 import java.lang.foreign.*;
@@ -200,8 +201,7 @@ public class ArenaNativeTest {
 
     public static void main(String[] args) throws Throwable {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         compileLib();
         System.load(so.toString());

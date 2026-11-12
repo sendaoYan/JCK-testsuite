@@ -9,6 +9,7 @@
  *          method, loadLibrary resolves lib<name>.so through
  *          java.library.path, relative and empty paths are rejected, and null
  *          arguments throw NullPointerException.
+ * @library /lib
  * @run main/othervm -Djava.library.path=. SystemLoadNativeTest full
  * @run main/othervm SystemLoadNativeTest bare
  */
@@ -144,8 +145,7 @@ public class SystemLoadNativeTest {
 
     public static void main(String[] args) throws Exception {
         if (System.getProperty("test.nativepath") == null && !gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         // "bare": a second action without -Djava.library.path and, on newer
         // JDKs, without --enable-native-access: System.load must still work.

@@ -4,6 +4,7 @@
  *          linker: descriptor/handle type correspondence, derived descriptors
  *          (append/insert/change/drop) driving genuinely invoked downcalls,
  *          and layout-count mismatches.
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED FunctionDescriptorNativeTest
  */
 import java.lang.foreign.*;
@@ -162,8 +163,7 @@ public class FunctionDescriptorNativeTest {
 
     public static void main(String[] args) throws Throwable {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         LINKER = Linker.nativeLinker();
         System.load(compileLib().toString());

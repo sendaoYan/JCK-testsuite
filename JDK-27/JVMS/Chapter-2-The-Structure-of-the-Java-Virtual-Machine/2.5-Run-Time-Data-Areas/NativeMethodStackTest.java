@@ -7,6 +7,7 @@
  *          native and Java frames raises a catchable StackOverflowError
  *          without corrupting the VM, and execution continues normally
  *          afterwards.
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED NativeMethodStackTest
  */
 
@@ -100,8 +101,7 @@ public class NativeMethodStackTest {
 
     public static void main(String[] args) throws Exception {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         compileAndLoad();
 

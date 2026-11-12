@@ -5,6 +5,7 @@
  *          method warning block to stderr; with --enable-native-access=ALL-UNNAMED
  *          the same operations produce no warnings. Verified by driving fresh
  *          child JVMs (the test JVM itself runs with the flag enabled).
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED LinkerNativeAccessWarningTest
  */
 import java.io.IOException;
@@ -105,8 +106,7 @@ public class LinkerNativeAccessWarningTest {
 
     public static void main(String[] args) throws Exception {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         compileChildAndLib();
         String flag = "--enable-native-access=ALL-UNNAMED";

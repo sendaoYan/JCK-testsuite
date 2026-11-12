@@ -7,6 +7,7 @@
  *          round-trip), and object-array ops (NewObjectArray /
  *          GetObjectArrayElement / SetObjectArrayElement / IsSameObject, OOB ->
  *          ArrayIndexOutOfBoundsException).
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED JniMonitorAndBufferTest
  */
 
@@ -241,8 +242,7 @@ public class JniMonitorAndBufferTest {
     // ------------------------------------------------------------------
     public static void main(String[] args) throws Exception {
         if (System.getProperty("test.nativepath") == null && !gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         compileAndLoad();
 

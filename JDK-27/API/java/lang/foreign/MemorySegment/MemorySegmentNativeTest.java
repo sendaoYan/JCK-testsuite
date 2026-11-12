@@ -4,6 +4,7 @@
  *          passed to and produced by real C calls, slicing/offset semantics as
  *          seen from C, read-only and NULL segments, string interop, and the
  *          heap-segment rejection.
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED MemorySegmentNativeTest
  */
 import java.lang.foreign.*;
@@ -189,8 +190,7 @@ public class MemorySegmentNativeTest {
 
     public static void main(String[] args) throws Throwable {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         LINKER = Linker.nativeLinker();
         System.load(compileLib().toString());

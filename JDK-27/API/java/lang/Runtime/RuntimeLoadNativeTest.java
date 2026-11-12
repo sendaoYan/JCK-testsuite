@@ -10,6 +10,7 @@
  *          lib<name>.so through java.library.path for both the success and
  *          failure paths, and the observation that System.load and
  *          Runtime.load share one registry per class loader.
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED -Djava.library.path=. RuntimeLoadNativeTest full
  * @run main/othervm RuntimeLoadNativeTest bare
  */
@@ -106,8 +107,7 @@ public class RuntimeLoadNativeTest {
 
     public static void main(String[] args) throws Exception {
         if (System.getProperty("test.nativepath") == null && !gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         Runtime rt = Runtime.getRuntime();
         // "bare": second action without -Djava.library.path and, on newer JDKs,

@@ -8,6 +8,7 @@
  *          delivery with ExceptionCheck/ExceptionClear, global and weak global
  *          references, local frames, JNI_OnLoad version negotiation,
  *          RegisterNatives/UnregisterNatives, and GetJavaVM.
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED JniSemanticsTest
  */
 
@@ -455,8 +456,7 @@ public class JniSemanticsTest {
     // ------------------------------------------------------------------
     public static void main(String[] args) throws Exception {
         if (System.getProperty("test.nativepath") == null && !gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         compileAndLoad();
 

@@ -8,6 +8,7 @@
  *          instance natives invoke and re-invoke successfully.  The binding
  *          works for a class generated directly from a class file (jasm),
  *          not only for javac-produced classes.
+ * @library /lib
  * @compile NativeBindingTarget.jasm
  * @run main/othervm --enable-native-access=ALL-UNNAMED BindingNativeMethodTest
  */
@@ -89,8 +90,7 @@ public class BindingNativeMethodTest {
 
     public static void main(String[] args) throws Exception {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         Class<?> target = Class.forName("NativeBindingTarget");
         Method add = target.getMethod("add", int.class, int.class);

@@ -9,6 +9,7 @@
  *          and different loaders may each load their own copy of distinct
  *          paths.  loadLibrary also maps the bare library name to
  *          lib<name>.so through java.library.path.
+ * @library /lib
  * @run main/othervm -Djava.library.path=. NativeLibraryNamespaceTest
  */
 
@@ -104,8 +105,7 @@ public class NativeLibraryNamespaceTest {
 
     public static void main(String[] args) throws Throwable {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         Path libA = compile("libjcknsa.so");
         Path libB = compile("libjcknsb.so");

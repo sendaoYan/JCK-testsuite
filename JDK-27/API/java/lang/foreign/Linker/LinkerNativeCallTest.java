@@ -4,6 +4,7 @@
  *          through nativeLinker().downcallHandle() with exact return-value
  *          assertions, carrier matrix via a self-compiled C library, variadic
  *          linkage, errno capture and negative cases.
+ * @library /lib
  * @run main/othervm --enable-native-access=ALL-UNNAMED LinkerNativeCallTest
  */
 import java.lang.foreign.*;
@@ -362,8 +363,7 @@ public class LinkerNativeCallTest {
 
     public static void main(String[] args) throws Throwable {
         if (!gccAvailable()) {
-            System.out.println("SKIP: no C compiler (gcc) available; native library cannot be built");
-            return;
+            throw new jtreg.SkippedException("no C compiler (gcc) available; native library cannot be built");
         }
         LINKER = Linker.nativeLinker();
         System.load(compileLib().toString());
