@@ -107,6 +107,19 @@ super public class CondBranches
         ireturn;
     }
 
+    public static Method ifIcmpne:"(II)I"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_icmpne L1;
+        iconst_0;
+        ireturn;
+    L1: stack_frame_type same;
+        iconst_1;
+        ireturn;
+    }
+
     public static Method ifAcmeq:"(Ljava/lang/Object;Ljava/lang/Object;)I"
         stack 2 locals 2
     {

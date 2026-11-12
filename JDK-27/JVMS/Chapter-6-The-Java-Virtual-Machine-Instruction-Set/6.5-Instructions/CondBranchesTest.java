@@ -1,8 +1,8 @@
 /*
  * @test
  * @summary JVMS 6.5: conditional branch instructions (ifeq, ifne, iflt, ifge,
- *          ifnull, ifnonnull, if_icmplt, if_icmpge, if_acmpeq, if_acmpne)
- *          branch when their comparison holds.
+ *          ifnull, ifnonnull, if_icmplt, if_icmpge, if_icmpne, if_acmpeq,
+ *          if_acmpne) branch when their comparison holds.
  * @compile CondBranches.jasm
  * @run main CondBranchesTest
  */
@@ -19,6 +19,7 @@ public class CondBranchesTest {
 
         if (CondBranches.ifIcmplt(3, 5) != 1 || CondBranches.ifIcmplt(5, 3) != 0) throw new AssertionError("if_icmplt");
         if (CondBranches.ifIcmpge(5, 5) != 1 || CondBranches.ifIcmpge(3, 5) != 0) throw new AssertionError("if_icmpge");
+        if (CondBranches.ifIcmpne(3, 5) != 1 || CondBranches.ifIcmpne(5, 5) != 0) throw new AssertionError("if_icmpne");
 
         Object a = new Object(), b = new Object();
         if (CondBranches.ifAcmeq(a, a) != 1 || CondBranches.ifAcmeq(a, b) != 0) throw new AssertionError("if_acmpeq");
