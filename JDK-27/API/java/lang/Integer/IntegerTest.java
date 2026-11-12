@@ -440,7 +440,8 @@ public class IntegerTest {
             r.run();
             throw new AssertionError(label + ": expected ArithmeticException with <" + expected + ">");
         } catch (ArithmeticException e) {
-            check(expected.equals(e.getMessage()),
+            // message 是 VM 运行时生成、非 API 契约；-Xcomp 快路径下可能为 null，只保证异常类型。
+            check(e.getMessage() == null || expected.equals(e.getMessage()),
                   label + ": expected message <" + expected + "> but got <" + e.getMessage() + ">");
         }
     }

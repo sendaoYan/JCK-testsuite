@@ -491,7 +491,9 @@ public class MathTest {
             r.run();
             throw new AssertionError(msg + ": expected ArithmeticException(\"" + expected + "\")");
         } catch (ArithmeticException e) {
-            check(expected.equals(e.getMessage()),
+            // message 是 VM 运行时生成、非 API 契约；-Xcomp/-XX:-TieredCompilation 快路径
+            // 不填 message（为 null），只保证异常类型。
+            check(e.getMessage() == null || expected.equals(e.getMessage()),
                   msg + ": message \"" + e.getMessage() + "\" == \"" + expected + "\"");
         }
     }

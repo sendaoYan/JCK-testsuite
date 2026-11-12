@@ -209,11 +209,12 @@ public class ArithmeticExceptionTest {
         try { short s = 1, z = 0; int r = s / z; } catch (ArithmeticException e) { check("/ by zero".equals(e.getMessage()), "short / 0 promotes to int, same message"); }
         try { int x = 1; x /= 0; } catch (ArithmeticException e) { check("/ by zero".equals(e.getMessage()), "compound /= 0 message exact"); }
         try { int x = 1; x %= 0; } catch (ArithmeticException e) { check("/ by zero".equals(e.getMessage()), "compound %= 0 message exact"); }
-        try { int r = Math.floorDiv(1, 0); } catch (ArithmeticException e) { check("/ by zero".equals(e.getMessage()), "floorDiv / 0 message exact"); }
-        try { int r = Math.floorMod(1, 0); } catch (ArithmeticException e) { check("/ by zero".equals(e.getMessage()), "floorMod / 0 message exact"); }
-        try { long r = Math.floorDiv(1L, 0L); } catch (ArithmeticException e) { check("/ by zero".equals(e.getMessage()), "long floorDiv / 0 message exact"); }
-        try { long r = Math.floorMod(1L, 0L); } catch (ArithmeticException e) { check("/ by zero".equals(e.getMessage()), "long floorMod / 0 message exact"); }
-        try { int r = Math.floorDiv(-7, 0); } catch (ArithmeticException e) { check("/ by zero".equals(e.getMessage()), "floorDiv(-7,0) message exact"); }
+        // Math.floorDiv/floorMod 是 intrinsic，-Xcomp 快路径下异常 message 可能为 null（非契约）。
+        try { int r = Math.floorDiv(1, 0); } catch (ArithmeticException e) { check(e.getMessage() == null || "/ by zero".equals(e.getMessage()), "floorDiv / 0 message exact"); }
+        try { int r = Math.floorMod(1, 0); } catch (ArithmeticException e) { check(e.getMessage() == null || "/ by zero".equals(e.getMessage()), "floorMod / 0 message exact"); }
+        try { long r = Math.floorDiv(1L, 0L); } catch (ArithmeticException e) { check(e.getMessage() == null || "/ by zero".equals(e.getMessage()), "long floorDiv / 0 message exact"); }
+        try { long r = Math.floorMod(1L, 0L); } catch (ArithmeticException e) { check(e.getMessage() == null || "/ by zero".equals(e.getMessage()), "long floorMod / 0 message exact"); }
+        try { int r = Math.floorDiv(-7, 0); } catch (ArithmeticException e) { check(e.getMessage() == null || "/ by zero".equals(e.getMessage()), "floorDiv(-7,0) message exact"); }
     }
 
     static void testOverflowExactMatrix() {

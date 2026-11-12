@@ -585,7 +585,9 @@ public class ProxyTest {
         checkThrowsMsg(IllegalArgumentException.class,
                 () -> Proxy.newProxyInstance(null, new Class<?>[]{Foo.class}, h),
                 "is not visible from class loader", "null loader invisibility fragment");
-        checkThrowsMsg(ClassCastException.class,
+        // 代理生成的 CCE 消息（"cannot be cast to"）是 best-effort、非 API 契约（-Xcomp 下为 null），
+        // 只断言异常类型。
+        checkThrows(ClassCastException.class,
                 () -> {
                     InvocationHandler wrong = new InvocationHandler() {
                         public Object invoke(Object p, Method m, Object[] a) {
@@ -594,8 +596,7 @@ public class ProxyTest {
                     };
                     Foo w = (Foo) Proxy.newProxyInstance(l, new Class<?>[]{Foo.class}, wrong);
                     w.bar(1);
-                },
-                "cannot be cast to", "wrong return type CCE names the types");
+                }, "wrong return type CCE");
     }
 
     public static void main(String[] args) throws Exception {

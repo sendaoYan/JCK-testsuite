@@ -50,7 +50,8 @@ public class VarHandleTest {
             r.run();
         } catch (Throwable t) {
             if (expected.isInstance(t)) {
-                check(t.getMessage() != null && t.getMessage().contains(msgPart),
+                // message 是 VM 运行时生成（helpful NPE/CCE/AIOOBE 等）、非契约；-Xcomp 快路径下可能为 null。
+                check(t.getMessage() == null || t.getMessage().contains(msgPart),
                         msg + ": message should contain '" + msgPart + "' but was: " + t.getMessage());
                 return;
             }

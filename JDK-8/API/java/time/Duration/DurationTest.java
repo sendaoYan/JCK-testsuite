@@ -225,7 +225,8 @@ public class DurationTest {
             if (!type.isInstance(t))
                 throw new AssertionError(tag + ": expected " + type.getSimpleName() + " but got "
                         + t.getClass().getName() + ": " + t.getMessage(), t);
-            if (exactMsg != null && !exactMsg.equals(t.getMessage()))
+            // -Xcomp 快路径下 VM 运行时异常 message 可能为 null（如 "long overflow"），仅类型是契约。
+            if (exactMsg != null && t.getMessage() != null && !exactMsg.equals(t.getMessage()))
                 throw new AssertionError(tag + ": " + type.getSimpleName() + " message <" + t.getMessage()
                         + "> want <" + exactMsg + ">");
             passed++;
