@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.Sequencer conformance: interface hierarchy and methods.
+ * @library /lib
  * @run main SequencerTest
  */
 
@@ -131,8 +132,7 @@ public class SequencerTest {
             check(javax.sound.midi.Sequencer.SyncMode.MIDI_SYNC != null && javax.sound.midi.Sequencer.SyncMode.MIDI_TIME_CODE != null, "sync mode constants exist");
             check("Internal Clock".equals(javax.sound.midi.Sequencer.SyncMode.INTERNAL_CLOCK.toString()), "sync mode toString");
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
-            return;
+            throw new jtreg.SkippedException("no audio device/line available");
         }
         try { javax.sound.midi.Sequencer.class.getMethod("getMasterSyncModes"); passed++; } catch (Exception e) { throw new AssertionError("surface"); }
     }

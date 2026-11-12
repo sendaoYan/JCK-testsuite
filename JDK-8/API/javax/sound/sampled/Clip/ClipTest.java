@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.sampled.Clip conformance: interface hierarchy and methods.
+ * @library /lib
  * @run main ClipTest
  */
 
@@ -64,10 +65,10 @@ public class ClipTest {
             javax.sound.sampled.DataLine.Info bi = new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, fmt);
             check(bi.getLineClass() == javax.sound.sampled.Clip.class, "info class");
         } catch (javax.sound.sampled.LineUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         } catch (IllegalArgumentException e) {
             if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
-                System.out.println("SKIP: no audio device/line available");
+                throw new jtreg.SkippedException("no audio device/line available");
             } else {
                 throw e;
             }

@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.spi.SoundbankReader conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main SoundbankReaderTest
  */
 
@@ -63,7 +64,7 @@ public class SoundbankReaderTest {
             check(syn.getDefaultSoundbank().getInstruments().length == 129, "real soundbank reachable headless");
             syn.close();
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
     }
     static class RecReader extends javax.sound.midi.spi.SoundbankReader {

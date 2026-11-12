@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.spi.SoundbankReader conformance: abstract hierarchy and methods.
+ * @library /lib
  * @run main SoundbankReaderTest
  */
 
@@ -45,7 +46,7 @@ public class SoundbankReaderTest {
             check(ins.length == 129, "real soundbank reachable headless");
             syn.close();
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
         return true;
     }

@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.MidiDeviceReceiver conformance: interface hierarchy and methods.
+ * @library /lib
  * @run main MidiDeviceReceiverTest
  */
 
@@ -41,7 +42,7 @@ public class MidiDeviceReceiverTest {
                 check(mdr.getMidiDevice() == sqr, "receiver reports owning device");
             } finally { sqr.close(); }
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
     }
 

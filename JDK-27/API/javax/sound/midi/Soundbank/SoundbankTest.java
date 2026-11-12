@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.Soundbank conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main SoundbankTest
  */
 
@@ -78,7 +79,7 @@ public class SoundbankTest {
                 check(sbk.getResources().length == 76, "76 resources");
             } finally { syn.close(); }
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
         return true;
     }

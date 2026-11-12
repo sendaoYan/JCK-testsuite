@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.Synthesizer conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main SynthesizerTest
  */
 
@@ -156,7 +157,7 @@ public class SynthesizerTest {
             } finally { syn.close(); }
             check(!syn.isOpen(), "close");
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
         check(javax.sound.midi.Synthesizer.class.getMethod("getMaxPolyphony").getReturnType() == int.class, "surface");
         return true;

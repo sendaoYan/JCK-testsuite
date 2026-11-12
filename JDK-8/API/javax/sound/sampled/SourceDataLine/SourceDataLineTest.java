@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.sampled.SourceDataLine conformance: interface hierarchy and methods.
+ * @library /lib
  * @run main SourceDataLineTest
  */
 
@@ -52,10 +53,10 @@ public class SourceDataLineTest {
             javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, fmt);
             check(info.getLineClass() == javax.sound.sampled.SourceDataLine.class, "info class");
         } catch (javax.sound.sampled.LineUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         } catch (IllegalArgumentException e) {
             if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
-                System.out.println("SKIP: no audio device/line available");
+                throw new jtreg.SkippedException("no audio device/line available");
             } else {
                 throw e;
             }

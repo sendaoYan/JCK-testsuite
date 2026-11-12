@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.VoiceStatus conformance: behavioral.
+ * @library /lib
  * @run main VoiceStatusTest
  */
 
@@ -53,7 +54,7 @@ public class VoiceStatusTest {
                 ch.noteOff(60);
             } finally { syn.close(); }
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
         return true;
     }

@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.SoundbankResource conformance: abstract hierarchy and methods.
+ * @library /lib
  * @run main SoundbankResourceTest
  */
 
@@ -52,7 +53,7 @@ public class SoundbankResourceTest {
                 check(hasNamed, "resources named");
             } finally { syn.close(); }
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
         return true;
     }

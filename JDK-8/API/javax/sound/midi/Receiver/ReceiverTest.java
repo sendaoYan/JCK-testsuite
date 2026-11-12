@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary javax.sound.midi.Receiver conformance: interface hierarchy and methods.
+ * @library /lib
  * @run main ReceiverTest
  */
 
@@ -66,7 +67,7 @@ public class ReceiverTest {
             sqr.close();
             passed += 3;
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
     }
 

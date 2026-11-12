@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.MidiDeviceTransmitter conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main MidiDeviceTransmitterTest
  */
 
@@ -108,7 +109,7 @@ public class MidiDeviceTransmitterTest {
                 check(mdr.getMidiDevice() == sqr, "receiver reports owning device");
             } finally { sqr.close(); }
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
     }
 

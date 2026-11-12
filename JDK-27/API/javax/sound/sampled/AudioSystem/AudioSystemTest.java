@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.sampled.AudioSystem conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main AudioSystemTest
  */
 
@@ -241,10 +242,10 @@ public class AudioSystemTest {
             javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
             check(clip != null && !clip.isOpen(), "software Clip acquired closed (skip reason: no sound card needed)");
         } catch (javax.sound.sampled.LineUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         } catch (IllegalArgumentException e) {
             if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
-                System.out.println("SKIP: no audio device/line available");
+                throw new jtreg.SkippedException("no audio device/line available");
             } else {
                 throw e;
             }

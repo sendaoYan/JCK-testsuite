@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.Sequencer conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main SequencerTest
  */
 
@@ -170,7 +171,7 @@ public class SequencerTest {
             }
             check(hasInternal, "INTERNAL_CLOCK reported");
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
         check(javax.sound.midi.Sequencer.SyncMode.MIDI_SYNC != null && javax.sound.midi.Sequencer.SyncMode.MIDI_TIME_CODE != null, "sync mode constants exist");
         check("Internal Clock".equals(javax.sound.midi.Sequencer.SyncMode.INTERNAL_CLOCK.toString()), "sync mode toString");

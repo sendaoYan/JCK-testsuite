@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.midi.MetaEventListener conformance: interface hierarchy and methods.
+ * @library /lib
  * @run main MetaEventListenerTest
  */
 
@@ -47,7 +48,7 @@ public class MetaEventListenerTest {
                 passed += 2; // registration lifecycle accepted
             } finally { sqr.close(); }
         } catch (javax.sound.midi.MidiUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         }
     }
 

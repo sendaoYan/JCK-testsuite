@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.sampled.LineListener conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main LineListenerTest
  */
 
@@ -117,10 +118,10 @@ public class LineListenerTest {
             clip.removeLineListener(l);
             check(true, "removal accepted");
         } catch (javax.sound.sampled.LineUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         } catch (IllegalArgumentException e) {
             if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
-                System.out.println("SKIP: no audio device/line available");
+                throw new jtreg.SkippedException("no audio device/line available");
             } else {
                 throw e;
             }

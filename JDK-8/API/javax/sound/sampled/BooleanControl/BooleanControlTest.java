@@ -2,6 +2,7 @@
  * @test
  * @key sound
  * @summary javax.sound.sampled.BooleanControl conformance: abstract hierarchy and methods.
+ * @library /lib
  * @run main BooleanControlTest
  */
 
@@ -48,10 +49,10 @@ public class BooleanControlTest {
             check("Mute".equals(mute.getType().toString()), "type name Mute");
             clip.close();
         } catch (javax.sound.sampled.LineUnavailableException e) {
-            System.out.println("SKIP: no audio device/line available");
+            throw new jtreg.SkippedException("no audio device/line available");
         } catch (IllegalArgumentException e) {
             if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
-                System.out.println("SKIP: no audio device/line available");
+                throw new jtreg.SkippedException("no audio device/line available");
             } else {
                 throw e;
             }
