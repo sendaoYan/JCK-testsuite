@@ -162,14 +162,16 @@ public class SecretKeyFactoryTest {
         pbeDec.init(Cipher.DECRYPT_MODE, pbe.generateSecret(new PBEKeySpec(pass, salt, 10000)),
                 new PBEParameterSpec(salt, 10000, new IvParameterSpec(iv)));
         check(Arrays.equals(pbeDec.doFinal(pbeCt), pbePt), "PBE key decrypts its own ciphertext");
-        // a key from a wrong password cannot decrypt
+        // a key from a wrong password cannot recover the plaintext. AES-CBC/PKCS5 has
+        // no integrity, so a wrong key either trips PKCS5 padding (most of the time) or
+        // "succeeds" as garbage; in both cases the original plaintext is not recovered.
         SecretKey wrongKey = pbe.generateSecret(new PBEKeySpec("wrongpass".toCharArray(), salt, 10000));
         Cipher badDec = Cipher.getInstance("PBEWithHmacSHA256AndAES_128");
         badDec.init(Cipher.DECRYPT_MODE, wrongKey,
                 new PBEParameterSpec(salt, 10000, new IvParameterSpec(iv)));
         try {
-            badDec.doFinal(pbeCt);
-            check(false, "wrong password must fail authentication");
+            byte[] wrong = badDec.doFinal(pbeCt);
+            check(!Arrays.equals(wrong, pbePt), "wrong password must not recover the plaintext");
         } catch (javax.crypto.BadPaddingException e) {
             check(true, "wrong password -> BadPaddingException");
         }

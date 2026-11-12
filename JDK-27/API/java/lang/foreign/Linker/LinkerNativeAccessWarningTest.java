@@ -96,8 +96,10 @@ public class LinkerNativeAccessWarningTest {
             throw new IllegalStateException("child JVM did not finish within 60s");
         }
         // 子进程退出后其管道已 EOF，但读线程可能仍在排空缓冲；join 后再取结果，避免读到截断输出。
-        outReader.join(10000);
-        errReader.join(10000);
+        // join 不带超时：上面 waitFor 已返回 true（子进程退出），管道必已 EOF，读线程会立即读完退出；
+        // 带 10s 超时反而会在 -Xcomp 下 CPU 争用导致读线程未排空就被取走、读到截断输出。
+        outReader.join();
+        errReader.join();
         return new ChildResult(p.exitValue(), out.toString(), err.toString());
     }
 

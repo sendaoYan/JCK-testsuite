@@ -68,11 +68,14 @@ public class SubmissionPublisherTest {
         // consume() 的订阅者回调在发布者 executor 线程上异步执行，多个订阅者并发写入同一集合；
         // ArrayList 非线程安全，改用 CopyOnWriteArrayList 消除丢失更新竞态。
         List<Integer> collected = new java.util.concurrent.CopyOnWriteArrayList<>();
-        pub2.consume(collected::add);
+        // 捕获并 join 第一个 consume() 的 future：它对应的订阅者才真正收到 1、2。
+        // 关闭后再 consume() 得到的新 future 立即完成、收不到任何 item，join 它不产生同步，
+        // 因此原代码在 item 异步投递完成前就断言，是竞态。
+        CompletableFuture<Void> consumeDone = pub2.consume(collected::add);
         pub2.submit(1);
         pub2.submit(2);
         pub2.close();
-        pub2.consume(collected::add).join();
+        consumeDone.join();
         check(collected.contains(1) && collected.contains(2), "consume collects items");
 
         SubmissionPublisher<Integer> pub3 = new SubmissionPublisher<>();
