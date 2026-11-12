@@ -12,8 +12,12 @@ public class VolatileLongDoubleAtomic {
     static volatile boolean failed = false;
     static volatile boolean stop = false;
 
-    static final long LONG_A = 0x00000000FFFFFFFFL;
-    static final long LONG_B = 0xFFFFFFFF00000000L;
+    // All four combinations of the two 32-bit halves are distinct, and none of
+    // them equals the field's default 0.  With the old pair (0x00000000FFFFFFFF
+    // / 0xFFFFFFFF00000000) one mixed value was 0x0 -- exactly the default -- so
+    // a reader that ran before the writer's first store looked like a tear.
+    static final long LONG_A = 0x1111111122222222L;
+    static final long LONG_B = 0x3333333344444444L;
     // Two non-NaN doubles whose bit patterns differ in BOTH their high and low
     // 32 bits, so every mixed-halves read is distinguishable from A and B.
     static final double DOUBLE_A = Double.longBitsToDouble(0x3FF00000FFFFFFFFL);
