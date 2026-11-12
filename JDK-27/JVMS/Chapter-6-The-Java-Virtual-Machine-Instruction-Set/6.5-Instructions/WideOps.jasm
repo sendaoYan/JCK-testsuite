@@ -1,0 +1,84 @@
+// JVMS 6.5 "wide": the wide prefix extends iload/lload/fload/dload/aload,
+// istore/lstore/fstore/dstore/astore and iinc to a 16-bit local-variable index
+// (and, for iinc, a 16-bit constant).  Local index 256 cannot be reached by
+// the non-wide forms, so a correct round-trip through local 256 proves the
+// wide encoding was used and executed.
+
+super public class WideOps
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method wideInt:"(I)I"
+        stack 1 locals 257
+    {
+        iload_0;
+        istore 256;
+        iload 256;
+        ireturn;
+    }
+
+    public static Method wideLong:"(J)J"
+        stack 2 locals 258
+    {
+        lload_0;
+        lstore 256;
+        lload 256;
+        lreturn;
+    }
+
+    public static Method wideFloat:"(F)F"
+        stack 1 locals 257
+    {
+        fload_0;
+        fstore 256;
+        fload 256;
+        freturn;
+    }
+
+    public static Method wideDouble:"(D)D"
+        stack 2 locals 258
+    {
+        dload_0;
+        dstore 256;
+        dload 256;
+        dreturn;
+    }
+
+    public static Method wideRef:"(Ljava/lang/Object;)Ljava/lang/Object;"
+        stack 1 locals 257
+    {
+        aload_0;
+        astore 256;
+        aload 256;
+        areturn;
+    }
+
+    // wide iinc: 16-bit index 256.
+    public static Method wideIincIndex:"(I)I"
+        stack 1 locals 257
+    {
+        iload_0;
+        istore 256;
+        iinc 256, 5;
+        iload 256;
+        ireturn;
+    }
+
+    // wide iinc: constant 300 is outside the s1 range [-128,127].
+    public static Method wideIincConst:"()I"
+        stack 1 locals 1
+    {
+        iconst_0;
+        istore_0;
+        iinc_w 0, 300;
+        iload_0;
+        ireturn;
+    }
+}
