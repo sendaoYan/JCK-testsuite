@@ -22,6 +22,43 @@ public class l10nTest {
         return (java.util.ResourceBundle) ctor.newInstance();
     }
 
+    // 引擎消息目录会按默认 Locale 本地化（中文 Windows 上的 diagnostics/
+    // 异常文本是中文）。按 ResourceBundle 的候选 Locale 顺序反射实例化对应
+    // 资源包类，再把“模板中 {0} 之前/之后的部分”作为断言依据，避免把断言
+    // 绑死在英文文案上；基础资源包（英文）仍由 bundle() 直接校验。
+    static java.util.ResourceBundle localizedBundle() throws Exception {
+        String base = "jdk.jshell.resources.l10n";
+        java.util.ResourceBundle.Control ctl =
+                java.util.ResourceBundle.Control.getControl(
+                        java.util.ResourceBundle.Control.FORMAT_DEFAULT);
+        for (java.util.Locale l : ctl.getCandidateLocales(base, java.util.Locale.getDefault())) {
+            String className = ctl.toBundleName(base, l);
+            try {
+                Class<?> c = Class.forName(className);
+                java.lang.reflect.Constructor<?> ctor = c.getDeclaredConstructor();
+                ctor.setAccessible(true);
+                return (java.util.ResourceBundle) ctor.newInstance();
+            } catch (ClassNotFoundException ignore) {
+                // 该 Locale 没有翻译资源，继续按候选顺序回退
+            }
+        }
+        throw new AssertionError("no engine catalog bundle for " + java.util.Locale.getDefault());
+    }
+
+    static String template(String key) throws Exception {
+        return localizedBundle().getString(key);
+    }
+
+    static String beforePlaceholder(String pattern) {
+        int i = pattern.indexOf("{0}");
+        return i < 0 ? pattern : pattern.substring(0, i);
+    }
+
+    static String afterPlaceholder(String pattern) {
+        int i = pattern.indexOf("{0}");
+        return i < 0 ? "" : pattern.substring(i + 3);
+    }
+
     static void testMessageCatalog() throws Exception {
         java.util.ResourceBundle rb = bundle();
         java.util.Set<String> keys = new java.util.TreeSet<>(rb.keySet());
@@ -42,24 +79,30 @@ public class l10nTest {
                 check(rendered.contains("x"), "placeholder {0} filled for " + k);
         }
         // the {0}-filled messages are exactly what the engine reports
+        String omPrefix = beforePlaceholder(template("jshell.diag.object.method.fatal"));
         try (jdk.jshell.JShell js = jdk.jshell.JShell.builder().executionEngine("local").build()) {
             jdk.jshell.Snippet bad = js.eval("boolean equals(Object o) { return false; }").get(0).snippet();
             boolean saw = false;
             for (jdk.jshell.Diag d : js.diagnostics(bad).toList())
-                if (d.getMessage(null).startsWith("JShell method names must not match Object methods")) saw = true;
+                if (d.getMessage(null).startsWith(omPrefix)) saw = true;
             check(saw, "engine surfaces jshell.diag.object.method.fatal through diagnostics");
         }
+        String closedPattern = template("jshell.exc.closed");
+        String closedPrefix = beforePlaceholder(closedPattern);
+        String closedSuffix = afterPlaceholder(closedPattern);
         jdk.jshell.JShell closed = jdk.jshell.JShell.builder().executionEngine("local").build();
         closed.close();
         try { closed.eval("1"); } catch (IllegalStateException expected) {
-            check(expected.getMessage().startsWith("JShell (") && expected.getMessage().endsWith(" has been closed."),
+            check(expected.getMessage().startsWith(closedPrefix)
+                      && expected.getMessage().endsWith(closedSuffix),
                   "engine surfaces jshell.exc.closed on a closed shell");
         }
+        String alienPrefix = beforePlaceholder(template("jshell.exc.alien"));
         try (jdk.jshell.JShell a = jdk.jshell.JShell.builder().executionEngine("local").build();
              jdk.jshell.JShell b = jdk.jshell.JShell.builder().executionEngine("local").build()) {
             jdk.jshell.VarSnippet alien = (jdk.jshell.VarSnippet) a.eval("int av1 = 1;").get(0).snippet();
             try { b.varValue(alien); } catch (IllegalArgumentException expected) {
-                check(expected.getMessage().startsWith("Snippet not from this JShell"),
+                check(expected.getMessage().startsWith(alienPrefix),
                       "engine surfaces jshell.exc.alien for a foreign snippet");
             }
         }

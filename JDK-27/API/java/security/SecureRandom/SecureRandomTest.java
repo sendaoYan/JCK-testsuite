@@ -122,8 +122,9 @@ public class SecureRandomTest {
     // ---- contract deepening: metadata, determinism closed loops, primitive streams,
     //      edge-length seeds, and subclass fallback ("unknown") ----
     static void testContractDeep() throws Exception {
-        // default instance: platform-specific algorithm (NativePRNG on Linux,
-        // Windows-PRNG on Windows), seeded from entropy
+        // default instance: platform-specific algorithm (NativePRNG on Linux;
+        // DRBG on Windows, whose NativePRNG implementation is unavailable),
+        // seeded from entropy
         SecureRandom def = new SecureRandom();
         String defAlg = def.getAlgorithm();
         check(defAlg != null && !defAlg.isEmpty(), "default algorithm non-empty");
@@ -183,8 +184,9 @@ public class SecureRandomTest {
         check(q1.nextInt() == q2.nextInt(), "nextInt follows bytes determinism");
         check(q1.nextDouble() == q2.nextDouble(), "nextDouble follows bytes determinism");
 
-        // SecureRandom(byte[]) ctor uses the platform NativePRNG: the seed is only
-        // supplemental, so two identically-seeded ctors DIVERGE (fresh entropy)
+        // SecureRandom(byte[]) ctor uses the platform default algorithm (NativePRNG
+        // on Linux, DRBG on Windows): the seed is only supplemental, so two
+        // identically-seeded ctors DIVERGE (fresh entropy)
         SecureRandom c1 = new SecureRandom(seed);
         SecureRandom c2 = new SecureRandom(seed);
         byte[] b1 = new byte[64], b2 = new byte[64];
@@ -238,7 +240,18 @@ public class SecureRandomTest {
 
         // JDK-27 fork: toString is the algorithm/SPI name, generateSeed(-1) is IAE
         String ts = new SecureRandom().toString();
-        check(defAlg.equals(ts), "default toString is the default algorithm name");
+        if ("DRBG".equals(defAlg)) {
+            // Windows 的默认算法是 DRBG（SUN 提供者）：toString 是 SPI 描述串
+            // （Hash_DRBG,SHA-256,128,reseed_only），getParameters() 返回
+            // 128 位 RESEED_ONLY、无个性化串的默认 Instantiation。
+            check(ts.contains("DRBG"), "default DRBG toString names the mechanism: " + ts);
+            check(new SecureRandom().getParameters() instanceof DrbgParameters.Instantiation,
+                  "default DRBG getParameters is Instantiation");
+        } else {
+            check(defAlg.equals(ts), "default toString is the default algorithm name");
+            // getParameters: null for non-DRBG implementations
+            check(new SecureRandom().getParameters() == null, "default getParameters null");
+        }
         check("SecureRandom".equals(SecureRandom.getInstance("SHA1PRNG").toString()),
                 "SHA1PRNG toString is SPI name SecureRandom (JDK-27)");
         check(SecureRandom.getInstance("DRBG").toString().contains("DRBG"),
@@ -249,8 +262,6 @@ public class SecureRandomTest {
         } catch (IllegalArgumentException iae) {
             check(true, "generateSeed(-1) -> IllegalArgumentException (JDK-27)");
         }
-        // getParameters: null for non-DRBG implementations
-        check(new SecureRandom().getParameters() == null, "default getParameters null");
         check(SecureRandom.getInstance("SHA1PRNG").getParameters() == null, "SHA1PRNG getParameters null");
         // nextBytes(buf, null params) -> IAE with exact message
         final SecureRandom nbp = SecureRandom.getInstance("SHA1PRNG");

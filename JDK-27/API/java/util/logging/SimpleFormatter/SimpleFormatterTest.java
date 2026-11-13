@@ -18,6 +18,12 @@ public class SimpleFormatterTest {
         passed++;
     }
 
+    // SimpleFormatter 渲染的是 Level 的本地化名称：级别名随默认 Locale
+    // 本地化（中文 Windows 上 INFO 为“信息”、WARNING 为“警告”）。
+    static String levelText(Level l) {
+        return l.getLocalizedName();
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.util.logging.SimpleFormatter");
@@ -66,11 +72,12 @@ public class SimpleFormatterTest {
         java.util.logging.SimpleFormatter sf = new java.util.logging.SimpleFormatter();
         java.util.logging.LogRecord r = new java.util.logging.LogRecord(java.util.logging.Level.INFO, "plain-msg");
         String s = sf.format(r);
-        check(s.contains("INFO") && s.contains("plain-msg"), "format contains level and message");
+        check(s.contains(levelText(java.util.logging.Level.INFO)) && s.contains("plain-msg"),
+              "format contains level and message");
         // 时间戳与日志名可选字段
         java.util.logging.LogRecord named = new java.util.logging.LogRecord(java.util.logging.Level.WARNING, "w");
         named.setLoggerName("jck.sf");
-        check(sf.format(named).contains("WARNING"), "warning level rendered");
+        check(sf.format(named).contains(levelText(java.util.logging.Level.WARNING)), "warning level rendered");
         // getHead/getTail 默认空串
         check("".equals(sf.getHead(null)) && "".equals(sf.getTail(null)), "default head/tail empty");
         // null record NPE
@@ -94,7 +101,8 @@ public class SimpleFormatterTest {
               "format renders source class and method");
         // null message 不抛异常，级别仍被渲染
         String nullMsg = sf.format(new java.util.logging.LogRecord(java.util.logging.Level.INFO, null));
-        check(nullMsg.contains("INFO"), "format with null message still renders level");
+        check(nullMsg.contains(levelText(java.util.logging.Level.INFO)),
+              "format with null message still renders level");
         // getHead/getTail 对非 null handler 亦为空串（Formatter 默认实现）
         java.util.logging.Handler dummy = new java.util.logging.Handler() {
             public void publish(java.util.logging.LogRecord r) {}

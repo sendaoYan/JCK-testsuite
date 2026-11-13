@@ -198,8 +198,11 @@ public class JShellTest {
             try { js.varValue(rej); check(false, "varValue(REJECTED) must IAE"); }
             catch (IllegalArgumentException expected) {
                 check(true, "varValue(REJECTED) IAE");
-                check(expected.getMessage() != null && expected.getMessage().contains("must be VALID"),
-                      "varValue IAE message mentions VALID");
+                // jshell.exc.var.not.valid 的目录文本随默认 Locale 本地化
+                // （英文 “must be VALID”，中文 “必须为 VALID”），
+                // 但各语言版本都保留状态名 VALID，因此只断言该关键字。
+                check(expected.getMessage() != null && expected.getMessage().contains("VALID"),
+                      "varValue IAE message mentions VALID: " + expected.getMessage());
             }
             VarSnippet okv = (VarSnippet) js.eval("int okv2 = 3;").get(0).snippet();
             js.drop(okv);

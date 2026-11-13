@@ -52,7 +52,11 @@ public class JavaFileManagerTest {
         }
         javax.tools.StandardJavaFileManager fm =
                 jc.getStandardFileManager(null, Locale.ROOT, StandardCharsets.UTF_8);
-        Path dir = Files.createTempDirectory("jckjfm");
+        // Windows 的 java.io.tmpdir 可能带 8.3 短名（如 C:\Users\YANSEN~1\...）。
+        // PathFileObject.SimpleFileObject.inferBinaryName 用规范化（toRealPath 的长名）
+        // 路径比较，而 setLocation 保存的是我们传入的原始短名，二者不匹配会返回 null。
+        // 先 toRealPath() 统一成长名，使两边的规范化结果一致。
+        Path dir = Files.createTempDirectory("jckjfm").toRealPath();
         try {
             fm.setLocation(javax.tools.StandardLocation.SOURCE_PATH, List.of(dir.toFile()));
             Path src = dir.resolve("X.java");

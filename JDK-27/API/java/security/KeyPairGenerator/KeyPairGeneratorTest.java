@@ -107,11 +107,26 @@ public class KeyPairGeneratorTest {
                 () -> kpgWrong.initialize((AlgorithmParameterSpec) MGF1ParameterSpec.SHA256),
                 "initialize(wrong spec)");
 
-        // ---- null spec -> InvalidAlgorithmParameterException ----
+        // ---- null spec: provider-dependent ----
+        // Linux 上 RSA 只有 SunRsaSign 一个实现，null 参数抛
+        // InvalidAlgorithmParameterException；Windows 的提供者链里还有 SunMSCAPI，
+        // 其 CKeyPairGenerator 把 null 当作“默认 2048 位 RSA”接受，
+        // 因此 Delegate 故障转移后不会抛异常。
         final KeyPairGenerator kpgNull = KeyPairGenerator.getInstance("RSA");
-        checkThrows(InvalidAlgorithmParameterException.class,
-                () -> kpgNull.initialize((AlgorithmParameterSpec) null),
-                "initialize(null spec)");
+        if (Security.getProvider("SunMSCAPI") != null) {
+            try {
+                kpgNull.initialize((AlgorithmParameterSpec) null);
+                KeyPair kpNull = kpgNull.generateKeyPair();
+                check(kpNull.getPublic() != null && kpNull.getPrivate() != null,
+                      "Windows: initialize(null) falls over to SunMSCAPI default keypair");
+            } catch (InvalidAlgorithmParameterException iape) {
+                check(true, "Windows: initialize(null) rejected with InvalidAlgorithmParameterException");
+            }
+        } else {
+            checkThrows(InvalidAlgorithmParameterException.class,
+                    () -> kpgNull.initialize((AlgorithmParameterSpec) null),
+                    "initialize(null spec)");
+        }
 
         // ==== contract deepening: DSA/EC engines, size matrix, spec-driven generation ====
 

@@ -404,7 +404,10 @@ public class PropertiesTest {
         mc.setProperty("a", "b");
         StringWriter sw3 = new StringWriter();
         mc.store(sw3, "line1\nline2");
-        check(sw3.toString().contains("#line1\n#line2"), "multiline comment prefixed per line");
+        // store 写行尾用的是 BufferedWriter.newLine()，即平台行分隔符
+        // （Windows 为 "\r\n"），因此期望串用 System.lineSeparator() 拼。
+        check(sw3.toString().contains("#line1" + System.lineSeparator() + "#line2"),
+              "multiline comment prefixed per line");
     }
 
     static void testList() {
@@ -419,7 +422,9 @@ public class PropertiesTest {
         check(out.contains("short=v"), "list prints key=value");
         check(out.contains("longkey.name.here=0123456789012345678901234567890123456..."),
               "list truncates long value to 37 chars + ...");
-        check(!out.contains("67890123456789\n"), "list omits the truncated tail");
+        // list 用 PrintWriter.println，行尾是平台行分隔符
+        check(!out.contains("67890123456789" + System.lineSeparator()),
+              "list omits the truncated tail");
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         p.list(new PrintStream(bos));
         check(new String(bos.toByteArray()).contains("short=v"), "list(PrintStream) prints key=value");

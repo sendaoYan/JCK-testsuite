@@ -172,6 +172,15 @@ public class JdwpContractTest {
             check(vm != null, "SocketAttach connected to the debuggee");
 
             EventQueue queue = vm.eventQueue();
+            EventRequestManager erm = vm.eventRequestManager();
+            // 先在挂起状态下登记 ClassPrepareRequest，再恢复 VMStart 事件集。
+            // 否则恢复后调试目标可能在请求生效前就完成并退出，事件队列随后抛出
+            // VMDisconnectedException（Windows 上调试目标启动更快，更易命中该竞态）。
+            ClassPrepareRequest cpr = erm.createClassPrepareRequest();
+            cpr.addClassFilter("Debuggee");
+            cpr.setSuspendPolicy(EventRequest.SUSPEND_ALL);
+            cpr.enable();
+
             boolean sawVmStart = false;
             EventSet initial = queue.remove(3000);
             if (initial != null) {
@@ -181,11 +190,6 @@ public class JdwpContractTest {
             }
             check(sawVmStart, "attach delivered a VMStartEvent");
 
-            EventRequestManager erm = vm.eventRequestManager();
-            ClassPrepareRequest cpr = erm.createClassPrepareRequest();
-            cpr.addClassFilter("Debuggee");
-            cpr.setSuspendPolicy(EventRequest.SUSPEND_ALL);
-            cpr.enable();
             vm.resume();
 
             ReferenceType debuggeeType = waitClassPrepared(queue);

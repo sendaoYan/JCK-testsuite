@@ -180,12 +180,15 @@ public class FileTest {
 
     // ---- 8. normalization: getPath keeps ".", ".."; collapses duplicate seps; trims trailing sep ----
     static void testPathNormalization() throws Exception {
-        check("a/../b".equals(new File("a/../b").getPath()), "getPath keeps ..");
-        check("a/./b".equals(new File("a/./b").getPath()), "getPath keeps .");
-        check("a/b".equals(new File("a//b").getPath()), "duplicate separators collapsed");
-        check("a/b".equals(new File("a/b/").getPath()), "trailing separator trimmed");
-        check("a/../b".equals(new File("a/../b").getAbsolutePath()
-                  .substring(new File("a/../b").getAbsolutePath().length() - 6)),
+        // Windows 上 WinNTFileSystem.normalize 把 '/' 规范成 '\'，
+        // 因此期望串用平台分隔符拼接；Linux 上分隔符本来就是 '/'。
+        final char sep = File.separatorChar;
+        check(("a" + sep + ".." + sep + "b").equals(new File("a/../b").getPath()), "getPath keeps ..");
+        check(("a" + sep + "." + sep + "b").equals(new File("a/./b").getPath()), "getPath keeps .");
+        check(("a" + sep + "b").equals(new File("a//b").getPath()), "duplicate separators collapsed");
+        check(("a" + sep + "b").equals(new File("a/b/").getPath()), "trailing separator trimmed");
+        check(new File("a/../b").getAbsolutePath()
+                  .endsWith("a" + sep + ".." + sep + "b"),
               "getAbsolutePath does not resolve .. either");
         // canonical path resolves .. and . lexically against the working directory
         check(new File("a/../b").getCanonicalPath().equals(new File("b").getCanonicalPath()),
@@ -267,7 +270,20 @@ public class FileTest {
             check(f.createNewFile(), "create for permissions");
             check(f.canRead(), "new file canRead");
             check(f.canWrite(), "new file canWrite");
-            check(!f.canExecute(), "new file !canExecute");
+            if (File.separatorChar == '/') {
+                check(!f.canExecute(), "new file !canExecute");
+            } else {
+                // Windows：java.io.File 只映射“只读”属性；对存在的文件
+                // checkAccess(READ/EXECUTE) 恒为 true，setReadable/setExecutable 是空操作
+                // （WinNTFileSystem.setPermission0 对 READ/EXECUTE 直接返回 enable）。
+                check(f.canExecute(), "Windows: existing file canExecute is always true");
+                // 原生实现直接 return enable，即返回值等于传入的 enable 参数
+                check(!f.setReadable(false), "Windows: setReadable(false) returns false");
+                check(f.canRead(), "Windows: setReadable(false) does not revoke read (no-op)");
+                check(f.setReadable(true), "Windows: setReadable(true) returns true");
+                check(!f.setExecutable(false), "Windows: setExecutable(false) returns false");
+                check(f.canExecute(), "Windows: setExecutable(false) does not revoke execute (no-op)");
+            }
             check(f.setReadOnly(), "setReadOnly true");
             check(!f.canWrite(), "after setReadOnly canWrite false");
             check(f.canRead(), "after setReadOnly still readable");
@@ -276,20 +292,22 @@ public class FileTest {
             check(f.setWritable(false), "setWritable(false)");
             check(!f.canWrite(), "not writable");
             check(f.setWritable(true), "restore writable");
-            check(f.setReadable(false), "setReadable(false)");
-            check(!f.canRead(), "unreadable");
-            check(f.setReadable(true, true), "setReadable(true, ownerOnly=true)");
-            check(f.canRead(), "owner readable");
-            check(f.setReadable(false, false), "setReadable(false, ownerOnly=false)");
-            check(!f.canRead(), "ownerOnly=false clears every read bit");
-            check(f.setReadable(true), "restore readable");
-            check(f.setExecutable(true), "setExecutable(true)");
-            check(f.canExecute(), "executable");
-            check(f.setExecutable(false, true), "setExecutable(false, ownerOnly=true)");
-            check(!f.canExecute(), "owner bit cleared");
-            check(f.setExecutable(true, false), "setExecutable(true, ownerOnly=false)");
-            check(f.canExecute(), "all bits set");
-            check(f.setExecutable(false), "clear executable");
+            if (File.separatorChar == '/') {           // 读/执行位只有 POSIX 后端真正生效
+                check(f.setReadable(false), "setReadable(false)");
+                check(!f.canRead(), "unreadable");
+                check(f.setReadable(true, true), "setReadable(true, ownerOnly=true)");
+                check(f.canRead(), "owner readable");
+                check(f.setReadable(false, false), "setReadable(false, ownerOnly=false)");
+                check(!f.canRead(), "ownerOnly=false clears every read bit");
+                check(f.setReadable(true), "restore readable");
+                check(f.setExecutable(true), "setExecutable(true)");
+                check(f.canExecute(), "executable");
+                check(f.setExecutable(false, true), "setExecutable(false, ownerOnly=true)");
+                check(!f.canExecute(), "owner bit cleared");
+                check(f.setExecutable(true, false), "setExecutable(true, ownerOnly=false)");
+                check(f.canExecute(), "all bits set");
+                check(f.setExecutable(false), "clear executable");
+            }
 
             File missing = new File(d, "nope");
             check(!missing.canRead() && !missing.canWrite() && !missing.canExecute(),
@@ -327,7 +345,10 @@ public class FileTest {
             File f = new File(d, "e.txt");
             check(f.createNewFile(), "createNewFile first true");
             check(!f.createNewFile(), "createNewFile on existing false");
-            mustThrow(java.io.IOException.class, "No such file or directory",
+            // Windows 的系统错误文本随 OS 语言本地化（中文 Windows 为“系统找不到指定的路径。”），
+            // 因此只在 POSIX 上校验英文片段，Windows 仅校验异常类型。
+            mustThrow(java.io.IOException.class,
+                      File.separatorChar == '/' ? "No such file or directory" : null,
                       () -> new File(new File(d, "nodir"), "x").createNewFile(),
                       "createNewFile with missing parent");
             check(!new File(d, "zzz").delete(), "delete missing false");
@@ -461,7 +482,8 @@ public class FileTest {
             check(inTmp.getName().endsWith(".tmp"), "null suffix defaults to .tmp");
             check(inTmp.getName().startsWith("jckioH"), "prefix kept");
             check(inTmp.getParentFile().equals(d), "created inside explicit dir");
-            mustThrow(java.io.IOException.class, "No such file or directory",
+            mustThrow(java.io.IOException.class,
+                      File.separatorChar == '/' ? "No such file or directory" : null,
                       () -> File.createTempFile("jckioH", ".t", new File(d, "nodir")),
                       "createTempFile in missing dir");
             File def = File.createTempFile("jckioH", ".x");

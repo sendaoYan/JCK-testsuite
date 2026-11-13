@@ -168,7 +168,17 @@ public class PreferencesTest {
             n.put("z", "1");
             n.put("a", "2");
             n.put("m", "3");
-            check(java.util.Arrays.equals(n.keys(), new String[] {"a", "m", "z"}), "keys() sorted");
+            // keys() 的返回顺序未在规范中规定：Linux 文件后端恰好按字典序，
+            // Windows 注册表后端按注册表枚举顺序。先断言集合相等；文件后端的
+            // 有序性作为附加覆盖保留在 POSIX 分支。
+            String[] ks = n.keys();
+            java.util.Arrays.sort(ks);
+            check(java.util.Arrays.equals(ks, new String[] {"a", "m", "z"}),
+                  "keys() contains exactly a,m,z");
+            if (java.io.File.separatorChar == '/') {
+                check(java.util.Arrays.equals(n.keys(), new String[] {"a", "m", "z"}),
+                      "file backend keys() sorted");
+            }
             // clear 清空全部
             n.clear();
             check(n.keys().length == 0, "clear empties node");

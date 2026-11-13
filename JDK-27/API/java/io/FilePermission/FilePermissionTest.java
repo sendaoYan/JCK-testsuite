@@ -203,8 +203,15 @@ public class FilePermissionTest {
               "flat does not imply a recursive grant for the same dir");
         check(!new FilePermission("/tmp/*", "read").implies(new FilePermission("/tmp/x/-", "read")),
               "flat does not imply recursive under a child");
-        check(!new FilePermission("/tmp/A", "read").implies(new FilePermission("/tmp/a", "read")),
-              "Linux paths are case-sensitive in implies");
+        if (java.io.File.separatorChar == '/') {
+            check(!new FilePermission("/tmp/A", "read").implies(new FilePermission("/tmp/a", "read")),
+                  "Linux paths are case-sensitive in implies");
+        } else {
+            // Windows 文件系统大小写不敏感：FilePermission 用 WindowsPath 比较路径，
+            // WindowsPath.compareTo 走 equalsIgnoreCase，故大小写不同仍互相蕴含。
+            check(new FilePermission("/tmp/A", "read").implies(new FilePermission("/tmp/a", "read")),
+                  "Windows: implies is case-insensitive");
+        }
         FilePermission full = new FilePermission("/x", "read,write,execute,delete");
         check(full.implies(new FilePermission("/x", "read")), "full implies read");
         check(full.implies(new FilePermission("/x", "write")), "full implies write");
@@ -262,6 +269,8 @@ public class FilePermissionTest {
     static void testToStringContract() {
         FilePermission p = new FilePermission("/tmp/x", "write,read");
         String s = p.toString();
+        // Permission.getName() 返回构造时传入的原始串（不随平台规范化），
+        // 因此这里的非规范输入在 Windows 上同样原样出现在 toString 中。
         check(s.contains("/tmp/x"), "toString contains the path");
         check(s.contains("read,write"), "toString contains canonical actions");
         check(s.contains("java.io.FilePermission"), "toString contains the class name");

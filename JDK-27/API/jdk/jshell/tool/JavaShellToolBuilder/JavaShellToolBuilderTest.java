@@ -54,7 +54,10 @@ public class JavaShellToolBuilderTest {
                 .err(hps)
                 .persistence(new HashMap<String, String>())
                 .env(new HashMap<String, String>())
-                .locale(Locale.US)
+                // --help 文本随 Locale 本地化，而 ResourceBundle 对没有专有资源包的
+                // Locale（如 en_US）会回退到“默认 Locale”的资源包（中文 Windows 即中文）。
+                // 用 Locale.ROOT 固定取基础（英文）资源，跨平台断言同一份文本。
+                .locale(Locale.ROOT)
                 .interactiveTerminal(false);
         runner.run("--help");
         hps.flush();

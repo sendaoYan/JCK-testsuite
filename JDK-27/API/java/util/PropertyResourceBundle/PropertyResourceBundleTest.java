@@ -110,16 +110,20 @@ public class PropertyResourceBundleTest {
         java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("prb27");
         java.nio.file.Path iso = dir.resolve("iso.properties");
         java.nio.file.Files.write(iso, "k=caf\\u00e9".getBytes("ISO-8859-1"));
-        PropertyResourceBundle b1 = new PropertyResourceBundle(
-              new java.io.FileInputStream(iso.toFile()));
-        check("caf\u00e9".equals(b1.getString("k")),
-              "ISO-8859-1 file with unicode escape round-trips");
+        // PropertyResourceBundle(InputStream) 在构造时读完整个流，但不负责关闭它；
+        // Windows 无法删除仍被打开的句柄，故用 try-with-resources 显式关闭。
+        try (java.io.FileInputStream in = new java.io.FileInputStream(iso.toFile())) {
+            PropertyResourceBundle b1 = new PropertyResourceBundle(in);
+            check("caf\u00e9".equals(b1.getString("k")),
+                  "ISO-8859-1 file with unicode escape round-trips");
+        }
         java.nio.file.Path raw = dir.resolve("raw.properties");
         java.nio.file.Files.write(raw, "k=caf\u00e9".getBytes("UTF-8"));
-        PropertyResourceBundle b2 = new PropertyResourceBundle(
-              new java.io.FileInputStream(raw.toFile()));
-        check("caf\u00e9".equals(b2.getString("k")),
-              "JDK-9+ PropertyResourceBundle(InputStream) decodes UTF-8 directly");
+        try (java.io.FileInputStream in = new java.io.FileInputStream(raw.toFile())) {
+            PropertyResourceBundle b2 = new PropertyResourceBundle(in);
+            check("caf\u00e9".equals(b2.getString("k")),
+                  "JDK-9+ PropertyResourceBundle(InputStream) decodes UTF-8 directly");
+        }
         deletePrbTemp(dir);
     }
 

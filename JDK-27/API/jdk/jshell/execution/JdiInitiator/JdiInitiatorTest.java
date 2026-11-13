@@ -37,7 +37,10 @@ public class JdiInitiatorTest {
         check(vm.canBeModified(), "debuggee VM is modifiable");
         Process p = ii.process();
         check(p != null && p.isAlive(), "process() is the live debuggee process");
-        check(p.info().command().orElse("").endsWith("java"), "debuggee runs the java launcher");
+        // Windows 的启动器文件名是 java.exe，POSIX 上是 java
+        String javaName = new java.io.File(p.info().command().orElse("")).getName();
+        check(javaName.equals("java") || javaName.equalsIgnoreCase("java.exe"),
+              "debuggee runs the java launcher: " + p.info().command().orElse(""));
         vm.exit(0);
         check(p.waitFor() == 0, "vm.exit(0) terminates the debuggee with status 0");
     }
