@@ -103,14 +103,14 @@ public class ModuleTargetAttributeTest {
     static void testRealProducts() throws Exception {
         ClassModel jm = ClassFile.of().parse(Path.of(java.net.URI.create("jrt:/java.logging/module-info.class")));
         // The real JDK's module-info carries the platform it was built for,
-        // named the way the build names it (linux-amd64, macosx-aarch64,
+        // named the way the build names it (linux-amd64, macos-aarch64,
         // windows-amd64, ...).  os.name is the marketing name ("Windows Server
         // 2019", "Mac OS X"), so fold it to the build's OS token first.
         String osToken = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
         if (osToken.startsWith("windows")) {
             osToken = "windows";
         } else if (osToken.startsWith("mac")) {
-            osToken = "macosx";
+            osToken = "macos";
         } else {
             osToken = osToken.split(" ")[0];
         }

@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary javax.sound.midi.spi.MidiDeviceProvider conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main MidiDeviceProviderTest
  */
 

@@ -15,4 +15,4 @@ JDK 自带 `test/jdk/jdk/classfile/*.java`（如 ClassBuildingTest、SignaturesT
 ### 深化条目（2026-11-05 B 批，23 断言）
 - testFactoryOverloads：of(String)/of(Utf8Entry)（entry 身份保留）；of(null×2) NPE；NAME_MODULE_TARGET/CP_REFS。
 - testInjectRoundTrip：普通类 + module-info transform 注入回读。
-- testRealProducts：jrt java.logging ModuleTarget 等于构建平台名（linux-amd64 / windows-amd64 / macosx-aarch64…，由 os.name 归一化到构建方 OS token 后加 os.arch 推得）；javac 普通类不产。
+- testRealProducts：jrt java.logging ModuleTarget 等于构建平台名（linux-amd64 / windows-amd64 / macos-aarch64…，由 os.name 归一化到构建方 OS token 后加 os.arch 推得）；javac 普通类不产。

@@ -151,7 +151,8 @@ public class DirectoryStreamTest {
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.{txt,bin}")) {
                 int c = 0;
                 for (Path p : ds) c++;
-                check(c == 2, "glob brace alternation");
+                // a.txt + b.bin, plus c.TXT where the provider folds case.
+                check(c == (ci ? 3 : 2), "glob brace alternation: " + c);
             }
             // Filter throwing IOException -> DirectoryIteratorException with identical cause
             final java.io.IOException sentinel = new java.io.IOException("from-filter");

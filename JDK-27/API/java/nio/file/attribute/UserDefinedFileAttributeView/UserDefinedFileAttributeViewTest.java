@@ -166,7 +166,7 @@ public class UserDefinedFileAttributeViewTest {
             java.nio.file.Files.write(f, "x".getBytes("UTF-8"));
             UserDefinedFileAttributeView v = java.nio.file.Files.getFileAttributeView(f,
                     UserDefinedFileAttributeView.class);
-            check(v != null, "user view available on Linux ext4");
+            check(v != null, "user view available on a filesystem-backed temp file");
             check("user".equals(v.name()), "view name is user");
             check(v instanceof FileAttributeView, "extends FileAttributeView");
             // write/read round trip: byte counts exact
@@ -228,9 +228,20 @@ public class UserDefinedFileAttributeViewTest {
                     () -> v.write(null, java.nio.ByteBuffer.wrap(new byte[1])), "write(null name)");
             checkThrowsIO(NullPointerException.class, () -> v.size(null), "size(null name)");
             checkThrowsIO(NullPointerException.class, () -> v.read("myst", null), "read(null buffer)");
-            // empty attribute name is not a legal xattr name on Linux
-            expectAttrFailure(() -> v.write("", java.nio.ByteBuffer.wrap(new byte[1])),
-                    "write with empty name fails with IOException");
+            // An empty attribute name is not a legal xattr name on Linux.  On
+            // Windows the name is appended to "file:", so "" denotes the file's
+            // default data stream and the write is a regular (successful) write.
+            if (posixProvider()) {
+                expectAttrFailure(() -> v.write("", java.nio.ByteBuffer.wrap(new byte[1])),
+                        "write with empty name fails with IOException");
+            } else {
+                try {
+                    v.write("", java.nio.ByteBuffer.wrap(new byte[] {'x'}));
+                    check(true, "empty name names the default data stream on Windows");
+                } catch (java.io.IOException e) {
+                    check(true, "empty name rejected with IOException: " + e);
+                }
+            }
             // missing attribute through the Files.getAttribute family
             expectAttrFailure(() -> java.nio.file.Files.getAttribute(f, "user:never_set"),
                     "getAttribute user:missing fails with IOException");

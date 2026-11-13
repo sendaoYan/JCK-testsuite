@@ -269,8 +269,8 @@ public class MappedByteBufferTest {
                         "compact on a read-only mapped buffer -> ReadOnlyBufferException");
             }
         } finally {
-            Files.deleteIfExists(dir.resolve("matrix.bin"));
-            Files.deleteIfExists(dir);
+            deleteAfterUnmap(dir.resolve("matrix.bin"));
+            deleteAfterUnmap(dir);
         }
     }
 
@@ -313,8 +313,8 @@ public class MappedByteBufferTest {
                         "read-only map force(index,length) returns this without throwing (JDK-13+)");
             }
         } finally {
-            Files.deleteIfExists(dir.resolve("range.bin"));
-            Files.deleteIfExists(dir);
+            deleteAfterUnmap(dir.resolve("range.bin"));
+            deleteAfterUnmap(dir);
         }
     }
 

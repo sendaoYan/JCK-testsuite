@@ -85,11 +85,16 @@ public class PathsTest {
         check(Paths.get("/a", "b").equals(Paths.get("/a/b")), "root segment joined");
         check(Paths.get("a", "").equals(Paths.get("a")), "empty trailing segment tolerated");
         check(Paths.get("a/b", "c").equals(Paths.get("a/b/c")), "embedded separator in segment");
-        check(Paths.get("a", "b").toString().equals("a/b"), "joined toString a/b");
+        // The joined form uses the provider's own separator.
+        check(Paths.get("a", "b").toString().equals("a" + java.io.File.separatorChar + "b"),
+              "joined toString uses the platform separator");
         check(Paths.get("a", "b", "c").isAbsolute() == false, "relative join stays relative");
-        check(Paths.get("/tmp", "x").isAbsolute(), "absolute first segment absolute");
+        // A leading slash is drive-relative on Windows, so take the absolute
+        // base from the platform instead of assuming a POSIX root.
+        Path absBase = Paths.get(System.getProperty("java.io.tmpdir")).toAbsolutePath();
+        check(Paths.get(absBase.toString(), "x").isAbsolute(), "absolute first segment absolute");
         check(Paths.get("a/b/c").equals(Paths.get("a", "b", "c")), "single equals multi");
-        check(Paths.get("/").getNameCount() == 0, "root only");
+        check(Paths.get(absBase.getRoot().toString()).getNameCount() == 0, "root only");
         // JDK-11+ Path.of delegating factory mirrors Paths.get exactly
         check(Path.of("a", "b").equals(Paths.get("a", "b")), "Path.of mirrors Paths.get join");
         check(Path.of("/a", "b").equals(Paths.get("/a/b")), "Path.of root join");
@@ -99,7 +104,10 @@ public class PathsTest {
             Paths.get("a\0b");
             check(false, "NUL in path must throw InvalidPathException");
         } catch (java.nio.file.InvalidPathException e) {
-            check(e.getIndex() == -1, "InvalidPathException index -1 for NUL");
+            int idx = e.getIndex();
+            check(idx == -1 || (idx >= 0 && idx < "a\0b".length()
+                                && "a\0b".charAt(idx) == '\0'),
+                  "InvalidPathException index is -1 or points at the NUL: " + idx);
             check(e.getInput() != null && e.getInput().contains("a"), "InvalidPathException input");
         }
         checkThrows(NullPointerException.class, () -> Paths.get("a", (String[]) null),
@@ -113,18 +121,31 @@ public class PathsTest {
 
     // URI conversion matrix (probe-confirmed exact types)
     static void testUriMatrix() {
-        Path abs = Paths.get(URI.create("file:///tmp/x"));
-        check(abs.isAbsolute(), "file:///tmp/x absolute");
-        check("/tmp/x".equals(abs.toString()), "file:///tmp/x decodes to /tmp/x");
-        check(Paths.get(URI.create("file:///a%20b")).equals(Paths.get("/a b")),
-              "file URI decodes %20");
-        check(Paths.get(URI.create("file:///a%20b")).toUri().equals(URI.create("file:///a%20b")),
-              "escape round-trip a b");
-        check(Paths.get(URI.create("file:///")).equals(Paths.get("/")), "file:/// -> root");
-        check(Paths.get(URI.create("file:///a/b")).equals(
-                java.nio.file.FileSystems.getDefault().getPath("/a/b")),
-              "get(URI) equals default fs getPath");
-        check(Paths.get(URI.create("file:///tmp/x")).getFileSystem()
+        // Round-trip an absolute path the platform itself produces: file:///tmp
+        // is drive-relative (not absolute) on Windows.
+        Path tmp = Paths.get(System.getProperty("java.io.tmpdir")).toAbsolutePath();
+        Path decoded = Paths.get(tmp.toUri());
+        check(decoded.isAbsolute(), "absolute path's file URI decodes absolute");
+        check(decoded.equals(tmp), "file URI round-trips an absolute path");
+        Path spaced = tmp.resolve("a b");
+        check(spaced.toUri().getRawPath().contains("a%20b"), "space escaped in toUri");
+        check(Paths.get(spaced.toUri()).equals(spaced), "escape round-trip a b");
+        // The POSIX-rooted forms are only meaningful where / is absolute.
+        if (java.io.File.separatorChar == '/') {
+            Path abs = Paths.get(URI.create("file:///tmp/x"));
+            check(abs.isAbsolute(), "file:///tmp/x absolute");
+            check("/tmp/x".equals(abs.toString()), "file:///tmp/x decodes to /tmp/x");
+            check(Paths.get(URI.create("file:///a%20b")).equals(Paths.get("/a b")),
+                  "file URI decodes %20");
+            check(Paths.get(URI.create("file:///a%20b")).toUri()
+                      .equals(URI.create("file:///a%20b")),
+                  "escape round-trip a b");
+            check(Paths.get(URI.create("file:///")).equals(Paths.get("/")), "file:/// -> root");
+            check(Paths.get(URI.create("file:///a/b")).equals(
+                    java.nio.file.FileSystems.getDefault().getPath("/a/b")),
+                  "get(URI) equals default fs getPath");
+        }
+        check(Paths.get(tmp.toUri()).getFileSystem()
               == java.nio.file.FileSystems.getDefault(), "get(URI) default provider");
         check(Path.of(URI.create("file:///a/b")).equals(Paths.get(URI.create("file:///a/b"))),
               "Path.of(URI) mirrors Paths.get(URI) (JDK-11+)");

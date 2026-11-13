@@ -122,7 +122,11 @@ public class UserPrincipalTest {
               || (win && (u.getName().equalsIgnoreCase(me)
                           || u.getName().toLowerCase().endsWith("\\" + me.toLowerCase()))),
               "getName names the current user: " + u.getName());
-        check(u.toString().equals(u.getName()), "toString is the principal name");
+        // The Unix principal prints exactly its name; the Windows principal
+        // appends the account type, e.g. "DOMAIN" backslash "user (User)".
+        check(u.toString().equals(u.getName())
+              || (win && u.toString().startsWith(u.getName() + " (")),
+              "toString carries the principal name: " + u);
         check(u instanceof java.security.Principal, "is a Principal");
         check(!(u instanceof GroupPrincipal), "user principal is not a GroupPrincipal");
         // repeat lookups: equal values, distinct objects, consistent hashCode
@@ -153,10 +157,18 @@ public class UserPrincipalTest {
         try {
             java.nio.file.Path f = dir.resolve("f");
             java.nio.file.Files.write(f, "x".getBytes("UTF-8"));
-            check(java.nio.file.Files.readAttributes(f, PosixFileAttributes.class).owner().equals(u),
-                  "file owner equals looked-up principal");
-            check(java.nio.file.Files.getOwner(f) instanceof UserPrincipal,
-                  "Files.getOwner returns a UserPrincipal");
+            // PosixFileAttributes exists only where the posix view is supported;
+            // Files.getOwner works on every provider.
+            if (java.nio.file.FileSystems.getDefault().supportedFileAttributeViews()
+                    .contains("posix")) {
+                check(java.nio.file.Files.readAttributes(f, PosixFileAttributes.class)
+                          .owner().equals(u),
+                      "file owner equals looked-up principal");
+            }
+            UserPrincipal owner = java.nio.file.Files.getOwner(f);
+            check(owner instanceof UserPrincipal, "Files.getOwner returns a UserPrincipal");
+            check(owner.equals(u) || (win && owner.getName().equalsIgnoreCase(u.getName())),
+                  "file owner names the current user: " + owner);
         } finally {
             cleanup(dir);
         }
