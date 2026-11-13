@@ -24,16 +24,36 @@ public class AtomicMoveNotSupportedExceptionTest {
         check("why".equals(e.getReason()), "reason stored");
     }
 
+    /** A writable directory on a FileStore other than the one holding dir, or null. */
+    static java.nio.file.Path crossStoreDir(java.nio.file.Path dir) throws java.io.IOException {
+        java.nio.file.FileStore here = java.nio.file.Files.getFileStore(dir);
+        java.util.List<java.nio.file.Path> candidates = new java.util.ArrayList<>();
+        if (java.io.File.separatorChar == '/') {
+            candidates.add(java.nio.file.Path.of("/dev/shm"));
+        }
+        for (java.nio.file.Path root : java.nio.file.FileSystems.getDefault().getRootDirectories()) {
+            candidates.add(root);
+        }
+        for (java.nio.file.Path c : candidates) {
+            try {
+                if (!java.nio.file.Files.isDirectory(c) || !java.nio.file.Files.isWritable(c)) continue;
+                if (!java.nio.file.Files.getFileStore(c).equals(here)) return c;
+            } catch (java.io.IOException ignore) {
+                // not a usable candidate on this host
+            }
+        }
+        return null;
+    }
+
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() throws Exception {
 
         // cross-file-system ATOMIC_MOVE surfaces this exception
         java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("jck");
-        java.nio.file.Path other = java.nio.file.Path.of("/dev/shm");
-        java.nio.file.FileStore s1 = java.nio.file.Files.getFileStore(dir);
-        java.nio.file.FileStore s2 = java.nio.file.Files.getFileStore(other);
-        if (s1.equals(s2)) {
-            System.out.println("NOTE: tmp and /dev/shm share a store; move part skipped");
+        java.nio.file.Path other = crossStoreDir(dir);
+        if (other == null) {
+            System.out.println("NOTE: no second FileStore is reachable; cross-store move skipped");
+            java.nio.file.Files.deleteIfExists(dir);
             return;
         }
         try {
@@ -157,11 +177,10 @@ public class AtomicMoveNotSupportedExceptionTest {
         // /tmp (ext4) and /dev/shm (tmpfs) are different FileStores on this host (measured);
         // EXDEV surfaces as AtomicMoveNotSupportedException only under ATOMIC_MOVE
         java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("a11");
-        java.nio.file.Path shm = java.nio.file.Paths.get("/dev/shm");
-        java.nio.file.FileStore s1 = java.nio.file.Files.getFileStore(dir);
-        java.nio.file.FileStore s2 = java.nio.file.Files.getFileStore(shm);
-        if (s1.equals(s2)) {
-            System.out.println("NOTE: tmp and /dev/shm share a FileStore; trigger skipped");
+        java.nio.file.Path shm = crossStoreDir(dir);
+        if (shm == null) {
+            System.out.println("NOTE: no second FileStore is reachable; trigger skipped");
+            java.nio.file.Files.deleteIfExists(dir);
             return;
         }
         java.nio.file.Path shmOut = null;

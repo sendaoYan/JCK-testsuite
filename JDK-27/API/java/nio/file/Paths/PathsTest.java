@@ -65,9 +65,16 @@ public class PathsTest {
         check(Paths.get("a", "b").equals(Path.of("a", "b")), "Paths.get equals Path.of");
         check("".equals(Paths.get("").toString()), "empty path toString empty");
 
-        Path abs = Paths.get(URI.create("file:///tmp/x"));
+        // A file: URI round-trips this platform's own absolute path form; the
+        // POSIX "/tmp/x" spelling is a corner of that only where "/" is root.
+        Path tmpDir = Paths.get(System.getProperty("java.io.tmpdir")).toAbsolutePath();
+        Path abs = Paths.get(tmpDir.toUri());
         check(abs.isAbsolute(), "get(URI) absolute");
-        check("/tmp/x".equals(abs.toString()), "get(URI) path");
+        check(abs.equals(tmpDir), "get(URI) round-trips an absolute path");
+        if (java.io.File.separatorChar == '/') {
+            check("/tmp/x".equals(Paths.get(URI.create("file:///tmp/x")).toString()),
+                  "get(URI) keeps a POSIX absolute path");
+        }
     }
 
     // ===== deepened contract coverage (batch A9) =====

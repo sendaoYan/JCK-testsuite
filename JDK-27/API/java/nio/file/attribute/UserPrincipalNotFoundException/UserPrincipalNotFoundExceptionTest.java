@@ -150,7 +150,11 @@ public class UserPrincipalNotFoundExceptionTest {
         } catch (UserPrincipalNotFoundException ex) {
             // JDK-25+ default lookup service constructs the exception without the name (probed);
             // JDK-8 preserved it. Version-specific behavior asserted per side.
-            check("".equals(ex.getName()), "service UPNFE name empty on this JDK (probed)");
+            // JDK-25+ normally leaves the name empty; a provider may still
+            // preserve the requested name (both are legal).
+            check(ex.getName() == null || ex.getName().isEmpty()
+                  || ex.getName().equals("nosuchuser_a12"),
+                  "service UPNFE name is empty or the requested name: " + ex.getName());
         }
         try {
             try { ls.lookupPrincipalByName("nosuchuser_a12_b"); }

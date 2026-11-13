@@ -8,6 +8,7 @@ import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.PathMatcher;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -134,12 +135,18 @@ public class DirectoryStreamTest {
                 check(names.contains("c.TXT"), "case preserved");
                 check(allParented, "each entry's parent is the streamed dir");
             }
-            // glob is case-sensitive and supports brace alternation
+            // The directory-stream glob uses the same matcher the file system
+            // publishes; on a case-insensitive provider (Windows) c.TXT matches
+            // "*.txt" as well, so derive the expectation from that matcher.
+            PathMatcher txtGlob = dir.getFileSystem().getPathMatcher("glob:*.txt");
+            boolean ci = txtGlob.matches(Path.of("c.TXT"));
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.txt")) {
                 List<String> names = new ArrayList<>();
                 for (Path p : ds) names.add(p.getFileName().toString());
-                check(names.size() == 1 && names.get(0).equals("a.txt"),
-                      "glob *.txt exact, c.TXT excluded (case-sensitive)");
+                check(names.contains("a.txt"), "glob *.txt includes a.txt");
+                check(names.contains("c.TXT") == ci,
+                      "glob *.txt case rule agrees with the provider's matcher");
+                check(names.size() == (ci ? 2 : 1), "glob *.txt lists exactly the matches");
             }
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.{txt,bin}")) {
                 int c = 0;

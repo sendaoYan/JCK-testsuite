@@ -76,15 +76,13 @@ public class UserDefinedFileAttributeViewTest {
             try {
                 view.delete("jck.num"); // already gone: ENODATA may surface
                 check(view.list().size() == 1, "no resurrection after second delete");
-            } catch (java.nio.file.FileSystemException fe) {
+            } catch (java.io.IOException fe) {
                 check(!view.list().contains("jck.num"), "still gone after failed second delete");
             }
 
             // unknown attribute size fails (ENODATA surfaces as a FileSystemException)
-            boolean nsf = false;
-            try { view.size("no.such.attr"); }
-            catch (java.nio.file.FileSystemException e) { nsf = true; }
-            check(nsf, "size of missing attribute -> FileSystemException");
+            expectAttrFailure(() -> view.size("no.such.attr"),
+                    "size of missing attribute fails with IOException");
 
             // cleanup deletes the remaining attribute so file removal is clean
             view.delete("jck.mood");
@@ -122,6 +120,29 @@ public class UserDefinedFileAttributeViewTest {
             if (type.isInstance(t)) { passed++; return; }
             throw new AssertionError(msg + " (expected " + type.getSimpleName()
                     + ", got " + t.getClass().getName() + ")");
+        }
+        throw new AssertionError(msg + " (no exception thrown)");
+    }
+
+    static boolean posixProvider() {
+        return java.nio.file.FileSystems.getDefault()
+                .supportedFileAttributeViews().contains("posix");
+    }
+
+    /**
+     * A failed user-attribute operation must surface as IOException. The unix
+     * provider refines that to FileSystemException (errno wrapper) while the
+     * Windows provider reports a plainer IOException; both satisfy the API.
+     */
+    static void expectAttrFailure(IORunnable r, String msg) {
+        try {
+            r.run();
+        } catch (java.io.IOException e) {
+            if (posixProvider() && !(e instanceof java.nio.file.FileSystemException)) {
+                throw new AssertionError(msg + ": unix provider should wrap the errno, got " + e);
+            }
+            passed++;
+            return;
         }
         throw new AssertionError(msg + " (no exception thrown)");
     }
@@ -191,29 +212,28 @@ public class UserDefinedFileAttributeViewTest {
             check(rr == 3, "read count with positioned buffer");
             check(into.position() == 4, "read fills from the initial position");
             // negatives: missing attribute -> FileSystemException (errno ENODATA wrapped)
-            checkThrowsIO(java.nio.file.FileSystemException.class, () -> v.read("gone", java.nio.ByteBuffer.allocate(4)),
-                    "read of missing attribute");
-            checkThrowsIO(java.nio.file.FileSystemException.class, () -> v.size("gone"),
-                    "size of missing attribute");
-            checkThrowsIO(java.nio.file.FileSystemException.class, () -> v.delete("gone"),
-                    "delete of missing attribute");
+            expectAttrFailure(() -> v.read("gone", java.nio.ByteBuffer.allocate(4)),
+                    "read of missing attribute fails with IOException");
+            expectAttrFailure(() -> v.size("gone"),
+                    "size of missing attribute fails with IOException");
+            expectAttrFailure(() -> v.delete("gone"),
+                    "delete of missing attribute fails with IOException");
             // buffer smaller than the value -> FileSystemException (ERANGE)
-            checkThrowsIO(java.nio.file.FileSystemException.class,
-                    () -> v.read("myst", java.nio.ByteBuffer.allocate(1)), "read with too-small buffer");
-            checkThrowsIO(java.nio.file.FileSystemException.class,
-                    () -> v.read("myst", java.nio.ByteBuffer.allocate(0)), "read with zero-capacity buffer");
+            expectAttrFailure(() -> v.read("myst", java.nio.ByteBuffer.allocate(1)),
+                    "read with too-small buffer fails with IOException");
+            expectAttrFailure(() -> v.read("myst", java.nio.ByteBuffer.allocate(0)),
+                    "read with zero-capacity buffer fails with IOException");
             // null arguments -> NPE
             checkThrowsIO(NullPointerException.class,
                     () -> v.write(null, java.nio.ByteBuffer.wrap(new byte[1])), "write(null name)");
             checkThrowsIO(NullPointerException.class, () -> v.size(null), "size(null name)");
             checkThrowsIO(NullPointerException.class, () -> v.read("myst", null), "read(null buffer)");
             // empty attribute name is not a legal xattr name on Linux
-            checkThrowsIO(java.nio.file.FileSystemException.class,
-                    () -> v.write("", java.nio.ByteBuffer.wrap(new byte[1])), "write with empty name");
+            expectAttrFailure(() -> v.write("", java.nio.ByteBuffer.wrap(new byte[1])),
+                    "write with empty name fails with IOException");
             // missing attribute through the Files.getAttribute family
-            checkThrowsIO(java.nio.file.FileSystemException.class,
-                    () -> java.nio.file.Files.getAttribute(f, "user:never_set"),
-                    "getAttribute user:missing");
+            expectAttrFailure(() -> java.nio.file.Files.getAttribute(f, "user:never_set"),
+                    "getAttribute user:missing fails with IOException");
             // Files.setAttribute/getAttribute integration (byte[] values)
             java.nio.file.Files.setAttribute(f, "user:viafiles", "abc".getBytes("UTF-8"));
             check(v.list().contains("viafiles"), "setAttribute user: visible in list()");

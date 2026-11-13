@@ -158,13 +158,19 @@ public class BasicFileAttributesTest {
             java.nio.file.Files.write(f, "hello world".getBytes("UTF-8"));
             check(java.nio.file.Files.readAttributes(f, BasicFileAttributes.class).size() == 11L,
                   "size tracks content growth");
-            // fileKey: Linux implementation keys on device+inode; stable across reads
+            // fileKey is provider-specific and the spec allows null; where the
+            // provider exposes one it must be stable and consistently hashed.
             Object k1 = a.fileKey();
-            check(k1 != null, "fileKey non-null on Linux (dev+inode)");
             Object k2 = java.nio.file.Files.readAttributes(f, BasicFileAttributes.class).fileKey();
-            check(k1.equals(k2), "fileKey stable across reads");
-            check(k1.hashCode() == k2.hashCode(), "fileKey hashCode stable");
-            check(k1 != k2, "fileKey is a fresh object per read");
+            if (k1 == null) {
+                check(k2 == null, "a provider without file keys keeps reporting none");
+            } else {
+                check(k1.equals(k2), "fileKey stable across reads");
+                check(k1.hashCode() == k2.hashCode(), "fileKey hashCode stable");
+                if (!System.getProperty("os.name", "").toLowerCase().contains("windows")) {
+                    check(k1 != k2, "fileKey is a fresh object per read (unix provider)");
+                }
+            }
             // directory shape
             BasicFileAttributes da = java.nio.file.Files.readAttributes(dir, BasicFileAttributes.class);
             check(da.isDirectory(), "dir isDirectory");

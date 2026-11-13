@@ -20,6 +20,18 @@ public class UserPrincipalLookupServiceTest {
         passed++;
     }
 
+    static boolean windowsHost() {
+        return System.getProperty("os.name", "").toLowerCase().contains("windows");
+    }
+
+    /** The Windows provider may report the qualified DOMAIN\\user form. */
+    static boolean namesCurrentUser(String name) {
+        String me = System.getProperty("user.name");
+        return name.equals(me)
+            || (windowsHost() && (name.equalsIgnoreCase(me)
+                                  || name.toLowerCase().endsWith("\\" + me.toLowerCase())));
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.nio.file.attribute.UserPrincipalLookupService");
@@ -47,15 +59,20 @@ public class UserPrincipalLookupServiceTest {
             var u1 = lookup.lookupPrincipalByName(me);
             var u2 = lookup.lookupPrincipalByName(me);
             check(u1 != null && u1.equals(u2), "user lookup deterministic");
-            check(u1.getName().equals(me), "name preserved");
+            check(namesCurrentUser(u1.getName()), "name preserved: " + u1.getName());
 
-            // group lookup: primary group of this user is discoverable via file metadata
-            Path probe = dir.resolve("probe");
-            Files.writeString(probe, "p");
-            GroupPrincipal group = Files.readAttributes(probe,
-                    java.nio.file.attribute.PosixFileAttributes.class).group();
-            GroupPrincipal found = lookup.lookupPrincipalByGroupName(group.getName());
-            check(found != null && found.equals(group), "group lookup round trip");
+            // group lookup: on a POSIX provider the user's primary group is
+            // discoverable through file metadata; Windows has no posix view.
+            if (dir.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+                Path probe = dir.resolve("probe");
+                Files.writeString(probe, "p");
+                GroupPrincipal group = Files.readAttributes(probe,
+                        java.nio.file.attribute.PosixFileAttributes.class).group();
+                GroupPrincipal found = lookup.lookupPrincipalByGroupName(group.getName());
+                check(found != null && found.equals(group), "group lookup round trip");
+            } else {
+                System.out.println("NOTE: no posix view on this provider; group round-trip skipped");
+            }
 
             // error cases
             boolean upnfe = false;
@@ -135,20 +152,22 @@ public class UserPrincipalLookupServiceTest {
         // name lookup contract
         UserPrincipal u = ls.lookupPrincipalByName(System.getProperty("user.name"));
         check(u != null, "lookupPrincipalByName(current user) non-null");
-        check(u.getName().equals(System.getProperty("user.name")), "name round-trip");
+        check(namesCurrentUser(u.getName()), "name round-trip: " + u.getName());
         check(ls.lookupPrincipalByName(System.getProperty("user.name")).equals(u), "repeat lookup equal");
-        // group lookup contract
-        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("a12-ls");
-        try {
-            java.nio.file.Path f = dir.resolve("f");
-            java.nio.file.Files.write(f, "x".getBytes("UTF-8"));
-            String groupName = java.nio.file.Files.readAttributes(f, PosixFileAttributes.class).group().getName();
-            GroupPrincipal g = ls.lookupPrincipalByGroupName(groupName);
-            check(g != null, "lookupPrincipalByGroupName(file group) non-null");
-            check(g.getName().equals(groupName), "group name round-trip");
-            check(ls.lookupPrincipalByGroupName(groupName).equals(g), "repeat group lookup equal");
-        } finally {
-            cleanup(dir);
+        // group lookup contract (POSIX file metadata only)
+        if (java.nio.file.FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("a12-ls");
+            try {
+                java.nio.file.Path f = dir.resolve("f");
+                java.nio.file.Files.write(f, "x".getBytes("UTF-8"));
+                String groupName = java.nio.file.Files.readAttributes(f, PosixFileAttributes.class).group().getName();
+                GroupPrincipal g = ls.lookupPrincipalByGroupName(groupName);
+                check(g != null, "lookupPrincipalByGroupName(file group) non-null");
+                check(g.getName().equals(groupName), "group name round-trip");
+                check(ls.lookupPrincipalByGroupName(groupName).equals(g), "repeat group lookup equal");
+            } finally {
+                cleanup(dir);
+            }
         }
         // unknown names -> UserPrincipalNotFoundException
         try {
@@ -156,14 +175,20 @@ public class UserPrincipalLookupServiceTest {
             check(false, "unknown user lookup must throw");
         } catch (UserPrincipalNotFoundException e) {
             // JDK-25+ throws UPNFE with an empty name (probed on 25/26/27); JDK-8 preserved the name.
-                check("".equals(e.getName()), "UPNFE name empty on this JDK (probed)");
+                // JDK-25+ normally leaves the name empty; a provider may still
+                // preserve the requested name (both are legal).
+                check(e.getName() == null || e.getName().isEmpty()
+                      || e.getName().equals("nosuchuser_a12"),
+                      "UPNFE name is empty or the requested name: " + e.getName());
         }
         try {
             ls.lookupPrincipalByGroupName("nosuchgroup_a12");
             check(false, "unknown group lookup must throw");
         } catch (UserPrincipalNotFoundException e) {
             // JDK-25+ throws UPNFE with an empty name (probed on 25/26/27); JDK-8 preserved the name.
-                check("".equals(e.getName()), "UPNFE name empty on this JDK (probed)");
+                check(e.getName() == null || e.getName().isEmpty()
+                      || e.getName().equals("nosuchgroup_a12"),
+                      "UPNFE name is empty or the requested name: " + e.getName());
         }
         try {
             ls.lookupPrincipalByName("");

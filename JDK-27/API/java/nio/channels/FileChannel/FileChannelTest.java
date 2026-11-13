@@ -38,7 +38,24 @@ public class FileChannelTest {
                 for (Path c : s.toList()) deleteRecursively(c);
             }
         }
-        Files.deleteIfExists(p);
+        // A memory-mapped region is released only when its buffer is collected;
+        // on Windows the file stays undeletable until then, so give the GC a
+        // nudge and retry before falling back to deletion at exit.
+        for (int i = 0; i < 10; i++) {
+            try {
+                Files.deleteIfExists(p);
+                return;
+            } catch (IOException stillMapped) {
+                System.gc();
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        p.toFile().deleteOnExit();
     }
 
     // ---- Part 1: white-box (structural) ----

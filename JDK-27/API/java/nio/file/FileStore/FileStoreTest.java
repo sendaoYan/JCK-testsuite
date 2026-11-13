@@ -54,7 +54,9 @@ public class FileStoreTest {
             FileStore store = Files.getFileStore(f);
 
             // descriptive metadata is present and sane
-            check(store.name() != null && !store.name().isEmpty(), "name non-empty");
+            // name() is the store's label; a Windows volume without a label
+            // reports the empty string, so only presence is required.
+            check(store.name() != null, "name reported");
             check(store.type() != null && !store.type().isEmpty(), "type non-empty");
             check(!store.isReadOnly(), "default store writable");
 
@@ -114,7 +116,7 @@ public class FileStoreTest {
             Files.createDirectory(sub);
 
             FileStore st = Files.getFileStore(f);
-            check(st.name() != null && !st.name().isEmpty(), "name non-empty (device on Linux)");
+            check(st.name() != null, "name reported (device label or empty)");
             check(st.type() != null && !st.type().isEmpty(), "type non-empty (fs type)");
             check(!st.isReadOnly(), "writable store");
             check(st.toString() != null && !st.toString().isEmpty(), "toString non-empty");

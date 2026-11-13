@@ -140,9 +140,31 @@ public class MappedByteBufferTest {
                 check(legacy.capacity() == 256, "legacy map");
             }
         } finally {
-            Files.deleteIfExists(dir.resolve("mapped.bin"));
-            Files.deleteIfExists(dir);
+            deleteAfterUnmap(dir.resolve("mapped.bin"));
+            deleteAfterUnmap(dir);
         }
+    }
+
+    /**
+     * Windows refuses to delete a file while any mapped region of it is still
+     * resident; the mapping is released when its buffer is collected.
+     */
+    static void deleteAfterUnmap(java.nio.file.Path p) {
+        for (int i = 0; i < 10; i++) {
+            try {
+                Files.deleteIfExists(p);
+                return;
+            } catch (java.io.IOException stillMapped) {
+                System.gc();
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        p.toFile().deleteOnExit();
     }
 
     /**

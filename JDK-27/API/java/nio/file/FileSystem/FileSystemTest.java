@@ -139,7 +139,9 @@ public class FileSystemTest {
             if (first == null) first = s;
         }
         check(storeCount >= 1, "at least one file store");
-        check(first != null && !first.name().isEmpty(), "first store name non-empty");
+        // FileStore.name() is the provider's label for the store; a Windows
+        // volume that carries no label legitimately reports the empty string.
+        check(first != null && first.name() != null, "first store name present");
         check(first != null && !first.type().isEmpty(), "first store type non-empty");
 
         // supported views (basic/owner/user always; posix is Unix-only)

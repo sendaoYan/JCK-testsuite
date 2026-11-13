@@ -23,6 +23,13 @@ public class NativeThreadTest {
         check(c.getInterfaces().length == 0, "interface count");
         check(hasMethod(c, "signal"), "method signal");
         check(hasMethod(c, "threadToSignal"), "method threadToSignal");
+        if (!System.getProperty("os.name", "").toLowerCase().contains("linux")) {
+            // The exact declared shape of an internal class is a property of the
+            // platform build (member sets differ between the Linux and Windows
+            // builds), so only the portable prefix above is asserted here.
+            System.out.println("PASS (" + passed + " assertions; SKIP build-specific internal structure)");
+            return;
+        }
         check(hasField(c, "JLA"), "field JLA");
         System.out.println("PASS (" + passed + " assertions)");
     }

@@ -125,7 +125,8 @@ public class FileStoreAttributeViewTest {
             java.nio.file.Files.write(f, "x".getBytes("UTF-8"));
             java.nio.file.FileStore st = java.nio.file.Files.getFileStore(f);
             check(st != null, "FileStore non-null");
-            check(st.name() != null && !st.name().isEmpty(), "store name non-empty");
+            // A volume without a label reports an empty name.
+            check(st.name() != null, "store name reported");
             check(st.type() != null && !st.type().isEmpty(), "store type non-empty");
             check(st.toString().contains(st.name()), "toString mentions store name");
             // Linux ext4: no FileStoreAttributeView is published (space stats come via getAttribute)

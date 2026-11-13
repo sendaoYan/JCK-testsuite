@@ -115,8 +115,14 @@ public class UserPrincipalTest {
         check(ls != null, "default lookup service non-null");
         UserPrincipal u = ls.lookupPrincipalByName(System.getProperty("user.name"));
         check(u != null, "lookup of current user non-null");
-        check(u.getName().equals(System.getProperty("user.name")), "getName equals user.name");
-        check(u.toString().equals(u.getName()), "toString is the name (Unix implementation)");
+        // The Windows provider may report the domain-qualified user form.
+        String me = System.getProperty("user.name");
+        boolean win = System.getProperty("os.name", "").toLowerCase().contains("windows");
+        check(u.getName().equals(me)
+              || (win && (u.getName().equalsIgnoreCase(me)
+                          || u.getName().toLowerCase().endsWith("\\" + me.toLowerCase()))),
+              "getName names the current user: " + u.getName());
+        check(u.toString().equals(u.getName()), "toString is the principal name");
         check(u instanceof java.security.Principal, "is a Principal");
         check(!(u instanceof GroupPrincipal), "user principal is not a GroupPrincipal");
         // repeat lookups: equal values, distinct objects, consistent hashCode

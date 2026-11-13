@@ -339,9 +339,16 @@ public class PathTest {
         java.util.Iterator<Path> it = set.iterator();
         List<Path> order = new ArrayList<>();
         while (it.hasNext()) order.add(it.next());
-        check(order.get(0).equals(abs("a")) && order.get(1).equals(abs("a", "b"))
-              && order.get(2).equals(abs("a", "b", "c")) && order.get(3).equals(abs("a", "bc")),
-              "TreeSet sorted lexicographically");
+        // Path ordering is implementation-dependent: the Windows provider
+        // compares the raw string with a '\\' separator, where '\\' sorts
+        // after the letters, so "a\\bc" comes before "a\\b\\c" there.
+        boolean win = System.getProperty("os.name", "").toLowerCase().contains("windows");
+        List<Path> expected = win
+                ? java.util.Arrays.asList(abs("a"), abs("a", "b"), abs("a", "bc"), abs("a", "b", "c"))
+                : java.util.Arrays.asList(abs("a"), abs("a", "b"), abs("a", "b", "c"), abs("a", "bc"));
+        boolean same = order.size() == expected.size();
+        for (int i = 0; same && i < order.size(); i++) same = order.get(i).equals(expected.get(i));
+        check(same, "TreeSet follows the provider's compareTo order: " + order);
     }
 
     // iterator exact order and Iterable for-each

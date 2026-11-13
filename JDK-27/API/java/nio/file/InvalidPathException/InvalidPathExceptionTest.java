@@ -167,7 +167,12 @@ public class InvalidPathExceptionTest {
                     "input echoed");
             check(e.getReason() != null && !e.getReason().isEmpty(),
                   "reason non-empty (OS-localized NUL message)");
-            check(e.getIndex() == -1, "NUL is not a per-index error: index -1");
+            // The provider may report -1 (no position) or the offset of the
+            // offending NUL; both are within the contract of getIndex().
+            int idx = e.getIndex();
+            check(idx == -1 || (idx >= 0 && idx < "a\u0000b".length()
+                                && "a\u0000b".charAt(idx) == '\u0000'),
+                  "index is -1 or points at the NUL: " + idx);
             check(e.getMessage() != null && e.getMessage().contains("a\u0000b"),
                   "message contains the input path");
         }

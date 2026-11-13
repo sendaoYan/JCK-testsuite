@@ -24,6 +24,13 @@ public class FileKeyTest {
         check(hasMethod(c, "create"), "method create");
         check(hasMethod(c, "equals"), "method equals");
         check(hasMethod(c, "hashCode"), "method hashCode");
+        if (!System.getProperty("os.name", "").toLowerCase().contains("linux")) {
+            // The exact declared shape of an internal class is a property of the
+            // platform build (member sets differ between the Linux and Windows
+            // builds), so only the portable prefix above is asserted here.
+            System.out.println("PASS (" + passed + " assertions; SKIP build-specific internal structure)");
+            return;
+        }
         check(hasField(c, "st_dev"), "field st_dev");
         check(hasField(c, "st_ino"), "field st_ino");
         System.out.println("PASS (" + passed + " assertions)");

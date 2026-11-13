@@ -65,7 +65,11 @@ public class PathMatcherTest {
               "brace alternation");
         PathMatcher klass = fs.getPathMatcher("glob:[A-Z]*");
         check(klass.matches(Path.of("Abc")), "char class matches");
-        check(!klass.matches(Path.of("abc")), "char class rejects lowercase");
+        // Glob matching follows the provider's case sensitivity: the Windows
+        // provider folds case, so [A-Z] also accepts "abc" there.
+        boolean foldCase = System.getProperty("os.name", "").toLowerCase().contains("windows");
+        check(klass.matches(Path.of("abc")) == foldCase,
+              "char class case rule follows the platform provider");
 
         // regex syntax behaves as java.util.regex against the whole path string
         PathMatcher regex = fs.getPathMatcher("regex:.*\\.java");
