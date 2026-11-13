@@ -300,11 +300,16 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
               (Get-HeapTokens $TestHeapMB $JavacHeapMB $tag) + $flagTokens + $dirs
     # jtreg's verbose stdout is UTF-16LE on this box; PowerShell decodes it
     # single-byte, so each ASCII char is followed by a NUL. Strip the NUL fill
-    # bytes before writing/parsing (see the encoding note above).
-    $out = @(& $JTREG_JAVA @jtArgs 2>&1 | ForEach-Object { ([string]$_).Replace([string]([char]0), "") })
-    if ($out.Count -gt 0) {
-        [System.IO.File]::AppendAllLines($LOG, [string[]]$out, $Utf8NoBom)
+    # bytes before writing/parsing (see the encoding note above).  Each line is
+    # appended to console.log as it arrives, so a multi-hour tree can be watched
+    # live (and a run that dies still leaves everything it printed).
+    $out = New-Object System.Collections.ArrayList
+    & $JTREG_JAVA @jtArgs 2>&1 | ForEach-Object {
+        $l = ([string]$_).Replace([string]([char]0), "")
+        [void]$out.Add($l)
+        [System.IO.File]::AppendAllText($LOG, $l + "`r`n", $Utf8NoBom)
     }
+    $out = @($out)
 
     # Failed/error list from the verbose stream (see Parse-Failures), with the
     # report summary as a fallback for the (unusual) case where the verbose
