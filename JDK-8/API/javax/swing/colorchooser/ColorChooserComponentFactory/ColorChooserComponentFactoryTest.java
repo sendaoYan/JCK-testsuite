@@ -58,17 +58,28 @@ public class ColorChooserComponentFactoryTest {
         AbstractColorChooserPanel[] panels = ColorChooserComponentFactory.getDefaultChooserPanels();
         check(panels != null, "getDefaultChooserPanels non-null");
         check(panels.length == 5, "Metal default panel count 5");
-        StringBuilder names = new StringBuilder();
-        for (AbstractColorChooserPanel p : panels) {
+        // 面板显示名来自 UIManager 资源键，随默认 locale 本地化（中文 Windows
+        // 上不是 Swatches/HSV/...）。用实现所用的同一组资源键取期望值，并额外
+        // 校验名称互不相同，保持“五个可区分的面板”这一契约。
+        String[] nameKeys = {
+            "ColorChooser.swatchesNameText", "ColorChooser.hsvNameText",
+            "ColorChooser.hslNameText", "ColorChooser.rgbNameText",
+            "ColorChooser.cmykNameText",
+        };
+        Set<String> names = new HashSet<String>();
+        for (int i = 0; i < panels.length; i++) {
+            AbstractColorChooserPanel p = panels[i];
             check(p != null, "panel element non-null");
             check(p instanceof AbstractColorChooserPanel, "panel is AbstractColorChooserPanel");
             check(p.getDisplayName() != null, "panel has display name");
             check(p.getMnemonic() != 0, "panel mnemonic set");
             check(p.getDisplayedMnemonicIndex() >= 0, "panel displayed mnemonic index valid");
-            names.append(p.getDisplayName()).append(';');
+            String expected = UIManager.getString(nameKeys[i], p.getLocale());
+            check(expected != null && expected.equals(p.getDisplayName()),
+                  "panel " + i + " display name matches " + nameKeys[i] + " [" + p.getDisplayName() + "]");
+            names.add(p.getDisplayName());
         }
-        check(names.toString().equals("Swatches;HSV;HSL;RGB;CMYK;"),
-              "Metal panel display names Swatches/HSV/HSL/RGB/CMYK");
+        check(names.size() == panels.length, "panel display names are distinct");
 
         // preview panel: fresh JComponent each call, DefaultPreviewPanel type
         JComponent preview = ColorChooserComponentFactory.getPreviewPanel();

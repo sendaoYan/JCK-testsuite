@@ -227,7 +227,11 @@ public class AbstractDocumentTest {
         check(d.getUndoableEditListeners().length == 1, "undoable listener registered");
         d.insertString(0, "ab", null);
         check(events.size() == 1, "one event per insert");
-        check(events.get(0).equals("addition:true:true"), "insert edit presentation/significance/source");
+        // 展示名来自 UIManager 资源键，随默认 locale 本地化（中文 Windows 上
+        // 不是 "addition"）；用实现所用的同一资源键取期望值。
+        String additionText = javax.swing.UIManager.getString("AbstractDocument.additionText");
+        check(additionText != null && additionText.length() > 0, "AbstractDocument.additionText resource present");
+        check(events.get(0).equals(additionText + ":true:true"), "insert edit presentation/significance/source");
         d.remove(0, 1);
         check(events.size() == 2, "one event per remove");
         d.insertString(0, "", null); // no-op, no event

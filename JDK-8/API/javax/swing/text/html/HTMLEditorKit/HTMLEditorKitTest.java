@@ -146,8 +146,13 @@ public class HTMLEditorKitTest {
         check(kit.isAutoFormSubmission() == false, "setAutoFormSubmission round-trip");
         kit.setAutoFormSubmission(true);
 
-        check("Default Cursor".equals(kit.getDefaultCursor().getName()), "default cursor name");
-        check("Hand Cursor".equals(kit.getLinkCursor().getName()), "link cursor name");
+        // 光标名通过 Toolkit.getProperty 本地化（中文 Windows 上不是
+        // "Default Cursor"/"Hand Cursor"）；实现用的就是这两个预定义光标，
+        // 因此与同类型的预定义光标名字比较，语义仍是“默认/链接光标类型正确”。
+        check(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.DEFAULT_CURSOR).getName()
+                  .equals(kit.getDefaultCursor().getName()), "default cursor name");
+        check(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR).getName()
+                  .equals(kit.getLinkCursor().getName()), "link cursor name");
         java.awt.Cursor hand = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR);
         kit.setDefaultCursor(hand);
         kit.setLinkCursor(hand);
