@@ -11,9 +11,8 @@
 
   First non-flag token is the label (default "baseline"); every remaining token
   is passed verbatim to run-windows-full.ps1 as a JVM flag (it reads $args, so
-  -XX:+... tokens survive intact).  The child's stdout/stderr go to
-  windows\sweep-<label>.out / .err; jtreg results land in
-  windows-results\<label>\ as usual (poll console.log there).
+  -XX:+... tokens survive intact).  The child runs hidden and detached; its
+  authoritative log is windows-results\<label>\console.log (poll that).
 
   Deliberately has NO param() block: that way -XX:+UseG1GC etc. are NOT eaten by
   PowerShell's parameter binder and land in $args verbatim.
@@ -36,15 +35,15 @@ if ($args -and $args.Count -gt 0) {
 }
 
 $run = Join-Path $PSScriptRoot "run-windows-full.ps1"
-$out = Join-Path $PSScriptRoot ("sweep-" + $label + ".out")
-$err = Join-Path $PSScriptRoot ("sweep-" + $label + ".err")
-
 $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $run) + $flags
 
-$p = Start-Process -FilePath "powershell.exe" -ArgumentList $argList `
-    -WindowStyle Hidden -PassThru `
-    -RedirectStandardOutput $out -RedirectStandardError $err
+# NO -RedirectStandardOutput/-RedirectStandardError: in PS 5.1 those leave a
+# stdout pipe that keeps the calling PowerShell alive until the long-running
+# child exits, which blocks the single-threaded reverse shell for the whole
+# sweep.  run-windows-full.ps1 already writes its authoritative log to
+# windows-results\<label>\console.log, so capturing the child's stdout is not
+# needed — Start-Process without redirection returns immediately.
+$p = Start-Process -FilePath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden -PassThru
 
 Write-Host ("launched pid=" + $p.Id + " label=" + $label + " flags=[" + ($flags -join ' ') + "]")
-Write-Host ("stdout -> " + $out)
-Write-Host ("results -> " + (Join-Path $PSScriptRoot "windows-results\" + $label))
+Write-Host ("results -> " + (Join-Path $PSScriptRoot "windows-results\" + $label + "\console.log"))
