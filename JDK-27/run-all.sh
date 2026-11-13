@@ -53,4 +53,4 @@ echo "测试范围    : ${TEST_DIRS[*]}"
 echo "工作/报告   : $W / $R"
 
 export JTREG_JAVA
-"$JTREG" -jdk:"$JDK" -w "$W" -r "$R" -verbose:summary "${TEST_DIRS[@]}" "$@"
+"$JTREG" -jdk:"$JDK" -w "$W" -r "$R" -verbose:summary "$@" "${TEST_DIRS[@]}"
