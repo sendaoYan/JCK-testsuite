@@ -196,7 +196,9 @@ public class UnknownErrorTest {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         t.printStackTrace(new PrintStream(bos, true, "UTF-8"));
         String txt = new String(bos.toByteArray(), "UTF-8");
-        String[] lines = txt.split("\n");
+        // printStackTrace terminates each line with the platform line
+        // separator, so a Windows trace ends lines with \r\n.
+        String[] lines = txt.split("\\r?\\n");
         check("java.lang.UnknownError: m".equals(lines[0]), "printStackTrace first line exact");
         check(txt.contains("\tat "), "printStackTrace contains tab-prefixed frames");
         check(txt.contains("Caused by: java.lang.RuntimeException: c"), "Caused by: line exact");
