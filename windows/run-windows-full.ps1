@@ -86,15 +86,24 @@ New-Item -ItemType Directory -Force -Path $resDir | Out-Null
 
 $LOG = Join-Path $resDir "console.log"
 
-# console.log is written UTF-8 (no BOM) throughout. Windows PowerShell 5.1's
-# Tee-Object / Out-File / Add-Content default to UTF-16LE (or the ANSI code
-# page), which interleaves NUL bytes into the log and shows up as "invisible
-# characters". One explicit encoding object is reused by every write below.
+# console.log is written UTF-8 (no BOM) throughout. Two separate corruption
+# sources are neutralised here:
+#   1. Windows PowerShell 5.1's Tee-Object / Out-File / Add-Content default to
+#      UTF-16LE (or the ANSI code page), interleaving NUL bytes into the log.
+#   2. jtreg's own STDOUT on this box is UTF-16LE (its stderr summary is plain
+#      ASCII). PowerShell 5.1 decodes that UTF-16LE stdout one byte at a time,
+#      leaving a NUL character after every ASCII char (e.g. "on" -> "o`0n`0").
+#      Re-encoding that as UTF-8 writes the NULs as 0x00 bytes -> the log reads
+#      as "invisible characters".
+# A single UTF-8 (no BOM) encoding object is reused for every write, and every
+# line is NUL-stripped (.Replace([char]0,"")) to undo the UTF-16LE mis-decode.
+# That strip is a no-op for the clean lines (script messages, stderr summary,
+# java -version), so it is safe to apply uniformly.
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Log([string]$text) {
     Write-Host $text
-    [System.IO.File]::AppendAllText($LOG, $text + "`r`n", $Utf8NoBom)
+    [System.IO.File]::AppendAllText($LOG, $text.Replace([char]0, "") + "`r`n", $Utf8NoBom)
 }
 
 # Write an array of lines to a file (empty array -> empty file).
@@ -122,7 +131,10 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
     $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
                 "-conc:$Concurrency", "-timeoutFactor:5", "-verbose:fail,error,time",
                 "-javacoption:-encoding", "-javacoption:UTF-8") + $flagTokens + $dirs
-    $out = @(& $JTREG_JAVA @jtArgs 2>&1)
+    # jtreg's verbose stdout is UTF-16LE on this box; PowerShell decodes it
+    # single-byte, so each ASCII char is followed by a NUL. Strip the NUL fill
+    # bytes before writing/parsing (see the encoding note above).
+    $out = @(& $JTREG_JAVA @jtArgs 2>&1 | ForEach-Object { ([string]$_).Replace([char]0, "") })
     if ($out.Count -gt 0) {
         [System.IO.File]::AppendAllLines($LOG, [string[]]$out, $Utf8NoBom)
     }
@@ -245,6 +257,14 @@ $jdk27N = Col "jdk27" "new"
 $sumFile = Join-Path $resRoot "summary.txt"
 if (-not (Test-Path $sumFile)) {
     [System.IO.File]::WriteAllText($sumFile, ("{0,-40}`t{1,7}`t{2,7}`t{3,7}`t{4,7}" -f "label", "jdk8fail", "jdk8new", "jdk27fail", "jdk27new") + "`r`n", $Utf8NoBom)
+} else {
+    # Older runs wrote the header with Set-Content -Encoding UTF8, which left a
+    # leading UTF-8 BOM (U+FEFF, shows as "﻿" before "label"). Strip it once so
+    # every later append stays clean no-BOM UTF-8.
+    $existing = [System.IO.File]::ReadAllText($sumFile)
+    if ($existing.StartsWith([char]0xFEFF)) {
+        [System.IO.File]::WriteAllText($sumFile, $existing.Substring(1), $Utf8NoBom)
+    }
 }
 [System.IO.File]::AppendAllText($sumFile, ("{0,-40}`t{1,7}`t{2,7}`t{3,7}`t{4,7}" -f $label, $jdk8F, $jdk8N, $jdk27F, $jdk27N) + "`r`n", $Utf8NoBom)
 
