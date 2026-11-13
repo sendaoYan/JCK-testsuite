@@ -115,6 +115,12 @@ New-Item -ItemType Directory -Force -Path $resDir | Out-Null
 
 $LOG = Join-Path $resDir "console.log"
 
+# Start each run with a fresh log.  Log() appends, so without this a rerun's
+# output would pile onto the previous run's — and a previous run that died
+# mid-tree would leave a truncated log that later analysis could mistake for
+# this run's.  The old copy is kept as console.prev.log for reference.
+if (Test-Path $LOG) { Move-Item -LiteralPath $LOG -Destination (Join-Path $resDir "console.prev.log") -Force }
+
 # console.log is written UTF-8 (no BOM) throughout. Two separate corruption
 # sources are neutralised here:
 #   1. Windows PowerShell 5.1's Tee-Object / Out-File / Add-Content default to
