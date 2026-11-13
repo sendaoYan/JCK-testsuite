@@ -1,0 +1,409 @@
+// JVMS 6.5 / 4.10: negative coverage for the instruction families that
+// OperandStackVerify does not already exercise.  Each class below carries one
+// deliberate operand-stack type error or depth error in a single method;
+// FamilyNegativeVerifyTest loads each and asserts a VerifyError.  Families:
+//   load-store   IloadOnLongLocal / LstoreIntoInt
+//   conversion   D2iOnLong
+//   comparison   FcmplOnLong / DcmpgUnderflow
+//   cond-branch  IfAcmpeqOnInt
+//   switch       TableswitchUnderflow / LookupswitchOnLong
+//   array        IastoreOnLongArray / ArraylengthOnInt / NewarrayLongCount
+//   invoke       InvokestaticWrongArg
+//   return       LreturnOnInt / AreturnOnInt
+//   stack        SwapUnderflow / Dup2Underflow
+//   monitor      MonitorenterOnInt
+//   field        PutfieldWrongType / GetfieldOnInt
+
+super public class IloadOnLongLocal
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // iload expects an int local; local 0 is a long.
+    public static Method bad:"(J)I"
+        stack 1 locals 2
+    {
+        iload_0;
+        ireturn;
+    }
+}
+
+super public class LstoreIntoInt
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // lstore expects a long local of two slots; local 0 is a single int.
+    public static Method bad:"(I)V"
+        stack 2 locals 1
+    {
+        lconst_0;
+        lstore_0;
+        return;
+    }
+}
+
+super public class D2iOnLong
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // d2i expects a double; the top of stack is a long.
+    public static Method bad:"(J)I"
+        stack 2 locals 2
+    {
+        lload_0;
+        d2i;
+        ireturn;
+    }
+}
+
+super public class FcmplOnLong
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // fcmpl expects two floats; the stack holds two longs.
+    public static Method bad:"(JJ)I"
+        stack 4 locals 4
+    {
+        lload_0;
+        lload_2;
+        fcmpl;
+        ireturn;
+    }
+}
+
+super public class DcmpgUnderflow
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // dcmpg expects two doubles; only one is present.
+    public static Method bad:"(D)I"
+        stack 2 locals 2
+    {
+        dload_0;
+        dcmpg;
+        ireturn;
+    }
+}
+
+super public class IfAcmpeqOnInt
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // if_acmpeq expects two references; the stack holds two ints.
+    public static Method bad:"(II)V"
+        stack 2 locals 2
+    {
+        iload_0;
+        iload_1;
+        if_acmpeq L1;
+        return;
+    L1: stack_frame_type same;
+        return;
+    }
+}
+
+super public class TableswitchUnderflow
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // tableswitch pops an int key; the stack is empty.
+    public static Method bad:"()V"
+        stack 0 locals 0
+    {
+        tableswitch{ //0 to 1
+            0: L0;
+            1: L0;
+            default: L0 };
+    L0: stack_frame_type same;
+        return;
+    }
+}
+
+super public class LookupswitchOnLong
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // lookupswitch pops an int key; the stack holds a long.
+    public static Method bad:"(J)V"
+        stack 2 locals 2
+    {
+        lload_0;
+        lookupswitch{ //1
+            0: L0;
+            default: L0 };
+    L0: stack_frame_type same;
+        return;
+    }
+}
+
+super public class IastoreOnLongArray
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // iastore expects an int[]; the array is a long[].
+    public static Method bad:"([JI)V"
+        stack 3 locals 2
+    {
+        aload_0;
+        iconst_0;
+        iload_1;
+        iastore;
+        return;
+    }
+}
+
+super public class ArraylengthOnInt
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // arraylength expects a reference; the top of stack is an int.
+    public static Method bad:"(I)I"
+        stack 1 locals 1
+    {
+        iload_0;
+        arraylength;
+        ireturn;
+    }
+}
+
+super public class NewarrayLongCount
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // newarray expects an int count; the top of stack is a long.
+    public static Method bad:"(J)I"
+        stack 2 locals 2
+    {
+        lload_0;
+        newarray int;
+        ireturn;
+    }
+}
+
+super public class InvokestaticWrongArg
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // invokestatic Math.abs(I)I expects an int; the stack holds a long.
+    public static Method bad:"(J)I"
+        stack 2 locals 2
+    {
+        lload_0;
+        invokestatic Method java/lang/Math.abs:"(I)I";
+        ireturn;
+    }
+}
+
+super public class LreturnOnInt
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // lreturn expects a long; the top of stack is an int.
+    public static Method bad:"(I)J"
+        stack 1 locals 1
+    {
+        iload_0;
+        lreturn;
+    }
+}
+
+super public class AreturnOnInt
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // areturn expects a reference; the top of stack is an int.
+    public static Method bad:"(I)Ljava/lang/Object;"
+        stack 1 locals 1
+    {
+        iload_0;
+        areturn;
+    }
+}
+
+super public class SwapUnderflow
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // swap needs two category-1 values; only one int is pushed.
+    public static Method bad:"()V"
+        stack 1 locals 0
+    {
+        iconst_0;
+        swap;
+        return;
+    }
+}
+
+super public class Dup2Underflow
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // dup2 needs two operand-stack slots; only one int is pushed.
+    public static Method bad:"()V"
+        stack 1 locals 0
+    {
+        iconst_0;
+        dup2;
+        return;
+    }
+}
+
+super public class MonitorenterOnInt
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // monitorenter expects a reference; the top of stack is an int.
+    public static Method bad:"()V"
+        stack 1 locals 0
+    {
+        iconst_0;
+        monitorenter;
+        return;
+    }
+}
+
+super public class PutfieldWrongType
+    version 52:0
+{
+    Field x:I;
+
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // putfield into the int field x expects an int value; the stack holds a long.
+    public Method bad:"(J)V"
+        stack 3 locals 3
+    {
+        aload_0;
+        lload_1;
+        putfield Field x:"I";
+        return;
+    }
+}
+
+super public class GetfieldOnInt
+    version 52:0
+{
+    Field x:I;
+
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    // getfield expects an object reference; the top of stack is an int.
+    public Method bad:"(I)I"
+        stack 1 locals 2
+    {
+        iload_1;
+        getfield Field x:"I";
+        ireturn;
+    }
+}

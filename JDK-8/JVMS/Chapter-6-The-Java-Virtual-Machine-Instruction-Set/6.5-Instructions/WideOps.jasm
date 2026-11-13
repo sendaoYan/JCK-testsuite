@@ -3,6 +3,10 @@
 // (and, for iinc, a 16-bit constant).  Local index 256 cannot be reached by
 // the non-wide forms, so a correct round-trip through local 256 proves the
 // wide encoding was used and executed.
+//
+// jasm gotcha: a plain "istore 256" / "iload 256" is silently TRUNCATED to the
+// low byte (index 0), so the wide encoding must be spelled explicitly with the
+// "_w" suffix (istore_w / iload_w / iinc_w ...).
 
 super public class WideOps
     version 52:0
@@ -19,8 +23,8 @@ super public class WideOps
         stack 1 locals 257
     {
         iload_0;
-        istore 256;
-        iload 256;
+        istore_w 256;
+        iload_w 256;
         ireturn;
     }
 
@@ -28,8 +32,8 @@ super public class WideOps
         stack 2 locals 258
     {
         lload_0;
-        lstore 256;
-        lload 256;
+        lstore_w 256;
+        lload_w 256;
         lreturn;
     }
 
@@ -37,8 +41,8 @@ super public class WideOps
         stack 1 locals 257
     {
         fload_0;
-        fstore 256;
-        fload 256;
+        fstore_w 256;
+        fload_w 256;
         freturn;
     }
 
@@ -46,8 +50,8 @@ super public class WideOps
         stack 2 locals 258
     {
         dload_0;
-        dstore 256;
-        dload 256;
+        dstore_w 256;
+        dload_w 256;
         dreturn;
     }
 
@@ -55,8 +59,8 @@ super public class WideOps
         stack 1 locals 257
     {
         aload_0;
-        astore 256;
-        aload 256;
+        astore_w 256;
+        aload_w 256;
         areturn;
     }
 
@@ -65,9 +69,9 @@ super public class WideOps
         stack 1 locals 257
     {
         iload_0;
-        istore 256;
-        iinc 256, 5;
-        iload 256;
+        istore_w 256;
+        iinc_w 256, 5;
+        iload_w 256;
         ireturn;
     }
 

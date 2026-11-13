@@ -1,0 +1,159 @@
+// JVMS 6.5 "wide": the full matrix.
+//
+// Legal forms: every wide-able load/store (iload/lload/fload/dload/aload,
+// istore/lstore/fstore/dstore/astore) plus iinc, exercised at the top of the
+// 16-bit local-index range — index 65534 for single-slot values and 65533 for
+// long/double (a two-slot value at 65533 occupies slots 65533..65534, the
+// highest pair representable when max_locals = 65535).  The "_w" suffix is
+// mandatory: jasm truncates a plain "istore 65534" to index 254.
+//
+// Illegal forms: each class below has one bad method and must be rejected with
+// VerifyError — "wide" preceding an opcode that wide cannot extend (iadd,
+// iload_0, nop), and a wide iinc whose 16-bit constant operand is truncated
+// (the code array ends before the const's second byte).
+
+super public class WideMatrix
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method wideIntHi:"(I)I"
+        stack 1 locals 65535
+    {
+        iload_0;
+        istore_w 65534;
+        iload_w 65534;
+        ireturn;
+    }
+
+    public static Method wideLongHi:"(J)J"
+        stack 2 locals 65535
+    {
+        lload_0;
+        lstore_w 65533;
+        lload_w 65533;
+        lreturn;
+    }
+
+    public static Method wideFloatHi:"(F)F"
+        stack 1 locals 65535
+    {
+        fload_0;
+        fstore_w 65534;
+        fload_w 65534;
+        freturn;
+    }
+
+    public static Method wideDoubleHi:"(D)D"
+        stack 2 locals 65535
+    {
+        dload_0;
+        dstore_w 65533;
+        dload_w 65533;
+        dreturn;
+    }
+
+    public static Method wideRefHi:"(Ljava/lang/Object;)Ljava/lang/Object;"
+        stack 1 locals 65535
+    {
+        aload_0;
+        astore_w 65534;
+        aload_w 65534;
+        areturn;
+    }
+
+    public static Method wideIincHi:"(I)I"
+        stack 1 locals 65535
+    {
+        iload_0;
+        istore_w 65534;
+        iinc_w 65534, 7;
+        iload_w 65534;
+        ireturn;
+    }
+}
+
+super public class WideIaddBad
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    public static Method bad:"()I"
+        stack 2 locals 0
+    {
+        iconst_0;
+        bytecode 196;
+        bytecode 96;
+        ireturn;
+    }
+}
+
+super public class WideIload0Bad
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    public static Method bad:"()I"
+        stack 1 locals 1
+    {
+        bytecode 196;
+        bytecode 26;
+        ireturn;
+    }
+}
+
+super public class WideNopBad
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    public static Method bad:"()V"
+        stack 0 locals 0
+    {
+        bytecode 196;
+        bytecode 0;
+        return;
+    }
+}
+
+super public class WideIincTruncBad
+    version 52:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+    public static Method bad:"()V"
+        stack 0 locals 1
+    {
+        bytecode 196;
+        bytecode 132;
+        bytecode 0;
+        bytecode 0;
+        return;
+    }
+}
