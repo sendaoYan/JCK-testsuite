@@ -20,9 +20,10 @@
       printf 'dir D:\\path\r\n' | nc -q 2 127.0.0.1 <port>
 
   (the trailing \r\n ends the command line; `-q 2` closes nc's side after 2s).
-  Long-running jobs should be started detached, e.g.
-      start /b cmd /c "powershell -File ... > out.log 2>&1"
-  then poll the log with `type out.log`.
+  Long-running jobs should be started detached in a NEW window, e.g.
+      start "" /min cmd /c "powershell -File ... > out.log 2>&1"
+  then poll the log with `type out.log`.  (`start /b` shares this server's
+  console and, despite the temp-file capture below, is best avoided.)
 
 .PARAMETER SshHost
   The host alias VSCode Remote-SSH uses for hanqinhu (default "hanqinhu").
@@ -49,6 +50,11 @@ $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopba
 $listener.Start()
 Write-Host "Command server listening on 127.0.0.1:$Port (one line = one cmd command)"
 
+# cmd.exe writes its output in the OEM code page (GBK on Chinese Windows,
+# 437/850 elsewhere). Decode the captured temp file with it so `dir`/`type`/
+# `tasklist` text comes back intact; the reply itself is re-encoded UTF-8.
+$Oem = [System.Text.Encoding]::GetEncoding([int](Get-Culture).TextInfo.OEMCodePage)
+
 while ($true) {
     $client = $listener.AcceptTcpClient()
     $stream = $client.GetStream()
@@ -56,10 +62,18 @@ while ($true) {
     $cmd = $reader.ReadLine()
     if ($cmd -and $cmd.Trim().Length -gt 0) {
         $out = ""
+        $outFile = [System.IO.Path]::GetTempFileName()
         try {
-            $out = (& cmd.exe /c $cmd 2>&1 | Out-String)
+            # Capture to a temp FILE, not a PowerShell pipe: a `start`-launched
+            # background process that inherits stdout would otherwise hold a
+            # pipe open and block this whole single-threaded server until that
+            # background process exits. A file handle never blocks the read.
+            cmd.exe /c $cmd *> $outFile
+            $out = [System.IO.File]::ReadAllText($outFile, $Oem)
         } catch {
             $out = "[PS-ERROR] $_"
+        } finally {
+            Remove-Item $outFile -Force -ErrorAction SilentlyContinue
         }
         try {
             $bytes = [System.Text.Encoding]::UTF8.GetBytes($out)
