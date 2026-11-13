@@ -412,12 +412,17 @@ public class RuntimeTest {
 
     static void testLoadNegatives() {
         Runtime r = Runtime.getRuntime();
+        // An absolute path is required before the library is even looked up, so
+        // the probe path must be absolute on every platform (a leading slash is
+        // drive-relative on Windows).
+        String missing = new java.io.File(System.getProperty("java.io.tmpdir"),
+                                          "lcF-definitely-missing-lib").getAbsolutePath();
         try {
-            r.load("/tmp/lcF/definitely-missing-lib");
+            r.load(missing);
             throw new AssertionError("Runtime.load(missing): expected UnsatisfiedLinkError");
         } catch (UnsatisfiedLinkError e) {
-            check("Can't load library: /tmp/lcF/definitely-missing-lib".equals(e.getMessage()),
-                  "Runtime.load(missing) exact message [JDK27]");
+            check(("Can't load library: " + missing).equals(e.getMessage()),
+                  "Runtime.load(missing) exact message [JDK27]: " + e.getMessage());
         }
         try {
             r.load("lcF/relative.so");
@@ -440,12 +445,15 @@ public class RuntimeTest {
             check(e.getMessage() != null && e.getMessage().startsWith("no lcFNoSuchLib in java.library.path"),
                   "Runtime.loadLibrary(missing) message prefix [JDK27]");
         }
+        // The guard tests the platform's own separator, so the probe must use it.
+        String separated = "a" + java.io.File.separatorChar + "b";
         try {
-            r.loadLibrary("a/b");
+            r.loadLibrary(separated);
             throw new AssertionError("Runtime.loadLibrary(separator): expected UnsatisfiedLinkError");
         } catch (UnsatisfiedLinkError e) {
-            check("Directory separator should not appear in library name: a/b".equals(e.getMessage()),
-                  "Runtime.loadLibrary(separator) exact message [JDK27]");
+            check(("Directory separator should not appear in library name: " + separated)
+                      .equals(e.getMessage()),
+                  "Runtime.loadLibrary(separator) exact message [JDK27]: " + e.getMessage());
         }
         try {
             r.loadLibrary("");

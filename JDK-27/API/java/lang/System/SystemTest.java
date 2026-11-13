@@ -618,12 +618,17 @@ public class SystemTest {
 
     static void testLoadNegatives() {
         // Absolute path to a library that does not exist: message names the path.
+        // The path must be absolute on every platform (a leading slash alone is
+        // drive-relative on Windows), otherwise the "absolute path" guard fires
+        // before the library is looked up.
+        String missing = new java.io.File(System.getProperty("java.io.tmpdir"),
+                                          "lcF-definitely-missing-lib").getAbsolutePath();
         try {
-            System.load("/tmp/lcF/definitely-missing-lib");
+            System.load(missing);
             throw new AssertionError("System.load(missing): expected UnsatisfiedLinkError");
         } catch (UnsatisfiedLinkError e) {
-            check("Can't load library: /tmp/lcF/definitely-missing-lib".equals(e.getMessage()),
-                  "System.load(missing) exact message [JDK27]");
+            check(("Can't load library: " + missing).equals(e.getMessage()),
+                  "System.load(missing) exact message [JDK27]: " + e.getMessage());
         }
         try {
             System.loadLibrary("lcFNoSuchLib");
@@ -641,12 +646,15 @@ public class SystemTest {
             check("Expecting an absolute path of the library: lcF/relative.so".equals(e.getMessage()),
                   "System.load(relative) exact message [JDK27]");
         }
+        // The guard tests the platform's own separator, so the probe must use it.
+        String separated = "a" + java.io.File.separatorChar + "b";
         try {
-            System.loadLibrary("a/b");
+            System.loadLibrary(separated);
             throw new AssertionError("System.loadLibrary(separator): expected UnsatisfiedLinkError");
         } catch (UnsatisfiedLinkError e) {
-            check("Directory separator should not appear in library name: a/b".equals(e.getMessage()),
-                  "System.loadLibrary(separator) exact message [JDK27]");
+            check(("Directory separator should not appear in library name: " + separated)
+                      .equals(e.getMessage()),
+                  "System.loadLibrary(separator) exact message [JDK27]: " + e.getMessage());
         }
         try {
             System.loadLibrary("");
@@ -660,8 +668,16 @@ public class SystemTest {
     }
 
     static void testMiscSurface() {
-        check("libfoo.so".equals(System.mapLibraryName("foo")), "mapLibraryName Linux form");
-        check("liblibfoo.so".equals(System.mapLibraryName("libfoo")), "mapLibraryName prefixes lib");
+        // The mapping is the platform's native naming convention: an optional
+        // lib prefix plus the platform suffix (macOS uses .dylib).
+        boolean win = java.io.File.separatorChar == '\\';
+        String prefix = win ? "" : "lib";
+        String suffix = win ? ".dll"
+                : System.getProperty("os.name").toLowerCase().contains("mac") ? ".dylib" : ".so";
+        check((prefix + "foo" + suffix).equals(System.mapLibraryName("foo")),
+              "mapLibraryName platform form: " + System.mapLibraryName("foo"));
+        check((prefix + "libfoo" + suffix).equals(System.mapLibraryName("libfoo")),
+              "mapLibraryName applies the platform prefix once: " + System.mapLibraryName("libfoo"));
         check(System.mapLibraryName("lcF-bar") != null, "mapLibraryName non-null");
         check(System.out instanceof PrintStream, "System.out is a PrintStream");
         check(System.err instanceof PrintStream, "System.err is a PrintStream");
