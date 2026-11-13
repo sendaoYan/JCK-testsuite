@@ -46,4 +46,5 @@ $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $run) + $flags
 $p = Start-Process -FilePath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden -PassThru
 
 Write-Host ("launched pid=" + $p.Id + " label=" + $label + " flags=[" + ($flags -join ' ') + "]")
-Write-Host ("results -> " + (Join-Path $PSScriptRoot "windows-results\" + $label + "\console.log"))
+$resLog = Join-Path $PSScriptRoot ("windows-results\" + $label + "\console.log")
+Write-Host ("results -> " + $resLog)
