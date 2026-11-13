@@ -31,9 +31,18 @@ public class InfoTest {
         check(info != null, "info non-null");
         check(info.command().isPresent(), "command present for the current process");
         check(info.command().get().contains("java"), "command is the java executable");
-        check(info.commandLine().isPresent(), "commandLine present");
-        check(info.commandLine().get().contains(info.command().get()),
-              "commandLine starts with command");
+        // commandLine()/arguments() are optional: the Windows implementation
+        // exposes only the image name, so the POSIX build is where the process
+        // arguments are always readable.  Where they are present they must be
+        // consistent with command().
+        if (info.commandLine().isPresent()) {
+            check(info.commandLine().get().contains(info.command().get()),
+                  "commandLine starts with command: " + info.commandLine().get());
+        } else if (java.io.File.separatorChar == '/') {
+            throw new AssertionError("commandLine present on this platform");
+        } else {
+            passed++; // Windows exposes no command line: absent is allowed
+        }
         check(info.user().isPresent() && !info.user().get().isEmpty(), "user present and non-empty");
         check(info.startInstant().isPresent(), "startInstant present");
         check(!info.startInstant().get().isAfter(Instant.now()), "process started no later than now");

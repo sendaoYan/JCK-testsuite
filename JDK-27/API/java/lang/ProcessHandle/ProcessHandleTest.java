@@ -122,7 +122,27 @@ public class ProcessHandleTest {
     // ==== 契约深化（2026-11）新增：真子进程基础设施 ====
     // 子进程一律用 System.getProperty("java.home")+"/bin/java"，避免跨 JDK 混淆。
     static final String LC_JAVA_BIN = Path.of(System.getProperty("java.home"), "bin", "java").toString();
-    static Path lcDir; // /tmp 独立子目录，main 末尾 finally 递归清理
+    static Path lcDir; // 临时目录下的独立子目录，main 末尾 finally 递归清理
+
+    /** True when destroy() can ask the process to terminate (a catchable signal). */
+    static boolean normalTerminationSupported() { return java.io.File.separatorChar == '/'; }
+
+    /** True when the executable name matches after the OS's own resolution rules. */
+    static boolean sameExecutable(String reported, String expected) {
+        return reported.equals(expected)
+            // Windows appends the .exe suffix when it resolves a bare program name.
+            || (java.io.File.separatorChar == '\\' && reported.equalsIgnoreCase(expected + ".exe"));
+    }
+
+    /** True when the OS-reported account names the user running the JVM. */
+    static boolean sameUser(String reported) {
+        String me = System.getProperty("user.name");
+        return me.equals(reported)
+            // Windows reports accounts qualified with a domain or machine prefix.
+            || (java.io.File.separatorChar == '\\'
+                && (reported.equalsIgnoreCase(me)
+                    || reported.toLowerCase().endsWith("\\" + me.toLowerCase())));
+    }
 
     static void expectNPE(Callable<?> c, String msg) throws Exception {
         try {
@@ -183,7 +203,8 @@ public class ProcessHandleTest {
         check(me.equals(me), "equals self");
         check(!me.equals(null), "equals(null) false");
         check(!me.equals(new Object()), "equals(non-ProcessHandle) false");
-        check(me.supportsNormalTermination(), "supportsNormalTermination true on Linux (实测锁定)");
+        check(me.supportsNormalTermination() == normalTerminationSupported(),
+              "supportsNormalTermination follows destroy() on this platform");
         check(me.toString() != null, "toString non-null");
         check(me.toString().equals(Long.toString(pid)), "toString is exactly the pid string");
         Optional<ProcessHandle> parent = me.parent();
@@ -202,7 +223,12 @@ public class ProcessHandleTest {
         check(!ProcessHandle.of(0L).isPresent(), "of(0) empty");
         check(!ProcessHandle.of(-1L).isPresent(), "of(-1) empty without exception");
         check(!ProcessHandle.of(999999999L).isPresent(), "of(unused large pid) empty");
-        check(ProcessHandle.of(1L).isPresent(), "of(1) present (init always exists on Linux)");
+        Optional<ProcessHandle> init = ProcessHandle.of(1L);
+        check(init != null, "of(1) returns an Optional");
+        if (java.io.File.separatorChar == '/') {
+            // pid 1 is init/systemd on POSIX; Windows has no such well-known pid.
+            check(init.isPresent(), "of(1) present (init always exists on POSIX)");
+        }
         long pid = ProcessHandle.current().pid();
         Optional<ProcessHandle> a = ProcessHandle.of(pid);
         Optional<ProcessHandle> b = ProcessHandle.of(pid);
@@ -256,10 +282,11 @@ public class ProcessHandleTest {
             check(h.pid() == child.pid(), "handle pid equals process pid");
             check(child.pid() > 0, "child pid positive");
             check(h.isAlive() && child.isAlive(), "handle and process alive views agree");
-            check(h.supportsNormalTermination(), "child supports normal termination (Linux 实测)");
+            check(h.supportsNormalTermination() == normalTerminationSupported(),
+                  "child supportsNormalTermination follows destroy() on this platform");
             check(h.destroy(), "destroy() on live child returns true");
             int code = child.waitFor();
-            check(code != 0, "destroyed child exits non-zero (Linux SIGTERM observed as 143)");
+            check(code != 0, "destroyed child exits non-zero (signal or kill status)");
             check(!h.isAlive(), "handle not alive after exit");
             check(!child.isAlive(), "process not alive after exit");
             check(!h.destroy(), "destroy() after exit returns false");
@@ -278,7 +305,7 @@ public class ProcessHandleTest {
         try {
             ProcessHandle h2 = c2.toHandle();
             check(h2.destroyForcibly(), "destroyForcibly on live child returns true");
-            check(c2.waitFor() != 0, "forcibly destroyed child exits non-zero (Linux SIGKILL observed as 137)");
+            check(c2.waitFor() != 0, "forcibly destroyed child exits non-zero (kill status)");
             check(!h2.isAlive(), "handle not alive after forced kill");
         } finally {
             lcReap(c2);
@@ -290,16 +317,23 @@ public class ProcessHandleTest {
         try {
             ProcessHandle.Info info = child.toHandle().info();
             check(info != null, "child info non-null");
-            check(Optional.of(LC_JAVA_BIN).equals(info.command()),
-                  "child command is exactly the java binary we launched");
-            check(info.commandLine().isPresent(), "child commandLine present");
-            check(info.commandLine().get().contains("Sleeper"), "child commandLine contains Sleeper");
-            check(info.arguments().isPresent(), "child arguments present");
-            String[] argv = info.arguments().get();
-            check(argv.length == 3 && "-cp".equals(argv[0]) && "Sleeper".equals(argv[2]),
-                  "child arguments exact [-cp, <dir>, Sleeper]");
+            check(info.command().isPresent() && sameExecutable(info.command().get(), LC_JAVA_BIN),
+                  "child command is the java binary we launched: " + info.command());
+            // The Windows implementation exposes only the image name, so the
+            // argument vector is readable on POSIX only.
+            if (java.io.File.separatorChar == '/') {
+                check(info.commandLine().isPresent(), "child commandLine present");
+                check(info.commandLine().get().contains("Sleeper"), "child commandLine contains Sleeper");
+                check(info.arguments().isPresent(), "child arguments present");
+                String[] argv = info.arguments().get();
+                check(argv.length == 3 && "-cp".equals(argv[0]) && "Sleeper".equals(argv[2]),
+                      "child arguments exact [-cp, <dir>, Sleeper]");
+            } else {
+                check(info.commandLine() != null && info.arguments() != null,
+                      "commandLine/arguments Optionals exist where the platform omits them");
+            }
             check(info.user().isPresent(), "child user present");
-            check(System.getProperty("user.name").equals(info.user().get()), "child user equals user.name");
+            check(sameUser(info.user().get()), "child user names user.name: " + info.user());
             check(info.startInstant().isPresent(), "child startInstant present");
             check(info.totalCpuDuration().isPresent(), "child totalCpuDuration present");
         } finally {
@@ -308,9 +342,13 @@ public class ProcessHandleTest {
         ProcessHandle.Info mine = ProcessHandle.current().info();
         check(mine.command().isPresent(), "current command present");
         check(mine.command().get().contains("java"), "current command is a java executable");
-        check(mine.commandLine().isPresent(), "current commandLine present");
-        check(mine.user().isPresent()
-              && System.getProperty("user.name").equals(mine.user().get()), "current user equals user.name");
+        if (java.io.File.separatorChar == '/') {
+            check(mine.commandLine().isPresent(), "current commandLine present");
+        } else {
+            check(mine.commandLine() != null, "current commandLine Optional exists on Windows");
+        }
+        check(mine.user().isPresent() && sameUser(mine.user().get()),
+              "current user names user.name: " + mine.user());
         check(mine.startInstant().isPresent(), "current startInstant present");
     }
 
