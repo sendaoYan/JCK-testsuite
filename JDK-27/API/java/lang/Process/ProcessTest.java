@@ -54,14 +54,69 @@ public class ProcessTest {
     }
 
     // ---- Part 2: black-box (behavioral) ----
+    /** The charset inputReader()/errorReader() pick when no charset is given. */
+    static java.nio.charset.Charset nativeCharset() {
+        try {
+            return java.nio.charset.Charset.forName(System.getProperty("native.encoding"));
+        } catch (RuntimeException unnamedOrUnsupported) {
+            return java.nio.charset.Charset.defaultCharset();
+        }
+    }
+
     static void testReaders() throws Exception {
         MockProcess p = new MockProcess(0);
         check(p.inputReader().readLine().equals("in"), "inputReader reads getInputStream");
         check(p.errorReader().readLine().equals("err"), "errorReader reads getErrorStream");
-        check(p.inputReader(java.nio.charset.StandardCharsets.UTF_8) != null,
+
+        // The no-argument form decodes with the native charset, and both forms
+        // hand back one cached reader per stream.
+        check(p.inputReader() == p.inputReader(), "inputReader() is cached");
+        check(p.inputReader(nativeCharset()) == p.inputReader(),
+              "inputReader(native charset) is the default reader");
+        check(p.errorReader(nativeCharset()) == p.errorReader(),
+              "errorReader(native charset) is the default reader");
+
+        // A reader buffers the stream it decodes, so a second reader with a
+        // different charset cannot be served: asking for one is rejected.
+        java.nio.charset.Charset other =
+                nativeCharset().equals(java.nio.charset.StandardCharsets.UTF_8)
+                        ? java.nio.charset.StandardCharsets.ISO_8859_1
+                        : java.nio.charset.StandardCharsets.UTF_8;
+        try {
+            p.inputReader(other);
+            throw new AssertionError("inputReader with a conflicting charset: expected IllegalStateException");
+        } catch (IllegalStateException expected) {
+            passed++;
+        }
+        try {
+            p.errorReader(other);
+            throw new AssertionError("errorReader with a conflicting charset: expected IllegalStateException");
+        } catch (IllegalStateException expected) {
+            passed++;
+        }
+
+        // A fresh process is free to pick any charset for its single reader.
+        MockProcess q = new MockProcess(0);
+        check(q.inputReader(java.nio.charset.StandardCharsets.UTF_8) != null,
               "inputReader(Charset) non-null");
-        check(p.errorReader(java.nio.charset.StandardCharsets.UTF_8) != null,
+        check(q.inputReader(java.nio.charset.StandardCharsets.UTF_8) == q.inputReader(),
+              "same charset returns the same reader");
+        check(q.errorReader(java.nio.charset.StandardCharsets.UTF_8) != null,
               "errorReader(Charset) non-null");
+        check(q.errorReader(java.nio.charset.StandardCharsets.UTF_8) == q.errorReader(),
+              "same charset returns the same error reader");
+        try {
+            new MockProcess(0).inputReader(null);
+            throw new AssertionError("inputReader(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
+        try {
+            new MockProcess(0).errorReader(null);
+            throw new AssertionError("errorReader(null): expected NullPointerException");
+        } catch (NullPointerException expected) {
+            passed++;
+        }
     }
 
     static void testWriters() throws Exception {
@@ -147,7 +202,23 @@ public class ProcessTest {
     // 子进程一律用 System.getProperty("java.home")+"/bin/java"，避免跨 JDK 混淆。
     static final String LC_JAVA_BIN =
             new File(new File(System.getProperty("java.home"), "bin"), "java").getAbsolutePath();
-    static File lcDir; // /tmp 独立子目录，main 末尾 finally 递归清理
+    static File lcDir; // 临时目录下的独立子目录，main 末尾 finally 递归清理
+
+    /** True when the executable name resolved the way the OS resolves it. */
+    static boolean sameExecutable(String reported, String expected) {
+        // Windows appends the .exe suffix when it resolves a bare program name.
+        return reported.equals(expected)
+            || (File.separatorChar == '\\' && reported.equalsIgnoreCase(expected + ".exe"));
+    }
+
+    /** True when the OS-reported account names the user running the JVM. */
+    static boolean sameUser(String reported) {
+        String me = System.getProperty("user.name");
+        return me.equals(reported)
+            // Windows reports accounts qualified with a domain or machine prefix.
+            || (File.separatorChar == '\\'
+                && reported.toLowerCase().endsWith("\\" + me.toLowerCase()));
+    }
 
     static String lcJavacBin() {
         return new File(new File(System.getProperty("java.home"), "bin"), "javac").getAbsolutePath();
@@ -186,7 +257,7 @@ public class ProcessTest {
 
     // 编译真子进程样本类：Sleeper（长驻 10s）、ExitN（按参数退出）、Cat（stdin 一行回显）。
     static void lcSetupHelpers() throws Exception {
-        lcDir = new File("/tmp", "lcG-p27-" + System.nanoTime());
+        lcDir = new File(System.getProperty("java.io.tmpdir"), "lcG-p27-" + System.nanoTime());
         check(lcDir.mkdirs(), "helper dir created");
         lcWrite(new File(lcDir, "Sleeper.java"),
             "public class Sleeper { public static void main(String[] a) throws Exception { Thread.sleep(10000); } }");
@@ -254,7 +325,10 @@ public class ProcessTest {
         check(h != null, "toHandle() non-null");
         check(h.pid() == pid, "toHandle().pid() equals process pid()");
         check(p.toHandle() == h, "toHandle() returns same handle instance");
-        check(p.supportsNormalTermination(), "supportsNormalTermination true on Linux");
+        // destroy() can ask the process to terminate only where the platform has
+        // a catchable signal; Windows kills outright, so it reports false.
+        check(p.supportsNormalTermination() == (File.separatorChar == '/'),
+              "supportsNormalTermination follows destroy() on this platform");
         check(p.info() != null, "info() non-null");
         check(p.getOutputStream() != null, "getOutputStream non-null");
         check(p.getInputStream() != null, "getInputStream non-null");
@@ -300,11 +374,12 @@ public class ProcessTest {
         // 活跃子进程的 info 契约（长驻进程保证可读）
         ProcessHandle.Info info = p.info();
         check(info != null, "sleeper info non-null");
-        check(java.util.Optional.of(LC_JAVA_BIN).equals(info.command()), "info.command is exact java binary while alive");
+        check(info.command().isPresent() && sameExecutable(info.command().get(), LC_JAVA_BIN),
+              "info.command is exact java binary while alive: " + info.command());
         check(info.commandLine().isPresent() && info.commandLine().get().contains("Sleeper"),
               "info.commandLine contains class name");
-        check(info.user().isPresent()
-              && System.getProperty("user.name").equals(info.user().get()), "info.user equals user.name");
+        check(info.user().isPresent() && sameUser(info.user().get()),
+              "info.user names user.name: " + info.user());
         check(!p.waitFor(200, TimeUnit.MILLISECONDS), "waitFor(200ms) false while running");
         check(!p.waitFor(java.time.Duration.ofMillis(200)), "waitFor(Duration) false while running");
         check(!p.waitFor(0, TimeUnit.MILLISECONDS), "waitFor(0) false while running");
@@ -315,7 +390,7 @@ public class ProcessTest {
         check(p.getErrorStream() != null, "error stream non-null while running");
         p.destroy();
         int code = p.waitFor();
-        check(code != 0, "destroyed sleeper exits non-zero (Linux SIGTERM observed as 143)");
+        check(code != 0, "destroyed sleeper exits non-zero (signal or kill status)");
         check(!p.isAlive(), "not alive after waitFor");
         check(p.exitValue() == code, "exitValue equals waitFor result");
         check(p.waitFor() == code, "waitFor stable across calls");
@@ -331,7 +406,7 @@ public class ProcessTest {
         check(p.isAlive(), "second sleeper alive");
         check(p.destroyForcibly() == p, "destroyForcibly returns this while running");
         int code = p.waitFor();
-        check(code != 0, "forcibly destroyed sleeper exits non-zero (Linux SIGKILL observed as 137)");
+        check(code != 0, "forcibly destroyed sleeper exits non-zero (kill status)");
         check(!p.isAlive(), "not alive after forced destruction");
         check(p.exitValue() == code, "exitValue equals forced exit code");
     }

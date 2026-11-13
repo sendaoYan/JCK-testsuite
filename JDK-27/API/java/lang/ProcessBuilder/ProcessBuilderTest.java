@@ -213,7 +213,7 @@ public class ProcessBuilderTest {
 
     // 编译真子进程样本类：Cat（stdin 回显）、Out（打印标记）、Env（打印注入环境变量与 cwd）。
     static void lcSetupHelpers() throws Exception {
-        lcDir = new File("/tmp", "lcG-pb27-" + System.nanoTime());
+        lcDir = new File(System.getProperty("java.io.tmpdir"), "lcG-pb27-" + System.nanoTime());
         check(lcDir.mkdirs(), "helper dir created");
         lcWrite(new File(lcDir, "Cat.java"),
             "public class Cat { public static void main(String[] a) throws Exception {"
@@ -424,12 +424,14 @@ public class ProcessBuilderTest {
         check(ProcessBuilder.Redirect.Type.class.isEnum(), "Redirect.Type is enum");
     }
 
-    // DISCARD 是 JDK-9+ 新增常量（JDK-8 无）：输出被丢弃，file() 在 Linux 上是 /dev/null。
+    // DISCARD 是 JDK-9+ 新增常量（JDK-8 无）：输出被丢弃，file() 是该平台的空设备。
     static void testDiscardContract() throws Exception {
         check(ProcessBuilder.Redirect.DISCARD == ProcessBuilder.Redirect.DISCARD, "DISCARD singleton identity");
         check(ProcessBuilder.Redirect.DISCARD.type() == ProcessBuilder.Redirect.Type.WRITE, "DISCARD type WRITE");
-        check(new File("/dev/null").equals(ProcessBuilder.Redirect.DISCARD.file()),
-              "DISCARD file() is /dev/null on Linux");
+        File nullDevice = new File(File.separatorChar == '\\' ? "NUL" : "/dev/null");
+        File discardFile = ProcessBuilder.Redirect.DISCARD.file();
+        check(discardFile != null && discardFile.equals(nullDevice),
+              "DISCARD file() is the platform null device " + nullDevice + ": " + discardFile);
         check("WRITE".equals(ProcessBuilder.Redirect.DISCARD.toString()), "DISCARD toString is WRITE");
         ProcessBuilder pb = new ProcessBuilder("cmd");
         check(pb.redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectOutput()
@@ -509,14 +511,15 @@ public class ProcessBuilderTest {
         } catch (java.io.IOException expected) {
             passed++;
         }
+        File noDir = new File(System.getProperty("java.io.tmpdir"), "lcG-no-such-dir-xyz");
+        lcDeleteRec(noDir); // a directory created by an earlier round must not mask the failure
         try {
-            new ProcessBuilder(LC_JAVA_BIN, "-version")
-                    .directory(new File("/tmp/lcG-no-such-dir-xyz")).start();
+            new ProcessBuilder(LC_JAVA_BIN, "-version").directory(noDir).start();
             throw new AssertionError("start() with missing working directory: expected IOException");
         } catch (java.io.IOException e) {
             passed++;
-            check(e.getMessage().contains("(in directory \"/tmp/lcG-no-such-dir-xyz\")"),
-                  "IOException message locks directory");
+            check(e.getMessage().contains("(in directory \"" + noDir.getPath() + "\")"),
+                  "IOException message locks directory: " + e.getMessage());
         }
     }
 
