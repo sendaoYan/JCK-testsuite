@@ -17,11 +17,14 @@
 
   Failure details go to console.log via -verbose:fail,error,time; the work +
   report dirs are deleted after each tree (no .jtr sprawl).  Results land in
-  windows-results\<label>\ (label derived from the flags; empty -> "baseline"):
+  windows-results\<label>\ (label from JCK_LABEL when launch.ps1 sets it,
+  otherwise derived from the flags; empty -> "baseline"):
   per-JDK <jdk8|jdk27>.failed.txt, .counts.txt, .new.txt (delta vs baseline).
-  A one-line record is appended to windows-results\summary.txt.
+  A one-line record is appended to windows-results\summary.txt; a tree whose
+  jtreg run died before printing "Test results:" shows up as INCOMPLETE there.
+  Only one run may be active at a time (windows-results\.run.lock).
 
-  run-windows-full.bat drives the full 9-config sweep by invoking this script
+  run-windows-full.bat drives the full 10-config sweep by invoking this script
   once per config (baseline first).
 
   jtreg concurrency (-conc:N) defaults to 16; set JCK_CONC=<n> to override.
@@ -53,22 +56,40 @@ $Concurrency = $RequestedConc
 # On this box the JVMs' Windows default max heap is physical/4 = 16 GB each;
 # 16 slots of that exhausts the commit limit (RAM + pagefile) and kills the
 # run with native OOM (malloc failed / "unable to create new native thread").
-$MemMB = [int]((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB)
-$TestHeapMB  = [int][math]::Max(512, [math]::Min(4096, $MemMB / $RequestedConc / 4))
-$JavacHeapMB = [int][math]::Max(512, [math]::Min(2048, $MemMB / $RequestedConc / 8))
+# TotalPhysicalMemory can be unreadable (WMI disabled, restricted session); the
+# script must still run, so fall back to a conservative assumption instead of
+# letting a $null propagate into the arithmetic below.
+$MemMB = 0
+try {
+    $MemMB = [int]((Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).TotalPhysicalMemory / 1MB)
+} catch { }
+if ($MemMB -le 0) {
+    $MemMB = 8192
+    Write-Host "[warn] cannot read TotalPhysicalMemory; sizing heaps for an assumed 8192 MB"
+}
+# Floor the per-slot share at 256m rather than 512m: a 512m floor times many
+# slots can ask for more memory than a small box has, and a shell that cannot
+# start is worse than a small heap.
+$TestHeapMB  = [int][math]::Min(4096, [math]::Max(256, [math]::Floor($MemMB / $RequestedConc / 4)))
+$JavacHeapMB = [int][math]::Min(2048, [math]::Max(128, [math]::Floor($MemMB / $RequestedConc / 8)))
 
 # The machine is shared: other sessions can hold most of the commit charge, so
-# also trim concurrency to what the CURRENT commit headroom can carry (use 60%
-# of it, keeping the rest for the OS and other users).
+# trim concurrency to what the CURRENT commit headroom can carry (60% of it,
+# keeping the rest for the OS and other users), and never plan for more than
+# 60% of physical RAM either (the floor above may have made a slot larger than
+# the per-slot share).
 $FreeCommitMB = 0
-try { $FreeCommitMB = [int]((Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory / 1KB) } catch { }
+try { $FreeCommitMB = [int]((Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).FreeVirtualMemory / 1KB) } catch { }
 $SlotMB = $TestHeapMB + $JavacHeapMB
 $ConcNote = ""
-if ($FreeCommitMB -gt 0) {
-    $Fit = [int][math]::Floor(($FreeCommitMB * 0.6) / $SlotMB)
+$Fits = New-Object System.Collections.ArrayList
+if ($MemMB -gt 0) { [void]$Fits.Add([int][math]::Floor(($MemMB * 0.6) / $SlotMB)) }
+if ($FreeCommitMB -gt 0) { [void]$Fits.Add([int][math]::Floor(($FreeCommitMB * 0.6) / $SlotMB)) }
+if ($Fits.Count -gt 0) {
+    $Fit = ($Fits | Measure-Object -Minimum).Minimum
     if ($Fit -lt $Concurrency) {
         $Concurrency = [math]::Max(1, $Fit)
-        $ConcNote = " (trimmed from ${RequestedConc}: only ${FreeCommitMB} MB commit free)"
+        $ConcNote = " (trimmed from ${RequestedConc}: ${FreeCommitMB} MB commit free, ${MemMB} MB RAM)"
     }
 }
 
@@ -98,9 +119,15 @@ foreach ($p in @($SUITE, $JDK8, $JDK27, $JTREG_JAR, $JTREG_JAVA)) {
     if (-not (Test-Path $p)) { Write-Host "[error] missing: $p"; exit 1 }
 }
 
-# ---- derive label from flags ----
-$label = if ($JvmArgs.Count -eq 0) { "baseline" }
+# ---- label ----
+# launch.ps1 takes a human label as its first token and passes it down in
+# JCK_LABEL; honour it so the path it prints and the directory actually written
+# are the same. Otherwise derive one from the flags (the .bat sweep relies on
+# this: "baseline", "g1", "xcomp_notiered", ...).
+$label = if ($env:JCK_LABEL) { ($env:JCK_LABEL -replace '[^A-Za-z0-9.+-]', '_') }
+         elseif ($JvmArgs.Count -eq 0) { "baseline" }
          else { (($JvmArgs -join '+') -replace '[^A-Za-z0-9.+-]', '_') }
+if (-not $label) { $label = "baseline" }
 
 $trees = @(
     @{ tag = "jdk8";  jdk = $JDK8;  dir = "JDK-8" },
@@ -112,6 +139,16 @@ $flagTokens = @($JvmArgs | ForEach-Object { "-javaoption:$_" })
 $resRoot = Join-Path $PSScriptRoot "windows-results"
 $resDir  = Join-Path $resRoot $label
 New-Item -ItemType Directory -Force -Path $resDir | Out-Null
+
+# A rerun must not inherit results from an earlier run in the same label dir.
+# Without this, a JDK that is no longer rejected by the flag probe keeps a stale
+# .skipped.txt (which summary.txt then reports as "skip" forever and which makes
+# the delta step skip that JDK), and a stale .new.txt / .oom-retry.txt survives
+# a run that produced different failures.
+foreach ($stale in @(Get-ChildItem -LiteralPath $resDir -File -Filter "*.txt" -ErrorAction SilentlyContinue |
+                     Where-Object { $_.Name -match '^(jdk8|jdk27)\.(failed|counts|new|skipped|oom-retry)\.txt$' })) {
+    Remove-Item -LiteralPath $stale.FullName -Force -ErrorAction SilentlyContinue
+}
 
 $LOG = Join-Path $resDir "console.log"
 
@@ -139,10 +176,46 @@ if (Test-Path $LOG) { Move-Item -LiteralPath $LOG -Destination (Join-Path $resDi
 # summary, java -version), so it is safe to apply uniformly.
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
+# One StreamWriter (append mode, AutoFlush) is reused for the whole run.
+# AppendAllText per line would open/seek/close the file hundreds of thousands of
+# times in a full tree; AutoFlush still makes the log readable while the run is
+# in progress and keeps every line that was written if the script is killed.
+$script:LogStream = $null
+function Append-Log([string]$line) {
+    if (-not $script:LogStream) {
+        $script:LogStream = New-Object System.IO.StreamWriter($LOG, $true, $Utf8NoBom)
+        $script:LogStream.AutoFlush = $true
+    }
+    $script:LogStream.WriteLine($line.Replace([string]([char]0), ""))
+}
+
 function Log([string]$text) {
     Write-Host $text
-    [System.IO.File]::AppendAllText($LOG, $text.Replace([string]([char]0), "") + "`r`n", $Utf8NoBom)
+    Append-Log $text
 }
+
+# ---- single-instance guard ----
+# Two concurrent runs write the same per-label result files and the same
+# hs_err_<tag>_*.log pattern, so each would see the other's failures. A crashed
+# run cannot clean up after itself, so only refuse to start when the recorded
+# pid is actually still alive.
+$lockFile = Join-Path $resRoot ".run.lock"
+if (Test-Path -LiteralPath $lockFile) {
+    $oldPid = 0
+    try { $oldPid = [int]((Get-Content -LiteralPath $lockFile -TotalCount 1)) } catch { }
+    $alive = $false
+    if ($oldPid -gt 0) {
+        try { $alive = [bool](Get-Process -Id $oldPid -ErrorAction Stop) } catch { }
+    }
+    if ($alive) {
+        Write-Host ("[error] another run (pid {0}) is in progress; refusing to start" -f $oldPid)
+        Write-Host ("        (delete {0} if that pid is not this sweep)" -f $lockFile)
+        exit 2
+    }
+    Write-Host ("[warn] removing stale run lock (pid {0} is no longer running)" -f $oldPid)
+    Remove-Item -LiteralPath $lockFile -Force -ErrorAction SilentlyContinue
+}
+[System.IO.File]::WriteAllText($lockFile, ("{0}" -f $PID), $Utf8NoBom)
 
 # Write an array of lines to a file (empty array -> empty file).
 function Write-Lines([string]$path, [string[]]$lines) {
@@ -156,11 +229,35 @@ function Write-Lines([string]$path, [string[]]$lines) {
 # `git pull` never re-checkouts existing files, so normalise in place here.
 # Byte-level CR-before-LF removal is idempotent and cannot corrupt content.
 function Repair-JasmEol([string]$root) {
-    $files = @(& git -C $root ls-files -- '*.jasm' '*.jcod' 2>$null)
+    # 待修文件清单：优先用 git 跟踪清单（快，且不改动仓库外的文件）。
+    # git 不可用、目录不是 git 仓库或命令失败时不能静默跳过——否则 CRLF
+    # 会原样进入 jtreg，重新制造 26 个 `"<}>" token is expected` 失败，
+    # 并让 3 个 native 用例出现“jasm OK 但 ClassNotFoundException”的假象。
+    $files = New-Object 'System.Collections.Generic.List[string]'
+    $gitOk = $false
+    try {
+        $out = @(& git -C $root ls-files -- '*.jasm' '*.jcod' 2>$null)
+        if ($LASTEXITCODE -eq 0) {
+            $gitOk = $true
+            foreach ($f in $out) {
+                if ($f) { $files.Add((Join-Path $root ($f -replace '/', '\'))) }
+            }
+        }
+    } catch { }
+    if (-not $gitOk) {
+        Write-Host "[eol] git unavailable or $root is not a git repo; using filesystem scan"
+    }
+    # 安全网：无论 git 结果如何都再枚举一遍磁盘，把未跟踪的 .jasm/.jcod
+    # 也纳入。重复项只会多读一次（第一次修完后不再有 CRLF，不会重复写）。
+    # 覆盖任意子目录以及 .jcod；.git 目录本身跳过。
+    foreach ($fi in @(Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
+                      Where-Object { ($_.Extension -eq '.jasm' -or $_.Extension -eq '.jcod') -and
+                                     ($_.FullName -notmatch '[\\/]\.git[\\/]') })) {
+        $files.Add($fi.FullName)
+    }
     $fixed = 0
-    foreach ($f in $files) {
-        $p = Join-Path $root ($f -replace '/', '\')
-        if (-not (Test-Path $p)) { continue }
+    foreach ($p in $files) {
+        if (-not (Test-Path -LiteralPath $p)) { continue }
         $b = [System.IO.File]::ReadAllBytes($p)
         $hasCrlf = $false
         for ($i = 0; $i -lt $b.Length - 1; $i++) {
@@ -172,8 +269,13 @@ function Repair-JasmEol([string]$root) {
             if (($b[$i] -eq 13) -and (($i + 1) -lt $b.Length) -and ($b[$i + 1] -eq 10)) { continue }
             $o.Add($b[$i])
         }
-        [System.IO.File]::WriteAllBytes($p, $o.ToArray())
-        $fixed++
+        try {
+            [System.IO.File]::WriteAllBytes($p, $o.ToArray())
+            $fixed++
+        } catch {
+            # 写不进去必须显式告警：该文件稍后仍会以 CRLF 失败。
+            Write-Host ("[eol] WARNING: cannot normalise " + $p + ": " + $_.Exception.Message)
+        }
     }
     return $fixed
 }
@@ -198,6 +300,11 @@ function Parse-Failures([string[]]$lines) {
             $text = $matches[2] + "`n" + ($block -join "`n")
             $isOom = $text -match 'insufficient memory|Native memory allocation|OutOfMemoryError|unable to create new native thread|hs_err_pid|exit code: -107374'
             [void]$fails.Add([pscustomobject]@{ Test = $cur; Result = $matches[2]; Oom = [bool]$isOom })
+            # Consume the header: a second RESULT with no new TEST line (jtreg
+            # reports one test under both Failed and Error in some modes) must
+            # not be attributed to the test that follows in the log.
+            $cur = $null
+            $block.Clear()
         } else {
             [void]$block.Add($l)
         }
@@ -247,11 +354,17 @@ function Invoke-OomRetry([string]$tag, [string]$jdk, [string]$dir, [string[]]$te
                      (Get-HeapTokens $retryHeap $JavacHeapMB $tag) + $flagTokens + @($path)
             $rout = @(& $JTREG_JAVA @rArgs 2>&1 | ForEach-Object { ([string]$_).Replace([string]([char]0), "") })
             $rf = @(Parse-Failures $rout)
-            $lastResult = if ($rf.Count -gt 0) { $rf[0].Result } else { "pass" }
-            # A pass needs an actual summary line with zero failures/errors: a
-            # crashed run also has no failure lines and must not count as a pass.
+            # A pass needs an actual summary line that reports at least one test
+            # passed and no failures/errors. A crashed run has no summary line
+            # at all, and a run that matched nothing reports passed: 0 — neither
+            # may count as a pass.
             $rl = ($rout | Select-String 'Test results:' | Select-Object -Last 1).Line
-            $ok = [bool]($rl -and ($rl -notmatch 'failed: [1-9]') -and ($rl -notmatch 'error: [1-9]'))
+            $ok = [bool]($rf.Count -eq 0 -and $rl -and ($rl -match 'passed: [1-9]') -and
+                         ($rl -notmatch 'failed: [1-9]') -and ($rl -notmatch 'error: [1-9]'))
+            $lastResult = if ($rf.Count -gt 0) { $rf[0].Result }
+                          elseif (-not $rl) { "no 'Test results:' line (run died)" }
+                          elseif (-not $ok) { $rl.Trim() }
+                          else { "pass" }
             Remove-Item -LiteralPath $rw -Recurse -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $rr -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -291,8 +404,7 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
 
     $flagStr = if ($JvmArgs.Count -gt 0) { ($JvmArgs -join ' ') } else { "(no JVM flags)" }
     $msg = "=== [$tag/$label] jtreg -jdk:$jdk $flagStr ==="
-    Write-Host $msg
-    [System.IO.File]::AppendAllText($LOG, $msg + "`r`n", $Utf8NoBom)
+    Log $msg
 
     $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
                 "-conc:$Concurrency", "-timeoutFactor:5", "-verbose:fail,error,time",
@@ -307,9 +419,10 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
     & $JTREG_JAVA @jtArgs 2>&1 | ForEach-Object {
         $l = ([string]$_).Replace([string]([char]0), "")
         [void]$out.Add($l)
-        [System.IO.File]::AppendAllText($LOG, $l + "`r`n", $Utf8NoBom)
+        Append-Log $l
     }
     $out = @($out)
+    $jtExit = $LASTEXITCODE
 
     # Failed/error list from the verbose stream (see Parse-Failures), with the
     # report summary as a fallback for the (unusual) case where the verbose
@@ -333,20 +446,28 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
         Invoke-OomRetry $tag $jdk $dir $oomTests
     }
 
+    # A non-zero exit with a proper summary line is normal (jtreg exits non-zero
+    # when anything failed); a non-zero exit WITHOUT one means the run died.
     $countsLine = ($out | Select-String 'Test results:' | Select-Object -Last 1).Line
     if ($countsLine) {
         Write-Lines (Join-Path $resDir "$tag.counts.txt") @($countsLine)
+        if ($jtExit -ne 0) {
+            Log ("[{0}] jtreg exit code {1} (expected when anything failed/errored)" -f $tag, $jtExit)
+        }
     } else {
         # No summary line => jtreg never reached the end of the tree. Say so
         # loudly; an empty failed.txt must never be read as "all passed".
-        $msg = ("INCOMPLETE: jtreg produced no 'Test results:' line (run died); " +
-                "failures recorded: {0}" -f @($failed).Count)
+        $msg = ("INCOMPLETE: jtreg produced no 'Test results:' line (exit code {0}); " +
+                "failures recorded: {1}" -f $jtExit, @($failed).Count)
         Write-Lines (Join-Path $resDir "$tag.counts.txt") @($msg)
         Log ("[!!] " + $tag + ": " + $msg)
     }
 
-    # HotSpot crash dumps land in the jtreg process CWD (the repo root) when a
-    # javac/test VM dies; they are not part of the suite.
+    # HotSpot crash dumps are configured to land in TEMP via -XX:ErrorFile, so
+    # clean that tag's files there; a VM that ignored the option may also drop
+    # hs_err_pid*/replay_pid* in the jtreg process CWD (the repo root).
+    Get-ChildItem -Path $env:TEMP -Filter ("hs_err_{0}_*.log" -f $tag) -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     Get-ChildItem -Path $SUITE -Filter "replay_pid*.log" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
     Get-ChildItem -Path $SUITE -Filter "hs_err_pid*.log" -ErrorAction SilentlyContinue |
@@ -373,13 +494,22 @@ if ($eolFixed -gt 0) {
 Log ""
 
 # ---- versions (recorded for failure analysis) ----
+# A probe that fails must be visible in the log: a version block with no output
+# and no complaint is indistinguishable from a healthy run.
+function Log-Version([string]$what, [string]$exe, [string[]]$exeArgs) {
+    Log ("--- " + $what + " ---")
+    $v = @(& $exe @exeArgs 2>&1)
+    $code = $LASTEXITCODE
+    $v | ForEach-Object { Log ("  " + $_) }
+    if ($code -ne 0 -or $v.Count -eq 0) {
+        Log ("  [warn] version probe failed (exit code {0}, {1} line(s)): {2}" -f $code, $v.Count, $exe)
+    }
+}
+
 Log "=== versions ==="
-Log ("--- jtreg ---")
-& $JTREG_JAVA -jar $JTREG_JAR -version 2>&1 | ForEach-Object { Log ("  " + $_) }
-Log "--- java -version (JDK-8 under test) ---"
-& (Join-Path $JDK8 "bin\java.exe") -version 2>&1 | ForEach-Object { Log ("  " + $_) }
-Log "--- java -version (JDK-27 under test) ---"
-& (Join-Path $JDK27 "bin\java.exe") -version 2>&1 | ForEach-Object { Log ("  " + $_) }
+Log-Version "jtreg" $JTREG_JAVA @("-jar", $JTREG_JAR, "-version")
+Log-Version "java -version (JDK-8 under test)" (Join-Path $JDK8 "bin\java.exe") @("-version")
+Log-Version "java -version (JDK-27 under test)" (Join-Path $JDK27 "bin\java.exe") @("-version")
 
 # Windows OS + CPU identity (国产 x86 vs Intel/AMD attribution).
 Log "--- Windows OS ---"
@@ -449,11 +579,19 @@ foreach ($t in $trees) {
 
 # ---- append one-line record to summary.txt ----
 # Column value for summary.txt: "skip" if that JDK was skipped by the probe,
-# otherwise the line count of <tag>.<kind>.txt.
+# "INCOMPLETE" if jtreg never reached the end of the tree (its failure count is
+# then a lower bound, not a result), otherwise the line count of <tag>.<kind>.txt.
 function Col([string]$tag, [string]$kind) {
     if (Test-Path (Join-Path $resDir "$tag.skipped.txt")) { return "skip" }
     $p = Join-Path $resDir "$tag.$kind.txt"
-    if (Test-Path $p) { return ("" + @(Get-Content $p -ErrorAction SilentlyContinue).Count) }
+    if (Test-Path $p) {
+        if ($kind -eq "failed") {
+            $countsFile = Join-Path $resDir "$tag.counts.txt"
+            $c = @(Get-Content $countsFile -ErrorAction SilentlyContinue)
+            if ($c.Count -gt 0 -and $c[0] -like "INCOMPLETE:*") { return "INCOMPLETE" }
+        }
+        return ("" + @(Get-Content $p -ErrorAction SilentlyContinue).Count)
+    }
     return "0"
 }
 $jdk8F = Col "jdk8" "failed"
@@ -463,7 +601,7 @@ $jdk27N = Col "jdk27" "new"
 
 $sumFile = Join-Path $resRoot "summary.txt"
 if (-not (Test-Path $sumFile)) {
-    [System.IO.File]::WriteAllText($sumFile, ("{0,-40}`t{1,7}`t{2,7}`t{3,7}`t{4,7}" -f "label", "jdk8fail", "jdk8new", "jdk27fail", "jdk27new") + "`r`n", $Utf8NoBom)
+    [System.IO.File]::WriteAllText($sumFile, ("{0,-40}`t{1,10}`t{2,10}`t{3,10}`t{4,10}" -f "label", "jdk8fail", "jdk8new", "jdk27fail", "jdk27new") + "`r`n", $Utf8NoBom)
 } else {
     # Older runs wrote the header with Set-Content -Encoding UTF8, which left a
     # leading UTF-8 BOM (U+FEFF, shows as "﻿" before "label"). Strip it once so
@@ -473,7 +611,11 @@ if (-not (Test-Path $sumFile)) {
         [System.IO.File]::WriteAllText($sumFile, $existing.Substring(1), $Utf8NoBom)
     }
 }
-[System.IO.File]::AppendAllText($sumFile, ("{0,-40}`t{1,7}`t{2,7}`t{3,7}`t{4,7}" -f $label, $jdk8F, $jdk8N, $jdk27F, $jdk27N) + "`r`n", $Utf8NoBom)
+[System.IO.File]::AppendAllText($sumFile, ("{0,-40}`t{1,10}`t{2,10}`t{3,10}`t{4,10}" -f $label, $jdk8F, $jdk8N, $jdk27F, $jdk27N) + "`r`n", $Utf8NoBom)
 
 Log ""
 Log ("=== DONE label=$label  jdk8.failed=$jdk8F jdk8.new=$jdk8N jdk27.failed=$jdk27F jdk27.new=$jdk27N ===")
+
+# Release the single-instance lock (see the guard above).
+if ($script:LogStream) { $script:LogStream.Dispose(); $script:LogStream = $null }
+Remove-Item -LiteralPath $lockFile -Force -ErrorAction SilentlyContinue

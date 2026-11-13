@@ -39,10 +39,14 @@ param(
 $ErrorActionPreference = "Continue"
 
 # --- 1) reverse tunnel (background): sshHost:port -> 127.0.0.1:port ---
-$tunnel = Start-Job -ArgumentList $SshHost, $Port -ScriptBlock {
+# Kept in a script block so the tunnel can be restarted when ssh drops (a
+# dropped tunnel leaves the listener up but unreachable, which looks exactly
+# like "the Windows box went away").
+$tunnelBlock = {
     param($h, $p)
     ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -R "${p}:127.0.0.1:${p}" $h
 }
+$tunnel = Start-Job -ArgumentList $SshHost, $Port -ScriptBlock $tunnelBlock
 Write-Host "Reverse tunnel job started: ssh -R ${Port}:127.0.0.1:${Port} $SshHost"
 
 # --- 2) single-threaded command server on 127.0.0.1:port ---
@@ -55,11 +59,41 @@ Write-Host "Command server listening on 127.0.0.1:$Port (one line = one cmd comm
 # `tasklist` text comes back intact; the reply itself is re-encoded UTF-8.
 $Oem = [System.Text.Encoding]::GetEncoding([int](Get-Culture).TextInfo.OEMCodePage)
 
+# The `*>` redirection above is performed by PowerShell, not by cmd.exe, and
+# PS 5.1's default file encoding is Unicode (UTF-16LE) — so the temp file may be
+# UTF-16LE, UTF-8 with BOM, or raw OEM bytes depending on how the text got there.
+# Decode by BOM first and fall back to OEM (stripping any stray NULs, which are
+# what a UTF-16LE file decoded as OEM leaves behind).
+function Read-Captured([string]$path) {
+    $b = [System.IO.File]::ReadAllBytes($path)
+    if ($b.Length -ge 2 -and $b[0] -eq 0xFF -and $b[1] -eq 0xFE) {
+        return [System.Text.Encoding]::Unicode.GetString($b, 2, $b.Length - 2)
+    }
+    if ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) {
+        return [System.Text.Encoding]::UTF8.GetString($b, 3, $b.Length - 3)
+    }
+    return $Oem.GetString($b).Replace([string]([char]0), "")
+}
+
 while ($true) {
+    # A dead tunnel means the listener is reachable only from this box; restart
+    # it before taking the next command so the session does not silently rot.
+    if ($tunnel.State -ne 'Running') {
+        Write-Host ("[warn] reverse tunnel job is {0}; restarting" -f $tunnel.State)
+        $tunnel = Start-Job -ArgumentList $SshHost, $Port -ScriptBlock $tunnelBlock
+    }
     $client = $listener.AcceptTcpClient()
     $stream = $client.GetStream()
+    # The server is single-threaded: a client that connects and never sends a
+    # newline would block every later command, so time the read out.
+    $stream.ReadTimeout = 60000
     $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8)
-    $cmd = $reader.ReadLine()
+    try {
+        $cmd = $reader.ReadLine()
+    } catch {
+        $cmd = $null
+        Write-Host ("[warn] no command line received: " + $_.Exception.Message)
+    }
     if ($cmd -and $cmd.Trim().Length -gt 0) {
         $out = ""
         $outFile = [System.IO.Path]::GetTempFileName()
@@ -69,7 +103,7 @@ while ($true) {
             # pipe open and block this whole single-threaded server until that
             # background process exits. A file handle never blocks the read.
             cmd.exe /c $cmd *> $outFile
-            $out = [System.IO.File]::ReadAllText($outFile, $Oem)
+            $out = Read-Captured $outFile
         } catch {
             $out = "[PS-ERROR] $_"
         } finally {
