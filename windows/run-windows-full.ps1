@@ -68,7 +68,7 @@ if ($FreeCommitMB -gt 0) {
     $Fit = [int][math]::Floor(($FreeCommitMB * 0.6) / $SlotMB)
     if ($Fit -lt $Concurrency) {
         $Concurrency = [math]::Max(1, $Fit)
-        $ConcNote = " (trimmed from $RequestedConc: only ${FreeCommitMB} MB commit free)"
+        $ConcNote = " (trimmed from ${RequestedConc}: only ${FreeCommitMB} MB commit free)"
     }
 }
 
