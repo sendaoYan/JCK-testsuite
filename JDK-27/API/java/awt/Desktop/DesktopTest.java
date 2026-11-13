@@ -86,14 +86,21 @@ public class DesktopTest {
 
     // ---- Part 3: contract deepening ----
     static void testContractDesktop() throws Exception {
-        // measured on this X11/Xvfb display (jtreg @key headful)
-        check(Desktop.isDesktopSupported(), "isDesktopSupported true on X11");
+        // 有头环境下 Desktop 一定可用：X11 和 Windows 都提供 DesktopPeer
+        check(Desktop.isDesktopSupported(), "isDesktopSupported true on a headful display");
         Desktop d = Desktop.getDesktop();
         check(Desktop.getDesktop() == d, "getDesktop returns a singleton");
         check(d.isSupported(Desktop.Action.OPEN), "OPEN supported");
-        check(!d.isSupported(Desktop.Action.EDIT), "EDIT unsupported here");
-        check(!d.isSupported(Desktop.Action.PRINT), "PRINT unsupported here");
-        check(!d.isSupported(Desktop.Action.MAIL), "MAIL unsupported here");
+        // EDIT/PRINT/MAIL 是否可用取决于平台实现：X11 上通常没有注册关联程序，
+        // 一律返回 false；Windows 的 WDesktopPeer#isSupported 对全部动作恒返回
+        // true。这里在 Windows 上断言这个确定的能力，其余平台留给通用的
+        // “每个 Action 都能回答”检查，具体分支在下面按能力取用。
+        if (System.getProperty("os.name", "").startsWith("Windows")) {
+            for (Desktop.Action a : new Desktop.Action[] {
+                    Desktop.Action.EDIT, Desktop.Action.PRINT, Desktop.Action.MAIL}) {
+                check(d.isSupported(a), "Windows desktop peer supports " + a);
+            }
+        }
         // every declared Action answers without throwing
         for (Desktop.Action act : Desktop.Action.values()) {
             check(d.isSupported(act) || !d.isSupported(act), "isSupported(" + act + ") answers a boolean");
@@ -105,12 +112,16 @@ public class DesktopTest {
         //@27 check(!d.isSupported(Desktop.Action.APP_MENU_BAR), "APP_MENU_BAR unsupported on Linux");
         //@27 check(!d.isSupported(Desktop.Action.BROWSE_FILE_DIR), "BROWSE_FILE_DIR unsupported on Linux");
         //@27 check(!d.isSupported(Desktop.Action.MOVE_TO_TRASH), "MOVE_TO_TRASH unsupported on Linux");
-        // null action tolerated
+        // null action: X11 用 Set.contains 返回 false，Windows 的 WDesktopPeer
+        // 用 switch 实现、对 null 抛 NPE。规范没有为此承诺具体行为，因此这里
+        // 只要求“要么回答 boolean、要么以 NPE 拒绝 null”，不允许其他异常。
         try {
             d.isSupported(null);
             check(true, "isSupported(null) answers");
+        } catch (NullPointerException expected) {
+            passed++;
         } catch (Throwable t) {
-            check(false, "isSupported(null) should not throw: " + t);
+            check(false, "isSupported(null) must answer or reject null with NPE: " + t);
         }
         // unsupported actions reject with UnsupportedOperationException
         java.io.File tmp = java.io.File.createTempFile("jck-desk", ".txt");

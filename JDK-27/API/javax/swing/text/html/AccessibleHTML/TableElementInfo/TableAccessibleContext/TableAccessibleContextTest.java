@@ -61,7 +61,12 @@ public class TableAccessibleContextTest {
             check(table instanceof AccessibleTable, "is AccessibleTable");
 
             check(table.getAccessibleRole() == AccessibleRole.TABLE, "role TABLE");
-            check("table".equals(table.getAccessibleName()), "name == role text");
+            // AccessibleHTML 用 getAccessibleRole().toString() 作为名称，而
+            // AccessibleRole.toString() 返回的是本地化显示串（中文 Windows 上
+            // 不是 "table"）。用同一 role 的显示串比较，仍是“名称即角色文本”。
+            String roleText = AccessibleRole.TABLE.toString();
+            check(roleText != null && !roleText.isEmpty(), "AccessibleRole.TABLE display text present");
+            check(roleText.equals(table.getAccessibleName()), "name == role text");
 
             AccessibleTable t = (AccessibleTable) table;
             check(t.getAccessibleRowCount() == 2, "row count == 2");

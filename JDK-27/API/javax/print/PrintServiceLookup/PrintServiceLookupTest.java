@@ -41,20 +41,50 @@ public class PrintServiceLookupTest {
 
     // ---- contract deepening: no-service contract + registerServiceProvider/registerService closed loops ----
     static void testContractDeep() throws Exception {
-        // no-service contract on this headless host (CUPS-less)
+        // 是否装有真实打印服务取决于主机：CUPS-less 的 Linux CI 上一个都没有，
+        // 而 Windows 默认装有 Microsoft Print to PDF / Microsoft XPS Document
+        // Writer 等。零结果契约只在“无打印机”环境断言；有打印机时只断言与数量
+        // 无关的契约（非 null、名字、默认服务属于查询结果、flavor 过滤自洽）。
         javax.print.PrintService[] all = javax.print.PrintServiceLookup.lookupPrintServices(null, null);
         check(all != null, "lookupPrintServices returns non-null array");
         int real = 0, nullLeak = 0;
         for (javax.print.PrintService p : all) { if (p == null) nullLeak++; else real++; }
-        check(real == 0, "no real printers installed: zero non-null services (skip reason: headless CUPS-less host)");
+        boolean hasReal = real > 0;
         boolean isOld = System.getProperty("java.specification.version").startsWith("1.8");
-        check(nullLeak > 0 == isOld, "registerService(null) leak: JDK-8 true (null entry), JDK-27 false (clean)");
+        check((nullLeak > 0) == isOld, "registerService(null) leak: JDK-8 true (null entry), JDK-27 false (clean)");
         javax.print.MultiDocPrintService[] md = javax.print.PrintServiceLookup.lookupMultiDocPrintServices(null, null);
-        check(md != null && md.length == 0, "lookupMultiDocPrintServices non-null empty");
-        check(javax.print.PrintServiceLookup.lookupDefaultPrintService() == null, "defaultPrintService null without printers");
+        check(md != null, "lookupMultiDocPrintServices non-null array");
+        for (javax.print.MultiDocPrintService p : md) {
+            check(p != null, "multidoc service element non-null");
+        }
+        javax.print.PrintService defaultService = javax.print.PrintServiceLookup.lookupDefaultPrintService();
+        if (hasReal) {
+            for (javax.print.PrintService p : all) {
+                if (p != null) {
+                    check(p.getName() != null && !p.getName().isEmpty(), "installed print service has a name");
+                }
+            }
+            if (defaultService != null) {
+                boolean defaultListed = false;
+                for (javax.print.PrintService p : all) if (p == defaultService) defaultListed = true;
+                check(defaultListed, "default print service is part of lookupPrintServices");
+            }
+        } else {
+            check(md.length == 0, "no printers installed: lookupMultiDocPrintServices empty");
+            check(defaultService == null, "no printers installed: defaultPrintService null");
+        }
         try {
             javax.print.PrintService[] byFlavor = javax.print.PrintServiceLookup.lookupPrintServices(javax.print.DocFlavor.SERVICE_FORMATTED.PRINTABLE, null);
-            check(byFlavor != null && byFlavor.length == 0, "flavor-filtered lookup still empty non-null");
+            check(byFlavor != null, "flavor-filtered lookup returns non-null array");
+            for (javax.print.PrintService p : byFlavor) {
+                if (p != null) {
+                    check(p.isDocFlavorSupported(javax.print.DocFlavor.SERVICE_FORMATTED.PRINTABLE),
+                          "flavor-filtered service supports PRINTABLE");
+                }
+            }
+            if (!hasReal) {
+                check(byFlavor.length == 0, "no printers installed: flavor-filtered lookup empty");
+            }
             check(!isOld, "flavor lookup clean on JDK-27");
         } catch (NullPointerException npe) {
             check(isOld, "flavor-filtered lookup NPEs on JDK-8 from leaked null entry");

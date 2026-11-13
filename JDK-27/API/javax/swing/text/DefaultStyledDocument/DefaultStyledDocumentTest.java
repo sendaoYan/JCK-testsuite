@@ -230,7 +230,11 @@ public class DefaultStyledDocumentTest {
         d.setCharacterAttributes(0, 3, ital, false);
         check(edit[0] != null, "style change produces undoable edit");
         check(edit[0].isSignificant(), "style change is significant");
-        check("style change".equals(edit[0].getPresentationName()), "presentation name");
+        // 展示名来自 UIManager 资源键，随默认 locale 本地化（中文 Windows 上
+        // 不是 "style change"）；用实现所用的同一资源键取期望值。
+        String styleChangeText = javax.swing.UIManager.getString("AbstractDocument.styleChangeText");
+        check(styleChangeText != null && !styleChangeText.isEmpty(), "AbstractDocument.styleChangeText resource present");
+        check(styleChangeText.equals(edit[0].getPresentationName()), "presentation name");
         edit[0].undo();
         check(!StyleConstants.isItalic(d.getCharacterElement(1).getAttributes()), "undo reverts the style change");
         edit[0].redo();

@@ -37,6 +37,23 @@ public class JFileChooserTest {
         }
     }
 
+    // 校验“用给定目录构造 chooser 后当前目录被保留”的可移植契约：
+    // 目录可遍历时必须原样保留（用 Files.isSameFile 按文件系统标识比较，
+    // 容忍 Windows 上短名/长名等不同表示）；不可遍历时按 setCurrentDirectory
+    // 文档规定的行为沿父目录链回退，此时只要求结果是真实目录（或 null）。
+    static void checkPreservedDirectory(JFileChooser fc, File dir, java.nio.file.Path dirPath, String what)
+            throws java.io.IOException {
+        File cur = fc.getCurrentDirectory();
+        if (fc.isTraversable(dir)) {
+            check(cur != null && java.nio.file.Files.isSameFile(cur.toPath(), dirPath), what);
+        } else {
+            // 不可遍历时实现按文档回退（父目录链，或换成默认目录），
+            // 这里只断言结果仍是可用的目录，不假定具体回退目标。
+            check(cur == null || cur.isDirectory(),
+                  what + " (non-traversable dir falls back to a usable directory)");
+        }
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("javax.swing.JFileChooser");
@@ -141,12 +158,26 @@ public class JFileChooserTest {
         File initial = d.getCurrentDirectory();
         d.setCurrentDirectory(null);
         check(d.getCurrentDirectory().equals(initial), "setCurrentDirectory(null) falls back to home");
-        JFileChooser d2 = new JFileChooser(tmp);
-        check(d2.getCurrentDirectory().equals(tmp), "ctor(File) preserves directory");
-        javax.swing.filechooser.FileSystemView fsv = javax.swing.filechooser.FileSystemView.getFileSystemView();
-        JFileChooser d3 = new JFileChooser(tmp, fsv);
-        check(d3.getCurrentDirectory().equals(tmp), "ctor(File,FSV) preserves directory");
-        check(d3.getFileSystemView() == fsv, "ctor(File,FSV) preserves FSV");
+        // 用自建临时目录探测构造器是否保留给定目录（不依赖 java.io.tmpdir 的
+        // 具体形式）。可遍历目录必须原样保留；Windows 上路径可能带 8.3 短名
+        // （如 YANSEN~1）等不同表示，因此按“是否同一个目录”判定
+        // （Files.isSameFile 走文件系统标识）。不可遍历时按文档允许回退。
+        java.nio.file.Path ownedPath = java.nio.file.Files.createTempDirectory("jck-jfc");
+        File owned = ownedPath.toFile();
+        JFileChooser d2 = new JFileChooser(owned);
+        try {
+            checkPreservedDirectory(d2, owned, ownedPath, "ctor(File) preserves directory");
+            javax.swing.filechooser.FileSystemView fsv = javax.swing.filechooser.FileSystemView.getFileSystemView();
+            JFileChooser d3 = new JFileChooser(owned, fsv);
+            checkPreservedDirectory(d3, owned, ownedPath, "ctor(File,FSV) preserves directory");
+            check(d3.getFileSystemView() == fsv, "ctor(File,FSV) preserves FSV");
+            // 探测用目录稍后会被删除，先把 d2 指回仍然存在的临时目录，
+            // 避免后续 updateUI 去列一个已删除的目录。
+            d2.setCurrentDirectory(tmp);
+        } finally {
+            try { java.nio.file.Files.deleteIfExists(ownedPath); }
+            catch (java.io.IOException ignore) { }
+        }
 
         d2.setSelectedFile(new File(tmp, "s.tmp"));
         d2.setSelectedFile(null);

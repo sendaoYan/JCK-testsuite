@@ -39,15 +39,19 @@ public class FileSystemViewTest {
         FileSystemView fsv = FileSystemView.getFileSystemView();
         check(fsv != null, "getFileSystemView returns non-null");
 
-        // Roots: at least one file-system root, and it is reported as such.
+        // Roots: getRoots 在 Windows 上返回“桌面”这个 shell 虚拟节点而不是盘符
+        // （WindowsFileSystemView.getRoots -> {Desktop}），isFileSystemRoot(桌面)
+        // 在 Windows 上为 false，但它仍应被 isRoot 认作根。
         File[] roots = fsv.getRoots();
         check(roots.length >= 1, "at least one root partition");
         boolean anyRoot = false;
+        boolean anyFileSystemRoot = false;
         for (File r : roots) {
             check(r != null, "root element non-null");
-            if (fsv.isFileSystemRoot(r)) anyRoot = true;
+            if (fsv.isFileSystemRoot(r)) anyFileSystemRoot = true;
+            if (fsv.isRoot(r)) anyRoot = true;
         }
-        check(anyRoot, "isFileSystemRoot true for at least one root");
+        check(anyFileSystemRoot || anyRoot, "at least one reported root is recognised (isFileSystemRoot or isRoot)");
 
         // isRoot: null and relative paths are not roots.
         check(!fsv.isRoot(null), "isRoot(null) false");
@@ -73,14 +77,27 @@ public class FileSystemViewTest {
             Files.write(f1.toPath(), "a".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             Files.write(f2.toPath(), "b".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-            check(f1.getName().equals(fsv.getSystemDisplayName(f1)), "getSystemDisplayName returns file name");
+            // Windows 的 display name 来自 shell（SHGDN_NORMAL）：资源管理器默认
+            // 隐藏已知扩展名，alpha.txt 可能显示成 "alpha"。因此只要求返回
+            // “非空且是文件名本身或去掉最后一个扩展名的形式”，X11 上仍是全名。
+            String f1Display = fsv.getSystemDisplayName(f1);
+            String f1NoExt = f1.getName();
+            int dot = f1NoExt.lastIndexOf('.');
+            if (dot > 0) f1NoExt = f1NoExt.substring(0, dot);
+            check(f1Display != null
+                  && (f1Display.equals(f1.getName()) || f1Display.equals(f1NoExt)),
+                  "getSystemDisplayName is the file name (optionally without known extension) [" + f1Display + "]");
             check(dirF.getName().equals(fsv.getSystemDisplayName(dirF)), "getSystemDisplayName returns dir name");
 
             check(Boolean.TRUE.equals(fsv.isTraversable(dirF)), "isTraversable(directory) true");
             check(Boolean.FALSE.equals(fsv.isTraversable(f1)), "isTraversable(file) false");
 
+            // Windows 上 shell 返回的父目录可能用长路径（C:\Users\yansendao\...），
+            // 而 java.io.tmpdir 可能来自 8.3 短名（YANSEN~1），字符串比较会不等。
+            // 契约是“父目录就是所在目录”，按文件系统标识比较。
             File parent = fsv.getParentDirectory(f1);
-            check(parent != null && parent.equals(dirF), "getParentDirectory(file) == parent dir");
+            check(parent != null && Files.isSameFile(parent.toPath(), dirF.toPath()),
+                  "getParentDirectory(file) is the containing directory");
 
             File[] files = fsv.getFiles(dirF, false);
             String[] names = new String[files.length];

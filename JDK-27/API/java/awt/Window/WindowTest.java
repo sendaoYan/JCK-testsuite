@@ -238,15 +238,23 @@ public class WindowTest {
             check(w.getX() == 11 && w.getY() == 22 && w.getWidth() == 33 && w.getHeight() == 44,
                   "x/y/width/height consistent");
 
-            // setLocationRelativeTo(null) centers on the default screen, size unchanged
+            // setLocationRelativeTo(null) 以“可用屏幕区域”的中心定位（getCenterPoint），
+            // 而不是整屏中心：Windows 会把任务栏从可用区域里扣掉，整屏中心会偏下/偏右。
+            // 之后再按实现最后一步把窗口夹回整屏边界内。
             w.setSize(120, 90);
             w.setLocationRelativeTo(null);
-            Rectangle sb = GraphicsEnvironment.getLocalGraphicsEnvironment()
-                    .getDefaultScreenDevice().getDefaultConfiguration().getBounds();
-            int ex = sb.x + (sb.width - 120) / 2;
-            int ey = sb.y + (sb.height - 90) / 2;
+            GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+            Rectangle sb = ge.getDefaultScreenDevice().getDefaultConfiguration().getBounds();
+            Point cp = ge.getCenterPoint();
+            int ex = cp.x - 120 / 2;
+            int ey = cp.y - 90 / 2;
+            if (ey + 90 > sb.y + sb.height) ey = sb.y + sb.height - 90;
+            if (ey < sb.y) ey = sb.y;
+            if (ex + 120 > sb.x + sb.width) ex = sb.x + sb.width - 120;
+            if (ex < sb.x) ex = sb.x;
             check(w.getLocation().equals(new Point(ex, ey)),
-                  "setLocationRelativeTo(null) centers (" + w.getLocation() + " vs " + ex + "," + ey + ")");
+                  "setLocationRelativeTo(null) centers on usable bounds ("
+                          + w.getLocation() + " vs " + ex + "," + ey + ")");
             check(w.getSize().equals(new Dimension(120, 90)),
                   "setLocationRelativeTo keeps size");
 

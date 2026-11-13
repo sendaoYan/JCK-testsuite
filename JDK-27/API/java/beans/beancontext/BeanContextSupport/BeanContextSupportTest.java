@@ -370,8 +370,12 @@ public class BeanContextSupportTest {
         bc.addPropertyChangeListener("locale", new PropertyChangeListener() {
             public void propertyChange(PropertyChangeEvent e) { locEvs.add(e); }
         });
+        // 默认 locale 来自 Locale.getDefault()：Linux CI 上就是 en_US，所以这次
+        // setLocale(Locale.US) 是“同值”；Windows 中文环境默认是 zh_CN，同一次调用
+        // 会是真实变更并正当地触发一次事件。先清空已记录事件，再验证同值不触发。
         bc.setLocale(Locale.US);
         check(Locale.US.equals(bc.getLocale()), "setLocale takes effect");
+        locEvs.clear();
         bc.setLocale(Locale.US);
         check(locEvs.isEmpty(), "setLocale same value fires nothing");
         bc.setLocale(null);

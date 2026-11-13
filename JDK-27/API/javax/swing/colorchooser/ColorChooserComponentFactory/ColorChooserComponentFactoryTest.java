@@ -69,14 +69,25 @@ public class ColorChooserComponentFactoryTest {
         javax.swing.colorchooser.AbstractColorChooserPanel[] panels =
                 javax.swing.colorchooser.ColorChooserComponentFactory.getDefaultChooserPanels();
         check(panels.length == 5, "Metal default panel count 5");
-        StringBuilder names = new StringBuilder();
-        for (javax.swing.colorchooser.AbstractColorChooserPanel p : panels) {
+        // 面板显示名来自 UIManager 资源键，随默认 locale 本地化（中文 Windows
+        // 上不是 Swatches/HSV/...）。用实现所用的同一组资源键取期望值，并额外
+        // 校验名称互不相同、非空，保持“五个可区分的面板”这一契约。
+        String[] nameKeys = {
+            "ColorChooser.swatchesNameText", "ColorChooser.hsvNameText",
+            "ColorChooser.hslNameText", "ColorChooser.rgbNameText",
+            "ColorChooser.cmykNameText",
+        };
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (int i = 0; i < panels.length; i++) {
+            javax.swing.colorchooser.AbstractColorChooserPanel p = panels[i];
             check(p.getMnemonic() != 0, "panel mnemonic set");
             check(p.getDisplayedMnemonicIndex() >= 0, "panel displayed mnemonic index valid");
-            names.append(p.getDisplayName()).append(';');
+            String expected = javax.swing.UIManager.getString(nameKeys[i], p.getLocale());
+            check(expected != null && expected.equals(p.getDisplayName()),
+                  "panel " + i + " display name matches " + nameKeys[i] + " [" + p.getDisplayName() + "]");
+            names.add(p.getDisplayName());
         }
-        check(names.toString().equals("Swatches;HSV;HSL;RGB;CMYK;"),
-              "Metal panel display names Swatches/HSV/HSL/RGB/CMYK");
+        check(names.size() == panels.length, "panel display names are distinct");
         javax.swing.JComponent preview =
                 javax.swing.colorchooser.ColorChooserComponentFactory.getPreviewPanel();
         check("DefaultPreviewPanel".equals(preview.getClass().getSimpleName()),

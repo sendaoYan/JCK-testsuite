@@ -34,6 +34,16 @@ public class PopupMenuTest {
         }
     }
 
+    // Windows 上 PopupMenu.show() 会走到原生 TrackPopupMenu 模态消息循环，
+    // 需要用户选择/取消才返回，而且 PopupMenu.show() 是 synchronized
+    // (getTreeLock()) 包住 native _show 的，所以整个模态期间一直持有
+    // AWTTreeLock。无交互桌面上无法完成，还会让后续 dispose() 里的
+    // EventQueue.invokeAndWait 等待 EDT 抢同一把锁而永久阻塞。因此在
+    // Windows 上不真正进入原生 show()，只校验可移植的前置/状态契约。
+    static boolean isWindows() {
+        return System.getProperty("os.name", "").startsWith("Windows");
+    }
+
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() {
         PopupMenu p = new PopupMenu();
@@ -53,7 +63,12 @@ public class PopupMenuTest {
             f.add(c);
             c.add(p2);
             check(p2.getParent() == c, "getParent after add to component");
-            check(showOffThread(p2, c, 0, 0) == null, "show on a showing origin must not throw");
+            if (isWindows()) {
+                check(p2.getItemCount() == 1 && p2.getParent() == c,
+                      "popup intact (native modal show not exercised on Windows)");
+            } else {
+                check(showOffThread(p2, c, 0, 0) == null, "show on a showing origin must not throw");
+            }
             check(p2.getItemCount() == 1, "popup still intact after show");
         } finally {
             f.dispose();
@@ -73,10 +88,8 @@ public class PopupMenuTest {
         }
     }
 
-    // PopupMenu.show() is modal on Windows (native TrackPopupMenu blocks until
-    // the menu is dismissed) but non-blocking on X11. Run it off-thread so a
-    // modal show can't hang the test; the origin frame is disposed right after,
-    // cancelling any popup still up (the daemon thread dies at JVM exit).
+    // X11 上 show() 立即返回；这里仍放到独立线程执行，避免实现差异让测试线程被卡住。
+    // （Windows 上不调用它，原因见 isWindows() 上方注释。）
     static Throwable showOffThread(PopupMenu menu, Component origin, int x, int y) {
         final Throwable[] err = new Throwable[1];
         Thread t = new Thread(() -> {
@@ -105,11 +118,17 @@ public class PopupMenuTest {
         f.add(host);
         host.add(p);
         check(p.getParent() == host, "add wires popup parent");
-        // show() before the origin is mapped fails deterministically (X11 contract)
+        // 父组件尚未显示时 show() 在进入原生层之前就抛 RuntimeException，
+        // 该检查与平台无关，Windows 上同样不会阻塞。
         expectExact(RuntimeException.class, "show() with non-showing origin", () -> p.show(host, 5, 5));
         f.setVisible(true);
         try {
-            check(showOffThread(p, host, 5, 5) == null, "show on a showing origin must not throw");
+            if (isWindows()) {
+                check(p.getItemCount() == 2 && p.getParent() == host,
+                      "popup intact (native modal show not exercised on Windows)");
+            } else {
+                check(showOffThread(p, host, 5, 5) == null, "show on a showing origin must not throw");
+            }
             check(p.getItemCount() == 2, "items intact after show");
         } finally {
             f.dispose();

@@ -68,7 +68,13 @@ public class AccessibleActionTest {
         javax.swing.JButton b = new javax.swing.JButton("Press");
         javax.accessibility.AccessibleAction ba = b.getAccessibleContext().getAccessibleAction();
         check(ba != null && ba.getAccessibleActionCount() == 1, "button one action");
-        check(javax.accessibility.AccessibleAction.CLICK.equals(ba.getAccessibleActionDescription(0)), "button action is click");
+        // AbstractButton.AccessibleAbstractButton 的 click 描述取自
+        // UIManager.getString("AbstractButton.clickText")，会随默认 locale 本地化
+        // （中文 Windows 上不是 "click"）。用同一个资源键取期望值，保持契约不变。
+        String clickText = javax.swing.UIManager.getString("AbstractButton.clickText");
+        check(clickText != null && !clickText.isEmpty(), "AbstractButton.clickText resource present");
+        check(clickText.equals(ba.getAccessibleActionDescription(0)),
+              "button action description is the localised clickText");
         javax.swing.JLabel l = new javax.swing.JLabel();
         check(l.getAccessibleContext().getAccessibleAction() == null, "label no action");
     }

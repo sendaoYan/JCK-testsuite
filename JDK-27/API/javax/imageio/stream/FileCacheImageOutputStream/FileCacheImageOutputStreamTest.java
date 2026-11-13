@@ -173,14 +173,35 @@ public class FileCacheImageOutputStreamTest {
                     "ctor(cacheDir is regular file)");
             notDir.delete();
 
-            // unwritable cache directory: temp file creation fails
+            // 只读缓存目录：各平台的“只读”语义不同。Windows 上目录的只读属性
+            // 是 DOS attribute，并不阻止在其中创建文件（MSVCRT 的 _access 对目录
+            // 只检查存在性），所以 setWritable(false) 后实际仍可能可写。这里用
+            // 真实创建探测决定走哪条可移植契约分支。
             File ro = newCacheDir();
             ro.setWritable(false);
             try {
-                check(!ro.canWrite(), "ctor: read-only dir prepared");
-                expectExact(java.nio.file.AccessDeniedException.class,
-                        () -> new FileCacheImageOutputStream(new ByteArrayOutputStream(), ro),
-                        "ctor(unwritable cacheDir)");
+                File probe = new File(ro, "probe-" + System.nanoTime());
+                boolean effectivelyWritable;
+                try (FileOutputStream probeOut = new FileOutputStream(probe)) {
+                    probeOut.write(0);
+                    effectivelyWritable = true;
+                } catch (IOException denied) {
+                    effectivelyWritable = false;
+                }
+                probe.delete();
+                if (effectivelyWritable) {
+                    // 平台忽略目录只读属性：构造器照常创建缓存文件并可用
+                    ByteArrayOutputStream bosRo = new ByteArrayOutputStream();
+                    FileCacheImageOutputStream s = new FileCacheImageOutputStream(bosRo, ro);
+                    s.write(0x5A);
+                    s.close();
+                    check(bosRo.size() == 1 && (bosRo.toByteArray()[0] & 0xFF) == 0x5A,
+                          "ctor: platform ignores dir read-only attribute, cache works");
+                } else {
+                    expectExact(java.nio.file.AccessDeniedException.class,
+                            () -> new FileCacheImageOutputStream(new ByteArrayOutputStream(), ro),
+                            "ctor(unwritable cacheDir)");
+                }
             } finally {
                 ro.setWritable(true);
                 deleteRecursive(ro);

@@ -89,7 +89,10 @@ public class AbstractWriterTest {
         StringWriter sw3 = new StringWriter();
         WriterImpl emit = new WriterImpl(sw3, doc);
         emit.emitAll();
-        check(sw3.toString().equals("hello\nworld"), "emitAll reproduces document text");
+        // AbstractWriter 写出时把文档中的 '\n' 换成行分隔符（默认取
+        // System.lineSeparator()，Windows 上是 CRLF），因此期望值不能写死 '\n'。
+        check(sw3.toString().equals("hello" + System.lineSeparator() + "world"),
+              "emitAll reproduces document text with platform line separator");
 
         // getText(Element) returns the text of a leaf element.
         Element root = doc.getDefaultRootElement();

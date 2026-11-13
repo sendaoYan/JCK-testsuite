@@ -104,7 +104,11 @@ public class DefaultDocumentEventTest {
         CompoundEdit edit = (CompoundEdit) e;
         check(edit.isSignificant(), "document edit is significant");
         check(edit.canUndo(), "fresh edit canUndo");
-        check("addition".equals(edit.getPresentationName()), "insert presentation name");
+        // 展示名来自 UIManager 资源键，随默认 locale 本地化（中文 Windows 上
+        // 不是 "addition"）；用实现所用的同一资源键取期望值。
+        String additionText = javax.swing.UIManager.getString("AbstractDocument.additionText");
+        check(additionText != null && !additionText.isEmpty(), "AbstractDocument.additionText resource present");
+        check(additionText.equals(edit.getPresentationName()), "insert presentation name");
         edit.undo();
         check(d.getLength() == 0, "undo through the event reverts the insert");
         check(!edit.canUndo() && edit.canRedo(), "post-undo state");

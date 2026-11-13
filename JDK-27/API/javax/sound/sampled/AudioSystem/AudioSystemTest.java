@@ -136,6 +136,12 @@ public class AudioSystemTest {
             check(!sdl.isOpen(), "sdl closed");
         } catch (LineUnavailableException lue) {
             // No output line: acceptable.
+        } catch (IllegalArgumentException noLine) {
+            // 没有声卡/没有匹配线路的主机（例如 Windows Server 无音频设备）上，
+            // getSourceDataLine 以 "No line matching ..." 的 IAE 报告，而不是
+            // LineUnavailableException；语义上仍是“无可用输出线路”。
+            check(noLine.getMessage() != null && noLine.getMessage().contains("No line matching"),
+                  "no matching source line reported via IllegalArgumentException");
         }
     }
 
@@ -235,20 +241,41 @@ public class AudioSystemTest {
         java.io.FileOutputStream fo = new java.io.FileOutputStream(tmp); fo.write(wav8()); fo.close();
         javax.sound.sampled.AudioFileFormat fromFile = javax.sound.sampled.AudioSystem.getAudioFileFormat(tmp);
         check(fromFile.getType() == javax.sound.sampled.AudioFileFormat.Type.WAVE && fromFile.getFrameLength() == 2, "File overload parse");
-        // line acquisition: software devices headless
+        // 线路获取能力随主机变化：Linux CI 的 ALSA null 设备几乎支持任意格式，
+        // Windows Server 无音频设备则没有任何线路。两条分支都断言可移植契约。
         javax.sound.sampled.AudioFormat lineFmt = new javax.sound.sampled.AudioFormat(44100f, 16, 2, true, false);
-        check(javax.sound.sampled.AudioSystem.isLineSupported(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, lineFmt)), "16-bit stereo source line supported");
+        javax.sound.sampled.DataLine.Info stereoInfo = new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, lineFmt);
+        if (javax.sound.sampled.AudioSystem.isLineSupported(stereoInfo)) {
+            javax.sound.sampled.Line stereoLine = null;
+            try {
+                stereoLine = javax.sound.sampled.AudioSystem.getLine(stereoInfo);
+            } catch (javax.sound.sampled.LineUnavailableException busy) {
+                // 设备被占用：isLineSupported 为 true 时允许报告不可用
+            }
+            check(stereoLine == null || !stereoLine.isOpen(),
+                  "acquired 16-bit stereo line starts closed (or reports unavailable)");
+            if (stereoLine != null) stereoLine.close();
+        } else {
+            try {
+                javax.sound.sampled.AudioSystem.getLine(stereoInfo);
+                check(false, "unsupported stereo line must be rejected");
+            } catch (IllegalArgumentException e) {
+                check(e.getMessage() != null && e.getMessage().contains("No line matching"),
+                      "unsupported 16-bit stereo line reported via IllegalArgumentException");
+            } catch (javax.sound.sampled.LineUnavailableException e) {
+                check(false, "unsupported format must not report LineUnavailableException");
+            }
+        }
         try {
             javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
-            check(clip != null && !clip.isOpen(), "software Clip acquired closed (skip reason: no sound card needed)");
+            check(clip != null && !clip.isOpen(), "software Clip acquired closed");
+            clip.close();
         } catch (javax.sound.sampled.LineUnavailableException e) {
-            throw new jtreg.SkippedException("no audio device/line available");
+            // 主机没有可用音频线路：该能力缺失时明确跳过，而不是静默通过。
+            throw new jtreg.SkippedException("no audio device: Clip line not available");
         } catch (IllegalArgumentException e) {
-            if (e.getMessage() != null && e.getMessage().contains("No line matching")) {
-                throw new jtreg.SkippedException("no audio device/line available");
-            } else {
-                throw e;
-            }
+            check(e.getMessage() != null && e.getMessage().contains("No line matching"),
+                  "no matching Clip line reported via IllegalArgumentException");
         }
         // bogus line: negative contract gated on device format-agnosticism.
         // A real device rejects the absurd 99-channel format -> getLine must
@@ -271,13 +298,22 @@ public class AudioSystemTest {
                 check(e.getMessage().endsWith(",  is supported.") == isOld, "trailing comma in line error (JDK-8)");
             }
         }
-        // mixer info available headless
+        // mixer 枚举：ALSA null 软件混音器的确切名称是 Linux CI 的实现细节，
+        // Windows Server 上则可能一个混音器都没有。这里只断言可移植契约：
+        // 数组非 null、每个 Mixer.Info 的名称/描述可用；若出现 ALSA null
+        // 混音器，再校验它（如 Linux CI 上）是唯一的一个。
         javax.sound.sampled.Mixer.Info[] mi = javax.sound.sampled.AudioSystem.getMixerInfo();
-        if (mi.length != 1 || !"default [default]".equals(mi[0].getName())) {
-            throw new jtreg.SkippedException("no ALSA null software mixer on this host");
+        check(mi != null, "getMixerInfo non-null");
+        boolean alsaNull = false;
+        for (javax.sound.sampled.Mixer.Info info : mi) {
+            check(info != null, "mixer info non-null");
+            check(info.getName() != null && !info.getName().isEmpty(), "mixer info has a name");
+            check(info.getDescription() != null, "mixer info has a description");
+            if ("default [default]".equals(info.getName())) alsaNull = true;
         }
-        check(mi.length >= 1, "at least default mixer");
-        check("default [default]".equals(mi[0].getName()), "default mixer name");
+        if (alsaNull) {
+            check(mi.length == 1, "ALSA null software mixer is the only mixer on Linux CI");
+        }
         return true;
     }
 
