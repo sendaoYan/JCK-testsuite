@@ -150,6 +150,34 @@ function Write-Lines([string]$path, [string[]]$lines) {
     else { [System.IO.File]::WriteAllText($path, "") }
 }
 
+# .gitattributes forces eol=lf for *.jasm/*.jcod because asmtools' jasm is
+# CRLF-sensitive: a CRLF file dies with `"<}>" token is expected` at the end of
+# a line.  A clone made BEFORE those attributes were added keeps CRLF, and
+# `git pull` never re-checkouts existing files, so normalise in place here.
+# Byte-level CR-before-LF removal is idempotent and cannot corrupt content.
+function Repair-JasmEol([string]$root) {
+    $files = @(& git -C $root ls-files -- '*.jasm' '*.jcod' 2>$null)
+    $fixed = 0
+    foreach ($f in $files) {
+        $p = Join-Path $root ($f -replace '/', '\')
+        if (-not (Test-Path $p)) { continue }
+        $b = [System.IO.File]::ReadAllBytes($p)
+        $hasCrlf = $false
+        for ($i = 0; $i -lt $b.Length - 1; $i++) {
+            if ($b[$i] -eq 13 -and $b[$i + 1] -eq 10) { $hasCrlf = $true; break }
+        }
+        if (-not $hasCrlf) { continue }
+        $o = New-Object 'System.Collections.Generic.List[byte]'
+        for ($i = 0; $i -lt $b.Length; $i++) {
+            if (($b[$i] -eq 13) -and (($i + 1) -lt $b.Length) -and ($b[$i + 1] -eq 10)) { continue }
+            $o.Add($b[$i])
+        }
+        [System.IO.File]::WriteAllBytes($p, $o.ToArray())
+        $fixed++
+    }
+    return $fixed
+}
+
 # Parse jtreg's -verbose:fail,error output into failing tests.  Reading the
 # failure list off the console (rather than only from report/text/summary.txt)
 # is what makes a HALF-DEAD run visible: when jtreg dies (native OOM, killed
@@ -331,6 +359,12 @@ Log "JDK-8 : $JDK8"
 Log "JDK-27: $JDK27"
 Log ("memory: ${MemMB} MB RAM; commit free ${FreeCommitMB} MB")
 Log ("heap  : test VM -Xms/-Xmx ${TestHeapMB}m +AlwaysPreTouch; javac ${JavacHeapMB}m; conc=$Concurrency$ConcNote")
+
+# asmtools needs LF in .jasm/.jcod (see Repair-JasmEol); fix a stale clone.
+$eolFixed = Repair-JasmEol $SUITE
+if ($eolFixed -gt 0) {
+    Log ("[eol] normalised CRLF -> LF in $eolFixed jasm/jcod file(s) (asmtools is CRLF-sensitive)")
+}
 Log ""
 
 # ---- versions (recorded for failure analysis) ----
