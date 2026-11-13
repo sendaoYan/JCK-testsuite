@@ -10,6 +10,7 @@ import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 
 import java.util.GregorianCalendar;
+import java.util.Locale;
 import java.util.TimeZone;
 
 public class XMLGregorianCalendarTest {
@@ -29,6 +30,8 @@ public class XMLGregorianCalendarTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：XMLGregorianCalendar 的非法词法消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文消息
+        Locale.setDefault(Locale.ENGLISH);
         DatatypeFactory f = DatatypeFactory.newInstance();
 
         // ---- parse with timezone offset ----

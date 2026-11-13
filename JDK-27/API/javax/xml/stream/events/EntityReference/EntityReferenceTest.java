@@ -91,6 +91,8 @@ public class EntityReferenceTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：StAX 解析器的未解析实体错误消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文消息
+        Locale.setDefault(Locale.ENGLISH);
         testWhiteBox();
         testBlackBox();
         testDeep();

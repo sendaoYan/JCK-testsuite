@@ -26,6 +26,7 @@ import org.xml.sax.InputSource;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.util.Iterator;
+import java.util.Locale;
 
 public class XPathTest {
     static int passed;
@@ -57,6 +58,8 @@ public class XPathTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：XPath 错误消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文消息
+        Locale.setDefault(Locale.ENGLISH);
         XPath xp = XPathFactory.newInstance().newXPath();
         Document d = doc();
 

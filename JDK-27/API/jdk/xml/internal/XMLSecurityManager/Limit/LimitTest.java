@@ -8,6 +8,8 @@ public class LimitTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：JAXP 限额错误消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文消息
+        java.util.Locale.setDefault(java.util.Locale.ENGLISH);
         Class<?> c = Class.forName("jdk.xml.internal.XMLSecurityManager$Limit", false, LimitTest.class.getClassLoader());
         check(c.getName().equals("jdk.xml.internal.XMLSecurityManager$Limit"), "name");
         check(c.isInterface() == false, "isInterface");

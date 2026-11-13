@@ -8,6 +8,8 @@ public class XMLSecurityManagerTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：JAXP 限额错误消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文消息
+        java.util.Locale.setDefault(java.util.Locale.ENGLISH);
         Class<?> c = Class.forName("jdk.xml.internal.XMLSecurityManager", false, XMLSecurityManagerTest.class.getClassLoader());
         check(c.getName().equals("jdk.xml.internal.XMLSecurityManager"), "name");
         check(c.isInterface() == false, "isInterface");
@@ -278,7 +280,8 @@ public class XMLSecurityManagerTest {
         } finally {
             System.setErr(oldErr);
         }
-        String[] lines = bos.toString().trim().split("\n");
+        // 行分隔符按平台取值（Windows 为 CRLF），用 \R 兼容
+        String[] lines = bos.toString().trim().split("\\R");
         check(lines.length == 2, "printWarning-dedup-2-lines");
         check(lines[0].equals("Warning: C1: boom1"), "printWarning-line1");
         check(lines[1].equals("Warning: C2: boom3"), "printWarning-line2");

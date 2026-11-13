@@ -74,6 +74,8 @@ public class XPathExpressionTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：XPath 语法错误消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文消息
+        Locale.setDefault(Locale.ENGLISH);
         testWhiteBox();
         testBlackBox();
         testCompiledEvaluation();

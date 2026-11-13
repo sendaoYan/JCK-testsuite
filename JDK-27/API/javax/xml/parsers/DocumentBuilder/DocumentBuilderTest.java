@@ -25,6 +25,7 @@ import org.xml.sax.SAXParseException;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.StringReader;
+import java.util.Locale;
 
 public class DocumentBuilderTest {
     static int passed;
@@ -53,6 +54,8 @@ public class DocumentBuilderTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：解析器校验错误消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文内容模型文本
+        Locale.setDefault(Locale.ENGLISH);
         DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
         f.setNamespaceAware(true);
         DocumentBuilder db = f.newDocumentBuilder();

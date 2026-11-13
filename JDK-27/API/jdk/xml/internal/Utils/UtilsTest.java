@@ -72,7 +72,9 @@ public class UtilsTest {
             System.setErr(oldErr);
             System.clearProperty("jaxp.debug");
         }
-        check(bos.toString().equals("JAXP: hello-dxml27\nJAXP: second-message\n"), "dPrint-jaxp-debug-output");
+        // dPrint 用 System.err.println 输出，行分隔符随平台（Windows 为 CRLF），期望值按当前平台拼接
+        String nl = System.lineSeparator();
+        check(bos.toString().equals("JAXP: hello-dxml27" + nl + "JAXP: second-message" + nl), "dPrint-jaxp-debug-output");
         // arraysAppend(null, null) -> null; identity and concatenation for the other combinations
         java.lang.reflect.Method aa = c.getMethod("arraysAppend", Class[].class, Class[].class);
         check(aa.invoke(null, (Object) null, (Object) null) == null, "aa-null-null");
@@ -132,7 +134,7 @@ public class UtilsTest {
             System.setErr(oldErr);
         }
         boolean allJaxp = true;
-        for (String ln : bos2.toString().split("\n")) if (!ln.isEmpty() && !ln.startsWith("JAXP: ")) allJaxp = false;
+        for (String ln : bos2.toString().split("\\R")) if (!ln.isEmpty() && !ln.startsWith("JAXP: ")) allJaxp = false;
         check(allJaxp, "factory-debug-uses-JAXP-prefix");
         // arraysAppend mirrors what factory configuration does when joining parameter lists
         Class<?>[] params = (Class<?>[]) aa.invoke(null,

@@ -8,6 +8,8 @@ public class NameMapTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：SAXMessages 的“属性未识别”消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文消息
+        java.util.Locale.setDefault(java.util.Locale.ENGLISH);
         Class<?> c = Class.forName("jdk.xml.internal.XMLLimitAnalyzer$NameMap", false, NameMapTest.class.getClassLoader());
         check(c.getName().equals("jdk.xml.internal.XMLLimitAnalyzer$NameMap"), "name");
         check(c.isInterface() == false, "isInterface");
