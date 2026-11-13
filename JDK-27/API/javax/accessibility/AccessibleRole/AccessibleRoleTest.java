@@ -84,7 +84,20 @@ public class AccessibleRoleTest {
         for (javax.accessibility.AccessibleRole r : roles) check(r != null && r.toDisplayString(java.util.Locale.ENGLISH) != null, "role displayable " + r);
         check("alert".equals(javax.accessibility.AccessibleRole.ALERT.toDisplayString(java.util.Locale.ENGLISH)), "alert");
         check("push button".equals(javax.accessibility.AccessibleRole.PUSH_BUTTON.toDisplayString(java.util.Locale.ENGLISH)), "push button");
-        check("push button".equals(javax.accessibility.AccessibleRole.PUSH_BUTTON.toString()), "toString = English display string");
+        // AccessibleBundle.toString() resolves the *default* locale at call time
+        // (toString() == toDisplayString(Locale.getDefault())), so pin an English
+        // default while asserting the literal text: the expectation must not
+        // depend on the host JVM's locale.
+        java.util.Locale savedDefaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ENGLISH);
+            check("push button".equals(javax.accessibility.AccessibleRole.PUSH_BUTTON.toString()), "toString = English display string");
+        } finally {
+            java.util.Locale.setDefault(savedDefaultLocale);
+        }
+        check(javax.accessibility.AccessibleRole.PUSH_BUTTON.toString()
+                        .equals(javax.accessibility.AccessibleRole.PUSH_BUTTON.toDisplayString(java.util.Locale.getDefault())),
+                "toString follows the caller's default locale");
         check("label".equals(javax.accessibility.AccessibleRole.LABEL.toDisplayString(java.util.Locale.ENGLISH)), "label");
         check("bouton".equals(javax.accessibility.AccessibleRole.PUSH_BUTTON.toDisplayString(java.util.Locale.FRENCH)), "French bouton");
         check(javax.accessibility.AccessibleRole.LABEL.equals(javax.accessibility.AccessibleRole.LABEL), "self equals");

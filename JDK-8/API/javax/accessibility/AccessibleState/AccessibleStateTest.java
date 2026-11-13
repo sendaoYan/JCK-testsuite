@@ -47,7 +47,17 @@ public class AccessibleStateTest {
         for (javax.accessibility.AccessibleState s : states) check(s != null && s.toDisplayString(java.util.Locale.ENGLISH) != null, "state displayable " + s);
         check("focused".equals(javax.accessibility.AccessibleState.FOCUSED.toDisplayString(java.util.Locale.ENGLISH)), "focused");
         check("enabled".equals(javax.accessibility.AccessibleState.ENABLED.toDisplayString(java.util.Locale.ENGLISH)), "enabled");
-        check("enabled".equals(javax.accessibility.AccessibleState.ENABLED.toString()), "toString = English display string");
+        // toString() follows Locale.getDefault(); pin English for the literal check.
+        java.util.Locale savedDefaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ENGLISH);
+            check("enabled".equals(javax.accessibility.AccessibleState.ENABLED.toString()), "toString = English display string");
+        } finally {
+            java.util.Locale.setDefault(savedDefaultLocale);
+        }
+        check(javax.accessibility.AccessibleState.ENABLED.toString()
+                        .equals(javax.accessibility.AccessibleState.ENABLED.toDisplayString(java.util.Locale.getDefault())),
+                "toString follows the caller's default locale");
         check("activ\u00E9".equals(javax.accessibility.AccessibleState.ENABLED.toDisplayString(java.util.Locale.FRENCH)), "French activ\u00E9");
         check(javax.accessibility.AccessibleState.ENABLED.equals(javax.accessibility.AccessibleState.ENABLED), "self equals");
         check(!javax.accessibility.AccessibleState.ENABLED.equals(javax.accessibility.AccessibleState.FOCUSED), "distinct unequal");

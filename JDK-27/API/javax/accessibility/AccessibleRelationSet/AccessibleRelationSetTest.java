@@ -90,7 +90,15 @@ public class AccessibleRelationSetTest {
         check("labelFor".equals(rs.get(javax.accessibility.AccessibleRelation.LABEL_FOR).getKey()), "get by key");
         check(rs.get("no-such-key") == null, "missing key get null");
         check(rs.contains("controlledBy"), "contains by key string");
-        check("label for,controlledBy".equals(rs.toString()), "toString display strings [" + rs.toString() + "]");
+        // AccessibleRelationSet.toString() joins each relation's display string,
+        // which is resolved against Locale.getDefault(); pin English for the literal.
+        java.util.Locale savedDefaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ENGLISH);
+            check("label for,controlledBy".equals(rs.toString()), "toString display strings [" + rs.toString() + "]");
+        } finally {
+            java.util.Locale.setDefault(savedDefaultLocale);
+        }
         boolean dup = rs.add(new javax.accessibility.AccessibleRelation(javax.accessibility.AccessibleRelation.LABEL_FOR, "z"));
         check(dup, "re-adding same key returns true (merges targets)");
         check(rs.size() == 2, "size still 2 after merge");

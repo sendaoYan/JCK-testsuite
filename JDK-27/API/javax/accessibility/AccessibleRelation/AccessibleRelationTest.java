@@ -81,7 +81,14 @@ public class AccessibleRelationTest {
         check(javax.accessibility.AccessibleRelation.CHILD_NODE_OF.equals(r.getKey()), "getKey");
         Object[] tg = (Object[]) r.getTarget();
         check(tg.length == 2 && "k1".equals(tg[0]) && "k2".equals(tg[1]), "varargs targets");
-        check("child node of".equals(r.toString()), "toString is display string");
+        // Inherited AccessibleBundle.toString() resolves Locale.getDefault().
+        java.util.Locale savedDefaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ENGLISH);
+            check("child node of".equals(r.toString()), "toString is display string");
+        } finally {
+            java.util.Locale.setDefault(savedDefaultLocale);
+        }
         r.setTarget("k3");
         check(((Object[]) r.getTarget()).length == 1 && "k3".equals(((Object[]) r.getTarget())[0]), "setTarget replaces");
         javax.accessibility.AccessibleRelation single = new javax.accessibility.AccessibleRelation(javax.accessibility.AccessibleRelation.LABEL_FOR, "one");

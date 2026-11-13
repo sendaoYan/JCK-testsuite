@@ -65,8 +65,18 @@ public class AccessibleBundleTest {
         check(javax.accessibility.AccessibleBundle.class.getSuperclass() == java.lang.Object.class, "extends Object");
         java.lang.reflect.Field key = javax.accessibility.AccessibleBundle.class.getDeclaredField("key");
         check(java.lang.reflect.Modifier.isProtected(key.getModifiers()), "protected key field");
-        // toDisplayString(Locale) == toString() for English default-locale runs
-        check(javax.accessibility.AccessibleRole.LABEL.toString().equals(javax.accessibility.AccessibleRole.LABEL.toDisplayString(java.util.Locale.ENGLISH)), "toString/display equivalence");
+        // toString() == toDisplayString(Locale) only when Locale is the default;
+        // pin English instead of assuming the host JVM already runs under it.
+        java.util.Locale savedDefaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ENGLISH);
+            check(javax.accessibility.AccessibleRole.LABEL.toString().equals(javax.accessibility.AccessibleRole.LABEL.toDisplayString(java.util.Locale.ENGLISH)), "toString/display equivalence");
+        } finally {
+            java.util.Locale.setDefault(savedDefaultLocale);
+        }
+        check(javax.accessibility.AccessibleRole.LABEL.toString()
+                        .equals(javax.accessibility.AccessibleRole.LABEL.toDisplayString(java.util.Locale.getDefault())),
+                "toString/display equivalence for caller's locale");
         // unknown key falls back to the key itself (no bundle entry)
         javax.accessibility.AccessibleRole custom = new javax.accessibility.AccessibleRole("deep-x") {};
         check("deep-x".equals(custom.toDisplayString(java.util.Locale.ENGLISH)), "fallback = key");

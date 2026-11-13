@@ -47,7 +47,15 @@ public class AccessibleStateSetTest {
         ss.add(javax.accessibility.AccessibleState.FOCUSABLE);
         check(ss.toArray().length == 2, "2 after adds");
         check(ss.contains(javax.accessibility.AccessibleState.ENABLED), "contains");
-        check("enabled,focusable".equals(ss.toString()), "toString comma-joined display strings [" + ss.toString() + "]");
+        // AccessibleStateSet.toString() joins each state's display string, which is
+        // resolved against Locale.getDefault(); pin English for the literal.
+        java.util.Locale savedDefaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ENGLISH);
+            check("enabled,focusable".equals(ss.toString()), "toString comma-joined display strings [" + ss.toString() + "]");
+        } finally {
+            java.util.Locale.setDefault(savedDefaultLocale);
+        }
         check(!ss.add(javax.accessibility.AccessibleState.ENABLED), "duplicate add returns false");
         check(ss.toArray().length == 2, "size unchanged by dup");
         check(ss.remove(javax.accessibility.AccessibleState.ENABLED), "remove true");
