@@ -25,7 +25,13 @@ $label = "baseline"
 $flags = @()
 if ($args -and $args.Count -gt 0) {
     $rest = @($args)
-    if ($rest[0] -notlike '-*') { $label = $rest[0]; $rest = @($rest[1..($rest.Count - 1)]) }
+    if ($rest[0] -notlike '-*') {
+        $label = $rest[0]
+        # Select-Object -Skip 1 yields an empty collection for a 1-element list
+        # (a raw $rest[1..0] range would return @($null,$rest[0]) — PowerShell
+        # ranges are inclusive/descending, not "empty when out of range").
+        $rest = @($rest | Select-Object -Skip 1)
+    }
     $flags = @($rest)
 }
 
