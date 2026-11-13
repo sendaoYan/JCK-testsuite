@@ -98,6 +98,8 @@ public class ServiceTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // 固定默认区域为英文：JAX-WS RI 的校验消息随默认 Locale 本地化（zh_CN 下是中文），断言的是英文消息。
+        java.util.Locale.setDefault(java.util.Locale.ENGLISH);
         testStructure();
         QName qn = new javax.xml.namespace.QName("urn:test", "HelloService");
         javax.xml.ws.Service svc = javax.xml.ws.Service.create(qn);
