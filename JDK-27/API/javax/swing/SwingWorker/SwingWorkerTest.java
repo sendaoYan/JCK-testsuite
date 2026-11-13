@@ -105,6 +105,9 @@ public class SwingWorkerTest {
         check(!w.bgOnEdt, "doInBackground() runs off EDT");
         check(w.processed.equals(Arrays.asList(1, 2, 3)), "process() accumulates published chunks");
         check(w.getProgress() == 42, "getProgress after setProgress");
+        // 状态的属性变更由 SwingWorkerPropertyChangeSupport 异步投递到 EDT，且 done()
+        // 的排队早于 DONE 通知；先把 EDT 队列排空，才能断言事件已经投递。
+        SwingUtilities.invokeAndWait(new Runnable() { public void run() { } });
         boolean sawStarted = false, sawDone = false, sawProgress = false;
         for (PropertyChangeEvent e : evts) {
             if ("state".equals(e.getPropertyName())) {
@@ -115,7 +118,7 @@ public class SwingWorkerTest {
             }
         }
         check(sawStarted, "state event PENDING->STARTED fired");
-        check(sawDone, "state event STARTED->DONE fired");
+        check(sawDone, "state event STARTED->DONE fired (events=" + evts + ", state=" + w.getState() + ")");
         check(sawProgress, "progress event 0->42 fired");
         w.execute(); // second execute is a documented no-op
         Thread.sleep(100);

@@ -85,7 +85,15 @@ public class SSLSocketTest {
                 check(events.stream().filter(s -> s.equals("unbound:attr")).count() >= 2, "unbound fired on remove");
             }
             srv.join(8000);
-            check(log.stream().anyMatch(s -> s.startsWith("HCE:")), "handshake completed event fired");
+            // TransportContext.finishHandshake 把 HandshakeCompletedEvent 交给单独的
+            // NotifyHandshake 线程投递，join 返回时事件可能尚未落进 log，因此限时等待。
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+            while (System.nanoTime() < deadline
+                   && log.stream().noneMatch(s -> s.startsWith("HCE:"))) {
+                Thread.sleep(10);
+            }
+            check(log.stream().anyMatch(s -> s.startsWith("HCE:")),
+                  "handshake completed event fired (log=" + log + ")");
         }
     }
     // ---- Part 3: contract deepening (validation + pinned protocol) ----

@@ -284,7 +284,10 @@ public class AsynchronousSocketChannelTest {
                         catch (java.io.IOException e) { throw new RuntimeException(e); }
                     }
                 }, "bind while already implicitly bound");
-                // ConnectionPendingException: a second connect issued while the first is pending
+                // ConnectionPendingException: a second connect issued while the first is pending.
+                // 回环 connect 往往在第二次调用前就完成（高负载下更明显），因此先试回环，
+                // 仍观察不到 pending 时改用 TEST-NET-1 黑洞地址：SYN 无人应答，connect 会
+                // 持续 pending 数秒，第二次 connect 必然命中 ConnectionPendingException。
                 boolean sawPending = false;
                 for (int attempt = 0; attempt < 5 && !sawPending; attempt++) {
                     try (AsynchronousSocketChannel racing = AsynchronousSocketChannel.open()) {
@@ -297,7 +300,29 @@ public class AsynchronousSocketChannelTest {
                         } catch (AlreadyConnectedException e) {
                             // loopback connect may complete before the second call: retry
                         }
-                        first.get(10, TimeUnit.SECONDS);
+                        try {
+                            first.get(10, TimeUnit.SECONDS);
+                        } catch (java.util.concurrent.ExecutionException e) {
+                            // 回环 connect 失败也不影响本断言，交给后续用例
+                        }
+                    }
+                }
+                if (!sawPending) {
+                    // 黑洞地址不可达时可能快速失败（无默认路由/防火墙拒绝）；此时
+                    // 该分支无判定力，保持 sawPending 不变，不引入新的失败点。
+                    try (AsynchronousSocketChannel pending = AsynchronousSocketChannel.open()) {
+                        InetSocketAddress blackhole = new InetSocketAddress("192.0.2.1", 9);
+                        Future<Void> first = pending.connect(blackhole);
+                        try {
+                            pending.connect(blackhole);
+                        } catch (ConnectionPendingException e) {
+                            sawPending = true;
+                        } catch (AlreadyConnectedException e) {
+                            // 极端情况下连接瞬间完成
+                        }
+                        first.cancel(true);
+                    } catch (java.io.IOException notApplicable) {
+                        // 打开通道失败：该探测不适用
                     }
                 }
                 check(sawPending, "connect while pending -> ConnectionPendingException");

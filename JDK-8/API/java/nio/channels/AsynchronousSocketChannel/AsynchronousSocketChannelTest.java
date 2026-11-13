@@ -149,7 +149,30 @@ public class AsynchronousSocketChannelTest {
                         } catch (AlreadyConnectedException e) {
                             // loopback connect may complete before the second call: retry
                         }
-                        first.get(10, TimeUnit.SECONDS);
+                        try {
+                            first.get(10, TimeUnit.SECONDS);
+                        } catch (java.util.concurrent.ExecutionException e) {
+                            // 回环 connect 失败也不影响本断言，交给后续用例
+                        }
+                    }
+                }
+                if (!sawPending) {
+                    // 回环 connect 往往在第二次调用前就完成；TEST-NET-1 黑洞地址的 SYN
+                    // 无人应答，connect 会持续 pending，第二次调用必然命中该异常。
+                    // 黑洞不可达时（无默认路由/防火墙拒绝）该探测无判定力，保持不变。
+                    try (AsynchronousSocketChannel pending = AsynchronousSocketChannel.open()) {
+                        InetSocketAddress blackhole = new InetSocketAddress("192.0.2.1", 9);
+                        Future<Void> first = pending.connect(blackhole);
+                        try {
+                            pending.connect(blackhole);
+                        } catch (ConnectionPendingException e) {
+                            sawPending = true;
+                        } catch (AlreadyConnectedException e) {
+                            // 极端情况下连接瞬间完成
+                        }
+                        first.cancel(true);
+                    } catch (java.io.IOException notApplicable) {
+                        // 打开通道失败：该探测不适用
                     }
                 }
                 check(sawPending, "connect while pending -> ConnectionPendingException");
