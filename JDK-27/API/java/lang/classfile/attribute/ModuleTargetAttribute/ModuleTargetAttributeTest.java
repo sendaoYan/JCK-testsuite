@@ -102,11 +102,19 @@ public class ModuleTargetAttributeTest {
     // ---- Part 5: jrt 真实产物 + javac 不产 ----
     static void testRealProducts() throws Exception {
         ClassModel jm = ClassFile.of().parse(Path.of(java.net.URI.create("jrt:/java.logging/module-info.class")));
-        // The real JDK's module-info carries the platform it was built for
-        // (linux-amd64, linux-aarch64, ...); match the running platform rather
-        // than hardcoding a single arch.
-        String expectedPlatform = System.getProperty("os.name").toLowerCase()
-                + "-" + System.getProperty("os.arch");
+        // The real JDK's module-info carries the platform it was built for,
+        // named the way the build names it (linux-amd64, macosx-aarch64,
+        // windows-amd64, ...).  os.name is the marketing name ("Windows Server
+        // 2019", "Mac OS X"), so fold it to the build's OS token first.
+        String osToken = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
+        if (osToken.startsWith("windows")) {
+            osToken = "windows";
+        } else if (osToken.startsWith("mac")) {
+            osToken = "macosx";
+        } else {
+            osToken = osToken.split(" ")[0];
+        }
+        String expectedPlatform = osToken + "-" + System.getProperty("os.arch");
         check(jm.findAttribute(Attributes.moduleTarget()).get().targetPlatform().stringValue().equals(expectedPlatform),
                 "java.logging ModuleTarget matches running platform: " + expectedPlatform);
         byte[] self = ModuleTargetAttributeTest.class.getResourceAsStream("ModuleTargetAttributeTest.class").readAllBytes();
