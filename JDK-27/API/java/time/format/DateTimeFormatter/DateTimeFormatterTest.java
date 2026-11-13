@@ -153,6 +153,10 @@ public class DateTimeFormatterTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // Pattern text (era/ampm/month names) is localized; the JDK-8 twin pins
+        // ENGLISH for the same reason.  Keep the two trees deterministic and
+        // identical instead of depending on the host default locale.
+        java.util.Locale.setDefault(java.util.Locale.ENGLISH);
         testWhiteBox();
         testBlackBox();
         testDeepFormatter();
@@ -266,7 +270,9 @@ public class DateTimeFormatterTest {
         xeq(d.format(DateTimeFormatter.ofPattern("uuuu-MM-dd")), "2024-02-29", "pattern u");
         xeq(d.format(DateTimeFormatter.ofPattern("yyyy 'Q'Q")), "2024 Q1", "pattern literal quote + quarter");
         xeq(d.format(DateTimeFormatter.ofPattern("''yyyy''")), "'2024'", "pattern escaped quotes");
-        xeq(d.format(DateTimeFormatter.ofPattern("G yyyy")), "AD 2024", "pattern G iso");
+        // era text is locale-sensitive (zh_CN renders 公元), so pin the
+        // formatter's locale instead of relying on the host default.
+        xeq(d.format(DateTimeFormatter.ofPattern("G yyyy", en)), "AD 2024", "pattern G iso");
         xeq(d.format(DateTimeFormatter.ofPattern("D w W F")), "60 9 5 5", "pattern F JDK27 day-of-week-in-month=5");
         xeq(LocalDate.of(2024, 2, 1).format(DateTimeFormatter.ofPattern("F")), "1", "pattern F first of month both agree");
         xact(() -> DateTimeFormatter.ofPattern("WW"), IllegalArgumentException.class,

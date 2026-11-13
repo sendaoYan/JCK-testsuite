@@ -117,8 +117,13 @@ public class UIManagerTest {
         check("probeValue".equals(UIManager.get("probe.key")), "UIManager.put/get");
         check("probeValue".equals(UIManager.getString("probe.key")),
                 "getString reads UIManager table");
-        check("Yes".equals(UIManager.getString("OptionPane.yesButtonText")),
-                "OptionPane.yesButtonText is Yes");
+        // The yes-button label is localized when the LAF is installed ("是(Y)"
+        // under a zh_CN default locale), so only require the localized lookup to
+        // agree with the raw table entry and to be non-empty.
+        Object yesText = UIManager.get("OptionPane.yesButtonText");
+        check(yesText != null && !yesText.toString().isEmpty(), "OptionPane.yesButtonText non-empty");
+        check(yesText.toString().equals(UIManager.getString("OptionPane.yesButtonText")),
+                "getString agrees with the localized table entry");
         check(UIManager.getFont("Label.font") != null, "Label.font nonnull");
         java.awt.Color focus = UIManager.getColor("Table.focusCellBackground");
         check(focus != null && focus.getRed() == 255 && focus.getGreen() == 255 && focus.getBlue() == 255,

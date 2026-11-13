@@ -75,6 +75,14 @@ public class LineTest {
             check(!line.isOpen(), "isOpen false after close");
         } catch (LineUnavailableException lue) {
             // No line available: degraded to enumeration paths.
+        } catch (IllegalArgumentException iae) {
+            // AudioSystem.getLine() reports "no such device" with IAE, not
+            // LineUnavailableException.  A host without a sound card (e.g. a
+            // Windows server) must be skipped loudly, not failed.
+            if (iae.getMessage() != null && iae.getMessage().startsWith("No line matching")) {
+                throw new jtreg.SkippedException("no audio line available on this host");
+            }
+            throw iae;
         }
     }
 

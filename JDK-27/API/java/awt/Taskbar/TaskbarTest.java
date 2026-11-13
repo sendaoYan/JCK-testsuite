@@ -86,10 +86,18 @@ public class TaskbarTest {
 
     // ---- Part 3: contract deepening ----
     static void testContractTaskbar() throws Exception {
-        // measured on this Linux/X11 display: no taskbar provider exists outside macOS
-        check(!Taskbar.isTaskbarSupported(), "isTaskbarSupported false on Linux/X11");
-        expectExact(UnsupportedOperationException.class, "getTaskbar without a provider",
-              () -> Taskbar.getTaskbar());
+        // Provider availability is platform-dependent: Windows and some GTK
+        // desktops expose a taskbar, plain X11 does not.  Assert the invariant
+        // for whichever branch the host is in instead of Linux's answer.
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            expectExact(java.awt.HeadlessException.class, "getTaskbar in a headless VM",
+                  () -> Taskbar.getTaskbar());
+        } else if (Taskbar.isTaskbarSupported()) {
+            check(Taskbar.getTaskbar() != null, "getTaskbar non-null when supported");
+        } else {
+            expectExact(UnsupportedOperationException.class, "getTaskbar without a provider",
+                  () -> Taskbar.getTaskbar());
+        }
         java.util.Set<String> states = new java.util.HashSet<>();
         for (Taskbar.State st : Taskbar.State.values()) states.add(st.name());
         check(states.equals(new java.util.HashSet<>(java.util.Arrays.asList(

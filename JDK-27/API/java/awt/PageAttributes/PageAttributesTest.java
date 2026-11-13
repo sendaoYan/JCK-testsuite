@@ -31,7 +31,19 @@ public class PageAttributesTest {
         // Defaults.
         PageAttributes p = new PageAttributes();
         check(p.getColor() == PageAttributes.ColorType.MONOCHROME, "default color monochrome");
-        check(p.getMedia() == PageAttributes.MediaType.NA_LETTER, "default media na-letter");
+        // The no-arg ctor uses the host's default paper size (NA_LETTER on a
+        // US/GB desktop, ISO_A4 on a zh_CN Windows box), so only the legal-value
+        // and round-trip parts of the contract are platform independent.
+        PageAttributes.MediaType defaultMedia = p.getMedia();
+        check(defaultMedia != null, "default media non-null");
+        String country = java.util.Locale.getDefault().getCountry();
+        if ("US".equals(country) || "GB".equals(country)) {
+            check(defaultMedia == PageAttributes.MediaType.NA_LETTER, "default media na-letter for US/GB locale");
+        } else {
+            check(defaultMedia == PageAttributes.MediaType.ISO_A4 || defaultMedia == PageAttributes.MediaType.NA_LETTER,
+                  "default media is a regional paper size: " + defaultMedia);
+        }
+        check(new PageAttributes(p).getMedia() == defaultMedia, "copy ctor round-trips default media");
         check(p.getOrientationRequested() == PageAttributes.OrientationRequestedType.PORTRAIT, "default orientation portrait");
         check(p.getOrigin() == PageAttributes.OriginType.PHYSICAL, "default origin physical");
         check(p.getPrintQuality() == PageAttributes.PrintQualityType.NORMAL, "default quality normal");

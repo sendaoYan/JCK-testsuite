@@ -60,8 +60,11 @@ public class SystemFlavorMapTest {
         // ---- FlavorTable list API ----
         List<String> natives = ft.getNativesForFlavor(java.awt.datatransfer.DataFlavor.stringFlavor);
         check(natives != null && !natives.isEmpty(), "natives for stringFlavor non-empty");
-        java.util.List<java.awt.datatransfer.DataFlavor> flavors = ft.getFlavorsForNative("STRING");
-        check(flavors != null && !flavors.isEmpty(), "flavors for STRING non-empty");
+        // Native names are platform vocabulary (X11 uses "STRING"; Windows uses
+        // "TEXT"/"UNICODE TEXT"), so round-trip a native this host advertises
+        // instead of hard-coding one platform's name.
+        java.util.List<java.awt.datatransfer.DataFlavor> flavors = ft.getFlavorsForNative(natives.get(0));
+        check(flavors != null && !flavors.isEmpty(), "advertised native maps back to flavors [" + natives.get(0) + "]");
         // unknown arbitrary native maps to an empty (never null) list
         List<java.awt.datatransfer.DataFlavor> unknown = ft.getFlavorsForNative("MY_TEST_NATIVE_ZZ");
         check(unknown != null && unknown.isEmpty(), "unknown native -> empty non-null list");

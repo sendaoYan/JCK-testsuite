@@ -60,8 +60,17 @@ public class MidiDeviceProviderTest {
         catch (NullPointerException e) { passed++; }
         javax.sound.midi.MidiDevice dev = p.getDevice(infos[0]);
         check(dev.getDeviceInfo() == infos[0], "device bound to info");
-        // real providers surface indirectly through MidiSystem (2 devices on this host)
-        check(javax.sound.midi.MidiSystem.getMidiDeviceInfo().length == 2, "JDK providers registered");
+        // Real providers surface indirectly through MidiSystem.  The device set
+        // is host-dependent (Linux software synths vs. Windows without a
+        // wavetable device), so only the SPI contract above is normative; a
+        // host with no MIDI device at all is skipped rather than failed.
+        int realDevices = javax.sound.midi.MidiSystem.getMidiDeviceInfo().length;
+        if (realDevices == 0) {
+            throw new jtreg.SkippedException("no MIDI device registered on this host");
+        }
+        for (javax.sound.midi.MidiDevice.Info ri : javax.sound.midi.MidiSystem.getMidiDeviceInfo()) {
+            check(ri.getName() != null && !ri.getName().isEmpty(), "registered MIDI info has a name");
+        }
     }
     static class RecProvider extends javax.sound.midi.spi.MidiDeviceProvider {
         static final javax.sound.midi.MidiDevice.Info INFO = new javax.sound.midi.MidiDevice.Info("Fake", "deep", "recording", "1") {};

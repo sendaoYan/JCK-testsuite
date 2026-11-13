@@ -126,14 +126,27 @@ public class KeyEventTest {
         KeyEvent pressed = new KeyEvent(src, KeyEvent.KEY_PRESSED, when, 0, KeyEvent.VK_A, KeyEvent.CHAR_UNDEFINED, KeyEvent.KEY_LOCATION_STANDARD);
         check(pressed.getKeyChar() == KeyEvent.CHAR_UNDEFINED, "KEY_PRESSED keyChar undefined");
         check(!pressed.isActionKey(), "letter keys are not action keys");
-        // getKeyText for well-known keys
-        check(KeyEvent.getKeyText(KeyEvent.VK_ENTER).equals("Enter"), "getKeyText(VK_ENTER)");
-        check(KeyEvent.getKeyText(KeyEvent.VK_SPACE).equals("Space"), "getKeyText(VK_SPACE)");
-        check(KeyEvent.getKeyText(KeyEvent.VK_F1).equals("F1"), "getKeyText(VK_F1)");
-        check(KeyEvent.getKeyText(0x3000).startsWith("Unknown"), "getKeyText(unknown) Unknown");
-        // getKeyModifiersText joins with + and orders Meta first
-        check(KeyEvent.getKeyModifiersText(InputEvent.SHIFT_MASK | InputEvent.CTRL_MASK).equals("Ctrl+Shift"), "getKeyModifiersText Ctrl+Shift");
-        check(KeyEvent.getKeyModifiersText(InputEvent.ALT_MASK | InputEvent.META_MASK).equals("Meta+Alt"), "getKeyModifiersText Meta+Alt");
+        // getKeyText/getKeyModifiersText localize through Locale.getDefault()
+        // (zh_CN yields "空格"), so pin English for the literal expectations and
+        // restore the caller's locale immediately afterwards.
+        java.util.Locale savedDefaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ENGLISH);
+            // getKeyText for well-known keys
+            check(KeyEvent.getKeyText(KeyEvent.VK_ENTER).equals("Enter"), "getKeyText(VK_ENTER)");
+            check(KeyEvent.getKeyText(KeyEvent.VK_SPACE).equals("Space"), "getKeyText(VK_SPACE)");
+            check(KeyEvent.getKeyText(KeyEvent.VK_F1).equals("F1"), "getKeyText(VK_F1)");
+            check(KeyEvent.getKeyText(0x3000).startsWith("Unknown"), "getKeyText(unknown) Unknown");
+            // getKeyModifiersText joins with + and orders Meta first
+            check(KeyEvent.getKeyModifiersText(InputEvent.SHIFT_MASK | InputEvent.CTRL_MASK).equals("Ctrl+Shift"), "getKeyModifiersText Ctrl+Shift");
+            check(KeyEvent.getKeyModifiersText(InputEvent.ALT_MASK | InputEvent.META_MASK).equals("Meta+Alt"), "getKeyModifiersText Meta+Alt");
+        } finally {
+            java.util.Locale.setDefault(savedDefaultLocale);
+        }
+        // the localized form is still well-formed under the caller's locale
+        String localizedSpace = KeyEvent.getKeyText(KeyEvent.VK_SPACE);
+        check(localizedSpace != null && !localizedSpace.isEmpty(),
+                "getKeyText non-empty for caller's default locale: " + localizedSpace);
         // getExtendedKeyCodeForChar returns 0 for non-ASCII characters (no real extended key on this platform)
         check(KeyEvent.getExtendedKeyCodeForChar('\u4E2D') == 0, "getExtendedKeyCodeForChar(non-ASCII) == 0");
         // paramString of KEY_TYPED shows keyCode=0 and the key char
@@ -164,6 +177,11 @@ public class KeyEventTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // KeyEvent resolves its key/modifier names through a resource bundle
+        // that is cached at class-initialisation time, so the default locale has
+        // to be English before the class is touched — a later setDefault() has
+        // no effect.  Pin it for the whole run (zh_CN would say "空格").
+        java.util.Locale.setDefault(java.util.Locale.ENGLISH);
         testWhiteBox();
         testBlackBox();
         testSerialization();

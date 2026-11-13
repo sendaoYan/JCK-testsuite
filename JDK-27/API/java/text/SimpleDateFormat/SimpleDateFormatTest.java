@@ -456,9 +456,20 @@ public class SimpleDateFormatTest {
     }
 
     static void testVersionLockedLocaleDataContract() {
-        // JDK-27 CLDR locale data
-        check("M/d/yy, h:mm\u202Fa".equals(new SimpleDateFormat().toPattern()),
-              "default pattern has comma + NNBSP (CLDR)");
+        // JDK-27 CLDR locale data.  The no-arg ctor takes the default locale's
+        // CLDR pattern (zh_CN yields "y/M/d HH:mm"), so pin en_US around the
+        // literal expectation and still require a usable pattern for the host
+        // locale afterwards.
+        java.util.Locale savedDefaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.US);
+            check("M/d/yy, h:mm\u202Fa".equals(new SimpleDateFormat().toPattern()),
+                  "default pattern has comma + NNBSP (CLDR en_US)");
+        } finally {
+            java.util.Locale.setDefault(savedDefaultLocale);
+        }
+        String hostPattern = new SimpleDateFormat().toPattern();
+        check(hostPattern != null && !hostPattern.isEmpty(), "default pattern non-empty for host locale [" + hostPattern + "]");
         check("Donnerstag M\u00E4rz PM n. Chr. UTC"
               .equals(fmt("EEEE MMMM a G z", Locale.GERMAN, TimeZone.getTimeZone("UTC"))),
               "de names (CLDR)");
