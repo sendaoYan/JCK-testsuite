@@ -96,14 +96,17 @@ $LOG = Join-Path $resDir "console.log"
 #      Re-encoding that as UTF-8 writes the NULs as 0x00 bytes -> the log reads
 #      as "invisible characters".
 # A single UTF-8 (no BOM) encoding object is reused for every write, and every
-# line is NUL-stripped (.Replace([char]0,"")) to undo the UTF-16LE mis-decode.
-# That strip is a no-op for the clean lines (script messages, stderr summary,
-# java -version), so it is safe to apply uniformly.
+# line is NUL-stripped to undo the UTF-16LE mis-decode.  Must be spelled
+# .Replace([string]([char]0), "") — writing [char]0 (uncast) makes PowerShell 5.1
+# bind the String.Replace(char, char) overload, which then rejects the "" second
+# argument ("字符串的长度只能为一个字符").  The cast forces the (string, string)
+# overload.  The strip is a no-op for clean lines (script messages, stderr
+# summary, java -version), so it is safe to apply uniformly.
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Log([string]$text) {
     Write-Host $text
-    [System.IO.File]::AppendAllText($LOG, $text.Replace([char]0, "") + "`r`n", $Utf8NoBom)
+    [System.IO.File]::AppendAllText($LOG, $text.Replace([string]([char]0), "") + "`r`n", $Utf8NoBom)
 }
 
 # Write an array of lines to a file (empty array -> empty file).
@@ -134,7 +137,7 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
     # jtreg's verbose stdout is UTF-16LE on this box; PowerShell decodes it
     # single-byte, so each ASCII char is followed by a NUL. Strip the NUL fill
     # bytes before writing/parsing (see the encoding note above).
-    $out = @(& $JTREG_JAVA @jtArgs 2>&1 | ForEach-Object { ([string]$_).Replace([char]0, "") })
+    $out = @(& $JTREG_JAVA @jtArgs 2>&1 | ForEach-Object { ([string]$_).Replace([string]([char]0), "") })
     if ($out.Count -gt 0) {
         [System.IO.File]::AppendAllLines($LOG, [string[]]$out, $Utf8NoBom)
     }
