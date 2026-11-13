@@ -197,8 +197,15 @@ public class FileNotFoundExceptionTest {
         } catch (FileNotFoundException fnfe) {
             check(fnfe.getMessage().startsWith(missing.getPath()),
                   "message starts with the offending path");
-            check(fnfe.getMessage().contains("(No such file or directory)"),
-                  "missing file errno suffix: " + fnfe.getMessage());
+            // The suffix is the OS strerror, which is localized (a zh_CN
+            // Windows reports 系统找不到指定的文件); require the "(reason)"
+            // shape and the English text only where the C locale supplies it.
+            check(fnfe.getMessage().matches(".*\\(.+\\)$"),
+                  "missing file carries an OS reason suffix: " + fnfe.getMessage());
+            if (!System.getProperty("os.name").startsWith("Windows")) {
+                check(fnfe.getMessage().contains("(No such file or directory)"),
+                      "missing file errno suffix on POSIX: " + fnfe.getMessage());
+            }
             check(fnfe.getMessage().equals(fnfe.getLocalizedMessage()),
                   "getLocalizedMessage identical for platform messages");
             check(fnfe.toString().startsWith("java.io.FileNotFoundException: " + missing.getPath()),
@@ -209,8 +216,12 @@ public class FileNotFoundExceptionTest {
             new FileInputStream(base);
             check(false, "directory open must throw");
         } catch (FileNotFoundException fnfe) {
-            check(fnfe.getMessage().contains("(Is a directory)"),
-                  "directory errno suffix: " + fnfe.getMessage());
+            check(fnfe.getMessage().matches(".*\\(.+\\)$"),
+                  "directory errno suffix shape: " + fnfe.getMessage());
+            if (!System.getProperty("os.name").startsWith("Windows")) {
+                check(fnfe.getMessage().contains("(Is a directory)"),
+                      "directory errno suffix on POSIX: " + fnfe.getMessage());
+            }
         }
         // write into a missing parent directory
         File orphan = new File(base, "fnfe-orphan-" + System.nanoTime() + "/child.txt");
@@ -219,8 +230,8 @@ public class FileNotFoundExceptionTest {
             check(false, "orphan path write must throw");
         } catch (FileNotFoundException fnfe) {
             check(fnfe.getMessage().contains(orphan.getPath())
-                      && fnfe.getMessage().contains("(No such file or directory)"),
-                  "orphan write carries path + errno: " + fnfe.getMessage());
+                      && fnfe.getMessage().matches(".*\\(.+\\)$"),
+                  "orphan write carries path + OS reason: " + fnfe.getMessage());
         }
         // RandomAccessFile "r" on missing path reuses the same exception type
         try {

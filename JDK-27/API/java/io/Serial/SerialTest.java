@@ -291,6 +291,10 @@ public class SerialTest {
     }
 
     public static void main(String[] args) throws Exception {
+        // The in-process javac localizes diagnostics through the JVM default
+        // locale (zh_CN yields 批注接口不适用于此类型), so pin English before the
+        // compiler is initialized: the assertions check javac's wording.
+        java.util.Locale.setDefault(java.util.Locale.ENGLISH);
         testWhiteBox();
         testBlackBox();
         testMetaExact();

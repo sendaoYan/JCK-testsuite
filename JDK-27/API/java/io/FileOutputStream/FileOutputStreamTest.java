@@ -123,8 +123,12 @@ public class FileOutputStreamTest {
                 new FileOutputStream(dir.toFile());
                 check(false, "directory must throw");
             } catch (FileNotFoundException e) {
-                check(e.getMessage().equals(dir.toString() + " (Is a directory)"),
-                      "JDK-27 directory message exact: " + e.getMessage());
+                // "<path> (<OS reason>)" — the reason is a localized strerror
+                // ("Is a directory" on Linux, 拒绝访问 on a zh_CN Windows).
+                check(e.getMessage().startsWith(dir.toString() + " ("),
+                      "directory message starts with path and paren: " + e.getMessage());
+                check(e.getMessage().matches(".*\\(.+\\)$"),
+                      "directory message ends with an OS reason: " + e.getMessage());
             }
             File orphan = dir.resolve("no/such/x.bin").toFile();
             try {

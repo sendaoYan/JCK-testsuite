@@ -121,8 +121,11 @@ public class FileInputStreamTest {
                 new FileInputStream(missing);
             } catch (FileNotFoundException e) {
                 String m = e.getMessage();
-                check(m.contains(missing.getPath()) && m.contains("No such file or directory"),
-                      "missing-file message has path and reason: " + m);
+                check(m.contains(missing.getPath()), "missing-file message names the path: " + m);
+                // The reason text comes from the OS strerror and is localized
+                // (a zh_CN Windows says 系统找不到指定的文件); only the
+                // "<path> (<reason>)" shape is portable.
+                check(m.matches(".*\\(.+\\)$"), "missing-file message ends with an OS reason: " + m);
             }
             checkThrows(FileNotFoundException.class,
                         () -> new FileInputStream(dir.resolve("no/such").toString()),

@@ -103,6 +103,22 @@ public class PrintStreamTest {
         throw new AssertionError(what + ": expected " + type.getName() + " but nothing thrown");
     }
 
+    // Same as expectThrowsMsg, but for OS-generated messages: the reason text
+    // is a localized strerror, so only the "<path> (<reason>)" shape is portable.
+    static void expectThrowsPathReason(String what, Class<? extends Throwable> type, String path, Action a) {
+        try { a.run(); }
+        catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(what + ": expected " + type.getName() + " but got " + t);
+            String m = t.getMessage();
+            if (m == null || !m.contains(path) || !m.matches("(?s).*\\(.+\\)$"))
+                throw new AssertionError(what + ": message \"" + m
+                                         + "\" lacks the path or the OS reason");
+            passed++; return;
+        }
+        throw new AssertionError(what + ": expected " + type.getName() + " but nothing thrown");
+    }
+
     static void expectThrowsMsg(String what, Class<? extends Throwable> type, String msg, Action a) {
         try { a.run(); }
         catch (Throwable t) {
@@ -538,11 +554,11 @@ public class PrintStreamTest {
             check("00 63 00 73 00 31 00 36".equals(hex(readFile(f5))),
                   "(File,String) UTF-16BE exact bytes");
             final File missing = new File(dir, "no-such-dir" + File.separatorChar + "f.txt");
-            expectThrowsMsg("(File) with missing parent", java.io.FileNotFoundException.class,
-                            "(No such file or directory)",
+            expectThrowsPathReason("(File) with missing parent", java.io.FileNotFoundException.class,
+                            missing.getPath(),
                 new Action() { public void run() throws Exception { new PrintStream(missing); } });
-            expectThrowsMsg("(String) with missing parent", java.io.FileNotFoundException.class,
-                            "(No such file or directory)",
+            expectThrowsPathReason("(String) with missing parent", java.io.FileNotFoundException.class,
+                            missing.getPath(),
                 new Action() { public void run() throws Exception { new PrintStream(missing.getPath()); } });
             final File bad = new File(dir, "bad.txt");
             expectThrowsMsg("(File,\"Bogus\")", UnsupportedEncodingException.class, "Bogus",

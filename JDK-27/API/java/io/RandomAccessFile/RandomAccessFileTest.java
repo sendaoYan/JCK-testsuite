@@ -95,8 +95,14 @@ public class RandomAccessFileTest {
                 raf.write(1);
                 check(false, "write in r mode must throw");
             } catch (IOException ioe) {
-                check("Bad file descriptor".equals(ioe.getMessage()),
-                      "r-mode write message: " + ioe.getMessage());
+                // Windows reports EBADF through its own localized strerror
+                // (拒绝访问), so the exact text is a POSIX-only expectation.
+                check(ioe.getMessage() != null && !ioe.getMessage().isEmpty(),
+                      "r-mode write reports an IOException message: " + ioe.getMessage());
+                if (!System.getProperty("os.name").startsWith("Windows")) {
+                    check("Bad file descriptor".equals(ioe.getMessage()),
+                          "r-mode write message on POSIX: " + ioe.getMessage());
+                }
             }
             raf.close();
 
