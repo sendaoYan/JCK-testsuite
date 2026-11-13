@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary java.net.UnixDomainSocketAddress conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main UnixDomainSocketAddressTest
  */
 
@@ -36,9 +37,12 @@ public class UnixDomainSocketAddressTest {
     }
 
     static void testBlackBox() throws Exception {
-        UnixDomainSocketAddress u = UnixDomainSocketAddress.of("/tmp/jck-sock");
-        check(u.getPath().toString().equals("/tmp/jck-sock"), "path from string");
-        check(u.toString().equals("/tmp/jck-sock"), "toString");
+        // of(String) is by contract of(Path.of(s)): the text is rendered by the
+        // default file system, which uses '\\' separators on Windows.
+        Path sample = Path.of("/tmp/jck-sock");
+        UnixDomainSocketAddress u = UnixDomainSocketAddress.of(sample);
+        check(u.getPath().equals(sample), "path from string");
+        check(u.toString().equals(sample.toString()), "toString");
 
         UnixDomainSocketAddress u2 = UnixDomainSocketAddress.of(Paths.get("/tmp/jck-sock"));
         check(u2.getPath().equals(u.getPath()), "path from Path");
@@ -115,19 +119,21 @@ public class UnixDomainSocketAddressTest {
     static void testOfStringMatrix() {
         String[] samples = {"/tmp/a.sock", "/a/b/c/d.sock", "a.sock", "rel/sub/b.sock", "",
                 "/tmp/a b.sock", "/tmp/日本語.sock", "/tmp/./a.sock", "/tmp/x.sock/"};
-        String[] expected = {"/tmp/a.sock", "/a/b/c/d.sock", "a.sock", "rel/sub/b.sock", "",
-                "/tmp/a b.sock", "/tmp/日本語.sock", "/tmp/./a.sock", "/tmp/x.sock"};
-        boolean[] absolute = {true, true, false, false, false, true, true, true, true};
         for (int i = 0; i < samples.length; i++) {
+            // The contract is of(String) == of(Path.of(String)); the concrete
+            // text (separators, '.' handling, absolute-ness of a drive-less
+            // rooted path) is supplied by the platform default file system.
+            Path expected = Path.of(samples[i]);
             UnixDomainSocketAddress a = UnixDomainSocketAddress.of(samples[i]);
             check(a != null, "of sample " + i + " non-null");
-            check(expected[i].equals(a.getPath().toString()),
+            check(expected.toString().equals(a.getPath().toString()),
                     "round-trip[" + i + "] <" + samples[i] + "> -> <" + a.getPath() + ">");
-            check(expected[i].equals(a.toString()), "toString[" + i + "] equals path text");
-            check(a.getPath().isAbsolute() == absolute[i], "isAbsolute[" + i + "]");
+            check(expected.toString().equals(a.toString()), "toString[" + i + "] equals path text");
+            check(a.getPath().isAbsolute() == expected.isAbsolute(), "isAbsolute[" + i + "]");
         }
         // Trailing slash is collapsed by Path semantics (probed).
-        check("/tmp/x.sock".equals(UnixDomainSocketAddress.of("/tmp/x.sock/").getPath().toString()),
+        check(Path.of("/tmp/x.sock").toString()
+                        .equals(UnixDomainSocketAddress.of("/tmp/x.sock/").getPath().toString()),
                 "trailing slash collapsed");
         // Deeply nested path keeps all components.
         List<String> names = new ArrayList<String>();
@@ -148,7 +154,7 @@ public class UnixDomainSocketAddressTest {
         Path rel = Path.of("rel", "r.sock");
         UnixDomainSocketAddress b = UnixDomainSocketAddress.of(rel);
         check(!b.getPath().isAbsolute(), "relative Path stays relative");
-        check("rel/r.sock".equals(b.getPath().toString()), "relative text");
+        check(Path.of("rel", "r.sock").toString().equals(b.getPath().toString()), "relative text");
         check(UnixDomainSocketAddress.of(Path.of("")).getPath().toString().isEmpty(),
                 "empty Path accepted (probed)");
         check(UnixDomainSocketAddress.of(Path.of("a.sock")).equals(UnixDomainSocketAddress.of("a.sock")),
@@ -197,10 +203,12 @@ public class UnixDomainSocketAddressTest {
 
     // ---- Part 5: toString ----
     static void testToString() {
-        check("/tmp/t.sock".equals(UnixDomainSocketAddress.of("/tmp/t.sock").toString()), "absolute text");
+        check(Path.of("/tmp/t.sock").toString()
+                        .equals(UnixDomainSocketAddress.of("/tmp/t.sock").toString()), "absolute text");
         check("t.sock".equals(UnixDomainSocketAddress.of("t.sock").toString()), "relative text");
         check("".equals(UnixDomainSocketAddress.of("").toString()), "empty text");
-        check("/tmp/a b.sock".equals(UnixDomainSocketAddress.of("/tmp/a b.sock").toString()),
+        check(Path.of("/tmp/a b.sock").toString()
+                        .equals(UnixDomainSocketAddress.of("/tmp/a b.sock").toString()),
                 "spaces preserved verbatim");
         UnixDomainSocketAddress u = UnixDomainSocketAddress.of("/tmp/rep.sock");
         check(u.toString().equals(u.toString()), "toString stable");
@@ -220,8 +228,16 @@ public class UnixDomainSocketAddressTest {
             check(false, "IPE expected");
         } catch (InvalidPathException e) {
             check("a\u0000b".equals(e.getInput()), "IPE echoes the offending input");
-            check("Nul character not allowed".equals(e.getReason()), "IPE reason exact (probed)");
-            check(e.getIndex() == -1, "IPE index -1 for nul-character rejection (probed)");
+            if (File.separatorChar == '/') {
+                check("Nul character not allowed".equals(e.getReason()), "IPE reason exact (probed)");
+                check(e.getIndex() == -1, "IPE index -1 for nul-character rejection (probed)");
+            } else {
+                // The Windows path parser reports the offending character and
+                // its position rather than rejecting the whole input.
+                check(e.getReason() != null && !e.getReason().isEmpty(),
+                        "IPE reason reported: " + e.getReason());
+                check(e.getIndex() == 1, "IPE index points at the nul char, got " + e.getIndex());
+            }
         }
     }
 
@@ -237,7 +253,8 @@ public class UnixDomainSocketAddressTest {
         UnixDomainSocketAddress res = (UnixDomainSocketAddress) back;
         check(orig.equals(res), "round-trip equals");
         check(res.equals(orig), "round-trip equals symmetric");
-        check("/tmp/ser/a.sock".equals(res.getPath().toString()), "round-trip path text");
+        check(Path.of("/tmp/ser/a.sock").toString().equals(res.getPath().toString()),
+                "round-trip path text");
         check(res.toString().equals(orig.toString()), "round-trip toString");
         check(res.hashCode() == orig.hashCode(), "round-trip hashCode");
         // Relative and empty paths also survive.
@@ -258,14 +275,33 @@ public class UnixDomainSocketAddressTest {
     }
 
     // ---- Part 8: live AF_UNIX integration on a throwaway socket path ----
+
+    /**
+     * Opens a UNIX-family server channel, or reports the test as skipped when
+     * the platform has no AF_UNIX provider (pre-1803 Windows, or a default
+     * file system that cannot carry socket paths).
+     */
+    static ServerSocketChannel openUnixServer() throws java.io.IOException {
+        try {
+            return ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+        } catch (UnsupportedOperationException | java.net.SocketException e) {
+            throw new jtreg.SkippedException(
+                    "AF_UNIX not supported on this platform: " + e);
+        }
+    }
+
     static void testLiveUnixDomainSocket() throws Exception {
         Path dir = Files.createTempDirectory("net-J-uds");
         Path sockPath = dir.resolve("test.sock");
         UnixDomainSocketAddress addr = UnixDomainSocketAddress.of(sockPath);
 
-        try (ServerSocketChannel ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX)) {
+        try (ServerSocketChannel ssc = openUnixServer()) {
             ssc.bind(addr);
-            check(Files.exists(sockPath), "socket special file created in the filesystem");
+            if (File.separatorChar == '/') {
+                // A POSIX AF_UNIX name is a special file in the file system;
+                // the Windows implementation stores it differently.
+                check(Files.exists(sockPath), "socket special file created in the filesystem");
+            }
             SocketAddress local = ssc.getLocalAddress();
             check(local instanceof UnixDomainSocketAddress, "local address type");
             check(local.equals(addr), "bound local address equals the constructed one");
@@ -273,7 +309,7 @@ public class UnixDomainSocketAddressTest {
                     "local address path equals the socket path");
 
             // Double-bind of the same filesystem name is refused (probed message).
-            try (ServerSocketChannel second = ServerSocketChannel.open(StandardProtocolFamily.UNIX)) {
+            try (ServerSocketChannel second = openUnixServer()) {
                 second.bind(UnixDomainSocketAddress.of(sockPath));
                 check(false, "second bind must fail");
             } catch (BindException e) {
@@ -327,13 +363,19 @@ public class UnixDomainSocketAddressTest {
         }
 
         // Binding to a path under a nonexistent directory fails (probed: plain
-        // SocketException, not NoSuchFileException).
-        try (ServerSocketChannel bad = ServerSocketChannel.open(StandardProtocolFamily.UNIX)) {
-            bad.bind(UnixDomainSocketAddress.of("/tmp/net-J-uds-no-such-dir/x.sock"));
+        // SocketException, not NoSuchFileException). The native error text is
+        // platform-specific, so only the type is asserted on Windows.
+        try (ServerSocketChannel bad = openUnixServer()) {
+            bad.bind(UnixDomainSocketAddress.of(dir.resolve("no-such-subdir").resolve("x.sock")));
             check(false, "bind into missing directory must fail");
         } catch (SocketException e) {
-            check(e.getMessage() != null && e.getMessage().contains("No such file or directory"),
-                    "missing directory -> SocketException 'No such file or directory' (probed)");
+            if (File.separatorChar == '/') {
+                check(e.getMessage() != null && e.getMessage().contains("No such file or directory"),
+                        "missing directory -> SocketException 'No such file or directory' (probed)");
+            } else {
+                check(e.getMessage() != null,
+                        "missing directory -> SocketException: " + e.getMessage());
+            }
         }
 
         // Cleanup (bounded, best effort).

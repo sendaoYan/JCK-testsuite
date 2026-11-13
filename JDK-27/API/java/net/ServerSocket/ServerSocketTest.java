@@ -350,7 +350,11 @@ public class ServerSocketTest {
             catch (IllegalArgumentException e) {
                 check("negative receive size".equals(e.getMessage()), "setReceiveBufferSize(-1) message");
             }
-            check(ss.getReuseAddress(), "default REUSEADDR true before bind (Linux)");
+            // SO_REUSEADDR is on by default for unbound ServerSockets on
+            // POSIX; Winsock leaves it off until explicitly enabled.
+            boolean reuseDefault = java.io.File.separatorChar != '\\';
+            check(ss.getReuseAddress() == reuseDefault,
+                    "default REUSEADDR before bind, got " + ss.getReuseAddress());
             ss.setReuseAddress(true);
             check(ss.getReuseAddress(), "REUSEADDR round trip true");
             ss.setReuseAddress(false);

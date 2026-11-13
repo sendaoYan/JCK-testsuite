@@ -35,27 +35,39 @@ public class MulticastChannelTest {
               "MulticastChannel does not extend DatagramChannel (other way around)");
     }
 
+    /**
+     * Picks an interface that can carry IPv4 multicast, preferring a real
+     * (non-loopback) adapter. Requiring an actual IPv4 address matters: an
+     * IPv6-only interface (e.g. a docker veth link) satisfies supportsMulticast
+     * but join(IPv4 group) on it throws "Network interface not configured for
+     * IPv4".
+     */
+    static NetworkInterface pickMulticastInterface() throws Exception {
+        NetworkInterface loopback = null;
+        for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
+            if (!ni.isUp() || !ni.supportsMulticast()
+                    || !ni.inetAddresses().anyMatch(a -> a instanceof java.net.Inet4Address)) {
+                continue;
+            }
+            if (!ni.isLoopback()) return ni;
+            if (loopback == null) loopback = ni;
+        }
+        return loopback;
+    }
+
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() throws Exception {
         InetAddress group = InetAddress.getByName("224.0.113.1"); // AD-HOC block 1, no external traffic
 
         try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
             MulticastChannel mc = dc;
-            dc.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+            // Bind the wildcard address: Windows refuses to bind a UDP socket
+            // to a unicast address and still receive multicast, and refuses a
+            // multicast group address as the local endpoint altogether.
+            dc.bind(new InetSocketAddress(0));
             check(dc.getLocalAddress() != null, "channel bound");
 
-            // find a multicast-capable interface (usually loopback on Linux)
-            NetworkInterface nif = null;
-            for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                // Require a real IPv4 address: an IPv6-only interface (e.g. a
-                // docker veth link) satisfies findAny() but join(IPv4 group) on it
-                // throws "Network interface not configured for IPv4".
-                if (ni.isUp() && ni.supportsMulticast()
-                        && ni.inetAddresses().anyMatch(a -> a instanceof java.net.Inet4Address)) {
-                    nif = ni;
-                    break;
-                }
-            }
+            NetworkInterface nif = pickMulticastInterface();
             if (nif == null) {
                 System.out.println("NOTE: no multicast-capable interface; join tests skipped");
             } else {
@@ -74,7 +86,10 @@ public class MulticastChannelTest {
                     java.nio.channels.Selector sel = java.nio.channels.Selector.open();
                     dc.register(sel, java.nio.channels.SelectionKey.OP_READ);
                     try (DatagramChannel sender = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
-                        sender.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+                        // Let the stack auto-bind and force the multicast
+                        // egress interface; a loopback-bound sender has no
+                        // route to the group on Windows.
+                        sender.setOption(java.net.StandardSocketOptions.IP_MULTICAST_IF, nif);
                         ByteBuffer out = ByteBuffer.wrap(new byte[] {77});
                         sender.send(out, new InetSocketAddress(group,
                                 ((InetSocketAddress) dc.getLocalAddress()).getPort()));
@@ -119,21 +134,16 @@ public class MulticastChannelTest {
 
     static void testJoinIdempotency() throws Exception {
         InetAddress group = InetAddress.getByName("239.255.19.1");
-        NetworkInterface nif = null;
-        for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
-            if (!ni.isUp() || !ni.supportsMulticast() || ni.isLoopback()) continue;
-            boolean hasV4 = false;
-            for (InetAddress a : java.util.Collections.list(ni.getInetAddresses()))
-                if (a instanceof java.net.Inet4Address) hasV4 = true;
-            if (hasV4) { nif = ni; break; }
-        }
+        NetworkInterface nif = pickMulticastInterface();
         if (nif == null) {
-            System.out.println("NOTE: no multicast-capable non-loopback interface; idempotency test skipped");
+            System.out.println("NOTE: no multicast-capable interface; idempotency test skipped");
             return;
         }
         try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
             dc.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            // Wildcard bind: joining is independent of the local endpoint, and
+            // Windows rejects a multicast group address as the local address.
+            dc.bind(new InetSocketAddress(0));
             MembershipKey k1 = dc.join(group, nif);
             MembershipKey k2 = dc.join(group, nif);
             check(k1 == k2, "re-join of the same group yields the same key");
@@ -155,20 +165,13 @@ public class MulticastChannelTest {
     }
 
     static void testGroupRoundTrip() throws Exception {
-        NetworkInterface nif = null;
-        for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
-            if (!ni.isUp() || !ni.supportsMulticast() || ni.isLoopback()) continue;
-            boolean hasV4 = false;
-            for (InetAddress a : java.util.Collections.list(ni.getInetAddresses()))
-                if (a instanceof java.net.Inet4Address) hasV4 = true;
-            if (hasV4) { nif = ni; break; }
-        }
+        NetworkInterface nif = pickMulticastInterface();
         if (nif == null) return;
         InetAddress group = InetAddress.getByName("239.255.19.2");
         try (DatagramChannel rx = DatagramChannel.open(java.net.StandardProtocolFamily.INET);
              DatagramChannel tx = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
             rx.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
-            rx.bind(new InetSocketAddress(group, 0));
+            rx.bind(new InetSocketAddress(0));
             rx.join(group, nif);
             rx.configureBlocking(false);
             int port = ((InetSocketAddress) rx.getLocalAddress()).getPort();

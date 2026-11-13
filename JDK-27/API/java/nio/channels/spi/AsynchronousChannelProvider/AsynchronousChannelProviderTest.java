@@ -22,6 +22,23 @@ public class AsynchronousChannelProviderTest {
         passed++;
     }
 
+    /**
+     * A wildcard bind address (0.0.0.0 or ::) cannot be used as a connect
+     * target on Windows; map it to the matching loopback address, keeping the
+     * bound port.
+     */
+    static java.net.InetSocketAddress connectTarget(java.net.InetSocketAddress local)
+            throws java.net.UnknownHostException {
+        java.net.InetAddress a = local.getAddress();
+        if (a != null && a.isAnyLocalAddress()) {
+            java.net.InetAddress target = (a instanceof java.net.Inet6Address)
+                    ? java.net.InetAddress.getByName("::1")
+                    : java.net.InetAddress.getByName("127.0.0.1");
+            return new java.net.InetSocketAddress(target, local.getPort());
+        }
+        return local;
+    }
+
     static ThreadFactory daemonFactory(String name) {
         AtomicInteger seq = new AtomicInteger();
         return r -> {
@@ -61,7 +78,8 @@ public class AsynchronousChannelProviderTest {
                 // accept+connect through provider-created channels
                 try (var client = p.openAsynchronousSocketChannel(fixed)) {
                     check(client.provider() == p, "client provider");
-                    client.connect(server.getLocalAddress()).get(10, java.util.concurrent.TimeUnit.SECONDS);
+                    client.connect(connectTarget((java.net.InetSocketAddress) server.getLocalAddress()))
+                          .get(10, java.util.concurrent.TimeUnit.SECONDS);
                     var accepted = server.accept().get(10, java.util.concurrent.TimeUnit.SECONDS);
                     client.write(java.nio.ByteBuffer.wrap(new byte[] {3}))
                           .get(10, java.util.concurrent.TimeUnit.SECONDS);

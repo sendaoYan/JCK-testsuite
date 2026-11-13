@@ -515,9 +515,12 @@ public class SocketTest {
             check(false, "bind occupied port must fail");
         } catch (BindException e) {
             // Precise type (BindException, not plain SocketException);
-            // JDK-27 message is "Address already in use" (JDK-8 appends
-            // "(Bind failed)").
-            check("Address already in use".equals(e.getMessage()),
+            // POSIX JDK-27 text is "Address already in use" (JDK-8 appends
+            // "(Bind failed)"); the Windows winsock mapping appends the
+            // failing call, ": bind".
+            String expected = java.io.File.separatorChar == '\\'
+                    ? "Address already in use: bind" : "Address already in use";
+            check(expected.equals(e.getMessage()),
                     "occupied bind message, got: " + e.getMessage());
         }
         b2.close();

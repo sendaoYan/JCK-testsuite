@@ -37,6 +37,22 @@ public class AsynchronousServerSocketChannelTest {
         passed++;
     }
 
+    /**
+     * A wildcard local address (0.0.0.0 or ::) is not a connectable target on
+     * Windows (WSAEADDRNOTAVAIL), so derive the matching loopback address and
+     * keep the bound port.
+     */
+    static InetSocketAddress connectTarget(InetSocketAddress local)
+            throws java.net.UnknownHostException {
+        InetAddress a = local.getAddress();
+        if (a != null && a.isAnyLocalAddress()) {
+            InetAddress target = (a instanceof java.net.Inet6Address)
+                    ? InetAddress.getByName("::1") : InetAddress.getByName("127.0.0.1");
+            return new InetSocketAddress(target, local.getPort());
+        }
+        return local;
+    }
+
     // ---- Part 1: white-box (structural) ----
     static void testWhiteBox() throws Exception {
         Class<?> c = Class.forName("java.nio.channels.AsynchronousServerSocketChannel");
@@ -82,7 +98,7 @@ public class AsynchronousServerSocketChannelTest {
 
                 // Future accept: client connects first
                 try (AsynchronousSocketChannel client = AsynchronousSocketChannel.open()) {
-                    Future<Void> cf = client.connect(addr);
+                    Future<Void> cf = client.connect(connectTarget(addr));
                     check(cf.get(10, TimeUnit.SECONDS) == null, "client connected");
                     Future<AsynchronousSocketChannel> af = server.accept();
                     AsynchronousSocketChannel accepted = af.get(10, TimeUnit.SECONDS);
@@ -101,7 +117,7 @@ public class AsynchronousServerSocketChannelTest {
 
                 // CompletionHandler accept
                 try (AsynchronousSocketChannel client = AsynchronousSocketChannel.open()) {
-                    client.connect(addr).get(10, TimeUnit.SECONDS);
+                    client.connect(connectTarget(addr)).get(10, TimeUnit.SECONDS);
                     CompletableFuture<AsynchronousSocketChannel> got = new CompletableFuture<>();
                     server.accept("attach", new CompletionHandler<AsynchronousSocketChannel, String>() {
                         public void completed(AsynchronousSocketChannel ch, String a) {

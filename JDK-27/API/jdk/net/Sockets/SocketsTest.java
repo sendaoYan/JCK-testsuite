@@ -39,6 +39,10 @@ public class SocketsTest {
 
     // ---- 深化(2026-11-05)：四类 socket 支持面矩阵 + 双通道闭环 + 异常面（经 JDK27.0.1 Linux 实测）----
     static void deepen() throws Exception {
+        // The extended/extra option surface is platform specific: SO_REUSEPORT,
+        // TCP_QUICKACK and SO_INCOMING_NAPI_ID exist on Linux, not on Windows;
+        // the TCP keepalive trio is supported by Windows 10+.
+        boolean windows = java.io.File.separatorChar == '\\';
         java.net.Socket s = new java.net.Socket();
         try {
             // 1. 真实 set/get 闭环（Sockets 通道）
@@ -55,17 +59,27 @@ public class SocketsTest {
             Sockets.setOption(s, StandardSocketOptions.SO_KEEPALIVE, Boolean.FALSE);
             check(Boolean.FALSE.equals(Sockets.getOption(s, StandardSocketOptions.SO_KEEPALIVE)), "SO_KEEPALIVE off");
             check(Sockets.getOption(s, StandardSocketOptions.SO_RCVBUF) instanceof Integer, "SO_RCVBUF value Integer");
-            // 2. SO_REUSEPORT（JDK-9+ 常量，Linux 支持）真实闭环
-            Sockets.setOption(s, StandardSocketOptions.SO_REUSEPORT, Boolean.TRUE);
-            check(Boolean.TRUE.equals(Sockets.getOption(s, StandardSocketOptions.SO_REUSEPORT)), "SO_REUSEPORT round-trip");
-            Sockets.setOption(s, StandardSocketOptions.SO_REUSEPORT, Boolean.FALSE);
-            check(Boolean.FALSE.equals(Sockets.getOption(s, StandardSocketOptions.SO_REUSEPORT)), "SO_REUSEPORT off");
+            // 2. SO_REUSEPORT（JDK-9+ 常量，Linux 支持；Windows 不支持）
+            if (windows) {
+                try { Sockets.setOption(s, StandardSocketOptions.SO_REUSEPORT, Boolean.TRUE); check(false, "SO_REUSEPORT should be unsupported on Windows"); }
+                catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("SO_REUSEPORT"), "SO_REUSEPORT UOE on Windows"); }
+            } else {
+                Sockets.setOption(s, StandardSocketOptions.SO_REUSEPORT, Boolean.TRUE);
+                check(Boolean.TRUE.equals(Sockets.getOption(s, StandardSocketOptions.SO_REUSEPORT)), "SO_REUSEPORT round-trip");
+                Sockets.setOption(s, StandardSocketOptions.SO_REUSEPORT, Boolean.FALSE);
+                check(Boolean.FALSE.equals(Sockets.getOption(s, StandardSocketOptions.SO_REUSEPORT)), "SO_REUSEPORT off");
+            }
             // 3. 扩展选项经 Sockets 通道 + 原生通道互通
             Sockets.setOption(s, ExtendedSocketOptions.TCP_KEEPIDLE, 100);
             check(Integer.valueOf(100).equals(Sockets.getOption(s, ExtendedSocketOptions.TCP_KEEPIDLE)), "TCP_KEEPIDLE via Sockets");
-            s.setOption(ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE);
-            check(Boolean.FALSE.equals(s.getOption(ExtendedSocketOptions.TCP_QUICKACK)), "TCP_QUICKACK via native channel");
-            check(Boolean.FALSE.equals(Sockets.getOption(s, ExtendedSocketOptions.TCP_QUICKACK)), "native set readable via Sockets");
+            if (windows) {
+                try { s.setOption(ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE); check(false, "TCP_QUICKACK should be unsupported on Windows"); }
+                catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("TCP_QUICKACK"), "TCP_QUICKACK UOE on Windows"); }
+            } else {
+                s.setOption(ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE);
+                check(Boolean.FALSE.equals(s.getOption(ExtendedSocketOptions.TCP_QUICKACK)), "TCP_QUICKACK via native channel");
+                check(Boolean.FALSE.equals(Sockets.getOption(s, ExtendedSocketOptions.TCP_QUICKACK)), "native set readable via Sockets");
+            }
             // 4. null 参数：null 选项 → NPE；null socket → NPE（JDK-27 实测，JDK-8 为 IAE）
             try { Sockets.setOption(s, null, 1); check(false, "setOption null option should NPE"); }
             catch (NullPointerException e) { check(true, "setOption null option NPE"); }
@@ -101,19 +115,26 @@ public class SocketsTest {
         catch (java.net.SocketException e) { check("Socket is closed".equals(e.getMessage()), "closed get 'Socket is closed'"); }
         try { s.setOption(StandardSocketOptions.SO_RCVBUF, 4096); check(false, "native closed set should throw"); }
         catch (java.net.SocketException e) { check(true, "native closed set SocketException"); }
-        // 9. supportedOptions 矩阵（Linux JDK-27）
+        // 9. supportedOptions 矩阵（平台相关；Linux JDK-27 / Windows JDK-27）
         java.util.Set<java.net.SocketOption<?>> sk = Sockets.supportedOptions(java.net.Socket.class);
         java.net.SocketOption<?>[] sockMust = {
             StandardSocketOptions.SO_KEEPALIVE, StandardSocketOptions.SO_SNDBUF,
             StandardSocketOptions.SO_RCVBUF, StandardSocketOptions.SO_REUSEADDR,
-            StandardSocketOptions.SO_REUSEPORT, StandardSocketOptions.SO_LINGER,
+            StandardSocketOptions.SO_LINGER,
             StandardSocketOptions.IP_TOS, StandardSocketOptions.TCP_NODELAY };
         for (java.net.SocketOption<?> o : sockMust) check(sk.contains(o), "Socket set contains " + o.name());
-        check(sk.contains(ExtendedSocketOptions.TCP_QUICKACK)
-           && sk.contains(ExtendedSocketOptions.TCP_KEEPIDLE)
+        check(sk.contains(ExtendedSocketOptions.TCP_KEEPIDLE)
            && sk.contains(ExtendedSocketOptions.TCP_KEEPINTERVAL)
-           && sk.contains(ExtendedSocketOptions.TCP_KEEPCOUNT)
-           && sk.contains(ExtendedSocketOptions.SO_INCOMING_NAPI_ID), "Socket set contains extended options");
+           && sk.contains(ExtendedSocketOptions.TCP_KEEPCOUNT), "Socket set contains keepalive options");
+        if (windows) {
+            check(!sk.contains(ExtendedSocketOptions.TCP_QUICKACK), "Socket set lacks TCP_QUICKACK on Windows");
+            check(!sk.contains(ExtendedSocketOptions.SO_INCOMING_NAPI_ID), "Socket set lacks SO_INCOMING_NAPI_ID on Windows");
+            check(!sk.contains(StandardSocketOptions.SO_REUSEPORT), "Socket set lacks SO_REUSEPORT on Windows");
+        } else {
+            check(sk.contains(ExtendedSocketOptions.TCP_QUICKACK)
+               && sk.contains(ExtendedSocketOptions.SO_INCOMING_NAPI_ID), "Socket set contains Linux-only extended options");
+            check(sk.contains(StandardSocketOptions.SO_REUSEPORT), "Socket set contains SO_REUSEPORT");
+        }
         check(!sk.contains(ExtendedSocketOptions.SO_PEERCRED), "Socket set lacks SO_PEERCRED");
         java.util.Set<java.net.SocketOption<?>> ss = Sockets.supportedOptions(java.net.ServerSocket.class);
         check(ss.contains(StandardSocketOptions.SO_RCVBUF), "ServerSocket contains SO_RCVBUF");
@@ -146,8 +167,13 @@ public class SocketsTest {
             Sockets.setOption(srv, StandardSocketOptions.SO_RCVBUF, 8192);
             int got = Sockets.getOption(srv, StandardSocketOptions.SO_RCVBUF);
             check(got >= 1024, "ServerSocket SO_RCVBUF readback >= 1024: " + got);
-            srv.setOption(StandardSocketOptions.SO_REUSEPORT, Boolean.TRUE);
-            check(Boolean.TRUE.equals(Sockets.getOption(srv, StandardSocketOptions.SO_REUSEPORT)), "SS SO_REUSEPORT via native set / Sockets get");
+            if (windows) {
+                try { srv.setOption(StandardSocketOptions.SO_REUSEPORT, Boolean.TRUE); check(false, "SS SO_REUSEPORT should be unsupported on Windows"); }
+                catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("SO_REUSEPORT"), "SS SO_REUSEPORT UOE on Windows"); }
+            } else {
+                srv.setOption(StandardSocketOptions.SO_REUSEPORT, Boolean.TRUE);
+                check(Boolean.TRUE.equals(Sockets.getOption(srv, StandardSocketOptions.SO_REUSEPORT)), "SS SO_REUSEPORT via native set / Sockets get");
+            }
             try { Sockets.setOption(srv, StandardSocketOptions.TCP_NODELAY, Boolean.TRUE); check(false, "SS TCP_NODELAY should UOE"); }
             catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("TCP_NODELAY"), "SS TCP_NODELAY UOE message"); }
             check(srv.getLocalPort() > 0, "ServerSocket bound port");

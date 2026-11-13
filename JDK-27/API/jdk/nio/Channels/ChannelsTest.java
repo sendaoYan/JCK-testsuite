@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary jdk.nio.Channels conformance: white-box structure + black-box behavior.
+ * @library /lib
  * @run main ChannelsTest
  */
 
@@ -82,10 +83,19 @@ public class ChannelsTest {
     }
 
     public static void main(String[] args) throws Exception {
-        testDeepen();
-
         testWhiteBox();
         testBlackBox();
+        // The documented contract for readWriteSelectableChannel is a "socket
+        // or resource that can be multiplexed by a Selector". The Windows
+        // Selector (WEPoll) multiplexes sockets only, so a regular-file
+        // descriptor is outside that contract there and the blocking-mode
+        // switch fails with "Socket operation on nonsocket: ioctlsocket".
+        if (java.io.File.separatorChar == '\\') {
+            throw new jtreg.SkippedException(
+                    "Windows Selector only multiplexes sockets; a regular-file"
+                    + " descriptor is not a selectable resource on Windows");
+        }
+        testDeepen();
         System.out.println("PASS (" + passed + " assertions)");
     }
 }

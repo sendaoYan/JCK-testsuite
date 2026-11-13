@@ -41,17 +41,11 @@ public class MembershipKeyTest {
         try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
             dc.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
 
-            NetworkInterface nif = null;
-            for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                // Require a real IPv4 address: an IPv6-only interface (e.g. a
-                // docker veth link) satisfies findAny() but join(IPv4 group) on it
-                // throws "Network interface not configured for IPv4".
-                if (ni.isUp() && ni.supportsMulticast()
-                        && ni.inetAddresses().anyMatch(a -> a instanceof java.net.Inet4Address)) {
-                    nif = ni;
-                    break;
-                }
-            }
+            // Require a real IPv4 address: an IPv6-only interface (e.g. a
+            // docker veth link) satisfies supportsMulticast but join(IPv4
+            // group) on it throws "not configured for IPv4". Prefer a real
+            // adapter; fall back to loopback when that is all there is.
+            NetworkInterface nif = pickMulticastInterface();
             if (nif == null) {
                 System.out.println("NOTE: no multicast-capable interface; behavioral join skipped");
             } else {
@@ -135,7 +129,9 @@ public class MembershipKeyTest {
         InetAddress group = InetAddress.getByName("239.255.18.1");
         try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
             dc.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            // Wildcard bind: membership is independent of the local endpoint,
+            // and Windows rejects a multicast group address as a local address.
+            dc.bind(new InetSocketAddress(0));
             MembershipKey key = dc.join(group, nif);
             check(key.isValid(), "fresh membership valid before drop");
             key.drop();
@@ -158,7 +154,9 @@ public class MembershipKeyTest {
         InetAddress group = InetAddress.getByName("239.255.18.2");
         try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
             dc.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            // Wildcard bind: membership is independent of the local endpoint,
+            // and Windows rejects a multicast group address as a local address.
+            dc.bind(new InetSocketAddress(0));
             MembershipKey key = dc.join(group, nif);
             InetAddress src = InetAddress.getByName("127.0.0.1");
             check(key.block(src) == key, "block returns this key");
@@ -183,7 +181,9 @@ public class MembershipKeyTest {
         InetAddress src = InetAddress.getByName("192.0.2.66");
         try (DatagramChannel dc = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
             dc.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            // Wildcard bind: membership is independent of the local endpoint,
+            // and Windows rejects a multicast group address as a local address.
+            dc.bind(new InetSocketAddress(0));
             MembershipKey key = dc.join(group, nif, src);
             check(key.sourceAddress().equals(src), "sourceAddress() records the filter source");
             check(dc.join(group, nif, src) == key, "re-join with same source is idempotent");
@@ -209,9 +209,16 @@ public class MembershipKeyTest {
         try (DatagramChannel rx = DatagramChannel.open(java.net.StandardProtocolFamily.INET);
              DatagramChannel tx = DatagramChannel.open(java.net.StandardProtocolFamily.INET)) {
             rx.setOption(java.net.StandardSocketOptions.SO_REUSEADDR, true);
-            rx.bind(new InetSocketAddress(group, 0));
+            // Wildcard bind: Windows rejects a multicast group address as the
+            // local endpoint; reception is driven by the membership, not by
+            // the bound address.
+            rx.bind(new InetSocketAddress(0));
             MembershipKey key = rx.join(group, nif);
             rx.configureBlocking(false);
+            // Send from the interface address itself so the packet source is
+            // deterministic (and matches the address that is blocked below);
+            // a wildcard-bound sender uses an OS-chosen source address.
+            tx.bind(new InetSocketAddress(ifaceAddr, 0));
             tx.setOption(java.net.StandardSocketOptions.IP_MULTICAST_IF, nif);
             int port = ((InetSocketAddress) rx.getLocalAddress()).getPort();
             try (java.nio.channels.Selector sel = java.nio.channels.Selector.open()) {

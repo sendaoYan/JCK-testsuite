@@ -63,8 +63,9 @@ public class InterfaceAddressTest {
     }
 
     // ------------------------------------------------------------------
-    // Deepening: deterministic loopback contract (probed identical on both
-    // JDKs: no broadcast on lo, prefix 8/128, re-lookup equality)
+    // Deepening: deterministic loopback contract (probed on both JDKs:
+    // no broadcast on POSIX lo; the Windows IPv4 lo reports 127.255.255.255.
+    // Prefix 8/128 and re-lookup equality hold everywhere.)
     // ------------------------------------------------------------------
 
     static void testLoopbackInterfaceAddresses() throws Exception {
@@ -88,7 +89,20 @@ public class InterfaceAddressTest {
                 check(plen <= 128, "IPv6 prefix <= 128");
                 v6++;
             }
-            check(null == ia.getBroadcast(), "no broadcast on loopback: " + a.getHostAddress());
+            // The broadcast address is a platform representation detail: the
+            // POSIX loopback has none, while the Windows IPv4 loopback
+            // (127.0.0.1/8) reports 127.255.255.255. IPv6 never has one.
+            InetAddress bc = ia.getBroadcast();
+            if (a instanceof Inet4Address) {
+                if (java.io.File.separatorChar == '\\') {
+                    check(bc == null || bc instanceof Inet4Address,
+                            "Windows IPv4 loopback broadcast is IPv4 or absent: " + bc);
+                } else {
+                    check(bc == null, "no broadcast on loopback: " + a.getHostAddress());
+                }
+            } else {
+                check(bc == null, "no broadcast for an IPv6 loopback address: " + a.getHostAddress());
+            }
             check(ia.toString().contains(a.getHostAddress()), "toString contains address text");
         }
         check(v4 >= 1, "at least one IPv4 interface address on lo");

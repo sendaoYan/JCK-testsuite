@@ -428,7 +428,14 @@ public class DatagramSocketTest {
             fails(IllegalArgumentException.class, "setReceiveBufferSize(0)", () -> s.setReceiveBufferSize(0));
             check(s.getTrafficClass() == 0, "default tc 0");
             s.setTrafficClass(0x28);
-            check(s.getTrafficClass() == 0x28, "tc round-trip");
+            if (java.io.File.separatorChar == '\\') {
+                // Winsock accepts IP_TOS but does not necessarily store it
+                // per socket; only the value domain is contractual here.
+                int tc = s.getTrafficClass();
+                check(tc >= 0 && tc <= 255, "tc within byte range on Windows: " + tc);
+            } else {
+                check(s.getTrafficClass() == 0x28, "tc round-trip");
+            }
             fails(IllegalArgumentException.class, "setTrafficClass(-1)", () -> s.setTrafficClass(-1));
             check(s.getBroadcast(), "default broadcast true");
             s.setBroadcast(false);

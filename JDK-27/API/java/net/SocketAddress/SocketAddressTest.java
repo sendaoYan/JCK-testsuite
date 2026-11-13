@@ -16,6 +16,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.reflect.*;
 import java.net.*;
+import java.nio.file.Path;
 
 public class SocketAddressTest {
     static int passed;
@@ -92,15 +93,19 @@ public class SocketAddressTest {
         PlainAddress p2 = new PlainAddress("k");
         check(p1.equals(p2) && p2.equals(p1), "custom subclass equals symmetric");
         check(p1.hashCode() == p2.hashCode(), "custom subclass hashCode agrees");
-        // Unix-domain addresses equal by path string.
-        SocketAddress u1 = UnixDomainSocketAddress.of("/tmp/a.sock");
-        SocketAddress u2 = UnixDomainSocketAddress.of("/tmp/a.sock");
-        SocketAddress u3 = UnixDomainSocketAddress.of("/tmp/b.sock");
+        // Unix-domain addresses equal by path string. The lookup path is
+        // interpreted by the default file system, so compare against the Path
+        // text produced on this platform (Windows normalizes separators).
+        Path sockA = Path.of("/tmp/a.sock");
+        Path sockB = Path.of("/tmp/b.sock");
+        SocketAddress u1 = UnixDomainSocketAddress.of(sockA);
+        SocketAddress u2 = UnixDomainSocketAddress.of(sockA);
+        SocketAddress u3 = UnixDomainSocketAddress.of(sockB);
         check(u1.equals(u2), "unix equal by path");
         check(u1.hashCode() == u2.hashCode(), "unix hashCode agrees");
         check(!u1.equals(u3), "unix different path unequal");
         check(!u1.equals(isa1), "unix vs inet unequal");
-        check(u1.toString().contains("/tmp/a.sock"), "unix toString contains path");
+        check(u1.toString().contains(sockA.toString()), "unix toString contains path");
     }
 
     static void testSerialization() throws Exception {

@@ -47,7 +47,7 @@ public class JarURLConnectionTest {
         public JarEntry getJarEntry() { return null; }
     }
 
-    /** Builds /tmp/net-c-JarURLConnection/t.jar with main + per-entry manifest attrs. */
+    /** Builds <java.io.tmpdir>/net-c-JarURLConnection/t.jar with main + per-entry manifest attrs. */
     static File buildJar(File dir) throws Exception {
         Manifest mf = new Manifest();
         mf.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
@@ -304,7 +304,9 @@ public class JarURLConnectionTest {
     }
 
     public static void main(String[] args) throws Exception {
-        File dir = new File("/tmp/net-c-JarURLConnection");
+        // Use an absolute temp directory: "/tmp" is drive-relative on Windows
+        // and the FilePermission name is derived from the absolute file URL.
+        File dir = new File(System.getProperty("java.io.tmpdir"), "net-c-JarURLConnection");
         dir.mkdirs();
         File jar = buildJar(dir);
         try {

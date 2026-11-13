@@ -6,7 +6,8 @@
  *          matrix, cause chaining, suppressed exceptions, serialization
  *          round-trips, cross-thread propagation, and a real loopback
  *          trigger: binding a ServerSocket to an occupied port throws
- *          BindException "Address already in use" on JDK-27 (no suffix).
+ *          BindException "Address already in use" on JDK-27 POSIX (Windows
+ *          appends the failing call, "Address already in use: bind").
  * @run main BindExceptionTest
  */
 
@@ -162,8 +163,12 @@ public class BindExceptionTest {
             } catch (BindException be) {
                 check(be.getMessage().startsWith("Address already in use"),
                         "trigger message prefix, got: " + be.getMessage());
-                check("Address already in use".equals(be.getMessage()),
-                        "JDK-27 exact trigger message, got: " + be.getMessage());
+                // The JDK-27 POSIX text has no suffix; the Windows winsock
+                // mapping appends the failing call: "...: bind".
+                String expected = File.separatorChar == '\\'
+                        ? "Address already in use: bind" : "Address already in use";
+                check(expected.equals(be.getMessage()),
+                        "exact trigger message, got: " + be.getMessage());
                 check(be instanceof SocketException, "trigger is SocketException");
             }
             try {

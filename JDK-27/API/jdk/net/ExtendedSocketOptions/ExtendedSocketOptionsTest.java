@@ -69,18 +69,35 @@ public class ExtendedSocketOptionsTest {
         // 5. 类结构：final、不可实例化
         check(java.lang.reflect.Modifier.isFinal(jdk.net.ExtendedSocketOptions.class.getModifiers()), "class final");
         check(jdk.net.ExtendedSocketOptions.class.getConstructors().length == 0, "no public constructors");
-        // 6. supportedOptions 支持面（Linux：SO_PEERCRED/IP_DONTFRAGMENT 不在 Socket 集）
+        // 6. supportedOptions 支持面（平台相关：Linux 有 QUICKACK/NAPI/REUSEPORT，
+        //    Windows 10+ 只有三个 keepalive 选项；SO_PEERCRED/IP_DONTFRAGMENT
+        //    从不出现在流式 Socket 集里）
+        boolean windows = java.io.File.separatorChar == '\\';
         java.util.Set<java.net.SocketOption<?>> sk = jdk.net.Sockets.supportedOptions(java.net.Socket.class);
-        check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_QUICKACK), "Socket supports TCP_QUICKACK");
-        check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "Socket supports TCP_KEEPIDLE");
-        check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL), "Socket supports TCP_KEEPINTERVAL");
-        check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT), "Socket supports TCP_KEEPCOUNT");
-        check(sk.contains(jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID), "Socket supports SO_INCOMING_NAPI_ID");
-        check(sk.contains(java.net.StandardSocketOptions.SO_REUSEPORT), "Socket supports SO_REUSEPORT");
+        if (windows) {
+            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)
+               && sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL)
+               && sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT),
+                  "Socket supports the TCP keepalive options on Windows");
+            check(!sk.contains(jdk.net.ExtendedSocketOptions.TCP_QUICKACK),
+                  "Socket lacks TCP_QUICKACK on Windows");
+            check(!sk.contains(jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID),
+                  "Socket lacks SO_INCOMING_NAPI_ID on Windows");
+            check(!sk.contains(java.net.StandardSocketOptions.SO_REUSEPORT),
+                  "Socket lacks SO_REUSEPORT on Windows");
+        } else {
+            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_QUICKACK), "Socket supports TCP_QUICKACK");
+            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "Socket supports TCP_KEEPIDLE");
+            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL), "Socket supports TCP_KEEPINTERVAL");
+            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT), "Socket supports TCP_KEEPCOUNT");
+            check(sk.contains(jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID), "Socket supports SO_INCOMING_NAPI_ID");
+            check(sk.contains(java.net.StandardSocketOptions.SO_REUSEPORT), "Socket supports SO_REUSEPORT");
+        }
         check(!sk.contains(jdk.net.ExtendedSocketOptions.SO_PEERCRED), "Socket set lacks SO_PEERCRED (unix-domain only)");
-        check(!sk.contains(jdk.net.ExtendedSocketOptions.IP_DONTFRAGMENT), "Socket set lacks IP_DONTFRAGMENT on Linux");
+        check(!sk.contains(jdk.net.ExtendedSocketOptions.IP_DONTFRAGMENT), "Socket set lacks IP_DONTFRAGMENT (datagram-only)");
         check(jdk.net.Sockets.supportedOptions(java.net.ServerSocket.class).contains(
-                jdk.net.ExtendedSocketOptions.TCP_QUICKACK), "ServerSocket supports TCP_QUICKACK");
+                jdk.net.ExtendedSocketOptions.TCP_QUICKACK) == !windows,
+                "ServerSocket " + (windows ? "lacks" : "supports") + " TCP_QUICKACK");
         check(!jdk.net.Sockets.supportedOptions(java.net.DatagramSocket.class).contains(
                 jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "DatagramSocket lacks TCP_KEEPIDLE");
         // 7. 真实闭环：未连接 Socket 上 set/get
@@ -92,17 +109,30 @@ public class ExtendedSocketOptionsTest {
             check(Integer.valueOf(50).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL)), "TCP_KEEPINTERVAL round-trip 50");
             jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT, 8);
             check(Integer.valueOf(8).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT)), "TCP_KEEPCOUNT round-trip 8");
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE);
-            check(Boolean.FALSE.equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK)), "TCP_QUICKACK false round-trip");
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.TRUE);
-            check(Boolean.TRUE.equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK)), "TCP_QUICKACK true round-trip");
             check(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE) instanceof Integer, "KEEPIDLE value Integer");
-            check(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK) instanceof Boolean, "QUICKACK value Boolean");
-            // 8. SO_INCOMING_NAPI_ID：只读——get 可用(未连接回 0)，set → SocketException("Attempt to set read only option")
-            Integer napi = jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID);
-            check(napi != null && napi.intValue() >= 0, "SO_INCOMING_NAPI_ID get >= 0: " + napi);
-            try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID, 5); check(false, "NAPI set should throw"); }
-            catch (java.net.SocketException e) { check(e.getMessage() != null && e.getMessage().contains("read only"), "NAPI set read-only SocketException"); }
+            if (windows) {
+                // TCP_QUICKACK is Linux-only: the option is not in the
+                // supported set, so the channel rejects it outright.
+                try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE); check(false, "TCP_QUICKACK should be unsupported on Windows"); }
+                catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("TCP_QUICKACK"), "TCP_QUICKACK UOE on Windows"); }
+            } else {
+                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE);
+                check(Boolean.FALSE.equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK)), "TCP_QUICKACK false round-trip");
+                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.TRUE);
+                check(Boolean.TRUE.equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK)), "TCP_QUICKACK true round-trip");
+                check(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK) instanceof Boolean, "QUICKACK value Boolean");
+            }
+            // 8. SO_INCOMING_NAPI_ID：Linux 只读（get 可用，set → SocketException），
+            //    Windows 不支持（不在支持集里 → UnsupportedOperationException）
+            if (windows) {
+                try { jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID); check(false, "NAPI get should be unsupported on Windows"); }
+                catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("SO_INCOMING_NAPI_ID"), "NAPI UOE on Windows"); }
+            } else {
+                Integer napi = jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID);
+                check(napi != null && napi.intValue() >= 0, "SO_INCOMING_NAPI_ID get >= 0: " + napi);
+                try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID, 5); check(false, "NAPI set should throw"); }
+                catch (java.net.SocketException e) { check(e.getMessage() != null && e.getMessage().contains("read only"), "NAPI set read-only SocketException"); }
+            }
             // 9. SO_PEERCRED / IP_DONTFRAGMENT 在 AF_INET socket 上 → UnsupportedOperationException
             try { jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_PEERCRED); check(false, "SO_PEERCRED get should UOE on inet socket"); }
             catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("SO_PEERCRED"), "SO_PEERCRED UOE message"); }

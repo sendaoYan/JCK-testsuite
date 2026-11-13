@@ -682,7 +682,9 @@ public class URLConnectionTest {
     }
 
     public static void main(String[] args) throws Exception {
-        File dir = new File("/tmp/net-c-URLConnection");
+        // Absolute temp directory: "/tmp" is drive-relative on Windows, and
+        // FilePermission names are derived from the absolute file URL.
+        File dir = new File(System.getProperty("java.io.tmpdir"), "net-c-URLConnection");
         dir.mkdirs();
         try {
             testWhiteBox();
