@@ -41,7 +41,36 @@ $ErrorActionPreference = "Continue"
 
 # ---- configurable ----
 # jtreg -conc:N concurrency per config; override with JCK_CONC=<n> in the env.
-$Concurrency = if ($env:JCK_CONC) { [int]$env:JCK_CONC } else { 16 }
+$RequestedConc = if ($env:JCK_CONC) { [int]$env:JCK_CONC } else { 16 }
+$Concurrency = $RequestedConc
+
+# ---- heap sizing from physical memory (standing rule) ----
+# Each jtreg slot can have ONE test VM and ONE javac alive at the same time, so
+# a slot commits TestHeap + JavacHeap.  Give the test VM ~1/4 of the per-slot
+# physical share and javac ~1/8.  -Xms = -Xmx and AlwaysPreTouch on the test VM
+# keep GC/JIT timing stable (the sweep exists to compare configs).
+#
+# On this box the JVMs' Windows default max heap is physical/4 = 16 GB each;
+# 16 slots of that exhausts the commit limit (RAM + pagefile) and kills the
+# run with native OOM (malloc failed / "unable to create new native thread").
+$MemMB = [int]((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB)
+$TestHeapMB  = [int][math]::Max(512, [math]::Min(4096, $MemMB / $RequestedConc / 4))
+$JavacHeapMB = [int][math]::Max(512, [math]::Min(2048, $MemMB / $RequestedConc / 8))
+
+# The machine is shared: other sessions can hold most of the commit charge, so
+# also trim concurrency to what the CURRENT commit headroom can carry (use 60%
+# of it, keeping the rest for the OS and other users).
+$FreeCommitMB = 0
+try { $FreeCommitMB = [int]((Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory / 1KB) } catch { }
+$SlotMB = $TestHeapMB + $JavacHeapMB
+$ConcNote = ""
+if ($FreeCommitMB -gt 0) {
+    $Fit = [int][math]::Floor(($FreeCommitMB * 0.6) / $SlotMB)
+    if ($Fit -lt $Concurrency) {
+        $Concurrency = [math]::Max(1, $Fit)
+        $ConcNote = " (trimmed from $RequestedConc: only ${FreeCommitMB} MB commit free)"
+    }
+}
 
 $JDKROOT = "D:\yansendao\JDK"
 $JDK8    = Join-Path $JDKROOT "jdk-8.0.512.9-hotspot"   # JDK under test (8)
@@ -115,6 +144,106 @@ function Write-Lines([string]$path, [string[]]$lines) {
     else { [System.IO.File]::WriteAllText($path, "") }
 }
 
+# Parse jtreg's -verbose:fail,error output into failing tests.  Reading the
+# failure list off the console (rather than only from report/text/summary.txt)
+# is what makes a HALF-DEAD run visible: when jtreg dies (native OOM, killed
+# process) it never writes summary.txt, and a summary-only reader then reports
+# "0 failures" for a run that actually crashed mid-tree.
+#
+# Returns objects: Test (path), Result (text after "Failed."/"Error."),
+# Oom ($true when the failure block carries a memory-exhaustion signature).
+function Parse-Failures([string[]]$lines) {
+    $cur = $null
+    $block = New-Object System.Collections.ArrayList
+    $fails = New-Object System.Collections.ArrayList
+    foreach ($l in $lines) {
+        if ($l -match '^TEST:\s+(\S.*?)\s*$') {
+            $cur = $matches[1]
+            $block.Clear()
+        } elseif ($l -match '^TEST RESULT:\s+(Failed|Error)\.\s*(.*)$') {
+            $text = $matches[2] + "`n" + ($block -join "`n")
+            $isOom = $text -match 'insufficient memory|Native memory allocation|OutOfMemoryError|unable to create new native thread|hs_err_pid|exit code: -107374'
+            [void]$fails.Add([pscustomobject]@{ Test = $cur; Result = $matches[2]; Oom = [bool]$isOom })
+        } else {
+            [void]$block.Add($l)
+        }
+    }
+    return @($fails)
+}
+
+# Heap/error-file tokens shared by the main run and the OOM retry pass.
+function Get-HeapTokens([int]$testMB, [int]$javacMB, [string]$tag) {
+    $errFile = Join-Path $env:TEMP ("hs_err_{0}_%p.log" -f $tag)
+    return @(
+        "-javaoption:-Xms${testMB}m",
+        "-javaoption:-Xmx${testMB}m",
+        "-javaoption:-XX:+AlwaysPreTouch",
+        "-javaoption:-XX:ErrorFile=$errFile",
+        "-javacoption:-J-Xms${javacMB}m",
+        "-javacoption:-J-Xmx${javacMB}m",
+        "-javacoption:-J-XX:ErrorFile=$errFile"
+    )
+}
+
+# Re-run each memory-failure test on its own, serially, with twice the heap.
+# Under -conc:N a slot competes with 15 others for commit charge; run alone, the
+# same test usually passes. A test that still OOMs 3 times alone is a real
+# finding (and stays in failed.txt, since only passes are dropped there).
+function Invoke-OomRetry([string]$tag, [string]$jdk, [string]$dir, [string[]]$tests) {
+    $attempts = 3
+    $retryHeap = [math]::Min(4096, $TestHeapMB * 2)
+    $lines = @()
+    $lines += ("=== OOM retry: {0} test(s), serial (-conc:1), heap {1}m x{2} ===" -f $tests.Count, $retryHeap, $attempts)
+
+    foreach ($t in $tests) {
+        $path = Join-Path $SUITE ($dir + "\" + ($t -replace '/', '\'))
+        if (-not (Test-Path $path)) {
+            $lines += ("MISSING  {0}" -f $t)
+            continue
+        }
+        $ok = $false
+        $lastResult = ""
+        for ($a = 1; $a -le $attempts -and -not $ok; $a++) {
+            $rw = Join-Path $env:TEMP ("jck-retry-{0}-{1}\w" -f $tag, $label)
+            $rr = Join-Path $env:TEMP ("jck-retry-{0}-{1}\r" -f $tag, $label)
+            New-Item -ItemType Directory -Force -Path $rw, $rr | Out-Null
+            $rArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $rw, "-r", $rr,
+                       "-conc:1", "-timeoutFactor:5", "-verbose:fail,error",
+                       "-javacoption:-encoding", "-javacoption:UTF-8") +
+                     (Get-HeapTokens $retryHeap $JavacHeapMB $tag) + $flagTokens + @($path)
+            $rout = @(& $JTREG_JAVA @rArgs 2>&1 | ForEach-Object { ([string]$_).Replace([string]([char]0), "") })
+            $rf = @(Parse-Failures $rout)
+            $lastResult = if ($rf.Count -gt 0) { $rf[0].Result } else { "pass" }
+            # A pass needs an actual summary line with zero failures/errors: a
+            # crashed run also has no failure lines and must not count as a pass.
+            $rl = ($rout | Select-String 'Test results:' | Select-Object -Last 1).Line
+            $ok = [bool]($rl -and ($rl -notmatch 'failed: [1-9]') -and ($rl -notmatch 'error: [1-9]'))
+            Remove-Item -LiteralPath $rw -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $rr -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        if ($ok) {
+            $lines += ("PASS     {0}  (attempt {1}; removed from failed.txt)" -f $t, ($a - 1))
+        } else {
+            $lines += ("STILL-FAIL {0}  ({1})" -f $t, $lastResult)
+        }
+    }
+
+    # A test that passed alone was only a contention casualty: drop it from the
+    # failure list so .new.txt (delta vs baseline) does not carry phantom rows.
+    $passedAlone = @($lines | Where-Object { $_ -like "PASS *" } |
+                     ForEach-Object { ($_ -split '\s+')[1] })
+    if ($passedAlone.Count -gt 0) {
+        $failPath = Join-Path $resDir "$tag.failed.txt"
+        $rest = @(Get-Content $failPath -ErrorAction SilentlyContinue |
+                  Where-Object { $passedAlone -notcontains $_ })
+        Write-Lines $failPath $rest
+    }
+
+    $retryPath = Join-Path $resDir "$tag.oom-retry.txt"
+    Write-Lines $retryPath $lines
+    $lines | ForEach-Object { Log ("  [retry] " + $_) }
+}
+
 # Run one tree (JDK-8 or JDK-27) under the current flags; writes failed.txt + counts.txt.
 function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
     $dirs = @((Join-Path $SUITE "$dir\API"),
@@ -133,7 +262,8 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
 
     $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
                 "-conc:$Concurrency", "-timeoutFactor:5", "-verbose:fail,error,time",
-                "-javacoption:-encoding", "-javacoption:UTF-8") + $flagTokens + $dirs
+                "-javacoption:-encoding", "-javacoption:UTF-8") +
+              (Get-HeapTokens $TestHeapMB $JavacHeapMB $tag) + $flagTokens + $dirs
     # jtreg's verbose stdout is UTF-16LE on this box; PowerShell decodes it
     # single-byte, so each ASCII char is followed by a NUL. Strip the NUL fill
     # bytes before writing/parsing (see the encoding note above).
@@ -142,19 +272,46 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
         [System.IO.File]::AppendAllLines($LOG, [string[]]$out, $Utf8NoBom)
     }
 
-    # Failed/error list straight from the report summary (no .jtr needed).
+    # Failed/error list from the verbose stream (see Parse-Failures), with the
+    # report summary as a fallback for the (unusual) case where the verbose
+    # lines were not emitted.
+    $parsed = @(Parse-Failures $out)
+    $failed = @($parsed | Where-Object { $_.Test } | ForEach-Object { $_.Test } | Sort-Object -Unique)
     $summary = Join-Path $rep "text\summary.txt"
-    $failed = @()
     if (Test-Path $summary) {
-        $failed = @(Get-Content $summary |
-                    Where-Object { $_ -match ' (Failed|Error)\. ' } |
-                    ForEach-Object { ($_ -split '\s+')[0] } |
-                    Sort-Object)
+        $fromSummary = @(Get-Content $summary |
+                         Where-Object { $_ -match ' (Failed|Error)\. ' } |
+                         ForEach-Object { ($_ -split '\s+')[0] });
+        $failed = @(@($failed) + @($fromSummary) | Sort-Object -Unique)
     }
     Write-Lines (Join-Path $resDir "$tag.failed.txt") $failed
 
+    # OOM-prone failures get a second, serial chance after the tree finishes.
+    $oomTests = @($parsed | Where-Object { $_.Oom -and $_.Test } |
+                  ForEach-Object { $_.Test } | Sort-Object -Unique)
+    if ($oomTests.Count -gt 0) {
+        Log ("[{0}] {1} failure(s) carry a memory-exhaustion signature -> serial retry" -f $tag, $oomTests.Count)
+        Invoke-OomRetry $tag $jdk $dir $oomTests
+    }
+
     $countsLine = ($out | Select-String 'Test results:' | Select-Object -Last 1).Line
-    if ($countsLine) { Write-Lines (Join-Path $resDir "$tag.counts.txt") @($countsLine) }
+    if ($countsLine) {
+        Write-Lines (Join-Path $resDir "$tag.counts.txt") @($countsLine)
+    } else {
+        # No summary line => jtreg never reached the end of the tree. Say so
+        # loudly; an empty failed.txt must never be read as "all passed".
+        $msg = ("INCOMPLETE: jtreg produced no 'Test results:' line (run died); " +
+                "failures recorded: {0}" -f @($failed).Count)
+        Write-Lines (Join-Path $resDir "$tag.counts.txt") @($msg)
+        Log ("[!!] " + $tag + ": " + $msg)
+    }
+
+    # HotSpot crash dumps land in the jtreg process CWD (the repo root) when a
+    # javac/test VM dies; they are not part of the suite.
+    Get-ChildItem -Path $SUITE -Filter "replay_pid*.log" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -Path $SUITE -Filter "hs_err_pid*.log" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
 
     # Failure details already went to console.log; drop work + report dirs so
     # per-test .jtr/.class small files don't accumulate.
@@ -166,6 +323,8 @@ Log "=== JCK-testsuite Windows sweep: label=$label flags=[$($JvmArgs -join ' ')]
 Log "suite : $SUITE"
 Log "JDK-8 : $JDK8"
 Log "JDK-27: $JDK27"
+Log ("memory: ${MemMB} MB RAM; commit free ${FreeCommitMB} MB")
+Log ("heap  : test VM -Xms/-Xmx ${TestHeapMB}m +AlwaysPreTouch; javac ${JavacHeapMB}m; conc=$Concurrency$ConcNote")
 Log ""
 
 # ---- versions (recorded for failure analysis) ----
