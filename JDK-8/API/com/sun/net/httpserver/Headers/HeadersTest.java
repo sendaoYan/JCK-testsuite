@@ -26,10 +26,12 @@ public class HeadersTest {
         java.util.Set<String> in = new java.util.HashSet<String>();
         for (Class<?> i : c.getInterfaces()) in.add(i.getName());
         check(in.contains("java.util.Map"), "implements java.util.Map");
+        // Assert only the exported Map/Headers API surface. The private helpers
+        // (checkValue, normalize) are build-specific implementation details —
+        // jdk8u502 dropped checkValue — and are not part of the contract.
         java.util.Set<String> ms = new java.util.HashSet<String>();
         for (java.lang.reflect.Method m : c.getDeclaredMethods()) ms.add(m.getName());
         check(ms.contains("add"), "declares add");
-        check(ms.contains("checkValue"), "declares checkValue");
         check(ms.contains("clear"), "declares clear");
         check(ms.contains("containsKey"), "declares containsKey");
         check(ms.contains("containsValue"), "declares containsValue");
@@ -40,7 +42,6 @@ public class HeadersTest {
         check(ms.contains("hashCode"), "declares hashCode");
         check(ms.contains("isEmpty"), "declares isEmpty");
         check(ms.contains("keySet"), "declares keySet");
-        check(ms.contains("normalize"), "declares normalize");
         check(ms.contains("put"), "declares put");
         check(ms.contains("putAll"), "declares putAll");
         check(ms.contains("remove"), "declares remove");
