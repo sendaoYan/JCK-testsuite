@@ -587,7 +587,12 @@ public class URLTest {
     }
 
     static void testFileUrlConnections() throws Exception {
-        File dir = new File("/tmp/net-B-url/file");
+        // java.io.tmpdir is absolute on every platform ("/tmp" is drive-relative
+        // on Windows). The per-run suffix matters when several configurations of
+        // this test run at once: a peer JVM rewriting the same fixture changes
+        // its lastModified between openConnection() and File.lastModified().
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-B-url-" + System.nanoTime() + "/file");
         dir.mkdirs();
         File hello = new File(dir, "hello.txt");
         byte[] helloBytes = "hello world 123".getBytes("UTF-8");
@@ -661,6 +666,7 @@ public class URLTest {
 
         // cleanup
         hello.delete(); bin.delete(); empty.delete(); dir.delete();
+        dir.getParentFile().delete(); // the per-run parent created by mkdirs()
     }
 
     // ---------- deepening: custom URLStreamHandlerFactory ----------

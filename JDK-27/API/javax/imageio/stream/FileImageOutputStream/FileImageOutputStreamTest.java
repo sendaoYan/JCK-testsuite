@@ -120,9 +120,12 @@ public class FileImageOutputStreamTest {
     }
 
     static int tmpCounter;
+    // Per-run fixture suffix: concurrent configurations of this test
+    // must not share the same temp paths.
+    static final String RUN = Long.toHexString(System.nanoTime());
 
     static File newFile(byte[] content) throws IOException {
-        File f = new File(System.getProperty("java.io.tmpdir"), "imgio-streamimpl-FileImageOutputStream" + tmpCounter++);
+        File f = new File(System.getProperty("java.io.tmpdir"), "imgio-streamimpl-FileImageOutputStream" + "-" + RUN + tmpCounter++);
         FileOutputStream fos = new FileOutputStream(f);
         fos.write(content);
         fos.close();
@@ -140,7 +143,7 @@ public class FileImageOutputStreamTest {
                 "ctor(RandomAccessFile null)");
         // a nonexistent file inside an existing directory is created empty
         File ghost = new File(System.getProperty("java.io.tmpdir"),
-                "imgio-streamimpl-FileImageOutputStream-created" + tmpCounter++);
+                "imgio-streamimpl-FileImageOutputStream-created" + "-" + RUN + tmpCounter++);
         FileImageOutputStream out = new FileImageOutputStream(ghost);
         try {
             check(out.length() == 0L, "ctor: nonexistent file created empty");

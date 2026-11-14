@@ -329,8 +329,12 @@ public class JarURLConnectionTest {
     public static void main(String[] args) throws Exception {
         // Use an absolute temp directory: "/tmp" is drive-relative on Windows
         // and the FilePermission name is derived from the absolute file URL.
-        File dir = new File(System.getProperty("java.io.tmpdir"), "net-c-JarURLConnection");
-        dir.mkdirs();
+        // The per-run suffix keeps concurrent configurations of this test from
+        // deleting each other's jar while it is still open (observed with
+        // -Xcomp sweeps: listFiles() came back null after a peer's cleanup).
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-c-JarURLConnection-" + System.nanoTime());
+        if (!dir.mkdirs()) throw new AssertionError("temp dir created: " + dir);
         File jar = buildJar(dir);
         try {
             testWhiteBox();

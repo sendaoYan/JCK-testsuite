@@ -78,8 +78,13 @@ public class URLClassLoaderTest {
     static File miniJar;
 
     static void buildFixtures() throws Exception {
-        workDir = new File("/tmp/net-B-ucl");
-        if (!workDir.exists()) workDir.mkdirs();
+        // java.io.tmpdir is absolute on every platform ("/tmp" is drive-relative
+        // on Windows). The per-run suffix matters when several configurations of
+        // this test run at once: a fixed path lets one JVM's cleanup delete the
+        // jar another JVM is still loading classes from (observed CNFE "Mini").
+        workDir = new File(System.getProperty("java.io.tmpdir"),
+                "net-B-ucl-" + System.nanoTime());
+        if (!workDir.mkdirs()) throw new AssertionError("cannot create " + workDir);
         miniJar = new File(workDir, "mini.jar");
         JarOutputStream jos = new JarOutputStream(new FileOutputStream(miniJar));
         jos.putNextEntry(new JarEntry("Mini.class"));

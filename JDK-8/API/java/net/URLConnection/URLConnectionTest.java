@@ -591,7 +591,11 @@ public class URLConnectionTest {
     }
 
     public static void main(String[] args) throws Exception {
-        File dir = new File("/tmp/net-c-URLConnection");
+        // java.io.tmpdir is absolute on every platform ("/tmp" is drive-relative
+        // on Windows). The per-run suffix keeps concurrent configurations of
+        // this test from deleting each other's fixtures.
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-c-URLConnection-" + System.nanoTime());
         dir.mkdirs();
         try {
             testStructure(); // original content

@@ -40,9 +40,11 @@ public class ImageIOTest {
         }
     }
     static int tmpCounter = 0;
+    // Per-run fixture suffix: concurrent configurations must not share paths.
+    static final String RUN = Long.toHexString(System.nanoTime());
     static File tmpFile(String ext) {
         return new File(System.getProperty("java.io.tmpdir"),
-                        "imgio-corea-ImageIO-" + (tmpCounter++) + ext);
+                        "imgio-corea-ImageIO-" + RUN + "-" + (tmpCounter++) + ext);
     }
     static BufferedImage pattern(int w, int h, int type) {
         BufferedImage bi = new BufferedImage(w, h, type);

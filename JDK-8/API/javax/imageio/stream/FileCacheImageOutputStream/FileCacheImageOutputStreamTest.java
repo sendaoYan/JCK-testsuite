@@ -53,9 +53,12 @@ public class FileCacheImageOutputStreamTest {
     }
 
     static int tmpCounter;
+    // Per-run fixture suffix: concurrent configurations of this test
+    // must not share the same temp paths.
+    static final String RUN = Long.toHexString(System.nanoTime());
 
     static File newCacheDir() {
-        File d = new File(System.getProperty("java.io.tmpdir"), "imgio-streamimpl-FileCacheImageOutputStream" + tmpCounter++);
+        File d = new File(System.getProperty("java.io.tmpdir"), "imgio-streamimpl-FileCacheImageOutputStream" + "-" + RUN + tmpCounter++);
         d.mkdirs();
         return d;
     }
@@ -94,7 +97,7 @@ public class FileCacheImageOutputStreamTest {
 
             // cacheDir pointing at a regular file
             File notDir = new File(System.getProperty("java.io.tmpdir"),
-                    "imgio-streamimpl-FileCacheImageOutputStream-notdir" + tmpCounter++);
+                    "imgio-streamimpl-FileCacheImageOutputStream-notdir" + "-" + RUN + tmpCounter++);
             FileOutputStream fos = new FileOutputStream(notDir);
             fos.write(1);
             fos.close();

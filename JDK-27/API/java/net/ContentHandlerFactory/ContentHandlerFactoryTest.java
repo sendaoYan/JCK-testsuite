@@ -106,7 +106,11 @@ public class ContentHandlerFactoryTest {
             }
         });
         // integration: getContent() on a file: URL is routed through the factory
-        File dir = new File("/tmp/net-c-ContentHandlerFactory");
+        // Absolute java.io.tmpdir ("/tmp" is drive-relative on Windows) plus a
+        // per-run suffix so concurrent configurations cannot delete each
+        // other's fixtures mid-test.
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-c-ContentHandlerFactory-" + System.nanoTime());
         dir.mkdirs();
         try {
             File f = new File(dir, "x.txt");
@@ -118,7 +122,8 @@ public class ContentHandlerFactoryTest {
             check(mimes.contains("text/plain"), "factory saw text/plain, got " + mimes);
             check(mimes.size() == 1, "exactly one lookup per getContent");
         } finally {
-            for (File x : dir.listFiles()) x.delete();
+            File[] kids = dir.listFiles();
+            if (kids != null) for (File x : kids) x.delete();
             dir.delete();
         }
         // second installation fails with Error

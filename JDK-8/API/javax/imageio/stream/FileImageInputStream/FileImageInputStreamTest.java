@@ -57,9 +57,12 @@ public class FileImageInputStreamTest {
     }
 
     static int tmpCounter;
+    // Per-run fixture suffix: concurrent configurations of this test
+    // must not share the same temp paths.
+    static final String RUN = Long.toHexString(System.nanoTime());
 
     static File newFile(byte[] content) throws IOException {
-        File f = new File(System.getProperty("java.io.tmpdir"), "imgio-streamimpl-FileImageInputStream" + tmpCounter++);
+        File f = new File(System.getProperty("java.io.tmpdir"), "imgio-streamimpl-FileImageInputStream" + "-" + RUN + tmpCounter++);
         FileOutputStream fos = new FileOutputStream(f);
         fos.write(content);
         fos.close();
@@ -82,12 +85,12 @@ public class FileImageInputStreamTest {
         expectExact(IllegalArgumentException.class, () -> new FileImageInputStream((RandomAccessFile) null),
                 "ctor(RandomAccessFile null)");
         File ghost = new File(System.getProperty("java.io.tmpdir"),
-                "imgio-streamimpl-FileImageInputStream-ghost" + tmpCounter++);
+                "imgio-streamimpl-FileImageInputStream-ghost" + "-" + RUN + tmpCounter++);
         expectExact(FileNotFoundException.class, () -> new FileImageInputStream(ghost),
                 "ctor(nonexistent file)");
         // opening a directory fails with FileNotFoundException (reason text is OS/locale specific)
         File dir = new File(System.getProperty("java.io.tmpdir"),
-                "imgio-streamimpl-FileImageInputStream-dir" + tmpCounter++);
+                "imgio-streamimpl-FileImageInputStream-dir" + "-" + RUN + tmpCounter++);
         dir.mkdirs();
         expectExact(FileNotFoundException.class, () -> new FileImageInputStream(dir),
                 "ctor(directory)");

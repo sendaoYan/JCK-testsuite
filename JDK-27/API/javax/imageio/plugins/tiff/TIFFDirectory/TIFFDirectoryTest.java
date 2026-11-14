@@ -248,7 +248,7 @@ public class TIFFDirectoryTest {
             dir.addTIFFField(new TIFFField(base.getTag("DocumentName"),
                 TIFFTag.TIFF_ASCII, 1, new String[]{"tiffdir-roundtrip"}));
             javax.imageio.metadata.IIOMetadata custom = dir.getAsMetadata();
-            tmp = new java.io.File(System.getProperty("java.io.tmpdir"), "imgio-tiff-TIFFDirectory-1.tiff");
+            tmp = new java.io.File(System.getProperty("java.io.tmpdir"), "imgio-tiff-TIFFDirectory-" + Long.toHexString(System.nanoTime()) + ".tiff");
             javax.imageio.stream.ImageOutputStream ios =
                 javax.imageio.ImageIO.createImageOutputStream(tmp);
             try {

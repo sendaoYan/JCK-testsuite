@@ -295,7 +295,11 @@ public class BodySubscribersTest {
         check(ls2.lines.equals(List.of("a", "b", "c")), "fromLineSubscriber line contents");
 
         // ---------- ofFile ----------
-        File dir = new File("/tmp/net-I-BodySubscribers");
+        // Absolute java.io.tmpdir ("/tmp" is drive-relative on Windows) plus a
+        // per-run suffix: concurrent configurations of this test must not
+        // share fixtures.
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-I-BodySubscribers-" + System.nanoTime());
         dir.mkdirs();
         Path target = dir.toPath().resolve("out.bin");
         HttpResponse.BodySubscriber<Path> bf = HttpResponse.BodySubscribers.ofFile(target);

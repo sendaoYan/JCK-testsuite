@@ -205,12 +205,14 @@ public class ImageInputStreamSpiTest {
     }
 
     static int tmpCounter;
+    // Per-run fixture suffix: concurrent configurations must not share paths.
+    static final String RUN = Long.toHexString(System.nanoTime());
 
     // FileImageInputStreamSpi creates a working stream from a real temp file
     static void testFileSpiRoundTrip() throws Exception {
         ImageInputStreamSpi fileSpi = findByInputClass(java.io.File.class);
         java.io.File f = new java.io.File(System.getProperty("java.io.tmpdir"),
-                          "imgio-spi-ImageInputStreamSpi-" + (tmpCounter++) + ".bin");
+                          "imgio-spi-ImageInputStreamSpi-" + RUN + "-" + (tmpCounter++) + ".bin");
         java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
         fos.write(new byte[] { 7, 8, 9 });
         fos.close();

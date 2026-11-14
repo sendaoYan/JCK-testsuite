@@ -178,7 +178,11 @@ public class BodyPublishersTest {
                 new byte[]{'h', 'i'}), "fromPublisher delegates data flow");
 
         // ---------- ofFile / ofFileChannel ----------
-        File dir = new File("/tmp/net-I-BodyPublishers");
+        // Absolute java.io.tmpdir ("/tmp" is drive-relative on Windows) plus a
+        // per-run suffix: concurrent configurations of this test must not
+        // share fixtures.
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-I-BodyPublishers-" + System.nanoTime());
         dir.mkdirs();
         File f = new File(dir, "sample.bin");
         try (FileOutputStream fo = new FileOutputStream(f)) {

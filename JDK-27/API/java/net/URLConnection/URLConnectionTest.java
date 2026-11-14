@@ -684,7 +684,11 @@ public class URLConnectionTest {
     public static void main(String[] args) throws Exception {
         // Absolute temp directory: "/tmp" is drive-relative on Windows, and
         // FilePermission names are derived from the absolute file URL.
-        File dir = new File(System.getProperty("java.io.tmpdir"), "net-c-URLConnection");
+        // The per-run suffix matters when several configurations of this test
+        // run at the same time on one machine: a fixed name lets one JVM's
+        // cleanup delete the fixtures of another (observed with -Xcomp sweeps).
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-c-URLConnection-" + System.nanoTime());
         dir.mkdirs();
         try {
             testWhiteBox();

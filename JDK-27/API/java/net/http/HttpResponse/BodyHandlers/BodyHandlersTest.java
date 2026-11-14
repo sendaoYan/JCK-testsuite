@@ -191,7 +191,11 @@ public class BodyHandlersTest {
                 "fromLineSubscriber finisher counts lines");
 
         // ofFile: writes the body to the file (uses a scratch directory).
-        File dir = new File("/tmp/net-I-BodyHandlers");
+        // Absolute java.io.tmpdir ("/tmp" is drive-relative on Windows) plus a
+        // per-run suffix: concurrent configurations of this test must not
+        // share fixtures.
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-I-BodyHandlers-" + System.nanoTime());
         dir.mkdirs();
         Path target = dir.toPath().resolve("out.txt");
         HttpResponse.BodySubscriber<Path> file =

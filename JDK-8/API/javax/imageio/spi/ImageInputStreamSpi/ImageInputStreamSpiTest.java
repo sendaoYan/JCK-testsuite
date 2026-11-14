@@ -14,6 +14,8 @@ import javax.imageio.stream.ImageInputStream;
 public class ImageInputStreamSpiTest {
     static int passed;
     static int tmpCounter;
+    // Per-run fixture suffix: concurrent configurations must not share paths.
+    static final String RUN = Long.toHexString(System.nanoTime());
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     public static void main(String[] a) throws Exception {
         Class<?> c = Class.forName("javax.imageio.spi.ImageInputStreamSpi");
@@ -147,7 +149,7 @@ public class ImageInputStreamSpiTest {
     static void testFileSpiRoundTrip() throws Exception {
         ImageInputStreamSpi fileSpi = findByInputClass(File.class);
         File f = new File(System.getProperty("java.io.tmpdir"),
-                          "imgio-spi-ImageInputStreamSpi-" + (tmpCounter++) + ".bin");
+                          "imgio-spi-ImageInputStreamSpi-" + RUN + "-" + (tmpCounter++) + ".bin");
         f.deleteOnExit();
         FileOutputStream fos = new FileOutputStream(f);
         fos.write(new byte[] { 7, 8, 9 });
