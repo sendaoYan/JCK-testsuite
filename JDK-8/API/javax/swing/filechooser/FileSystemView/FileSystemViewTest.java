@@ -54,7 +54,7 @@ public class FileSystemViewTest {
     }
 
     // ---- black-box: behavioral contract ----
-    static void behavior() {
+    static void behavior() throws Exception {
         try { UIManager.setLookAndFeel(new MetalLookAndFeel0()); }
         catch (Exception e) { throw new AssertionError("Metal LaF: " + e); }
 
@@ -118,8 +118,12 @@ public class FileSystemViewTest {
         check(child.equals(new File(tmp, "c")), "getChild equality");
         check(v.isParent(tmp, new File(tmp, "c")), "isParent true");
         File parentOfTmp = v.getParentDirectory(tmp);
-        check(parentOfTmp != null && parentOfTmp.equals(tmp.getParentFile()),
-              "getParentDirectory(tmp) == tmp.getParentFile()");
+        // Windows shell 返回的父目录可能是长路径，而 java.io.tmpdir 可能带 8.3 短名
+        // （YANSEN~1），字符串/File.equals 会不等；契约是“父目录就是所在目录”，
+        // 按文件系统标识比较。
+        check(parentOfTmp != null && java.nio.file.Files.isSameFile(
+                parentOfTmp.toPath(), tmp.getParentFile().toPath()),
+              "getParentDirectory(tmp) is tmp's containing directory");
         check(v.getParentDirectory(new File("/etc/hostname")) != null,
               "getParentDirectory(plain file) non-null");
         check(v.getFiles(tmp, true) != null, "getFiles returns an array");

@@ -189,8 +189,11 @@ public class JdwpContractTest {
                 initial.resume();
             }
             check(sawVmStart, "attach delivered a VMStartEvent");
-
-            vm.resume();
+            // 这里不能再发一次 VM 级 resume：initial.resume() 已经恢复了 VMStart
+            // 事件集，而 VM.Resume 会清掉所有线程的挂起计数。目标 VM 若在这个
+            // 空隙里触发 ClassPrepare 的 SUSPEND_ALL，就会被这次 resume 放行，
+            // 一路跑到退出，随后 ReferenceType.methods() 拿不到回复而抛
+            // VMDisconnectedException（-Xcomp 下实测稳定命中）。
 
             ReferenceType debuggeeType = waitClassPrepared(queue);
             check(debuggeeType != null, "Debuggee class prepared");

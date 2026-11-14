@@ -907,8 +907,15 @@ public class SocketTest {
                 c.getInputStream().read();
                 check(false, "read after shutdownInput must fail");
             } catch (SocketException e) {
-                check("Socket input is shutdown".equals(e.getMessage()),
-                        "read-after-shutdownInput exact message");
+                if (posix) {
+                    check("Socket input is shutdown".equals(e.getMessage()),
+                            "read-after-shutdownInput exact message");
+                } else {
+                    // 对端写入触发的 RST 可能先于 Java 层的 shutdown 检查到达，
+                    // Windows 于是直接报 OS 文本（WSAECONNABORTED）；语义仍是“读失败”。
+                    check(e.getMessage() != null && !e.getMessage().isEmpty(),
+                            "read-after-shutdownInput fails with a message: " + e.getMessage());
+                }
             }
             // Peer can still read whatever the local end wrote before shutdown.
             boolean localWriteFailed = false;
@@ -924,9 +931,23 @@ public class SocketTest {
             c.shutdownOutput();
             a.setSoTimeout(500);
             if (!localWriteFailed) {
-                check(a.getInputStream().read() == 77, "peer reads data sent before shutdownInput");
+                try {
+                    check(a.getInputStream().read() == 77, "peer reads data sent before shutdownInput");
+                } catch (SocketException e) {
+                    // 接收半关后到达的数据会让 Windows 回 RST，对端读到的不是数据而是复位。
+                    if (posix) throw e;
+                    check(e.getMessage() != null && !e.getMessage().isEmpty(),
+                          "peer read aborted by the platform reset: " + e.getMessage());
+                }
             }
-            check(a.getInputStream().read() == -1, "peer sees EOF after shutdownOutput");
+            try {
+                check(a.getInputStream().read() == -1, "peer sees EOF after shutdownOutput");
+            } catch (SocketException e) {
+                // 同上：RST 可能让对端读到 WSAECONNRESET 而不是干净的 EOF。
+                if (posix) throw e;
+                check(e.getMessage() != null && !e.getMessage().isEmpty(),
+                      "peer observes a reset instead of EOF: " + e.getMessage());
+            }
         } finally {
             closePair(p);
         }

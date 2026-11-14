@@ -160,10 +160,20 @@ public class ExtendedSocketOptionsTest {
         } finally {
             s.close();
         }
-        try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100); check(false, "closed set should throw"); }
-        catch (java.net.SocketException e) { check("Socket closed".equals(e.getMessage()), "closed set SocketException 'Socket closed' (extended path, lowercase)"); }
-        try { jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE); check(false, "closed get should throw"); }
-        catch (java.net.SocketException e) { check(true, "closed get SocketException"); }
+        // 能力检查先于关闭检查：选项在本平台不受支持时，即便 socket 已关闭也报 UOE。
+        // Windows 的 supportedOptions(Socket) 只有标准选项（探针实测），因此对
+        // TCP_KEEPIDLE 期望的是 UOE 而不是 "Socket closed"。
+        if (sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)) {
+            try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100); check(false, "closed set should throw"); }
+            catch (java.net.SocketException e) { check("Socket closed".equals(e.getMessage()), "closed set SocketException 'Socket closed' (extended path, lowercase)"); }
+            try { jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE); check(false, "closed get should throw"); }
+            catch (java.net.SocketException e) { check(true, "closed get SocketException"); }
+        } else {
+            try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100); check(false, "closed set unsupported should throw UOE"); }
+            catch (UnsupportedOperationException e) { check("TCP_KEEPIDLE".equals(e.getMessage()), "closed set unsupported: UOE names the option"); }
+            try { jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE); check(false, "closed get unsupported should throw UOE"); }
+            catch (UnsupportedOperationException e) { check("TCP_KEEPIDLE".equals(e.getMessage()), "closed get unsupported: UOE names the option"); }
+        }
         // 12. supportedOptions 返回集不可变、稳定
         java.util.Set<java.net.SocketOption<?>> set1 = jdk.net.Sockets.supportedOptions(java.net.Socket.class);
         try { set1.add(java.net.StandardSocketOptions.SO_SNDBUF); check(false, "set should be immutable"); }

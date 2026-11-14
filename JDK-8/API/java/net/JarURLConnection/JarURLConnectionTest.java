@@ -347,8 +347,11 @@ public class JarURLConnectionTest {
 
     public static void main(String[] args) throws Exception {
         testOriginalStructure();
-        File dir = new File("/tmp/net-c-JarURLConnection");
-        dir.mkdirs();
+        // 用 java.io.tmpdir 而不是硬编码 /tmp：Windows 上 "/tmp" 是盘符相对路径；
+        // 目录名再带上纳秒后缀，避免并发/多轮之间互相踩。
+        File dir = new File(System.getProperty("java.io.tmpdir"),
+                "net-c-JarURLConnection-" + System.nanoTime());
+        if (!dir.mkdirs()) throw new AssertionError("temp dir created: " + dir);
         File jar = buildJar(dir);
         try {
             testWhiteBox();

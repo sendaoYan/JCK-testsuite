@@ -198,9 +198,15 @@ public class FileInputStreamTest {
                 fis.skip(1);
                 check(false, "skip after close must throw");
             } catch (IOException ioe) {
-                // JDK-27 实测：skip 路径报 Bad file descriptor；JDK-8 报 Stream Closed（见 DESIGN 差异表）
-                check("Bad file descriptor".equals(ioe.getMessage()),
-                      "JDK-27 skip-after-close message: " + ioe.getMessage());
+                // JDK-27 在 POSIX 上 skip 路径报 Bad file descriptor（JDK-8 报 Stream Closed）；
+                // Windows 的 closed-fd 检查先于 native lseek，两个 JDK 都报 Stream Closed。
+                if (File.separatorChar == '/') {
+                    check("Bad file descriptor".equals(ioe.getMessage()),
+                          "JDK-27 skip-after-close message: " + ioe.getMessage());
+                } else {
+                    check(ioe.getMessage() != null && !ioe.getMessage().isEmpty(),
+                          "skip-after-close fails with a message: " + ioe.getMessage());
+                }
             }
             check(fis.getFD() == fd, "getFD still callable after close");
             check(fis.getChannel() != null, "getChannel still returns after close");
@@ -250,8 +256,15 @@ public class FileInputStreamTest {
                     fis.skip(-5);
                     check(false, "FIS skip(negative) must throw");
                 } catch (IOException ioe) {
-                    check("Invalid argument".equals(ioe.getMessage()),
-                          "negative skip message: " + ioe.getMessage());
+                    // lseek 失败时消息就是 OS 的 errno 文本：POSIX 是
+                    // "Invalid argument"，Windows 是本地化系统消息。
+                    if (File.separatorChar == '/') {
+                        check("Invalid argument".equals(ioe.getMessage()),
+                              "negative skip message: " + ioe.getMessage());
+                    } else {
+                        check(ioe.getMessage() != null && !ioe.getMessage().isEmpty(),
+                              "negative skip message non-empty: " + ioe.getMessage());
+                    }
                 }
                 check(fis.read() == 1, "failed negative skip did not move position");
                 check(fis.skip(2) == 2 && fis.read() == 4, "skip(2) precise");

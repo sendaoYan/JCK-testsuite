@@ -26,6 +26,8 @@ import java.util.stream.Stream;
 
 public class FileChannelTest {
     static int passed;
+    // 保持映射缓冲区强可达，使“映射存活期间的截断”行为可确定（否则依赖 GC 时机）。
+    static Object mappedKeepAlive;
 
     static void check(boolean cond, String msg) {
         if (!cond) throw new AssertionError(msg);
@@ -183,7 +185,21 @@ public class FileChannelTest {
                 ch.force(true);
 
                 check(ch.position(2) == ch, "position(long) returns this");
-                check(ch.truncate(2) instanceof FileChannel, "truncate returns FileChannel");
+                // Windows 拒绝对存在用户映射的文件做截断（ERROR_USER_MAPPED_FILE），
+                // POSIX 允许并返回本通道。用静态引用保证映射在截断时仍然存活。
+                mappedKeepAlive = mbb;
+                if (java.io.File.separatorChar == '\\') {
+                    try {
+                        ch.truncate(2);
+                        check(false, "truncate with a live mapping must fail on Windows");
+                    } catch (IOException mapped) {
+                        check(mapped.getMessage() != null && !mapped.getMessage().isEmpty(),
+                              "truncate-while-mapped IOException: " + mapped.getMessage());
+                    }
+                } else {
+                    check(ch.truncate(2) instanceof FileChannel, "truncate returns FileChannel");
+                }
+                mappedKeepAlive = null;
             }
             check(Files.exists(file), "file persisted after channel close");
 
@@ -310,7 +326,12 @@ public class FileChannelTest {
                 check(ch.isOpen(), "DELETE_ON_CLOSE channel open while live");
                 check(ch.write(ByteBuffer.wrap(new byte[] {1, 2})) == 2 && ch.size() == 2,
                       "DELETE_ON_CLOSE channel fully usable");
-                check(!Files.exists(gone), "on Unix the directory entry is already unlinked at open (实测)");
+                if (java.io.File.separatorChar == '/') {
+                    check(!Files.exists(gone), "on Unix the directory entry is already unlinked at open (实测)");
+                } else {
+                    // Windows 用 FILE_FLAG_DELETE_ON_CLOSE：最后一个句柄关闭前名字仍可见。
+                    check(Files.exists(gone), "Windows keeps the name visible until the handle closes");
+                }
             }
             check(!Files.exists(gone), "file stays gone after close");
 

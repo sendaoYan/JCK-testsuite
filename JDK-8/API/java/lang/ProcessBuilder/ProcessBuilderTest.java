@@ -142,7 +142,11 @@ public class ProcessBuilderTest {
     }
 
     static void testRealStart() throws Exception {
-        Process p = new ProcessBuilder("sh", "-c", "echo hello").redirectErrorStream(true).start();
+        // Windows 没有 sh；cmd /c echo 提供同样的“真子进程 + 一行 stdout”。
+        boolean win = java.io.File.separatorChar == '\\';
+        Process p = (win ? new ProcessBuilder("cmd", "/c", "echo hello")
+                         : new ProcessBuilder("sh", "-c", "echo hello"))
+                .redirectErrorStream(true).start();
         check(p.waitFor() == 0, "start() produces working process exit 0");
         String out = new String(readAll(p.getInputStream()), "UTF-8").trim();
         check("hello".equals(out), "stdout captured");
@@ -197,7 +201,8 @@ public class ProcessBuilderTest {
 
     // 编译真子进程样本类：Cat（stdin 回显）、Out（打印标记）、Env（打印注入环境变量与 cwd）。
     static void lcSetupHelpers() throws Exception {
-        lcDir = new File("/tmp", "lcG-pb8-" + System.nanoTime());
+        // 用 java.io.tmpdir 而不是硬编码 /tmp：Windows 上 "/tmp" 是盘符相对路径。
+        lcDir = new File(System.getProperty("java.io.tmpdir"), "lcG-pb8-" + System.nanoTime());
         check(lcDir.mkdirs(), "helper dir created");
         lcWrite(new File(lcDir, "Cat.java"),
             "public class Cat { public static void main(String[] a) throws Exception {"

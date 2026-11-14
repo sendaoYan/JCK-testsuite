@@ -650,9 +650,15 @@ public class SystemTest {
     }
 
     static void testMiscSurface() {
-        // mapLibraryName is platform-mapping; this suite runs on Linux.
-        check("libfoo.so".equals(System.mapLibraryName("foo")), "mapLibraryName Linux form");
-        check("liblibfoo.so".equals(System.mapLibraryName("libfoo")), "mapLibraryName prefixes lib");
+        // mapLibraryName 是平台命名约定：Linux 加 lib 前缀与 .so，Windows 只加 .dll。
+        boolean win = java.io.File.separatorChar == '\\';
+        String libPrefix = win ? "" : "lib";
+        String libSuffix = win ? ".dll"
+                : System.getProperty("os.name").toLowerCase().contains("mac") ? ".dylib" : ".so";
+        check((libPrefix + "foo" + libSuffix).equals(System.mapLibraryName("foo")),
+              "mapLibraryName platform form: " + System.mapLibraryName("foo"));
+        check((libPrefix + "libfoo" + libSuffix).equals(System.mapLibraryName("libfoo")),
+              "mapLibraryName prefix applied once: " + System.mapLibraryName("libfoo"));
         check(System.mapLibraryName("lcF-bar") != null, "mapLibraryName non-null");
         // Standard stream types.
         check(System.out instanceof PrintStream, "System.out is a PrintStream");

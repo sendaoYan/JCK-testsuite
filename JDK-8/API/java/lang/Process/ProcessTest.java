@@ -84,7 +84,10 @@ public class ProcessTest {
     }
 
     static void testRealProcess() throws Exception {
-        Process p = new ProcessBuilder("sh", "-c", "echo hello").start();
+        // Windows 没有 sh；cmd /c echo 提供同样的“真子进程 + 一行 stdout”。
+        boolean win = java.io.File.separatorChar == '\\';
+        Process p = win ? new ProcessBuilder("cmd", "/c", "echo hello").start()
+                        : new ProcessBuilder("sh", "-c", "echo hello").start();
         String out = new String(readAll(p.getInputStream()), "UTF-8").trim();
         check(p.waitFor() == 0, "real process exit 0");
         check("hello".equals(out), "real process stdout");
@@ -157,7 +160,8 @@ public class ProcessTest {
 
     // 编译真子进程样本类：Sleeper（长驻 10s）、ExitN（按参数退出）、Cat（stdin 一行回显）。
     static void lcSetupHelpers() throws Exception {
-        lcDir = new File("/tmp", "lcG-p8-" + System.nanoTime());
+        // 用 java.io.tmpdir 而不是硬编码 /tmp：Windows 上 "/tmp" 是盘符相对路径。
+        lcDir = new File(System.getProperty("java.io.tmpdir"), "lcG-p8-" + System.nanoTime());
         check(lcDir.mkdirs(), "helper dir created");
         lcWrite(new File(lcDir, "Sleeper.java"),
             "public class Sleeper { public static void main(String[] a) throws Exception { Thread.sleep(10000); } }");

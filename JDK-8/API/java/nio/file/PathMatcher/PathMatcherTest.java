@@ -78,9 +78,11 @@ public class PathMatcherTest {
         if (java.io.File.separatorChar == '/') {
             check(!klass.matches(Paths.get("abc")), "char class rejects lowercase (case-sensitive glob)");
         } else {
-            // The Windows glob matcher folds case, so [A-Z] also accepts "abc".
+            // Windows 的 glob 匹配折叠大小写：[A-Z] 等价于 [A-Za-z]，因此 "abc"
+            // 乃至 "zzz" 都被接受（探针实测 zzz=true）；仍拒绝非字母首字符。
             check(klass.matches(Paths.get("abc")), "char class folds case (Windows glob)");
-            check(!klass.matches(Paths.get("zzz")), "char class rejects non-matching case-insensitively");
+            check(klass.matches(Paths.get("zzz")), "case-folded [A-Z] accepts any letter");
+            check(!klass.matches(Paths.get("1zz")), "char class still rejects non-letters");
         }
 
         // regex syntax behaves as java.util.regex against the whole path string

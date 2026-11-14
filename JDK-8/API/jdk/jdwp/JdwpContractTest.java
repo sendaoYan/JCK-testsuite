@@ -172,6 +172,14 @@ public class JdwpContractTest {
             check(vm != null, "SocketAttach connected to the debuggee");
 
             EventQueue queue = vm.eventQueue();
+            EventRequestManager erm = vm.eventRequestManager();
+            // 先在挂起状态下登记 ClassPrepareRequest，再恢复 VMStart 事件集：
+            // 恢复之后调试目标可能在请求生效前就完成加载并退出。
+            ClassPrepareRequest cpr = erm.createClassPrepareRequest();
+            cpr.addClassFilter("Debuggee");
+            cpr.setSuspendPolicy(EventRequest.SUSPEND_ALL);
+            cpr.enable();
+
             boolean sawVmStart = false;
             EventSet initial = queue.remove(3000);
             if (initial != null) {
@@ -180,13 +188,10 @@ public class JdwpContractTest {
                 initial.resume();
             }
             check(sawVmStart, "attach delivered a VMStartEvent");
-
-            EventRequestManager erm = vm.eventRequestManager();
-            ClassPrepareRequest cpr = erm.createClassPrepareRequest();
-            cpr.addClassFilter("Debuggee");
-            cpr.setSuspendPolicy(EventRequest.SUSPEND_ALL);
-            cpr.enable();
-            vm.resume();
+            // 不要再补一次 VM 级 resume：initial.resume() 已恢复 VMStart 事件集，
+            // 而 VM.Resume 会清掉所有线程的挂起计数；目标若在此空隙触发
+            // ClassPrepare 的 SUSPEND_ALL 就会被放行跑完，后续 methods() 抛
+            // VMDisconnectedException（-Xcomp 下实测稳定命中）。
 
             ReferenceType debuggeeType = waitClassPrepared(queue);
             check(debuggeeType != null, "Debuggee class prepared");

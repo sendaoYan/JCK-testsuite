@@ -248,6 +248,29 @@ public class RandomAccessFileTest {
         throw new AssertionError(what + ": expected " + type.getSimpleName() + " but nothing was thrown");
     }
 
+    // 只读句柄写入/非法长度这类失败的原因文本来自 OS strerror：POSIX 是固定英文
+    // （"Bad file descriptor" / "Invalid argument"），Windows 是本地化系统消息。
+    // 平台表示层只放宽措辞，异常类型与“必须失败”的语义不变。
+    static void mustThrowIoReason(String posixMessage, Thrower r, String what) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (!(t instanceof IOException))
+                throw new AssertionError(what + ": expected IOException but got "
+                        + t.getClass().getName() + " [" + t.getMessage() + "]");
+            String m = t.getMessage();
+            boolean ok = File.separatorChar != '/'
+                    ? m != null && !m.isEmpty()
+                    : posixMessage.equals(m);
+            if (!ok)
+                throw new AssertionError(what + ": unexpected IOException message ["
+                        + m + "], POSIX form is \"" + posixMessage + "\"");
+            passed++;
+            return;
+        }
+        throw new AssertionError(what + ": expected IOException but nothing was thrown");
+    }
+
     // 平台消息形如 "<path> (<OS 原因>)"；原因文本随 OS/strerror 与默认 locale 变化
     // （zh_CN Windows 下是中文），只锁结构与路径。
     static boolean hasOsReason(String msg, String path) {
@@ -364,11 +387,11 @@ public class RandomAccessFileTest {
             check(raf.getFilePointer() == 0, "r mode starts at 0");
             check(raf.length() == 1, "r mode sees the length");
             final RandomAccessFile ro2 = raf;
-            mustThrow(IOException.class, "Bad file descriptor",
+            mustThrowIoReason("Bad file descriptor",
                       () -> ro2.write(66), "r write(int)");
-            mustThrow(IOException.class, "Bad file descriptor",
+            mustThrowIoReason("Bad file descriptor",
                       () -> ro2.writeInt(1), "r writeInt");
-            mustThrow(IOException.class, "Invalid argument",
+            mustThrowIoReason("Invalid argument",
                       () -> ro2.setLength(0), "r setLength");
             check(raf.getFD().valid(), "FD valid while open");
             check(raf.getChannel() != null && raf.getChannel().isOpen(), "channel open while open");
@@ -440,7 +463,7 @@ public class RandomAccessFileTest {
             raf = new RandomAccessFile(tmp, "rw");
             raf.writeBytes("0123456789");
             final RandomAccessFile fl = raf;
-            mustThrow(IOException.class, "Invalid argument",
+            mustThrowIoReason("Invalid argument",
                       () -> fl.setLength(-1), "setLength(-1)");
             raf.seek(8);
             raf.setLength(4);

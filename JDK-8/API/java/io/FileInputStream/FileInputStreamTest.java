@@ -247,8 +247,15 @@ public class FileInputStreamTest {
                     fis.skip(-5);
                     check(false, "FIS skip(negative) must throw");
                 } catch (IOException ioe) {
-                    check("Invalid argument".equals(ioe.getMessage()),
-                          "negative skip message: " + ioe.getMessage());
+                    // lseek 失败时消息就是 OS 的 errno 文本：POSIX 是
+                    // "Invalid argument"，Windows 是本地化系统消息。
+                    if (File.separatorChar == '/') {
+                        check("Invalid argument".equals(ioe.getMessage()),
+                              "negative skip message: " + ioe.getMessage());
+                    } else {
+                        check(ioe.getMessage() != null && !ioe.getMessage().isEmpty(),
+                              "negative skip message non-empty: " + ioe.getMessage());
+                    }
                 }
                 check(fis.read() == 1, "failed negative skip did not move position");
                 check(fis.skip(2) == 2 && fis.read() == 4, "skip(2) precise");

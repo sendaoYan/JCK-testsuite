@@ -292,7 +292,19 @@ public class FileTest {
             check(f.createNewFile(), "create for permissions");
             check(f.canRead(), "new file canRead");
             check(f.canWrite(), "new file canWrite");
-            check(!f.canExecute(), "new file !canExecute");
+            if (File.separatorChar == '/') {
+                check(!f.canExecute(), "new file !canExecute");
+            } else {
+                // Windows：java.io.File 只映射“只读”属性；对存在的文件
+                // checkAccess(READ/EXECUTE) 恒为 true，setReadable/setExecutable 是空操作
+                // （WinNTFileSystem.setPermission0 对 READ/EXECUTE 直接返回 enable）。
+                check(f.canExecute(), "Windows: existing file canExecute is always true");
+                check(!f.setReadable(false), "Windows: setReadable(false) returns false");
+                check(f.canRead(), "Windows: setReadable(false) does not revoke read (no-op)");
+                check(f.setReadable(true), "Windows: setReadable(true) returns true");
+                check(!f.setExecutable(false), "Windows: setExecutable(false) returns false");
+                check(f.canExecute(), "Windows: setExecutable(false) does not revoke execute (no-op)");
+            }
             check(f.setReadOnly(), "setReadOnly true");
             check(!f.canWrite(), "after setReadOnly canWrite false");
             check(f.canRead(), "after setReadOnly still readable");
@@ -301,20 +313,22 @@ public class FileTest {
             check(f.setWritable(false), "setWritable(false)");
             check(!f.canWrite(), "not writable");
             check(f.setWritable(true), "restore writable");
-            check(f.setReadable(false), "setReadable(false)");
-            check(!f.canRead(), "unreadable");
-            check(f.setReadable(true, true), "setReadable(true, ownerOnly=true)");
-            check(f.canRead(), "owner readable");
-            check(f.setReadable(false, false), "setReadable(false, ownerOnly=false)");
-            check(!f.canRead(), "ownerOnly=false clears every read bit");
-            check(f.setReadable(true), "restore readable");
-            check(f.setExecutable(true), "setExecutable(true)");
-            check(f.canExecute(), "executable");
-            check(f.setExecutable(false, true), "setExecutable(false, ownerOnly=true)");
-            check(!f.canExecute(), "owner bit cleared");
-            check(f.setExecutable(true, false), "setExecutable(true, ownerOnly=false)");
-            check(f.canExecute(), "all bits set");
-            check(f.setExecutable(false), "clear executable");
+            if (File.separatorChar == '/') {           // 读/执行位只有 POSIX 后端真正生效
+                check(f.setReadable(false), "setReadable(false)");
+                check(!f.canRead(), "unreadable");
+                check(f.setReadable(true, true), "setReadable(true, ownerOnly=true)");
+                check(f.canRead(), "owner readable");
+                check(f.setReadable(false, false), "setReadable(false, ownerOnly=false)");
+                check(!f.canRead(), "ownerOnly=false clears every read bit");
+                check(f.setReadable(true), "restore readable");
+                check(f.setExecutable(true), "setExecutable(true)");
+                check(f.canExecute(), "executable");
+                check(f.setExecutable(false, true), "setExecutable(false, ownerOnly=true)");
+                check(!f.canExecute(), "owner bit cleared");
+                check(f.setExecutable(true, false), "setExecutable(true, ownerOnly=false)");
+                check(f.canExecute(), "all bits set");
+                check(f.setExecutable(false), "clear executable");
+            }
 
             File missing = new File(d, "nope");
             check(!missing.canRead() && !missing.canWrite() && !missing.canExecute(),
