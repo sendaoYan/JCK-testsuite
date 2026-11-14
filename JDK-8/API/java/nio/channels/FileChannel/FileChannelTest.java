@@ -470,10 +470,27 @@ public class FileChannelTest {
                 check(Arrays.equals(Files.readAllBytes(file), new byte[] {1, 2, 3, 4, 77, 78}),
                       "second write also appended");
 
+                // Positional write in APPEND mode: the spec scopes append mode to
+                // *relative* writes ("each invocation of a relative write operation
+                // first advances the position to the end") and write(src, position)
+                // is documented as "starting at the given file position". Linux
+                // (O_APPEND + pwrite) nevertheless appends at the tail — a kernel
+                // quirk (pwrite(2) BUGS) — while Windows (WriteFile after an
+                // explicit seek) honors the position argument. Accept both platform
+                // representations; the position argument is not a spec guarantee.
+                boolean appendTail = System.getProperty("os.name", "")
+                        .toLowerCase().contains("linux");
                 ch.write(ByteBuffer.wrap(new byte[] {79}), 0);
-                check(ch.size() == 7, "positional write in APPEND mode extends at tail");
-                check(Arrays.equals(Files.readAllBytes(file), new byte[] {1, 2, 3, 4, 77, 78, 79}),
-                      "positional write's position argument ignored in APPEND mode (实测)");
+                byte[] afterPos = Files.readAllBytes(file);
+                if (appendTail) {
+                    check(ch.size() == 7, "positional write in APPEND mode extends at tail (Linux)");
+                    check(Arrays.equals(afterPos, new byte[] {1, 2, 3, 4, 77, 78, 79}),
+                          "positional write appended at the tail (Linux)");
+                } else {
+                    check(ch.size() == 6, "positional write honors position arg in APPEND mode (Windows)");
+                    check(Arrays.equals(afterPos, new byte[] {79, 2, 3, 4, 77, 78}),
+                          "positional write wrote at the given position (Windows)");
+                }
 
                 checkThrows(java.nio.channels.NonReadableChannelException.class,
                         () -> ch.read(ByteBuffer.allocate(1)),

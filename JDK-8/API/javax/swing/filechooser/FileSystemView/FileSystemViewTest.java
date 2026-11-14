@@ -124,8 +124,18 @@ public class FileSystemViewTest {
         check(parentOfTmp != null && java.nio.file.Files.isSameFile(
                 parentOfTmp.toPath(), tmp.getParentFile().toPath()),
               "getParentDirectory(tmp) is tmp's containing directory");
-        check(v.getParentDirectory(new File("/etc/hostname")) != null,
-              "getParentDirectory(plain file) non-null");
+        // getParentDirectory(plain file) must return the containing directory.
+        // Use a real, existing file: the Linux-only /etc/hostname cannot be
+        // resolved by the Windows shell (null parent for a nonexistent Unix path).
+        File plainProbe = File.createTempFile("jck-fsv", ".tmp");
+        try {
+            File plainParent = v.getParentDirectory(plainProbe);
+            check(plainParent != null && java.nio.file.Files.isSameFile(
+                    plainParent.toPath(), plainProbe.getParentFile().toPath()),
+                  "getParentDirectory(plain file) is the containing directory");
+        } finally {
+            plainProbe.delete();
+        }
         check(v.getFiles(tmp, true) != null, "getFiles returns an array");
 
         // hidden files: dot-prefixed names hidden on Unix
