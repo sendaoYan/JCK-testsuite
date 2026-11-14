@@ -134,6 +134,15 @@ public class ProcessHandleTest {
             || (java.io.File.separatorChar == '\\' && reported.equalsIgnoreCase(expected + ".exe"));
     }
 
+    /** True when the handle's command is a Java launcher (java/javaw). */
+    static boolean isJavaProcess(ProcessHandle h) {
+        return h.info().command()
+                .map(c -> {
+                    String n = c.toLowerCase();
+                    return n.endsWith("java.exe") || n.endsWith("javaw.exe") || n.endsWith("java");
+                }).orElse(false);
+    }
+
     /** True when the OS-reported account names the user running the JVM. */
     static boolean sameUser(String reported) {
         String me = System.getProperty("user.name");
@@ -263,8 +272,19 @@ public class ProcessHandleTest {
             check(me.children().anyMatch(c -> c.pid() == child.pid()), "children contains live child");
             check(me.descendants().anyMatch(c -> c.pid() == child.pid()), "descendants contains live child");
             check(h.children() != null && h.descendants() != null, "child handle streams non-null");
-            check(h.children().count() == 0, "sleeper has no children of its own");
-            check(h.descendants().count() == 0, "sleeper has no descendants");
+            if (java.io.File.separatorChar == '/') {
+                check(h.children().count() == 0, "sleeper has no children of its own");
+                check(h.descendants().count() == 0, "sleeper has no descendants");
+            } else {
+                // Windows attaches conhost.exe as a child of any console process
+                // (probed: a bare `java Sleeper` has one conhost.exe child and
+                // descendant). The structural contract still holds: the sleeper
+                // has no application (java) child or descendant.
+                check(h.children().noneMatch(ProcessHandleTest::isJavaProcess),
+                        "Windows sleeper children are only the console host");
+                check(h.descendants().noneMatch(ProcessHandleTest::isJavaProcess),
+                        "Windows sleeper descendants are only the console host");
+            }
             Optional<ProcessHandle> par = h.parent();
             check(par.isPresent(), "child parent present");
             check(par.get().equals(me), "child parent is current handle");

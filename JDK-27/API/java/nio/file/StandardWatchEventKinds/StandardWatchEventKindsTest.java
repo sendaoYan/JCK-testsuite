@@ -170,18 +170,28 @@ public class StandardWatchEventKindsTest {
             check(sawModify, "ENTRY_MODIFY delivered (ext4/inotify measured stable)");
 
             Files.delete(f);
-            java.nio.file.WatchKey delKey =
-                    ws.poll(5, java.util.concurrent.TimeUnit.SECONDS);
-            check(delKey == key, "delete signalled the same key");
+            // Windows delivers the removal in its own batch that may trail a
+            // leftover ENTRY_MODIFY (ReadDirectoryChangesW splits events), so
+            // poll repeatedly until ENTRY_DELETE is observed or the deadline
+            // expires. OVERFLOW carries no per-file context and is skipped.
             boolean sawDelete = false;
-            for (java.nio.file.WatchEvent<?> e : delKey.pollEvents())
-                if (e.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
-                    sawDelete = true;
-                    check("kinds.txt".equals(e.context().toString()),
-                          "ENTRY_DELETE context is the exact file name");
+            long delDeadline = System.nanoTime()
+                    + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+            while (!sawDelete && System.nanoTime() < delDeadline) {
+                java.nio.file.WatchKey delKey =
+                        ws.poll(2, java.util.concurrent.TimeUnit.SECONDS);
+                if (delKey == null) continue;
+                check(delKey == key, "delete signalled the same key");
+                for (java.nio.file.WatchEvent<?> e : delKey.pollEvents()) {
+                    if (e.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
+                        sawDelete = true;
+                        check("kinds.txt".equals(e.context().toString()),
+                              "ENTRY_DELETE context is the exact file name");
+                    }
                 }
+                check(delKey.reset(), "delete key re-armed");
+            }
             check(sawDelete, "ENTRY_DELETE delivered (must)");
-            delKey.reset();
         } finally {
             try { Files.deleteIfExists(dir.resolve("kinds.txt")); } catch (Exception ignore) { }
             Files.deleteIfExists(dir);
