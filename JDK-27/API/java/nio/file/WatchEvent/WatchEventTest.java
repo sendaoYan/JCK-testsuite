@@ -128,18 +128,27 @@ public class WatchEventTest {
             check(sawModify, "ENTRY_MODIFY observed (ext4/inotify measured stable)");
 
             Files.delete(f);
-            java.nio.file.WatchKey delKey =
-                    ws.poll(5, java.util.concurrent.TimeUnit.SECONDS);
-            check(delKey == key, "delete signalled the same key");
+            // Windows delivers the removal in its own batch that may trail a
+            // leftover ENTRY_MODIFY (ReadDirectoryChangesW splits events), so
+            // poll repeatedly until ENTRY_DELETE is observed or the deadline
+            // expires. OVERFLOW carries no per-file context and is skipped.
             boolean sawDelete = false;
-            for (WatchEvent<?> e : delKey.pollEvents())
-                if (e.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
-                    sawDelete = true;
-                    check("prec.txt".equals(e.context().toString()),
-                          "delete context exact file name");
+            long delDeadline = System.currentTimeMillis() + 10_000;
+            while (!sawDelete && System.currentTimeMillis() < delDeadline) {
+                java.nio.file.WatchKey delKey =
+                        ws.poll(2, java.util.concurrent.TimeUnit.SECONDS);
+                if (delKey == null) continue;
+                check(delKey == key, "delete signalled the same key");
+                for (WatchEvent<?> e : delKey.pollEvents()) {
+                    if (e.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
+                        sawDelete = true;
+                        check("prec.txt".equals(e.context().toString()),
+                              "delete context exact file name");
+                    }
                 }
+                check(delKey.reset(), "delete key re-armed");
+            }
             check(sawDelete, "ENTRY_DELETE observed (must)");
-            delKey.reset();
         } finally {
             try { Files.deleteIfExists(dir.resolve("prec.txt")); } catch (Exception ignore) { }
             Files.deleteIfExists(dir);

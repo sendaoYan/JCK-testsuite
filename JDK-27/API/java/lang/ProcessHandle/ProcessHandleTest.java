@@ -317,7 +317,12 @@ public class ProcessHandleTest {
             ProcessHandle.Info dead = h.info();
             check(dead != null, "info of exited process non-null");
             check(!dead.command().isPresent(), "command empty after exit");
-            check(!dead.user().isPresent(), "user empty after exit");
+            // user() after exit: the spec only promises an Optional<String> for the
+            // owning user, not that it empties after exit. Linux empties it (/proc
+            // entry gone) but Windows caches the username from creation and still
+            // reports it. Only assert the Linux emptiness, where it is stable.
+            if (java.io.File.separatorChar == '/')
+                check(!dead.user().isPresent(), "user empty after exit (Linux /proc gone)");
             check(!dead.startInstant().isPresent(), "startInstant empty after exit");
             check(!ProcessHandle.of(child.pid()).isPresent(), "of(exited pid) empty");
         } finally {

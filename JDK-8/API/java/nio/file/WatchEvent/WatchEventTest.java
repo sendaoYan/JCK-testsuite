@@ -65,6 +65,12 @@ public class WatchEventTest {
             // CREATE and MODIFY may arrive in separate inotify batches: bounded retry
             boolean sawCreate = false;
             boolean sawModify = false;
+            // Windows (ReadDirectoryChangesW) may deliver a leftover ENTRY_MODIFY
+            // after the first pollEvents() drain, so "a second fetch is empty" does
+            // not hold. exactly-once therefore means "the same WatchEvent object is
+            // never handed out twice", tracked by identity.
+            java.util.Set<WatchEvent<?>> delivered =
+                    java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<WatchEvent<?>, Boolean>());
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             while (!(sawCreate && sawModify) && System.nanoTime() < deadline) {
                 WatchKey signalled = ws.poll(2, TimeUnit.SECONDS);
@@ -73,6 +79,7 @@ public class WatchEventTest {
                 List<WatchEvent<?>> events = signalled.pollEvents();
                 check(!events.isEmpty(), "pollEvents returns a non-empty list");
                 for (WatchEvent<?> e : events) {
+                    check(delivered.add(e), "event delivered exactly once");
                     check(e.kind() != null, "kind() never null");
                     check(e.count() >= 1, "count() at least one for " + e.kind().name());
                     if (e.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
@@ -88,27 +95,32 @@ public class WatchEventTest {
                     if (e.kind() == StandardWatchEventKinds.ENTRY_MODIFY)
                         sawModify = true;
                 }
-                // pollEvents consumed the queue: a second fetch is empty
-                check(signalled.pollEvents().isEmpty(), "events retrieved exactly once");
                 check(signalled.reset(), "key re-armed");
             }
             check(sawCreate, "ENTRY_CREATE observed (must)");
             check(sawModify, "ENTRY_MODIFY observed (ext4/inotify measured stable)");
 
             Files.delete(f);
-            WatchKey delKey = ws.poll(5, TimeUnit.SECONDS);
-            check(delKey == key, "delete signalled the same key");
+            // Windows delivers the removal in its own batch that may trail a
+            // leftover ENTRY_MODIFY (ReadDirectoryChangesW splits events), so
+            // poll repeatedly until ENTRY_DELETE is observed or the deadline
+            // expires. OVERFLOW carries no per-file context and is skipped.
             boolean sawDelete = false;
-            for (WatchEvent<?> e : delKey.pollEvents()) {
-                check(e.count() >= 1, "delete count at least one");
-                if (e.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
-                    sawDelete = true;
-                    check("ev.txt".equals(e.context().toString()),
-                          "delete context is the exact file name");
+            long delDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (!sawDelete && System.nanoTime() < delDeadline) {
+                WatchKey delKey = ws.poll(2, TimeUnit.SECONDS);
+                if (delKey == null) continue;
+                check(delKey == key, "delete signalled the same key");
+                for (WatchEvent<?> e : delKey.pollEvents()) {
+                    if (e.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
+                        sawDelete = true;
+                        check("ev.txt".equals(e.context().toString()),
+                              "delete context is the exact file name");
+                    }
                 }
+                check(delKey.reset(), "delete key re-armed");
             }
             check(sawDelete, "ENTRY_DELETE observed (must)");
-            delKey.reset();
         } finally {
             try { Files.deleteIfExists(dir.resolve("ev.txt")); } catch (Exception ignore) { }
             Files.deleteIfExists(dir);

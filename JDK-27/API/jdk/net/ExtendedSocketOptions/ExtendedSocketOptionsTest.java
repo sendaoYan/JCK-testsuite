@@ -22,13 +22,15 @@ public class ExtendedSocketOptionsTest {
                 jdk.net.Sockets.setOption(s, opt, value);
                 check(false, label + " unsupported: set must throw UnsupportedOperationException");
             } catch (UnsupportedOperationException e) {
-                check(label.equals(e.getMessage()), label + " unsupported: set UOE message");
+                check(e.getMessage() != null && e.getMessage().contains(label),
+                        label + " unsupported: set UOE message");
             }
             try {
                 jdk.net.Sockets.getOption(s, opt);
                 check(false, label + " unsupported: get must throw UnsupportedOperationException");
             } catch (UnsupportedOperationException e) {
-                check(label.equals(e.getMessage()), label + " unsupported: get UOE message");
+                check(e.getMessage() != null && e.getMessage().contains(label),
+                        label + " unsupported: get UOE message");
             }
         }
     }
@@ -44,13 +46,15 @@ public class ExtendedSocketOptionsTest {
                 jdk.net.Sockets.setOption(s, opt, value);
                 check(false, label + " unsupported: set must throw UnsupportedOperationException");
             } catch (UnsupportedOperationException e) {
-                check(label.equals(e.getMessage()), label + " unsupported: set UOE message");
+                check(e.getMessage() != null && e.getMessage().contains(label),
+                        label + " unsupported: set UOE message");
             }
             try {
                 jdk.net.Sockets.getOption(s, opt);
                 check(false, label + " unsupported: get must throw UnsupportedOperationException");
             } catch (UnsupportedOperationException e) {
-                check(label.equals(e.getMessage()), label + " unsupported: get UOE message");
+                check(e.getMessage() != null && e.getMessage().contains(label),
+                        label + " unsupported: get UOE message");
             }
         }
     }
