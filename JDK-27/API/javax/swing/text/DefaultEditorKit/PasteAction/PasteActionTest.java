@@ -54,20 +54,32 @@ public class PasteActionTest {
             frame.pack();
             frame.setVisible(true);
 
+            // 剪贴板是进程外全局资源：并行跑用例（-conc:16）时其他用例会在我们
+            // setContents 与 paste 之间覆盖它，所以每次设置-粘贴-断言整体重试。
             Clipboard cb = Toolkit.getDefaultToolkit().getSystemClipboard();
-            cb.setContents(new StringSelection("Pasted"), null);
-
-            area.setCaretPosition(0);
-            ActionEvent evt = new ActionEvent(area, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.pasteAction);
-            action.actionPerformed(evt);
-            check("PastedBefore".equals(area.getText()), "paste inserts at caret");
+            boolean inserted = false;
+            for (int i = 0; i < 40 && !inserted; i++) {
+                area.setText("Before");
+                cb.setContents(new StringSelection("Pasted"), null);
+                area.setCaretPosition(0);
+                ActionEvent evt = new ActionEvent(area, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.pasteAction);
+                action.actionPerformed(evt);
+                inserted = "PastedBefore".equals(area.getText());
+                if (!inserted) sleepQuietly();
+            }
+            check(inserted, "paste inserts at caret");
 
             // paste replacing a selection
-            area.setText("ABCDEF");
-            area.select(1, 4); // replace "BCD"
-            cb.setContents(new StringSelection("X"), null);
-            action.actionPerformed(new ActionEvent(area, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.pasteAction));
-            check("AXEF".equals(area.getText()), "paste replaces selection");
+            boolean replaced = false;
+            for (int i = 0; i < 40 && !replaced; i++) {
+                area.setText("ABCDEF");
+                area.select(1, 4); // replace "BCD"
+                cb.setContents(new StringSelection("X"), null);
+                action.actionPerformed(new ActionEvent(area, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.pasteAction));
+                replaced = "AXEF".equals(area.getText());
+                if (!replaced) sleepQuietly();
+            }
+            check(replaced, "paste replaces selection");
 
             // paste is a no-op on non-editable component
             JTextArea ro = new JTextArea("Keep");
@@ -85,6 +97,11 @@ public class PasteActionTest {
         runOnEDT(PasteActionTest::testBlackBox);
         System.out.println("PASS (" + passed + " assertions)");
     }
+    static void sleepQuietly() {
+        try { Thread.sleep(100); }
+        catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+    }
+
     interface ThrowingRunnable { void run() throws Exception; }
     static void runOnEDT(ThrowingRunnable r) throws Exception {
         try {

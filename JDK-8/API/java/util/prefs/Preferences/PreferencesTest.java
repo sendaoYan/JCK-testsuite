@@ -163,12 +163,21 @@ public class PreferencesTest {
             check("v2".equals(n.get("k", "d")), "put overwrites");
             n.remove("k");
             check("d".equals(n.get("k", "d")), "remove restores default");
-            // keys() 有序（TreeMap 语义）
+            // keys() 的返回顺序未在规范中规定：Linux 文件后端恰好按字典序，
+            // Windows 注册表后端按注册表枚举顺序。只校验集合内容（长度、去重后
+            // 排序相等），不依赖顺序。
             n.clear();
             n.put("z", "1");
             n.put("a", "2");
             n.put("m", "3");
-            check(java.util.Arrays.equals(n.keys(), new String[] {"a", "m", "z"}), "keys() sorted");
+            String[] ks = n.keys();
+            check(ks.length == 3, "keys() length 3");
+            String[] ksSorted = ks.clone();
+            java.util.Arrays.sort(ksSorted);
+            check(java.util.Arrays.equals(ksSorted, new String[] {"a", "m", "z"}),
+                  "keys() contains exactly a,m,z");
+            check(new java.util.HashSet<String>(java.util.Arrays.asList(ks)).size() == ks.length,
+                  "keys() has no duplicates");
             // clear 清空全部
             n.clear();
             check(n.keys().length == 0, "clear empties node");

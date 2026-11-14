@@ -23,6 +23,18 @@ public class JFileChooserTest {
 
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    // jtreg may hand us an 8.3 short TEMP path (C:\Users\YANSEN~1\...), while
+    // JFileChooser normalises directories to their long form. Compare
+    // canonical paths (falling back to absolute if canonicalisation fails) so
+    // the same directory isn't rejected just because its spelling differs.
+    static File canonical(File f) {
+        try {
+            return f.getCanonicalFile();
+        } catch (java.io.IOException e) {
+            return f.getAbsoluteFile();
+        }
+    }
+
     static Throwable checkThrows(Class<? extends Throwable> ex, Runnable r) {
         try { r.run(); } catch (Throwable t) {
             if (!ex.isInstance(t)) throw new AssertionError("expected " + ex.getSimpleName() + " got " + t);
@@ -119,20 +131,20 @@ public class JFileChooserTest {
         File initial = d.getCurrentDirectory();
         d.setCurrentDirectory(tmp);
         check(d.getCurrentDirectory() != null
-              && d.getCurrentDirectory().getAbsoluteFile().equals(tmp.getAbsoluteFile()),
+              && canonical(d.getCurrentDirectory()).equals(canonical(tmp)),
               "setCurrentDirectory roundtrip");
         d.setCurrentDirectory(null);
         check(d.getCurrentDirectory() != null
-              && d.getCurrentDirectory().getAbsoluteFile().equals(initial.getAbsoluteFile()),
+              && canonical(d.getCurrentDirectory()).equals(canonical(initial)),
               "setCurrentDirectory(null) falls back to home");
         JFileChooser d2 = new JFileChooser(tmp);
         check(d2.getCurrentDirectory() != null
-              && d2.getCurrentDirectory().getAbsoluteFile().equals(tmp.getAbsoluteFile()),
+              && canonical(d2.getCurrentDirectory()).equals(canonical(tmp)),
               "ctor(File) preserves directory");
         FileSystemView fsv = FileSystemView.getFileSystemView();
         JFileChooser d3 = new JFileChooser(tmp, fsv);
         check(d3.getCurrentDirectory() != null
-              && d3.getCurrentDirectory().getAbsoluteFile().equals(tmp.getAbsoluteFile()),
+              && canonical(d3.getCurrentDirectory()).equals(canonical(tmp)),
               "ctor(File,FSV) preserves directory");
         check(d3.getFileSystemView() == fsv, "ctor(File,FSV) preserves FSV");
 

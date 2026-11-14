@@ -1179,7 +1179,11 @@ public class ThreadTest {
         long start = System.nanoTime();
         Thread.sleep(20);
         long ms = (System.nanoTime() - start) / 1_000_000L;
-        check(ms >= 20, "sleep blocks at least requested ms");
+        // javadoc: sleep is "subject to the precision and accuracy of system
+        // timers"; Windows timer granularity is ~15.6ms, so a 20ms request may
+        // return slightly early. Allow 5ms tolerance while still requiring
+        // approximately the requested delay.
+        check(ms >= 20 - 5, "sleep blocks at least close to requested ms");
     }
 
     static void testInterruptFlag() {

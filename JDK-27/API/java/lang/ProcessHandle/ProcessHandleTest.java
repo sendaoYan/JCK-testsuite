@@ -243,7 +243,9 @@ public class ProcessHandleTest {
         long pid = ProcessHandle.current().pid();
         check(ProcessHandle.allProcesses().anyMatch(h -> h.pid() == pid),
               "allProcesses sees the current process");
-        check(ProcessHandle.allProcesses().allMatch(h -> h.pid() > 0), "all reported pids positive");
+        // Windows 的 System Idle Process 以 pid 0 出现在进程表里，所以只要求非负；
+        // 真正的约定是每个句柄都带一个可读的 pid。
+        check(ProcessHandle.allProcesses().allMatch(h -> h.pid() >= 0), "all reported pids non-negative");
         check(ProcessHandle.allProcesses().count() >= 1, "allProcesses non-empty");
         // 单快照内统计（两次 allProcesses() 是两个独立快照，忙机器上进程增减会导致计数漂移）
         List<Long> pids = ProcessHandle.allProcesses()

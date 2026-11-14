@@ -127,7 +127,14 @@ public class AudioSystemTest {
         check(fromFile.getType() == javax.sound.sampled.AudioFileFormat.Type.WAVE && fromFile.getFrameLength() == 2, "File overload parse");
         // line acquisition: software devices headless
         javax.sound.sampled.AudioFormat lineFmt = new javax.sound.sampled.AudioFormat(44100f, 16, 2, true, false);
-        check(javax.sound.sampled.AudioSystem.isLineSupported(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, lineFmt)), "16-bit stereo source line supported");
+        javax.sound.sampled.DataLine.Info stereoInfo =
+                new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class, lineFmt);
+        // Probe the host's line capability before asserting: a Windows server
+        // without an audio device reports no SourceDataLine at all.
+        if (!javax.sound.sampled.AudioSystem.isLineSupported(stereoInfo)) {
+            throw new jtreg.SkippedException("no audio device/line available");
+        }
+        check(javax.sound.sampled.AudioSystem.isLineSupported(stereoInfo), "16-bit stereo source line supported");
         try {
             javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) javax.sound.sampled.AudioSystem.getLine(new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false)));
             check(clip != null && !clip.isOpen(), "software Clip acquired closed (skip reason: no sound card needed)");

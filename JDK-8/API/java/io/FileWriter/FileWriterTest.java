@@ -5,7 +5,7 @@
  *          write(String,off,len) region, flush. ASCII content keeps the
  *          default-charset behavior deterministic (JDK 8 has no Charset ctor).
  *          Deepened (contract level): ctor negatives (null NPE, missing-parent FNFE
- *          "No such file or directory", directory FNFE "Is a directory"),
+ *          and directory FNFE carrying a platform OS reason text),
  *          FileDescriptor ctor, closed matrix ("Stream closed"), truncate-vs-append
  *          both ctors, write bounds (NPE/IOOBE/StringIndexOOB), write(int) low 16 bits,
  *          flush visibility, char-by-char writes, reopen semantics (ASCII only:

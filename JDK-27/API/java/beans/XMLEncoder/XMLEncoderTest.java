@@ -447,9 +447,11 @@ public class XMLEncoderTest {
         check(fback.count == 9, "public field round-trip");
     }
 
-    static Object decode(String xml) {
+    static Object decode(String xml) throws java.io.UnsupportedEncodingException {
+        // encode() produces UTF-8 (declared encoding="UTF-8"); decode with the
+        // same charset rather than the platform default (GBK on zh_CN Windows).
         java.beans.XMLDecoder dec = new java.beans.XMLDecoder(
-                new java.io.ByteArrayInputStream(xml.getBytes()));
+                new java.io.ByteArrayInputStream(xml.getBytes("UTF-8")));
         try { return dec.readObject(); } finally { dec.close(); }
     }
 

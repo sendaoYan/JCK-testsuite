@@ -33,6 +33,11 @@ public class TargetDataLineTest {
         try {
             javax.sound.sampled.AudioFormat fmt = new javax.sound.sampled.AudioFormat(8000f, 8, 1, true, false);
             javax.sound.sampled.DataLine.Info ti = new javax.sound.sampled.DataLine.Info(javax.sound.sampled.TargetDataLine.class, fmt);
+            // Probe first: a Windows server with no audio device has no
+            // capture line, which is a host capability gap, not a bug.
+            if (!javax.sound.sampled.AudioSystem.isLineSupported(ti)) {
+                throw new jtreg.SkippedException("no audio device/line available");
+            }
             check(javax.sound.sampled.AudioSystem.isLineSupported(ti), "capture line supported by software device");
             javax.sound.sampled.TargetDataLine tdl = (javax.sound.sampled.TargetDataLine) javax.sound.sampled.AudioSystem.getLine(ti);
             check(tdl != null && !tdl.isOpen(), "acquired closed");

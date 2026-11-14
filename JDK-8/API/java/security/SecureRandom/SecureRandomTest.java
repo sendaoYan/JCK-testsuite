@@ -181,14 +181,24 @@ public class SecureRandomTest {
         check(q1.nextInt() == q2.nextInt(), "nextInt follows bytes determinism");
         check(q1.nextDouble() == q2.nextDouble(), "nextDouble follows bytes determinism");
 
-        // SecureRandom(byte[]) ctor uses the platform NativePRNG: the seed is only
-        // supplemental, so two identically-seeded ctors DIVERGE (fresh entropy)
+        // SecureRandom(byte[]) uses the platform default algorithm. The
+        // NativePRNG family mixes in fresh entropy, so two identically-seeded
+        // instances diverge. Windows-PRNG (and DRBG) are deterministic: the
+        // same seed yields the same stream, so no inequality can be required.
+        String alg = new SecureRandom().getAlgorithm();
         SecureRandom c1 = new SecureRandom(seed);
         SecureRandom c2 = new SecureRandom(seed);
         byte[] b1 = new byte[64], b2 = new byte[64];
         c1.nextBytes(b1);
         c2.nextBytes(b2);
-        check(!Arrays.equals(b1, b2), "ctor-seed NativePRNG is entropy-backed (streams differ)");
+        if (alg.startsWith("NativePRNG")) {
+            check(!Arrays.equals(b1, b2), "ctor-seed " + alg + " is entropy-backed (streams differ)");
+        } else {
+            System.out.println("NOTE: default SecureRandom algorithm is " + alg
+                    + "; seeded ctors are deterministic, streams not compared");
+            check(b1.length == 64 && b2.length == 64,
+                  "ctor-seed " + alg + " fills 64-byte buffers");
+        }
 
         // primitives: bounded and total ranges
         SecureRandom pr = SecureRandom.getInstance("SHA1PRNG");

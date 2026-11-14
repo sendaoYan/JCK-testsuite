@@ -35,7 +35,7 @@
 7. **autoFlush 探针计数**：write('a')=0、write('\n')=+1、write(byte[])=+1、println 增加；false 全 0 直到显式 flush（print(String) 在 autoFlush=true 时经编码器回调也会触发底层 flush——实现行为，不断言）。
 8. **构造矩阵（String 名 + Charset 双轨）**：(File,String)/(String,String) 精确内容与 UTF-16BE 原始字节（00 63 00 73...）；重开截断；charset 先于文件打开校验（(File,"Bogus") UEE 且文件未创建）。
 9. **JDK-27 特有成员（javap 复核后直测）**：`charset()` 返回构造 Charset（UTF-8/ISO-8859-1 实测）；`(OutputStream,boolean,Charset)` 编码验证（'中'→E4 B8 AD）；`(File,Charset)`/`(String,Charset)` UTF-16BE 精确字节；三者 + write(byte[])/writeBytes/charset() 以 getDeclaredMethod/getConstructor 白盒断定声明存在。
-10. **负例矩阵（实测）**：(OutputStream) null → NPE "Null output stream"；(OS,b,(String)null) → NPE "charsetName"；(OS,b,"Bogus") → UEE "Bogus"；**(OS,b,(Charset)null) → NPE "charset"**（JDK-27 特有路径）；(String)/(File) null → NPE；缺父目录 → FNFE "(No such file or directory)"；write 越界 → IOOBE；write/print(byte[]/char[]) null → NPE。
+10. **负例矩阵（实测）**：(OutputStream) null → NPE "Null output stream"；(OS,b,(String)null) → NPE "charsetName"；(OS,b,"Bogus") → UEE "Bogus"；**(OS,b,(Charset)null) → NPE "charset"**（JDK-27 特有路径）；(String)/(File) null → NPE；缺父目录 → FNFE 平台 OS 原因文本（随 OS/locale 本地化）；write 越界 → IOOBE；write/print(byte[]/char[]) null → NPE。
 
 ### 版本差异（相对 JDK-8 基线）
 新增 charset()/writeBytes(byte[])（JDK 14+）/write(byte[]) 覆写声明/(OutputStream,boolean,Charset)/(File,Charset)/(String,Charset)（JDK 10+）；NPE "charset"（Charset 路径）vs "charsetName"（String 路径）；IOOBE 消息从 null 变为 "Range [...]" 格式；println 的编码器回调 flush 批次计数不同（JDK-8=5 vs JDK-27=4，故两侧都只断言增量不断言精确总数）。

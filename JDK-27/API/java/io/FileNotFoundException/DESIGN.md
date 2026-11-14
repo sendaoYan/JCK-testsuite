@@ -33,8 +33,8 @@
 3. testMessageContent（errno 后缀精确断言）
 
 ### 负例与精确异常（操作 → 类型 → 双侧一致 message 子串）
-- 不存在路径 → message 含「(No such file or directory)」
-- 目录当文件读 → 含「(Is a directory)」
+- 不存在路径 → message 含「(平台 OS 原因文本)」（随 OS/locale 本地化）
+- 目录当文件读 → 含「(平台 OS 原因文本)」
 - message 以路径开头；rw 模式可创建成功（对照组不抛）
 
 ### JDK-8 vs JDK-27 差异

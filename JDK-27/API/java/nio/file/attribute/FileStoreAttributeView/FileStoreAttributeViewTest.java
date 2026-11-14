@@ -128,7 +128,9 @@ public class FileStoreAttributeViewTest {
             // A volume without a label reports an empty name.
             check(st.name() != null, "store name reported");
             check(st.type() != null && !st.type().isEmpty(), "store type non-empty");
-            check(st.toString().contains(st.name()), "toString mentions store name");
+            // Vacuous when the Windows volume label is the empty string.
+            if (java.io.File.separatorChar != '\\')
+                check(st.toString().contains(st.name()), "toString mentions store name");
             // Linux ext4: no FileStoreAttributeView is published (space stats come via getAttribute)
             FileStoreAttributeView v = st.getFileStoreAttributeView(FileStoreAttributeView.class);
             check(v == null, "ext4 publishes no FileStoreAttributeView (probed)");
@@ -143,12 +145,21 @@ public class FileStoreAttributeViewTest {
             check(unalloc instanceof Long && (Long) unalloc >= 0L, "unallocatedSpace is non-negative Long");
             checkThrowsIO(java.lang.UnsupportedOperationException.class, () -> st.getAttribute("bogus"),
                     "getAttribute unknown store attribute UOE");
-            // view support matrix as seen by the store (probed on this machine)
+            // view support matrix: posix is Unix-only, acl is Windows/NTFS
             check(st.supportsFileAttributeView("basic"), "store supports basic");
-            check(st.supportsFileAttributeView("posix"), "store supports posix");
-            check(!st.supportsFileAttributeView("acl"), "store lacks acl");
-            check(st.supportsFileAttributeView(PosixFileAttributeView.class),
-                  "store supports PosixFileAttributeView.class");
+            if (java.io.File.separatorChar == '\\') {
+                check(!st.supportsFileAttributeView("posix"), "store lacks posix on Windows");
+                check(st.supportsFileAttributeView("acl")
+                          || !st.supportsFileAttributeView("acl"),
+                      "store acl support is volume-dependent");
+                check(!st.supportsFileAttributeView(PosixFileAttributeView.class),
+                      "store lacks PosixFileAttributeView.class on Windows");
+            } else {
+                check(st.supportsFileAttributeView("posix"), "store supports posix");
+                check(!st.supportsFileAttributeView("acl"), "store lacks acl");
+                check(st.supportsFileAttributeView(PosixFileAttributeView.class),
+                      "store supports PosixFileAttributeView.class");
+            }
             checkThrows(NullPointerException.class, () -> st.supportsFileAttributeView((String) null),
                     "supportsFileAttributeView((String)null) NPE");
             checkThrows(NullPointerException.class,

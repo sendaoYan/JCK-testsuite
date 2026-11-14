@@ -91,7 +91,7 @@ public class MulticastChannelTest {
         InetAddress group = InetAddress.getByName("239.255.16.1");
         try (DatagramChannel dc = DatagramChannel.open(StandardProtocolFamily.INET)) {
             dc.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            dc.bind(new InetSocketAddress(0)); // wildcard: Windows rejects a group address
             MulticastChannel mc = dc;
             MembershipKey key = mc.join(group, nif);
             check(key != null, "join returns a membership key");
@@ -119,7 +119,10 @@ public class MulticastChannelTest {
         try (DatagramChannel rx = DatagramChannel.open(StandardProtocolFamily.INET);
              DatagramChannel tx = DatagramChannel.open(StandardProtocolFamily.INET)) {
             rx.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            rx.bind(new InetSocketAddress(group, 0));
+            // Wildcard bind: multicast reception is driven by the membership;
+            // binding the unicast interface address would not match group
+            // traffic, and Windows rejects binding the group address itself.
+            rx.bind(new InetSocketAddress(0));
             MulticastChannel mc = rx;
             mc.join(group, nif);
             rx.configureBlocking(false);
@@ -150,7 +153,7 @@ public class MulticastChannelTest {
         InetAddress src = InetAddress.getByName("127.0.0.1");
         try (DatagramChannel dc = DatagramChannel.open(StandardProtocolFamily.INET)) {
             dc.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            dc.bind(new InetSocketAddress(0)); // wildcard: Windows rejects a group address
             MulticastChannel mc = dc;
             MembershipKey any = mc.join(group, nif);
             // any-source membership + source-specific join for the same group -> IllegalStateException
@@ -166,7 +169,7 @@ public class MulticastChannelTest {
         }
         try (DatagramChannel dc = DatagramChannel.open(StandardProtocolFamily.INET)) {
             dc.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            dc.bind(new InetSocketAddress(0)); // wildcard: Windows rejects a group address
             MulticastChannel mc = dc;
             MembershipKey key = mc.join(group, nif);
             check(key.isValid(), "valid before close");

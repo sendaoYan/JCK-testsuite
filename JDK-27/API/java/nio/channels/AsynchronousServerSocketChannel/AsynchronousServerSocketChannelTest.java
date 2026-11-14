@@ -264,8 +264,14 @@ public class AsynchronousServerSocketChannelTest {
                 check(((InetSocketAddress) accepted.getLocalAddress()).getPort() == addr.getPort(),
                       "accepted local port equals server port");
                 check(accepted.getRemoteAddress() != null, "accepted remote address known");
-                check(accepted.getRemoteAddress().equals(client.getLocalAddress()),
-                      "accepted remote is the client local address");
+                // Windows 双栈客户端把自己的本地地址报成通配 [::]:port，而服务端看到的
+                // 仍是具体的 127.0.0.1:port：端口必须一致，本地地址为通配时只比端口。
+                InetSocketAddress acceptedRemote = (InetSocketAddress) accepted.getRemoteAddress();
+                InetSocketAddress clientLocal = (InetSocketAddress) client.getLocalAddress();
+                check(acceptedRemote.getPort() == clientLocal.getPort(),
+                      "accepted remote port equals client local port");
+                check(clientLocal.getAddress().isAnyLocalAddress() || acceptedRemote.equals(clientLocal),
+                      "accepted remote is the client local address (wildcard local on Windows)");
                 check(accepted.provider() == server.provider(),
                       "accepted channel inherits the server provider");
                 // one byte round trip proves the accepted pair works

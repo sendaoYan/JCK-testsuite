@@ -187,7 +187,7 @@ public class FileNotFoundExceptionTest {
         check("r".equals(rc.getCause().getMessage()), "cause survives round-trip");
     }
 
-    // ---- message content contract: path + errno suffix (实测双侧一致) ----
+    // ---- message content contract: path + OS reason suffix (原因文本随 OS/locale 变化) ----
     static void testMessageContent() throws Exception {
         File base = new File(System.getProperty("java.io.tmpdir"));
         File missing = new File(base, "fnfe-deep-" + System.nanoTime() + ".dat");
@@ -197,31 +197,22 @@ public class FileNotFoundExceptionTest {
         } catch (FileNotFoundException fnfe) {
             check(fnfe.getMessage().startsWith(missing.getPath()),
                   "message starts with the offending path");
-            // The suffix is the OS strerror, which is localized (a zh_CN
-            // Windows reports 系统找不到指定的文件); require the "(reason)"
-            // shape and the English text only where the C locale supplies it.
+            // 后缀是 OS strerror 文本，随默认 locale 本地化（zh_CN Windows 为
+            // “系统找不到指定的文件。”），只断言 "(OS reason)" 结构，不锁英文措辞。
             check(fnfe.getMessage().matches(".*\\(.+\\)$"),
                   "missing file carries an OS reason suffix: " + fnfe.getMessage());
-            if (!System.getProperty("os.name").startsWith("Windows")) {
-                check(fnfe.getMessage().contains("(No such file or directory)"),
-                      "missing file errno suffix on POSIX: " + fnfe.getMessage());
-            }
             check(fnfe.getMessage().equals(fnfe.getLocalizedMessage()),
                   "getLocalizedMessage identical for platform messages");
             check(fnfe.toString().startsWith("java.io.FileNotFoundException: " + missing.getPath()),
                   "toString carries path");
         }
-        // directory opened for reading reports (Is a directory)
+        // 目录当文件打开：消息形如 "<path> (<OS reason>)"，原因文本随 OS/locale 本地化。
         try {
             new FileInputStream(base);
             check(false, "directory open must throw");
         } catch (FileNotFoundException fnfe) {
             check(fnfe.getMessage().matches(".*\\(.+\\)$"),
-                  "directory errno suffix shape: " + fnfe.getMessage());
-            if (!System.getProperty("os.name").startsWith("Windows")) {
-                check(fnfe.getMessage().contains("(Is a directory)"),
-                      "directory errno suffix on POSIX: " + fnfe.getMessage());
-            }
+                  "directory OS reason suffix shape: " + fnfe.getMessage());
         }
         // write into a missing parent directory
         File orphan = new File(base, "fnfe-orphan-" + System.nanoTime() + "/child.txt");
@@ -238,8 +229,9 @@ public class FileNotFoundExceptionTest {
             new RandomAccessFile(missing, "r");
             check(false, "RAF(r) missing must throw");
         } catch (FileNotFoundException fnfe) {
-            check(fnfe.getMessage().contains("(No such file or directory)"),
-                  "RAF errno suffix: " + fnfe.getMessage());
+            check(fnfe.getMessage().contains(missing.getPath())
+                      && fnfe.getMessage().matches(".*\\(.+\\)$"),
+                  "RAF missing path carries path + OS reason: " + fnfe.getMessage());
         }
         // contrast: "rw" creates the file instead of throwing
         File created = new File(base, "fnfe-rw-" + System.nanoTime() + ".dat");

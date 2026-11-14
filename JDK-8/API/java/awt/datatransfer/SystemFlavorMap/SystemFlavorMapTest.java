@@ -136,7 +136,15 @@ public class SystemFlavorMapTest {
         check(mutated.contains(java.awt.datatransfer.DataFlavor.stringFlavor), "addFlavorForUnencodedNative visible");
         sfm.setFlavorsForNative("MY_NATIVE_X", new java.awt.datatransfer.DataFlavor[0]);
         check(ft.getFlavorsForNative("MY_NATIVE_X").isEmpty(), "setFlavorsForNative empty clears mapping");
-        check(ft.getFlavorsForNative("STRING").size() > 0, "STRING mapping unaffected");
+        // "STRING" is an X11 native absent on Windows; use a native this host
+        // actually advertises for stringFlavor (orig) instead.
+        if (orig.isEmpty()) {
+            System.out.println("NOTE: no native mapping for stringFlavor; skip unaffected-native assertion");
+        } else {
+            String probeNative = orig.get(0);
+            check(ft.getFlavorsForNative(probeNative).size() > 0,
+                  "native mapping unaffected [" + probeNative + "]");
+        }
         // NPE for null arguments on mutation methods
         boolean npe1 = false, npe2 = false, npe3 = false, npe4 = false;
         try { sfm.addUnencodedNativeForFlavor(null, "n"); } catch (NullPointerException x) { npe1 = true; }

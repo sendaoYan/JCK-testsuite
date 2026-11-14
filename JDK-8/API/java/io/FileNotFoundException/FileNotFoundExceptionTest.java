@@ -27,6 +27,13 @@ public class FileNotFoundExceptionTest {
         passed++;
     }
 
+    // 平台消息形如 "<path> (<OS 原因>)"；原因文本随 OS/strerror 与默认 locale 变化
+    // （zh_CN Windows 下是中文），只锁结构与路径，不锁英文措辞。
+    static boolean hasOsReason(String msg, String path) {
+        return msg != null && (path == null || msg.contains(path))
+                && msg.lastIndexOf('(') > 0 && msg.trim().endsWith(")");
+    }
+
     static void testBlackBox() throws Exception {
         // 1. constructors
         check(new FileNotFoundException().getMessage() == null, "no-arg message null");
@@ -181,7 +188,7 @@ public class FileNotFoundExceptionTest {
         } catch (FileNotFoundException fnfe) {
             check(fnfe.getMessage().startsWith(missing.getPath()),
                   "message starts with the offending path");
-            check(fnfe.getMessage().contains("(No such file or directory)"),
+            check(hasOsReason(fnfe.getMessage(), missing.getPath()),
                   "missing file errno suffix: " + fnfe.getMessage());
             check(fnfe.getMessage().equals(fnfe.getLocalizedMessage()),
                   "getLocalizedMessage identical for platform messages");
@@ -193,7 +200,7 @@ public class FileNotFoundExceptionTest {
             new FileInputStream(base);
             check(false, "directory open must throw");
         } catch (FileNotFoundException fnfe) {
-            check(fnfe.getMessage().contains("(Is a directory)"),
+            check(hasOsReason(fnfe.getMessage(), base.getPath()),
                   "directory errno suffix: " + fnfe.getMessage());
         }
         // write into a missing parent directory
@@ -202,8 +209,7 @@ public class FileNotFoundExceptionTest {
             new FileOutputStream(orphan);
             check(false, "orphan path write must throw");
         } catch (FileNotFoundException fnfe) {
-            check(fnfe.getMessage().contains(orphan.getPath())
-                      && fnfe.getMessage().contains("(No such file or directory)"),
+            check(hasOsReason(fnfe.getMessage(), orphan.getPath()),
                   "orphan write carries path + errno: " + fnfe.getMessage());
         }
         // RandomAccessFile "r" on missing path reuses the same exception type
@@ -211,7 +217,7 @@ public class FileNotFoundExceptionTest {
             new RandomAccessFile(missing, "r");
             check(false, "RAF(r) missing must throw");
         } catch (FileNotFoundException fnfe) {
-            check(fnfe.getMessage().contains("(No such file or directory)"),
+            check(hasOsReason(fnfe.getMessage(), missing.getPath()),
                   "RAF errno suffix: " + fnfe.getMessage());
         }
         // contrast: "rw" creates the file instead of throwing

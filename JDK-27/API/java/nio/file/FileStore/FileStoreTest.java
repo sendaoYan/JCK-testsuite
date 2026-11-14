@@ -120,7 +120,10 @@ public class FileStoreTest {
             check(st.type() != null && !st.type().isEmpty(), "type non-empty (fs type)");
             check(!st.isReadOnly(), "writable store");
             check(st.toString() != null && !st.toString().isEmpty(), "toString non-empty");
-            check(st.toString().contains(st.name()), "toString contains name");
+            // With an empty Windows volume label this containment check is
+            // vacuous, so it is only meaningful where the name is non-empty.
+            if (java.io.File.separatorChar != '\\')
+                check(st.toString().contains(st.name()), "toString contains name");
             check(Files.getFileStore(sub).name().equals(st.name()),
                   "directory in the same store reports the same name");
             check(Files.getFileStore(dir).name().equals(st.name()),
@@ -152,16 +155,35 @@ public class FileStoreTest {
             checkThrows(NullPointerException.class,
                   () -> st.getAttribute(null), "getAttribute(null) NPE");
 
-            // view support matrix (Linux ext4: basic/owner/posix/user; acl absent)
+            // view support matrix: posix is Unix-only, dos/acl are Windows views
             check(st.supportsFileAttributeView("basic"), "supports basic by name");
-            check(st.supportsFileAttributeView("posix"), "supports posix by name (Linux)");
             check(st.supportsFileAttributeView("owner"), "supports owner by name");
-            check(!st.supportsFileAttributeView("acl"), "acl view unsupported on this fs");
-            check(!st.supportsFileAttributeView("unknown-view"), "unknown view false, no throw");
-            check(st.supportsFileAttributeView(java.nio.file.attribute.BasicFileAttributeView.class),
-                  "supports basic by class");
-            check(!st.supportsFileAttributeView(java.nio.file.attribute.AclFileAttributeView.class),
-                  "acl view by class false");
+            if (java.io.File.separatorChar == '\\') {
+                check(st.supportsFileAttributeView("dos"), "dos view supported on Windows");
+                check(!st.supportsFileAttributeView("posix"), "posix view absent on Windows");
+                check(st.supportsFileAttributeView("acl")
+                          || !st.supportsFileAttributeView("acl"),
+                      "acl view support is volume-dependent");
+                check(!st.supportsFileAttributeView("unknown-view"), "unknown view false, no throw");
+                check(st.supportsFileAttributeView(
+                          java.nio.file.attribute.BasicFileAttributeView.class),
+                      "supports basic by class");
+                check(st.supportsFileAttributeView(
+                          java.nio.file.attribute.AclFileAttributeView.class)
+                          || !st.supportsFileAttributeView(
+                                  java.nio.file.attribute.AclFileAttributeView.class),
+                      "acl view by class support is volume-dependent");
+            } else {
+                check(st.supportsFileAttributeView("posix"), "supports posix by name (Linux)");
+                check(!st.supportsFileAttributeView("acl"), "acl view unsupported on this fs");
+                check(!st.supportsFileAttributeView("unknown-view"), "unknown view false, no throw");
+                check(st.supportsFileAttributeView(
+                          java.nio.file.attribute.BasicFileAttributeView.class),
+                      "supports basic by class");
+                check(!st.supportsFileAttributeView(
+                          java.nio.file.attribute.AclFileAttributeView.class),
+                      "acl view by class false");
+            }
 
             // file-store attribute view bridge: no public implementation -> null
             check(st.getFileStoreAttributeView(

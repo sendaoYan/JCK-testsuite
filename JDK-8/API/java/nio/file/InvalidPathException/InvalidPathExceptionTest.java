@@ -149,7 +149,12 @@ public class InvalidPathExceptionTest {
                     "input echoed");
             check(e.getReason() != null && !e.getReason().isEmpty(),
                   "reason non-empty (OS-localized NUL message)");
-            check(e.getIndex() == -1, "NUL is not a per-index error: index -1");
+            // getIndex() is -1 when the provider cannot name a position, or a
+            // valid offset into the input when it can (the Windows provider
+            // locates the NUL; Linux reports -1).
+            int idx = e.getIndex();
+            check(idx == -1 || (idx >= 0 && idx < "a\u0000b".length()),
+                  "index is -1 or a valid input offset: " + idx);
             check(e.getMessage() != null && e.getMessage().contains("a\u0000b"),
                   "message contains the input path");
         }

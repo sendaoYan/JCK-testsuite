@@ -5,7 +5,7 @@
  *          EOF, FileNotFoundException for a missing file. ASCII content keeps
  *          the default-charset behavior deterministic (JDK 8 has no Charset ctor).
  *          Deepened (contract level): ctor negatives (null NPE, directory FNFE
- *          "Is a directory", missing FNFE "No such file or directory" with path),
+ *          with a platform OS reason text, missing FNFE with path + OS reason),
  *          FileDescriptor ctor via FileInputStream FD, closed-state matrix
  *          ("Stream closed"), read bounds, empty file, mixed single/bulk/offset reads,
  *          skip semantics, byte-level read-back via FileOutputStream (ASCII only:

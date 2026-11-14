@@ -128,6 +128,12 @@ $label = if ($env:JCK_LABEL) { ($env:JCK_LABEL -replace '[^A-Za-z0-9.+-]', '_') 
          elseif ($JvmArgs.Count -eq 0) { "baseline" }
          else { (($JvmArgs -join '+') -replace '[^A-Za-z0-9.+-]', '_') }
 if (-not $label) { $label = "baseline" }
+# Optional round tag so repeated sweeps keep their own result dirs instead of
+# overwriting the previous round (launch-sweep.ps1 sets JCK_PREFIX).
+if ($env:JCK_PREFIX) {
+    $prefix = ($env:JCK_PREFIX -replace '[^A-Za-z0-9.+-]', '_')
+    if ($prefix) { $label = "$prefix-$label" }
+}
 
 $trees = @(
     @{ tag = "jdk8";  jdk = $JDK8;  dir = "JDK-8" },

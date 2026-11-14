@@ -60,7 +60,7 @@
 ### 新增维度清单
 1. **构造 null 矩阵**：name null NPE、File null NPE、mode null NPE（两个构造器各测）；(String,String) 与 (File,String) 等价（length/pointer/首字节）。
 2. **近失模式**："rw "、"rwS"、"RWS"、"r ws"、"rwsx"、"rws " 全部 IAE，精确消息 `Illegal mode "<mode>" must be one of "r", "rw", "rws", or "rwd"`（大小写敏感，无 trim）。
-3. **缺失/目录**：r 缺失 → FNFE（消息含完整路径 + "(No such file or directory)"）；rw/rws 缺失 → 创建空文件；r/rw 打开目录 → FNFE "(Is a directory)"。
+3. **缺失/目录**：r 缺失 → FNFE（消息含完整路径 + 平台 OS 原因文本）；rw/rws 缺失 → 创建空文件；r/rw 打开目录 → FNFE 平台 OS 原因文本（随 OS/locale 本地化）。
 4. **r 模式失败消息**：write/writeInt → IOException "Bad file descriptor"；setLength → IOException "Invalid argument"；FD valid、channel isOpen（打开时）。
 5. **close 后统一 "Stream Closed"**：read/write/seek/getFilePointer/length/readUTF 六操作；getFD() 仍可用且 valid()==false；close 幂等。
 6. **seek 边界**：-1 与 Long.MIN_VALUE → IOException "Negative seek offset"；seek 超长合法、read → -1 且指针不动。
@@ -78,8 +78,8 @@
 |---|---|---|
 | ctor name/File/mode null | NullPointerException | —（类型级） |
 | mode "rw "/"rwS"/"RWS"/"r ws"/"rwsx"/"rws " | IllegalArgumentException | `Illegal mode "<m>" must be one of "r", "rw", "rws", or "rwd"` |
-| "r" 打开缺失文件 | FileNotFoundException | 含路径 + "No such file or directory" |
-| "r"/"rw" 打开目录 | FileNotFoundException | "Is a directory" |
+| "r" 打开缺失文件 | FileNotFoundException | 含路径 + 平台 OS 原因文本 |
+| "r"/"rw" 打开目录 | FileNotFoundException | 平台 OS 原因文本 |
 | r 模式 write/writeInt | IOException | "Bad file descriptor" |
 | r 模式 setLength | IOException | "Invalid argument" |
 | seek(-1)/seek(Long.MIN_VALUE) | IOException | "Negative seek offset" |

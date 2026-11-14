@@ -75,7 +75,13 @@ public class PathMatcherTest {
         check(!braces.matches(Paths.get("a.class")), "brace rejects other suffix");
         PathMatcher klass = fs.getPathMatcher("glob:[A-Z]*");
         check(klass.matches(Paths.get("Abc")), "char class matches");
-        check(!klass.matches(Paths.get("abc")), "char class rejects lowercase");
+        if (java.io.File.separatorChar == '/') {
+            check(!klass.matches(Paths.get("abc")), "char class rejects lowercase (case-sensitive glob)");
+        } else {
+            // The Windows glob matcher folds case, so [A-Z] also accepts "abc".
+            check(klass.matches(Paths.get("abc")), "char class folds case (Windows glob)");
+            check(!klass.matches(Paths.get("zzz")), "char class rejects non-matching case-insensitively");
+        }
 
         // regex syntax behaves as java.util.regex against the whole path string
         PathMatcher regex = fs.getPathMatcher("regex:.*\\.java");

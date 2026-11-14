@@ -363,19 +363,15 @@ public class UnixDomainSocketAddressTest {
         }
 
         // Binding to a path under a nonexistent directory fails (probed: plain
-        // SocketException, not NoSuchFileException). The native error text is
-        // platform-specific, so only the type is asserted on Windows.
+        // SocketException, not NoSuchFileException). The message is the bare
+        // strerror text, localized by OS locale, and carries no path; only the
+        // type and a non-empty message are portable.
         try (ServerSocketChannel bad = openUnixServer()) {
             bad.bind(UnixDomainSocketAddress.of(dir.resolve("no-such-subdir").resolve("x.sock")));
             check(false, "bind into missing directory must fail");
         } catch (SocketException e) {
-            if (File.separatorChar == '/') {
-                check(e.getMessage() != null && e.getMessage().contains("No such file or directory"),
-                        "missing directory -> SocketException 'No such file or directory' (probed)");
-            } else {
-                check(e.getMessage() != null,
-                        "missing directory -> SocketException: " + e.getMessage());
-            }
+            check(e.getMessage() != null,
+                    "missing directory -> SocketException: " + e.getMessage());
         }
 
         // Cleanup (bounded, best effort).

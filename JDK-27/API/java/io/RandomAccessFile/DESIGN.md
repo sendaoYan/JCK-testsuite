@@ -35,7 +35,7 @@
 ### 新增维度清单（与 JDK-8 侧同构）
 1. 构造 null 矩阵（name/File/mode null → NPE ×4）+ (String,String)≡(File,String)。
 2. 近失模式 "rw "/"rwS"/"RWS"/"r ws"/"rwsx"/"rws " → IAE 精确消息。
-3. 缺失/目录：r 缺失 FNFE 含路径；rw/rws 缺失创建；r/rw 目录 FNFE "(Is a directory)"。
+3. 缺失/目录：r 缺失 FNFE 含路径；rw/rws 缺失创建；r/rw 目录 FNFE 平台 OS 原因文本（随 OS/locale 本地化）。
 4. r 模式：write "Bad file descriptor"、setLength "Invalid argument"。
 5. close 后 read/write/seek/getFilePointer/length/readUTF 均 "Stream Closed"；FD invalid；close 幂等。
 6. seek(-1)/MIN "Negative seek offset"；seek 超长 read -1 指针不动。

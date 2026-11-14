@@ -135,8 +135,12 @@ public class FileInputStreamTest {
             try {
                 new FileInputStream(dir.toFile());
             } catch (FileNotFoundException e) {
-                check(e.getMessage().equals(dir.toString() + " (Is a directory)"),
-                      "JDK-27 directory message exact: " + e.getMessage());
+                // 原因文本来自 OS strerror 并随默认 locale 本地化（zh_CN Windows 为“拒绝访问。”），
+                // 只断言 "<path> (<OS reason>)" 结构，不锁英文措辞。
+                String m = e.getMessage();
+                check(m != null && m.startsWith(dir.toString() + " (")
+                      && m.matches(".*\\(.+\\)$"),
+                      "directory message names path with an OS reason: " + m);
             }
             try {
                 new FileInputStream((File) null);

@@ -135,9 +135,11 @@ public class FileOutputStreamTest {
                 new FileOutputStream(orphan);
                 check(false, "missing parent must throw");
             } catch (FileNotFoundException e) {
+                // 原因文本来自 OS strerror 且随 locale 本地化，只锁 "<path> (<OS reason>)" 结构。
                 String m = e.getMessage();
-                check(m.contains("No such file or directory") && m.contains(orphan.getPath()),
-                      "missing parent message has path and reason: " + m);
+                check(m != null && m.contains(orphan.getPath())
+                      && m.matches(".*\\(.+\\)$"),
+                      "missing parent message has path and OS reason: " + m);
             }
             checkThrows(FileNotFoundException.class, () -> new FileOutputStream(orphan.getPath(), false),
                         "missing parent String,bool -> FNFE");

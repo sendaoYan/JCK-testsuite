@@ -888,9 +888,20 @@ public class SocketTest {
         try {
             Socket c = p.client, a = p.accepted;
             c.shutdownInput();
+            boolean posix = java.io.File.separatorChar == '/';
             // Peer writes succeed (kernel ACKs); data is discarded locally.
-            a.getOutputStream().write(5);
-            a.getOutputStream().flush();
+            // Windows aborts the connection when data arrives after a receive
+            // half-close (it answers with RST and later local sends fail with
+            // WSAECONNABORTED), so either write may throw there. POSIX keeps
+            // the original exact behaviour.
+            try {
+                a.getOutputStream().write(5);
+                a.getOutputStream().flush();
+            } catch (SocketException e) {
+                if (posix) throw e;
+                System.out.println("NOTE: peer write after shutdownInput failed on this"
+                        + " platform (receive half-close aborts the connection): " + e);
+            }
             passed++;
             try {
                 c.getInputStream().read();
@@ -900,11 +911,21 @@ public class SocketTest {
                         "read-after-shutdownInput exact message");
             }
             // Peer can still read whatever the local end wrote before shutdown.
-            c.getOutputStream().write(77);
-            c.getOutputStream().flush();
+            boolean localWriteFailed = false;
+            try {
+                c.getOutputStream().write(77);
+                c.getOutputStream().flush();
+            } catch (SocketException e) {
+                if (posix) throw e;
+                localWriteFailed = true;
+                System.out.println("NOTE: local write after a peer write into a"
+                        + " half-closed input failed on this platform: " + e);
+            }
             c.shutdownOutput();
             a.setSoTimeout(500);
-            check(a.getInputStream().read() == 77, "peer reads data sent before shutdownInput");
+            if (!localWriteFailed) {
+                check(a.getInputStream().read() == 77, "peer reads data sent before shutdownInput");
+            }
             check(a.getInputStream().read() == -1, "peer sees EOF after shutdownOutput");
         } finally {
             closePair(p);

@@ -30,8 +30,8 @@ JDK-27 专属：testCharsetCtors——(File,Charset)/(String,Charset)：UTF-16BE
 | 操作 | 异常 | 精确子串 |
 |---|---|---|
 | null File/String/null Charset | NullPointerException | 类型级（JDK-27 NPE 带具名消息） |
-| 打开目录（含 Charset 构造） | FileNotFoundException | Is a directory |
-| 缺失文件（含 Charset 构造） | FileNotFoundException | No such file or directory |
+| 打开目录（含 Charset 构造） | FileNotFoundException | 平台 OS 原因文本 |
+| 缺失文件（含 Charset 构造） | FileNotFoundException | 平台 OS 原因文本 |
 | 关闭后 4 操作 | IOException | Stream closed |
 | skip(负数) | IllegalArgumentException | skip value is negative |
 | read(cbuf,off,len) 越界 | IndexOutOfBoundsException | 类型级 |

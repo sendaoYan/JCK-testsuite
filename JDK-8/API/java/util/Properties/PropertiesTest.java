@@ -363,7 +363,10 @@ public class PropertiesTest {
         mc.setProperty("a", "b");
         StringWriter sw3 = new StringWriter();
         mc.store(sw3, "line1\nline2");
-        check(sw3.toString().contains("#line1\n#line2"), "multiline comment prefixed per line");
+        // store() 写行尾用 BufferedWriter.newLine()，即平台行分隔符
+        // （Windows 为 "\r\n"）。先把实际输出规范化再比较。
+        check(sw3.toString().replace("\r\n", "\n").contains("#line1\n#line2"),
+              "multiline comment prefixed per line");
     }
 
     static void testList() {

@@ -92,9 +92,18 @@ public class FileStoreAttributeViewTest {
             java.nio.file.Files.write(f, "x".getBytes("UTF-8"));
             java.nio.file.FileStore st = java.nio.file.Files.getFileStore(f);
             check(st != null, "FileStore non-null");
-            check(st.name() != null && !st.name().isEmpty(), "store name non-empty");
+            // name() is implementation specific: an unlabeled Windows volume
+            // reports the empty string, so only presence is required there.
+            if (java.io.File.separatorChar == '\\') {
+                check(st.name() != null,
+                      "store name reported (may be empty on an unlabeled Windows volume)");
+            } else {
+                check(st.name() != null && !st.name().isEmpty(), "store name non-empty");
+            }
             check(st.type() != null && !st.type().isEmpty(), "store type non-empty");
-            check(st.toString().contains(st.name()), "toString mentions store name");
+            // Vacuous when the Windows volume label is the empty string.
+            if (java.io.File.separatorChar != '\\')
+                check(st.toString().contains(st.name()), "toString mentions store name");
             // Linux ext4: no FileStoreAttributeView is published (space stats come via getAttribute)
             FileStoreAttributeView v = st.getFileStoreAttributeView(FileStoreAttributeView.class);
             check(v == null, "ext4 publishes no FileStoreAttributeView (probed)");

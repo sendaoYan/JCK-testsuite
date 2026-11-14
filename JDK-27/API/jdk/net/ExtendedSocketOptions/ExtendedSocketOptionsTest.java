@@ -8,6 +8,84 @@ public class ExtendedSocketOptionsTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    // Runtime capability probe: the supported-options set decides whether
+    // set/get must round-trip or must be rejected with
+    // UnsupportedOperationException. Never hard-code a platform's option set.
+    static void probeIntOption(java.net.Socket s, String label,
+            java.net.SocketOption<Integer> opt, int value) throws Exception {
+        if (jdk.net.Sockets.supportedOptions(java.net.Socket.class).contains(opt)) {
+            jdk.net.Sockets.setOption(s, opt, value);
+            check(Integer.valueOf(value).equals(jdk.net.Sockets.getOption(s, opt)),
+                    label + " supported: set/get round-trip " + value);
+        } else {
+            try {
+                jdk.net.Sockets.setOption(s, opt, value);
+                check(false, label + " unsupported: set must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(label.equals(e.getMessage()), label + " unsupported: set UOE message");
+            }
+            try {
+                jdk.net.Sockets.getOption(s, opt);
+                check(false, label + " unsupported: get must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(label.equals(e.getMessage()), label + " unsupported: get UOE message");
+            }
+        }
+    }
+
+    static void probeBoolOption(java.net.Socket s, String label,
+            java.net.SocketOption<Boolean> opt, boolean value) throws Exception {
+        if (jdk.net.Sockets.supportedOptions(java.net.Socket.class).contains(opt)) {
+            jdk.net.Sockets.setOption(s, opt, value);
+            check(Boolean.valueOf(value).equals(jdk.net.Sockets.getOption(s, opt)),
+                    label + " supported: set/get round-trip " + value);
+        } else {
+            try {
+                jdk.net.Sockets.setOption(s, opt, value);
+                check(false, label + " unsupported: set must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(label.equals(e.getMessage()), label + " unsupported: set UOE message");
+            }
+            try {
+                jdk.net.Sockets.getOption(s, opt);
+                check(false, label + " unsupported: get must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(label.equals(e.getMessage()), label + " unsupported: get UOE message");
+            }
+        }
+    }
+
+    static void probeNapi(java.net.Socket s) throws Exception {
+        if (jdk.net.Sockets.supportedOptions(java.net.Socket.class).contains(
+                jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID)) {
+            Integer napi = jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID);
+            check(napi != null && napi.intValue() >= 0,
+                    "SO_INCOMING_NAPI_ID supported: read-only get >= 0: " + napi);
+            try {
+                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID, 5);
+                check(false, "SO_INCOMING_NAPI_ID supported: set must throw (read-only)");
+            } catch (java.net.SocketException e) {
+                check(e.getMessage() != null && e.getMessage().contains("read only"),
+                        "SO_INCOMING_NAPI_ID supported: set read-only SocketException");
+            }
+        } else {
+            try {
+                jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID);
+                check(false, "SO_INCOMING_NAPI_ID unsupported: get must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(e.getMessage() != null && e.getMessage().contains("SO_INCOMING_NAPI_ID"),
+                        "SO_INCOMING_NAPI_ID unsupported: get UOE message");
+            }
+            try {
+                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID, 5);
+                check(false, "SO_INCOMING_NAPI_ID unsupported: set must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(e.getMessage() != null && e.getMessage().contains("SO_INCOMING_NAPI_ID"),
+                        "SO_INCOMING_NAPI_ID unsupported: set UOE message");
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         check(jdk.net.ExtendedSocketOptions.TCP_QUICKACK != null, "TCP_QUICKACK");
         check("TCP_QUICKACK".equals(jdk.net.ExtendedSocketOptions.TCP_QUICKACK.name()), "TCP_QUICKACK name");
@@ -69,80 +147,45 @@ public class ExtendedSocketOptionsTest {
         // 5. 类结构：final、不可实例化
         check(java.lang.reflect.Modifier.isFinal(jdk.net.ExtendedSocketOptions.class.getModifiers()), "class final");
         check(jdk.net.ExtendedSocketOptions.class.getConstructors().length == 0, "no public constructors");
-        // 6. supportedOptions 支持面（平台相关：Linux 有 QUICKACK/NAPI/REUSEPORT，
-        //    Windows 10+ 只有三个 keepalive 选项；SO_PEERCRED/IP_DONTFRAGMENT
-        //    从不出现在流式 Socket 集里）
-        boolean windows = java.io.File.separatorChar == '\\';
+        // 6. 扩展选项的可用集合是运行时事实，不按平台硬编码推断：
+        //    集合内 -> set/get 闭环；集合外 -> set/get 抛 UOE（见 section 7/8）。
         java.util.Set<java.net.SocketOption<?>> sk = jdk.net.Sockets.supportedOptions(java.net.Socket.class);
-        if (windows) {
-            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)
-               && sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL)
-               && sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT),
-                  "Socket supports the TCP keepalive options on Windows");
-            check(!sk.contains(jdk.net.ExtendedSocketOptions.TCP_QUICKACK),
-                  "Socket lacks TCP_QUICKACK on Windows");
-            check(!sk.contains(jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID),
-                  "Socket lacks SO_INCOMING_NAPI_ID on Windows");
-            check(!sk.contains(java.net.StandardSocketOptions.SO_REUSEPORT),
-                  "Socket lacks SO_REUSEPORT on Windows");
-        } else {
-            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_QUICKACK), "Socket supports TCP_QUICKACK");
-            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "Socket supports TCP_KEEPIDLE");
-            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL), "Socket supports TCP_KEEPINTERVAL");
-            check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT), "Socket supports TCP_KEEPCOUNT");
-            check(sk.contains(jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID), "Socket supports SO_INCOMING_NAPI_ID");
-            check(sk.contains(java.net.StandardSocketOptions.SO_REUSEPORT), "Socket supports SO_REUSEPORT");
-        }
+        // These two never appear in a stream Socket's set on any platform.
         check(!sk.contains(jdk.net.ExtendedSocketOptions.SO_PEERCRED), "Socket set lacks SO_PEERCRED (unix-domain only)");
         check(!sk.contains(jdk.net.ExtendedSocketOptions.IP_DONTFRAGMENT), "Socket set lacks IP_DONTFRAGMENT (datagram-only)");
-        check(jdk.net.Sockets.supportedOptions(java.net.ServerSocket.class).contains(
-                jdk.net.ExtendedSocketOptions.TCP_QUICKACK) == !windows,
-                "ServerSocket " + (windows ? "lacks" : "supports") + " TCP_QUICKACK");
         check(!jdk.net.Sockets.supportedOptions(java.net.DatagramSocket.class).contains(
                 jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "DatagramSocket lacks TCP_KEEPIDLE");
-        // 7. 真实闭环：未连接 Socket 上 set/get
+        // 7. 真实闭环：未连接 Socket 上 set/get（按能力探测分支）
         java.net.Socket s = new java.net.Socket();
         try {
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100);
-            check(Integer.valueOf(100).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)), "TCP_KEEPIDLE round-trip 100");
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL, 50);
-            check(Integer.valueOf(50).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL)), "TCP_KEEPINTERVAL round-trip 50");
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT, 8);
-            check(Integer.valueOf(8).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT)), "TCP_KEEPCOUNT round-trip 8");
-            check(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE) instanceof Integer, "KEEPIDLE value Integer");
-            if (windows) {
-                // TCP_QUICKACK is Linux-only: the option is not in the
-                // supported set, so the channel rejects it outright.
-                try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE); check(false, "TCP_QUICKACK should be unsupported on Windows"); }
-                catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("TCP_QUICKACK"), "TCP_QUICKACK UOE on Windows"); }
-            } else {
-                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE);
-                check(Boolean.FALSE.equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK)), "TCP_QUICKACK false round-trip");
-                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.TRUE);
-                check(Boolean.TRUE.equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK)), "TCP_QUICKACK true round-trip");
-                check(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_QUICKACK) instanceof Boolean, "QUICKACK value Boolean");
-            }
-            // 8. SO_INCOMING_NAPI_ID：Linux 只读（get 可用，set → SocketException），
-            //    Windows 不支持（不在支持集里 → UnsupportedOperationException）
-            if (windows) {
-                try { jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID); check(false, "NAPI get should be unsupported on Windows"); }
-                catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("SO_INCOMING_NAPI_ID"), "NAPI UOE on Windows"); }
-            } else {
-                Integer napi = jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID);
-                check(napi != null && napi.intValue() >= 0, "SO_INCOMING_NAPI_ID get >= 0: " + napi);
-                try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_INCOMING_NAPI_ID, 5); check(false, "NAPI set should throw"); }
-                catch (java.net.SocketException e) { check(e.getMessage() != null && e.getMessage().contains("read only"), "NAPI set read-only SocketException"); }
-            }
+            probeIntOption(s, "TCP_KEEPIDLE", jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100);
+            probeIntOption(s, "TCP_KEEPINTERVAL", jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL, 50);
+            probeIntOption(s, "TCP_KEEPCOUNT", jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT, 8);
+            probeBoolOption(s, "TCP_QUICKACK", jdk.net.ExtendedSocketOptions.TCP_QUICKACK, Boolean.FALSE);
+            // 8. SO_INCOMING_NAPI_ID：受支持时为只读（get 可用，set → SocketException），
+            //    不受支持时 get/set 都抛 UnsupportedOperationException。
+            probeNapi(s);
             // 9. SO_PEERCRED / IP_DONTFRAGMENT 在 AF_INET socket 上 → UnsupportedOperationException
             try { jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_PEERCRED); check(false, "SO_PEERCRED get should UOE on inet socket"); }
             catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("SO_PEERCRED"), "SO_PEERCRED UOE message"); }
             try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.IP_DONTFRAGMENT, Boolean.TRUE); check(false, "IP_DONTFRAGMENT set should UOE"); }
             catch (UnsupportedOperationException e) { check(e.getMessage() != null && e.getMessage().contains("IP_DONTFRAGMENT"), "IP_DONTFRAGMENT UOE message"); }
-            // 10. 内核级非法值：TCP_KEEPIDLE 0/-5 → SocketException("Invalid argument")
-            try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 0); check(false, "KEEPIDLE=0 should throw"); }
-            catch (java.net.SocketException e) { check(true, "KEEPIDLE=0 SocketException"); }
-            try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, -5); check(false, "KEEPIDLE=-5 should throw"); }
-            catch (java.net.SocketException e) { check(true, "KEEPIDLE=-5 SocketException"); }
+            // 10. 内核级非法值（仅在该平台支持 TCP_KEEPIDLE 时有意义）
+            if (sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)) {
+                try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 0); check(false, "KEEPIDLE=0 should throw"); }
+                catch (java.net.SocketException e) { check(true, "KEEPIDLE=0 SocketException"); }
+                if (java.io.File.separatorChar == '\\') {
+                    // Windows 内核把负值夹到 uint32 上限（探针：-5 → 4294967 秒），不返回 EINVAL；
+                    // 只有 POSIX 内核才拒绝负值，因此这里断言钳制后的值仍为正。
+                    jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, -5);
+                    Object clamped = jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE);
+                    check(clamped instanceof Integer && (Integer) clamped > 0,
+                          "negative KEEPIDLE clamped to a positive value on Windows");
+                } else {
+                    try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, -5); check(false, "KEEPIDLE=-5 should throw"); }
+                    catch (java.net.SocketException e) { check(true, "KEEPIDLE=-5 SocketException"); }
+                }
+            }
             // 11. 值类型检查（JDK-27 独有）：错型 → IllegalArgumentException("Invalid value ...")
             java.lang.reflect.Method setM = jdk.net.Sockets.class.getMethod("setOption",
                     java.net.Socket.class, java.net.SocketOption.class, Object.class);
@@ -165,17 +208,20 @@ public class ExtendedSocketOptionsTest {
             s.setOption(java.net.StandardSocketOptions.SO_RCVBUF, 16384);
             check(Integer.valueOf(16384).equals(s.getOption(java.net.StandardSocketOptions.SO_RCVBUF)), "Socket.setOption native round-trip");
             check(Integer.valueOf(16384).equals(jdk.net.Sockets.getOption(s, java.net.StandardSocketOptions.SO_RCVBUF)), "native set readable via Sockets.getOption");
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 111);
-            check(Integer.valueOf(111).equals(s.getOption(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)), "Sockets set readable via native getOption");
+            if (sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)) {
+                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 111);
+                check(Integer.valueOf(111).equals(s.getOption(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)), "Sockets set readable via native getOption");
+            }
         } finally {
             s.close();
         }
-        // 15. 已关闭 socket → SocketException("Socket is closed")
-        try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100); check(false, "closed set should throw"); }
+        // 15. 已关闭 socket → SocketException("Socket is closed")。使用所有平台
+        //     都支持的 SO_RCVBUF，避免扩展选项可用性差异掩盖关闭语义。
+        try { jdk.net.Sockets.setOption(s, java.net.StandardSocketOptions.SO_RCVBUF, 4096); check(false, "closed set should throw"); }
         catch (java.net.SocketException e) { check("Socket is closed".equals(e.getMessage()), "closed set 'Socket is closed'"); }
-        try { jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE); check(false, "closed get should throw"); }
+        try { jdk.net.Sockets.getOption(s, java.net.StandardSocketOptions.SO_RCVBUF); check(false, "closed get should throw"); }
         catch (java.net.SocketException e) { check("Socket is closed".equals(e.getMessage()), "closed get 'Socket is closed'"); }
-        try { s.getOption(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE); check(false, "native closed get should throw"); }
+        try { s.getOption(java.net.StandardSocketOptions.SO_RCVBUF); check(false, "native closed get should throw"); }
         catch (java.net.SocketException e) { check(true, "native closed get SocketException"); }
         // 16. supportedOptions 集不可变、稳定、未知类型 IAE
         try { sk.add(java.net.StandardSocketOptions.SO_SNDBUF); check(false, "set should be immutable"); }

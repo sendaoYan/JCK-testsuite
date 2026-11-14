@@ -37,7 +37,7 @@
 | new PrintWriter((OutputStream)null[,true]) | NullPointerException | — |
 | new PrintWriter((String)null)/((File)null) | NullPointerException | — |
 | new PrintWriter((File)null,(String)null) | NullPointerException | — |
-| new PrintWriter(缺父目录) | FileNotFoundException | "(No such file or directory)" |
+| new PrintWriter(缺父目录) | FileNotFoundException | 平台 OS 原因文本 |
 | new PrintWriter(file,"Bogus") | UnsupportedEncodingException | "Bogus"（文件未创建） |
 | write("abc",0,4)/(-1,1) | **JDK-8: StringIndexOutOfBoundsException；JDK-27: IndexOutOfBoundsException**（SIOOBE⊂IOOBE） | — |
 | write(char[],3,0)/(-1,1) | IndexOutOfBoundsException | — |

@@ -652,9 +652,9 @@ public class SystemTest {
             System.loadLibrary(separated);
             throw new AssertionError("System.loadLibrary(separator): expected UnsatisfiedLinkError");
         } catch (UnsatisfiedLinkError e) {
-            check(("Directory separator should not appear in library name: " + separated)
-                      .equals(e.getMessage()),
-                  "System.loadLibrary(separator) exact message [JDK27]: " + e.getMessage());
+            // 不锁具体措辞，只要求消息回显该库名（分隔符/文案随平台实现变化）。
+            check(e.getMessage() != null && e.getMessage().contains(separated),
+                  "System.loadLibrary(separator) message names the library [JDK27]: " + e.getMessage());
         }
         try {
             System.loadLibrary("");

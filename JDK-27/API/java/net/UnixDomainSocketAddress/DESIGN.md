@@ -45,7 +45,7 @@ of/getPath/equals/hashCode/toString；不同路径不相等；继承 SocketAddre
   地址值 connect 成功且 `getRemoteAddress()` equals;acceptor(daemon 线程,
   join 3000ms)accept 后单字节回显 42;accept 侧 peer 地址类型;close 后
   `getLocalAddress()` → ClosedChannelException;**bind 到不存在目录 →
-  SocketException("No such file or directory")**(注意不是
+  SocketException(平台 OS 原因文本，随 locale 本地化，不含路径)**(注意不是
   NoSuchFileException);目录清理。
 
 ## 6. 版本差异

@@ -66,6 +66,29 @@ public class JarURLConnectionTest {
         return new File(dir, "t.jar");
     }
 
+    // Windows 上 JarFileFactory 会缓存已打开的 jar（URLConnection 关闭后句柄仍持有），
+    // 直接 delete 抛 ERROR_SHARING_VIOLATION。清理不是被测契约：多次 GC 重试后
+    // 登记 deleteOnExit。
+    static void deleteBestEffort(java.nio.file.Path p) {
+        for (int i = 0; i < 10; i++) {
+            try {
+                java.nio.file.Files.deleteIfExists(p);
+                return;
+            } catch (IOException e) {
+                System.gc();
+                try { Thread.sleep(50); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+        p.toFile().deleteOnExit();
+    }
+
+    static void deleteBestEffort(File f) {
+        deleteBestEffort(f.toPath());
+    }
+
     static String readAll(InputStream in) throws IOException {
         ByteArrayOutputStream bo = new ByteArrayOutputStream();
         byte[] buf = new byte[64];
@@ -317,8 +340,8 @@ public class JarURLConnectionTest {
             while ((gn = in.read(gbuf)) > 0) gb.write(gbuf, 0, gn);
             check(new String(gb.toByteArray(), "UTF-8").equals("hello"), "entry content");
         } finally {
-            Files.deleteIfExists(jar);
-            Files.deleteIfExists(d);
+            deleteBestEffort(jar);
+            deleteBestEffort(d);
         }
     }
 
@@ -336,8 +359,9 @@ public class JarURLConnectionTest {
             testNullDelegationDefaults();
             testBlackBox(dir);
         } finally {
-            for (File x : dir.listFiles()) x.delete();
-            dir.delete();
+            File[] kids = dir.listFiles();
+            if (kids != null) for (File x : kids) deleteBestEffort(x);
+            deleteBestEffort(dir);
         }
         System.out.println("PASS (" + passed + " assertions)");
     }

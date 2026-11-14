@@ -8,6 +8,56 @@ public class ExtendedSocketOptionsTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    // Runtime capability probe: the supported-options set decides whether
+    // set/get must round-trip or must be rejected with
+    // UnsupportedOperationException. Never hard-code a platform's option set.
+    static void probeIntOption(java.net.Socket s, String label,
+            java.net.SocketOption<Integer> opt, int value) throws Exception {
+        if (jdk.net.Sockets.supportedOptions(java.net.Socket.class).contains(opt)) {
+            jdk.net.Sockets.setOption(s, opt, value);
+            check(Integer.valueOf(value).equals(jdk.net.Sockets.getOption(s, opt)),
+                    label + " supported: set/get round-trip " + value);
+        } else {
+            try {
+                jdk.net.Sockets.setOption(s, opt, value);
+                check(false, label + " unsupported: set must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(label.equals(e.getMessage()), label + " unsupported: set UOE message");
+            }
+            try {
+                jdk.net.Sockets.getOption(s, opt);
+                check(false, label + " unsupported: get must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(label.equals(e.getMessage()), label + " unsupported: get UOE message");
+            }
+        }
+    }
+
+    static void probeFlowSla(java.net.Socket s) throws Exception {
+        if (jdk.net.Sockets.supportedOptions(java.net.Socket.class).contains(
+                jdk.net.ExtendedSocketOptions.SO_FLOW_SLA)) {
+            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA,
+                    jdk.net.SocketFlow.create().priority(1).bandwidth(1024));
+            Object flow = jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA);
+            check(flow instanceof jdk.net.SocketFlow,
+                    "SO_FLOW_SLA supported: set/get returns a SocketFlow");
+        } else {
+            try {
+                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA,
+                        jdk.net.SocketFlow.create().priority(1).bandwidth(1024));
+                check(false, "SO_FLOW_SLA unsupported: set must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check("SO_FLOW_SLA".equals(e.getMessage()), "SO_FLOW_SLA unsupported: set UOE message");
+            }
+            try {
+                jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA);
+                check(false, "SO_FLOW_SLA unsupported: get must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check("SO_FLOW_SLA".equals(e.getMessage()), "SO_FLOW_SLA unsupported: get UOE message");
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         check(jdk.net.ExtendedSocketOptions.SO_FLOW_SLA != null, "SO_FLOW_SLA");
         check(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE != null, "TCP_KEEPIDLE");
@@ -55,45 +105,39 @@ public class ExtendedSocketOptionsTest {
         // 4. 类结构：final、包私有构造（不可实例化）
         check(java.lang.reflect.Modifier.isFinal(jdk.net.ExtendedSocketOptions.class.getModifiers()), "class final");
         check(jdk.net.ExtendedSocketOptions.class.getConstructors().length == 0, "no public constructors");
-        // 5. supportedOptions 平台支持面（Linux：TCP_KEEP* 进 Socket/ServerSocket 集，SO_FLOW_SLA 仅 Solaris）
+        // 5. supportedOptions 是运行时能力的权威来源（平台相关：Linux 有
+        //    TCP_KEEP*、不支持 SO_FLOW_SLA；Windows 上则相反）。集合内选项
+        //    必须 set/get 闭环，集合外选项必须抛 UnsupportedOperationException。
         java.util.Set<java.net.SocketOption<?>> sk = jdk.net.Sockets.supportedOptions(java.net.Socket.class);
-        check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "Socket supports TCP_KEEPIDLE");
-        check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL), "Socket supports TCP_KEEPINTERVAL");
-        check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT), "Socket supports TCP_KEEPCOUNT");
-        check(!sk.contains(jdk.net.ExtendedSocketOptions.SO_FLOW_SLA), "SO_FLOW_SLA not supported on Linux");
-        check(jdk.net.Sockets.supportedOptions(java.net.ServerSocket.class).contains(
-                jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "ServerSocket supports TCP_KEEPIDLE");
-        check(!jdk.net.Sockets.supportedOptions(java.net.DatagramSocket.class).contains(
-                jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "DatagramSocket lacks TCP_KEEPIDLE");
-        // 6. 真实闭环：未连接 Socket 上 set/get TCP_KEEP*（本地 setsockopt，不绑端口不连接）
         java.net.Socket s = new java.net.Socket();
         try {
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100);
-            check(Integer.valueOf(100).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)), "TCP_KEEPIDLE round-trip 100");
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL, 50);
-            check(Integer.valueOf(50).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL)), "TCP_KEEPINTERVAL round-trip 50");
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT, 8);
-            check(Integer.valueOf(8).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT)), "TCP_KEEPCOUNT round-trip 8");
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 200);
-            check(Integer.valueOf(200).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)), "TCP_KEEPIDLE overwrite 200");
-            check(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE) instanceof Integer, "TCP_KEEPIDLE value is Integer");
-            // 7. 内核级非法值 → SocketException("Invalid argument")
-            try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 0); check(false, "KEEPIDLE=0 should throw"); }
-            catch (java.net.SocketException e) { check(true, "KEEPIDLE=0 SocketException"); }
-            try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, -5); check(false, "KEEPIDLE=-5 should throw"); }
-            catch (java.net.SocketException e) { check(true, "KEEPIDLE=-5 SocketException"); }
-            // 8. SO_FLOW_SLA 在 Linux 上 set → UnsupportedOperationException（Sockets.isSupported 先拒绝）
-            try {
-                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA,
-                        jdk.net.SocketFlow.create().priority(1).bandwidth(1024));
-                check(false, "SO_FLOW_SLA set should be unsupported on Linux");
-            } catch (UnsupportedOperationException e) {
-                check("SO_FLOW_SLA".equals(e.getMessage()), "SO_FLOW_SLA UOE message is option name");
+            probeIntOption(s, "TCP_KEEPIDLE", jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100);
+            probeIntOption(s, "TCP_KEEPINTERVAL", jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL, 50);
+            probeIntOption(s, "TCP_KEEPCOUNT", jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT, 8);
+            probeFlowSla(s);
+            if (sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)) {
+                check(jdk.net.Sockets.supportedOptions(java.net.ServerSocket.class).contains(
+                        jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE),
+                        "ServerSocket supports TCP_KEEPIDLE where Socket does");
             }
-            try {
-                jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA);
-                check(false, "SO_FLOW_SLA get should be unsupported on Linux");
-            } catch (UnsupportedOperationException e) { check(true, "SO_FLOW_SLA get UOE"); }
+            check(!jdk.net.Sockets.supportedOptions(java.net.DatagramSocket.class).contains(
+                    jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "DatagramSocket lacks TCP_KEEPIDLE");
+            // 6. 内核级非法值（仅在 TCP_KEEPIDLE 受支持时才有意义）
+            if (sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)) {
+                try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 0); check(false, "KEEPIDLE=0 should throw"); }
+                catch (java.net.SocketException e) { check(true, "KEEPIDLE=0 SocketException"); }
+                if (java.io.File.separatorChar == '\\') {
+                    // Windows 内核把负值夹到 uint32 上限（探针：-5 → 4294967 秒），不返回 EINVAL；
+                    // 只有 POSIX 内核才拒绝负值，因此这里断言钳制后的值仍为正。
+                    jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, -5);
+                    Object clamped = jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE);
+                    check(clamped instanceof Integer && (Integer) clamped > 0,
+                          "negative KEEPIDLE clamped to a positive value on Windows");
+                } else {
+                    try { jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, -5); check(false, "KEEPIDLE=-5 should throw"); }
+                    catch (java.net.SocketException e) { check(true, "KEEPIDLE=-5 SocketException"); }
+                }
+            }
             // 9. 未知选项（自定义 SocketOption）→ UnsupportedOperationException(选项name)
             final java.net.SocketOption<Object> fake = new java.net.SocketOption<Object>() {
                 public String name() { return "FAKE_OPT"; }

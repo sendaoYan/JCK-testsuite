@@ -286,6 +286,29 @@ public class RandomAccessFileTest {
 
     static interface Thrower { void run() throws Throwable; }
 
+    // 平台消息形如 "<path> (<OS 原因>)"；原因文本随 OS/strerror 与默认 locale 变化
+    // （zh_CN Windows 下是中文），只锁结构与路径。
+    static boolean hasOsReason(String msg, String path) {
+        return msg != null && (path == null || msg.contains(path))
+                && msg.lastIndexOf('(') > 0 && msg.trim().endsWith(")");
+    }
+
+    static void mustThrowOsReason(Class<? extends Throwable> type, String path,
+                                  Thrower r, String what) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            if (type.isInstance(t) && hasOsReason(t.getMessage(), path)) {
+                passed++;
+                return;
+            }
+            throw new AssertionError(what + ": expected " + type.getSimpleName()
+                    + " with \"<path> (<OS reason>)\" but got " + t.getClass().getName()
+                    + " [" + t.getMessage() + "]");
+        }
+        throw new AssertionError(what + ": expected " + type.getSimpleName() + " but nothing thrown");
+    }
+
     static void mustThrow(Class<? extends Throwable> type, String msgPart, Thrower r, String what) {
         try {
             r.run();
@@ -357,7 +380,7 @@ public class RandomAccessFileTest {
             } catch (FileNotFoundException fnfe) {
                 check(fnfe.getMessage() != null && fnfe.getMessage().contains(missing.getPath()),
                       "FNFE message contains the path");
-                check(fnfe.getMessage().contains("No such file or directory"),
+                check(hasOsReason(fnfe.getMessage(), missing.getPath()),
                       "FNFE message carries the OS reason");
             }
             File created = new File(dir, "created.dat");
@@ -371,10 +394,11 @@ public class RandomAccessFileTest {
             raf.close();
             createdSync.delete();
 
-            // opening a directory fails in every mode with "(Is a directory)"
-            mustThrow(FileNotFoundException.class, "Is a directory",
+            // opening a directory fails in every mode;原因文本随 OS（Linux "Is a directory"，
+            // Windows 中文 "拒绝访问。"），只锁异常类型 + 路径 + 括号原因结构。
+            mustThrowOsReason(FileNotFoundException.class, dir.getPath(),
                       () -> new RandomAccessFile(dir, "r"), "r on a directory");
-            mustThrow(FileNotFoundException.class, "Is a directory",
+            mustThrowOsReason(FileNotFoundException.class, dir.getPath(),
                       () -> new RandomAccessFile(dir, "rw"), "rw on a directory");
         } finally {
             for (File k : dir.listFiles()) k.delete();

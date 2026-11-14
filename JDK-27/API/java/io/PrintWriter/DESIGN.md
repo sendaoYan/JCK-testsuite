@@ -35,7 +35,7 @@
 8. **OutputStream 包装缓冲**：print 后底层 0 字节，flush 后下沉。
 9. **构造矩阵（String 名 + Charset 双轨）**：(File,String)/(String,String) 精确内容 + UTF-16BE 原始字节；截断；(File,"Bogus") UEE 且文件未创建。
 10. **JDK-27 特有（javap 复核后直测）**：`(OutputStream,boolean,Charset)` 编码验证（'中'→E4 B8 AD）；`(File,Charset)`/`(String,Charset)` UTF-16BE 精确字节（00 70 00 31 00 36）；(OS,b,(Charset)null) → NPE "charset"；三个 Charset 构造以 getConstructor 白盒断定存在。
-11. **负例矩阵**：(Writer)/(OutputStream)/(String)/(File) null → NPE；(File,null csn) → NPE；缺父目录 → FNFE "(No such file or directory)"；(file,"Bogus") → UEE "Bogus"（文件未创建）；write(String,0,4)/(-1,1) → **IndexOutOfBoundsException（JDK-27 实测类型；JDK-8 为 StringIndexOutOfBoundsException 子类）**；write(char[],3,0)/(-1,1) → IOOBE；char[]/String null → NPE。
+11. **负例矩阵**：(Writer)/(OutputStream)/(String)/(File) null → NPE；(File,null csn) → NPE；缺父目录 → FNFE 平台 OS 原因文本（随 OS/locale 本地化）；(file,"Bogus") → UEE "Bogus"（文件未创建）；write(String,0,4)/(-1,1) → **IndexOutOfBoundsException（JDK-27 实测类型；JDK-8 为 StringIndexOutOfBoundsException 子类）**；write(char[],3,0)/(-1,1) → IOOBE；char[]/String null → NPE。
 
 ### 版本差异（相对 JDK-8 基线）
 新增 (OutputStream,boolean,Charset)/(File,Charset)/(String,Charset)（JDK 10+）；write(String,off,len) 越界异常由 StringIndexOutOfBoundsException 收敛为 IndexOutOfBoundsException；NPE "charset"（Charset 路径）。JDK-8 侧以 getConstructor NoSuchMethodException 锁定 4 个缺席构造（含 OutputStream 路径在 JDK-8 完全无 csn 版本这一事实）。

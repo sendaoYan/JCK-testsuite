@@ -140,7 +140,17 @@ public class XMLStreamWriterTest {
         w4.writeEndElement();
         w4.writeEndDocument();
         w4.flush();
-        check(bos.toString("UTF-8").equals("<?xml version=\"1.0\" ?><a>中</a>"), "OutputStream default writer UTF-8 exact");
+        // createXMLStreamWriter(OutputStream) with no encoding is
+        // implementation-defined: the JDK uses UTF-8 only when file.encoding is
+        // UTF-8, otherwise it falls back to the platform default charset
+        // (GBK on zh_CN Windows). Decode with the same charset it encoded with.
+        String implEnc = System.getProperty("file.encoding");
+        java.nio.charset.Charset streamCs =
+                (implEnc != null && implEnc.equalsIgnoreCase("UTF-8"))
+                        ? java.nio.charset.StandardCharsets.UTF_8
+                        : java.nio.charset.Charset.defaultCharset();
+        check(bos.toString(streamCs.name()).equals("<?xml version=\"1.0\" ?><a>中</a>"),
+              "OutputStream default writer encoding matches platform default");
         w4.close();
         // OutputStream UTF-16: writes BOM
         java.io.ByteArrayOutputStream bos2 = new java.io.ByteArrayOutputStream();

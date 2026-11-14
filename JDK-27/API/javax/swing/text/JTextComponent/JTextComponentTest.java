@@ -126,23 +126,39 @@ public class JTextComponentTest {
             area.setDragEnabled(true);
             check(area.getDragEnabled(), "setDragEnabled(true)");
 
-            // copy -> paste round trip
+            // 剪贴板是进程外的全局独占资源：并行跑用例（-conc:16）时其他用例会短暂
+            // 占用它，Toolkit 的复制/剪切/粘贴动作把失败吞成鸣笛（cut 失败时选区
+            // 原样留在文本里），所以往返断言要重试到剪贴板空出来。
             JTextArea a1 = new JTextArea("ClipboardText");
-            a1.select(0, 9); // "Clipboard"
-            a1.copy();
-            check("ClipboardText".equals(a1.getText()), "copy leaves source text");
             JTextArea a2 = new JTextArea("");
-            a2.paste();
-            check("Clipboard".equals(a2.getText()), "copy->paste round trip");
+            boolean copied = false;
+            for (int i = 0; i < 40 && !copied; i++) {
+                a1.select(0, 9); // "Clipboard"
+                a1.copy();
+                a2.setText("");
+                a2.paste();
+                copied = "Clipboard".equals(a2.getText());
+                if (!copied) sleepQuietly();
+            }
+            check("ClipboardText".equals(a1.getText()), "copy leaves source text");
+            check(copied, "copy->paste round trip");
 
             // cut -> paste round trip
             JTextArea a3 = new JTextArea("ClipboardText");
-            a3.select(0, 9);
-            a3.cut();
-            check("Text".equals(a3.getText()), "cut removes selection");
             JTextArea a4 = new JTextArea("");
-            a4.paste();
-            check("Clipboard".equals(a4.getText()), "cut->paste round trip");
+            boolean cutPasted = false;
+            for (int i = 0; i < 40 && !cutPasted; i++) {
+                a3.setText("ClipboardText");
+                a3.select(0, 9);
+                a3.cut();
+                if (!"Text".equals(a3.getText())) { sleepQuietly(); continue; }
+                a4.setText("");
+                a4.paste();
+                cutPasted = "Clipboard".equals(a4.getText());
+                if (!cutPasted) sleepQuietly();
+            }
+            check("Text".equals(a3.getText()), "cut removes selection");
+            check(cutPasted, "cut->paste round trip");
         } finally {
             frame.dispose();
         }
@@ -153,6 +169,11 @@ public class JTextComponentTest {
         runOnEDT(JTextComponentTest::testBlackBox);
         System.out.println("PASS (" + passed + " assertions)");
     }
+    static void sleepQuietly() {
+        try { Thread.sleep(100); }
+        catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+    }
+
     interface ThrowingRunnable { void run() throws Exception; }
     static void runOnEDT(ThrowingRunnable r) throws Exception {
         try {

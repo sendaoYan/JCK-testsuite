@@ -24,6 +24,10 @@ public class UserPrincipalLookupServiceTest {
         passed++;
     }
 
+    static boolean windowsHost() {
+        return System.getProperty("os.name", "").toLowerCase().contains("windows");
+    }
+
     static void testUserPrincipalLookupService() {
         check(Modifier.isAbstract(UserPrincipalLookupService.class.getModifiers()), "is abstract");
 
@@ -119,11 +123,23 @@ public class UserPrincipalLookupServiceTest {
         } catch (UserPrincipalNotFoundException e) {
             check("nosuchgroup_a12".equals(e.getName()), "UPNFE carries requested group name");
         }
-        try {
-            ls.lookupPrincipalByName("");
-            check(false, "empty user lookup must throw");
-        } catch (UserPrincipalNotFoundException e) {
-            check(true, "empty user name -> UserNFE");
+        if (windowsHost()) {
+            // LookupAccountName("") on Windows resolves the empty name to the
+            // current user instead of reporting an unknown account; both a
+            // returned principal and a UserPrincipalNotFoundException are legal.
+            try {
+                UserPrincipal empty = ls.lookupPrincipalByName("");
+                check(empty != null, "Windows may resolve \"\" to a principal");
+            } catch (UserPrincipalNotFoundException e) {
+                check(true, "or report an empty name as unknown");
+            }
+        } else {
+            try {
+                ls.lookupPrincipalByName("");
+                check(false, "empty user lookup must throw");
+            } catch (UserPrincipalNotFoundException e) {
+                check(true, "empty user name -> UserNFE");
+            }
         }
         // null arguments -> NPE
         checkThrowsIO(NullPointerException.class, () -> ls.lookupPrincipalByName(null),

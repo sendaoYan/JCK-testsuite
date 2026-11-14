@@ -337,9 +337,19 @@ public class PathTest {
         java.util.Iterator<Path> it = set.iterator();
         List<Path> order = new ArrayList<>();
         while (it.hasNext()) order.add(it.next());
-        check(order.get(0).equals(abs("a")) && order.get(1).equals(abs("a", "b"))
-              && order.get(2).equals(abs("a", "b", "c")) && order.get(3).equals(abs("a", "bc")),
-              "TreeSet sorted lexicographically");
+        // compareTo is provider-specific. The Windows provider compares the raw
+        // path string case-insensitively with a '\\' separator, so 'bc' sorts
+        // before 'b\\c' there ("C:\\a\\bc" < "C:\\a\\b\\c"), while the Unix
+        // provider compares elements and puts the shorter "a/b" first.
+        List<Path> expected;
+        if (java.io.File.separatorChar == '\\') {
+            expected = java.util.Arrays.asList(
+                    abs("a"), abs("a", "b"), abs("a", "bc"), abs("a", "b", "c"));
+        } else {
+            expected = java.util.Arrays.asList(
+                    abs("a"), abs("a", "b"), abs("a", "b", "c"), abs("a", "bc"));
+        }
+        check(order.equals(expected), "TreeSet follows the provider's compareTo order: " + order);
     }
 
     // iterator exact order and Iterable for-each

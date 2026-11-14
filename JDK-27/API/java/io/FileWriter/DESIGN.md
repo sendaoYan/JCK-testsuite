@@ -37,8 +37,8 @@ JDK-27 专属：testCharsetCtors——4 个 Charset 构造：
 |---|---|---|
 | null Charset（4 形式） | NullPointerException | charset（JDK-27 helpful 消息） |
 | null File/String | NullPointerException | 类型级 |
-| 缺失父目录 | FileNotFoundException | No such file or directory |
-| 打开目录 | FileNotFoundException | Is a directory |
+| 缺失父目录 | FileNotFoundException | 平台 OS 原因文本 |
+| 打开目录 | FileNotFoundException | 平台 OS 原因文本 |
 | 关闭后 write/flush | IOException | Stream closed |
 | write("abc",1,5) | StringIndexOutOfBoundsException | 类型级 |
 

@@ -54,7 +54,14 @@ public class FileStoreTest {
             Files.write(f, "data".getBytes(StandardCharsets.UTF_8));
             FileStore store = Files.getFileStore(f);
 
-            check(store.name() != null && !store.name().isEmpty(), "name non-empty");
+            // name() is implementation specific: a Windows volume without a
+            // volume label reports the empty string, so only presence is
+            // required there.
+            if (java.io.File.separatorChar == '\\') {
+                check(store.name() != null, "name reported (may be empty on an unlabeled Windows volume)");
+            } else {
+                check(store.name() != null && !store.name().isEmpty(), "name non-empty");
+            }
             check(store.type() != null && !store.type().isEmpty(), "type non-empty");
             check(!store.isReadOnly(), "default store writable");
 
@@ -107,11 +114,20 @@ public class FileStoreTest {
             Files.createDirectory(sub);
 
             FileStore st = Files.getFileStore(f);
-            check(st.name() != null && !st.name().isEmpty(), "name non-empty (device on Linux)");
+            // A labeled Unix device reports a non-empty name; an unlabeled
+            // Windows volume reports the empty string (see name() javadoc).
+            if (java.io.File.separatorChar == '\\') {
+                check(st.name() != null, "name reported (may be empty on an unlabeled Windows volume)");
+            } else {
+                check(st.name() != null && !st.name().isEmpty(), "name non-empty (device on Linux)");
+            }
             check(st.type() != null && !st.type().isEmpty(), "type non-empty (fs type)");
             check(!st.isReadOnly(), "writable store");
             check(st.toString() != null && !st.toString().isEmpty(), "toString non-empty");
-            check(st.toString().contains(st.name()), "toString contains name");
+            // With an empty Windows volume label this containment check is
+            // vacuous, so it is only meaningful where the name is non-empty.
+            if (java.io.File.separatorChar != '\\')
+                check(st.toString().contains(st.name()), "toString contains name");
             check(Files.getFileStore(sub).name().equals(st.name()),
                   "directory in the same store reports the same name");
             check(Files.getFileStore(dir).name().equals(st.name()),

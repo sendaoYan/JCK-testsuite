@@ -95,7 +95,9 @@ public class SystemFlavorMapTest {
         check(fullN.containsKey(java.awt.datatransfer.DataFlavor.stringFlavor), "full map contains stringFlavor");
         Map<String, java.awt.datatransfer.DataFlavor> fullF = sfm.getFlavorsForNatives(null);
         check(fullF != null && !fullF.isEmpty(), "null native array -> full map");
-        check(fullF.containsKey("STRING"), "full map contains STRING");
+        // "STRING" is an X11 native absent on Windows; asserting membership of a
+        // specific native in the full map is platform-dependent, so only the
+        // non-empty invariant above is kept.
 
         // ---- FlavorMap map API ----
         java.util.Map<java.awt.datatransfer.DataFlavor, String> nf = fm.getNativesForFlavors(new java.awt.datatransfer.DataFlavor[]{ java.awt.datatransfer.DataFlavor.stringFlavor });
@@ -137,7 +139,15 @@ public class SystemFlavorMapTest {
         check(mutated.contains(java.awt.datatransfer.DataFlavor.stringFlavor), "addFlavorForUnencodedNative visible");
         sfm.setFlavorsForNative("MY_NATIVE_X", new java.awt.datatransfer.DataFlavor[0]);
         check(ft.getFlavorsForNative("MY_NATIVE_X").isEmpty(), "setFlavorsForNative empty clears mapping");
-        check(ft.getFlavorsForNative("STRING").size() > 0, "STRING mapping unaffected");
+        // "STRING" is an X11 native absent on Windows; use a native this host
+        // actually advertises for stringFlavor (orig) instead.
+        if (orig.isEmpty()) {
+            System.out.println("NOTE: no native mapping for stringFlavor; skip unaffected-native assertion");
+        } else {
+            String probeNative = orig.get(0);
+            check(ft.getFlavorsForNative(probeNative).size() > 0,
+                  "native mapping unaffected [" + probeNative + "]");
+        }
         // NPE for null arguments on mutation methods
         boolean npe1 = false, npe2 = false, npe3 = false, npe4 = false;
         try { sfm.addUnencodedNativeForFlavor(null, "n"); } catch (NullPointerException x) { npe1 = true; }

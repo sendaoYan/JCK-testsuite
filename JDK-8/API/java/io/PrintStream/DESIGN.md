@@ -44,7 +44,7 @@
 | new PrintStream(os,b,(String)null) | NullPointerException | "charsetName" |
 | new PrintStream(os,b,"Bogus") | UnsupportedEncodingException | "Bogus" |
 | new PrintStream((String)null) / ((File)null) | NullPointerException | — |
-| new PrintStream(缺父目录 File/String) | FileNotFoundException | "(No such file or directory)" |
+| new PrintStream(缺父目录 File/String) | FileNotFoundException | 平台 OS 原因文本 |
 | write(b,-1,2)/(0,4)/(4,0)/(2,-1)/(4,-1) | IndexOutOfBoundsException | JDK-8 消息为 null，JDK-27 为 "Range [...]"（双侧只断类型） |
 | write((byte[])null[,..]) | NullPointerException | — |
 | print/println((char[])null) | NullPointerException | — |

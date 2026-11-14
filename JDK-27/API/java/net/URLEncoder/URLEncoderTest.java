@@ -78,8 +78,14 @@ public class URLEncoderTest {
     }
 
     static void testDefaultOverload() throws Exception {
-        check("a+b%C3%BC".equals(encodeDeprecated("a bü")), "deprecated single-arg uses UTF-8");
-        check(encodeDeprecated("a bü").equals(URLEncoder.encode("a bü", "UTF-8")), "single-arg == UTF-8");
+        // 废弃的单参 encode(String) 内部分派到 encode(s, Charset.defaultCharset())，
+        // 并非固定 UTF-8（zh_CN Windows 下默认字符集为 GBK）。
+        java.nio.charset.Charset def = java.nio.charset.Charset.defaultCharset();
+        check(encodeDeprecated("a bü").equals(URLEncoder.encode("a bü", def.name())),
+              "single-arg == encode(s, defaultCharset)");
+        if ("UTF-8".equalsIgnoreCase(def.name())) {
+            check("a+b%C3%BC".equals(encodeDeprecated("a bü")), "deprecated single-arg uses UTF-8");
+        }
     }
 
     @SuppressWarnings("deprecation")

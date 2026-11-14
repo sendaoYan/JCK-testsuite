@@ -32,13 +32,31 @@ public class FileChannelTest {
         passed++;
     }
 
+    // 清理不是被测契约。Windows 上刚 map 过的文件在句柄真正关闭前删除会抛
+    // ERROR_SHARING_VIOLATION；这里重试几次，仍失败就登记 deleteOnExit。
+    static void deleteBestEffort(Path p) {
+        for (int i = 0; i < 10; i++) {
+            try {
+                Files.deleteIfExists(p);
+                return;
+            } catch (IOException e) {
+                System.gc();
+                try { Thread.sleep(50); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+        p.toFile().deleteOnExit();
+    }
+
     static void deleteRecursively(Path p) throws IOException {
         if (Files.isDirectory(p)) {
             try (Stream<Path> s = Files.list(p)) {
                 for (Path c : s.collect(Collectors.toList())) deleteRecursively(c);
             }
         }
-        Files.deleteIfExists(p);
+        deleteBestEffort(p);
     }
 
     // ---- white-box: structure via reflection ----

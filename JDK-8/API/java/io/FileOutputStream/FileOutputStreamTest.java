@@ -22,6 +22,13 @@ public class FileOutputStreamTest {
         passed++;
     }
 
+    // 平台消息形如 "<path> (<OS 原因>)"；原因文本随 OS/strerror 与默认 locale 变化
+    // （zh_CN Windows 下是中文），只锁结构与路径，不锁英文措辞。
+    static boolean hasOsReason(String msg, String path) {
+        return msg != null && (path == null || msg.contains(path))
+                && msg.lastIndexOf('(') > 0 && msg.trim().endsWith(")");
+    }
+
     static File newTempDir() throws Exception {
         File d = File.createTempFile("jck-fos", ".tmp");
         if (!d.delete() || !d.mkdir()) throw new AssertionError("temp dir");
@@ -128,14 +135,14 @@ public class FileOutputStreamTest {
                 new FileOutputStream(dir);
                 check(false, "directory must throw");
             } catch (FileNotFoundException e) {
-                check(e.getMessage().equals(dir.getPath() + " (Is a directory)"),
-                      "JDK-8 directory message exact: " + e.getMessage());
+                check(hasOsReason(e.getMessage(), dir.getPath()),
+                      "JDK-8 directory message shape: " + e.getMessage());
             }
             try {
                 new FileOutputStream(dir, true);
                 check(false, "directory append must throw");
             } catch (FileNotFoundException e) {
-                check(e.getMessage().endsWith("(Is a directory)"), "append variant same reason");
+                check(hasOsReason(e.getMessage(), dir.getPath()), "append variant same reason");
             }
             File orphan = new File(dir, "no/such/x.bin");
             try {
@@ -143,7 +150,7 @@ public class FileOutputStreamTest {
                 check(false, "missing parent must throw");
             } catch (FileNotFoundException e) {
                 String m = e.getMessage();
-                check(m.contains("No such file or directory") && m.contains(orphan.getPath()),
+                check(hasOsReason(m, orphan.getPath()),
                       "missing parent message has path and reason: " + m);
             }
             checkThrows(FileNotFoundException.class, () -> new FileOutputStream(orphan.getPath()),

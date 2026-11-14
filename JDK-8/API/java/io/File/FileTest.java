@@ -202,11 +202,14 @@ public class FileTest {
 
     // ---- 8. normalization: getPath keeps ".", ".."; collapses duplicate seps; trims trailing sep ----
     static void testPathNormalization() throws Exception {
-        check("a/../b".equals(new File("a/../b").getPath()), "getPath keeps ..");
-        check("a/./b".equals(new File("a/./b").getPath()), "getPath keeps .");
-        check("a/b".equals(new File("a//b").getPath()), "duplicate separators collapsed");
-        check("a/b".equals(new File("a/b/").getPath()), "trailing separator trimmed");
-        check("a/../b".equals(new File("a/../b").getAbsolutePath()
+        // 平台分隔符：Windows 上构造时给的 "/" 在 getPath() 里统一成 "\"，
+        // 期望串必须用 File.separator 拼，否则断言的是 Linux 的分隔符。
+        String s = File.separator;
+        check(("a" + s + ".." + s + "b").equals(new File("a/../b").getPath()), "getPath keeps ..");
+        check(("a" + s + "." + s + "b").equals(new File("a/./b").getPath()), "getPath keeps .");
+        check(("a" + s + "b").equals(new File("a//b").getPath()), "duplicate separators collapsed");
+        check(("a" + s + "b").equals(new File("a/b/").getPath()), "trailing separator trimmed");
+        check(("a" + s + ".." + s + "b").equals(new File("a/../b").getAbsolutePath()
                   .substring(new File("a/../b").getAbsolutePath().length() - 6)),
               "getAbsolutePath does not resolve .. either");
         // canonical path resolves .. and . lexically against the working directory
@@ -349,7 +352,8 @@ public class FileTest {
             File f = new File(d, "e.txt");
             check(f.createNewFile(), "createNewFile first true");
             check(!f.createNewFile(), "createNewFile on existing false");
-            mustThrow(java.io.IOException.class, "No such file or directory",
+            // 原因文本来自 OS（zh_CN Windows 下是中文），只锁异常类型。
+            mustThrow(java.io.IOException.class, null,
                       () -> new File(new File(d, "nodir"), "x").createNewFile(),
                       "createNewFile with missing parent");
             check(!new File(d, "zzz").delete(), "delete missing false");
@@ -483,7 +487,7 @@ public class FileTest {
             check(inTmp.getName().endsWith(".tmp"), "null suffix defaults to .tmp");
             check(inTmp.getName().startsWith("jckioH"), "prefix kept");
             check(inTmp.getParentFile().equals(d), "created inside explicit dir");
-            mustThrow(java.io.IOException.class, "No such file or directory",
+            mustThrow(java.io.IOException.class, null,
                       () -> File.createTempFile("jckioH", ".t", new File(d, "nodir")),
                       "createTempFile in missing dir");
             File def = File.createTempFile("jckioH", ".x");

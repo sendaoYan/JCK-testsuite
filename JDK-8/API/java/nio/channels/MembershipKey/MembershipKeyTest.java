@@ -85,7 +85,10 @@ public class MembershipKeyTest {
         DatagramChannel dc = DatagramChannel.open(StandardProtocolFamily.INET);
         try {
             dc.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            // Wildcard bind: membership is independent of the local endpoint,
+            // and Windows rejects a multicast group address as a local address
+            // ("Cannot assign requested address"). The group is joined via nif.
+            dc.bind(new InetSocketAddress(0));
             MembershipKey key = dc.join(group, nif);
             check(key.isValid(), "valid on join");
             check(key.channel() == dc, "channel() identity");
@@ -109,7 +112,7 @@ public class MembershipKeyTest {
         // channel close invalidates
         DatagramChannel dc2 = DatagramChannel.open(StandardProtocolFamily.INET);
         dc2.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-        dc2.bind(new InetSocketAddress(group, 0));
+        dc2.bind(new InetSocketAddress(0)); // wildcard: Windows rejects a group address
         MembershipKey k2 = dc2.join(group, nif);
         dc2.close();
         check(!k2.isValid(), "invalid after channel close");
@@ -124,7 +127,7 @@ public class MembershipKeyTest {
         InetAddress group = InetAddress.getByName("239.255.17.2");
         try (DatagramChannel dc = DatagramChannel.open(StandardProtocolFamily.INET)) {
             dc.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            dc.bind(new InetSocketAddress(0)); // wildcard; membership binds the group
             MembershipKey key = dc.join(group, nif);
             InetAddress src = InetAddress.getByName("127.0.0.1");
             check(key.block(src) == key, "block returns this key");
@@ -158,9 +161,15 @@ public class MembershipKeyTest {
         try (DatagramChannel rx = DatagramChannel.open(StandardProtocolFamily.INET);
              DatagramChannel tx = DatagramChannel.open(StandardProtocolFamily.INET)) {
             rx.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            rx.bind(new InetSocketAddress(group, 0));
+            // Wildcard bind: multicast reception is driven by the membership;
+            // binding the unicast interface address would not match group
+            // traffic, and Windows rejects binding the group address itself.
+            rx.bind(new InetSocketAddress(0));
             MembershipKey key = rx.join(group, nif);
             rx.configureBlocking(false);
+            // Send from the interface address itself so the packet source is
+            // deterministic and matches the address blocked below.
+            tx.bind(new InetSocketAddress(ifaceAddr, 0));
             tx.setOption(StandardSocketOptions.IP_MULTICAST_IF, nif);
             int port = ((InetSocketAddress) rx.getLocalAddress()).getPort();
             try (Selector sel = Selector.open()) {
@@ -192,7 +201,7 @@ public class MembershipKeyTest {
         InetAddress src = InetAddress.getByName("192.0.2.55"); // unicast, never sends here
         try (DatagramChannel dc = DatagramChannel.open(StandardProtocolFamily.INET)) {
             dc.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-            dc.bind(new InetSocketAddress(group, 0));
+            dc.bind(new InetSocketAddress(0)); // wildcard: Windows rejects a group address
             MembershipKey key = dc.join(group, nif, src);
             check(key.isValid(), "source-specific membership valid");
             check(key.sourceAddress().equals(src), "sourceAddress() records the filter source");

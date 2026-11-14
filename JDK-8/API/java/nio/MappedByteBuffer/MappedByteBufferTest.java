@@ -34,6 +34,24 @@ public class MappedByteBufferTest {
         throw new AssertionError(msg + " (no exception thrown)");
     }
 
+    // 清理不是被测契约。Windows 上映射句柄由 Cleaner 在 GC 后才释放，期间
+    // delete 会抛 ERROR_SHARING_VIOLATION；重试并促 GC，仍失败就 deleteOnExit。
+    static void deleteBestEffort(Path p) {
+        for (int i = 0; i < 10; i++) {
+            try {
+                Files.deleteIfExists(p);
+                return;
+            } catch (IOException e) {
+                System.gc();
+                try { Thread.sleep(50); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+        p.toFile().deleteOnExit();
+    }
+
     /** An operation that may throw a checked IOException (FileChannel.map & co.). */
     interface IORunnable { void run() throws IOException; }
 
@@ -166,8 +184,8 @@ public class MappedByteBufferTest {
                         "compact on a read-only mapped buffer -> ReadOnlyBufferException");
             }
         } finally {
-            Files.deleteIfExists(dir.resolve("matrix.bin"));
-            Files.deleteIfExists(dir);
+            deleteBestEffort(dir.resolve("matrix.bin"));
+            deleteBestEffort(dir);
         }
     }
 
@@ -237,8 +255,8 @@ public class MappedByteBufferTest {
                 check(legacy.capacity() == 256, "legacy map");
             }
         } finally {
-            Files.deleteIfExists(dir.resolve("mapped.bin"));
-            Files.deleteIfExists(dir);
+            deleteBestEffort(dir.resolve("mapped.bin"));
+            deleteBestEffort(dir);
         }
     }
 

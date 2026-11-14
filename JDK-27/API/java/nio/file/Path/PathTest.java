@@ -342,7 +342,7 @@ public class PathTest {
         // Path ordering is implementation-dependent: the Windows provider
         // compares the raw string with a '\\' separator, where '\\' sorts
         // after the letters, so "a\\bc" comes before "a\\b\\c" there.
-        boolean win = System.getProperty("os.name", "").toLowerCase().contains("windows");
+        boolean win = java.io.File.separatorChar == '\\';
         List<Path> expected = win
                 ? java.util.Arrays.asList(abs("a"), abs("a", "b"), abs("a", "bc"), abs("a", "b", "c"))
                 : java.util.Arrays.asList(abs("a"), abs("a", "b"), abs("a", "b", "c"), abs("a", "bc"));

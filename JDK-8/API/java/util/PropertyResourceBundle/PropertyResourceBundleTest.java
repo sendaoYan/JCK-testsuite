@@ -81,14 +81,20 @@ public class PropertyResourceBundleTest {
         java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("prb8");
         java.nio.file.Path iso = dir.resolve("iso.properties");
         java.nio.file.Files.write(iso, "k=caf\\u00e9".getBytes("ISO-8859-1"));
-        PropertyResourceBundle b1 = new PropertyResourceBundle(
-              new java.io.FileInputStream(iso.toFile()));
+        // ctor 会一次性读完 InputStream，读完即关；句柄留着会让 Windows 上后续
+        // 删除临时文件报 ERROR_SHARING_VIOLATION。
+        PropertyResourceBundle b1;
+        try (java.io.FileInputStream in = new java.io.FileInputStream(iso.toFile())) {
+            b1 = new PropertyResourceBundle(in);
+        }
         check("caf\u00e9".equals(b1.getString("k")),
               "ISO-8859-1 file with unicode escape round-trips");
         java.nio.file.Path raw = dir.resolve("raw.properties");
         java.nio.file.Files.write(raw, "k=caf\u00e9".getBytes("UTF-8"));
-        PropertyResourceBundle b2 = new PropertyResourceBundle(
-              new java.io.FileInputStream(raw.toFile()));
+        PropertyResourceBundle b2;
+        try (java.io.FileInputStream in = new java.io.FileInputStream(raw.toFile())) {
+            b2 = new PropertyResourceBundle(in);
+        }
         check(!"caf\u00e9".equals(b2.getString("k")),
               "JDK-8 reads raw UTF-8 bytes as ISO-8859-1 (mojibake, escapes required)");
         deletePrbTemp(dir);
@@ -132,11 +138,30 @@ public class PropertyResourceBundleTest {
         }
     }
 
+    // 清理不是被测契约。Windows 上类加载器/资源缓存可能短暂持有句柄，
+    // 删除抛 IOException 时重试几次，仍失败就登记 deleteOnExit。
     static void deletePrbTemp(java.nio.file.Path dir) throws Exception {
-        java.nio.file.DirectoryStream<java.nio.file.Path> ds = java.nio.file.Files.newDirectoryStream(dir);
-        for (java.nio.file.Path p : ds) java.nio.file.Files.deleteIfExists(p);
-        ds.close();
-        java.nio.file.Files.deleteIfExists(dir);
+        try (java.nio.file.DirectoryStream<java.nio.file.Path> ds =
+                     java.nio.file.Files.newDirectoryStream(dir)) {
+            for (java.nio.file.Path p : ds) deleteBestEffort(p);
+        }
+        deleteBestEffort(dir);
+    }
+
+    static void deleteBestEffort(java.nio.file.Path p) {
+        for (int i = 0; i < 10; i++) {
+            try {
+                java.nio.file.Files.deleteIfExists(p);
+                return;
+            } catch (java.io.IOException e) {
+                System.gc();
+                try { Thread.sleep(50); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+        p.toFile().deleteOnExit();
     }
 
     public static void main(String[] args) throws Exception {

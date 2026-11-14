@@ -345,10 +345,10 @@ public class FileTest {
             File f = new File(d, "e.txt");
             check(f.createNewFile(), "createNewFile first true");
             check(!f.createNewFile(), "createNewFile on existing false");
-            // Windows 的系统错误文本随 OS 语言本地化（中文 Windows 为“系统找不到指定的路径。”），
-            // 因此只在 POSIX 上校验英文片段，Windows 仅校验异常类型。
-            mustThrow(java.io.IOException.class,
-                      File.separatorChar == '/' ? "No such file or directory" : null,
+            // createNewFile 的 IOException 消息只有 OS 原因文本、不含路径，且文本随
+            // OS/strerror 与默认 locale 本地化（zh_CN Windows 为“系统找不到指定的路径。”），
+            // 因此只校验异常类型。
+            mustThrow(java.io.IOException.class, null,
                       () -> new File(new File(d, "nodir"), "x").createNewFile(),
                       "createNewFile with missing parent");
             check(!new File(d, "zzz").delete(), "delete missing false");
@@ -482,8 +482,8 @@ public class FileTest {
             check(inTmp.getName().endsWith(".tmp"), "null suffix defaults to .tmp");
             check(inTmp.getName().startsWith("jckioH"), "prefix kept");
             check(inTmp.getParentFile().equals(d), "created inside explicit dir");
-            mustThrow(java.io.IOException.class,
-                      File.separatorChar == '/' ? "No such file or directory" : null,
+            // 同 createNewFile：消息只有随 OS/locale 本地化的原因文本，不含路径，只锁类型。
+            mustThrow(java.io.IOException.class, null,
                       () -> File.createTempFile("jckioH", ".t", new File(d, "nodir")),
                       "createTempFile in missing dir");
             File def = File.createTempFile("jckioH", ".x");

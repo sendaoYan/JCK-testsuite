@@ -39,7 +39,7 @@
 4. **大小写（Linux）**：`File("A")!=File("a")`、hashCode 不同、compareTo 按字典序；compareTo(null) NPE；equals(非 File) false。POSIX 特有断言以 `separatorChar=='/'` 门控。
 5. **权限布尔矩阵**：新文件 canRead/canWrite true、canExecute false；setReadOnly→canWrite false；setWritable(true/false) 往返；setReadable/ setExecutable 含 ownerOnly 二参数全矩阵（(false,false) 清空所有位）。
 6. **lastModified**：新文件 >0；setLastModified 精确往返；(-1)→IAE "Negative time"；0 合法；缺失文件 0。
-7. **createNewFile/delete**：已存在 false；父缺失→IOException "No such file or directory"；非空目录 delete false。
+7. **createNewFile/delete**：已存在 false；父缺失→IOException 平台 OS 原因文本（随 OS/locale 本地化，不含路径）；非空目录 delete false。
 8. **mkdir/mkdirs**：已存在 false；父缺失 false；穿过文件分量 false；多层级联 true。
 9. **list/listFiles**：普通文件/缺失 → null；空目录 len 0；null 过滤器等价全列。
 10. **renameTo**：同目录 true；缺失源 false；目标父缺失 false；renameTo(null) NPE；POSIX 覆盖目标/自改名 true。
@@ -50,7 +50,7 @@
 15. **序列化**：round-trip equals/compareTo==0/path；svUID=301077366599181567。
 
 ### 负例精确异常表（双侧实测）
-（同 JDK-8 侧 DESIGN 的表：URI 六负例消息、createTempFile "too short"、"Negative time"、"No such file or directory"×2、NPE×4。）
+（同 JDK-8 侧 DESIGN 的表：URI 六负例消息、createTempFile "too short"、"Negative time"、平台 OS 原因文本×2、NPE×4。）
 
 ### JDK-8 vs JDK-27 版本差异
 - createTempFile 前缀过短消息：27=`Prefix string "ab" too short: length must be at least 3`（8 为 `Prefix string too short`；断言公共子串 "too short"）。

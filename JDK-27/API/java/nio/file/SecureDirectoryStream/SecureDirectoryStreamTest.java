@@ -181,7 +181,7 @@ public class SecureDirectoryStreamTest {
                 checkThrows(java.nio.file.NoSuchFileException.class,
                       () -> sds.deleteDirectory(Path.of("ghostd")),
                       "deleteDirectory missing -> NoSuchFileException");
-                // deleteFile on a directory -> FileSystemException "Is a directory" (probe-confirmed)
+                // deleteFile on a directory -> FileSystemException (reason text is OS/locale specific; probe-confirmed)
                 checkThrows(java.nio.file.FileSystemException.class,
                       () -> sds.deleteFile(Path.of("nd")),
                       "deleteFile on directory -> FileSystemException");

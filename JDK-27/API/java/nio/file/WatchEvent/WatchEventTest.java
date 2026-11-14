@@ -91,7 +91,14 @@ public class WatchEventTest {
                     StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
             Path f = dir.resolve("prec.txt");
             Files.writeString(f, "v");
-            // CREATE and MODIFY may arrive in separate inotify batches: bounded retry
+            // CREATE and MODIFY may arrive in separate batches, and Windows
+            // (ReadDirectoryChangesW) splits one write into several independent
+            // ENTRY_MODIFY notifications — sometimes even after the events of the
+            // current poll have been drained. exactly-once therefore means "the
+            // same WatchEvent object is never handed out twice", not "a second
+            // pollEvents() on the same signal is empty".
+            java.util.Set<WatchEvent<?>> delivered =
+                    java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
             boolean sawCreate = false;
             boolean sawModify = false;
             long deadline = System.currentTimeMillis() + 5_000;
@@ -102,6 +109,7 @@ public class WatchEventTest {
                 check(signalled == key, "key signalled");
                 List<WatchEvent<?>> events = signalled.pollEvents();
                 for (WatchEvent<?> e : events) {
+                    check(delivered.add(e), "event delivered exactly once");
                     check(e.kind() != null, "kind() never null");
                     check(e.count() >= 1, "count() at least one");
                     if (e.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
@@ -114,7 +122,6 @@ public class WatchEventTest {
                     }
                     if (e.kind() == StandardWatchEventKinds.ENTRY_MODIFY) sawModify = true;
                 }
-                check(signalled.pollEvents().isEmpty(), "events retrieved exactly once");
                 check(signalled.reset(), "key re-armed");
             }
             check(sawCreate, "ENTRY_CREATE observed (must)");

@@ -85,7 +85,7 @@ public class FileImageInputStreamTest {
                 "imgio-streamimpl-FileImageInputStream-ghost" + tmpCounter++);
         expectExact(FileNotFoundException.class, () -> new FileImageInputStream(ghost),
                 "ctor(nonexistent file)");
-        // opening a directory fails with FileNotFoundException ("Is a directory")
+        // opening a directory fails with FileNotFoundException (reason text is OS/locale specific)
         File dir = new File(System.getProperty("java.io.tmpdir"),
                 "imgio-streamimpl-FileImageInputStream-dir" + tmpCounter++);
         dir.mkdirs();

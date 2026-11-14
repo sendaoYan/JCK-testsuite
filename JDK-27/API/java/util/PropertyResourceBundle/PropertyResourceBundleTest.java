@@ -165,11 +165,30 @@ public class PropertyResourceBundleTest {
         }
     }
 
+    // Cleanup is not the contract under test. Windows may keep a handle on the
+    // bundle resources briefly; retry before deferring deletion to exit.
     static void deletePrbTemp(java.nio.file.Path dir) throws Exception {
-        java.nio.file.DirectoryStream<java.nio.file.Path> ds = java.nio.file.Files.newDirectoryStream(dir);
-        for (java.nio.file.Path p : ds) java.nio.file.Files.deleteIfExists(p);
-        ds.close();
-        java.nio.file.Files.deleteIfExists(dir);
+        try (java.nio.file.DirectoryStream<java.nio.file.Path> ds =
+                     java.nio.file.Files.newDirectoryStream(dir)) {
+            for (java.nio.file.Path p : ds) deleteBestEffort(p);
+        }
+        deleteBestEffort(dir);
+    }
+
+    static void deleteBestEffort(java.nio.file.Path p) {
+        for (int i = 0; i < 10; i++) {
+            try {
+                java.nio.file.Files.deleteIfExists(p);
+                return;
+            } catch (java.io.IOException e) {
+                System.gc();
+                try { Thread.sleep(50); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+        p.toFile().deleteOnExit();
     }
 
     public static void main(String[] args) throws Exception {

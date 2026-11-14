@@ -982,7 +982,14 @@ public class FilesTest {
             Path f = dir.resolve("f.txt");
             Files.write(f, new byte[] {1});
             java.nio.file.FileStore st = Files.getFileStore(f);
-            check(st != null && !st.name().isEmpty(), "store name non-empty");
+            // name() is implementation specific: an unlabeled Windows volume
+            // reports the empty string, so only presence is required there.
+            if (java.io.File.separatorChar == '\\') {
+                check(st != null && st.name() != null,
+                      "store name reported (may be empty on an unlabeled Windows volume)");
+            } else {
+                check(st != null && !st.name().isEmpty(), "store name non-empty");
+            }
             check(!st.type().isEmpty(), "store type non-empty");
             check(!st.isReadOnly(), "store writable");
             check(Files.getFileStore(dir).name().equals(st.name()),

@@ -23,6 +23,13 @@ public class FileInputStreamTest {
         passed++;
     }
 
+    // FNFE 的平台消息形如 "<path> (<OS 原因>)"；原因文本由 OS/strerror 与默认
+    // locale 决定（zh_CN Windows 下是中文），只断言结构，不锁英文措辞。
+    static boolean hasOsReason(String msg, String path) {
+        return msg != null && (path == null || msg.contains(path))
+                && msg.lastIndexOf('(') > 0 && msg.trim().endsWith(")");
+    }
+
     static File newTempDir() throws Exception {
         File d = File.createTempFile("jck-fis", ".tmp");
         if (!d.delete() || !d.mkdir()) throw new AssertionError("temp dir");
@@ -122,7 +129,7 @@ public class FileInputStreamTest {
                 new FileInputStream(missing);
             } catch (FileNotFoundException e) {
                 String m = e.getMessage();
-                check(m.contains(missing.getPath()) && m.contains("No such file or directory"),
+                check(hasOsReason(m, missing.getPath()),
                       "missing-file message has path and reason: " + m);
             }
             File nested = new File(dir, "no/such/deep.bin");
@@ -131,7 +138,7 @@ public class FileInputStreamTest {
             try {
                 new FileInputStream(nested.getPath());
             } catch (FileNotFoundException e) {
-                check(e.getMessage().contains("No such file or directory"),
+                check(hasOsReason(e.getMessage(), nested.getPath()),
                       "missing-parent message reason: " + e.getMessage());
             }
             checkThrows(FileNotFoundException.class, () -> new FileInputStream(dir),
@@ -140,8 +147,10 @@ public class FileInputStreamTest {
                 new FileInputStream(dir);
             } catch (FileNotFoundException e) {
                 String m = e.getMessage();
-                check(m.equals(dir.getPath() + " (Is a directory)"),
-                      "JDK-8 directory message exact: " + m);
+                // 目录被当文件打开：Linux 是 "(Is a directory)"，Windows 是 "(拒绝访问。)"
+                // 一类的 OS 文本 —— 只锁 "<path> (<原因>)" 的形状。
+                check(hasOsReason(m, dir.getPath()),
+                      "JDK-8 directory message shape: " + m);
             }
             checkThrows(NullPointerException.class, () -> new FileInputStream((File) null),
                         "null File -> NPE");

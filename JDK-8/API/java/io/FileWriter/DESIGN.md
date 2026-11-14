@@ -25,7 +25,7 @@
 ## 深化追加（契约级）
 
 新增维度（断言 9 → 55）：
-- 构造负例：null File/String（含 boolean 变体）→ NPE；缺失父目录 → FNFE 含 "No such file or directory" 与路径；目录 → FNFE 含 "Is a directory"（含 append=true）。
+- 构造负例：null File/String（含 boolean 变体）→ NPE；缺失父目录 → FNFE 含平台 OS 原因文本与路径；目录 → FNFE 含平台 OS 原因文本（含 append=true）。
 - FileDescriptor 构造：经 FileOutputStream 的 FD 写 "ok" 读回。
 - 关闭矩阵：write(int)/write(char[])/write(String)/flush → IOException "Stream closed"；close 幂等；关闭前未写文件长 0。
 - truncate vs append 全构造组合：File/String × false/true；append 空串 no-op。
@@ -43,8 +43,8 @@
 | 操作 | 异常 | 精确子串 |
 |---|---|---|
 | null File/String（4 形式） | NullPointerException | 类型级 |
-| 缺失父目录 | FileNotFoundException | No such file or directory |
-| 打开目录（含 append=true） | FileNotFoundException | Is a directory |
+| 缺失父目录 | FileNotFoundException | 平台 OS 原因文本 |
+| 打开目录（含 append=true） | FileNotFoundException | 平台 OS 原因文本 |
 | 关闭后 write/flush | IOException | Stream closed |
 | write("abc",1,5) | StringIndexOutOfBoundsException | 类型级 |
 | write(cbuf,off,len) 越界 | IndexOutOfBoundsException | 类型级 |

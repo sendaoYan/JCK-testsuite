@@ -3,7 +3,7 @@
  * @summary java.io.FileReader conformance: white-box structure (reflection) + black-box behavior
  *          (UTF-8 character reads and roundtrip with FileWriter).
  *          Deepened (contract level): ctor negatives (null NPE, directory FNFE
- *          "Is a directory", missing FNFE "No such file or directory" with path),
+ *          with a platform OS reason text, missing FNFE with path + OS reason),
  *          FileDescriptor ctor via FileInputStream FD, closed-state matrix
  *          ("Stream closed"), read bounds, empty file, mixed single/bulk/offset reads,
  *          skip semantics; JDK-11+ Charset ctors: (File,Charset)/(String,Charset)

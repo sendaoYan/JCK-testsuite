@@ -8,6 +8,56 @@ public class SocketsTest {
     static int passed;
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
 
+    // Runtime capability probe: never hard-code a platform's option set. If the
+    // option is in supportedOptions(Socket.class) set/get must round-trip;
+    // otherwise both must throw UnsupportedOperationException (the contract).
+    static void probeIntOption(java.net.Socket s, String label,
+            java.net.SocketOption<Integer> opt, int value) throws Exception {
+        if (jdk.net.Sockets.supportedOptions(java.net.Socket.class).contains(opt)) {
+            jdk.net.Sockets.setOption(s, opt, value);
+            check(Integer.valueOf(value).equals(jdk.net.Sockets.getOption(s, opt)),
+                    label + " supported via Sockets: set/get round-trip");
+        } else {
+            try {
+                jdk.net.Sockets.setOption(s, opt, value);
+                check(false, label + " unsupported: set must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(label.equals(e.getMessage()), label + " unsupported: set UOE message");
+            }
+            try {
+                jdk.net.Sockets.getOption(s, opt);
+                check(false, label + " unsupported: get must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check(label.equals(e.getMessage()), label + " unsupported: get UOE message");
+            }
+        }
+    }
+
+    static void probeFlowSla(java.net.Socket s) throws Exception {
+        if (jdk.net.Sockets.supportedOptions(java.net.Socket.class).contains(
+                jdk.net.ExtendedSocketOptions.SO_FLOW_SLA)) {
+            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA,
+                    jdk.net.SocketFlow.create().priority(1).bandwidth(1024));
+            Object flow = jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA);
+            check(flow instanceof jdk.net.SocketFlow,
+                    "SO_FLOW_SLA supported via Sockets: set/get returns a SocketFlow");
+        } else {
+            try {
+                jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA,
+                        jdk.net.SocketFlow.create().priority(1).bandwidth(1024));
+                check(false, "SO_FLOW_SLA unsupported: set must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check("SO_FLOW_SLA".equals(e.getMessage()), "SO_FLOW_SLA unsupported: set UOE message");
+            }
+            try {
+                jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.SO_FLOW_SLA);
+                check(false, "SO_FLOW_SLA unsupported: get must throw UnsupportedOperationException");
+            } catch (UnsupportedOperationException e) {
+                check("SO_FLOW_SLA".equals(e.getMessage()), "SO_FLOW_SLA unsupported: get UOE message");
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         java.net.Socket s = new java.net.Socket();
         jdk.net.Sockets.setOption(s, java.net.StandardSocketOptions.TCP_NODELAY, true);
@@ -41,9 +91,11 @@ public class SocketsTest {
             check(Boolean.FALSE.equals(jdk.net.Sockets.getOption(s, java.net.StandardSocketOptions.SO_KEEPALIVE)), "SO_KEEPALIVE off");
             check(jdk.net.Sockets.getOption(s, java.net.StandardSocketOptions.SO_RCVBUF) instanceof Integer, "SO_RCVBUF value Integer");
             check(jdk.net.Sockets.getOption(s, java.net.StandardSocketOptions.TCP_NODELAY) instanceof Boolean, "TCP_NODELAY value Boolean");
-            // 2. 扩展选项经 Sockets 通道闭环
-            jdk.net.Sockets.setOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100);
-            check(Integer.valueOf(100).equals(jdk.net.Sockets.getOption(s, jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)), "TCP_KEEPIDLE via Sockets");
+            // 2. 扩展选项经 Sockets 通道闭环（按运行时能力探测分支）
+            probeIntOption(s, "TCP_KEEPIDLE", jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE, 100);
+            probeIntOption(s, "TCP_KEEPINTERVAL", jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL, 50);
+            probeIntOption(s, "TCP_KEEPCOUNT", jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT, 8);
+            probeFlowSla(s);
             // 3. null 参数：null 选项 → NPE；null socket → IllegalArgumentException（JDK-8 反射通道实测）
             try { jdk.net.Sockets.setOption(s, null, 1); check(false, "setOption null option should NPE"); }
             catch (NullPointerException e) { check(true, "setOption null option NPE"); }
@@ -74,15 +126,16 @@ public class SocketsTest {
             java.net.StandardSocketOptions.SO_LINGER, java.net.StandardSocketOptions.IP_TOS,
             java.net.StandardSocketOptions.TCP_NODELAY };
         for (java.net.SocketOption<?> o : sockMust) check(sk.contains(o), "Socket set contains " + o.name());
-        check(sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)
-           && sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPINTERVAL)
-           && sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPCOUNT), "Socket set contains TCP_KEEP*");
-        check(!sk.contains(jdk.net.ExtendedSocketOptions.SO_FLOW_SLA), "Socket set lacks SO_FLOW_SLA on Linux");
+        // 扩展选项的可用性不在此硬编码：section 2 的运行时探测已对
+        // supportedOptions 集合内/外的 set/get 契约分别作了断言。
         java.util.Set<java.net.SocketOption<?>> ss = jdk.net.Sockets.supportedOptions(java.net.ServerSocket.class);
         check(ss.contains(java.net.StandardSocketOptions.SO_RCVBUF), "ServerSocket contains SO_RCVBUF");
         check(ss.contains(java.net.StandardSocketOptions.SO_REUSEADDR), "ServerSocket contains SO_REUSEADDR");
         check(ss.contains(java.net.StandardSocketOptions.IP_TOS), "ServerSocket contains IP_TOS");
-        check(ss.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE), "ServerSocket contains TCP_KEEPIDLE");
+        if (sk.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE)) {
+            check(ss.contains(jdk.net.ExtendedSocketOptions.TCP_KEEPIDLE),
+                    "ServerSocket contains TCP_KEEPIDLE where Socket does");
+        }
         check(!ss.contains(java.net.StandardSocketOptions.TCP_NODELAY), "ServerSocket lacks TCP_NODELAY");
         check(!ss.contains(java.net.StandardSocketOptions.SO_SNDBUF), "ServerSocket lacks SO_SNDBUF");
         java.util.Set<java.net.SocketOption<?>> ds = jdk.net.Sockets.supportedOptions(java.net.DatagramSocket.class);

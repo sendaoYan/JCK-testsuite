@@ -91,6 +91,24 @@ public class ServiceTest {
         "  </service>\n" +
         "</definitions>\n";
 
+    // 清理不是被测契约。JAX-WS RI 读过的 WSDL 文件句柄可能晚一拍释放，
+    // Windows 上 delete 会抛 ERROR_SHARING_VIOLATION；重试后登记 deleteOnExit。
+    static void deleteBestEffort(Path p) {
+        for (int i = 0; i < 10; i++) {
+            try {
+                Files.deleteIfExists(p);
+                return;
+            } catch (java.io.IOException e) {
+                System.gc();
+                try { Thread.sleep(50); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+        p.toFile().deleteOnExit();
+    }
+
     static Path writeTempWsdl(String content) throws Exception {
         Path f = Files.createTempFile("jcksvc", ".wsdl");
         Files.write(f, content.getBytes(StandardCharsets.UTF_8));
@@ -295,7 +313,7 @@ public class ServiceTest {
                       "bare SEI message mentions annotation: " + e.getMessage());
             }
         } finally {
-            Files.deleteIfExists(f);
+            deleteBestEffort(f);
         }
     }
 
@@ -312,7 +330,7 @@ public class ServiceTest {
                       "garbage wsdl exception message non-empty");
             }
         } finally {
-            Files.deleteIfExists(f);
+            deleteBestEffort(f);
         }
     }
 

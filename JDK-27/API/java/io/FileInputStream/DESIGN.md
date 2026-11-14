@@ -32,6 +32,6 @@
 - 大文件分块矩阵（30000 字节，跨内部缓冲区）：readAllBytes 端到端、readNBytes(5)+readNBytes(b,0,3)+skipNBytes(10)+transferTo 计数与内容、skipNBytes(精确长度) 后 read=-1、EOF 处 skipNBytes(1) **不抛 EOFException**（FIS 覆写 skip 的 lseek 越界成功返回 n，与基类默认实现不同）
 - channel position 随读前进；File 与 String 构造一致
 
-负例矩阵：缺失文件 FNFE / 目录 FNFE("<path> (Is a directory)" 精确) / null File NPE("file") / read(b,1,2) IOOBE / readNBytes(-1) IAE / 关闭后 read/available IOException("Stream Closed")、skip IOException("Bad file descriptor")。
+负例矩阵：缺失文件 FNFE / 目录 FNFE("<path> (<平台 OS 原因>)" 结构) / null File NPE("file") / read(b,1,2) IOOBE / readNBytes(-1) IAE / 关闭后 read/available IOException("Stream Closed")、skip IOException("Bad file descriptor")。
 
 版本差异记录：skip 关闭后消息 8 "Stream Closed" vs 27 "Bad file descriptor"；基类 skipNBytes 的 EOFException 语义被 FIS 的 skip 覆写改变（EOF 处 skipNBytes 正数不抛）；null NPE 消息 27 指名参数。不测项：finalize；close 后懒创建 channel 的 isOpen；越过 EOF 后再小 skip 的返回值（非确定）。

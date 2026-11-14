@@ -52,15 +52,26 @@ public class CutActionTest {
             frame.pack();
             frame.setVisible(true);
 
+            // 剪贴板是进程外全局资源：并行跑用例（-conc:16）时会短暂被其他用例占用，
+            // CutAction 把复制失败静默吞成鸣笛、选区原样留在组件里，所以重试到剪贴板空出来。
             ActionEvent evt = new ActionEvent(src, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.cutAction);
-            action.actionPerformed(evt);
-
-            // cut removes the selection from the source
-            check("This".equals(src.getText()), "cut removes selection");
-
             JTextArea dst = new JTextArea();
-            dst.paste();
-            check("Cut".equals(dst.getText()), "cut->paste round trip");
+            boolean cutOk = false;
+            boolean pasted = false;
+            for (int i = 0; i < 40 && !(cutOk && pasted); i++) {
+                src.setText("CutThis");
+                src.select(0, 3); // "Cut"
+                action.actionPerformed(evt);
+                cutOk = "This".equals(src.getText());
+                if (!cutOk) { sleepQuietly(); continue; }
+                dst.setText("");
+                dst.paste();
+                pasted = "Cut".equals(dst.getText());
+                if (!pasted) sleepQuietly();
+            }
+            // cut removes the selection from the source
+            check(cutOk, "cut removes selection");
+            check(pasted, "cut->paste round trip");
 
             // cut on non-editable component is a no-op
             JTextArea ro = new JTextArea("Keep");
@@ -79,6 +90,11 @@ public class CutActionTest {
         runOnEDT(CutActionTest::testBlackBox);
         System.out.println("PASS (" + passed + " assertions)");
     }
+    static void sleepQuietly() {
+        try { Thread.sleep(100); }
+        catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+    }
+
     interface ThrowingRunnable { void run() throws Exception; }
     static void runOnEDT(ThrowingRunnable r) throws Exception {
         try {

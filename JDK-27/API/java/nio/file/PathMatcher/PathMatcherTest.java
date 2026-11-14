@@ -93,7 +93,13 @@ public class PathMatcherTest {
     static void testGlobMatrix() {
         FileSystem fs = FileSystems.getDefault();
         PathMatcher star = fs.getPathMatcher("glob:*.java");
-        check(!star.matches(Path.of("Hello.JAVA")), "glob case-sensitive");
+        // Glob case sensitivity follows the provider: Unix is sensitive,
+        // Windows folds case.
+        if (java.io.File.separatorChar == '/') {
+            check(!star.matches(Path.of("Hello.JAVA")), "glob is case-sensitive on Unix");
+        } else {
+            check(star.matches(Path.of("Hello.JAVA")), "glob folds case on Windows");
+        }
         check(!star.matches(Path.of("Hellojava")), "glob dot is literal");
         check(star.matches(Path.of(".java")), "glob * matches empty");
 
@@ -117,11 +123,14 @@ public class PathMatcherTest {
         check(neg.matches(Path.of("d.txt")), "glob [!abc] matches non-member");
         check(!neg.matches(Path.of("a.txt")), "glob [!abc] rejects member");
 
-        // absolute-path glob
-        PathMatcher absGl = fs.getPathMatcher("glob:/tmp/*.txt");
-        check(absGl.matches(Path.of("/tmp/x.txt")), "absolute glob matches");
-        check(!absGl.matches(Path.of("/var/x.txt")), "absolute glob rejects other root");
-        check(!absGl.matches(Path.of("tmp/x.txt")), "absolute glob rejects relative");
+        // absolute-path glob: the spelling "/tmp" is POSIX-specific (on Windows
+        // a leading slash is drive-relative), so this matrix runs on Unix only.
+        if (java.io.File.separatorChar == '/') {
+            PathMatcher absGl = fs.getPathMatcher("glob:/tmp/*.txt");
+            check(absGl.matches(Path.of("/tmp/x.txt")), "absolute glob matches");
+            check(!absGl.matches(Path.of("/var/x.txt")), "absolute glob rejects other root");
+            check(!absGl.matches(Path.of("tmp/x.txt")), "absolute glob rejects relative");
+        }
 
         // empty pattern matches only the empty path
         PathMatcher emptyRe = fs.getPathMatcher("regex:");
@@ -135,22 +144,29 @@ public class PathMatcherTest {
 
     static void testRegexMatrix() {
         FileSystem fs = FileSystems.getDefault();
-        PathMatcher m = fs.getPathMatcher("regex:foo/bar/.*");
-        check(m.matches(Path.of("foo/bar/x")), "regex matches deep");
-        check(!m.matches(Path.of("foo/baz/x")), "regex anchored at start");
+        // Regexes embed the provider's separator verbatim, so the POSIX-spelled
+        // case runs on Unix only; the trailing-separator check is written
+        // platform-neutrally below.
+        if (java.io.File.separatorChar == '/') {
+            PathMatcher m = fs.getPathMatcher("regex:foo/bar/.*");
+            check(m.matches(Path.of("foo/bar/x")), "regex matches deep");
+            check(!m.matches(Path.of("foo/baz/x")), "regex anchored at start");
+            check(!m.matches(Path.of("foo/bar/")),
+                  "normalized path no longer satisfies trailing-/ regex");
+        }
         // Path.of drops a trailing separator, so "foo/bar/" never reaches the matcher
-        check(Path.of("foo/bar/").toString().equals("foo/bar"),
+        check(Path.of("foo/bar/").equals(Path.of("foo", "bar")),
               "trailing separator normalized away");
-        check(!m.matches(Path.of("foo/bar/")),
-              "normalized path no longer satisfies trailing-/ regex");
         PathMatcher groups = fs.getPathMatcher("regex:(a|b)+c");
         check(groups.matches(Path.of("abaac")), "regex groups");
         check(!groups.matches(Path.of("c")), "regex groups require prefix");
         PathMatcher esc = fs.getPathMatcher("regex:a\\.b");
         check(esc.matches(Path.of("a.b")), "regex escaped dot literal");
         check(!esc.matches(Path.of("axb")), "regex escaped dot not wildcard");
-        PathMatcher slashCls = fs.getPathMatcher("regex:[/]");
-        check(slashCls.matches(Path.of("/")), "regex char class with separator");
+        if (java.io.File.separatorChar == '/') {
+            PathMatcher slashCls = fs.getPathMatcher("regex:[/]");
+            check(slashCls.matches(Path.of("/")), "regex char class with separator");
+        }
     }
 
     static void testFactoryNegatives() {

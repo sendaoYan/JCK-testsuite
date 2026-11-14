@@ -208,11 +208,19 @@ public class DosFileAttributesTest {
             check(v.readAttributes().lastModifiedTime().equals(
                     java.nio.file.Files.readAttributes(f, BasicFileAttributes.class).lastModifiedTime()),
                   "dos and basic mtime agree");
-            // Linux emulation detail: readonly is a stored flag, not enforced by the kernel for open(O_WRONLY)
             v.setReadOnly(true);
             check(v.readAttributes().isReadOnly(), "readonly flag set");
-            java.nio.file.Files.write(f, "more".getBytes("UTF-8"));
-            check(true, "write to dos-readonly file succeeds on Linux ext4 (emulated flag)");
+            if (java.io.File.separatorChar == '\\') {
+                // Windows 上 dos:readonly 就是 FILE_ATTRIBUTE_READONLY，由内核真正执行，
+                // 打开已存在的文件写入会被拒绝（探针实测 AccessDeniedException）。
+                checkThrowsIO(java.nio.file.AccessDeniedException.class,
+                        () -> java.nio.file.Files.write(f, "more".getBytes("UTF-8")),
+                        "write to dos-readonly file denied on Windows");
+            } else {
+                // Linux 上 readonly 只是存起来的标志（ext4 用 xattr 模拟），不拦 open(O_WRONLY)。
+                java.nio.file.Files.write(f, "more".getBytes("UTF-8"));
+                check(true, "write to dos-readonly file succeeds on Linux ext4 (emulated flag)");
+            }
             v.setReadOnly(false);
             check(!v.readAttributes().isReadOnly(), "readonly restored for cleanup");
             // symlink via NOFOLLOW: dos attributes cannot be read through the link itself

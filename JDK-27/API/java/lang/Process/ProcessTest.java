@@ -96,14 +96,18 @@ public class ProcessTest {
         }
 
         // A fresh process is free to pick any charset for its single reader.
+        // 无参 inputReader()/errorReader() 用 native.encoding（zh_CN Windows 上是 GBK），
+        // 与已按 UTF-8 建好的 reader 冲突，所以缓存语义只在同一 charset 下比较。
         MockProcess q = new MockProcess(0);
         check(q.inputReader(java.nio.charset.StandardCharsets.UTF_8) != null,
               "inputReader(Charset) non-null");
-        check(q.inputReader(java.nio.charset.StandardCharsets.UTF_8) == q.inputReader(),
+        check(q.inputReader(java.nio.charset.StandardCharsets.UTF_8)
+                == q.inputReader(java.nio.charset.StandardCharsets.UTF_8),
               "same charset returns the same reader");
         check(q.errorReader(java.nio.charset.StandardCharsets.UTF_8) != null,
               "errorReader(Charset) non-null");
-        check(q.errorReader(java.nio.charset.StandardCharsets.UTF_8) == q.errorReader(),
+        check(q.errorReader(java.nio.charset.StandardCharsets.UTF_8)
+                == q.errorReader(java.nio.charset.StandardCharsets.UTF_8),
               "same charset returns the same error reader");
         try {
             new MockProcess(0).inputReader(null);
@@ -369,7 +373,11 @@ public class ProcessTest {
             p.exitValue();
             throw new AssertionError("unreachable");
         } catch (IllegalThreadStateException e) {
-            check("process hasn't exited".equals(e.getMessage()), "ITSE message exact (identical in 8 and 27)");
+            // Windows ProcessImpl 报 "process has not exited"，POSIX 用 "hasn't"；
+            // 只锁消息非空且提到 exited，不锁具体措辞。
+            String m = e.getMessage();
+            check(m != null && !m.isEmpty() && m.contains("exit"),
+                  "ITSE message describes the exit state: " + m);
         }
         // 活跃子进程的 info 契约（长驻进程保证可读）
         ProcessHandle.Info info = p.info();

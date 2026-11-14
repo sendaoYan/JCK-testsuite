@@ -57,6 +57,24 @@ public class PrintWriterTest {
         throw new AssertionError(what + ": expected " + type.getName() + " but nothing thrown");
     }
 
+    // 平台消息形如 "<path> (<OS 原因>)"；原因文本随 OS/strerror 与默认 locale 变化，
+    // 只锁结构，不锁英文措辞。
+    static void expectThrowsOsReason(String what, Class<? extends Throwable> type,
+                                     String path, Action a) {
+        try { a.run(); }
+        catch (Throwable t) {
+            if (!type.isInstance(t))
+                throw new AssertionError(what + ": expected " + type.getName() + " but got " + t);
+            String m = t.getMessage();
+            if (m == null || (path != null && !m.contains(path))
+                    || m.lastIndexOf('(') <= 0 || !m.trim().endsWith(")"))
+                throw new AssertionError(what + ": message \"" + m
+                                         + "\" lacks \"<path> (<OS reason>)\"");
+            passed++; return;
+        }
+        throw new AssertionError(what + ": expected " + type.getName() + " but nothing thrown");
+    }
+
     static String hex(byte[] b) {
         StringBuilder sb = new StringBuilder();
         for (byte x : b) sb.append(String.format("%02X ", x));
@@ -490,11 +508,11 @@ public class PrintWriterTest {
             check("00 63 00 73 00 31 00 36".equals(hex(readFile(f5))),
                   "(File,String) UTF-16BE exact bytes");
             final File missing = new File(dir, "no-such-dir" + File.separatorChar + "f.txt");
-            expectThrowsMsg("(File) with missing parent", java.io.FileNotFoundException.class,
-                            "(No such file or directory)",
+            expectThrowsOsReason("(File) with missing parent", java.io.FileNotFoundException.class,
+                            missing.getPath(),
                 new Action() { public void run() throws Exception { new PrintWriter(missing); } });
-            expectThrowsMsg("(String) with missing parent", java.io.FileNotFoundException.class,
-                            "(No such file or directory)",
+            expectThrowsOsReason("(String) with missing parent", java.io.FileNotFoundException.class,
+                            missing.getPath(),
                 new Action() { public void run() throws Exception { new PrintWriter(missing.getPath()); } });
             // charset is validated before the file is opened
             final File bad = new File(dir, "bad.txt");

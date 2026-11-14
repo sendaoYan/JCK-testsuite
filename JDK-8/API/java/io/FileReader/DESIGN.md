@@ -23,7 +23,7 @@
 ## 深化追加（契约级）
 
 新增维度（断言 11 → 55）：
-- 构造负例：null File/String → NPE；目录 → FNFE 消息含 "Is a directory" 与路径；缺失文件 → FNFE 含 "No such file or directory" 与文件名（File 与 String 构造都验）。
+- 构造负例：null File/String → NPE；目录 → FNFE 消息含平台 OS 原因文本与路径；缺失文件 → FNFE 含平台 OS 原因文本与文件名（File 与 String 构造都验）。
 - FileDescriptor 构造：用 **FileInputStream 的 FD** 读 "hi"+EOF（write-side FD 会 EBADF——实测坑）。
 - 关闭矩阵：read()/skip()/ready()/read(char[]) → IOException "Stream closed"；close 幂等；markSupported()==false（继承 InputStreamReader）。
 - read 越界：null NPE、负 off IOOBE、越界 len IOOBE、off+len int 溢出 IOOBE、len=0 返回 0；区域读精确 offset 放置（buf[0]==0、buf[1]=='h'）。
@@ -36,8 +36,8 @@
 | 操作 | 异常 | 精确子串 |
 |---|---|---|
 | null File/String | NullPointerException | 类型级 |
-| 打开目录 | FileNotFoundException | Is a directory |
-| 打开缺失文件 | FileNotFoundException | No such file or directory |
+| 打开目录 | FileNotFoundException | 平台 OS 原因文本 |
+| 打开缺失文件 | FileNotFoundException | 平台 OS 原因文本 |
 | 关闭后 4 操作 | IOException | Stream closed |
 | skip(负数) | IllegalArgumentException | skip value is negative |
 | read(cbuf,off,len) 越界 | IndexOutOfBoundsException | 类型级 |

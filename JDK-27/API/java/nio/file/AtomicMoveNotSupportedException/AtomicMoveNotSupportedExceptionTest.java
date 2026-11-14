@@ -24,15 +24,31 @@ public class AtomicMoveNotSupportedExceptionTest {
         check("why".equals(e.getReason()), "reason stored");
     }
 
-    /** A writable directory on a FileStore other than the one holding dir, or null. */
+    /**
+     * A writable directory on a FileStore other than the one holding dir, or null.
+     * Mount points are discovered from the platform's FileStores (Unix
+     * FileStore.toString() starts with the mount point) plus the root
+     * directories; nothing platform-specific such as /dev/shm is hard-coded.
+     */
     static java.nio.file.Path crossStoreDir(java.nio.file.Path dir) throws java.io.IOException {
         java.nio.file.FileStore here = java.nio.file.Files.getFileStore(dir);
-        java.util.List<java.nio.file.Path> candidates = new java.util.ArrayList<>();
-        if (java.io.File.separatorChar == '/') {
-            candidates.add(java.nio.file.Path.of("/dev/shm"));
+        boolean otherStore = false;
+        for (java.nio.file.FileStore s
+                : java.nio.file.FileSystems.getDefault().getFileStores()) {
+            if (!s.equals(here)) { otherStore = true; break; }
         }
+        if (!otherStore)
+            return null;
+        java.util.List<java.nio.file.Path> candidates = new java.util.ArrayList<>();
         for (java.nio.file.Path root : java.nio.file.FileSystems.getDefault().getRootDirectories()) {
             candidates.add(root);
+        }
+        for (java.nio.file.FileStore s
+                : java.nio.file.FileSystems.getDefault().getFileStores()) {
+            if (s.equals(here)) continue;
+            String text = s.toString();
+            int i = text.indexOf(" (");
+            if (i > 0) candidates.add(java.nio.file.Path.of(text.substring(0, i)));
         }
         for (java.nio.file.Path c : candidates) {
             try {
@@ -174,16 +190,16 @@ public class AtomicMoveNotSupportedExceptionTest {
     }
 
     static void testContractRealTrigger() throws Exception {
-        // /tmp (ext4) and /dev/shm (tmpfs) are different FileStores on this host (measured);
-        // EXDEV surfaces as AtomicMoveNotSupportedException only under ATOMIC_MOVE
+        // A move across FileStore boundaries (EXDEV) surfaces as
+        // AtomicMoveNotSupportedException only under ATOMIC_MOVE
         java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("a11");
-        java.nio.file.Path shm = crossStoreDir(dir);
-        if (shm == null) {
+        java.nio.file.Path other = crossStoreDir(dir);
+        if (other == null) {
             System.out.println("NOTE: no second FileStore is reachable; trigger skipped");
             java.nio.file.Files.deleteIfExists(dir);
             return;
         }
-        java.nio.file.Path shmOut = null;
+        java.nio.file.Path dst = null;
         try {
             java.nio.file.Path src = dir.resolve("am.txt");
             java.nio.file.Files.write(src, "m".getBytes("UTF-8"));
@@ -192,20 +208,20 @@ public class AtomicMoveNotSupportedExceptionTest {
             java.nio.file.Files.move(src, sameStore, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             check(java.nio.file.Files.exists(sameStore) && !java.nio.file.Files.exists(src),
                     "same-store ATOMIC_MOVE is a plain rename (succeeds)");
-            shmOut = shm.resolve("a11-" + System.nanoTime() + ".txt");
+            dst = other.resolve("a11-" + System.nanoTime() + ".txt");
             try {
-                java.nio.file.Files.move(sameStore, shmOut,
+                java.nio.file.Files.move(sameStore, dst,
                         java.nio.file.StandardCopyOption.ATOMIC_MOVE);
                 check(false, "cross-store ATOMIC_MOVE must fail");
             } catch (AtomicMoveNotSupportedException e) {
                 check(sameStore.toString().equals(e.getFile()), "getFile is the source");
-                check(shmOut.toString().equals(e.getOtherFile()), "getOtherFile is the target");
+                check(dst.toString().equals(e.getOtherFile()), "getOtherFile is the target");
                 check(e.getReason() != null, "errno reason present (EXDEV)");
-                check(e.getMessage().equals(sameStore.toString() + " -> " + shmOut.toString()
+                check(e.getMessage().equals(sameStore.toString() + " -> " + dst.toString()
                         + ": " + e.getReason()), "message 'src -> dst: reason'");
             }
         } finally {
-            if (shmOut != null) java.nio.file.Files.deleteIfExists(shmOut);
+            if (dst != null) java.nio.file.Files.deleteIfExists(dst);
             deleteTree(dir);
         }
     }

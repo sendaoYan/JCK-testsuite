@@ -472,11 +472,14 @@ public class RuntimeTest {
 
     static void testLoadNegatives() {
         Runtime r = Runtime.getRuntime();
+        // 用 tmpdir 下的绝对路径：POSIX "/tmp..." 在 Windows 上的绝对性/路径形态不同。
+        String missingLib = new java.io.File(System.getProperty("java.io.tmpdir"),
+                                             "definitely-missing-lib").getAbsolutePath();
         try {
-            r.load("/tmp/lcF/definitely-missing-lib");
+            r.load(missingLib);
             throw new AssertionError("Runtime.load(missing): expected UnsatisfiedLinkError");
         } catch (UnsatisfiedLinkError e) {
-            check("Can't load library: /tmp/lcF/definitely-missing-lib".equals(e.getMessage()),
+            check(("Can't load library: " + missingLib).equals(e.getMessage()),
                   "Runtime.load(missing) exact message [JDK8]");
         }
         try {
@@ -500,12 +503,14 @@ public class RuntimeTest {
             check("no lcFNoSuchLib in java.library.path".equals(e.getMessage()),
                   "Runtime.loadLibrary(missing) exact message [JDK8]");
         }
+        // 分隔符守卫只认平台自身的分隔符，Windows 上 '/' 不是 File.separator。
+        String separated = "a" + java.io.File.separator + "b";
         try {
-            r.loadLibrary("a/b");
+            r.loadLibrary(separated);
             throw new AssertionError("Runtime.loadLibrary(separator): expected UnsatisfiedLinkError");
         } catch (UnsatisfiedLinkError e) {
-            check("Directory separator should not appear in library name: a/b".equals(e.getMessage()),
-                  "Runtime.loadLibrary(separator) exact message [JDK8]");
+            check(e.getMessage() != null && e.getMessage().contains(separated),
+                  "Runtime.loadLibrary(separator) message names the library [JDK8]: " + e.getMessage());
         }
         try {
             r.loadLibrary("");

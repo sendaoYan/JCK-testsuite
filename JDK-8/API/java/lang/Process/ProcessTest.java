@@ -241,7 +241,11 @@ public class ProcessTest {
             p.exitValue();
             throw new AssertionError("unreachable");
         } catch (IllegalThreadStateException e) {
-            check("process hasn't exited".equals(e.getMessage()), "ITSE message exact (identical in 8 and 27)");
+            // Windows JDK-8 的 ProcessImpl 报 "process has not exited"，POSIX 用 "hasn't"；
+            // 只锁消息非空且提到 exited，不锁具体措辞。
+            String m = e.getMessage();
+            check(m != null && !m.isEmpty() && m.contains("exit"),
+                  "ITSE message describes the exit state: " + m);
         }
         check(!p.waitFor(200, TimeUnit.MILLISECONDS), "waitFor(200ms) false while running");
         check(!p.waitFor(0, TimeUnit.MILLISECONDS), "waitFor(0) false while running");

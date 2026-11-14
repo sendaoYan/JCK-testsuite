@@ -481,14 +481,17 @@ public class ProcessBuilderTest {
         } catch (java.io.IOException expected) {
             passed++;
         }
+        // 用 tmpdir 构造缺失目录：Windows 上没有 /tmp，且消息中的路径形态随平台变化。
+        File noDir = new File(System.getProperty("java.io.tmpdir"), "lcG-no-such-dir-xyz");
+        lcDeleteRec(noDir); // 上一轮残留的目录会掩盖失败
         try {
-            new ProcessBuilder(LC_JAVA_BIN, "-version")
-                    .directory(new File("/tmp/lcG-no-such-dir-xyz")).start();
+            new ProcessBuilder(LC_JAVA_BIN, "-version").directory(noDir).start();
             throw new AssertionError("start() with missing working directory: expected IOException");
         } catch (java.io.IOException e) {
             passed++;
-            check(e.getMessage().contains("(in directory \"/tmp/lcG-no-such-dir-xyz\")"),
-                  "IOException message locks directory");
+            check(e.getMessage() != null && e.getMessage().contains(noDir.getPath())
+                  && e.getMessage().contains("in directory"),
+                  "IOException message names the missing directory: " + e.getMessage());
         }
     }
 

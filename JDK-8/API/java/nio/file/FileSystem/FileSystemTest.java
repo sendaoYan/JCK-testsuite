@@ -134,7 +134,14 @@ public class FileSystemTest {
             if (first == null) first = s;
         }
         check(storeCount >= 1, "at least one file store");
-        check(first != null && !first.name().isEmpty(), "first store name non-empty");
+        // An unlabeled Windows volume reports an empty name; name() only
+        // guarantees an implementation-specific string (never null).
+        if (java.io.File.separatorChar == '\\') {
+            check(first != null && first.name() != null,
+                  "first store name reported (may be empty on an unlabeled Windows volume)");
+        } else {
+            check(first != null && !first.name().isEmpty(), "first store name non-empty");
+        }
         check(first != null && !first.type().isEmpty(), "first store type non-empty");
 
         // supported views (basic/owner/user always; posix is Unix-only)

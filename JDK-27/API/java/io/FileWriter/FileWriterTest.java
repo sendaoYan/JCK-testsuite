@@ -3,7 +3,7 @@
  * @summary java.io.FileWriter conformance: white-box structure (reflection) + black-box behavior
  *          (write/append modes with explicit UTF-8 and roundtrip with FileReader).
  *          Deepened (contract level): ctor negatives (null NPE, missing-parent FNFE
- *          "No such file or directory", directory FNFE "Is a directory"),
+ *          and directory FNFE carrying a platform OS reason text),
  *          FileDescriptor ctor, closed matrix ("Stream closed"), truncate-vs-append
  *          both ctors, write bounds (NPE/IOOBE/StringIndexOOB), write(int) low 16 bits,
  *          flush visibility, append(null)->"null", write-forms agreement,

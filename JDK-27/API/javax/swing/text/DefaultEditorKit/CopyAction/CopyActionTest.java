@@ -52,16 +52,23 @@ public class CopyActionTest {
             frame.pack();
             frame.setVisible(true);
 
-            ActionEvent evt = new ActionEvent(src, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.copyAction);
-            action.actionPerformed(evt);
+            // 剪贴板是进程外全局资源：并行跑用例（-conc:16）时会被其他用例短暂占用，
+            // Toolkit 的复制失败被静默吞成鸣笛，源文本不受影响，所以只对往返重试。
+            JTextArea dst = new JTextArea();
+            boolean pasted = false;
+            for (int i = 0; i < 40 && !pasted; i++) {
+                ActionEvent evt = new ActionEvent(src, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.copyAction);
+                action.actionPerformed(evt);
+                dst.setText("");
+                dst.paste();
+                pasted = "Copy".equals(dst.getText());
+                if (!pasted) sleepQuietly();
+            }
 
             // copy leaves source text and selection intact
             check("CopyThis".equals(src.getText()), "copy leaves source text");
             check(src.getSelectionStart() == 0 && src.getSelectionEnd() == 4, "copy keeps selection");
-
-            JTextArea dst = new JTextArea();
-            dst.paste();
-            check("Copy".equals(dst.getText()), "copy->paste round trip");
+            check(pasted, "copy->paste round trip");
         } finally {
             frame.dispose();
         }
@@ -72,6 +79,11 @@ public class CopyActionTest {
         runOnEDT(CopyActionTest::testBlackBox);
         System.out.println("PASS (" + passed + " assertions)");
     }
+    static void sleepQuietly() {
+        try { Thread.sleep(100); }
+        catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+    }
+
     interface ThrowingRunnable { void run() throws Exception; }
     static void runOnEDT(ThrowingRunnable r) throws Exception {
         try {

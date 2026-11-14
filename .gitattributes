@@ -3,3 +3,9 @@
 # so they assemble identically on Windows (git core.autocrlf=true) and Linux.
 *.jasm text eol=lf
 *.jcod text eol=lf
+# PowerShell 5.1 mis-parses UTF-8 (no BOM) scripts that use LF-only line
+# endings when the ANSI codepage is multibyte (e.g. GBK): a UTF-8 sequence can
+# swallow the following ASCII byte, producing bogus syntax errors at random
+# lines.  Pin CRLF so the Windows scripts always parse.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
