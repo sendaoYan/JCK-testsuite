@@ -30,15 +30,21 @@
   jtreg concurrency (-conc:N) defaults to 16; set JCK_CONC=<n> to override.
 #>
 
-# Raw JVM flags from the command line, read via $args (NOT a param() block).
-# PowerShell's parameter binder splits tokens like -XX:+UseG1GC at the ':' into
-# "-XX" and "+UseG1GC", which makes `java -XX:+UseG1GC` fail with "Unrecognized
-# option: -XX" (the exact reason every GC config skipped with "Unrecognized
-# option: -XX"). $args receives the arguments verbatim, so the flag stays whole.
-# (Guard: when no args are passed, $args is $null — keep $JvmArgs empty so the
-# baseline label is still derived as "baseline".)
+# Raw JVM flags. The full sweep is driven by run-windows-full.bat, which passes
+# the flags via the JCK_FLAGS environment variable (one string, space-separated).
+# WHY NOT the command line: powershell.exe's own command-line tokenizer splits
+# -XX:+UseG1GC at the ':' into "-XX" and "+UseG1GC" *before* the script runs, so
+# $args (and a param() block alike) only ever see the broken tokens and every GC
+# config probes `java -XX +UseG1GC -version` -> "Unrecognized option: -XX".
+# An env-var value is never tokenized, so the flag reaches java intact.
+# Manual single-config runs may still pass flags as arguments ($args) — keep that
+# path for debugging, but it inherits the same ':'-split limitation.
 $JvmArgs = @()
-if ($args) { $JvmArgs = @($args) }
+if ($args) {
+    $JvmArgs = @($args)
+} elseif ($env:JCK_FLAGS) {
+    $JvmArgs = @($env:JCK_FLAGS -split '\s+' | Where-Object { $_ -ne '' })
+}
 
 $ErrorActionPreference = "Continue"
 

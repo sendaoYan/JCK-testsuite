@@ -15,38 +15,53 @@ rem   -Xcomp -XX:-TieredCompilation -> xcomp_notiered
 rem   -Xcomp -XX:TieredStopAtLevel=1 -> xcomp_tiered1
 rem   -Xcomp -XX:TieredStopAtLevel=4 -> xcomp_tiered4
 rem   -XX:-BackgroundCompilation -> nobgcomp
+rem Flags are handed to the ps1 via the JCK_FLAGS environment variable, NOT the
+rem command line: powershell.exe splits -XX:+UseG1GC at the ':' into "-XX" and
+rem "+UseG1GC" before the script ever runs, so every colon-bearing flag config
+rem was probed as `java -XX +UseG1GC -version` and skipped with
+rem "Unrecognized option: -XX". An env-var value is never tokenized.
 setlocal
 set "PS=powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0run-windows-full.ps1""
 
 echo === [ 1/10] baseline (no flags) ===
+set "JCK_FLAGS="
 %PS%
 
 echo === [ 2/10] cms_parnew ===
-%PS% -XX:+UseConcMarkSweepGC -XX:+UseParNewGC
+set "JCK_FLAGS=-XX:+UseConcMarkSweepGC -XX:+UseParNewGC"
+%PS%
 
 echo === [ 3/10] g1 ===
-%PS% -XX:+UseG1GC
+set "JCK_FLAGS=-XX:+UseG1GC"
+%PS%
 
 echo === [ 4/10] parnew ===
-%PS% -XX:+UseParNewGC
+set "JCK_FLAGS=-XX:+UseParNewGC"
+%PS%
 
 echo === [ 5/10] serial ===
-%PS% -XX:+UseSerialGC
+set "JCK_FLAGS=-XX:+UseSerialGC"
+%PS%
 
 echo === [ 6/10] xcomp ===
-%PS% -Xcomp
+set "JCK_FLAGS=-Xcomp"
+%PS%
 
 echo === [ 7/10] xcomp_notiered ===
-%PS% -Xcomp -XX:-TieredCompilation
+set "JCK_FLAGS=-Xcomp -XX:-TieredCompilation"
+%PS%
 
 echo === [ 8/10] xcomp_tiered1 ===
-%PS% -Xcomp -XX:TieredStopAtLevel=1
+set "JCK_FLAGS=-Xcomp -XX:TieredStopAtLevel=1"
+%PS%
 
 echo === [ 9/10] xcomp_tiered4 ===
-%PS% -Xcomp -XX:TieredStopAtLevel=4
+set "JCK_FLAGS=-Xcomp -XX:TieredStopAtLevel=4"
+%PS%
 
 echo === [10/10] nobgcomp ===
-%PS% -XX:-BackgroundCompilation
+set "JCK_FLAGS=-XX:-BackgroundCompilation"
+%PS%
 
 echo.
 echo Sweep done. Results in %~dp0windows-results\ (summary.txt + ^<label^>\*)
