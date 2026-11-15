@@ -323,7 +323,11 @@ public class ProcessHandleTest {
             // reports it. Only assert the Linux emptiness, where it is stable.
             if (java.io.File.separatorChar == '/')
                 check(!dead.user().isPresent(), "user empty after exit (Linux /proc gone)");
-            check(!dead.startInstant().isPresent(), "startInstant empty after exit");
+            // startInstant() after exit: same as user() above — the spec only
+            // promises an Optional, not that it empties after exit. Linux empties
+            // it (/proc gone); Windows caches it from creation and still reports it.
+            if (java.io.File.separatorChar == '/')
+                check(!dead.startInstant().isPresent(), "startInstant empty after exit");
             check(!ProcessHandle.of(child.pid()).isPresent(), "of(exited pid) empty");
         } finally {
             lcReap(child);

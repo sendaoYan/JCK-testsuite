@@ -138,8 +138,11 @@ public class FileSystemViewTest {
         }
         check(v.getFiles(tmp, true) != null, "getFiles returns an array");
 
-        // hidden files: dot-prefixed names hidden on Unix
-        check(v.isHiddenFile(new File(home, ".hidden-probe")), "dot-prefixed name hidden");
+        // hidden files: dot-prefixed names hidden on Unix; Windows uses the DOS
+        // hidden attribute (not a leading dot), so isHiddenFile(".x") is false
+        // there — assert the dot-prefix convention only where it holds.
+        if (java.io.File.separatorChar == '/')
+            check(v.isHiddenFile(new File(home, ".hidden-probe")), "dot-prefixed name hidden");
         check(!v.isHiddenFile(new File(home, "visible-probe")), "plain name not hidden");
     }
 
