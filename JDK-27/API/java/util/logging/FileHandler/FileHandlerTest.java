@@ -125,11 +125,14 @@ public class FileHandlerTest {
             long total = 0;
             for (java.io.File f : files) total += f.length();
             check(total > 0, "records written to disk");
-            // %t/%u 模式：写到 java.io.tmpdir 并清理
-            java.util.logging.FileHandler tmp = new java.util.logging.FileHandler("%t/jck_fh_probe_%u.log");
+            // %t/%u 模式：写到 java.io.tmpdir 并清理。前缀带 nanoTime 后缀，避免并发
+            // 配置（SWEEP_PAR>1）下多个测试 JVM 共用固定 jck_fh_probe_%u.log 互相踩踏
+            // （共享 tmpdir + JVM 内 %u 都从 0 起 → 各配置撞名 → f.delete() 竞态失败）。
+            String probePrefix = "jck_fh_probe_" + System.nanoTime() + "_";
+            java.util.logging.FileHandler tmp = new java.util.logging.FileHandler("%t/" + probePrefix + "%u.log");
             tmp.close();
             java.io.File[] tmps = new java.io.File(System.getProperty("java.io.tmpdir")).listFiles(
-                    (d, n) -> n.startsWith("jck_fh_probe_"));
+                    (d, n) -> n.startsWith(probePrefix));
             check(tmps != null && tmps.length >= 1, "%t pattern resolves into java.io.tmpdir");
             for (java.io.File f : tmps) check(f.delete(), "cleaned " + f.getName());
             // getEncoding/setEncoding 往返（默认 null）
