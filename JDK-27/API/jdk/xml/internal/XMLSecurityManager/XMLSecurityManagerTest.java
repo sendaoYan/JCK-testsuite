@@ -9,7 +9,10 @@ public class XMLSecurityManagerTest {
     static void check(boolean c, String m) { if (!c) throw new AssertionError(m); passed++; }
     public static void main(String[] args) throws Exception {
         // 固定默认区域为英文：JAXP 限额错误消息随默认 Locale 本地化（如 zh_CN 为中文），断言的是英文消息
+        // 捕获旧 Locale 并在 finally 恢复：agentvm 共享 JVM，不能污染后续 Locale 敏感测试
+        java.util.Locale oldLocale = java.util.Locale.getDefault();
         java.util.Locale.setDefault(java.util.Locale.ENGLISH);
+        try {
         Class<?> c = Class.forName("jdk.xml.internal.XMLSecurityManager", false, XMLSecurityManagerTest.class.getClassLoader());
         check(c.getName().equals("jdk.xml.internal.XMLSecurityManager"), "name");
         check(c.isInterface() == false, "isInterface");
@@ -70,6 +73,9 @@ public class XMLSecurityManagerTest {
         check(md.contains("setSecureProcessing"), "method-setSecureProcessing");
         deep();
         System.out.println("PASS (" + passed + " assertions)");
+        } finally {
+            java.util.Locale.setDefault(oldLocale);
+        }
     }
 
     static Object inv(Object t, String n, Object... a) throws Exception {

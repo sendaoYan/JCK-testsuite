@@ -30,7 +30,9 @@ public class XMLSecurityManagerTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Locale oldLocale = Locale.getDefault();
         Locale.setDefault(Locale.ENGLISH);
+        try {
         jdk.xml.internal.XMLSecurityManager m = new jdk.xml.internal.XMLSecurityManager();
         check(m != null, "constructed");
         m.setSecureProcessing(true);
@@ -284,5 +286,8 @@ public class XMLSecurityManagerTest {
         check("root".equals(clean.getDocumentElement().getNodeName()) && clean.getDocumentElement().getFirstChild().getNodeName().equals("a"), "clean XML parses under FSP");
 
         System.out.println("PASS (" + passed + " assertions)");
+        } finally {
+            Locale.setDefault(oldLocale);
+        }
     }
 }
