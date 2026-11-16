@@ -143,12 +143,21 @@ public class WritePendingExceptionTest {
                 client.connect(addr).get(10, java.util.concurrent.TimeUnit.SECONDS);
                 peer = server.accept().get(10, java.util.concurrent.TimeUnit.SECONDS);
                 peer.setOption(java.net.StandardSocketOptions.SO_RCVBUF, 1024);
-                // saturate the kernel buffers until one write stays pending
+                // saturate the kernel buffers until one write stays pending.
+                // A lone isDone() probe is racy: on Windows loopback (notably
+                // under -Xcomp) an IOCP write can report "not done" and then
+                // complete an instant later, so the follow-up concurrent write
+                // below is no longer concurrent and (correctly) does not throw.
+                // Re-probe after a short settle so a write only counts as
+                // "pending" once it has demonstrably stayed pending.
                 java.util.concurrent.Future<Integer> parked = null;
-                for (int i = 0; i < 32; i++) {
+                for (int i = 0; i < 32 && parked == null; i++) {
                     java.util.concurrent.Future<Integer> f =
                             client.write(java.nio.ByteBuffer.allocate(256 * 1024));
-                    if (!f.isDone()) { parked = f; break; }
+                    if (!f.isDone()) {
+                        Thread.sleep(100);
+                        if (!f.isDone()) parked = f;
+                    }
                 }
                 check(parked != null, "a pending write was produced");
                 try {
