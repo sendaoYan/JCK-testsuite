@@ -383,8 +383,14 @@ public class ThreadGroupTest {
         volatile int calls;
         CountingGroup(String name) { super(name); }
         @Override public void uncaughtException(Thread t, Throwable e) {
-            calls++;
+            // Record caughtThread/caught FIRST, then publish the "handled" signal.
+            // The test spins on calls==1 and then reads caughtThread/caught; if
+            // calls++ ran before super() the signal would fire before the payload
+            // was written, and a slow GC pause (CMS/ParNew on aarch64) between the
+            // two volatile writes makes caughtThread still null -> "group handler
+            // thread identity" false failure.
             super.uncaughtException(t, e);
+            calls++;
         }
     }
 
