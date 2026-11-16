@@ -574,12 +574,23 @@ foreach ($t in $run) {
 }
 
 # ---- delta vs baseline ----
+# The baseline results live in the same round-prefixed scheme as every other
+# config (JCK_PREFIX "r5" -> "r5-baseline", not "baseline"), so resolve the
+# baseline label the same way instead of hardcoding "baseline": with the
+# hardcoded path the delta read a non-existent dir, silently wrote an empty
+# .new.txt, and every summary row reported "new=0" even when a config had a
+# failure the baseline did not.
+$baseLabel = "baseline"
+if ($env:JCK_PREFIX) {
+    $bp = ($env:JCK_PREFIX -replace '[^A-Za-z0-9.+-]', '_')
+    if ($bp) { $baseLabel = "$bp-$baseLabel" }
+}
 foreach ($t in $trees) {
     if (Test-Path (Join-Path $resDir "$($t.tag).skipped.txt")) { continue }
-    $baseFailed = Join-Path $resRoot "baseline\$($t.tag).failed.txt"
+    $baseFailed = Join-Path $resRoot "$baseLabel\$($t.tag).failed.txt"
     $failedPath = Join-Path $resDir "$($t.tag).failed.txt"
     $newPath    = Join-Path $resDir "$($t.tag).new.txt"
-    if ($label -ne "baseline" -and (Test-Path $baseFailed)) {
+    if ($label -ne $baseLabel -and (Test-Path $baseFailed)) {
         $base = @(Get-Content $baseFailed -ErrorAction SilentlyContinue)
         $f    = @(Get-Content $failedPath -ErrorAction SilentlyContinue)
         $n    = @($f | Where-Object { $base -cnotcontains $_ })
