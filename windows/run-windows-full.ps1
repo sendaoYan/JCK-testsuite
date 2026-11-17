@@ -418,9 +418,20 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
     $msg = "=== [$tag/$label] jtreg -jdk:$jdk $flagStr ==="
     Log $msg
 
+    # Cap helper subprocess JVMs. The JLS-13.4/13.5 binary-compat tests fork
+    # javac/java via ProcessBuilder with NO -Xmx, so each helper inherits the
+    # Windows default max heap = physRAM/4 = 16 GB. On a shared box with little
+    # commit headroom (r6 saw 8 GB free), jdk8's ParallelGC fails to reserve that
+    # 16 GB heap at startup ("Unable to allocate ... bitmaps ... for the requested
+    # 16777216KB heap") and the whole binary-compat family fails. JAVA_TOOL_OPTIONS
+    # is read by every JVM but is overridden by the test VM's own -javaoption:-Xmx,
+    # so it only actually shrinks the helper subprocesses (512m is ample for the
+    # tiny C.java/Client.java helpers). Environment-level fix: no spec semantics
+    # weakened. (jdk27 defaults to G1, which reserves lazily, so it never hit this.)
     $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
                 "-conc:$Concurrency", "-timeoutFactor:5", "-verbose:fail,error,time",
-                "-javacoption:-encoding", "-javacoption:UTF-8") +
+                "-javacoption:-encoding", "-javacoption:UTF-8",
+                "-e:JAVA_TOOL_OPTIONS=-Xmx512m") +
               (Get-HeapTokens $TestHeapMB $JavacHeapMB $tag) + $flagTokens + $dirs
     # jtreg's verbose stdout is UTF-16LE on this box; PowerShell decodes it
     # single-byte, so each ASCII char is followed by a NUL. Strip the NUL fill
