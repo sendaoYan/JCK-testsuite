@@ -116,7 +116,8 @@ public class ZipEntryTest {
         java.time.LocalDateTime t = java.time.LocalDateTime.of(2021, 3, 14, 12, 30, 17);
         e.setTimeLocal(t);
         check(t.equals(e.getTimeLocal()), "setTimeLocal exact round-trip incl. odd second");
-        check(e.getTime() == 1615696217000L, "setTimeLocal epoch millis in Asia/Shanghai-local semantics");
+        long expectedMillis = t.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        check(e.getTime() == expectedMillis, "setTimeLocal epoch millis in system-default-zone semantics");
         // setTime 也反映到 getTimeLocal（epoch 0 -> 1970-01-01，时区相关的具体时不断言）
         e.setTime(0L);
         check(e.getTime() == 0L, "setTime(0) passthrough");

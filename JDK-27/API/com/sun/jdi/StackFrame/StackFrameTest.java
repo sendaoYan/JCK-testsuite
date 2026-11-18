@@ -35,7 +35,7 @@ public class StackFrameTest {
         "    public static void main(String[] args) {\n" +
         "        Target t = new Target();\n" +
         "        int local = 1;\n" +
-        "        while (!ready) { Thread.onSpinWait(); }\n" +
+        "        while (!ready && t.count == 10) { Thread.onSpinWait(); }\n" +
         "        int x = t.add(local, VALUE);\n" +
         "        System.out.println(\"x=\" + x);\n" +
         "    }\n" +
