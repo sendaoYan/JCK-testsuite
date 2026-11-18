@@ -226,12 +226,6 @@ public class XMLStreamWriterTest {
         // OutputStream default-encoding writer
         java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
         javax.xml.stream.XMLStreamWriter w4 = of.createXMLStreamWriter(bos);
-        w4.writeStartDocument();
-        w4.writeStartElement("a");
-        w4.writeCharacters("中");
-        w4.writeEndElement();
-        w4.writeEndDocument();
-        w4.flush();
         // createXMLStreamWriter(OutputStream) with no encoding is
         // implementation-defined: the JDK uses UTF-8 only when file.encoding is
         // UTF-8, otherwise it falls back to the platform default charset
@@ -241,7 +235,19 @@ public class XMLStreamWriterTest {
                 (implEnc != null && implEnc.equalsIgnoreCase("UTF-8"))
                         ? java.nio.charset.StandardCharsets.UTF_8
                         : java.nio.charset.Charset.defaultCharset();
-        check(bos.toString(streamCs.name()).equals("<?xml version=\"1.0\" ?><a>中</a>"),
+        String marker = "中";
+        if (!streamCs.newEncoder().canEncode(marker)) {
+            // platform default can't encode CJK (e.g. ISO-8859-1) — use a non-ASCII
+            // Latin-1 marker that still distinguishes single-byte from UTF-8 bytes
+            marker = "é";
+        }
+        w4.writeStartDocument();
+        w4.writeStartElement("a");
+        w4.writeCharacters(marker);
+        w4.writeEndElement();
+        w4.writeEndDocument();
+        w4.flush();
+        check(bos.toString(streamCs.name()).equals("<?xml version=\"1.0\" ?><a>" + marker + "</a>"),
               "OutputStream default writer encoding matches platform default");
         w4.close();
         // OutputStream UTF-16: writes BOM

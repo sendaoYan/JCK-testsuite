@@ -447,6 +447,10 @@ public class ProcessBuilderTest {
 
     static void testRealJavaVersion() throws Exception {
         ProcessBuilder pb = new ProcessBuilder(LC_JAVA_BIN, "-version").redirectErrorStream(true);
+        // 运行层 -e:JAVA_TOOL_OPTIONS 注入的 "Picked up ..." 前缀会污染 banner，隔离环境噪声以保持断言严格
+        pb.environment().remove("JAVA_TOOL_OPTIONS");
+        pb.environment().remove("_JAVA_OPTIONS");
+        pb.environment().remove("JDK_JAVA_OPTIONS");
         check(pb.redirectErrorStream(), "redirectErrorStream set for merged capture");
         Process p = pb.start();
         String out = new String(readAll(p.getInputStream()), "UTF-8");
