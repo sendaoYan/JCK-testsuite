@@ -23,7 +23,10 @@ public class CompilationMXBeanTest {
     // ---- Part 2: black-box (behavioral) ----
     static void testBlackBox() {
         CompilationMXBean b = ManagementFactory.getCompilationMXBean();
-        check(b != null, "non-null");
+        if (b == null) {
+            check(true, "no compilation system: null bean is legal (interpreter-only JVM)");
+            return;
+        }
         check(b.getName() != null && !b.getName().isEmpty(), "compiler name non-empty");
         check(b.getObjectName() != null, "objectName non-null");
         boolean supported = b.isCompilationTimeMonitoringSupported();

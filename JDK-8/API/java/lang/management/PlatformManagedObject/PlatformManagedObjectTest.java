@@ -74,12 +74,14 @@ public class PlatformManagedObjectTest {
         names.add(ManagementFactory.getThreadMXBean().getObjectName().getCanonicalName());
         names.add(ManagementFactory.getClassLoadingMXBean().getObjectName().getCanonicalName());
         names.add(ManagementFactory.getOperatingSystemMXBean().getObjectName().getCanonicalName());
-        if (ManagementFactory.getCompilationMXBean() != null) {
+        boolean hasCompilation = ManagementFactory.getCompilationMXBean() != null;
+        if (hasCompilation) {
             names.add(ManagementFactory.getCompilationMXBean().getObjectName().getCanonicalName());
         }
         names.add(ManagementFactory.getPlatformMXBean(java.lang.management.PlatformLoggingMXBean.class)
                 .getObjectName().getCanonicalName());
-        check(names.size() == 7, "all singleton ObjectNames are distinct, got " + names.size());
+        check(names.size() == (hasCompilation ? 7 : 6),
+              "all singleton ObjectNames are distinct, got " + names.size());
     }
 
     public static void main(String[] args) throws Exception {

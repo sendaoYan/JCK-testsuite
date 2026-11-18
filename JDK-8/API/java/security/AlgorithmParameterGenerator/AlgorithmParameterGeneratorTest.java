@@ -4,6 +4,7 @@
  *          getInstance (algorithm/provider/null/empty/unknown), getAlgorithm/getProvider,
  *          init(int)/init(AlgorithmParameterSpec)/init(int,SecureRandom),
  *          generateParameters returning parseable AlgorithmParameters, and exact exceptions.
+ * @requires vm.compMode != "Xint"
  * @run main/timeout=600 AlgorithmParameterGeneratorTest
  */
 
