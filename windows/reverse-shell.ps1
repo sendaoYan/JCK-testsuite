@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Command server over an SSH reverse tunnel, so hanqinhu can run commands on
+  Command server over an SSH reverse tunnel, so taoyuanming can run commands on
   this Windows box (which normally only initiates outbound SSH, e.g. VSCode
   Remote-SSH).
 
@@ -15,7 +15,7 @@
   closes.  No state is kept between connections, so use absolute paths or chain
   with `&&`/`&`.
 
-  From hanqinhu, run one command:
+  From taoyuanming, run one command:
 
       printf 'dir D:\\path\r\n' | nc -q 2 127.0.0.1 <port>
 
@@ -26,13 +26,13 @@
   console and, despite the temp-file capture below, is best avoided.)
 
 .PARAMETER SshHost
-  The host alias VSCode Remote-SSH uses for hanqinhu (default "hanqinhu").
+  The host alias VSCode Remote-SSH uses for taoyuanming (default "taoyuanming").
 
 .PARAMETER Port
   The tunneled port on both sides (default 4444).
 #>
 param(
-    [string]$SshHost = "hanqinhu",
+    [string]$SshHost = "taoyuanming",
     [int]$Port = 4444
 )
 
