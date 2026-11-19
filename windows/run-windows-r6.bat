@@ -43,7 +43,7 @@ set "JCK_FLAGS=-XX:TieredStopAtLevel=2"
 
 echo === [ 6/13] ci1 ===
 set "JCK_LABEL=ci1"
-set "JCK_FLAGS=-XX:CICompilerCount=1"
+set "JCK_FLAGS=-XX:CICompilerCount=2"
 %PS%
 
 echo === [ 7/13] nooops ===
