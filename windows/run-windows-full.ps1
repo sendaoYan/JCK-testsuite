@@ -28,6 +28,10 @@
   once per config (baseline first).
 
   jtreg concurrency (-conc:N) defaults to 16; set JCK_CONC=<n> to override.
+  Per-test-VM and javac heaps are auto-sized from the box's RAM and the CURRENT
+  commit headroom; set JCK_TEST_HEAP_MB / JCK_JAVAC_HEAP_MB to cap them
+  explicitly (e.g. on a shared box where free commit fluctuates mid-run and an
+  auto-sized 1 GB slot can still push the run into native OOM).
 #>
 
 # Raw JVM flags. The full sweep is driven by run-windows-full.bat, which passes
@@ -76,8 +80,16 @@ if ($MemMB -le 0) {
 # Floor the per-slot share at 256m rather than 512m: a 512m floor times many
 # slots can ask for more memory than a small box has, and a shell that cannot
 # start is worse than a small heap.
-$TestHeapMB  = [int][math]::Min(4096, [math]::Max(256, [math]::Floor($MemMB / $RequestedConc / 4)))
-$JavacHeapMB = [int][math]::Min(2048, [math]::Max(128, [math]::Floor($MemMB / $RequestedConc / 8)))
+if ($env:JCK_TEST_HEAP_MB) {
+    $TestHeapMB = [int]$env:JCK_TEST_HEAP_MB
+} else {
+    $TestHeapMB = [int][math]::Min(4096, [math]::Max(256, [math]::Floor($MemMB / $RequestedConc / 4)))
+}
+if ($env:JCK_JAVAC_HEAP_MB) {
+    $JavacHeapMB = [int]$env:JCK_JAVAC_HEAP_MB
+} else {
+    $JavacHeapMB = [int][math]::Min(2048, [math]::Max(128, [math]::Floor($MemMB / $RequestedConc / 8)))
+}
 
 # The machine is shared: other sessions can hold most of the commit charge, so
 # trim concurrency to what the CURRENT commit headroom can carry (60% of it,
