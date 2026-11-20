@@ -439,12 +439,20 @@ function Invoke-Tree([string]$tag, [string]$jdk, [string]$dir) {
     # is read by every JVM but is overridden by the test VM's own -javaoption:-Xmx,
     # so it only actually shrinks the helper subprocesses (512m is ample for the
     # tiny C.java/Client.java helpers). Environment-level fix: no spec semantics
-    # weakened. (jdk27 defaults to G1, which reserves lazily, so it never hit this.)
+    # weakened.
+    #
+    # Clamp jdk8 only. jdk27's default G1 reserves lazily, so its forked helpers
+    # never hit the 16 GB pre-commit OOM above; forcing -Xmx512m onto them is
+    # instead small enough to fail G1's "allocate initial concurrent mark
+    # overflow mark stack" under -XX:-UseCompressedOops + -conc pressure
+    # (r6-nooops VarargsChange / SynchronizedMethodChange). Letting jdk27 helpers
+    # keep the default heap (lazy G1, little commit) avoids both.
+    $helperClamp = @()
+    if ($tag -eq "jdk8") { $helperClamp = @("-e:JAVA_TOOL_OPTIONS=-Xmx512m") }
     $jtArgs = @("-jar", $JTREG_JAR, "-jdk:$jdk", "-w", $w, "-r", $rep,
                 "-conc:$Concurrency", "-timeoutFactor:5", "-verbose:fail,error,time",
-                "-javacoption:-encoding", "-javacoption:UTF-8",
-                "-e:JAVA_TOOL_OPTIONS=-Xmx512m") +
-              (Get-HeapTokens $TestHeapMB $JavacHeapMB $tag) + $flagTokens + $dirs
+                "-javacoption:-encoding", "-javacoption:UTF-8") +
+              $helperClamp + (Get-HeapTokens $TestHeapMB $JavacHeapMB $tag) + $flagTokens + $dirs
     # jtreg's verbose stdout is UTF-16LE on this box; PowerShell decodes it
     # single-byte, so each ASCII char is followed by a NUL. Strip the NUL fill
     # bytes before writing/parsing (see the encoding note above).  Each line is
