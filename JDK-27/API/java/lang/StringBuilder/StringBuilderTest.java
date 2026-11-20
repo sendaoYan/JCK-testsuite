@@ -881,10 +881,19 @@ public class StringBuilderTest {
     }
 
     static void testNegativeCapacityCtorMessage() {
-        expectExact(() -> new StringBuilder(-1),
-              "java.lang.NegativeArraySizeException",
-              MODERN ? "-1" : null,
-              "new StringBuilder(-1) message");
+        // The spec fixes only the exception type; the message is a VM detail.
+        // Compact-string path allocates byte[capacity] and carries "-1";
+        // -XX:-CompactStrings takes the UTF-16 path (byte[capacity << 1]) where
+        // the VM raises NegativeArraySizeException without a message.
+        try {
+            new StringBuilder(-1);
+            throw new AssertionError("new StringBuilder(-1): expected NegativeArraySizeException but none was thrown");
+        } catch (NegativeArraySizeException e) {
+            check(true, "new StringBuilder(-1) throws NegativeArraySizeException");
+            String m = e.getMessage();
+            check(m == null || "-1".equals(m),
+                  "new StringBuilder(-1) message: expected \"-1\" or null, got \"" + m + "\"");
+        }
     }
 
     static void testCharAtExactMessages() {

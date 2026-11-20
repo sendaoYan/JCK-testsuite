@@ -909,10 +909,19 @@ public class StringBufferTest {
     }
 
     static void testNegativeCapacityCtorMessage() {
-        expectExact(() -> new StringBuffer(-1),
-              "java.lang.NegativeArraySizeException",
-              MODERN ? "-1" : null,
-              "new StringBuffer(-1) message");
+        // The spec fixes only the exception type; the message is a VM detail.
+        // Compact-string path allocates byte[capacity] and carries "-1";
+        // -XX:-CompactStrings takes the UTF-16 path (byte[capacity << 1]) where
+        // the VM raises NegativeArraySizeException without a message.
+        try {
+            new StringBuffer(-1);
+            throw new AssertionError("new StringBuffer(-1): expected NegativeArraySizeException but none was thrown");
+        } catch (NegativeArraySizeException e) {
+            check(true, "new StringBuffer(-1) throws NegativeArraySizeException");
+            String m = e.getMessage();
+            check(m == null || "-1".equals(m),
+                  "new StringBuffer(-1) message: expected \"-1\" or null, got \"" + m + "\"");
+        }
     }
 
     static void testCharAtExactMessages() {
