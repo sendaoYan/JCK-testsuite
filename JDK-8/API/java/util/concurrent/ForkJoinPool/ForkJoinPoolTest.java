@@ -295,10 +295,13 @@ public class ForkJoinPoolTest {
     static class BlockTask extends RecursiveTask<Integer> {
         final CountDownLatch started = new CountDownLatch(1);
         final CountDownLatch release = new CountDownLatch(1);
+        final long blockSeconds;
+        BlockTask() { this(5); }
+        BlockTask(long blockSeconds) { this.blockSeconds = blockSeconds; }
         protected Integer compute() {
             started.countDown();
             try {
-                if (!release.await(5, TimeUnit.SECONDS)) throw new AssertionError("release timeout");
+                if (!release.await(blockSeconds, TimeUnit.SECONDS)) throw new AssertionError("release timeout");
             } catch (InterruptedException e) { throw new RuntimeException(e); }
             return 123;
         }
@@ -385,9 +388,13 @@ public class ForkJoinPoolTest {
     // ---- Part K: shutdownNow lifecycle (empty-list contract) ----
     static void testShutdownNowLifecycle() throws Exception {
         ForkJoinPool pool = new ForkJoinPool(1);
-        BlockTask t1 = new BlockTask();
-        BlockTask t2 = new BlockTask();
-        BlockTask t3 = new BlockTask();
+        // Block far longer than the waits below: with the old 5s self-timeout, a
+        // loaded box could deschedule this thread past the deadline, the worker
+        // would self-release and legitimately start a queued task before the
+        // assertion ran (seen once on Windows under -conc:8).
+        BlockTask t1 = new BlockTask(60);
+        BlockTask t2 = new BlockTask(60);
+        BlockTask t3 = new BlockTask(60);
         pool.execute(t1);
         pool.execute(t2);
         pool.execute(t3);
@@ -395,13 +402,15 @@ public class ForkJoinPoolTest {
         java.util.List<Runnable> rem = pool.shutdownNow();
         check(rem.isEmpty(), "ForkJoinPool.shutdownNow() always returns an empty list (documented)");
         check(pool.isShutdown(), "isShutdown after shutdownNow");
-        check(pool.awaitTermination(5, TimeUnit.SECONDS), "pool terminates after shutdownNow");
-        check(pool.isTerminated(), "isTerminated after shutdownNow");
-        check(!t2.started.await(0, TimeUnit.SECONDS) && !t3.started.await(0, TimeUnit.SECONDS),
+        // javadoc: shutdownNow "cancels both existing and unexecuted tasks", so
+        // the two tasks still queued behind the blocked worker must never start.
+        check(!t2.started.await(500, TimeUnit.MILLISECONDS) && !t3.started.await(0, TimeUnit.MILLISECONDS),
               "queued tasks never commenced after shutdownNow");
         t1.release.countDown();
         t2.release.countDown();
         t3.release.countDown();
+        check(pool.awaitTermination(10, TimeUnit.SECONDS), "pool terminates after shutdownNow");
+        check(pool.isTerminated(), "isTerminated after shutdownNow");
     }
 
     public static void main(String[] args) throws Exception {
