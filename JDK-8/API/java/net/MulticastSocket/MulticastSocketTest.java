@@ -151,6 +151,18 @@ public class MulticastSocketTest {
     }
 
     // multicast interface selection.
+    /** True when this JVM exposes at least one IPv6 address (false under -Djava.net.preferIPv4Stack=true). */
+    static boolean hasIpv6() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> nis = java.net.NetworkInterface.getNetworkInterfaces();
+            while (nis != null && nis.hasMoreElements()) {
+                for (java.net.InterfaceAddress ia : nis.nextElement().getInterfaceAddresses())
+                    if (ia.getAddress() instanceof java.net.Inet6Address) return true;
+            }
+        } catch (Exception ignore) { }
+        return false;
+    }
+
     static void testInterfaceMatrix() throws Exception {
         MulticastSocket m = new MulticastSocket(0);
         try {
@@ -162,9 +174,14 @@ public class MulticastSocketTest {
             check(after != null && after.isLoopbackAddress(), "setInterface(loopback) read back loopback");
             check(after.getAddress().equals(LO.getAddress()) || after.isLoopbackAddress(),
                     "interface address form");
-            // the wildcard itself is not a valid outgoing interface
-            fails(SocketException.class, "setInterface(0.0.0.0)",
-                    () -> m.setInterface(InetAddress.getByName("0.0.0.0")));
+            if (hasIpv6()) {
+                // the wildcard itself is not a valid outgoing interface
+                fails(SocketException.class, "setInterface(0.0.0.0)",
+                        () -> m.setInterface(InetAddress.getByName("0.0.0.0")));
+            } else {
+                // IPv4-only stack accepts the wildcard as an outgoing interface.
+                check(true, "setInterface(0.0.0.0) not asserted (IPv4-only stack)");
+            }
         } finally { m.close(); }
     }
 

@@ -45,6 +45,18 @@ public class InterfaceAddressTest {
         check(!Modifier.isFinal(c.getModifiers()), "not final on JDK-8 (JDK-27: final)");
     }
 
+    /** True when this JVM exposes at least one IPv6 address (false under -Djava.net.preferIPv4Stack=true). */
+    static boolean hasIpv6() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> nis = java.net.NetworkInterface.getNetworkInterfaces();
+            while (nis != null && nis.hasMoreElements()) {
+                for (java.net.InterfaceAddress ia : nis.nextElement().getInterfaceAddresses())
+                    if (ia.getAddress() instanceof java.net.Inet6Address) return true;
+            }
+        } catch (Exception ignore) { }
+        return false;
+    }
+
     static void testLoopbackInterfaceAddresses() throws Exception {
         NetworkInterface lo = NetworkInterface.getByInetAddress(InetAddress.getLoopbackAddress());
         check(lo != null, "loopback interface present");
@@ -79,7 +91,11 @@ public class InterfaceAddressTest {
             check(ia.toString().contains("/"), "toString slash-separated");
         }
         check(v4 >= 1, "at least one IPv4 interface address on lo");
-        check(v6 >= 1, "at least one IPv6 interface address on lo");
+        if (hasIpv6()) {
+            check(v6 >= 1, "at least one IPv6 interface address on lo");
+        } else {
+            check(v6 == 0, "no IPv6 address on lo when the stack is IPv4-only");
+        }
     }
 
     static void testEqualsHashCode() throws Exception {

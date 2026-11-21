@@ -431,10 +431,27 @@ public class InetAddressTest {
                 "unicast has no MC scope");
     }
 
+    /** True when this JVM exposes at least one IPv6 address (false under -Djava.net.preferIPv4Stack=true). */
+    static boolean hasIpv6() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> nis = java.net.NetworkInterface.getNetworkInterfaces();
+            while (nis != null && nis.hasMoreElements()) {
+                for (java.net.InterfaceAddress ia : nis.nextElement().getInterfaceAddresses())
+                    if (ia.getAddress() instanceof java.net.Inet6Address) return true;
+            }
+        } catch (Exception ignore) { }
+        return false;
+    }
+
     static void testReachability() throws Exception {
         // loopback reachability is local-only (no root / no real ICMP needed)
         check(InetAddress.getByName("127.0.0.1").isReachable(200), "127.0.0.1 reachable");
-        check(InetAddress.getByName("::1").isReachable(200), "::1 reachable");
+        if (hasIpv6()) {
+            check(InetAddress.getByName("::1").isReachable(200), "::1 reachable");
+        } else {
+            // IPv4-only stack: there is no IPv6 loopback to probe.
+            check(true, "::1 reachability not asserted (IPv4-only stack)");
+        }
         check(InetAddress.getByName("127.0.0.1").isReachable(0), "127.0.0.1 isReachable(0) true");
         // negative timeout -> IAE with exact probed message (identical on both JDKs)
         try {
