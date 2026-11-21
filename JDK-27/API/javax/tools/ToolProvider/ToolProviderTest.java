@@ -42,7 +42,14 @@ public class ToolProviderTest {
         // A full JDK provides it; a non-full JDK may return null, which is legal.
         check(dt == null || dt instanceof javax.tools.Tool, "documentation tool is a Tool when present");
 
+        // Consistency: the compiler and the documentation tool are provided together.
+        // A full JDK exposes both; a non-full JDK exposes neither. Mixed availability
+        // would violate the ToolProvider contract.
+        check((jc == null) == (dt == null), "compiler and documentation tool provided together");
+
         ClassLoader cl = javax.tools.ToolProvider.getSystemToolClassLoader();
+        // On module-based JDKs (9+) this returns null even in a full JDK; on older
+        // JDKs it returns the class loader that loaded the tools. Both are legal.
         check(cl == null || cl instanceof ClassLoader, "getSystemToolClassLoader returns null or a ClassLoader");
     }
 

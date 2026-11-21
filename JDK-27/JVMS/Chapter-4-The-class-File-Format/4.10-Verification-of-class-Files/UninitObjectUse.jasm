@@ -1,0 +1,33 @@
+// JVMS 4.10.1: an object allocated by `new` is uninitialized until its <init>
+// has been invoked.  Storing it into a local and loading it back does not
+// change that: the value still carries the uninitialized(offset) type, so any
+// use other than as the receiver of its <init> (here an invokevirtual) must be
+// rejected with VerifyError.  This extends the direct getfield case in
+// VerifierDataflow.jasm with a store/load round trip.
+super public class UninitObjectUse
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method bad:"()V"
+        stack 2 locals 1
+    {
+        new UninitObjectUse;
+        astore_0;
+        aload_0;
+        invokevirtual Method UninitObjectUse.m:"()V";
+        return;
+    }
+
+    public Method m:"()V"
+        stack 0 locals 1
+    {
+        return;
+    }
+}

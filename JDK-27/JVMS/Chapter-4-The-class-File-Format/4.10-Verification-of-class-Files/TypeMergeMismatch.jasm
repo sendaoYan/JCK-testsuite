@@ -1,0 +1,33 @@
+// JVMS 4.10.1: at a control-flow join the verifier requires every incoming
+// operand-stack type to be assignable to the type declared in the StackMapTable
+// frame at the target.  Here one branch pushes an int and the other pushes a
+// reference (null), but the join frame declares a reference type
+// (java/lang/Object); the int branch is therefore not assignable and the class
+// is rejected with VerifyError.  This is the dataflow/type-merge half of the
+// verifier's contract, complementing the straight-line operand-stack checks.
+super public class TypeMergeMismatch
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method bad:"(Z)Ljava/lang/Object;"
+        stack 2 locals 1
+    {
+        iload_0;
+        ifeq Lref;
+        iconst_0;
+        goto Ljoin;
+    Lref: stack_frame_type same;
+        aconst_null;
+    Ljoin: stack_frame_type full;
+        locals_map int;
+        stack_map class java/lang/Object;
+        areturn;
+    }
+}

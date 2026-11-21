@@ -95,6 +95,26 @@ public class DiagnosticTest {
             check(rd.getMessage(Locale.ROOT) != null && !rd.getMessage(Locale.ROOT).isEmpty(),
                     "real diagnostic message present");
             check(rd.getSource() == bad, "real diagnostic source is the file object");
+
+            // Precise position: a multi-line source reports the error on a known
+            // line and 1-based column, not just the default first line.
+            javax.tools.JavaFileObject multi = new javax.tools.SimpleJavaFileObject(
+                    URI.create("string:///M.java"), javax.tools.JavaFileObject.Kind.SOURCE) {
+                public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+                    return "class M {\n    void m() {\n        undeclared();\n    }\n}\n";
+                }
+            };
+            javax.tools.DiagnosticCollector<javax.tools.JavaFileObject> mc =
+                    new javax.tools.DiagnosticCollector<javax.tools.JavaFileObject>();
+            javax.tools.JavaCompiler.CompilationTask mt =
+                    jc.getTask(null, null, mc, java.util.List.of("-proc:none"), null, java.util.List.of(multi));
+            check(!mt.call(), "multi-line invalid source fails");
+            check(!mc.getDiagnostics().isEmpty(), "multi-line diagnostics collected");
+            javax.tools.Diagnostic<? extends javax.tools.JavaFileObject> md = mc.getDiagnostics().get(0);
+            check(md.getLineNumber() == 3, "diagnostic line 3 (1-based)");
+            check(md.getColumnNumber() == 9, "diagnostic column 9 (1-based)");
+            check(md.getPosition() == 33, "diagnostic position is 0-based source offset");
+            check(md.getCode() != null && !md.getCode().isEmpty(), "cannot-find-symbol code present");
         }
     }
 

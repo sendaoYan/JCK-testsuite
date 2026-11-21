@@ -1,0 +1,127 @@
+// JVMS 6.5 per-opcode stack-manipulation boundary matrix for dup_x1/dup_x2/
+// dup2_x1/dup2_x2, including the forms that involve a category-2 (long/double)
+// value. Each method arranges a distinct stack shape, applies the instruction,
+// then folds the duplicated values into one unique integer to prove the exact
+// post-instruction ordering. The verifier's form selection is:
+//
+//   dup_x1   (only): [v2,v1] -> [v1,v2,v1]           (both cat-1)
+//   dup_x2   form 1: [v3,v2,v1] -> [v1,v3,v2,v1]     (all cat-1)
+//   dup_x2   form 2: [v2,v1] -> [v1,v2,v1]           (v2 cat-2, v1 cat-1)
+//   dup2_x1  form 2: [v2,v1] -> [v1,v2,v1]           (v1 cat-2, v2 cat-1)
+//   dup2_x2  form 2: [v3,v2,v1] -> [v1,v3,v2,v1]     (v1 cat-2)
+//   dup2_x2  form 3: [v3,v2,v1] -> [v2,v1,v3,v2,v1]  (v3 cat-2)
+//   dup2_x2  form 4: [v2,v1] -> [v1,v2,v1]           (both cat-2)
+
+super public class StackDupXOps
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    // dup_x1: [3,7] -> [7,3,7], sum 17
+    public static Method dupX1Form1:"()I"
+        stack 3 locals 0
+    {
+        iconst_3;
+        bipush 7;
+        dup_x1;
+        iadd;
+        iadd;
+        ireturn;
+    }
+
+    // dup_x2 form 1: [2,3,5] -> [5,2,3,5], sum 15
+    public static Method dupX2Form1:"()I"
+        stack 4 locals 0
+    {
+        iconst_2;
+        iconst_3;
+        iconst_5;
+        dup_x2;
+        iadd;
+        iadd;
+        iadd;
+        ireturn;
+    }
+
+    // dup_x2 form 2 (long below, int top): [1L,7] -> [7,1L,7], sum 15
+    public static Method dupX2Form2:"()I"
+        stack 5 locals 0
+    {
+        lconst_1;
+        bipush 7;
+        dup_x2;
+        i2l;
+        ladd;
+        l2i;
+        iadd;
+        ireturn;
+    }
+
+    // dup2_x1 form 2 (long top, int below): [7,1L] -> [1L,7,1L], sum 9
+    public static Method dup2X1Form2:"()I"
+        stack 5 locals 0
+    {
+        bipush 7;
+        lconst_1;
+        dup2_x1;
+        l2i;
+        iadd;
+        i2l;
+        ladd;
+        l2i;
+        ireturn;
+    }
+
+    // dup2_x2 form 2 (long top, two ints below): [2,3,1L] -> [1L,2,3,1L], sum 7
+    public static Method dup2X2Form2:"()I"
+        stack 6 locals 0
+    {
+        iconst_2;
+        iconst_3;
+        lconst_1;
+        dup2_x2;
+        l2i;
+        iadd;
+        iadd;
+        i2l;
+        ladd;
+        l2i;
+        ireturn;
+    }
+
+    // dup2_x2 form 3 (long below, two ints top): [1L,2,5] -> [2,5,1L,2,5], sum 15
+    public static Method dup2X2Form3:"()I"
+        stack 6 locals 0
+    {
+        lconst_1;
+        iconst_2;
+        iconst_5;
+        dup2_x2;
+        iadd;
+        i2l;
+        ladd;
+        l2i;
+        iadd;
+        iadd;
+        ireturn;
+    }
+
+    // dup2_x2 form 4 (both doubles): [1.0,3.0] -> [3.0,1.0,3.0], sum 7
+    public static Method dup2X2Form4:"()I"
+        stack 6 locals 0
+    {
+        dconst_1;
+        ldc2_w double 3.0d;
+        dup2_x2;
+        dadd;
+        dadd;
+        d2i;
+        ireturn;
+    }
+}

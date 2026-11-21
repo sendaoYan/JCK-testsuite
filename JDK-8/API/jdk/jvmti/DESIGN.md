@@ -76,6 +76,19 @@ own, which keeps the native code tiny and the failure messages precise.
 |---|---|
 | `JvmtiAgentTest.java` | embedded agent + probe source, gcc/nativepath build, child launch, 12 assertions |
 | `jvmtiagent.c` | canonical agent source (identical to the embedded copy; `make native` input) |
+| `JvmtiEnvTest.java` / `jvmtienv.c` | GetVersionNumber, GetPhase, GetCapabilities, GetPotentialCapabilities, AddCapabilities / RelinquishCapabilities (on-load phase) |
+| `JvmtiClassMethodTest.java` / `jvmticlass.c` | GetLoadedClasses, GetClassSignature, GetClassModifiers, GetMethodName, GetSourceFileName |
+| `JvmtiEventTest.java` / `jvmtievents.c` | ClassLoad, ClassPrepare, MethodEntry/MethodExit, ThreadStart/ThreadEnd, VMInit/VMDeath |
+| `JvmtiThreadStackTest.java` / `jvmtistack.c` | GetAllThreads, GetThreadInfo, GetFrameCount, GetStackTrace |
+| `JvmtiLocalVarLineTest.java` / `jvmtilocals.c` | GetLocalVariableTable, GetLineNumberTable |
+
+Each of the five additions follows the same pattern as `JvmtiAgentTest`: the C
+agent is embedded as a Java string and kept as a canonical `.c` (built by
+`make native` into `build/native/<side>-<arch>/lib<name>.so`), the Java side
+compiles a tiny probe class with the JDK under test's own `javac`, launches a
+child JVM with `-agentpath`, parses the key=value observations and asserts on
+them. Query-heavy tests (2, 4, 5) drive the agent through a `static native
+void query()` method on the probe class rather than through event callbacks.
 
 Reference: JVMTI specification (JDK docs "JVM Tool Interface"),
 `<jdk>/include/jvmti.h`.  Behaviours were **empirically verified on the two
@@ -92,3 +105,16 @@ tests are self-written, no external test code was copied.
   environment.
 * `Agent_OnUnload` may run after the parent has closed some file descriptors;
   the agent only appends to a plain file it opened itself, which remains valid.
+* **Reuse the environment from `Agent_OnLoad`.**  A JVMTI `GetEnv` call in the
+  live phase mints a brand-new, capability-less environment (the dynamic-agent
+  path in `JvmtiExport::get_jvmti_interface`).  Agents that query from a native
+  method or callback must stash the `jvmtiEnv*` obtained in `Agent_OnLoad` in a
+  global and use that, not a second `GetEnv`; otherwise capability-gated calls
+  (GetSourceFileName, GetLineNumberTable, GetLocalVariableTable) fail with
+  `JVMTI_ERROR_MUST_POSSESS_CAPABILITY` even after `AddCapabilities`.
+* `GetSourceFileName` needs `can_get_source_file_name`, `GetLineNumberTable`
+  needs `can_get_line_numbers`, and `GetLocalVariableTable` needs
+  `can_access_local_variables`; the agents acquire them in `Agent_OnLoad` via
+  `AddCapabilities`.
+* `GetPhase` inside the `VMDeath` callback still reports `JVMTI_PHASE_LIVE` (4)
+  on both JDKs under test; the DEAD phase begins only after the callback.

@@ -1,0 +1,25 @@
+// JVMS 4.10.1.9: an invokespecial instruction is type safe only if it names an
+// instance initialization method, a private method of the current class, or a
+// method of a superclass/superinterface.  Targeting a public method of an
+// unrelated class (String.toString) is therefore rejected by the verifier with
+// VerifyError, independently of the normal resolution-time access checks.
+super public class InvokeSpecialConstraint
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public static Method bad:"()V"
+        stack 1 locals 0
+    {
+        aconst_null;
+        invokespecial Method java/lang/String.toString:"()Ljava/lang/String;";
+        pop;
+        return;
+    }
+}

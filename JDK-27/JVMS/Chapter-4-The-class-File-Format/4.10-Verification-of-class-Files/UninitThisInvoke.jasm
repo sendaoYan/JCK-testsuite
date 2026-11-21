@@ -1,0 +1,25 @@
+// JVMS 4.10.1.9: before a constructor has called superclass <init>, the local
+// variable `this` carries the special uninitializedThis type.  The only legal
+// use of an uninitialized `this` is as the receiver of an invokespecial of a
+// superclass <init>; invoking any other method on it must be rejected with
+// VerifyError.  This complements the getfield-on-uninitialized-this case in
+// VerifierDataflow.jasm by exercising an invokevirtual.
+super public class UninitThisInvoke
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 2 locals 1
+    {
+        aload_0;
+        invokevirtual Method UninitThisInvoke.m:"()V";
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public Method m:"()V"
+        stack 0 locals 1
+    {
+        return;
+    }
+}

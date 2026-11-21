@@ -1,0 +1,43 @@
+// JVMS 4.10.1.9 / 5.4.4: invocation type safety lets invokevirtual reach a
+// private method only across a nestmate boundary; access control is then
+// enforced when the symbolic reference is resolved.  An unrelated class that
+// invokes another class's private method via invokevirtual passes verification
+// but fails resolution with IllegalAccessError when the instruction executes.
+super public class PrivateMethodVictim
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    private Method secret:"()I"
+        stack 1 locals 1
+    {
+        iconst_1;
+        ireturn;
+    }
+}
+
+super public class PrivateMethodAttacker
+    version 71:0
+{
+    public Method "<init>":"()V"
+        stack 1 locals 1
+    {
+        aload_0;
+        invokespecial Method java/lang/Object."<init>":"()V";
+        return;
+    }
+
+    public Method steal:"(LPrivateMethodVictim;)I"
+        stack 1 locals 2
+    {
+        aload_1;
+        invokevirtual Method PrivateMethodVictim.secret:"()I";
+        ireturn;
+    }
+}
