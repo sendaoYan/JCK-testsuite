@@ -162,9 +162,16 @@ public class ObjectTest {
     static void testWaitTimeout() throws Exception {
         final Object lock = new Object();
         synchronized (lock) {
-            // wait(timeout) returns even when nobody notifies.
+            // wait(timeout) returns even when nobody notifies, but the spec
+            // explicitly permits spurious wakeups, so a single wait() call may
+            // return early. Re-wait until the deadline (the standard pattern)
+            // and only then measure; asserting a lower bound on one raw call
+            // is inherently flaky (seen: 39ms under load).
+            long deadline = System.nanoTime() + 50_000_000L;
             long start = System.nanoTime();
-            lock.wait(50);
+            for (long remaining; (remaining = deadline - System.nanoTime()) > 0; ) {
+                lock.wait(remaining / 1_000_000L, (int) (remaining % 1_000_000L));
+            }
             long elapsedMillis = (System.nanoTime() - start) / 1_000_000;
             check(elapsedMillis >= 40, "wait(50) waited at least ~50ms (actual " + elapsedMillis + ")");
         }
