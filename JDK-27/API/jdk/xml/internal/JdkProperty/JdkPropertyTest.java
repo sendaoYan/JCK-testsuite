@@ -39,13 +39,36 @@ public class JdkPropertyTest {
     }
 
     static Object e(Class<?> c, String n) { for (Object o : c.getEnumConstants()) if (o.toString().equals(n)) return o; throw new AssertionError("no " + n); }
+    // Match by name, arity AND parameter type: overloads of equal arity exist
+    // and getDeclaredMethods() order is unspecified.
     static Object inv(Object t, String n, Object... a) throws Exception {
         for (Class<?> k = t instanceof Class ? (Class<?>) t : t.getClass(); k != null; k = k.getSuperclass()) {
             for (java.lang.reflect.Method m : k.getDeclaredMethods()) {
-                if (m.getName().equals(n) && m.getParameterCount() == a.length) { m.setAccessible(true); return m.invoke(t instanceof Class ? null : t, a); }
+                if (!m.getName().equals(n) || m.getParameterCount() != a.length) continue;
+                Class<?>[] p = m.getParameterTypes();
+                boolean fit = true;
+                for (int i = 0; i < a.length && fit; i++) {
+                    fit = a[i] == null ? !p[i].isPrimitive() : wrap(p[i]).isInstance(a[i]);
+                }
+                if (!fit) continue;
+                m.setAccessible(true);
+                return m.invoke(t instanceof Class ? null : t, a);
             }
         }
         throw new NoSuchMethodException(n);
+    }
+
+    static Class<?> wrap(Class<?> c) {
+        if (!c.isPrimitive()) return c;
+        if (c == int.class) return Integer.class;
+        if (c == long.class) return Long.class;
+        if (c == boolean.class) return Boolean.class;
+        if (c == double.class) return Double.class;
+        if (c == float.class) return Float.class;
+        if (c == short.class) return Short.class;
+        if (c == byte.class) return Byte.class;
+        if (c == char.class) return Character.class;
+        return c;
     }
 
     static void deep() throws Exception {
