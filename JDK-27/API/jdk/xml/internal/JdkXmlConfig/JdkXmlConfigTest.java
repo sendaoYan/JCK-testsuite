@@ -43,13 +43,50 @@ public class JdkXmlConfigTest {
         System.out.println("PASS (" + passed + " assertions)");
     }
 
+    // Match by name, arity AND parameter type: some targets overload on arity
+    // alone (e.g. JdkXmlFeatures.getFeature(XmlFeature) vs getFeature(int)), and
+    // getDeclaredMethods() order is unspecified — arity-only matching can select
+    // the wrong overload and blow up with "argument type mismatch".
     static Object inv(Object t, String n, Object... a) throws Exception {
+        IllegalArgumentException mismatch = null;
         for (Class<?> k = t instanceof Class ? (Class<?>) t : t.getClass(); k != null; k = k.getSuperclass()) {
             for (java.lang.reflect.Method m : k.getDeclaredMethods()) {
-                if (m.getName().equals(n) && m.getParameterCount() == a.length) { m.setAccessible(true); return m.invoke(t instanceof Class ? null : t, a); }
+                if (!m.getName().equals(n) || m.getParameterCount() != a.length) continue;
+                Class<?>[] p = m.getParameterTypes();
+                boolean fit = true;
+                for (int i = 0; i < a.length && fit; i++) {
+                    fit = a[i] == null ? !p[i].isPrimitive() : wrap(p[i]).isInstance(a[i]);
+                }
+                if (!fit) continue;
+                try {
+                    m.setAccessible(true);
+                    return m.invoke(t instanceof Class ? null : t, a);
+                } catch (IllegalArgumentException e) {
+                    // getDeclaredMethods() order is unspecified; two same-name/
+                    // same-arity overloads can both pass isInstance but only one
+                    // actually accepts the boxed argument at invoke time. Keep
+                    // trying the remaining overloads instead of failing on the
+                    // first (seen as an intermittent "argument type mismatch"
+                    // under -XX:-CompactStrings).
+                    mismatch = e;
+                }
             }
         }
+        if (mismatch != null) throw mismatch;
         throw new NoSuchMethodException(n);
+    }
+
+    static Class<?> wrap(Class<?> c) {
+        if (!c.isPrimitive()) return c;
+        if (c == int.class) return Integer.class;
+        if (c == long.class) return Long.class;
+        if (c == boolean.class) return Boolean.class;
+        if (c == double.class) return Double.class;
+        if (c == float.class) return Float.class;
+        if (c == short.class) return Short.class;
+        if (c == byte.class) return Byte.class;
+        if (c == char.class) return Character.class;
+        return c;
     }
     static Object e(Class<?> c, String n) { for (Object o : c.getEnumConstants()) if (o.toString().equals(n)) return o; throw new AssertionError("no " + n); }
 
