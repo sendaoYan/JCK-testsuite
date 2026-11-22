@@ -49,10 +49,8 @@ public class XmlFeatureTest {
     }
 
     static Object e(Class<?> c, String n) { for (Object o : c.getEnumConstants()) if (o.toString().equals(n)) return o; throw new AssertionError("no " + n); }
-    // Match by name, arity AND parameter type: overloads of equal arity exist
-    // (e.g. JdkXmlFeatures.getFeature(XmlFeature) vs getFeature(int)) and
-    // getDeclaredMethods() order is unspecified.
     static Object inv(Object t, String n, Object... a) throws Exception {
+        IllegalArgumentException mismatch = null;
         for (Class<?> k = t instanceof Class ? (Class<?>) t : t.getClass(); k != null; k = k.getSuperclass()) {
             for (java.lang.reflect.Method m : k.getDeclaredMethods()) {
                 if (!m.getName().equals(n) || m.getParameterCount() != a.length) continue;
@@ -62,10 +60,18 @@ public class XmlFeatureTest {
                     fit = a[i] == null ? !p[i].isPrimitive() : wrap(p[i]).isInstance(a[i]);
                 }
                 if (!fit) continue;
-                m.setAccessible(true);
-                return m.invoke(t instanceof Class ? null : t, a);
+                try {
+                    m.setAccessible(true);
+                    return m.invoke(t instanceof Class ? null : t, a);
+                } catch (IllegalArgumentException e) {
+                    // Same-name/same-arity overloads can both pass isInstance
+                    // (boxed primitives); getDeclaredMethods() order is
+                    // unspecified, so keep trying the remaining ones.
+                    mismatch = e;
+                }
             }
         }
+        if (mismatch != null) throw mismatch;
         throw new NoSuchMethodException(n);
     }
 
