@@ -60,7 +60,7 @@ public class PasteActionTest {
             boolean inserted = false;
             for (int i = 0; i < 40 && !inserted; i++) {
                 area.setText("Before");
-                cb.setContents(new StringSelection("Pasted"), null);
+                setClip(cb, "Pasted");
                 area.setCaretPosition(0);
                 ActionEvent evt = new ActionEvent(area, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.pasteAction);
                 action.actionPerformed(evt);
@@ -74,7 +74,7 @@ public class PasteActionTest {
             for (int i = 0; i < 40 && !replaced; i++) {
                 area.setText("ABCDEF");
                 area.select(1, 4); // replace "BCD"
-                cb.setContents(new StringSelection("X"), null);
+                setClip(cb, "X");
                 action.actionPerformed(new ActionEvent(area, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.pasteAction));
                 replaced = "AXEF".equals(area.getText());
                 if (!replaced) sleepQuietly();
@@ -84,7 +84,7 @@ public class PasteActionTest {
             // paste is a no-op on non-editable component
             JTextArea ro = new JTextArea("Keep");
             ro.setEditable(false);
-            cb.setContents(new StringSelection("Nope"), null);
+            setClip(cb, "Nope");
             action.actionPerformed(new ActionEvent(ro, ActionEvent.ACTION_PERFORMED, DefaultEditorKit.pasteAction));
             check("Keep".equals(ro.getText()), "paste no-op when non-editable");
         } finally {
@@ -100,6 +100,25 @@ public class PasteActionTest {
     static void sleepQuietly() {
         try { Thread.sleep(100); }
         catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+    }
+
+    // The Windows system clipboard is ONE process-global lock: WClipboard's
+    // openClipboard() throws IllegalStateException("cannot open system clipboard")
+    // whenever another process holds it -- a sibling jtreg test under -conc, a
+    // clipboard manager, even the shell. That is a transient race, not a
+    // conformance signal, so retry the set with a short backoff (the content
+    // clobbering retries above already cover the other half of the race).
+    // Seen: r7-utf8 jdk27, WClipboard.openClipboard0 -> IllegalStateException.
+    static void setClip(Clipboard cb, String text) {
+        for (int i = 0; ; i++) {
+            try {
+                cb.setContents(new StringSelection(text), null);
+                return;
+            } catch (IllegalStateException e) {
+                if (i >= 100) throw e;
+                sleepQuietly();
+            }
+        }
     }
 
     interface ThrowingRunnable { void run() throws Exception; }
